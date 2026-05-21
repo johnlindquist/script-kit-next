@@ -74,6 +74,8 @@ impl ScriptListApp {
             self.computed_filter_text = value.clone();
             self.maybe_start_root_file_search(&value, cx);
             self.maybe_start_root_windows_refresh_for_query(&value, cx);
+            self.maybe_start_root_browser_tabs_refresh_for_query(&value, cx);
+            self.maybe_start_root_browser_history_refresh_for_query(&value, cx);
             self.reconcile_script_list_after_filter_change("filter_immediate", cx);
             if let Some(snapshot) = selection_before.as_ref() {
                 if self.restore_root_file_handoff_selection_from_snapshot(snapshot) {
@@ -194,6 +196,8 @@ impl ScriptListApp {
         self.filter_coalescer.reset();
         self.maybe_start_root_file_search(&text, cx);
         self.maybe_start_root_windows_refresh_for_query(&text, cx);
+        self.maybe_start_root_browser_tabs_refresh_for_query(&text, cx);
+        self.maybe_start_root_browser_history_refresh_for_query(&text, cx);
         self.reconcile_script_list_after_filter_change("set_filter_text_immediate", cx);
 
         // Update fallback state immediately based on filter results

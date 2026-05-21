@@ -176,3 +176,67 @@ fn root_grouped_cache_tracks_browser_passive_generations() {
         "grouped cache key should include browser history passive snapshot generation"
     );
 }
+
+#[test]
+fn explicit_browser_sources_have_app_managed_refresh_completion() {
+    let filtering = include_str!("../../src/app_impl/filtering_cache.rs");
+    let updates = include_str!("../../src/app_impl/filter_input_updates.rs");
+    let tabs = include_str!("../../src/browser_tabs.rs");
+    let history = include_str!("../../src/browser_history.rs");
+
+    for symbol in [
+        "current_query_includes_root_source",
+        "invalidate_root_passive_and_grouped_cache",
+        "maybe_start_root_browser_tabs_refresh_for_query",
+        "maybe_start_root_browser_history_refresh_for_query",
+        "browser_tabs_refresh_complete",
+        "browser_history_refresh_complete",
+    ] {
+        assert!(
+            filtering.contains(symbol),
+            "filtering cache should contain {symbol}"
+        );
+    }
+    assert!(
+        filtering.contains("self.root_passive_frame = None;"),
+        "browser refresh completion should invalidate the passive frame"
+    );
+    assert!(
+        filtering.contains("self.invalidate_main_window_preflight();"),
+        "browser refresh completion should invalidate the preflight receipt when generation changes"
+    );
+    assert!(
+        filtering.contains("browser_history_options.max_age_days = 365;")
+            && filtering.contains("options.max_age_days = 365;"),
+        "explicit browser history source browse should use the widest configured age window"
+    );
+    for call in [
+        "maybe_start_root_browser_tabs_refresh_for_query(&value, cx)",
+        "maybe_start_root_browser_history_refresh_for_query(&value, cx)",
+        "maybe_start_root_browser_tabs_refresh_for_query(&text, cx)",
+        "maybe_start_root_browser_history_refresh_for_query(&text, cx)",
+    ] {
+        assert!(
+            updates.contains(call),
+            "filter input path should start app-managed explicit browser refresh: {call}"
+        );
+    }
+    for symbol in [
+        "RootBrowserTabsRefresh",
+        "try_begin_root_browser_tabs_refresh",
+        "refresh_root_browser_tabs_snapshot",
+        "finish_root_browser_tabs_refresh",
+    ] {
+        assert!(tabs.contains(symbol), "browser tabs should expose {symbol}");
+    }
+    for symbol in [
+        "RootBrowserHistoryRefresh",
+        "try_begin_root_browser_history_refresh",
+        "finish_root_browser_history_refresh",
+    ] {
+        assert!(
+            history.contains(symbol),
+            "browser history should expose {symbol}"
+        );
+    }
+}

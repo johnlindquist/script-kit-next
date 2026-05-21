@@ -1,0 +1,25 @@
+{
+  "source": "history",
+  "inputValue": "history:",
+  "visibleChoiceCount": 12,
+  "browserHistory": {
+    "enabled": true,
+    "frameCount": 12,
+    "cacheGeneration": 2,
+    "frameGeneration": 2,
+    "refreshing": false
+  },
+  "firstVisible": {
+    "visibleRank": 0,
+    "groupedIndex": 1,
+    "stableKey": "browser-history/chrome/2b58b1d73840/518ad276ea5c",
+    "role": "rootPassive",
+    "actionKind": "runCommand",
+    "typeLabel": "Browser History",
+    "sourceName": "Browser History",
+    "description": "gemini.google.com \u00b7 Chrome/Profile 3 \u00b7 3 months, 1 week, 3 days, 21 hours and 26 minutes ago",
+    "leadingIconPresent": false,
+    "leadingIconKind": null,
+    "leadingIconBundleId": null
+  }
+}

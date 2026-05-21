@@ -234,6 +234,12 @@ struct RootBrowserHistorySnapshotState {
     last_refresh_error: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RootBrowserHistoryRefresh {
+    generation: u64,
+    started_at: Instant,
+}
+
 #[allow(dead_code)] // Root unified search calls this through the binary app layer.
 static ROOT_BROWSER_HISTORY_SNAPSHOT: LazyLock<Mutex<RootBrowserHistorySnapshotState>> =
     LazyLock::new(|| Mutex::new(RootBrowserHistorySnapshotState::default()));
@@ -407,92 +413,113 @@ pub(crate) fn ensure_root_browser_history_refresh(
     options: RootBrowserHistorySectionOptions,
     reason: &'static str,
 ) {
-    let ttl = Duration::from_millis(options.cache_ttl_ms);
-    let generation = {
-        let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() else {
-            return;
-        };
-        let is_fresh = cache
-            .snapshot
-            .as_ref()
-            .is_some_and(|snapshot| snapshot.captured_at.elapsed() <= ttl);
-        if is_fresh || cache.refresh_in_flight {
-            return;
-        }
-        cache.refresh_in_flight = true;
-        cache.generation = cache.generation.wrapping_add(1);
-        let generation = cache.generation;
-        let cache_age_ms = cache
-            .snapshot
-            .as_ref()
-            .map(|snapshot| snapshot.captured_at.elapsed().as_millis() as u64)
-            .unwrap_or(0);
-        let row_count = cache
-            .snapshot
-            .as_ref()
-            .map(|snapshot| snapshot.hits.len())
-            .unwrap_or(0);
-        tracing::info!(
-            source = "browser_history",
-            generation,
-            cache_age_ms,
-            ttl_ms = options.cache_ttl_ms,
-            row_count,
-            reason,
-            "root_passive_snapshot_refresh_started"
-        );
-        generation
+    let Some(refresh) = try_begin_root_browser_history_refresh(&options, reason) else {
+        return;
     };
 
     std::thread::spawn(move || {
-        let started = Instant::now();
         let result = refresh_root_browser_history_snapshot_from_home(&home, &options);
-        let elapsed_ms = started.elapsed().as_millis() as u64;
-
-        let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() else {
-            return;
-        };
-        if cache.generation != generation {
-            return;
-        }
-
-        match result {
-            Ok(hits) => {
-                let row_count = hits.len();
-                cache.snapshot = Some(RootBrowserHistorySnapshot {
-                    captured_at: Instant::now(),
-                    hits: Arc::new(hits.clone()),
-                });
-                cache.last_refresh_error = None;
-
-                // Trigger favicon fetch in background for top results
-                let urls: Vec<String> = hits.iter().take(100).map(|h| h.url.to_string()).collect();
-                std::thread::spawn(move || {
-                    let _needing = crate::favicons::domains_needing_favicons(&urls);
-                    crate::favicons::fetch_favicons_blocking(&_needing);
-                });
-
-                tracing::info!(
-                    source = "browser_history",
-                    generation,
-                    elapsed_ms,
-                    row_count,
-                    "root_passive_snapshot_refresh_completed"
-                );
-            }
-            Err(error) => {
-                cache.last_refresh_error = Some(error.to_string());
-                tracing::warn!(
-                    source = "browser_history",
-                    generation,
-                    elapsed_ms,
-                    error = %error,
-                    "root_passive_snapshot_refresh_failed"
-                );
-            }
-        }
-        cache.refresh_in_flight = false;
+        let _ = finish_root_browser_history_refresh(refresh, result);
     });
+}
+
+#[allow(dead_code)]
+pub(crate) fn try_begin_root_browser_history_refresh(
+    options: &RootBrowserHistorySectionOptions,
+    reason: &'static str,
+) -> Option<RootBrowserHistoryRefresh> {
+    let ttl = Duration::from_millis(options.cache_ttl_ms);
+    let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() else {
+        return None;
+    };
+    let now = Instant::now();
+    let is_fresh = cache
+        .snapshot
+        .as_ref()
+        .is_some_and(|snapshot| snapshot.captured_at.elapsed() <= ttl);
+    if is_fresh || cache.refresh_in_flight {
+        return None;
+    }
+    cache.refresh_in_flight = true;
+    cache.generation = cache.generation.wrapping_add(1);
+    let generation = cache.generation;
+    let cache_age_ms = cache
+        .snapshot
+        .as_ref()
+        .map(|snapshot| snapshot.captured_at.elapsed().as_millis() as u64)
+        .unwrap_or(0);
+    let row_count = cache
+        .snapshot
+        .as_ref()
+        .map(|snapshot| snapshot.hits.len())
+        .unwrap_or(0);
+    tracing::info!(
+        source = "browser_history",
+        generation,
+        cache_age_ms,
+        ttl_ms = options.cache_ttl_ms,
+        row_count,
+        reason,
+        "root_passive_snapshot_refresh_started"
+    );
+
+    Some(RootBrowserHistoryRefresh {
+        generation,
+        started_at: now,
+    })
+}
+
+#[allow(dead_code)]
+pub(crate) fn finish_root_browser_history_refresh(
+    refresh: RootBrowserHistoryRefresh,
+    result: Result<Vec<RootBrowserHistorySearchHit>>,
+) -> bool {
+    let elapsed_ms = refresh.started_at.elapsed().as_millis() as u64;
+
+    let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() else {
+        return false;
+    };
+    if cache.generation != refresh.generation {
+        return false;
+    }
+
+    match result {
+        Ok(hits) => {
+            let row_count = hits.len();
+            cache.snapshot = Some(RootBrowserHistorySnapshot {
+                captured_at: Instant::now(),
+                hits: Arc::new(hits.clone()),
+            });
+            cache.last_refresh_error = None;
+
+            let urls: Vec<String> = hits.iter().take(100).map(|h| h.url.to_string()).collect();
+            std::thread::spawn(move || {
+                let needing = crate::favicons::domains_needing_favicons(&urls);
+                crate::favicons::fetch_favicons_blocking(&needing);
+            });
+
+            tracing::info!(
+                source = "browser_history",
+                generation = refresh.generation,
+                elapsed_ms,
+                row_count,
+                "root_passive_snapshot_refresh_completed"
+            );
+        }
+        Err(error) => {
+            cache.last_refresh_error = Some(error.to_string());
+            tracing::warn!(
+                source = "browser_history",
+                generation = refresh.generation,
+                elapsed_ms,
+                error = %error,
+                "root_passive_snapshot_refresh_failed"
+            );
+        }
+    }
+    cache.refresh_in_flight = false;
+    cache.generation = cache.generation.wrapping_add(1);
+    true
 }
 
 #[allow(dead_code)]
@@ -1731,5 +1758,53 @@ mod tests {
         assert!(ensure_browser_history_url_is_http_or_https("file:///tmp/a").is_err());
         assert!(ensure_browser_history_url_is_http_or_https("javascript:alert(1)").is_err());
         assert!(ensure_browser_history_url_is_http_or_https("scriptkit://run/test").is_err());
+    }
+
+    #[test]
+    fn root_browser_history_refresh_completion_advances_generation_and_stores_rows() {
+        if let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() {
+            *cache = RootBrowserHistorySnapshotState::default();
+        }
+        let options = RootBrowserHistorySectionOptions {
+            enabled: true,
+            max_results: 10,
+            min_query_chars: 0,
+            max_age_days: 90,
+            providers: vec![crate::config::BrowserHistoryProvider::Chrome],
+            search_urls: true,
+            scan_limit: 10,
+            cache_ttl_ms: 30_000,
+        };
+        let before = root_browser_history_snapshot_status();
+        let refresh =
+            try_begin_root_browser_history_refresh(&options, "test").expect("refresh should start");
+        assert!(root_browser_history_snapshot_status().refreshing);
+
+        let hit = RootBrowserHistorySearchHit {
+            stable_key: "browser-history/chrome/default/1".to_string(),
+            provider_label: "Chrome".to_string(),
+            profile_label: "Default".to_string(),
+            title: "Root Completion History".to_string(),
+            url: "https://example.com/root-completion-history".to_string(),
+            domain: "example.com".to_string(),
+            last_visit_unix_ms: Utc::now().timestamp_millis(),
+            visit_count: 4,
+        };
+        assert!(finish_root_browser_history_refresh(
+            refresh,
+            Ok(vec![hit.clone()])
+        ));
+
+        let after = root_browser_history_snapshot_status();
+        assert!(after.generation > before.generation);
+        assert!(!after.refreshing);
+        assert_eq!(after.cached_count, 1);
+        assert_eq!(
+            cached_root_browser_history_snapshot(30_000).as_ref(),
+            &vec![hit]
+        );
+        if let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() {
+            *cache = RootBrowserHistorySnapshotState::default();
+        }
     }
 }

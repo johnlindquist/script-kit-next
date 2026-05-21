@@ -257,6 +257,159 @@ impl ScriptListApp {
         .detach();
     }
 
+    pub(crate) fn current_query_includes_root_source(
+        &self,
+        query_text: &str,
+        source: crate::menu_syntax::RootUnifiedSourceFilter,
+    ) -> bool {
+        self.menu_syntax_mode
+            .advanced_query_for(query_text)
+            .is_some_and(|advanced_query| {
+                advanced_query.source_filters.includes(source)
+                    && advanced_query.source_filters.allows(source)
+            })
+    }
+
+    pub(crate) fn invalidate_root_passive_and_grouped_cache(&mut self) {
+        self.root_passive_frame = None;
+        self.invalidate_grouped_cache();
+        self.invalidate_main_window_preflight();
+    }
+
+    pub(crate) fn maybe_start_root_browser_tabs_refresh_for_query(
+        &mut self,
+        query_text: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let source = crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs;
+        if !self.current_query_includes_root_source(query_text, source) {
+            return;
+        }
+
+        let unified_search = self.config.get_unified_search();
+        let mut options = unified_search.browser_tabs_section_options();
+        options.enabled = true;
+        options.min_query_chars = 0;
+        options.max_results = options
+            .max_results
+            .max(unified_search.passive_result_limits().max_total_results);
+        let providers = options.providers.clone();
+        let Some(refresh) = crate::browser_tabs::try_begin_root_browser_tabs_refresh(
+            options.cache_ttl_ms,
+            providers.len(),
+            "explicit_tabs_query",
+        ) else {
+            return;
+        };
+
+        self.invalidate_root_passive_and_grouped_cache();
+        cx.notify();
+
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    crate::browser_tabs::refresh_root_browser_tabs_snapshot(providers)
+                })
+                .await;
+
+            let _ = this.update(cx, |app, cx| {
+                let changed =
+                    crate::browser_tabs::finish_root_browser_tabs_refresh(refresh, result);
+                if !changed {
+                    return;
+                }
+                app.invalidate_root_passive_and_grouped_cache();
+                if app.current_query_includes_root_source(&app.computed_filter_text, source) {
+                    app.reconcile_script_list_after_filter_change(
+                        "browser_tabs_refresh_complete",
+                        cx,
+                    );
+                }
+                app.rebuild_main_window_preflight_if_needed();
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    pub(crate) fn maybe_start_root_browser_history_refresh_for_query(
+        &mut self,
+        query_text: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let source = crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory;
+        if !self.current_query_includes_root_source(query_text, source) {
+            return;
+        }
+
+        let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) else {
+            return;
+        };
+        let unified_search = self.config.get_unified_search();
+        let mut options = unified_search.browser_history_section_options();
+        options.enabled = true;
+        options.min_query_chars = 0;
+        options.max_age_days = 365;
+        options.max_results = options
+            .max_results
+            .max(unified_search.passive_result_limits().max_total_results);
+        let Some(refresh) =
+            crate::browser_history::try_begin_root_browser_history_refresh(
+                &options,
+                "explicit_history_query",
+            )
+        else {
+            return;
+        };
+
+        self.invalidate_root_passive_and_grouped_cache();
+        cx.notify();
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let result =
+                crate::browser_history::refresh_root_browser_history_snapshot_from_home(
+                    &home, &options,
+                );
+            let _ = tx.send(result);
+        });
+
+        cx.spawn(async move |this, cx| {
+            let result = loop {
+                match rx.try_recv() {
+                    Ok(result) => break result,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(16))
+                            .await;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        break Err(anyhow::anyhow!("browser history refresh worker disconnected"));
+                    }
+                }
+            };
+
+            let _ = this.update(cx, |app, cx| {
+                let changed =
+                    crate::browser_history::finish_root_browser_history_refresh(refresh, result);
+                if !changed {
+                    return;
+                }
+                app.invalidate_root_passive_and_grouped_cache();
+                if app.current_query_includes_root_source(&app.computed_filter_text, source) {
+                    app.reconcile_script_list_after_filter_change(
+                        "browser_history_refresh_complete",
+                        cx,
+                    );
+                }
+                app.rebuild_main_window_preflight_if_needed();
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     fn root_passive_frame_for_current_query(
         &mut self,
         search_text: &str,
@@ -1046,6 +1199,7 @@ impl ScriptListApp {
             {
                 browser_history_options.enabled = true;
                 browser_history_options.min_query_chars = 0;
+                browser_history_options.max_age_days = 365;
                 browser_history_options.max_results = browser_history_options
                     .max_results
                     .max(explicit_source_result_target);
