@@ -197,6 +197,17 @@ impl ScriptListApp {
             .with_section("Manage")
             .with_icon(IconName::Plus),
             Action::new(
+                "theme_chooser_edit_theme_as_text",
+                "Edit Theme as Text",
+                Some(
+                    "Open the current Theme Designer theme JSON in your configured editor"
+                        .to_string(),
+                ),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Manage")
+            .with_icon(IconName::Pencil),
+            Action::new(
                 "theme_chooser_update_user_theme",
                 "Update Selected User Theme",
                 Some(

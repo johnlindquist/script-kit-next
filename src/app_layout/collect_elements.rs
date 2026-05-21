@@ -525,6 +525,22 @@ impl ScriptListApp {
                     action_disabled: None,
                 });
                 elements.push(protocol::ElementInfo {
+                    semantic_id: "button:theme-chooser-edit-theme-as-text".to_string(),
+                    element_type: protocol::ElementType::Button,
+                    text: Some("Edit Theme as Text".to_string()),
+                    value: Some("theme_chooser_edit_theme_as_text".to_string()),
+                    selected: None,
+                    focused: None,
+                    index: None,
+                    role: Some("theme-action".to_string()),
+                    kind: Some("edit-theme-as-text".to_string()),
+                    source: None,
+                    source_name: None,
+                    selectable: Some(true),
+                    status_kind: None,
+                    action_disabled: None,
+                });
+                elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-update-user-theme".to_string(),
                     element_type: protocol::ElementType::Button,
                     text: Some("Update".to_string()),
@@ -633,6 +649,13 @@ impl ScriptListApp {
                     "accent-color",
                 );
                 push_theme_control(
+                    "control:theme-chooser:accent-color-hex".to_string(),
+                    protocol::ElementType::Input,
+                    "Accent Color Hex",
+                    format!("#{:06X}", self.theme.colors.accent.selected),
+                    "accent-color-hex",
+                );
+                push_theme_control(
                     "control:theme-chooser:surface-opacity".to_string(),
                     protocol::ElementType::Slider,
                     "Surface Opacity",
@@ -675,11 +698,25 @@ impl ScriptListApp {
                     "gradient-base-from",
                 );
                 push_theme_control(
+                    "control:theme-chooser:gradient-base-from-hex".to_string(),
+                    protocol::ElementType::Input,
+                    "Gradient Base From Hex",
+                    format!("#{:06X}", gradient.from),
+                    "gradient-base-from-hex",
+                );
+                push_theme_control(
                     "control:theme-chooser:gradient-base-to".to_string(),
                     protocol::ElementType::ColorPicker,
                     "Gradient Base To",
                     format!("#{:06X}", gradient.to),
                     "gradient-base-to",
+                );
+                push_theme_control(
+                    "control:theme-chooser:gradient-base-to-hex".to_string(),
+                    protocol::ElementType::Input,
+                    "Gradient Base To Hex",
+                    format!("#{:06X}", gradient.to),
+                    "gradient-base-to-hex",
                 );
                 push_theme_control(
                     "control:theme-chooser:gradient-base-angle".to_string(),
@@ -712,11 +749,25 @@ impl ScriptListApp {
                         &format!("gradient-layer-{ordinal}-from"),
                     );
                     push_theme_control(
+                        format!("control:theme-chooser:gradient-layer-{ordinal}-from-hex"),
+                        protocol::ElementType::Input,
+                        &format!("Gradient Layer {ordinal} From Hex"),
+                        format!("#{:06X}", layer.from),
+                        &format!("gradient-layer-{ordinal}-from-hex"),
+                    );
+                    push_theme_control(
                         format!("control:theme-chooser:gradient-layer-{ordinal}-to"),
                         protocol::ElementType::ColorPicker,
                         &format!("Gradient Layer {ordinal} To"),
                         format!("#{:06X}", layer.to),
                         &format!("gradient-layer-{ordinal}-to"),
+                    );
+                    push_theme_control(
+                        format!("control:theme-chooser:gradient-layer-{ordinal}-to-hex"),
+                        protocol::ElementType::Input,
+                        &format!("Gradient Layer {ordinal} To Hex"),
+                        format!("#{:06X}", layer.to),
+                        &format!("gradient-layer-{ordinal}-to-hex"),
                     );
                     push_theme_control(
                         format!("control:theme-chooser:gradient-layer-{ordinal}-angle"),
