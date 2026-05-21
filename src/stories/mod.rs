@@ -13,7 +13,6 @@ mod main_menu_variations;
 mod mini_ai_chat_states;
 mod popup_component_states;
 mod quick_terminal_states;
-mod tahoe_design_system_states;
 mod utility_builtin_states;
 
 use crate::storybook::StoryEntry;
@@ -35,7 +34,6 @@ pub use popup_component_states::{
     NotesWindowStatesStory, ShortcutRecorderStatesStory,
 };
 pub use quick_terminal_states::QuickTerminalStatesStory;
-pub use tahoe_design_system_states::TahoeDesignSystemStatesStory;
 pub use utility_builtin_states::UtilityBuiltinStatesStory;
 
 /// Static storage for all stories.
@@ -59,7 +57,6 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(BuiltInBrowserStatesStory)),
         StoryEntry::new(Box::new(QuickTerminalStatesStory)),
         StoryEntry::new(Box::new(ComponentPrimitivesStatesStory)),
-        StoryEntry::new(Box::new(TahoeDesignSystemStatesStory)),
         StoryEntry::new(Box::new(UtilityBuiltinStatesStory)),
     ]
 });
