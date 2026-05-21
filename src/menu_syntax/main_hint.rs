@@ -748,13 +748,8 @@ fn capture_composer_hint(
     let resolved = invocation.map(|inv| {
         crate::menu_syntax::date::resolve_capture_dates_with_accepts(inv, &clock, &accepts)
     });
-    let (status_chips, capture_validation) = capture_validation_chips_and_snapshot(
-        target,
-        invocation,
-        resolved.as_ref(),
-        ctx.scripts,
-        &accepts,
-    );
+    let capture_validation =
+        capture_validation_snapshot(target, invocation, resolved.as_ref(), ctx.scripts, &accepts);
 
     // Run 12 Pass 10 — surface unresolved date phrases (e.g. `due:asdf`)
     // by routing the live invocation through Pass-34's resolve_capture_dates.
@@ -787,16 +782,9 @@ fn capture_composer_hint(
             .map(|resolution| format!("Capture {}", resolution.title))
             .unwrap_or_else(|| format!("Capture {target}")),
         subtitle: Some("Enter saves this as structured local data.".to_string()),
-        mode_chip: Some(chip("; capture", MenuSyntaxMainHintTone::Accent)),
-        status_chip: Some(chip(
-            if has_body { "ready" } else { "needs body" },
-            if has_body {
-                MenuSyntaxMainHintTone::Success
-            } else {
-                MenuSyntaxMainHintTone::Muted
-            },
-        )),
-        status_chips,
+        mode_chip: None,
+        status_chip: None,
+        status_chips: Vec::new(),
         capture_validation,
         form: None,
         rows,
@@ -1818,26 +1806,20 @@ fn tag_boundary_rows() -> Vec<MenuSyntaxMainHintRow> {
     ]
 }
 
-/// Build the multi-chip status row + structured `CaptureValidation`
-/// snapshot for a `;target` capture composer state. Returns the chip Vec
-/// (always at least the mode chip) and the optional validation snapshot
-/// (None when the target has no registered schema, e.g. `;github`).
+/// Build the structured `CaptureValidation` snapshot for a `;target`
+/// capture composer state. Returns None when the target has no registered
+/// schema, e.g. `;github`.
 ///
 /// Story: capture-validation-snapshot (Pass 22). Wires
 /// [[crate::menu_syntax::capture_schema::validate]] into the snapshot the
-/// hint card consumes — so the UI can render `; capture` / `needs body`
-/// chips without re-running the validation rules.
-fn capture_validation_chips_and_snapshot(
+/// hint card consumes without re-running the validation rules.
+fn capture_validation_snapshot(
     target: &str,
     invocation: Option<&CaptureInvocation>,
     resolved: Option<&crate::menu_syntax::date::ResolvedCaptureInvocation>,
     scripts: &[Arc<Script>],
     accepts: &[String],
-) -> (
-    Vec<MenuSyntaxMainHintChip>,
-    Option<MenuSyntaxCaptureValidationSnapshot>,
-) {
-    let mut chips = vec![chip("; capture", MenuSyntaxMainHintTone::Accent)];
+) -> Option<MenuSyntaxCaptureValidationSnapshot> {
     // Run 12 Pass 15 — `capture-dynamic-target-schema`. Resolve the schema
     // through the script-aware lookup so script-declared `capture.v1`
     // specs (e.g. `;expense` from `capture-expense-ledger.ts`) flow into
@@ -1846,7 +1828,7 @@ fn capture_validation_chips_and_snapshot(
     let Some(schema) =
         crate::menu_syntax::capture_gate::resolve_capture_schema_for_target(target, scripts)
     else {
-        return (chips, None);
+        return None;
     };
     // Use a synthetic empty payload when the user has only typed `;target ` —
     // the schema's `missing_required` still computes the correct Vec from
@@ -1883,26 +1865,17 @@ fn capture_validation_chips_and_snapshot(
     );
     let hud_message = gate_decision.hud_message().map(|s| s.to_string());
     let snapshot = match &result {
-        ValidationResult::Ready => {
-            chips.push(chip("ready", MenuSyntaxMainHintTone::Success));
-            MenuSyntaxCaptureValidationSnapshot {
-                target: schema.target.clone(),
-                status: MenuSyntaxCaptureValidationStatus::Ready,
-                can_submit: true,
-                missing_field_labels: Vec::new(),
-                malformed_field_label: None,
-                malformed_reason: None,
-                hud_message,
-            }
-        }
+        ValidationResult::Ready => MenuSyntaxCaptureValidationSnapshot {
+            target: schema.target.clone(),
+            status: MenuSyntaxCaptureValidationStatus::Ready,
+            can_submit: true,
+            missing_field_labels: Vec::new(),
+            malformed_field_label: None,
+            malformed_reason: None,
+            hud_message,
+        },
         ValidationResult::Incomplete { missing } => {
             let labels: Vec<String> = missing.iter().map(|req| req.label()).collect();
-            for label in &labels {
-                chips.push(chip(
-                    &format!("needs {label}"),
-                    MenuSyntaxMainHintTone::Muted,
-                ));
-            }
             MenuSyntaxCaptureValidationSnapshot {
                 target: schema.target.clone(),
                 status: MenuSyntaxCaptureValidationStatus::Incomplete,
@@ -1913,20 +1886,17 @@ fn capture_validation_chips_and_snapshot(
                 hud_message,
             }
         }
-        ValidationResult::Malformed { field, reason } => {
-            chips.push(chip("malformed", MenuSyntaxMainHintTone::Warning));
-            MenuSyntaxCaptureValidationSnapshot {
-                target: schema.target.clone(),
-                status: MenuSyntaxCaptureValidationStatus::Malformed,
-                can_submit: false,
-                missing_field_labels: Vec::new(),
-                malformed_field_label: Some(field.label()),
-                malformed_reason: Some(reason.clone()),
-                hud_message,
-            }
-        }
+        ValidationResult::Malformed { field, reason } => MenuSyntaxCaptureValidationSnapshot {
+            target: schema.target.clone(),
+            status: MenuSyntaxCaptureValidationStatus::Malformed,
+            can_submit: false,
+            missing_field_labels: Vec::new(),
+            malformed_field_label: Some(field.label()),
+            malformed_reason: Some(reason.clone()),
+            hud_message,
+        },
     };
-    (chips, Some(snapshot))
+    Some(snapshot)
 }
 
 fn payload_for_capture_validation(
@@ -3442,18 +3412,14 @@ mod tests {
     }
 
     // ========================================================================
-    // capture_validation_chips_and_snapshot (Pass 22)
+    // capture_validation_snapshot (Pass 22)
     // ========================================================================
 
     #[test]
-    fn capture_validation_cal_with_no_invocation_yields_two_needs_chips() {
-        // Receipt from story: setFilter ";cal" → statusChips: [
-        //   {"; capture"}, {"needs body"}, {"needs date"}
-        // ] and captureValidation.status = incomplete.
-        let (chips, validation) =
-            capture_validation_chips_and_snapshot("cal", None, None, &[], &[]);
-        let labels: Vec<&str> = chips.iter().map(|c| c.label.as_str()).collect();
-        assert_eq!(labels, vec!["; capture", "needs body", "needs date"]);
+    fn capture_validation_cal_with_no_invocation_yields_missing_snapshot() {
+        // Receipt from story: setFilter ";cal" reports captureValidation.status
+        // = incomplete while capture-form header chips stay empty.
+        let validation = capture_validation_snapshot("cal", None, None, &[], &[]);
         let v = validation.expect("cal has a builtin schema");
         assert_eq!(v.status, MenuSyntaxCaptureValidationStatus::Incomplete);
         assert!(!v.can_submit);
@@ -3484,10 +3450,7 @@ mod tests {
                 source: "friday".to_string(),
                 source_span: (0, 6),
             });
-        let (chips, validation) =
-            capture_validation_chips_and_snapshot("cal", Some(&inv), None, &[], &[]);
-        let labels: Vec<&str> = chips.iter().map(|c| c.label.as_str()).collect();
-        assert_eq!(labels, vec!["; capture", "ready"]);
+        let validation = capture_validation_snapshot("cal", Some(&inv), None, &[], &[]);
         let v = validation.unwrap();
         assert_eq!(v.status, MenuSyntaxCaptureValidationStatus::Ready);
         assert!(v.can_submit);
@@ -3495,11 +3458,8 @@ mod tests {
     }
 
     #[test]
-    fn capture_validation_unknown_target_returns_only_mode_chip_no_snapshot() {
-        let (chips, validation) =
-            capture_validation_chips_and_snapshot("github", None, None, &[], &[]);
-        let labels: Vec<&str> = chips.iter().map(|c| c.label.as_str()).collect();
-        assert_eq!(labels, vec!["; capture"]);
+    fn capture_validation_unknown_target_returns_no_snapshot() {
+        let validation = capture_validation_snapshot("github", None, None, &[], &[]);
         assert!(
             validation.is_none(),
             "no builtin schema for github → no snapshot; doctor flags this elsewhere"
@@ -3520,10 +3480,7 @@ mod tests {
             date_phrases: vec![],
             raw: ";link ftp://nope".to_string(),
         };
-        let (chips, validation) =
-            capture_validation_chips_and_snapshot("link", Some(&inv), None, &[], &[]);
-        let labels: Vec<&str> = chips.iter().map(|c| c.label.as_str()).collect();
-        assert_eq!(labels, vec!["; capture", "malformed"]);
+        let validation = capture_validation_snapshot("link", Some(&inv), None, &[], &[]);
         let v = validation.unwrap();
         assert_eq!(v.status, MenuSyntaxCaptureValidationStatus::Malformed);
         assert!(!v.can_submit);
@@ -3535,13 +3492,9 @@ mod tests {
     fn capture_validation_uses_resolved_nl_state_for_mcal() {
         let scripts = vec![mcal_script()];
         let hint = capture_hint_for(";mcal Lunch with Ryan tomorrow at 12pm til 1pm", &scripts);
-        let labels: Vec<&str> = hint
-            .status_chips
-            .iter()
-            .map(|chip| chip.label.as_str())
-            .collect();
-        assert_eq!(labels, vec!["; capture", "ready"]);
-        assert!(!labels.contains(&"needs date"));
+        assert!(hint.status_chips.is_empty());
+        assert!(hint.mode_chip.is_none());
+        assert!(hint.status_chip.is_none());
         let validation = hint.capture_validation.expect("validation");
         assert_eq!(validation.status, MenuSyntaxCaptureValidationStatus::Ready);
         assert!(validation.can_submit);
@@ -3552,13 +3505,9 @@ mod tests {
     fn capture_validation_mcal_date_only_needs_body_not_date() {
         let scripts = vec![mcal_script()];
         let hint = capture_hint_for(";mcal tomorrow at 12pm til 1pm", &scripts);
-        let labels: Vec<&str> = hint
-            .status_chips
-            .iter()
-            .map(|chip| chip.label.as_str())
-            .collect();
-        assert_eq!(labels, vec!["; capture", "needs body"]);
-        assert!(!labels.contains(&"needs date"));
+        assert!(hint.status_chips.is_empty());
+        assert!(hint.mode_chip.is_none());
+        assert!(hint.status_chip.is_none());
         let validation = hint.capture_validation.expect("validation");
         assert_eq!(validation.missing_field_labels, vec!["body".to_string()]);
     }

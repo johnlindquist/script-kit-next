@@ -101,8 +101,9 @@ fn form_mode_hides_ask_ai_hint_and_uses_accent_focus_style() {
         "focused handler fields should show an accent border while preserving the normal field background"
     );
     assert!(
-        field_renderer.contains("field.required && !field.satisfied"),
-        "handler form focus should only add required-state chrome when the schema requires it"
+        !field_renderer.contains("field.required && !field.satisfied")
+            && !field_renderer.contains(".child(\"required\")"),
+        "handler form required presentation should live in the field label, not a separate badge/chrome"
     );
     assert!(
         field_renderer.contains("gpui_component::input::Input::new(&input)")
@@ -139,6 +140,88 @@ fn form_mode_hides_ask_ai_hint_and_uses_accent_focus_style() {
         !filter_change.contains("trim_end_matches(' ').to_string()")
             && !filter_change.contains("self.focus_next_menu_syntax_form_field(window, cx);\n                return;"),
         "typing a trailing space in the main input must not trim the command or auto-focus the first handler field"
+    );
+}
+
+#[test]
+fn capture_form_required_state_moves_to_labels_and_header_chips_are_empty() {
+    let form = read("src/menu_syntax/form.rs");
+    assert!(
+        form.contains("fn required_form_label")
+            && form.contains("format!(\"{label} *\")")
+            && form.contains("let label = required_form_label(label, required);")
+            && form.contains("required,")
+            && form.contains("satisfied,"),
+        "required handler form fields should keep semantic booleans while adding the visible `*` in snapshot labels"
+    );
+
+    let capture_schema = read("src/menu_syntax/capture_schema.rs");
+    assert!(
+        capture_schema.contains("FieldRequirement::Body => \"body\"")
+            && capture_schema.contains(
+                "FieldRequirement::SnippetNameOrSelection => \"name or selected snippet\""
+            )
+            && !capture_schema.contains("\"body *\"")
+            && !capture_schema.contains("name or selected snippet *"),
+        "capture validation labels must stay semantic and unstarred"
+    );
+
+    let hint = read("src/menu_syntax/main_hint.rs");
+    let capture_start = hint
+        .find("kind: MenuSyntaxMainHintKind::CaptureComposer")
+        .expect("capture composer snapshot must exist");
+    let capture_body = &hint[capture_start..];
+    assert!(
+        capture_body.contains("mode_chip: None")
+            && capture_body.contains("status_chip: None")
+            && capture_body.contains("status_chips: Vec::new()")
+            && capture_body.contains("capture_validation,"),
+        "capture form state should keep capture_validation but remove header mode/status chips"
+    );
+    let validation_start = hint
+        .find("fn capture_validation_snapshot(")
+        .expect("capture validation helper must exist");
+    let validation_end = hint[validation_start..]
+        .find("fn payload_for_capture_validation(")
+        .map(|offset| validation_start + offset)
+        .expect("payload helper must follow capture validation helper");
+    let validation_helper = &hint[validation_start..validation_end];
+    assert!(
+        !validation_helper.contains("chip(\"; capture\"")
+            && !validation_helper.contains("format!(\"needs {label}\")")
+            && !validation_helper.contains("chip(\"malformed\""),
+        "capture validation helper should no longer construct visible header chips"
+    );
+}
+
+#[test]
+fn capture_form_scroll_owner_and_tab_reveal_are_natural() {
+    let render = read("src/render_script_list/mod.rs");
+    assert!(
+        render.contains("gpui_component::scroll::ScrollableElement::vertical_scrollbar")
+            && render.contains(".id(\"menu-syntax-main-hint-scroll\")")
+            && render.contains(".track_scroll(scroll_handle)")
+            && render.contains(".overflow_y_scroll()"),
+        "capture form should keep the main-hint scroll surface as the single scroll owner"
+    );
+
+    let form_owner = read("src/app_impl/menu_syntax_main_hint.rs");
+    let reveal_start = form_owner
+        .find("fn reveal_menu_syntax_form_field_at(")
+        .expect("Tab focus reveal helper must exist");
+    let reveal_end = form_owner[reveal_start..]
+        .find("fn focus_menu_syntax_form_input_at(")
+        .map(|offset| reveal_start + offset)
+        .expect("focus helper must follow reveal helper");
+    let reveal = &form_owner[reveal_start..reveal_end];
+    assert!(
+        !reveal.contains("target_y = gpui::px(-((index as f32) * APPROX_FIELD_HEIGHT_PX))")
+            && reveal.contains("REVEAL_MARGIN_PX")
+            && reveal.contains("field_top")
+            && reveal.contains("field_bottom")
+            && reveal.contains("current_scroll_y")
+            && reveal.contains("} else {\n            current_scroll_y\n        }"),
+        "Tab reveal should ensure the field is visible instead of top-aligning every focused field"
     );
 }
 
