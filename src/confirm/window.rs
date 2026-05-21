@@ -5,7 +5,7 @@
 use std::{
     rc::Rc,
     sync::{Mutex, OnceLock},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use gpui::{
@@ -16,21 +16,23 @@ use gpui::{
 use gpui_component::button::ButtonVariant;
 
 use crate::{
+    components::overlay_modal::{OverlayAnimation, BUTTON_GAP, MODAL_PADDING},
     list_item::FONT_MONO,
     platform,
     theme::get_cached_theme,
     ui_foundation::{is_key_enter, is_key_escape, is_key_left, is_key_tab, HexColorExt},
 };
 
-const CONFIRM_PADDING_X: f32 = 10.0;
-const CONFIRM_PADDING_Y: f32 = 14.0;
-const CONFIRM_SECTION_GAP: f32 = 4.0;
-const CONFIRM_BUTTON_GAP: f32 = 12.0;
-const CONFIRM_BUTTON_HEIGHT: f32 = 20.0;
+const CONFIRM_MODAL_WIDTH: f32 = 360.0;
+const CONFIRM_PADDING_X: f32 = MODAL_PADDING;
+const CONFIRM_PADDING_Y: f32 = 20.0;
+const CONFIRM_SECTION_GAP: f32 = 10.0;
+const CONFIRM_BUTTON_GAP: f32 = BUTTON_GAP;
+const CONFIRM_BUTTON_HEIGHT: f32 = 24.0;
 const CONFIRM_TITLE_LINE_HEIGHT: f32 = 16.0;
 const CONFIRM_BODY_LINE_HEIGHT: f32 = 16.0;
-const CONFIRM_MIN_HEIGHT: f32 = 76.0;
-const CONFIRM_MAX_HEIGHT: f32 = 128.0;
+const CONFIRM_MIN_HEIGHT: f32 = 132.0;
+const CONFIRM_MAX_HEIGHT: f32 = 196.0;
 const CONFIRM_BODY_MAX_LINES: usize = 3;
 const CONFIRM_LIFECYCLE_POLL_MS: u64 = 120;
 /// NSWindowOrderingMode::NSWindowAbove — place child above parent.
@@ -139,12 +141,13 @@ fn confirm_window_bounds(
     title: &str,
     body: &str,
 ) -> Bounds<Pixels> {
-    let height = px(confirm_window_dynamic_height(width, title, body));
+    let requested_width = width.min(px(CONFIRM_MODAL_WIDTH));
+    let actual_width = requested_width.min(parent_bounds.size.width);
+    let height =
+        px(confirm_window_dynamic_height(actual_width, title, body)).min(parent_bounds.size.height);
 
-    // Match parent width and bottom-align flush with parent bottom edge
-    let actual_width = parent_bounds.size.width;
-    let x = parent_bounds.origin.x;
-    let y = parent_bounds.origin.y + parent_bounds.size.height - height;
+    let x = parent_bounds.origin.x + ((parent_bounds.size.width - actual_width) / 2.0);
+    let y = parent_bounds.origin.y + ((parent_bounds.size.height - height) / 2.0);
 
     Bounds {
         origin: Point { x, y },
@@ -305,12 +308,17 @@ fn get_confirm_focused_button() -> FocusedButton {
 }
 
 fn toggle_confirm_focused_button() {
+    let next = match get_confirm_focused_button() {
+        FocusedButton::Cancel => FocusedButton::Confirm,
+        FocusedButton::Confirm => FocusedButton::Cancel,
+    };
+    set_confirm_focused_button(next);
+}
+
+fn set_confirm_focused_button(next: FocusedButton) {
     if let Some(storage) = CONFIRM_FOCUSED_BUTTON.get() {
         if let Ok(mut guard) = storage.lock() {
-            *guard = match *guard {
-                FocusedButton::Cancel => FocusedButton::Confirm,
-                FocusedButton::Confirm => FocusedButton::Cancel,
-            };
+            *guard = next;
         }
     }
 }
@@ -617,9 +625,13 @@ pub(crate) fn open_confirm_popup_window(
                         );
 
                         // Match by approximate frame bounds (GPUI may apply
-                        // slight adjustments, so use 2px tolerance)
+                        // slight adjustments, so use tolerance on position
+                        // and size). Confirm is shortcut-sized, so size alone
+                        // can collide with another compact popup.
                         if (frame.size.width - expected_w as f64).abs() < 2.0
                             && (frame.size.height - expected_h as f64).abs() < 2.0
+                            && (frame.origin.x - expected_x as f64).abs() < 4.0
+                            && (frame.origin.y - expected_y as f64).abs() < 4.0
                             && is_visible
                         {
                             tracing::info!(
@@ -627,7 +639,7 @@ pub(crate) fn open_confirm_popup_window(
                                 event = "configure_confirm_nswindow_matched",
                                 index = i,
                                 ptr = format!("{:?}", w),
-                                "Matched confirm popup NSWindow by frame size"
+                                "Matched confirm popup NSWindow by frame bounds"
                             );
                             confirm_ns_window = w;
                         }
@@ -937,6 +949,22 @@ pub(crate) struct ConfirmPopupWindow {
     lifecycle_task: Option<Task<()>>,
     did_request_focus: bool,
     resolved: bool,
+    overlay_animation_started_at: Instant,
+    overlay_animation_tick_scheduled: bool,
+}
+
+impl OverlayAnimation for ConfirmPopupWindow {
+    fn overlay_animation_started_at(&self) -> Instant {
+        self.overlay_animation_started_at
+    }
+
+    fn overlay_animation_tick_scheduled(&self) -> bool {
+        self.overlay_animation_tick_scheduled
+    }
+
+    fn set_overlay_animation_tick_scheduled(&mut self, scheduled: bool) {
+        self.overlay_animation_tick_scheduled = scheduled;
+    }
 }
 
 impl ConfirmPopupWindow {
@@ -968,6 +996,8 @@ impl ConfirmPopupWindow {
             lifecycle_task: None,
             did_request_focus: false,
             resolved: false,
+            overlay_animation_started_at: Instant::now(),
+            overlay_animation_tick_scheduled: false,
         }
     }
 
@@ -978,6 +1008,7 @@ impl ConfirmPopupWindow {
             (FocusedButton::Cancel, true) => FocusedButton::Confirm,
             (FocusedButton::Confirm, true) => FocusedButton::Cancel,
         };
+        set_confirm_focused_button(self.focused_button);
         cx.notify();
     }
 
@@ -1126,6 +1157,9 @@ impl Render for ConfirmPopupWindow {
         );
 
         self.ensure_lifecycle_task(cx);
+        self.focused_button = get_confirm_focused_button();
+        let overlay_appear = self.overlay_appear_style();
+        self.schedule_overlay_animation_tick_if_needed(overlay_appear.complete, cx);
 
         if !self.did_request_focus {
             self.did_request_focus = true;
@@ -1197,15 +1231,18 @@ impl Render for ConfirmPopupWindow {
         let panel_bg = gpui::rgba(chrome.popup_surface_rgba);
         let is_danger = matches!(self.confirm_variant, ButtonVariant::Danger);
 
-        // Border color: red-tinted for danger, subtle for normal
-        let top_border_color = if is_danger {
-            theme.colors.ui.error.with_opacity(0.15)
+        let border_color = if is_danger {
+            theme.colors.ui.error.with_opacity(0.28)
         } else {
-            theme.colors.ui.border.with_opacity(0.30)
+            theme.colors.ui.border.with_opacity(0.55)
+        };
+        let accent_color = if is_danger {
+            theme.colors.ui.error.to_rgb()
+        } else {
+            theme.colors.accent.selected.to_rgb()
         };
 
-        // Read focused button state for visual feedback
-        let current_focused = get_confirm_focused_button();
+        let current_focused = self.focused_button;
         let cancel_focused = current_focused == FocusedButton::Cancel;
         let confirm_focused = current_focused == FocusedButton::Confirm;
 
@@ -1245,22 +1282,22 @@ impl Render for ConfirmPopupWindow {
         let cancel_entity = entity.clone();
         let confirm_entity = entity.clone();
 
-        // ── Title row: optional icon + title ────────────────────
         let title_row = div()
             .flex()
             .flex_row()
             .items_center()
-            .gap(px(5.))
-            .when(is_danger, |d| {
-                d.child(
-                    div()
-                        .text_xs()
-                        .text_color(theme.colors.ui.error.to_rgb())
-                        .child("⚠"),
-                )
-            })
+            .gap(px(8.))
             .child(
                 div()
+                    .w(px(2.0))
+                    .h(px(14.0))
+                    .rounded(px(1.0))
+                    .bg(accent_color),
+            )
+            .child(
+                div()
+                    .min_w(px(0.))
+                    .truncate()
                     .text_xs()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .text_color(title_color)
@@ -1293,7 +1330,7 @@ impl Render for ConfirmPopupWindow {
                     .child(
                         div()
                             .px(px(4.))
-                            .py(px(1.))
+                            .py(px(2.))
                             .rounded(px(3.))
                             .bg(cancel_keycap_bg)
                             .text_xs()
@@ -1327,7 +1364,7 @@ impl Render for ConfirmPopupWindow {
                     .child(
                         div()
                             .px(px(4.))
-                            .py(px(1.))
+                            .py(px(2.))
                             .rounded(px(3.))
                             .bg(confirm_keycap_bg)
                             .text_xs()
@@ -1355,12 +1392,16 @@ impl Render for ConfirmPopupWindow {
                     .size_full()
                     .flex()
                     .flex_col()
+                    .mt(px(overlay_appear.modal_offset_y))
+                    .opacity(overlay_appear.modal_opacity)
                     .bg(panel_bg)
                     .px(px(CONFIRM_PADDING_X))
                     .py(px(CONFIRM_PADDING_Y))
                     .gap(px(CONFIRM_SECTION_GAP))
-                    .border_t_1()
-                    .border_color(top_border_color)
+                    .border_1()
+                    .border_color(border_color)
+                    .rounded(px(8.0))
+                    .overflow_hidden()
                     // Title row
                     .child(title_row)
                     // Body (if present)
@@ -1368,7 +1409,10 @@ impl Render for ConfirmPopupWindow {
                         d.child(
                             div()
                                 .w_full()
+                                .min_h(px(0.))
+                                .overflow_hidden()
                                 .text_xs()
+                                .line_height(px(CONFIRM_BODY_LINE_HEIGHT))
                                 .text_color(body_color)
                                 .child(self.body.clone()),
                         )
@@ -1431,7 +1475,7 @@ mod tests {
     }
 
     #[test]
-    fn confirm_window_bounds_bottom_aligned_over_parent_window() {
+    fn confirm_window_bounds_centered_over_parent_window() {
         let parent_bounds = Bounds {
             origin: Point {
                 x: px(100.),
@@ -1448,20 +1492,18 @@ mod tests {
         let actual_y: f32 = bounds.origin.y.into();
         let actual_w: f32 = bounds.size.width.into();
 
-        let expected_height = confirm_window_dynamic_height(px(448.), "Confirm", "Body");
-        // Should match parent x and width
-        let expected_x = 100.0;
-        // Should bottom-align: parent_y + parent_h - confirm_h
-        let expected_y = 200.0 + 500.0 - expected_height;
+        let expected_width = CONFIRM_MODAL_WIDTH;
+        let expected_height = confirm_window_dynamic_height(px(expected_width), "Confirm", "Body");
+        let expected_x = 100.0 + ((750.0 - expected_width) / 2.0);
+        let expected_y = 200.0 + ((500.0 - expected_height) / 2.0);
 
         assert!((actual_x - expected_x).abs() < 0.5);
         assert!((actual_y - expected_y).abs() < 0.5);
-        // Width matches parent
-        assert!((actual_w - 750.0).abs() < 0.5);
+        assert!((actual_w - expected_width).abs() < 0.5);
     }
 
     #[test]
-    fn confirm_window_bounds_bottom_aligned_notes_sized_parent() {
+    fn confirm_window_bounds_centered_notes_sized_parent() {
         let parent_bounds = Bounds {
             origin: Point {
                 x: px(960.),
@@ -1485,14 +1527,51 @@ mod tests {
         let width: f32 = bounds.size.width.into();
         let height: f32 = bounds.size.height.into();
 
-        assert!((x - 960.0).abs() < 0.5, "popup x must match parent x");
         assert!(
-            (width - 350.0).abs() < 0.5,
-            "popup width must match parent width"
+            (x - (960.0 + ((350.0 - 326.0) / 2.0))).abs() < 0.5,
+            "popup x must center over notes parent"
         );
         assert!(
-            ((y + height) - (80.0 + 280.0)).abs() < 0.5,
-            "popup must be flush with parent bottom edge"
+            (width - 326.0).abs() < 0.5,
+            "popup width should use the requested compact width when it fits"
+        );
+        assert!(
+            (y - (80.0 + ((280.0 - height) / 2.0))).abs() < 0.5,
+            "popup must center vertically over notes parent"
+        );
+    }
+
+    #[test]
+    fn confirm_focus_global_state_tracks_native_popup_focus_changes() {
+        let _ = CONFIRM_FOCUSED_BUTTON.get_or_init(|| Mutex::new(FocusedButton::Confirm));
+        set_confirm_focused_button(FocusedButton::Confirm);
+        assert_eq!(get_confirm_focused_button(), FocusedButton::Confirm);
+
+        toggle_confirm_focused_button();
+        assert_eq!(get_confirm_focused_button(), FocusedButton::Cancel);
+
+        set_confirm_focused_button(FocusedButton::Confirm);
+        assert_eq!(get_confirm_focused_button(), FocusedButton::Confirm);
+    }
+
+    #[test]
+    fn confirm_nswindow_search_matches_position_and_size() {
+        let source = std::fs::read_to_string("src/confirm/window.rs")
+            .expect("Failed to read src/confirm/window.rs");
+        let search_section = source
+            .split("configure_confirm_nswindow_search")
+            .nth(1)
+            .and_then(|section| section.split("if confirm_ns_window == nil").next())
+            .expect("expected confirm NSWindow search section");
+
+        assert!(
+            search_section.contains("expected_x")
+                && search_section.contains("expected_y")
+                && search_section.contains("frame.origin.x")
+                && search_section.contains("frame.origin.y")
+                && search_section.contains("frame.size.width")
+                && search_section.contains("frame.size.height"),
+            "confirm popup NSWindow matching should include position and size"
         );
     }
 

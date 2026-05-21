@@ -319,56 +319,15 @@ pub(crate) async fn confirm_with_parent_dialog(
     let window_handle = crate::get_main_window_handle()
         .ok_or_else(|| anyhow::anyhow!("Main window handle not available"))?;
 
-    let main_window_active = crate::is_main_window_visible();
-
     let sender_ok = confirm_tx.clone();
     let sender_cancel = confirm_tx.clone();
-    let sender_in_window = confirm_tx.clone();
-    let options_for_route = options.clone();
 
-    cx.update_window(window_handle, move |any_view, window, cx| {
+    cx.update_window(window_handle, move |_any_view, window, cx| {
         tracing::info!(
             target: "script_kit::confirm",
             event = "confirm_route_decision",
-            main_window_active,
-            "Choosing in-window vs popup confirm route"
+            "Opening native parent-attached confirm popup"
         );
-        if main_window_active {
-            let routed = {
-                let guard = IN_WINDOW_ROUTER.lock().ok();
-                let has_router = guard.as_ref().and_then(|g| g.as_ref()).is_some();
-                tracing::info!(
-                    target: "script_kit::confirm",
-                    event = "confirm_router_lookup",
-                    has_router,
-                    "Looked up in-window confirm router"
-                );
-                if let Some(guard) = guard {
-                    if let Some(router) = guard.as_ref() {
-                        let accepted = router(
-                            any_view.clone(),
-                            options_for_route.clone(),
-                            sender_in_window,
-                            cx,
-                        );
-                        tracing::info!(
-                            target: "script_kit::confirm",
-                            event = "confirm_router_returned",
-                            accepted,
-                            "In-window confirm router returned"
-                        );
-                        accepted
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            };
-            if routed {
-                return;
-            }
-        }
 
         open_parent_confirm_dialog(
             window,
@@ -433,6 +392,32 @@ mod tests {
         assert!(
             !normalized.contains(&legacy_marker),
             "parent confirm dialog should no longer use in-window open_dialog"
+        );
+    }
+
+    #[test]
+    fn async_confirm_route_no_longer_uses_in_window_confirm_prompt_router() {
+        let source = fs::read_to_string("src/confirm/parent_dialog.rs")
+            .expect("Failed to read src/confirm/parent_dialog.rs");
+        let production_source = source.split("#[cfg(test)]").next().unwrap_or(&source);
+        let function_body = production_source
+            .split("pub(crate) async fn confirm_with_parent_dialog")
+            .nth(1)
+            .and_then(|section| section.split("let confirmed = confirm_rx.recv()").next())
+            .expect("expected confirm_with_parent_dialog body");
+        let normalized = normalize_ws(function_body);
+
+        assert!(
+            !normalized.contains("crate::is_main_window_visible()"),
+            "async confirms should no longer choose AppView::ConfirmPrompt based on main-window visibility"
+        );
+        assert!(
+            !normalized.contains("IN_WINDOW_ROUTER.lock()"),
+            "async confirms should no longer route through the in-window ConfirmPrompt router"
+        );
+        assert!(
+            normalized.contains("open_parent_confirm_dialog("),
+            "async confirms should open the shared native parent confirm popup"
         );
     }
 
