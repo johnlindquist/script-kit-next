@@ -2,7 +2,7 @@
 //!
 //! Consolidates duplicate implementations from across the codebase into a single source of truth.
 
-use chrono::{DateTime, Local, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Local, TimeZone, Utc};
 use chrono_humanize::{Accuracy, HumanTime, Tense};
 
 /// Format a byte count as a human-readable file size (e.g. "1.5 MB", "456 KB", "12 B").
@@ -83,6 +83,37 @@ pub fn format_absolute_unix_millis(unix_timestamp_ms: i64) -> String {
     DateTime::<Utc>::from_timestamp_millis(unix_timestamp_ms)
         .map(format_absolute_datetime)
         .unwrap_or_else(|| "unknown time".to_string())
+}
+
+/// Format a file modification timestamp like Finder's Date Modified column.
+///
+/// Uses compact contextual labels instead of verbose strings such as
+/// "Today at 7:08 AM" or "May 19, 2026 at 11:16 PM".
+pub fn format_finder_modified_timestamp(unix_timestamp: u64) -> String {
+    if unix_timestamp == 0 {
+        return "—".to_string();
+    }
+
+    let Some(dt) = Utc.timestamp_opt(unix_timestamp as i64, 0).single() else {
+        return "—".to_string();
+    };
+
+    let dt = dt.with_timezone(&Local);
+    let now = Local::now();
+    let today = now.date_naive();
+    let date = dt.date_naive();
+    let days_ago = today.signed_duration_since(date).num_days();
+
+    match days_ago {
+        // Today and yesterday: time only ("7:08 AM").
+        0 | 1 => dt.format("%-I:%M %p").to_string(),
+        // Earlier this week: weekday ("Mon").
+        2..=6 => dt.format("%a").to_string(),
+        // Same calendar year: month/day ("May 19").
+        _ if dt.year() == now.year() => dt.format("%b %-e").to_string(),
+        // Prior years: numeric date ("5/19/23").
+        _ => dt.format("%-m/%-e/%y").to_string(),
+    }
 }
 
 /// Format an RFC3339 timestamp as a local display date.
@@ -343,6 +374,40 @@ mod tests {
         assert_ne!(formatted, "unknown time");
         assert!(formatted.contains("1970"));
         assert!(formatted.contains(" at "));
+    }
+
+    #[test]
+    fn test_finder_modified_timestamp_zero_is_dash() {
+        assert_eq!(format_finder_modified_timestamp(0), "—");
+    }
+
+    #[test]
+    fn test_finder_modified_timestamp_today_is_time_only() {
+        let now = Local::now();
+        let formatted = format_finder_modified_timestamp(now.timestamp() as u64);
+
+        assert!(!formatted.contains("Today"));
+        assert!(!formatted.contains("Yesterday"));
+        assert!(!formatted.contains(" at "));
+    }
+
+    #[test]
+    fn test_finder_modified_timestamp_same_year_uses_month_day() {
+        let now = Local::now();
+        let dt = now - TimeDelta::days(30);
+        if dt.year() == now.year() {
+            let formatted = format_finder_modified_timestamp(dt.timestamp() as u64);
+            assert!(formatted.contains(' '));
+            assert!(!formatted.contains(" at "));
+            assert!(!formatted.contains(':'));
+        }
+    }
+
+    #[test]
+    fn test_finder_modified_timestamp_prior_year_uses_numeric_date() {
+        let dt = Local.with_ymd_and_hms(2020, 5, 19, 23, 16, 0).unwrap();
+        let formatted = format_finder_modified_timestamp(dt.timestamp() as u64);
+        assert_eq!(formatted, "5/19/20");
     }
 
     // ── format_duration_compact ───────────────────────────────────────────
