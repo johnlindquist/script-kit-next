@@ -226,11 +226,16 @@ fn codex_detection_uses_local_codex_cli_not_adapter_binary_only() {
     );
     assert!(
         ACP_CONFIG_SOURCE.contains("command_exists(\"codex\")"),
-        "Codex implicit default must be based on the local codex CLI"
+        "Codex diagnostics must probe the local codex CLI"
     );
     assert!(
-        ACP_CONFIG_SOURCE.contains("command_exists(\"npx\")"),
-        "Codex adapter readiness must account for npx"
+        ACP_CONFIG_SOURCE.contains("npx_runtime_fallback_enabled: false"),
+        "Codex must record that npx runtime fallback is disabled"
+    );
+    assert!(
+        ACP_CONFIG_SOURCE.contains("let launch_ready = adapter_ready;")
+            && ACP_CONFIG_SOURCE.contains("should_be_implicit_codex_default: launch_ready"),
+        "Codex launch readiness must come from the resolved adapter, not npx or codex CLI alone"
     );
     assert!(
         !ACP_CONFIG_SOURCE.contains(
@@ -251,8 +256,8 @@ fn codex_setup_normalizes_stale_absolute_adapter_paths() {
         "absolute stale codex-acp paths must be detected by filename"
     );
     assert!(
-        ACP_CONFIG_SOURCE.contains("missing_absolute_codex_acp_adapter_normalizes_to_npx_adapter"),
-        "config tests must pin stale absolute codex-acp migration to npx"
+        ACP_CONFIG_SOURCE.contains("missing_adapter_does_not_normalize_to_npx_runtime"),
+        "config tests must pin stale absolute codex-acp migration away from npx"
     );
 }
 
@@ -276,12 +281,16 @@ fn first_run_acp_catalog_seed_includes_codex_adapter() {
         "fresh installs must seed codex-acp into acp/agents.json"
     );
     assert!(
-        SETUP_MOD_SOURCE.contains(r#""command": "npx""#),
-        "fresh installs must run the Codex ACP adapter through npx"
+        SETUP_MOD_SOURCE.contains(r#""command": "codex-acp""#),
+        "fresh installs must seed Codex as a direct ACP adapter command"
     );
     assert!(
-        SETUP_MOD_SOURCE.contains(r#""args": ["@zed-industries/codex-acp"]"#),
-        "fresh installs must pass the Codex ACP adapter package to npx"
+        SETUP_MOD_SOURCE.contains(r#""args": []"#),
+        "fresh installs must not route Codex through npx package args"
+    );
+    assert!(
+        !SETUP_MOD_SOURCE.contains(r#""@zed-industries/codex-acp""#),
+        "fresh installs must not seed a runtime npx Codex package fallback"
     );
 }
 

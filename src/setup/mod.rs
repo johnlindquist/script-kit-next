@@ -146,14 +146,10 @@ const EMBEDDED_ACP_AGENTS_JSON: &str = r#"{
     {
       "id": "codex-acp",
       "displayName": "Codex",
-      "command": "npx",
-      "args": ["@zed-industries/codex-acp"],
+      "command": "codex-acp",
+      "args": [],
       "env": {},
       "models": [],
-      "install": {
-        "command": "npx",
-        "args": ["@zed-industries/codex-acp"]
-      },
       "auth": {
         "summary": "Authenticate with ChatGPT, CODEX_API_KEY, or OPENAI_API_KEY."
       }
