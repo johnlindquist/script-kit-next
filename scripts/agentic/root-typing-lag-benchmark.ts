@@ -34,6 +34,10 @@ const enforce = process.argv.includes("--enforce");
 const traceEnabled = !process.argv.includes("--no-trace");
 const passiveRefreshOverlap = process.argv.includes("--passive-refresh-overlap");
 const forceBrowserTabFailure = process.argv.includes("--force-browser-tabs-failure");
+const inputMode = argValue("--input-mode", "setFilter");
+if (!["setFilter", "printable-key"].includes(inputMode)) {
+  throw new Error(`unknown --input-mode '${inputMode}'`);
+}
 const scenarios = argValue("--scenarios", "amz,dictat,this is the f,Hae")
   .split(",")
   .map((scenario) => scenario.trim())
@@ -405,6 +409,25 @@ function setFilter(text: string, tag: string) {
   };
 }
 
+function printableKey(next: string, tag: string) {
+  const parseMs = directSend({
+    type: "setFilter",
+    text: next,
+    requestId: `root-typing-printable-key-${tag}-${Date.now()}`,
+  });
+  const echoWaitMs = waitForInput(next);
+  return {
+    text: next,
+    parseMs: Number(parseMs.toFixed(3)),
+    inputEchoMs: Number((parseMs + echoWaitMs).toFixed(3)),
+  };
+}
+
+function applyTypedInput(next: string, tag: string) {
+  if (inputMode === "printable-key") return printableKey(next, tag);
+  return setFilter(next, tag);
+}
+
 function typeScenario(query: string, sampleIndex: number) {
   setFilter("", `${slug(query)}-${sampleIndex}-clear`);
   const events = [];
@@ -413,7 +436,7 @@ function typeScenario(query: string, sampleIndex: number) {
   for (let index = 0; index < query.length; index += 1) {
     current += query[index];
     const tickStarted = performance.now();
-    const event = setFilter(current, `${slug(query)}-${sampleIndex}-${index}`);
+    const event = applyTypedInput(current, `${slug(query)}-${sampleIndex}-${index}`);
     const echoElapsed = performance.now() - tickStarted;
     const state = stateProbeEvery > 0 && index % stateProbeEvery === 0 ? getState(`${slug(query)}-${sampleIndex}-${index}`) : null;
     const elapsed = performance.now() - tickStarted;
@@ -422,6 +445,7 @@ function typeScenario(query: string, sampleIndex: number) {
       index,
       expected: current,
       expectedLength: current.length,
+      inputMode,
       ...event,
       computedMatchesInput: state ? state.mainWindowPreflight?.computedSearchText === current : null,
       visibleResultCount: state?.mainWindowPreflight?.visibleResults?.length ?? null,
@@ -477,6 +501,20 @@ function parsePerfLogs(logPath: string) {
   const refreshStarted = (log.match(/root_passive_snapshot_refresh_started/g) ?? []).length;
   const refreshFailed = (log.match(/root_passive_snapshot_refresh_failed/g) ?? []).length;
   const preflightDeepLineCount = (log.match(/visible_row_fingerprint":"(?:[^"]{512,})/g) ?? []).length;
+  const passiveSources = [...log.matchAll(
+    /\[PASSIVE_SOURCE_DONE\] source=([a-z_]+) query_len=([0-9]+) explicit=(true|false) in ([0-9.]+)ms -> ([0-9]+) hits/g,
+  )].map((match) => ({
+    source: match[1],
+    queryLen: Number(match[2]),
+    explicit: match[3] === "true",
+    ms: Number(match[4]),
+    hits: Number(match[5]),
+  }));
+  const passiveDurations = passiveSources.map((entry) => entry.ms);
+  const implicitPassiveDurations = passiveSources.filter((entry) => !entry.explicit).map((entry) => entry.ms);
+  const slowestPassiveSources = [...passiveSources]
+    .sort((a, b) => b.ms - a.ms)
+    .slice(0, 10);
   return {
     applyFilterDone: stats(applyDurations),
     groupDone: stats(groupDurations),
@@ -485,6 +523,12 @@ function parsePerfLogs(logPath: string) {
     handlerSlowCount: handlerDurations.length,
     browserTabsRefreshStartCount: refreshStarted,
     browserTabsRefreshFailedCount: refreshFailed,
+    passiveSources: {
+      all: stats(passiveDurations),
+      implicit: stats(implicitPassiveDurations),
+      count: passiveSources.length,
+      slowest: slowestPassiveSources,
+    },
     preflightDeepLineCount,
     maxLogLineBytes: maxLogLineBytes(log),
   };
@@ -541,6 +585,8 @@ async function main() {
   if (summary.perfLogs.handlerSlowCount !== 0) failures.push("handler slow logs present");
   if (summary.perfLogs.groupDone.p95Ms > 35) failures.push("GROUP_DONE p95 > 35ms");
   if (summary.perfLogs.searchTotal.p95Ms > 15) failures.push("SEARCH_TOTAL p95 > 15ms");
+  if (summary.perfLogs.passiveSources.all.maxMs > 20) failures.push("passive source max > 20ms");
+  if (summary.perfLogs.passiveSources.implicit.maxMs > 12) failures.push("implicit passive source max > 12ms");
   if (summary.perfLogs.maxLogLineBytes > 2048) failures.push("max log line bytes > 2048");
   if (summary.perfLogs.preflightDeepLineCount !== 0) failures.push("deep preflight lines present");
 
@@ -550,6 +596,7 @@ async function main() {
     scenarios,
     samples,
     cadenceMs,
+    inputMode,
     traceEnabled,
     passiveRefreshOverlap,
     forceBrowserTabFailure,
@@ -561,6 +608,8 @@ async function main() {
       cadenceOverrunMaxMs: 75,
       groupDoneP95Ms: 35,
       searchTotalP95Ms: 15,
+      passiveSourceMaxMs: 20,
+      implicitPassiveSourceMaxMs: 12,
       maxLogLineBytes: 2048,
       failures,
     },
