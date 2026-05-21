@@ -64,7 +64,7 @@ impl ScriptListApp {
             None
         };
 
-        // Restore retry draft state (suppresses focused part + ask-anything).
+        // Restore retry draft state (suppresses focused part, slash priming, and ask-anything).
         if let Some(draft_state) = retry_draft_state {
             view_entity_for_staging.update(cx, |view, cx| {
                 view.restore_retry_draft_state(draft_state, cx);
@@ -73,13 +73,15 @@ impl ScriptListApp {
 
         // Prime the slash command picker with /new-script when ACP opens
         // without auto-submit, explicit empty-composer intent, or context.
-        if Self::should_prime_script_authoring_slash(
-            auto_submit,
-            focused_part.is_some(),
-            use_ask_anything_fallback,
-            pending_script_list_trigger,
-            suppress_focused_part,
-        ) {
+        if !has_retry_draft_state
+            && Self::should_prime_script_authoring_slash(
+                auto_submit,
+                focused_part.is_some(),
+                use_ask_anything_fallback,
+                pending_script_list_trigger,
+                suppress_focused_part,
+            )
+        {
             view_entity_for_staging.update(cx, |view, cx| {
                 view.prime_slash_entry("new-script", cx);
             });
@@ -209,9 +211,8 @@ impl ScriptListApp {
 
             // Wait for deferred capture (bounded — OS providers can hang without a timeout).
             let capture_wait_started_at = std::time::Instant::now();
-            let capture_timeout = std::time::Duration::from_secs(
-                ScriptListApp::TAB_AI_DEFERRED_CAPTURE_TIMEOUT_SEC,
-            );
+            let capture_timeout =
+                std::time::Duration::from_secs(ScriptListApp::TAB_AI_DEFERRED_CAPTURE_TIMEOUT_SEC);
             let capture_result = loop {
                 match capture_rx.try_recv() {
                     Ok(result) => break result,

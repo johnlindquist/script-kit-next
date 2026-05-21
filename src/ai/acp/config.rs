@@ -165,22 +165,51 @@ fn bundled_codex_acp_path() -> Option<PathBuf> {
     None
 }
 
-fn sibling_repo_codex_acp_path() -> Option<PathBuf> {
+fn sibling_repo_codex_acp_candidates(root: &Path) -> Vec<PathBuf> {
+    let sibling_dev = root.join("codex-acp");
+    vec![
+        sibling_dev.join("target/release/codex-acp"),
+        sibling_dev.join("target/debug/codex-acp"),
+    ]
+}
+
+fn sibling_repo_codex_acp_search_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
         if let Some(parent) = PathBuf::from(manifest_dir).parent() {
-            let sibling_dev = parent.join("codex-acp");
-            let release_path = sibling_dev.join("target/release/codex-acp");
-            if let Some(path) = existing_executable_file(release_path) {
-                return Some(path);
-            }
-            let debug_path = sibling_dev.join("target/debug/codex-acp");
-            if let Some(path) = existing_executable_file(debug_path) {
-                return Some(path);
-            }
+            roots.push(parent.to_path_buf());
         }
     }
+    if let Ok(current_dir) = std::env::current_dir() {
+        if let Some(parent) = current_dir.parent() {
+            roots.push(parent.to_path_buf());
+        }
+    }
+    if let Ok(exe_path) = std::env::current_exe() {
+        let mut cursor = exe_path.as_path();
+        while let Some(parent) = cursor.parent() {
+            let parent_name = parent.file_name().and_then(|name| name.to_str());
+            if parent_name == Some("target") || parent_name == Some("target-agent") {
+                if let Some(repo_root) = parent.parent() {
+                    if let Some(dev_root) = repo_root.parent() {
+                        roots.push(dev_root.to_path_buf());
+                    }
+                }
+                break;
+            }
+            cursor = parent;
+        }
+    }
+    roots.sort();
+    roots.dedup();
+    roots
+}
 
-    None
+fn sibling_repo_codex_acp_path() -> Option<PathBuf> {
+    sibling_repo_codex_acp_search_roots()
+        .into_iter()
+        .flat_map(|root| sibling_repo_codex_acp_candidates(&root))
+        .find_map(existing_executable_file)
 }
 
 fn repo_local_codex_acp_path() -> Option<PathBuf> {
@@ -270,7 +299,7 @@ fn codex_acp_default_probe_state_from_parts(
     adapter_source: Option<CodexAcpAdapterSource>,
 ) -> CodexAcpDefaultProbeState {
     let adapter_ready = codex_acp_binary_ready;
-    let launch_ready = adapter_ready;
+    let launch_ready = adapter_ready && codex_cli_ready;
     CodexAcpDefaultProbeState {
         codex_cli_ready,
         npx_ready,
@@ -768,11 +797,12 @@ fn install_state_from_probe(
     agent: &AcpAgentConfig,
     command_ready: bool,
     adapter_ready: bool,
+    codex_cli_ready: bool,
 ) -> super::catalog::AcpAgentInstallState {
     use super::catalog::AcpAgentInstallState;
 
     let ready = if agent.id == CODEX_ACP_AGENT_ID {
-        adapter_ready
+        adapter_ready && codex_cli_ready
     } else {
         command_ready
     };
@@ -792,6 +822,7 @@ fn install_state_for_agent(agent: &AcpAgentConfig) -> super::catalog::AcpAgentIn
         agent,
         command_exists(&agent.command),
         is_codex_acp && resolved_codex_acp_adapter_path().is_some(),
+        !is_codex_acp || command_exists("codex"),
     )
 }
 
@@ -1662,11 +1693,11 @@ mod tests {
         let codex = codex_acp_agent_config();
 
         assert_eq!(
-            install_state_from_probe(&codex, true, false),
+            install_state_from_probe(&codex, true, false, true),
             crate::ai::acp::catalog::AcpAgentInstallState::Unsupported
         );
         assert_eq!(
-            install_state_from_probe(&codex, false, false),
+            install_state_from_probe(&codex, false, false, true),
             crate::ai::acp::catalog::AcpAgentInstallState::Unsupported
         );
 
@@ -1674,8 +1705,13 @@ mod tests {
         legacy.command = "codex-acp".into();
         legacy.args = Vec::new();
         assert_eq!(
-            install_state_from_probe(&legacy, false, true),
+            install_state_from_probe(&legacy, false, true, true),
             crate::ai::acp::catalog::AcpAgentInstallState::Ready
+        );
+        assert_eq!(
+            install_state_from_probe(&legacy, false, true, false),
+            crate::ai::acp::catalog::AcpAgentInstallState::Unsupported,
+            "Codex ACP adapter alone is not usable without the installed codex CLI"
         );
     }
 
@@ -1699,18 +1735,44 @@ mod tests {
         );
 
         let adapter_ready = codex_acp_default_probe_state_from_parts(
-            false,
+            true,
             true,
             true,
             Some(CodexAcpAdapterSource::BundledApp),
         );
-        assert!(!adapter_ready.codex_cli_ready);
+        assert!(adapter_ready.codex_cli_ready);
         assert!(adapter_ready.npx_ready);
         assert!(adapter_ready.codex_acp_binary_ready);
         assert!(adapter_ready.adapter_ready);
         assert!(adapter_ready.launch_ready);
         assert!(adapter_ready.should_be_implicit_codex_default);
         assert!(!adapter_ready.npx_runtime_fallback_enabled);
+
+        let missing_cli = codex_acp_default_probe_state_from_parts(
+            false,
+            true,
+            true,
+            Some(CodexAcpAdapterSource::BundledApp),
+        );
+        assert!(missing_cli.adapter_ready);
+        assert!(!missing_cli.launch_ready);
+        assert!(
+            !missing_cli.should_be_implicit_codex_default,
+            "adapter discovery must not select Codex by default when the codex CLI is missing"
+        );
+    }
+
+    #[test]
+    fn sibling_codex_acp_candidates_cover_release_before_debug() {
+        let root = PathBuf::from("/Users/example/dev");
+        let candidates = sibling_repo_codex_acp_candidates(&root);
+        assert_eq!(
+            candidates,
+            vec![
+                PathBuf::from("/Users/example/dev/codex-acp/target/release/codex-acp"),
+                PathBuf::from("/Users/example/dev/codex-acp/target/debug/codex-acp"),
+            ]
+        );
     }
 
     #[test]

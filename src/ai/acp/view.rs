@@ -6316,7 +6316,6 @@ impl AcpChatView {
             cx.notify();
         });
 
-        self.sync_inline_mentions(cx);
         self.sync_mention_popup_window_from_cached_parent(cx);
 
         tracing::info!(
