@@ -135,7 +135,7 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
 fn is_object_ref_token(token: &str) -> bool {
     token
         .strip_prefix('@')
-        .map(|query| !query.is_empty() && !query.starts_with('@'))
+        .map(|query| !query.starts_with('@'))
         .unwrap_or(false)
 }
 

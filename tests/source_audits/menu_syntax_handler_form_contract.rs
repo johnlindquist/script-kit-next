@@ -209,6 +209,11 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
         "src/main_entry/app_run_setup.rs",
     ] {
         let source = read(path);
+        assert!(
+            source.contains("handle_menu_syntax_form_key_input")
+                && source.contains("SimulateKey: menu-syntax form text input"),
+            "{path}: simulateKey printable/control keys must route through handler form key handling"
+        );
         let form = source
             .find("menu_syntax_capture_form_owns_input()")
             .unwrap_or_else(|| panic!("{path} must check handler form ownership"));
@@ -220,4 +225,106 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
             "{path}: simulateKey Tab must move handler form focus before Tab AI can claim the key"
         );
     }
+}
+
+#[test]
+fn handler_form_autocomplete_is_state_first_and_inline() {
+    let form = read("src/menu_syntax/form.rs");
+    for symbol in [
+        "pub struct MenuSyntaxFormSuggestionApplication",
+        "pub fn apply_menu_syntax_form_suggestion",
+        "pub struct MenuSyntaxFormSuggestionPools",
+        "pub struct MenuSyntaxFormSuggestion",
+        "pub detail: Option<String>",
+        "pub suggestion_query: String",
+        "pub selected_suggestion_index: Option<usize>",
+        "pub objects: Vec<crate::menu_syntax::ObjectSelectorCandidate>",
+        "filter_tag_suggestions",
+        "filter_object_suggestions",
+        "object_selector_candidate_matches",
+        "first_object_token_from_invocation",
+        "object_refs_for_raw_capture",
+    ] {
+        assert!(
+            form.contains(symbol),
+            "form autocomplete missing `{symbol}`"
+        );
+    }
+
+    let app = read("src/app_impl/menu_syntax_main_hint.rs");
+    let object_selector = read("src/app_impl/menu_syntax_object_selector_popup_window.rs");
+    for symbol in [
+        "handle_menu_syntax_form_control_key_input",
+        "move_menu_syntax_form_suggestion_selection",
+        "accept_menu_syntax_form_suggestion",
+        "annotate_menu_syntax_form_suggestion_selection",
+        "apply_menu_syntax_form_suggestion",
+        "update_menu_syntax_form_field",
+        "menu_syntax_form_suggestion_field_id",
+        "menu_syntax_form_suggestion_selected_index",
+        "search_root_object_candidates_direct",
+    ] {
+        assert!(app.contains(symbol), "app autocomplete missing `{symbol}`");
+    }
+
+    let accept_start = app
+        .find("fn accept_menu_syntax_form_suggestion(")
+        .expect("accept_menu_syntax_form_suggestion must exist");
+    let sync_start = app
+        .find("fn sync_menu_syntax_form_draft_from_form(")
+        .expect("sync_menu_syntax_form_draft_from_form must exist");
+    let accept_body = &app[accept_start..sync_start];
+    assert!(
+        accept_body.contains("update_menu_syntax_form_field")
+            && !accept_body.contains("menu_syntax_object_selector_state")
+            && !accept_body.contains("plan_object_selector_transition"),
+        "form suggestion acceptance must stay inline and sync through the form field edit path"
+    );
+
+    assert!(
+        object_selector.contains("self.menu_syntax_form_input_active")
+            && object_selector.contains("self.menu_syntax_capture_form_owns_input()")
+            && object_selector.contains("close_menu_syntax_object_selector_popup_window(cx)")
+            && object_selector.contains("run_menu_syntax_object_selector_state_machine"),
+        "handler form @ autocomplete must suppress the global object selector state machine"
+    );
+}
+
+#[test]
+fn handler_form_control_keys_preserve_standard_form_navigation() {
+    let render = read("src/render_script_list/mod.rs");
+    let control_key = render
+        .find("handle_menu_syntax_form_control_key_input")
+        .expect("physical key path must call form control-key handler");
+    let tab_key = render
+        .find("sk_is_key_tab(key_str)")
+        .expect("physical key path must still route Tab as form navigation");
+    assert!(
+        control_key < tab_key,
+        "suggestion Enter/Arrow handling should run before Tab navigation, while Tab stays traversal"
+    );
+
+    let app = read("src/app_impl/menu_syntax_main_hint.rs");
+    let control_start = app
+        .find("pub(crate) fn handle_menu_syntax_form_control_key_input(")
+        .expect("control key handler must exist");
+    let key_input_start = app
+        .find("pub(crate) fn handle_menu_syntax_form_key_input(")
+        .expect("printable key handler must still exist");
+    let control_body = &app[control_start..key_input_start];
+    assert!(
+        control_body.contains("\"up\" | \"arrowup\"")
+            && control_body.contains("\"down\" | \"arrowdown\"")
+            && control_body.contains("\"enter\" | \"return\"")
+            && control_body.contains("\"escape\" | \"esc\"")
+            && !control_body.contains("\"tab\""),
+        "Arrow/Enter/Escape may control form suggestions, but Tab must remain normal form traversal"
+    );
+
+    let state = read("src/main_sections/app_state.rs");
+    assert!(
+        state.contains("menu_syntax_form_suggestion_field_id")
+            && state.contains("menu_syntax_form_suggestion_selected_index"),
+        "selected form suggestion state must survive snapshot/render/control-key round trips"
+    );
 }

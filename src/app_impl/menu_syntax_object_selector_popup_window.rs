@@ -631,6 +631,11 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.menu_syntax_form_input_active && self.menu_syntax_capture_form_owns_input() {
+            self.menu_syntax_object_selector_state = Default::default();
+            close_menu_syntax_object_selector_popup_window(cx);
+            return;
+        }
         let capture_targets =
             crate::menu_syntax::registered_capture_targets_from_scripts(&self.scripts);
         let ctx = crate::menu_syntax::ObjectSelectorContext {

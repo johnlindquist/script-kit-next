@@ -23,6 +23,8 @@ pub struct MenuSyntaxFormSuggestion {
     pub value: String,
     pub label: String,
     pub source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -36,6 +38,10 @@ pub struct MenuSyntaxFormFieldSnapshot {
     pub required: bool,
     pub satisfied: bool,
     pub focused: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub suggestion_query: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_suggestion_index: Option<usize>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub suggestions: Vec<MenuSyntaxFormSuggestion>,
 }
@@ -58,6 +64,12 @@ pub struct MenuSyntaxFormSuggestionPools {
     pub priority_values: Vec<String>,
     pub date_values: Vec<ValueFrequency>,
     pub url_values: Vec<ValueFrequency>,
+    pub objects: Vec<crate::menu_syntax::ObjectSelectorCandidate>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MenuSyntaxFormSuggestionApplication {
+    pub next_field_value: String,
 }
 
 pub fn empty_capture_invocation(target: &str, raw: &str) -> CaptureInvocation {
@@ -151,9 +163,11 @@ pub fn apply_capture_form_field_edit(
             next.duration = (!normalized.is_empty()).then(|| normalized.to_string());
         }
         "object" => {
-            if !normalized.is_empty() {
-                next.body = append_or_replace_object_token(&next.body, normalized);
-            }
+            next.body = if normalized.is_empty() {
+                remove_object_tokens(&next.body)
+            } else {
+                append_or_replace_object_token(&next.body, normalized)
+            };
         }
         "trigger" => {
             upsert_kv(&mut next.kv, "trigger", normalized);
@@ -169,6 +183,61 @@ pub fn apply_capture_form_field_edit(
     }
 
     Some(serialize_capture_invocation(&next))
+}
+
+pub fn apply_menu_syntax_form_suggestion(
+    field: &MenuSyntaxFormFieldSnapshot,
+    suggestion: &MenuSyntaxFormSuggestion,
+) -> Option<MenuSyntaxFormSuggestionApplication> {
+    let next_field_value = match field.kind {
+        MenuSyntaxFormFieldKind::Tags => {
+            let range = active_completion_range(&field.value, true)?;
+            let mut next = String::new();
+            next.push_str(&field.value[..range.start]);
+            next.push_str(&normalize_tag_suggestion_value(&suggestion.value));
+            if !next.ends_with(' ') {
+                next.push(' ');
+            }
+            next.push_str(&field.value[range.end..]);
+            next.trim_end().to_string()
+        }
+        MenuSyntaxFormFieldKind::Object => suggestion.value.clone(),
+        MenuSyntaxFormFieldKind::Body
+        | MenuSyntaxFormFieldKind::Priority
+        | MenuSyntaxFormFieldKind::Date
+        | MenuSyntaxFormFieldKind::Url
+        | MenuSyntaxFormFieldKind::Duration
+        | MenuSyntaxFormFieldKind::KeyValue => suggestion.value.clone(),
+    };
+
+    Some(MenuSyntaxFormSuggestionApplication { next_field_value })
+}
+
+fn active_completion_range(value: &str, allow_comma: bool) -> Option<std::ops::Range<usize>> {
+    let end = value.len();
+    let start = value
+        .char_indices()
+        .rev()
+        .find_map(|(idx, ch)| {
+            (ch.is_ascii_whitespace() || (allow_comma && ch == ',')).then_some(idx + ch.len_utf8())
+        })
+        .unwrap_or(0);
+    Some(start..end)
+}
+
+fn active_completion_query(value: &str, allow_comma: bool) -> String {
+    active_completion_range(value, allow_comma)
+        .map(|range| value[range].trim().to_string())
+        .unwrap_or_default()
+}
+
+fn normalize_tag_suggestion_value(value: &str) -> String {
+    let tag = value.trim().trim_start_matches('#');
+    if tag.is_empty() {
+        String::new()
+    } else {
+        format!("#{tag}")
+    }
 }
 
 fn serialize_capture_invocation(invocation: &CaptureInvocation) -> String {
@@ -299,6 +368,128 @@ fn append_or_replace_object_token(body: &str, value: &str) -> String {
     parts.join(" ")
 }
 
+fn first_object_token_from_body(body: &str) -> String {
+    body.split_whitespace()
+        .find(|part| part.starts_with('@'))
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn first_object_token_from_invocation(invocation: &CaptureInvocation) -> String {
+    crate::menu_syntax::object_refs_for_raw_capture(&invocation.target, &invocation.raw)
+        .into_iter()
+        .find_map(|object_ref| object_ref.token)
+        .unwrap_or_else(|| first_object_token_from_body(&invocation.body))
+}
+
+fn remove_object_tokens(body: &str) -> String {
+    body.split_whitespace()
+        .filter(|part| !part.starts_with('@'))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn text_matches_query(value: &str, query: &str) -> bool {
+    let query = query
+        .trim()
+        .trim_start_matches(['#', '@'])
+        .to_ascii_lowercase();
+    if query.is_empty() {
+        return true;
+    }
+    value.to_ascii_lowercase().contains(&query)
+}
+
+fn filter_tag_suggestions(
+    current_value: &str,
+    tags: &[TagFrequency],
+) -> (String, Vec<MenuSyntaxFormSuggestion>) {
+    let raw_query = active_completion_query(current_value, true);
+    let query = raw_query.trim_start_matches('#').to_ascii_lowercase();
+    let suggestions = tags
+        .iter()
+        .filter(|tag| query.is_empty() || tag.tag.to_ascii_lowercase().contains(&query))
+        .take(8)
+        .map(|tag| MenuSyntaxFormSuggestion {
+            value: format!("#{}", tag.tag),
+            label: format!("#{} ({})", tag.tag, tag.count),
+            source: "tagHistory".to_string(),
+            detail: Some("Recent tag".to_string()),
+        })
+        .collect();
+    (raw_query, suggestions)
+}
+
+fn value_suggestions(
+    current_value: &str,
+    source: &str,
+    values: &[ValueFrequency],
+    limit: usize,
+) -> (String, Vec<MenuSyntaxFormSuggestion>) {
+    let raw_query = active_completion_query(current_value, false);
+    let suggestions = values
+        .iter()
+        .filter(|value| text_matches_query(&value.value, &raw_query))
+        .take(limit)
+        .map(|value| MenuSyntaxFormSuggestion {
+            value: value.value.clone(),
+            label: value.value.clone(),
+            source: source.to_string(),
+            detail: if value.count > 1 {
+                Some(format!("Used {} times", value.count))
+            } else {
+                None
+            },
+        })
+        .collect();
+    (raw_query, suggestions)
+}
+
+fn priority_suggestions(
+    current_value: &str,
+    values: &[String],
+) -> (String, Vec<MenuSyntaxFormSuggestion>) {
+    let raw_query = active_completion_query(current_value, false);
+    let suggestions = values
+        .iter()
+        .filter(|value| text_matches_query(value, &raw_query))
+        .map(|value| MenuSyntaxFormSuggestion {
+            value: value.clone(),
+            label: value.clone(),
+            source: "schema".to_string(),
+            detail: None,
+        })
+        .collect();
+    (raw_query, suggestions)
+}
+
+fn filter_object_suggestions(
+    current_value: &str,
+    objects: &[crate::menu_syntax::ObjectSelectorCandidate],
+) -> (String, Vec<MenuSyntaxFormSuggestion>) {
+    let raw_query = current_value.trim().to_string();
+    let query = raw_query
+        .trim_start_matches('@')
+        .split_once(':')
+        .map(|(_, rest)| rest)
+        .unwrap_or_else(|| raw_query.trim_start_matches('@'));
+    let suggestions = objects
+        .iter()
+        .filter(|candidate| {
+            query.is_empty()
+                || crate::menu_syntax::object_selector_candidate_matches(candidate, query)
+        })
+        .take(8)
+        .map(|candidate| MenuSyntaxFormSuggestion {
+            value: candidate.token(),
+            label: format!("@{}", candidate.label),
+            source: format!("object:{}", candidate.kind.as_str()),
+            detail: (!candidate.subtitle.is_empty()).then(|| candidate.subtitle.clone()),
+        })
+        .collect();
+    (raw_query, suggestions)
+}
+
 fn date_role_token(role: DateRole) -> &'static str {
     match role {
         DateRole::At => "at",
@@ -327,137 +518,140 @@ fn form_field_for_requirement(
 ) -> Option<MenuSyntaxFormFieldSnapshot> {
     let required = schema.required.contains(&requirement);
     let satisfied = requirement.is_satisfied(invocation);
-    let (id, label, kind, value, placeholder, suggestions) = match &requirement {
+    let (id, label, kind, value, placeholder, suggestion_query, suggestions) = match &requirement {
         FieldRequirement::Body => (
             "body".to_string(),
             "Task".to_string(),
             MenuSyntaxFormFieldKind::Body,
             invocation.body.clone(),
             format!("What should ;{} capture?", schema.target),
+            String::new(),
             Vec::new(),
         ),
-        FieldRequirement::Tag => (
-            "tags".to_string(),
-            "Tags".to_string(),
-            MenuSyntaxFormFieldKind::Tags,
-            invocation
+        FieldRequirement::Tag => {
+            let value = invocation
                 .tags
                 .iter()
                 .map(|tag| format!("#{tag}"))
                 .collect::<Vec<_>>()
-                .join(" "),
-            "#project #errands".to_string(),
-            pools
-                .tags
-                .iter()
-                .take(6)
-                .map(|tag| MenuSyntaxFormSuggestion {
-                    value: format!("#{}", tag.tag),
-                    label: format!("#{} ({})", tag.tag, tag.count),
-                    source: "tagHistory".to_string(),
-                })
-                .collect(),
-        ),
-        FieldRequirement::Priority => (
-            "priority".to_string(),
-            "Priority".to_string(),
-            MenuSyntaxFormFieldKind::Priority,
-            invocation
+                .join(" ");
+            let (suggestion_query, suggestions) = filter_tag_suggestions(&value, &pools.tags);
+            (
+                "tags".to_string(),
+                "Tags".to_string(),
+                MenuSyntaxFormFieldKind::Tags,
+                value,
+                "#project #errands".to_string(),
+                suggestion_query,
+                suggestions,
+            )
+        }
+        FieldRequirement::Priority => {
+            let value = invocation
                 .priority
                 .map(|priority| format!("p{priority}"))
-                .unwrap_or_default(),
-            "p1, p2, p3, or p4".to_string(),
-            pools
-                .priority_values
-                .iter()
-                .map(|value| MenuSyntaxFormSuggestion {
-                    value: value.clone(),
-                    label: value.clone(),
-                    source: "schema".to_string(),
-                })
-                .collect(),
-        ),
-        FieldRequirement::AnyDate | FieldRequirement::DateRole(_) => (
-            "date".to_string(),
-            date_label(&requirement),
-            MenuSyntaxFormFieldKind::Date,
-            invocation
+                .unwrap_or_default();
+            let (suggestion_query, suggestions) =
+                priority_suggestions(&value, &pools.priority_values);
+            (
+                "priority".to_string(),
+                "Priority".to_string(),
+                MenuSyntaxFormFieldKind::Priority,
+                value,
+                "p1, p2, p3, or p4".to_string(),
+                suggestion_query,
+                suggestions,
+            )
+        }
+        FieldRequirement::AnyDate | FieldRequirement::DateRole(_) => {
+            let value = invocation
                 .date_phrases
                 .iter()
                 .map(|date| date.source.clone())
                 .collect::<Vec<_>>()
-                .join(", "),
-            "tomorrow 3pm, next Friday, in 2 hours".to_string(),
-            pools
-                .date_values
-                .iter()
-                .take(5)
-                .map(|value| MenuSyntaxFormSuggestion {
-                    value: value.value.clone(),
-                    label: value.value.clone(),
-                    source: "dateHistory".to_string(),
-                })
-                .collect(),
-        ),
-        FieldRequirement::Url => (
-            "url".to_string(),
-            "URL".to_string(),
-            MenuSyntaxFormFieldKind::Url,
-            invocation.url.clone().unwrap_or_default(),
-            "https://example.com".to_string(),
-            pools
-                .url_values
-                .iter()
-                .take(5)
-                .map(|value| MenuSyntaxFormSuggestion {
-                    value: value.value.clone(),
-                    label: value.value.clone(),
-                    source: "urlHistory".to_string(),
-                })
-                .collect(),
-        ),
+                .join(", ");
+            let (suggestion_query, suggestions) =
+                value_suggestions(&value, "dateHistory", &pools.date_values, 5);
+            (
+                "date".to_string(),
+                date_label(&requirement),
+                MenuSyntaxFormFieldKind::Date,
+                value,
+                "tomorrow 3pm, next Friday, in 2 hours".to_string(),
+                suggestion_query,
+                suggestions,
+            )
+        }
+        FieldRequirement::Url => {
+            let value = invocation.url.clone().unwrap_or_default();
+            let (suggestion_query, suggestions) =
+                value_suggestions(&value, "urlHistory", &pools.url_values, 5);
+            (
+                "url".to_string(),
+                "URL".to_string(),
+                MenuSyntaxFormFieldKind::Url,
+                value,
+                "https://example.com".to_string(),
+                suggestion_query,
+                suggestions,
+            )
+        }
         FieldRequirement::Duration => (
             "duration".to_string(),
             "Duration".to_string(),
             MenuSyntaxFormFieldKind::Duration,
             invocation.duration.clone().unwrap_or_default(),
             "30m, 2h, 1d".to_string(),
+            active_completion_query(invocation.duration.as_deref().unwrap_or_default(), false),
             Vec::new(),
         ),
-        FieldRequirement::ObjectSelection => (
-            "object".to_string(),
-            "Existing item".to_string(),
-            MenuSyntaxFormFieldKind::Object,
-            String::new(),
-            "@ to search existing todos, notes, links, or snippets".to_string(),
-            Vec::new(),
-        ),
-        FieldRequirement::Kv(key) => (
-            format!("kv:{key}"),
-            key.clone(),
-            MenuSyntaxFormFieldKind::KeyValue,
-            invocation
+        FieldRequirement::ObjectSelection => {
+            let value = first_object_token_from_invocation(invocation);
+            let (suggestion_query, suggestions) = filter_object_suggestions(&value, &pools.objects);
+            (
+                "object".to_string(),
+                "Existing item".to_string(),
+                MenuSyntaxFormFieldKind::Object,
+                value,
+                "@ to search existing todos, notes, links, or snippets".to_string(),
+                suggestion_query,
+                suggestions,
+            )
+        }
+        FieldRequirement::Kv(key) => {
+            let value = invocation
                 .kv
                 .iter()
                 .find(|(candidate, _)| candidate.eq_ignore_ascii_case(key))
                 .map(|(_, value)| value.clone())
-                .unwrap_or_default(),
-            format!("{key}:value"),
-            Vec::new(),
-        ),
-        FieldRequirement::SnippetTriggerOrSelection => (
-            "trigger".to_string(),
-            "Trigger".to_string(),
-            MenuSyntaxFormFieldKind::KeyValue,
-            invocation
+                .unwrap_or_default();
+            (
+                format!("kv:{key}"),
+                key.clone(),
+                MenuSyntaxFormFieldKind::KeyValue,
+                value.clone(),
+                format!("{key}:value"),
+                active_completion_query(&value, false),
+                Vec::new(),
+            )
+        }
+        FieldRequirement::SnippetTriggerOrSelection => {
+            let value = invocation
                 .kv
                 .iter()
                 .find(|(candidate, _)| candidate.eq_ignore_ascii_case("trigger"))
                 .map(|(_, value)| value.clone())
-                .unwrap_or_default(),
-            "trigger:shortcut or @existing".to_string(),
-            Vec::new(),
-        ),
+                .unwrap_or_default();
+            (
+                "trigger".to_string(),
+                "Trigger".to_string(),
+                MenuSyntaxFormFieldKind::KeyValue,
+                value.clone(),
+                "trigger:shortcut or @existing".to_string(),
+                active_completion_query(&value, false),
+                Vec::new(),
+            )
+        }
     };
 
     Some(MenuSyntaxFormFieldSnapshot {
@@ -469,6 +663,8 @@ fn form_field_for_requirement(
         required,
         satisfied,
         focused: false,
+        suggestion_query,
+        selected_suggestion_index: None,
         suggestions,
     })
 }
@@ -564,6 +760,152 @@ mod tests {
             rewritten,
             ";todo Renew passport #errands p1 project:\"travel docs\""
         );
+    }
+
+    #[test]
+    fn tag_suggestions_filter_by_active_hash_fragment() {
+        let schema = builtin_schema("todo").expect("todo schema");
+        let invocation = todo_invocation(";todo Renew passport #e");
+        let validation = validate(&invocation, &schema);
+        let snapshot = build_capture_form_snapshot(
+            &schema,
+            &invocation,
+            1,
+            &validation,
+            MenuSyntaxFormSuggestionPools {
+                tags: vec![
+                    TagFrequency {
+                        tag: "errands".to_string(),
+                        count: 3,
+                        last_seen_ts: 3,
+                    },
+                    TagFrequency {
+                        tag: "work".to_string(),
+                        count: 2,
+                        last_seen_ts: 2,
+                    },
+                ],
+                ..Default::default()
+            },
+        );
+        let tags = snapshot
+            .fields
+            .iter()
+            .find(|field| field.id == "tags")
+            .expect("tags field");
+
+        assert_eq!(tags.suggestion_query, "#e");
+        assert_eq!(tags.suggestions.len(), 1);
+        assert_eq!(tags.suggestions[0].value, "#errands");
+    }
+
+    #[test]
+    fn accepting_tag_suggestion_rewrites_canonical_capture_text() {
+        let invocation = todo_invocation(";todo Renew passport #e");
+        let field = MenuSyntaxFormFieldSnapshot {
+            id: "tags".to_string(),
+            label: "Tags".to_string(),
+            kind: MenuSyntaxFormFieldKind::Tags,
+            value: "#e".to_string(),
+            placeholder: String::new(),
+            required: false,
+            satisfied: true,
+            focused: true,
+            suggestion_query: "#e".to_string(),
+            selected_suggestion_index: Some(0),
+            suggestions: vec![],
+        };
+        let suggestion = MenuSyntaxFormSuggestion {
+            value: "#errands".to_string(),
+            label: "#errands (3)".to_string(),
+            source: "tagHistory".to_string(),
+            detail: Some("Recent tag".to_string()),
+        };
+        let application =
+            apply_menu_syntax_form_suggestion(&field, &suggestion).expect("apply suggestion");
+        let rewritten =
+            apply_capture_form_field_edit(&invocation, "tags", &application.next_field_value)
+                .expect("tags edit should serialize");
+
+        assert_eq!(application.next_field_value, "#errands");
+        assert_eq!(rewritten, ";todo Renew passport #errands");
+    }
+
+    #[test]
+    fn object_field_reflects_existing_body_object_token() {
+        let schema = builtin_schema("todo").expect("todo schema");
+        let invocation = todo_invocation(";todo Renew passport @todo:todo_1 #errands");
+        let validation = validate(&invocation, &schema);
+        let snapshot = build_capture_form_snapshot(
+            &schema,
+            &invocation,
+            5,
+            &validation,
+            MenuSyntaxFormSuggestionPools::default(),
+        );
+        let object = snapshot
+            .fields
+            .iter()
+            .find(|field| field.id == "object")
+            .expect("object field");
+
+        assert_eq!(object.value, "@todo:todo_1");
+    }
+
+    #[test]
+    fn clearing_object_field_removes_object_token_from_body() {
+        let invocation = todo_invocation(";todo Renew passport @todo:todo_1 #errands");
+        let rewritten = apply_capture_form_field_edit(&invocation, "object", "")
+            .expect("object edit should serialize");
+
+        assert_eq!(rewritten, ";todo Renew passport #errands");
+    }
+
+    #[test]
+    fn object_suggestions_filter_existing_candidates() {
+        let schema = builtin_schema("todo").expect("todo schema");
+        let invocation = todo_invocation(";todo Renew passport @wel");
+        let validation = validate(&invocation, &schema);
+        let snapshot = build_capture_form_snapshot(
+            &schema,
+            &invocation,
+            5,
+            &validation,
+            MenuSyntaxFormSuggestionPools {
+                objects: vec![
+                    crate::menu_syntax::ObjectSelectorCandidate {
+                        kind: crate::menu_syntax::CaptureObjectKind::Todo,
+                        id: "todo_1".to_string(),
+                        label: "Welcome to Todo App".to_string(),
+                        subtitle: "Open".to_string(),
+                    },
+                    crate::menu_syntax::ObjectSelectorCandidate {
+                        kind: crate::menu_syntax::CaptureObjectKind::Todo,
+                        id: "todo_2".to_string(),
+                        label: "Review passport".to_string(),
+                        subtitle: "Open".to_string(),
+                    },
+                ],
+                ..Default::default()
+            },
+        );
+        let object = snapshot
+            .fields
+            .iter()
+            .find(|field| field.id == "object")
+            .expect("object field");
+
+        assert_eq!(object.suggestion_query, "@wel");
+        assert_eq!(object.suggestions.len(), 1);
+        assert_eq!(object.suggestions[0].value, "@todo:todo_1");
+    }
+
+    #[test]
+    fn bare_object_query_stays_out_of_body_while_form_edits() {
+        let invocation = todo_invocation(";todo Buy milk @ #errands");
+
+        assert_eq!(invocation.body, "Buy milk");
+        assert_eq!(invocation.tags, vec!["errands".to_string()]);
     }
 
     #[test]
