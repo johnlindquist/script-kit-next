@@ -306,6 +306,7 @@ async function main() {
     nodes: analysis.nodes,
     overlaps: analysis.overlaps,
     resizePressure: analysis.resizePressure,
+    handlerForm: (layout.info as JsonObject | undefined)?.handlerForm ?? layout.handlerForm ?? null,
     missingPrimitives: [
       analysis.nodes.length === 0 ? "layoutComponents" : "",
       layoutEnvelope.status === "error" ? "layoutInfoResult" : "",

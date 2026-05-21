@@ -2020,9 +2020,27 @@ impl ScriptListApp {
         let handler_form = self
             .menu_syntax_main_hint_snapshot(&self.filter_text, false)
             .and_then(|snapshot| snapshot.form);
-        let handler_form_field_count = handler_form
-            .as_ref()
-            .map_or(0usize, |form| form.fields.len());
+        let handler_form_field_count = handler_form.as_ref().map_or(0usize, |form| {
+            let field_count = form.fields.len();
+            let priority_options = form
+                .fields
+                .iter()
+                .find(|field| {
+                    matches!(
+                        field.kind,
+                        crate::menu_syntax::MenuSyntaxFormFieldKind::Priority
+                    )
+                })
+                .map_or(0, |field| field.suggestions.len().max(4));
+            let autocomplete_options = form
+                .fields
+                .iter()
+                .find(|field| {
+                    self.menu_syntax_form_suggestion_field_id.as_deref() == Some(field.id.as_str())
+                })
+                .map_or(0, |field| field.suggestions.len().min(6));
+            field_count + priority_options + autocomplete_options
+        });
         let total_count = total_rows + source_statuses.len() + handler_form_field_count + 2;
         let mut elements = Vec::with_capacity(limit.min(total_count));
 
@@ -2046,22 +2064,109 @@ impl ScriptListApp {
                 if elements.len() >= limit {
                     break;
                 }
+                let (element_type, role, kind, selectable) = match field.kind {
+                    crate::menu_syntax::MenuSyntaxFormFieldKind::Priority => (
+                        protocol::ElementType::Choice,
+                        "radiogroup",
+                        "handlerFormChoiceField",
+                        true,
+                    ),
+                    crate::menu_syntax::MenuSyntaxFormFieldKind::Tags
+                    | crate::menu_syntax::MenuSyntaxFormFieldKind::Object => (
+                        protocol::ElementType::Input,
+                        "combobox",
+                        "handlerFormAutocompleteField",
+                        true,
+                    ),
+                    _ => (
+                        protocol::ElementType::Input,
+                        "textbox",
+                        "handlerFormField",
+                        false,
+                    ),
+                };
                 elements.push(protocol::ElementInfo {
                     semantic_id: format!("handler-form:{}:{}", form.target, field.id),
-                    element_type: protocol::ElementType::Input,
+                    element_type,
                     text: Some(field.label.clone()),
                     value: Some(field.value.clone()),
                     selected: Some(false),
                     focused: Some(field.focused && self.menu_syntax_form_input_active),
                     index: Some(index),
-                    role: Some("textbox".to_string()),
-                    kind: Some("handlerFormField".to_string()),
+                    role: Some(role.to_string()),
+                    kind: Some(kind.to_string()),
                     source: Some("menuSyntaxMainHint.form".to_string()),
                     source_name: Some(form.target.clone()),
-                    selectable: Some(false),
+                    selectable: Some(selectable),
                     status_kind: None,
                     action_disabled: None,
                 });
+
+                if matches!(
+                    field.kind,
+                    crate::menu_syntax::MenuSyntaxFormFieldKind::Priority
+                ) {
+                    for (option_index, suggestion) in field.suggestions.iter().enumerate() {
+                        if elements.len() >= limit {
+                            break;
+                        }
+                        elements.push(protocol::ElementInfo {
+                            semantic_id: format!(
+                                "handler-form:{}:{}:option:{}",
+                                form.target, field.id, suggestion.value
+                            ),
+                            element_type: protocol::ElementType::Choice,
+                            text: Some(suggestion.label.clone()),
+                            value: Some(suggestion.value.clone()),
+                            selected: Some(
+                                field
+                                    .value
+                                    .trim()
+                                    .eq_ignore_ascii_case(suggestion.value.as_str()),
+                            ),
+                            focused: None,
+                            index: Some(option_index),
+                            role: Some("option".to_string()),
+                            kind: Some("handlerFormChoiceOption".to_string()),
+                            source: Some("menuSyntaxMainHint.form".to_string()),
+                            source_name: Some(field.id.clone()),
+                            selectable: Some(true),
+                            status_kind: None,
+                            action_disabled: None,
+                        });
+                    }
+                }
+
+                if self.menu_syntax_form_suggestion_field_id.as_deref() == Some(field.id.as_str()) {
+                    for (suggestion_index, suggestion) in
+                        field.suggestions.iter().take(6).enumerate()
+                    {
+                        if elements.len() >= limit {
+                            break;
+                        }
+                        elements.push(protocol::ElementInfo {
+                            semantic_id: format!(
+                                "handler-form:{}:{}:suggestion:{}",
+                                form.target, field.id, suggestion_index
+                            ),
+                            element_type: protocol::ElementType::Choice,
+                            text: Some(suggestion.label.clone()),
+                            value: Some(suggestion.value.clone()),
+                            selected: Some(
+                                field.selected_suggestion_index == Some(suggestion_index),
+                            ),
+                            focused: None,
+                            index: Some(suggestion_index),
+                            role: Some("option".to_string()),
+                            kind: Some("handlerFormAutocompleteOption".to_string()),
+                            source: Some(suggestion.source.clone()),
+                            source_name: Some(field.id.clone()),
+                            selectable: Some(true),
+                            status_kind: None,
+                            action_disabled: None,
+                        });
+                    }
+                }
             }
         }
 

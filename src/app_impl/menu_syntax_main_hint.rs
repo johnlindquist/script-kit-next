@@ -107,7 +107,18 @@ impl ScriptListApp {
                                 if this.menu_syntax_form_syncing_from_input {
                                     return;
                                 }
+                                let is_active_field = this
+                                    .menu_syntax_form_draft_field_id
+                                    .as_deref()
+                                    .is_some_and(|id| id == field_id);
+                                let is_focused = input.read(cx).focus_handle(cx).is_focused(window);
+                                if !is_active_field && !is_focused {
+                                    return;
+                                }
                                 let value = input.read(cx).value().to_string();
+                                if is_active_field && this.menu_syntax_form_draft_value == value {
+                                    return;
+                                }
                                 this.menu_syntax_form_syncing_from_input = true;
                                 let _ = this.update_menu_syntax_form_field(
                                     Some(&field_id),
@@ -167,6 +178,53 @@ impl ScriptListApp {
             })
     }
 
+    fn menu_syntax_form_field_uses_popup(
+        field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
+    ) -> bool {
+        matches!(
+            field.kind,
+            crate::menu_syntax::MenuSyntaxFormFieldKind::Tags
+                | crate::menu_syntax::MenuSyntaxFormFieldKind::Object
+        ) && !field.suggestions.is_empty()
+    }
+
+    fn close_menu_syntax_form_suggestions(&mut self) {
+        self.menu_syntax_form_suggestion_field_id = None;
+        self.menu_syntax_form_suggestion_selected_index = None;
+    }
+
+    fn open_menu_syntax_form_suggestions_for(
+        &mut self,
+        field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
+    ) {
+        if Self::menu_syntax_form_field_uses_popup(field) {
+            self.menu_syntax_form_suggestion_field_id = Some(field.id.clone());
+            self.menu_syntax_form_suggestion_selected_index = Some(0);
+        } else {
+            self.close_menu_syntax_form_suggestions();
+        }
+    }
+
+    fn reveal_menu_syntax_form_field_at(
+        &mut self,
+        index: usize,
+        _form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
+        _cx: &mut Context<Self>,
+    ) {
+        const APPROX_FIELD_HEIGHT_PX: f32 = 76.0;
+
+        let current = self.menu_syntax_main_hint_scroll_handle.offset();
+        let target_y = gpui::px(-((index as f32) * APPROX_FIELD_HEIGHT_PX));
+        let max = self.menu_syntax_main_hint_scroll_handle.max_offset();
+        let next_y = if max.y > gpui::px(0.0) {
+            target_y.clamp(-max.y, gpui::px(0.0))
+        } else {
+            target_y
+        };
+        self.menu_syntax_main_hint_scroll_handle
+            .set_offset(gpui::point(current.x, next_y));
+    }
+
     fn focus_menu_syntax_form_input_at(
         &mut self,
         index: usize,
@@ -179,15 +237,16 @@ impl ScriptListApp {
         };
         self.menu_syntax_form_input_active = true;
         self.menu_syntax_form_focused_index = index;
-        self.menu_syntax_form_suggestion_field_id = None;
-        self.menu_syntax_form_suggestion_selected_index = None;
         if let Some(field) = form.fields.get(index) {
             self.menu_syntax_form_draft_field_id = Some(field.id.clone());
             self.menu_syntax_form_draft_value = field.value.clone();
+            self.open_menu_syntax_form_suggestions_for(field);
         } else {
             self.menu_syntax_form_draft_field_id = Some(field_id);
             self.menu_syntax_form_draft_value.clear();
+            self.close_menu_syntax_form_suggestions();
         }
+        self.reveal_menu_syntax_form_field_at(index, form, cx);
         input.update(cx, |state, cx| {
             let len = state.value().len();
             state.set_selection(len, len, window, cx);
@@ -200,8 +259,7 @@ impl ScriptListApp {
         self.menu_syntax_form_input_active = false;
         self.menu_syntax_form_draft_field_id = None;
         self.menu_syntax_form_draft_value.clear();
-        self.menu_syntax_form_suggestion_field_id = None;
-        self.menu_syntax_form_suggestion_selected_index = None;
+        self.close_menu_syntax_form_suggestions();
         self.gpui_input_state
             .update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
@@ -356,7 +414,12 @@ impl ScriptListApp {
                 }
             }
             "escape" | "esc" => {
-                self.focus_menu_syntax_main_input(window, cx);
+                if self.menu_syntax_form_suggestion_field_id.is_some() {
+                    self.close_menu_syntax_form_suggestions();
+                    cx.notify();
+                } else {
+                    self.focus_menu_syntax_main_input(window, cx);
+                }
                 true
             }
             _ => false,
@@ -441,8 +504,7 @@ impl ScriptListApp {
         if field_count == 0 {
             self.menu_syntax_form_focused_index = 0;
             self.menu_syntax_form_input_active = false;
-            self.menu_syntax_form_suggestion_field_id = None;
-            self.menu_syntax_form_suggestion_selected_index = None;
+            self.close_menu_syntax_form_suggestions();
             return;
         }
         let current = if self.menu_syntax_form_input_active {
@@ -478,22 +540,19 @@ impl ScriptListApp {
         &self,
         form: &mut crate::menu_syntax::MenuSyntaxFormSnapshot,
     ) {
-        let Some(field) = form
-            .fields
-            .iter_mut()
-            .find(|field| field.focused && !field.suggestions.is_empty())
-        else {
+        let Some(owner_field_id) = self.menu_syntax_form_suggestion_field_id.as_deref() else {
+            return;
+        };
+        let Some(field) = form.fields.iter_mut().find(|field| {
+            field.focused && field.id == owner_field_id && !field.suggestions.is_empty()
+        }) else {
             return;
         };
 
-        let field_changed =
-            self.menu_syntax_form_suggestion_field_id.as_deref() != Some(field.id.as_str());
-        let selected = if field_changed {
-            0
-        } else {
-            self.menu_syntax_form_suggestion_selected_index.unwrap_or(0)
-        }
-        .min(field.suggestions.len().saturating_sub(1));
+        let selected = self
+            .menu_syntax_form_suggestion_selected_index
+            .unwrap_or(0)
+            .min(field.suggestions.len().saturating_sub(1));
 
         field.selected_suggestion_index = Some(selected);
     }
@@ -507,10 +566,9 @@ impl ScriptListApp {
         let Some(field) = form
             .fields
             .iter()
-            .find(|field| field.focused && !field.suggestions.is_empty())
+            .find(|field| field.focused && Self::menu_syntax_form_field_uses_popup(field))
         else {
-            self.menu_syntax_form_suggestion_field_id = None;
-            self.menu_syntax_form_suggestion_selected_index = None;
+            self.close_menu_syntax_form_suggestions();
             cx.notify();
             return;
         };
@@ -570,8 +628,7 @@ impl ScriptListApp {
             cx,
         );
         if updated {
-            self.menu_syntax_form_suggestion_field_id = Some(field.id.clone());
-            self.menu_syntax_form_suggestion_selected_index = Some(0);
+            self.close_menu_syntax_form_suggestions();
             cx.notify();
         }
         updated

@@ -494,3 +494,88 @@ fn handler_form_control_keys_preserve_standard_form_navigation() {
         "selected form suggestion state must survive snapshot/render/control-key round trips"
     );
 }
+
+#[test]
+fn handler_form_focus_reveal_has_scroll_and_layout_contract() {
+    let app = read("src/app_impl/menu_syntax_main_hint.rs");
+    assert!(
+        app.contains("fn reveal_menu_syntax_form_field_at(")
+            && app.contains("menu_syntax_main_hint_scroll_handle")
+            && app.contains("set_offset")
+            && app.contains("focus_menu_syntax_form_input_at")
+            && app.contains("reveal_menu_syntax_form_field_at(index, form, cx)"),
+        "Tab focus movement must reveal the active handler form field in the main hint scroll container"
+    );
+
+    let layout = read("src/app_layout/build_layout_info.rs");
+    assert!(
+        layout.contains("handlerFormFocusedVisibility")
+            && layout.contains("handlerFormFieldBounds")
+            && layout.contains("scrollOffsetY")
+            && layout.contains("scrollContainerId")
+            && read("src/protocol/types/grid_layout.rs").contains("handler_form"),
+        "getLayoutInfo must expose handler form field bounds and focused-field visibility for DevTools proof"
+    );
+}
+
+#[test]
+fn priority_field_is_choice_control_not_plain_textbox() {
+    let form = read("src/menu_syntax/form.rs");
+    assert!(
+        form.contains("MenuSyntaxFormFieldKind::Priority")
+            && form.contains("fn priority_suggestions(")
+            && !form.contains(".filter(|value| text_matches_query(value, &raw_query))"),
+        "priority suggestions must expose the schema choice set instead of filtering the active value"
+    );
+
+    let render = read("src/render_script_list/mod.rs");
+    assert!(
+        render.contains("fn render_menu_syntax_form_choice_field(")
+            && render.contains("handler-form-choice-option")
+            && render.contains("MenuSyntaxFormFieldKind::Priority")
+            && render.contains("update_menu_syntax_form_field"),
+        "priority must render as an owned choice control that syncs through form-field updates"
+    );
+
+    let elements = read("src/app_layout/collect_elements.rs");
+    assert!(
+        elements.contains("handlerFormChoiceField")
+            && elements.contains("handlerFormChoiceOption")
+            && elements.contains("\"radiogroup\"")
+            && elements.contains("\"option\""),
+        "getElements must expose priority as a choice/radiogroup with selectable options"
+    );
+}
+
+#[test]
+fn autocomplete_renders_owned_popup_list_and_escape_dismisses_first() {
+    let app = read("src/app_impl/menu_syntax_main_hint.rs");
+    assert!(
+        app.contains("fn menu_syntax_form_field_uses_popup(")
+            && app.contains("fn open_menu_syntax_form_suggestions_for(")
+            && app.contains("fn close_menu_syntax_form_suggestions(")
+            && app.contains("menu_syntax_form_suggestion_field_id")
+            && app.contains("close_menu_syntax_form_suggestions();\n                    cx.notify();")
+            && app.contains("focus_menu_syntax_main_input(window, cx)"),
+        "autocomplete popup ownership must be explicit and Escape must dismiss it before returning to the main input"
+    );
+
+    let render = read("src/render_script_list/mod.rs");
+    assert!(
+        render.contains("fn render_menu_syntax_form_suggestion_popup(")
+            && render.contains("handler-form-autocomplete-popup")
+            && render.contains("handler-form-autocomplete-option")
+            && render.contains("apply_menu_syntax_form_suggestion")
+            && render.contains("update_menu_syntax_form_field"),
+        "tags/object autocomplete must render an owned popup list whose options sync through canonical form edits"
+    );
+
+    let elements = read("src/app_layout/collect_elements.rs");
+    assert!(
+        elements.contains("handlerFormAutocompleteField")
+            && elements.contains("handlerFormAutocompleteOption")
+            && elements.contains("\"combobox\"")
+            && elements.contains("menu_syntax_form_suggestion_field_id.as_deref()"),
+        "getElements must only expose autocomplete popup options for the active popup owner"
+    );
+}
