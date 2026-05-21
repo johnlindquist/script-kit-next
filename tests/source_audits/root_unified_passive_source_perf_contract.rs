@@ -240,3 +240,45 @@ fn explicit_browser_sources_have_app_managed_refresh_completion() {
         );
     }
 }
+
+#[test]
+fn implicit_browser_tabs_queries_start_app_managed_refresh_without_direct_lookup() {
+    let filtering = include_str!("../../src/app_impl/filtering_cache.rs");
+    let refresh_fn = filtering
+        .split("pub(crate) fn maybe_start_root_browser_tabs_refresh_for_query")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("pub(crate) fn maybe_start_root_browser_history_refresh_for_query")
+                .next()
+        })
+        .expect("browser tabs refresh function should exist");
+
+    assert!(
+        filtering.contains("fn root_browser_tabs_refresh_options_for_query("),
+        "browser tabs should have a query eligibility helper"
+    );
+    assert!(
+        filtering.contains("fn current_query_can_show_root_browser_tabs("),
+        "refresh completion should re-check current query eligibility"
+    );
+    assert!(
+        filtering.contains("implicit_tabs_query"),
+        "ordinary eligible root queries should start a named implicit browser-tabs refresh"
+    );
+    assert!(
+        filtering.contains("root_browser_tabs_query_is_eligible("),
+        "implicit refresh should respect configured min query chars and enabled state"
+    );
+    assert!(
+        filtering.contains("source_filters.allows(source)"),
+        "implicit refresh should respect source-filter exclusions"
+    );
+    assert!(
+        refresh_fn.contains("current_query_can_show_root_browser_tabs(&app.computed_filter_text)"),
+        "completion should publish for ordinary queries, not only explicit tabs:"
+    );
+    assert!(
+        !refresh_fn.contains("search_root_browser_tabs_meta_direct"),
+        "app-managed warmup must not switch ordinary typing to direct foreground lookup"
+    );
+}

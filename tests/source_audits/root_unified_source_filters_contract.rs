@@ -156,6 +156,33 @@ fn explicit_source_filters_raise_passive_source_caps() {
 }
 
 #[test]
+fn implicit_browser_tabs_warmup_respects_source_filters() {
+    let filtering = include_str!("../../src/app_impl/filtering_cache.rs");
+    let helper = filtering
+        .split("fn root_browser_tabs_refresh_options_for_query(")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("fn current_query_can_show_root_browser_tabs(")
+                .next()
+        })
+        .expect("browser tabs refresh eligibility helper should exist");
+
+    assert!(
+        helper.contains("source_filters.includes(source)")
+            && helper.contains("source_filters.allows(source)"),
+        "explicit tabs: should force-enable browser tabs only when tabs are allowed"
+    );
+    assert!(
+        helper.contains("if !source_filters.allows(source)") && helper.contains("return None;"),
+        "ordinary implicit warmup should not run when tabs are filtered out"
+    );
+    assert!(
+        helper.contains("query.has_predicates()"),
+        "implicit warmup should not run for predicate-owned advanced queries"
+    );
+}
+
+#[test]
 fn grouping_suppresses_primary_and_disallowed_sources_when_filter_active() {
     let grouping = include_str!("../../src/scripts/grouping.rs");
     let app_state = include_str!("../../src/main_sections/app_state.rs");

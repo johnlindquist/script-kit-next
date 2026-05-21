@@ -276,28 +276,81 @@ impl ScriptListApp {
         self.invalidate_main_window_preflight();
     }
 
+    fn root_browser_tabs_refresh_options_for_query(
+        &self,
+        query_text: &str,
+    ) -> Option<(crate::browser_tabs::RootBrowserTabsSectionOptions, bool)> {
+        let source = crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs;
+        let unified_search = self.config.get_unified_search();
+        let mut options = unified_search.browser_tabs_section_options();
+        let advanced_query = self.menu_syntax_mode.advanced_query_for(query_text);
+        let source_filters = advanced_query
+            .map(|query| query.source_filters.clone())
+            .unwrap_or_default();
+        let explicit_tabs = source_filters.includes(source) && source_filters.allows(source);
+
+        if explicit_tabs {
+            options.enabled = true;
+            options.min_query_chars = 0;
+            options.max_results = options
+                .max_results
+                .max(unified_search.passive_result_limits().max_total_results);
+            return Some((options, true));
+        }
+
+        if !source_filters.allows(source) {
+            return None;
+        }
+
+        if advanced_query.is_some_and(|query| query.has_predicates()) {
+            return None;
+        }
+
+        if self.menu_syntax_object_selector_state.owns_main_list()
+            || self.menu_syntax_trigger_popup_state.owns_main_list()
+            || self
+                .menu_syntax_mode
+                .capture_composer_owns_input_for(query_text)
+            || self.menu_syntax_mode.command_owns_input_for(query_text)
+        {
+            return None;
+        }
+
+        let search_text =
+            crate::menu_syntax::free_text_for_search(&self.menu_syntax_mode, query_text);
+        if !crate::browser_tabs::root_browser_tabs_query_is_eligible(search_text, options.clone()) {
+            return None;
+        }
+
+        Some((options, false))
+    }
+
+    fn current_query_can_show_root_browser_tabs(&self, query_text: &str) -> bool {
+        self.root_browser_tabs_refresh_options_for_query(query_text)
+            .is_some()
+    }
+
     pub(crate) fn maybe_start_root_browser_tabs_refresh_for_query(
         &mut self,
         query_text: &str,
         cx: &mut Context<Self>,
     ) {
-        let source = crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs;
-        if !self.current_query_includes_root_source(query_text, source) {
+        let Some((options, explicit_tabs)) =
+            self.root_browser_tabs_refresh_options_for_query(query_text)
+        else {
             return;
-        }
+        };
 
-        let unified_search = self.config.get_unified_search();
-        let mut options = unified_search.browser_tabs_section_options();
-        options.enabled = true;
-        options.min_query_chars = 0;
-        options.max_results = options
-            .max_results
-            .max(unified_search.passive_result_limits().max_total_results);
         let providers = options.providers.clone();
+        let reason = if explicit_tabs {
+            "explicit_tabs_query"
+        } else {
+            "implicit_tabs_query"
+        };
         let Some(refresh) = crate::browser_tabs::try_begin_root_browser_tabs_refresh(
             options.cache_ttl_ms,
             providers.len(),
-            "explicit_tabs_query",
+            reason,
         ) else {
             return;
         };
@@ -306,12 +359,12 @@ impl ScriptListApp {
         cx.notify();
 
         cx.spawn(async move |this, cx| {
-            let result = cx
-                .background_executor()
-                .spawn(async move {
-                    crate::browser_tabs::refresh_root_browser_tabs_snapshot(providers)
-                })
-                .await;
+            let result =
+                cx.background_executor()
+                    .spawn(async move {
+                        crate::browser_tabs::refresh_root_browser_tabs_snapshot(providers)
+                    })
+                    .await;
 
             let _ = this.update(cx, |app, cx| {
                 let changed =
@@ -320,7 +373,7 @@ impl ScriptListApp {
                     return;
                 }
                 app.invalidate_root_passive_and_grouped_cache();
-                if app.current_query_includes_root_source(&app.computed_filter_text, source) {
+                if app.current_query_can_show_root_browser_tabs(&app.computed_filter_text) {
                     app.reconcile_script_list_after_filter_change(
                         "browser_tabs_refresh_complete",
                         cx,
@@ -354,12 +407,10 @@ impl ScriptListApp {
         options.max_results = options
             .max_results
             .max(unified_search.passive_result_limits().max_total_results);
-        let Some(refresh) =
-            crate::browser_history::try_begin_root_browser_history_refresh(
-                &options,
-                "explicit_history_query",
-            )
-        else {
+        let Some(refresh) = crate::browser_history::try_begin_root_browser_history_refresh(
+            &options,
+            "explicit_history_query",
+        ) else {
             return;
         };
 
@@ -368,10 +419,9 @@ impl ScriptListApp {
 
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let result =
-                crate::browser_history::refresh_root_browser_history_snapshot_from_home(
-                    &home, &options,
-                );
+            let result = crate::browser_history::refresh_root_browser_history_snapshot_from_home(
+                &home, &options,
+            );
             let _ = tx.send(result);
         });
 
@@ -385,7 +435,9 @@ impl ScriptListApp {
                             .await;
                     }
                     Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        break Err(anyhow::anyhow!("browser history refresh worker disconnected"));
+                        break Err(anyhow::anyhow!(
+                            "browser history refresh worker disconnected"
+                        ));
                     }
                 }
             };
