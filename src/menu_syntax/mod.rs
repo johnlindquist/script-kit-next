@@ -34,6 +34,7 @@ pub mod quote;
 pub mod retention;
 pub mod schema_overrides;
 pub mod skill;
+pub mod snippet_scriptlet;
 pub mod templates;
 pub mod trigger_picker;
 pub mod trigger_picker_keys;
@@ -148,6 +149,13 @@ pub use schema_overrides::{
 };
 #[allow(unused_imports)]
 pub use skill::{skill_specs_from_value, SkillSpec};
+#[allow(unused_imports)]
+pub use snippet_scriptlet::{
+    active_capture_field_selector_for_input, normalize_snippet_capture_invocation,
+    parse_snippet_scriptlet_capture, snippet_metadata_field_specs, ActiveCaptureFieldSelector,
+    SnippetLookup, SnippetMetadataFieldSpec, SnippetMetadataValueKind, SnippetScriptletDraft,
+    SnippetScriptletOperation,
+};
 #[allow(unused_imports)]
 pub use trigger_picker::{
     build_trigger_picker_snapshot, create_capture_handler_scaffold, CaptureHandlerScaffoldEffects,

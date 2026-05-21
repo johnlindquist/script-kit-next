@@ -544,10 +544,18 @@ fn form_field_for_requirement(
     let (id, label, kind, value, placeholder, suggestion_query, suggestions) = match &requirement {
         FieldRequirement::Body => (
             "body".to_string(),
-            "Task".to_string(),
+            if schema.target.eq_ignore_ascii_case("snippet") {
+                "Snippet".to_string()
+            } else {
+                "Task".to_string()
+            },
             MenuSyntaxFormFieldKind::Body,
             invocation.body.clone(),
-            format!("What should ;{} capture?", schema.target),
+            if schema.target.eq_ignore_ascii_case("snippet") {
+                "Text to paste/expand".to_string()
+            } else {
+                format!("What should ;{} capture?", schema.target)
+            },
             String::new(),
             Vec::new(),
         ),
@@ -671,6 +679,23 @@ fn form_field_for_requirement(
                 MenuSyntaxFormFieldKind::KeyValue,
                 value.clone(),
                 "trigger:shortcut or @existing".to_string(),
+                active_completion_query(&value, false),
+                Vec::new(),
+            )
+        }
+        FieldRequirement::SnippetNameOrSelection => {
+            let value = invocation
+                .kv
+                .iter()
+                .find(|(candidate, _)| candidate.eq_ignore_ascii_case("name"))
+                .map(|(_, value)| value.clone())
+                .unwrap_or_default();
+            (
+                "kv:name".to_string(),
+                "name".to_string(),
+                MenuSyntaxFormFieldKind::KeyValue,
+                value.clone(),
+                "name:Snippet name".to_string(),
                 active_completion_query(&value, false),
                 Vec::new(),
             )
@@ -1075,5 +1100,40 @@ mod tests {
                 "bare {target} should surface required fields"
             );
         }
+    }
+
+    #[test]
+    fn snippet_form_labels_body_as_snippet_and_exposes_metadata_fields() {
+        let schema = builtin_schema("snippet").expect("snippet schema");
+        let invocation = todo_invocation(
+            ";snippet Hello there! keyword:hi! description:Expand hi! to hello! name:Hi to Hello",
+        );
+        let validation = validate(&invocation, &schema);
+        let snapshot = build_capture_form_snapshot(
+            &schema,
+            &invocation,
+            0,
+            &validation,
+            MenuSyntaxFormSuggestionPools::default(),
+        );
+
+        let body = snapshot
+            .fields
+            .iter()
+            .find(|field| field.id == "body")
+            .expect("body field");
+        assert_eq!(body.label, "Snippet");
+        assert_eq!(body.placeholder, "Text to paste/expand");
+        assert!(snapshot
+            .fields
+            .iter()
+            .any(|field| field.id == "kv:name" && field.required));
+        assert!(snapshot.fields.iter().any(|field| field.id == "kv:keyword"));
+        assert!(snapshot
+            .fields
+            .iter()
+            .any(|field| field.id == "kv:description"));
+        assert!(!snapshot.fields.iter().any(|field| field.id == "trigger"));
+        assert!(snapshot.can_submit);
     }
 }

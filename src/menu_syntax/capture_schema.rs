@@ -14,6 +14,7 @@ pub enum FieldRequirement {
     Kv(String),
     ObjectSelection,
     SnippetTriggerOrSelection,
+    SnippetNameOrSelection,
 }
 
 impl FieldRequirement {
@@ -44,6 +45,7 @@ impl FieldRequirement {
             FieldRequirement::SnippetTriggerOrSelection => {
                 "trigger or selected snippet".to_string()
             }
+            FieldRequirement::SnippetNameOrSelection => "name or selected snippet".to_string(),
         }
     }
 
@@ -65,6 +67,9 @@ impl FieldRequirement {
             FieldRequirement::ObjectSelection => has_resolved_object_ref(payload, None),
             FieldRequirement::SnippetTriggerOrSelection => {
                 snippet_trigger_or_selection_requirement_is_satisfied(payload)
+            }
+            FieldRequirement::SnippetNameOrSelection => {
+                snippet_name_or_selection_requirement_is_satisfied(payload)
             }
         }
     }
@@ -88,13 +93,15 @@ fn body_requirement_is_satisfied(payload: &CaptureInvocation) -> bool {
     {
         return true;
     }
-    if payload.target.eq_ignore_ascii_case("snippet")
-        && matches!(
-            first_app_owned_operation_word(&payload.body),
-            Some("update" | "delete")
-        )
-    {
-        return has_resolved_object_ref(payload, Some(CaptureObjectKind::Snippet));
+    if payload.target.eq_ignore_ascii_case("snippet") {
+        if let Ok(draft) = crate::menu_syntax::parse_snippet_scriptlet_capture(payload) {
+            if !matches!(
+                draft.operation,
+                crate::menu_syntax::SnippetScriptletOperation::Create
+            ) {
+                return draft.lookup.is_some();
+            }
+        }
     }
     false
 }
@@ -130,6 +137,24 @@ fn snippet_trigger_or_selection_requirement_is_satisfied(payload: &CaptureInvoca
         first_app_owned_operation_word(&payload.body),
         Some("update" | "delete")
     ) && has_resolved_object_ref(payload, Some(CaptureObjectKind::Snippet))
+}
+
+fn snippet_name_or_selection_requirement_is_satisfied(payload: &CaptureInvocation) -> bool {
+    if !payload.target.eq_ignore_ascii_case("snippet") {
+        return false;
+    }
+    let Ok(draft) = crate::menu_syntax::parse_snippet_scriptlet_capture(payload) else {
+        return false;
+    };
+    match draft.operation {
+        crate::menu_syntax::SnippetScriptletOperation::Create => draft
+            .name
+            .as_deref()
+            .map(|name| !name.trim().is_empty())
+            .unwrap_or(false),
+        crate::menu_syntax::SnippetScriptletOperation::Update
+        | crate::menu_syntax::SnippetScriptletOperation::Delete => draft.lookup.is_some(),
+    }
 }
 
 fn note_payload_has_update_fragment(payload: &CaptureInvocation) -> bool {
@@ -280,14 +305,27 @@ pub fn builtin_schema(target: &str) -> Option<CaptureFieldSchema> {
             target: "snippet".to_string(),
             required: vec![
                 FieldRequirement::Body,
-                FieldRequirement::SnippetTriggerOrSelection,
+                FieldRequirement::SnippetNameOrSelection,
             ],
             optional: vec![
-                FieldRequirement::Tag,
-                FieldRequirement::Url,
-                FieldRequirement::Kv("title".to_string()),
-                FieldRequirement::Kv("trigger".to_string()),
-                FieldRequirement::Kv("lang".to_string()),
+                FieldRequirement::Kv("keyword".to_string()),
+                FieldRequirement::Kv("description".to_string()),
+                FieldRequirement::Kv("alias".to_string()),
+                FieldRequirement::Kv("shortcut".to_string()),
+                FieldRequirement::Kv("author".to_string()),
+                FieldRequirement::Kv("enter".to_string()),
+                FieldRequirement::Kv("icon".to_string()),
+                FieldRequirement::Kv("placeholder".to_string()),
+                FieldRequirement::Kv("cron".to_string()),
+                FieldRequirement::Kv("schedule".to_string()),
+                FieldRequirement::Kv("hidden".to_string()),
+                FieldRequirement::Kv("background".to_string()),
+                FieldRequirement::Kv("system".to_string()),
+                FieldRequirement::Kv("fallback".to_string()),
+                FieldRequirement::Kv("fallback_label".to_string()),
+                FieldRequirement::Kv("tags".to_string()),
+                FieldRequirement::Kv("watch".to_string()),
+                FieldRequirement::Kv("tool".to_string()),
                 FieldRequirement::ObjectSelection,
             ],
             forbidden: vec![FieldRequirement::Priority, FieldRequirement::Duration],
@@ -626,16 +664,16 @@ mod tests {
         assert!(schema.required.contains(&FieldRequirement::Body));
         assert!(schema
             .required
-            .contains(&FieldRequirement::SnippetTriggerOrSelection));
+            .contains(&FieldRequirement::SnippetNameOrSelection));
         assert!(schema
             .optional
-            .contains(&FieldRequirement::Kv("title".to_string())));
+            .contains(&FieldRequirement::Kv("keyword".to_string())));
         assert!(schema
             .optional
-            .contains(&FieldRequirement::Kv("trigger".to_string())));
+            .contains(&FieldRequirement::Kv("description".to_string())));
         assert!(schema
             .optional
-            .contains(&FieldRequirement::Kv("lang".to_string())));
+            .contains(&FieldRequirement::Kv("tool".to_string())));
         assert!(schema.optional.contains(&FieldRequirement::ObjectSelection));
     }
 
@@ -683,18 +721,18 @@ mod tests {
     }
 
     #[test]
-    fn snippet_remove_without_trigger_or_selection_is_incomplete() {
+    fn snippet_remove_without_name_or_selection_is_incomplete() {
         let schema = builtin_schema("snippet").unwrap();
         let inv = invocation_with_body("snippet", "remove");
 
         assert_eq!(
             schema.missing_required(&inv),
-            vec![FieldRequirement::SnippetTriggerOrSelection]
+            vec![FieldRequirement::SnippetNameOrSelection]
         );
     }
 
     #[test]
-    fn snippet_create_selected_ref_does_not_satisfy_trigger_requirement() {
+    fn snippet_create_selected_ref_does_not_satisfy_name_requirement() {
         let schema = builtin_schema("snippet").unwrap();
         let mut inv = invocation_with_body("snippet", "add");
         inv.raw = ";snippet add @snippet:fj -- const x = 1".to_string();
@@ -702,7 +740,7 @@ mod tests {
 
         assert_eq!(
             schema.missing_required(&inv),
-            vec![FieldRequirement::SnippetTriggerOrSelection]
+            vec![FieldRequirement::SnippetNameOrSelection]
         );
     }
 

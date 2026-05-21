@@ -195,6 +195,9 @@ pub fn build_trigger_picker_snapshot(
     }
 
     let capture_targets = registered_capture_targets(ctx);
+    if let Some(snapshot) = build_capture_field_snapshot(input, &capture_targets) {
+        return Some(snapshot);
+    }
     if capture_body_boundary_has_started_with_targets(input, &capture_targets) {
         return None;
     }
@@ -305,6 +308,57 @@ fn build_advanced_query_snapshot(input: &str, ctx: &TriggerPickerContext) -> Tri
         target: None,
         rows,
     }
+}
+
+fn build_capture_field_snapshot(
+    input: &str,
+    registered_targets: &[String],
+) -> Option<TriggerPickerSnapshot> {
+    let selector =
+        crate::menu_syntax::active_capture_field_selector_for_input(input, registered_targets)?;
+    let rows = selector
+        .fields
+        .iter()
+        .enumerate()
+        .map(|(index, field)| {
+            let replacement = format!("{}:", field.key);
+            let text = replace_range(input, selector.range, &replacement);
+            TriggerPickerRow {
+                id: format!("capture-field:{}:{}", selector.target, field.key),
+                mode: TriggerPickerMode::Capture,
+                kind: TriggerPickerRowKind::Qualifier,
+                title: field.label.to_string(),
+                token: Some(replacement),
+                subtitle: Some(format!(";{} field", selector.target)),
+                detail: None,
+                example: None,
+                badges: if field.required_on_create {
+                    vec!["required".to_string()]
+                } else {
+                    Vec::new()
+                },
+                action: TriggerPickerAction::ReplaceInput { text },
+                enabled: index < 12,
+            }
+        })
+        .take(12)
+        .collect::<Vec<_>>();
+    (!rows.is_empty()).then_some(TriggerPickerSnapshot {
+        mode: TriggerPickerMode::Capture,
+        target: Some(selector.target),
+        rows,
+    })
+}
+
+fn replace_range(input: &str, range: (usize, usize), replacement: &str) -> String {
+    let mut text = String::new();
+    text.push_str(&input[..range.0]);
+    text.push_str(replacement);
+    if !replacement.ends_with(' ') {
+        text.push(' ');
+    }
+    text.push_str(&input[range.1..]);
+    text
 }
 
 fn filtered_static_qualifier_rows(input: &str) -> Vec<TriggerPickerRow> {
@@ -1615,6 +1669,42 @@ mod tests {
             build_trigger_picker_snapshot(";snippet update @fetch", &ctx).is_none(),
             "object refs are owned by menu_syntax::object_selector, not TriggerPickerSnapshot"
         );
+    }
+
+    #[test]
+    fn snippet_capture_field_popup_lists_metadata_fields() {
+        let ctx = TriggerPickerContext::default();
+        let snap =
+            build_trigger_picker_snapshot(";snippet Hello there! :", &ctx).expect("snapshot");
+
+        assert_eq!(snap.mode, TriggerPickerMode::Capture);
+        assert!(snap
+            .rows
+            .iter()
+            .any(|row| row.title == "name" && row.token.as_deref() == Some("name:")));
+        assert!(snap
+            .rows
+            .iter()
+            .any(|row| row.title == "keyword" && row.token.as_deref() == Some("keyword:")));
+        assert!(snap
+            .rows
+            .iter()
+            .any(|row| row.title == "description" && row.token.as_deref() == Some("description:")));
+    }
+
+    #[test]
+    fn snippet_capture_field_popup_filters_and_replaces_field_token() {
+        let ctx = TriggerPickerContext::default();
+        let snap =
+            build_trigger_picker_snapshot(";snippet Hello there! de:", &ctx).expect("snapshot");
+
+        assert_eq!(snap.rows[0].title, "description");
+        match &snap.rows[0].action {
+            TriggerPickerAction::ReplaceInput { text } => {
+                assert_eq!(text, ";snippet Hello there! description: ");
+            }
+            other => panic!("expected ReplaceInput, got {other:?}"),
+        }
     }
 
     #[test]
