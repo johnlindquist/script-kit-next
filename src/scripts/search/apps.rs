@@ -59,7 +59,7 @@ pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
 
         // Fuzzy character matching in name using nucleo (handles Unicode)
         if use_nucleo {
-            if let Some(nucleo_s) = nucleo.score(&app.name) {
+            if let Some(nucleo_s) = nucleo.compact_score(&app.name, &query_lower) {
                 has_name_match = true;
                 // Scale nucleo score to match existing weights (~50 for fuzzy match)
                 score += 50 + (nucleo_s / 20) as i32;

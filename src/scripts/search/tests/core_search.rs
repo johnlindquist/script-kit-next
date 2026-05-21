@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::builtins::{BuiltInEntry, BuiltInFeature, BuiltInGroup};
+
 use super::super::*;
 
 // ============================================
@@ -146,4 +148,69 @@ fn test_compute_match_indices_for_result_handles_unicode_normalization_in_descri
         !indices.description_indices.is_empty(),
         "Unicode-normalized description match should produce highlight indices"
     );
+}
+
+fn make_builtin(name: &str, description: &str) -> BuiltInEntry {
+    BuiltInEntry {
+        id: name.to_lowercase().replace(' ', "-"),
+        name: name.to_string(),
+        description: description.to_string(),
+        keywords: Vec::new(),
+        feature: BuiltInFeature::Settings,
+        icon: None,
+        group: BuiltInGroup::Core,
+    }
+}
+
+#[test]
+fn test_compact_fuzzy_query_keeps_meaningful_word_match() {
+    let builtins = vec![make_builtin(
+        "Reset Window Positions",
+        "Restore all windows to default positions",
+    )];
+
+    let results = fuzzy_search_builtins(&builtins, "posit");
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].entry.name, "Reset Window Positions");
+}
+
+#[test]
+fn test_compact_fuzzy_query_rejects_sparse_builtin_name_match() {
+    let builtins = vec![make_builtin(
+        "Accessibility Permission Assistant",
+        "Open the Permission Assistant for Accessibility",
+    )];
+
+    let results = fuzzy_search_builtins(&builtins, "posit");
+
+    assert!(
+        results.is_empty(),
+        "sparse ordered letters should not admit unrelated permission assistant rows"
+    );
+}
+
+#[test]
+fn test_compact_fuzzy_query_rejects_sparse_script_description_match() {
+    let scripts = vec![make_script(
+        "Sync to GitHub",
+        Some("Initialize git and sync the Script Kit workspace to GitHub"),
+    )];
+
+    let results = fuzzy_search_scripts(&scripts, "posit");
+
+    assert!(
+        results.is_empty(),
+        "description-only sparse fuzzy matches should not clutter short ordered queries"
+    );
+}
+
+#[test]
+fn test_compact_fuzzy_query_preserves_common_abbreviation() {
+    let scripts = vec![make_script("Google Calendar", None)];
+
+    let results = fuzzy_search_scripts(&scripts, "gcal");
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].script.name, "Google Calendar");
 }

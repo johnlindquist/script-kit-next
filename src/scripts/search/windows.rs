@@ -85,7 +85,7 @@ pub fn fuzzy_search_root_windows(windows: &[RootWindowEntry], query: &str) -> Ve
 
         // Fuzzy character matching in app name using nucleo (handles Unicode)
         if use_nucleo {
-            if let Some(nucleo_s) = nucleo.score(&window.app) {
+            if let Some(nucleo_s) = nucleo.compact_score(&window.app, &query_lower) {
                 // Scale nucleo score to match existing weights (~50 for app name fuzzy match)
                 score += 50 + (nucleo_s / 20) as i32;
             }
@@ -93,7 +93,7 @@ pub fn fuzzy_search_root_windows(windows: &[RootWindowEntry], query: &str) -> Ve
 
         // Fuzzy character matching in window title using nucleo (handles Unicode)
         if use_nucleo {
-            if let Some(nucleo_s) = nucleo.score(&window.title) {
+            if let Some(nucleo_s) = nucleo.compact_score(&window.title, &query_lower) {
                 // Scale nucleo score to match existing weights (~40 for title fuzzy match)
                 score += 40 + (nucleo_s / 25) as i32;
             }
