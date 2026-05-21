@@ -1,3 +1,5 @@
+For a map of main UI surfaces to code implementation, see [GLOSSARY.md](file:///Users/johnlindquist/dev/script-kit-gpui/GLOSSARY.md).
+
 # Before Starting Work
 
 - Inspect the relevant source, tests, and repo-local skills before editing.

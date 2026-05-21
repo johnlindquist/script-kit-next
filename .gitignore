@@ -73,6 +73,8 @@ TODOS.md
 
 # Scratch / ephemeral working dirs
 .tmp/
+.codex-run/
+.agent-work/
 
 # AFK audit loop kill switch (presence aborts loop)
 .audit-pause

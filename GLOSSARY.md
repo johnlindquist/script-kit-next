@@ -1,0 +1,68 @@
+# Script Kit GPUI UI Glossary & Code Map
+
+This document defines the main user-facing UI surfaces and components in Script Kit GPUI and maps them to their respective locations in the source code.
+
+---
+
+## 1. Core Windows & Presentation Modes
+
+| UI Element | Description | Key Structs / Entities | Main Source File |
+| :--- | :--- | :--- | :--- |
+| **Script List** | The default launcher list view showing all scripts, recent items, and favorites when no prompts are active. | `ScriptListApp` | [render_impl.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/main_sections/render_impl.rs) & [app_state.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/main_sections/app_state.rs) |
+| **Expanded View** | Main window presentation mode (`MainWindowMode::Full`) that expands the list area to show preview details or prompt shells. | `MainWindowMode` | [app_view_state.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/main_sections/app_view_state.rs#L1361) |
+| **Mini View** | Main window presentation mode (`MainWindowMode::Mini`) that uses a single-column layout for quick selection. | `MainWindowMode` | [app_view_state.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/main_sections/app_view_state.rs#L1361) |
+| **Notes Window** | Floating, persistent overlay editor panel for creating and browsing notes. | `NotesApp` | [window.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/notes/window.rs#L246) |
+| **Dictation Window** | overlay micro panel indicating recording status, device options, and audio waveforms during voice capture. | `DictationOverlay` | [window.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/dictation/window.rs#L503) |
+| **Main Input** | The top search text box where users type filter queries. | `gpui_input_state` (`TextInputState`) | [text_input.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/components/text_input.rs) & [common.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/common.rs#L50) |
+| **Footer** | Native hints strip anchored at the bottom of the window displaying active shortcuts and streaming status. | `MainWindowFooterConfig` | [footer_popup.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/footer_popup.rs) |
+
+---
+
+## 2. Popups & Dialogs
+
+| UI Element | Description | Key Structs / Entities | Main Source File |
+| :--- | :--- | :--- | :--- |
+| **Actions Menu** | Searchable, categorised contextual operations menu shown as a popover overlay (Cmd+K). | `ActionsDialog` | [dialog.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/actions/dialog.rs#L520) & [window.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/actions/window.rs) |
+| **Trigger Popup** | Dropdown overlay suggesting capture targets and handlers when prefix characters are typed (e.g. `;`, `+`, `:`). | `MenuSyntaxTriggerPopupWindow` | [menu_syntax_trigger_popup_window.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/app_impl/menu_syntax_trigger_popup_window.rs#L406) & [menu_syntax_trigger_popup.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/app_impl/menu_syntax_trigger_popup.rs) |
+| **Confirm Popup** | Dialog box overlay with customizable buttons (e.g. Yes/No/Cancel). | `ConfirmPopup` | [confirm/mod.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/confirm/mod.rs) |
+
+---
+
+## 3. Interactive Script Prompts
+
+These represent the interactive surfaces that scripts spawn when calling methods from the SDK (e.g., `arg()`, `div()`, `editor()`).
+
+| UI Element | Description | Key Structs / Entities | Main Source File |
+| :--- | :--- | :--- | :--- |
+| **Arg Prompt** | Simple input fields prompting for single arguments. | `ArgPrompt` / `render_arg_prompt` | [render.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/arg/render.rs) & [arg.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/arg.rs) |
+| **Chat Prompt** | AI agent chat surface (Agent Chat Portal) supporting streaming and prompt-specific layouts. | `ChatPrompt` / `render_chat_prompt` | [other.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/other.rs#L441) |
+| **Editor Prompt** | Rich multi-line text editor interface. | `EditorPrompt` / `render_editor_prompt` | [editor.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/editor.rs) |
+| **Form Prompt** | Prompts containing multiple custom input fields. | `FormPrompt` / `render_form_prompt` | [form.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/form.rs) |
+| **Select Prompt** | Dropdown menu allowing search and selection from a list of options. | `SelectPrompt` / `render_select_prompt` | [other.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/other.rs) |
+| **Div Prompt** | Custom HTML-like rendering surface controlled by the script. | `DivPrompt` / `render_div_prompt` | [div.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/div.rs) |
+| **Terminal Prompt** | Embedded terminal shell/PTY widget running executions. | `TermPrompt` / `render_term_prompt` | [term.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/term.rs) & [term_prompt/mod.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/term_prompt/mod.rs) |
+
+---
+
+## 4. Built-in Surfaces
+
+Searchable utility lists available directly from the launcher.
+
+| UI Element | Description | Key Structs / Entities | Main Source File |
+| :--- | :--- | :--- | :--- |
+| **Clipboard History** | Searchable history of clipboard entries. | `ClipboardHistoryView` | [clipboard.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/clipboard.rs) & [clipboard_history/mod.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/clipboard_history/mod.rs) |
+| **Emoji Picker** | Panel for searching and inserting emojis. | `EmojiPickerView` | [emoji_picker.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/emoji_picker.rs) |
+| **Process Manager** | Search tool to view and kill system processes. | `ProcessManager` | [process_manager.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/process_manager.rs) |
+| **Window Switcher** | Switch focus between active application windows. | `WindowSwitcher` | [window_switcher.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/window_switcher.rs) |
+| **App Launcher** | Search and launch installed local applications. | `AppLauncher` | [app_launcher.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/app_launcher.rs) |
+| **Notes Browse** | List and search local Markdown notes. | `NotesBrowseView` | [notes_browse.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/notes_browse.rs) |
+| **Kit Store** | Browse and install community scripts. | `KitStore` | [kit_store.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/kit_store.rs) |
+| **File Search** | Browse files on the local filesystem. | `FileSearchView` | [file_search.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/file_search.rs) |
+
+---
+
+## 5. Developer Surfaces
+
+| UI Element | Description | Key Structs / Entities | Main Source File |
+| :--- | :--- | :--- | :--- |
+| **Storybook** | Visual component design and variables catalog. | `StoryBrowser` | [storybook/mod.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/storybook/mod.rs) & [stories/](file:///Users/johnlindquist/dev/script-kit-gpui/src/stories/) |
