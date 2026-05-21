@@ -12,6 +12,7 @@ fn selected_result(app: &crate::ScriptListApp) -> Option<crate::scripts::SearchR
     use crate::scripts::*;
 
     match &app.current_view {
+        AppView::ScriptList if app.menu_syntax_capture_form_owns_input() => None,
         AppView::ScriptList => app
             .main_menu_result_caches
             .cloned_first_search_result_at_or_after_grouped_item(app.selected_index),
@@ -77,6 +78,7 @@ fn selected_result(app: &crate::ScriptListApp) -> Option<crate::scripts::SearchR
 
 fn visible_result_keys(app: &crate::ScriptListApp) -> Vec<String> {
     match &app.current_view {
+        AppView::ScriptList if app.menu_syntax_capture_form_owns_input() => Vec::new(),
         AppView::ScriptList => app
             .main_menu_result_caches
             .grouped_search_results()
@@ -114,6 +116,11 @@ fn visible_result_keys(app: &crate::ScriptListApp) -> Vec<String> {
 }
 
 fn visible_row_fingerprint(app: &crate::ScriptListApp) -> String {
+    if matches!(app.current_view, AppView::ScriptList) && app.menu_syntax_capture_form_owns_input()
+    {
+        return "handler-form".to_string();
+    }
+
     if !matches!(app.current_view, AppView::ScriptList) {
         return format!(
             "v:{}:{}",
@@ -215,6 +222,11 @@ fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflig
 }
 
 fn visible_result_receipts(app: &crate::ScriptListApp) -> Vec<MainWindowPreflightVisibleResult> {
+    if matches!(app.current_view, AppView::ScriptList) && app.menu_syntax_capture_form_owns_input()
+    {
+        return Vec::new();
+    }
+
     if !matches!(app.current_view, AppView::ScriptList) {
         // For built-in views, we just return the selected result as the only visible result for now
         // to satisfy the basic preflight requirements.

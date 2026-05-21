@@ -674,15 +674,26 @@ impl ScriptListApp {
                 self.menu_syntax_trigger_popup_suppressed_filter = None;
             }
 
-            self.run_menu_syntax_object_selector_state_machine(&new_text, window, cx);
-            let object_selector_owns_input =
-                self.menu_syntax_object_selector_state.snapshot.is_some();
+            let capture_composer_owns_input =
+                self.menu_syntax_capture_form_owns_input_for(&new_text);
+            if capture_composer_owns_input {
+                self.menu_syntax_object_selector_state = Default::default();
+                self.menu_syntax_trigger_popup_state = Default::default();
+                crate::menu_syntax_object_selector_popup_window::close_menu_syntax_object_selector_popup_window(cx);
+                crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+            } else {
+                self.run_menu_syntax_object_selector_state_machine(&new_text, window, cx);
+            }
+            let object_selector_owns_input = !capture_composer_owns_input
+                && self.menu_syntax_object_selector_state.snapshot.is_some();
 
             let picker_ctx = self.menu_syntax_trigger_picker_context(&new_text);
             let transition = if popup_suppressed_for_this_text {
                 // User just accepted; popup should stay closed for this
                 // exact filter. Represent that as NoChange so the rest of
                 // the block runs uniformly.
+                crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange
+            } else if capture_composer_owns_input {
                 crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange
             } else if object_selector_owns_input {
                 if self.menu_syntax_trigger_popup_state.snapshot.is_some() {
@@ -697,9 +708,6 @@ impl ScriptListApp {
                     &picker_ctx,
                 )
             };
-            let capture_composer_owns_input = self
-                .menu_syntax_mode
-                .capture_composer_owns_input_for(&new_text);
             let mut needs_popup_sync = false;
             match &transition {
                 crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange => {}
@@ -794,14 +802,14 @@ impl ScriptListApp {
             if !previous_text.is_empty() && mode.capture_composer_owns_input_for(&previous_text) {
                 self.filter_text = previous_text.clone();
                 self.menu_syntax_mode = mode;
-            self.gpui_input_state.update(cx, |state, cx| {
-                state.set_value(previous_text.clone(), window, cx);
-                let len = previous_text.len();
-                state.set_selection(len, len, window, cx);
-            });
-            self.sync_menu_syntax_form_inputs_from_filter(window, cx);
-            self.focus_next_menu_syntax_form_field(window, cx);
-            return;
+                self.gpui_input_state.update(cx, |state, cx| {
+                    state.set_value(previous_text.clone(), window, cx);
+                    let len = previous_text.len();
+                    state.set_selection(len, len, window, cx);
+                });
+                self.sync_menu_syntax_form_inputs_from_filter(window, cx);
+                self.focus_next_menu_syntax_form_field(window, cx);
+                return;
             }
         }
 

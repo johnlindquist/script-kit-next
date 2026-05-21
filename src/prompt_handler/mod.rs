@@ -13,6 +13,28 @@ fn prompt_coming_soon_warning(prompt_name: &str) -> String {
     format!("{prompt_name} prompt coming soon.")
 }
 
+fn set_main_window_input_text_for_batch(
+    this: &gpui::WeakEntity<ScriptListApp>,
+    main_window_handle: Option<gpui::AnyWindowHandle>,
+    text: &str,
+    cx: &mut gpui::AsyncApp,
+) -> anyhow::Result<()> {
+    let text = text.to_string();
+    if let Some(handle) = main_window_handle {
+        handle.update(cx, |_root, window, cx| {
+            this.update(cx, |app, cx| {
+                app.set_input_text_in_window(&text, window, cx);
+            })
+        })??;
+        return Ok(());
+    }
+
+    this.update(cx, |app, cx| {
+        app.set_input_text(&text, cx);
+    })?;
+    Ok(())
+}
+
 fn should_restore_main_window_after_script_exit(
     script_hid_window: bool,
     keep_tab_ai_save_offer_open: bool,
@@ -5328,6 +5350,8 @@ impl ScriptListApp {
                     "automation.batch.started"
                 );
 
+                let main_batch_window_handle = crate::get_main_window_handle();
+
                 cx.spawn(async move |this, cx| {
                     // ── Detached ACP batch path ──────────────────────────
                     // When targeting a detached ACP entity, route commands
@@ -6664,9 +6688,12 @@ impl ScriptListApp {
                         let cmd_start = std::time::Instant::now();
                         match cmd {
                             protocol::BatchCommand::SetInput { text } => {
-                                match this.update(cx, |this, cx| {
-                                    this.set_input_text(text, cx);
-                                }) {
+                                match set_main_window_input_text_for_batch(
+                                    &this,
+                                    main_batch_window_handle,
+                                    text,
+                                    cx,
+                                ) {
                                     Ok(()) => {
                                         tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "setInput", "batch.step.ok");
                                         results.push(protocol::BatchResultEntry {
@@ -6821,17 +6848,28 @@ impl ScriptListApp {
                                     }
                                 }
                             }
-                            protocol::BatchCommand::FilterAndSelect { filter, select_first, submit } => {
+                            protocol::BatchCommand::FilterAndSelect {
+                                filter,
+                                select_first,
+                                submit,
+                            } => {
                                 let filter = filter.clone();
                                 let select_first = *select_first;
                                 let submit = *submit;
-                                match this.update(cx, |this, cx| {
-                                    this.set_input_text(&filter, cx);
-                                    if select_first {
-                                        this.select_first_choice(submit, cx)
-                                    } else {
-                                        Ok(None)
-                                    }
+                                match set_main_window_input_text_for_batch(
+                                    &this,
+                                    main_batch_window_handle,
+                                    &filter,
+                                    cx,
+                                )
+                                .and_then(|_| {
+                                    this.update(cx, |this, cx| {
+                                        if select_first {
+                                            this.select_first_choice(submit, cx)
+                                        } else {
+                                            Ok(None)
+                                        }
+                                    })
                                 }) {
                                     Ok(Ok(selected_value)) => {
                                         tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "filterAndSelect", filter = %filter, selected = ?selected_value, "batch.step.ok");
@@ -6861,9 +6899,16 @@ impl ScriptListApp {
                             }
                             protocol::BatchCommand::TypeAndSubmit { text } => {
                                 let text = text.clone();
-                                match this.update(cx, |this, cx| {
-                                    this.set_input_text(&text, cx);
-                                    this.submit_current_value(cx);
+                                match set_main_window_input_text_for_batch(
+                                    &this,
+                                    main_batch_window_handle,
+                                    &text,
+                                    cx,
+                                )
+                                .and_then(|_| {
+                                    this.update(cx, |this, cx| {
+                                        this.submit_current_value(cx);
+                                    })
                                 }) {
                                     Ok(()) => {
                                         tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "typeAndSubmit", "batch.step.ok");
@@ -8911,6 +8956,26 @@ impl ScriptListApp {
 
         let view = entity.read(cx);
         view.test_probe_snapshot(tail, cx)
+    }
+
+    fn set_input_text_in_window(
+        &mut self,
+        text: &str,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        match &self.current_view {
+            AppView::ScriptList => {
+                self.menu_syntax_form_input_active = false;
+                self.menu_syntax_form_draft_field_id = None;
+                self.menu_syntax_form_draft_value.clear();
+                self.menu_syntax_form_suggestion_field_id = None;
+                self.menu_syntax_form_suggestion_selected_index = None;
+                self.set_filter_text_immediate(text.to_string(), window, cx);
+                cx.notify();
+            }
+            _ => self.set_input_text(text, cx),
+        }
     }
 
     /// Set the input text for the current prompt.
