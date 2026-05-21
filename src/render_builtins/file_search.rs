@@ -256,23 +256,19 @@ fn file_search_row_trailing_metadata(
         list_colors,
         selected,
     ));
+    let summary = format!(
+        "{} · {}",
+        file_search::format_file_size(size),
+        file_search::format_relative_time(modified)
+    );
     div()
-        .flex()
-        .flex_col()
-        .items_end()
-        .gap(px(2.0))
-        .child(
-            div()
-                .text_xs()
-                .text_color(metadata_color)
-                .child(file_search::format_file_size(size)),
-        )
-        .child(
-            div()
-                .text_xs()
-                .text_color(metadata_color)
-                .child(file_search::format_relative_time(modified)),
-        )
+        .max_w(px(88.0))
+        .overflow_hidden()
+        .text_xs()
+        .whitespace_nowrap()
+        .text_ellipsis()
+        .text_color(metadata_color)
+        .child(summary)
         .into_any_element()
 }
 

@@ -1041,10 +1041,10 @@ pub fn format_file_size(bytes: u64) -> String {
         format!("{} B", bytes)
     }
 }
-/// Format Unix timestamp as relative time (e.g., "2 hours ago", "3 days ago")
+/// Format Unix timestamp for file-search modified metadata using Finder-style labels.
 #[allow(dead_code)]
 pub fn format_relative_time(unix_timestamp: u64) -> String {
-    crate::formatting::format_relative_time_long(unix_timestamp)
+    crate::formatting::format_finder_modified_timestamp(unix_timestamp)
 }
 /// Filter and sort FileResults using Nucleo fuzzy matching
 ///
@@ -2163,6 +2163,7 @@ mod tests {
     }
     #[test]
     fn test_format_relative_time() {
+        use chrono::Local;
         use std::time::{SystemTime, UNIX_EPOCH};
 
         let now = SystemTime::now()
@@ -2170,24 +2171,16 @@ mod tests {
             .unwrap()
             .as_secs();
 
-        // Just now (0 seconds ago)
-        assert_eq!(format_relative_time(now), "just now");
+        let formatted_now = format_relative_time(now);
+        assert!(!formatted_now.contains("Today"));
+        assert!(!formatted_now.contains(" at "));
 
-        // Minutes ago
-        assert_eq!(format_relative_time(now - 60), "1 minute ago");
-        assert_eq!(format_relative_time(now - 120), "2 minutes ago");
-        assert_eq!(format_relative_time(now - 59 * 60), "59 minutes ago");
+        let yesterday = Local::now() - chrono::Duration::days(1);
+        let formatted_yesterday = format_relative_time(yesterday.timestamp() as u64);
+        assert!(!formatted_yesterday.contains("Yesterday"));
+        assert!(!formatted_yesterday.contains(" at "));
 
-        // Hours ago
-        assert_eq!(format_relative_time(now - 3600), "1 hour ago");
-        assert_eq!(format_relative_time(now - 7200), "2 hours ago");
-
-        // Days ago
-        assert_eq!(format_relative_time(now - 86400), "1 day ago");
-        assert_eq!(format_relative_time(now - 172800), "2 days ago");
-
-        // Unknown (0 timestamp)
-        assert_eq!(format_relative_time(0), "Unknown");
+        assert_eq!(format_relative_time(0), "—");
     }
     #[test]
     fn test_shorten_path() {
