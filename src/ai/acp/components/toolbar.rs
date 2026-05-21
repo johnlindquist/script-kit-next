@@ -1,5 +1,6 @@
 use gpui::{
-    div, prelude::*, px, rgba, Context, FocusHandle, IntoElement, ParentElement, Render, Window,
+    div, prelude::*, px, rgb, rgba, Context, Entity, FocusHandle, IntoElement, ParentElement,
+    Render, Window,
 };
 
 use super::super::thread::AcpThreadStatus;
@@ -44,21 +45,18 @@ impl AcpToolbar {
 impl Render for AcpToolbar {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = theme::get_cached_theme();
-        let chrome = theme::AppChromeColors::from_theme(&theme);
 
         div()
             .id("acp-toolbar")
             .w_full()
-            .h(px(
-                crate::ui::chrome::TAHOE_CHROME_METRICS.acp_toolbar_height
-            ))
+            .h(px(32.0))
             .flex()
             .items_center()
             .justify_between()
             .px(px(12.0))
-            .bg(rgba(chrome.panel_surface_rgba))
+            .bg(rgb(theme.colors.background.main))
             .border_b_1()
-            .border_color(rgba(chrome.divider_rgba))
+            .border_color(rgb(theme.colors.ui.border))
             .child(
                 div()
                     .id("acp-toolbar-model-selector")
@@ -72,7 +70,7 @@ impl Render for AcpToolbar {
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgba(chrome.text_strong_rgba))
+                            .text_color(rgb(theme.colors.text.primary))
                             .child(self.model_name.clone()),
                     ),
             )
@@ -80,7 +78,7 @@ impl Render for AcpToolbar {
                 div().flex().items_center().gap(px(12.0)).child(
                     div()
                         .text_xs()
-                        .text_color(rgba(chrome.text_hint_rgba))
+                        .text_color(rgb(theme.colors.text.muted))
                         .child(format!("{:?}", self.status)),
                 ),
             )

@@ -158,7 +158,7 @@ impl PromptHeader {
             input
                 .px(px(10.0))
                 .py(px(6.0))
-                .rounded(px(crate::ui::chrome::TAHOE_CHROME_METRICS.control_md_radius))
+                .rounded(px(10.0))
                 .border_1()
                 .border_color(colors.border.rgba8(0x33)),
         )
