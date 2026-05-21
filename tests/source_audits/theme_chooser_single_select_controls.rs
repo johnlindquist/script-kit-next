@@ -68,6 +68,7 @@ fn theme_chooser_exposes_user_theme_management_and_gradient_actions() {
 
     for action_id in [
         "theme_chooser_save_as_user_theme",
+        "theme_chooser_edit_theme_as_text",
         "theme_chooser_update_user_theme",
         "theme_chooser_delete_user_theme",
         "theme_chooser_restore_deleted_user_theme",
@@ -117,6 +118,7 @@ fn theme_chooser_exposes_management_status_and_safe_user_theme_actions() {
 
     for action in [
         "theme_chooser_save_as_user_theme",
+        "theme_chooser_edit_theme_as_text",
         "theme_chooser_update_user_theme",
         "theme_chooser_delete_user_theme",
         "theme_chooser_restore_deleted_user_theme",
@@ -205,13 +207,16 @@ fn theme_chooser_controls_are_devtools_visible_and_drivable() {
 
     for control in [
         "accent-color",
+        "accent-color-hex",
         "surface-opacity",
         "secondary-text-opacity",
         "focused-background-opacity",
         "vibrancy-enabled",
         "gradient-enabled",
         "gradient-base-from",
+        "gradient-base-from-hex",
         "gradient-base-to",
+        "gradient-base-to-hex",
         "gradient-base-angle",
         "gradient-base-opacity",
         "ui-font-size",
@@ -230,6 +235,7 @@ fn theme_chooser_controls_are_devtools_visible_and_drivable() {
     for element_type in [
         "ElementType::Slider",
         "ElementType::ColorPicker",
+        "ElementType::Input",
         "ElementType::Toggle",
     ] {
         assert!(
@@ -244,6 +250,50 @@ fn theme_chooser_controls_are_devtools_visible_and_drivable() {
     assert!(prompt_handler.contains("\"setThemeControl\".to_string()"));
     assert!(prompt_handler.contains("setThemeControl requires ThemeChooserView"));
     assert!(!prompt_handler.contains(".set_theme_chooser_control_from_devtools(&control, &value, cx)\n                                                .ok()"));
+}
+
+#[test]
+fn theme_chooser_color_rows_use_single_picker_with_typed_hex_input() {
+    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+
+    assert!(chooser.contains("pub(crate) struct ThemeChooserColorControls"));
+    assert!(chooser.contains("picker: Entity<ColorPickerState>"));
+    assert!(chooser.contains("hex_input: Entity<gpui_component::input::InputState>"));
+    assert!(chooser.contains("fn new_theme_chooser_color_controls("));
+    assert!(chooser.contains("gpui_component::input::InputEvent::Change"));
+    assert!(chooser.contains("apply_theme_chooser_hex_text_if_valid"));
+    assert!(chooser.contains("parse_theme_chooser_hex_input(text)"));
+    assert!(chooser.contains("apply_theme_chooser_color_hex_change("));
+    assert!(
+        chooser.contains("gpui_component::input::Input::new(&controls.hex_input)")
+            && chooser.contains("ColorPicker::new(&controls.picker)"),
+        "Theme Designer color row must expose typed hex editing beside the single picker swatch"
+    );
+    assert!(
+        !chooser.contains(".w(px(18.0))\n                            .h(px(18.0))"),
+        "Theme Designer color rows should not render a duplicate manual color square"
+    );
+}
+
+#[test]
+fn theme_chooser_edit_as_text_action_materializes_user_theme_before_opening_editor() {
+    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let actions = read_source("src/render_builtins/actions.rs");
+    let collector = read_source("src/app_layout/collect_elements.rs");
+
+    assert!(actions.contains("\"theme_chooser_edit_theme_as_text\""));
+    assert!(actions.contains("\"Edit Theme as Text\""));
+    assert!(actions.contains("IconName::Pencil"));
+    assert!(collector.contains("button:theme-chooser-edit-theme-as-text"));
+    assert!(chooser.contains("fn materialize_theme_chooser_text_edit_file("));
+    assert!(chooser.contains("theme::user_themes::find_user_theme(&saved.slug)"));
+    assert!(chooser.contains("theme::user_themes::find_user_theme(slug)"));
+    assert!(chooser.contains("theme::user_themes::save_theme_as_user_theme(&snapshot.save_name"));
+    assert!(chooser.contains("crate::script_creation::open_in_editor("));
+    assert!(
+        !chooser.contains("setup::theme_json_path") && !chooser.contains("theme.json"),
+        "Edit-as-text should open a user-theme file, not the active ~/.scriptkit/theme.json override"
+    );
 }
 
 #[test]
@@ -358,7 +408,7 @@ fn theme_chooser_native_slider_drag_is_not_parent_reconciled_until_release() {
     let new_slider = chooser
         .split("fn new_theme_chooser_slider(")
         .nth(1)
-        .and_then(|section| section.split("fn new_theme_chooser_color_picker(").next())
+        .and_then(|section| section.split("fn new_theme_chooser_color_controls(").next())
         .expect("missing new_theme_chooser_slider");
     let sync_slider = chooser
         .split("fn sync_slider_entity_value(")

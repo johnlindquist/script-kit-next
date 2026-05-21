@@ -38,14 +38,19 @@ enum ThemeChooserColorBinding {
 }
 
 pub(crate) struct ThemeChooserGradientControls {
-    from: Entity<ColorPickerState>,
-    to: Entity<ColorPickerState>,
+    from: ThemeChooserColorControls,
+    to: ThemeChooserColorControls,
     angle: Entity<SliderState>,
     opacity: Entity<SliderState>,
 }
 
+pub(crate) struct ThemeChooserColorControls {
+    picker: Entity<ColorPickerState>,
+    hex_input: Entity<gpui_component::input::InputState>,
+}
+
 pub(crate) struct ThemeChooserControls {
-    accent: Entity<ColorPickerState>,
+    accent: ThemeChooserColorControls,
     surface_opacity: Entity<SliderState>,
     secondary_text_opacity: Entity<SliderState>,
     focused_background_opacity: Entity<SliderState>,
@@ -287,6 +292,10 @@ impl ScriptListApp {
         u32::from_str_radix(trimmed, 16).ok()
     }
 
+    fn canonical_theme_chooser_hex_label(hex: u32) -> String {
+        format!("#{:06X}", hex)
+    }
+
     fn theme_chooser_featured_colors() -> Vec<gpui::Hsla> {
         Self::ACCENT_PALETTE
             .iter()
@@ -327,14 +336,14 @@ impl ScriptListApp {
         slider
     }
 
-    fn new_theme_chooser_color_picker(
+    fn new_theme_chooser_color_controls(
         &self,
         binding: ThemeChooserColorBinding,
         initial_hex: u32,
         window: &mut Window,
         cx: &mut Context<Self>,
         subscriptions: &mut Vec<Subscription>,
-    ) -> gpui::Entity<ColorPickerState> {
+    ) -> ThemeChooserColorControls {
         let initial = Self::theme_chooser_hex_to_hsla(initial_hex);
         let picker = cx.new(|cx| ColorPickerState::new(window, cx).default_value(initial));
         subscriptions.push(cx.subscribe_in(
@@ -347,7 +356,30 @@ impl ScriptListApp {
                 ColorPickerEvent::Change(None) => {}
             },
         ));
-        picker
+
+        let hex_input = cx.new(|cx| {
+            gpui_component::input::InputState::new(window, cx)
+                .tab_navigation(true)
+                .placeholder("#RRGGBB")
+                .default_value(Self::canonical_theme_chooser_hex_label(initial_hex))
+        });
+        subscriptions.push(cx.subscribe_in(
+            &hex_input,
+            window,
+            move |this, input, event: &gpui_component::input::InputEvent, window, cx| match event {
+                gpui_component::input::InputEvent::Change => {
+                    let value = input.read(cx).value().to_string();
+                    this.apply_theme_chooser_hex_text_if_valid(binding, &value, cx);
+                }
+                gpui_component::input::InputEvent::PressEnter { .. }
+                | gpui_component::input::InputEvent::Blur => {
+                    this.sync_theme_chooser_control_values(window, cx);
+                }
+                _ => {}
+            },
+        ));
+
+        ThemeChooserColorControls { picker, hex_input }
     }
 
     fn new_theme_chooser_gradient_controls(
@@ -362,14 +394,14 @@ impl ScriptListApp {
         subscriptions: &mut Vec<Subscription>,
     ) -> ThemeChooserGradientControls {
         ThemeChooserGradientControls {
-            from: self.new_theme_chooser_color_picker(
+            from: self.new_theme_chooser_color_controls(
                 ThemeChooserColorBinding::GradientFrom { layer_index },
                 from,
                 window,
                 cx,
                 subscriptions,
             ),
-            to: self.new_theme_chooser_color_picker(
+            to: self.new_theme_chooser_color_controls(
                 ThemeChooserColorBinding::GradientTo { layer_index },
                 to,
                 window,
@@ -406,7 +438,7 @@ impl ScriptListApp {
         let needs_init = self.theme_chooser_controls.is_none();
         if needs_init {
             let mut subscriptions = Vec::new();
-            let accent = self.new_theme_chooser_color_picker(
+            let accent = self.new_theme_chooser_color_controls(
                 ThemeChooserColorBinding::Accent,
                 self.theme.colors.accent.selected,
                 window,
@@ -654,50 +686,63 @@ impl ScriptListApp {
         let Some(hex) = Self::theme_chooser_hsla_to_hex_rgb(color) else {
             return;
         };
+        self.apply_theme_chooser_color_hex_change(binding, hex, "theme_chooser_color_picker", cx);
+    }
+
+    fn apply_theme_chooser_color_hex_change(
+        &mut self,
+        binding: ThemeChooserColorBinding,
+        hex: u32,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
         match binding {
             ThemeChooserColorBinding::Accent => {
-                self.mutate_theme_chooser_theme("theme_chooser_accent_color_picker", cx, |theme| {
+                self.mutate_theme_chooser_theme(reason, cx, |theme| {
                     theme.colors.accent.selected = hex;
                     theme.colors.text.on_accent =
                         best_contrast_of_two(hex, 0xFFFFFF, theme.colors.background.main);
                 });
             }
             ThemeChooserColorBinding::GradientFrom { layer_index } => {
-                self.mutate_theme_chooser_theme(
-                    "theme_chooser_gradient_from_color_picker",
-                    cx,
-                    |theme| {
-                        let Some(gradient) = theme.background_gradient.as_mut() else {
-                            return;
-                        };
-                        if let Some(index) = layer_index {
-                            if let Some(layer) = gradient.layers.get_mut(index) {
-                                layer.from = hex;
-                            }
-                        } else {
-                            gradient.from = hex;
+                self.mutate_theme_chooser_theme(reason, cx, |theme| {
+                    let Some(gradient) = theme.background_gradient.as_mut() else {
+                        return;
+                    };
+                    if let Some(index) = layer_index {
+                        if let Some(layer) = gradient.layers.get_mut(index) {
+                            layer.from = hex;
                         }
-                    },
-                );
+                    } else {
+                        gradient.from = hex;
+                    }
+                });
             }
             ThemeChooserColorBinding::GradientTo { layer_index } => {
-                self.mutate_theme_chooser_theme(
-                    "theme_chooser_gradient_to_color_picker",
-                    cx,
-                    |theme| {
-                        let Some(gradient) = theme.background_gradient.as_mut() else {
-                            return;
-                        };
-                        if let Some(index) = layer_index {
-                            if let Some(layer) = gradient.layers.get_mut(index) {
-                                layer.to = hex;
-                            }
-                        } else {
-                            gradient.to = hex;
+                self.mutate_theme_chooser_theme(reason, cx, |theme| {
+                    let Some(gradient) = theme.background_gradient.as_mut() else {
+                        return;
+                    };
+                    if let Some(index) = layer_index {
+                        if let Some(layer) = gradient.layers.get_mut(index) {
+                            layer.to = hex;
                         }
-                    },
-                );
+                    } else {
+                        gradient.to = hex;
+                    }
+                });
             }
+        }
+    }
+
+    fn apply_theme_chooser_hex_text_if_valid(
+        &mut self,
+        binding: ThemeChooserColorBinding,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(hex) = Self::parse_theme_chooser_hex_input(text) {
+            self.apply_theme_chooser_color_hex_change(binding, hex, "theme_chooser_hex_input", cx);
         }
     }
 
@@ -799,7 +844,7 @@ impl ScriptListApp {
                     ThemeChooserManagementStatus::Clean
                 };
             }
-            "accent-color" => {
+            "accent-color" | "accent-color-hex" => {
                 let color = Self::theme_chooser_hex_to_hsla(hex_value()?);
                 self.apply_theme_chooser_color_change(ThemeChooserColorBinding::Accent, color, cx);
             }
@@ -837,7 +882,7 @@ impl ScriptListApp {
                     },
                 );
             }
-            "gradient-base-from" => {
+            "gradient-base-from" | "gradient-base-from-hex" => {
                 let color = hex_value()?;
                 self.mutate_theme_chooser_theme(
                     "theme_chooser_devtools_gradient_base_from",
@@ -850,7 +895,7 @@ impl ScriptListApp {
                     },
                 );
             }
-            "gradient-base-to" => {
+            "gradient-base-to" | "gradient-base-to-hex" => {
                 let color = hex_value()?;
                 self.mutate_theme_chooser_theme(
                     "theme_chooser_devtools_gradient_base_to",
@@ -901,7 +946,7 @@ impl ScriptListApp {
                         .ok_or_else(|| anyhow::anyhow!("gradient layer indices are 1-based"))?;
                     ensure_layer(layer_index)?;
                     match field {
-                        "from" => {
+                        "from" | "from-hex" => {
                             let color = Self::theme_chooser_hex_to_hsla(hex_value()?);
                             self.apply_theme_chooser_color_change(
                                 ThemeChooserColorBinding::GradientFrom {
@@ -911,7 +956,7 @@ impl ScriptListApp {
                                 cx,
                             );
                         }
-                        "to" => {
+                        "to" | "to-hex" => {
                             let color = Self::theme_chooser_hex_to_hsla(hex_value()?);
                             self.apply_theme_chooser_color_change(
                                 ThemeChooserColorBinding::GradientTo {
@@ -983,6 +1028,24 @@ impl ScriptListApp {
         });
     }
 
+    fn sync_color_control_value(
+        controls: &ThemeChooserColorControls,
+        hex: u32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        Self::sync_color_picker_entity_value(&controls.picker, hex, window, cx);
+        let next = Self::canonical_theme_chooser_hex_label(hex);
+        controls.hex_input.update(cx, |input, cx| {
+            if input.focus_handle(cx).is_focused(window) {
+                return;
+            }
+            if input.value().as_ref() != next.as_str() {
+                input.set_value(next, window, cx);
+            }
+        });
+    }
+
     fn sync_gradient_controls_from_theme(
         controls: &ThemeChooserGradientControls,
         from: u32,
@@ -992,8 +1055,8 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        Self::sync_color_picker_entity_value(&controls.from, from, window, cx);
-        Self::sync_color_picker_entity_value(&controls.to, to, window, cx);
+        Self::sync_color_control_value(&controls.from, from, window, cx);
+        Self::sync_color_control_value(&controls.to, to, window, cx);
         Self::sync_slider_entity_value(&controls.angle, angle.rem_euclid(360.0), window, cx);
         Self::sync_slider_entity_value(&controls.opacity, opacity.clamp(0.0, 1.0), window, cx);
     }
@@ -1005,7 +1068,7 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let fonts = self.theme.get_fonts();
 
-        Self::sync_color_picker_entity_value(
+        Self::sync_color_control_value(
             &controls.accent,
             self.theme.colors.accent.selected,
             window,
@@ -1142,8 +1205,8 @@ impl ScriptListApp {
 
     fn render_theme_chooser_color_picker_row(
         label: &'static str,
-        hex: u32,
-        picker: &Entity<ColorPickerState>,
+        _hex: u32,
+        controls: &ThemeChooserColorControls,
         chrome: &theme::AppChromeColors,
     ) -> gpui::AnyElement {
         div()
@@ -1165,32 +1228,25 @@ impl ScriptListApp {
                             .child(label),
                     )
                     .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(chrome.text_muted_hex))
-                            .child(format!("#{:06X}", hex)),
+                        gpui_component::input::Input::new(&controls.hex_input)
+                            .w(px(96.0))
+                            .h(px(24.0))
+                            .line_height(px(16.0))
+                            .px(px(6.0))
+                            .py(px(0.0))
+                            .with_size(Size::XSmall)
+                            .appearance(true)
+                            .bordered(true)
+                            .focus_bordered(true)
+                            .text_color(rgb(chrome.text_primary_hex)),
                     ),
             )
             .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(8.0))
-                    .child(
-                        div()
-                            .w(px(18.0))
-                            .h(px(18.0))
-                            .rounded(px(5.0))
-                            .border_1()
-                            .border_color(rgba(chrome.badge_border_rgba))
-                            .bg(rgb(hex)),
-                    )
-                    .child(
-                        ColorPicker::new(picker)
-                            .featured_colors(Self::theme_chooser_featured_colors())
-                            .with_size(Size::Small),
-                    ),
+                div().flex().flex_row().items_center().gap(px(8.0)).child(
+                    ColorPicker::new(&controls.picker)
+                        .featured_colors(Self::theme_chooser_featured_colors())
+                        .with_size(Size::Small),
+                ),
             )
             .into_any_element()
     }
@@ -1577,6 +1633,68 @@ impl ScriptListApp {
                 cx.notify();
             }
         }
+    }
+
+    fn materialize_theme_chooser_text_edit_file(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<std::path::PathBuf> {
+        let current_fingerprint = Self::theme_chooser_theme_fingerprint(self.theme.as_ref());
+
+        if let Some(saved) = self
+            .theme_chooser_management
+            .as_ref()
+            .and_then(|state| state.last_saved.as_ref())
+            .filter(|saved| saved.fingerprint == current_fingerprint)
+        {
+            if let Some(theme) = theme::user_themes::find_user_theme(&saved.slug) {
+                return Ok(theme.path);
+            }
+        }
+
+        if let Some(ThemeChooserBase::User {
+            slug, fingerprint, ..
+        }) = self
+            .theme_chooser_management
+            .as_ref()
+            .and_then(|state| state.selected_base.as_ref())
+            .filter(|base| match base {
+                ThemeChooserBase::User { fingerprint, .. } => *fingerprint == current_fingerprint,
+                ThemeChooserBase::BuiltIn { .. } => false,
+            })
+        {
+            if let Some(theme) = theme::user_themes::find_user_theme(slug) {
+                return Ok(theme.path);
+            }
+            let _ = fingerprint;
+        }
+
+        let selected_entry = self.selected_theme_chooser_catalog_entry();
+        let snapshot = self.theme_chooser_management_snapshot(selected_entry.as_ref());
+        let saved =
+            theme::user_themes::save_theme_as_user_theme(&snapshot.save_name, self.theme.as_ref())?;
+        tracing::info!(
+            slug = %saved.slug,
+            path = %saved.path.display(),
+            "theme_chooser_materialized_text_edit_file"
+        );
+        let path = saved.path.clone();
+        let state = self.theme_chooser_management_mut();
+        state.selected_base = Some(ThemeChooserBase::User {
+            slug: saved.slug.clone(),
+            name: saved.name.clone(),
+            fingerprint: current_fingerprint,
+        });
+        state.draft_name = None;
+        state.last_saved = Some(ThemeChooserSaveReceipt {
+            slug: saved.slug,
+            name: saved.name.clone(),
+            fingerprint: current_fingerprint,
+        });
+        state.pending_delete = None;
+        state.status = ThemeChooserManagementStatus::Saved { name: saved.name };
+        cx.notify();
+        Ok(path)
     }
 
     fn update_selected_user_theme(&mut self, reason: &'static str, cx: &mut Context<Self>) {
@@ -2446,6 +2564,30 @@ impl ScriptListApp {
                     "theme_chooser_action_save_as_user_theme",
                     cx,
                 );
+            }
+            "theme_chooser_edit_theme_as_text" => {
+                match self.materialize_theme_chooser_text_edit_file(cx) {
+                    Ok(path) => {
+                        if let Err(error) =
+                            crate::script_creation::open_in_editor(path.as_path(), &self.config)
+                        {
+                            self.theme_chooser_management_mut().status =
+                                ThemeChooserManagementStatus::Error {
+                                    message: format!("Open editor failed: {error}"),
+                                };
+                            tracing::warn!(%error, path = %path.display(), "theme_chooser_open_text_editor_failed");
+                            cx.notify();
+                        }
+                    }
+                    Err(error) => {
+                        self.theme_chooser_management_mut().status =
+                            ThemeChooserManagementStatus::Error {
+                                message: format!("Save for text edit failed: {error}"),
+                            };
+                        tracing::warn!(%error, "theme_chooser_materialize_text_edit_failed");
+                        cx.notify();
+                    }
+                }
             }
             "theme_chooser_update_user_theme" => {
                 self.update_selected_user_theme("theme_chooser_action_update_user_theme", cx);
