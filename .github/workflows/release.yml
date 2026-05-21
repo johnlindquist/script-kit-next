@@ -11,6 +11,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  CODEX_ACP_VERSION: "0.14.0"
 
 permissions:
   contents: write
@@ -87,6 +88,11 @@ jobs:
       - name: Create bundle
         run: cargo bundle --release --bin script-kit-gpui
 
+      - name: Fetch and embed codex-acp binary
+        run: |
+          chmod +x scripts/fetch-codex-acp.sh
+          bash scripts/fetch-codex-acp.sh "target/release/bundle/osx/Script Kit.app/Contents/MacOS" "$(uname -m)"
+
       - name: Verify bundled macOS app contents
         run: bash scripts/verify-macos-bundle.sh
 
@@ -129,6 +135,11 @@ jobs:
           # Sign all nested components first (frameworks, helpers, etc.)
           find "$APP_PATH" -type d -name "*.framework" -print0 | xargs -0 -I{} codesign --force --options runtime --sign "$IDENTITY" "{}"
           find "$APP_PATH" \( -name "*.dylib" -o -name "*.so" \) -type f -print0 | xargs -0 codesign --force --options runtime --sign "$IDENTITY"
+
+          # Sign the helper executable
+          test -x "$APP_PATH/Contents/MacOS/codex-acp"
+          codesign --force --options runtime --entitlements entitlements.plist --sign "$IDENTITY" "$APP_PATH/Contents/MacOS/codex-acp"
+          codesign --verify --verbose=4 "$APP_PATH/Contents/MacOS/codex-acp"
 
           # Sign the main executable
           codesign --force --options runtime --entitlements entitlements.plist --sign "$IDENTITY" "$APP_PATH/Contents/MacOS/script-kit-gpui"

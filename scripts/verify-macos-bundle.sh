@@ -4,17 +4,24 @@ set -euo pipefail
 APP_PATH="${1:-target/release/bundle/osx/Script Kit.app}"
 MACOS_DIR="${APP_PATH}/Contents/MacOS"
 EXPECTED_BIN="${MACOS_DIR}/script-kit-gpui"
+CODEX_ACP_BIN="${MACOS_DIR}/codex-acp"
 
 echo "bundle_verify begin app=${APP_PATH}"
 
 test -d "${APP_PATH}"
 test -d "${MACOS_DIR}"
 test -x "${EXPECTED_BIN}"
+test -x "${CODEX_ACP_BIN}"
 
 echo "bundle_verify macos_dir_listing"
 find "${MACOS_DIR}" -maxdepth 1 -type f -print | sort
 
-UNEXPECTED="$(find "${MACOS_DIR}" -maxdepth 1 -type f ! -name 'script-kit-gpui' -print || true)"
+if command -v file >/dev/null 2>&1; then
+  file "${EXPECTED_BIN}"
+  file "${CODEX_ACP_BIN}"
+fi
+
+UNEXPECTED="$(find "${MACOS_DIR}" -maxdepth 1 -type f ! -name 'script-kit-gpui' ! -name 'codex-acp' -print || true)"
 if [[ -n "${UNEXPECTED}" ]]; then
   echo "bundle_verify unexpected=${UNEXPECTED}" >&2
   exit 1
