@@ -90,6 +90,7 @@ mod registry;
 mod selection;
 pub mod shortcut_recorder_states;
 mod story;
+pub mod tahoe_design_system_states;
 pub mod utility_builtin_states;
 
 pub use acp_chat_states::{
@@ -201,6 +202,10 @@ pub use shortcut_recorder_states::{
     ShortcutRecorderStateSpec,
 };
 pub use story::{Story, StoryCatalogRole, StorySurface, StoryVariant};
+pub use tahoe_design_system_states::{
+    render_tahoe_design_system_compare_thumbnail, render_tahoe_design_system_preview,
+    tahoe_design_system_story_variants, TahoeDesignSystemSurfaceId,
+};
 
 pub use audit_report::{
     build_command_bar_consistency_report, build_prompt_chrome_consistency_report,
