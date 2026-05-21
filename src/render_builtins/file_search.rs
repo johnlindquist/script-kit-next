@@ -7,36 +7,28 @@ static FILE_SEARCH_NATIVE_DRAG_AWAITING_APP_REACTIVATE: std::sync::atomic::Atomi
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FileSearchEmptyState {
-    TypeToSearch,
     NoFilesFound,
 }
 
 impl FileSearchEmptyState {
-    fn from_query(query: &str) -> Self {
-        if query.is_empty() {
-            Self::TypeToSearch
-        } else {
-            Self::NoFilesFound
-        }
+    fn from_query(_query: &str) -> Self {
+        Self::NoFilesFound
     }
 
     fn audit_state(self) -> &'static str {
         match self {
-            Self::TypeToSearch => "type_to_search",
             Self::NoFilesFound => "no_files_found",
         }
     }
 
     fn render_state(self) -> &'static str {
         match self {
-            Self::TypeToSearch => "empty_idle",
             Self::NoFilesFound => "empty_no_results",
         }
     }
 
     fn title(self) -> &'static str {
         match self {
-            Self::TypeToSearch => "Type to search files",
             Self::NoFilesFound => "No files found",
         }
     }
@@ -48,8 +40,7 @@ fn mark_file_search_native_drag_awaiting_app_reactivate() {
 }
 
 fn take_file_search_native_drag_awaiting_app_reactivate() -> bool {
-    FILE_SEARCH_NATIVE_DRAG_AWAITING_APP_REACTIVATE
-        .swap(false, std::sync::atomic::Ordering::SeqCst)
+    FILE_SEARCH_NATIVE_DRAG_AWAITING_APP_REACTIVATE.swap(false, std::sync::atomic::Ordering::SeqCst)
 }
 
 #[derive(Debug)]
@@ -117,7 +108,9 @@ fn begin_file_search_native_drag(
     if let Err(error) = crate::platform::begin_native_file_drag(drag_path) {
         crate::logging::log(
             "FOCUS",
-            &format!("FileSearch native drag platform handoff failed: path={drag_path} error={error}"),
+            &format!(
+                "FileSearch native drag platform handoff failed: path={drag_path} error={error}"
+            ),
         );
         tracing::warn!(
             path = %drag_path,
@@ -295,7 +288,9 @@ fn render_file_search_loading_skeleton(
                     .px(px(12.0))
                     .gap(px(12.0))
                     .when(ix == 0, |row| {
-                        row.bg(rgba(crate::list_item::row_selected_background_rgba(list_colors)))
+                        row.bg(rgba(crate::list_item::row_selected_background_rgba(
+                            list_colors,
+                        )))
                     })
                     .child(
                         div()
@@ -344,22 +339,17 @@ fn render_file_search_loading_skeleton(
                                     .rounded(px(4.0))
                                     .bg(skeleton_bg),
                             )
-                            .child(
-                                div()
-                                    .w(px(age_w))
-                                    .h(px(8.0))
-                                    .rounded(px(4.0))
-                                    .bg(rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-                                        text_dimmed,
-                                        crate::theme::opacity::OPACITY_GHOST,
-                                    ))),
-                            ),
+                            .child(div().w(px(age_w)).h(px(8.0)).rounded(px(4.0)).bg(rgba(
+                                crate::ui_foundation::hex_to_rgba_with_opacity(
+                                    text_dimmed,
+                                    crate::theme::opacity::OPACITY_GHOST,
+                                ),
+                            ))),
                     )
             },
         ))
         .into_any_element()
 }
-
 
 impl ScriptListApp {
     fn ensure_file_search_preview_thumbnail(
@@ -856,10 +846,7 @@ impl ScriptListApp {
         } else if filtered_len == 0 {
             // No results and not loading - show empty state message
             let state = FileSearchEmptyState::from_query(query);
-            let icon = match state {
-                FileSearchEmptyState::TypeToSearch => crate::designs::icon_variations::IconName::MagnifyingGlass,
-                FileSearchEmptyState::NoFilesFound => crate::designs::icon_variations::IconName::Folder,
-            };
+            let icon = crate::designs::icon_variations::IconName::Folder;
             crate::list_item::EmptyState::new(state.title(), empty_text_color, &empty_font_family)
                 .icon(icon)
                 .into_element()
@@ -1316,15 +1303,7 @@ impl ScriptListApp {
         };
 
         let empty_state = FileSearchEmptyState::from_query(query);
-        let (empty_title, empty_subtitle) = if matches!(
-            empty_state,
-            FileSearchEmptyState::TypeToSearch
-        ) {
-            (
-                empty_state.title(),
-                "Use ~/ to browse a folder inline, or press \u{2318}\u{21b5} to ask AI how to search",
-            )
-        } else if is_directory_query && query.ends_with('/') {
+        let (empty_title, empty_subtitle) = if is_directory_query && query.ends_with('/') {
             (
                 "Folder is empty",
                 "Try another path, or press \u{2318}\u{21b5} for AI help deciding what to inspect next",

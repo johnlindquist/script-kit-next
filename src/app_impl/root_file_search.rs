@@ -72,33 +72,8 @@ impl ScriptListApp {
             return;
         }
 
-        let mut seen = std::collections::HashSet::new();
-        let mut hydrated: Vec<_> = self
-            .frecency_store
-            .top_file_paths(crate::file_search::ROOT_FILE_RECENT_HYDRATE_LIMIT)
-            .into_iter()
-            .filter_map(|(path, score)| {
-                if !seen.insert(path.clone()) {
-                    return None;
-                }
-                crate::file_search::file_result_from_existing_path(&path).map(|file| (file, score))
-            })
-            .collect();
-
-        hydrated.sort_by(|(a, a_score), (b, b_score)| {
-            b_score
-                .partial_cmp(a_score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| b.modified.cmp(&a.modified))
-                .then_with(|| a.name.cmp(&b.name))
-                .then_with(|| a.path.cmp(&b.path))
-        });
-
-        let next_results: Vec<_> = hydrated
-            .into_iter()
-            .take(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT)
-            .map(|(file, _)| file)
-            .collect();
+        let next_results =
+            self.recent_file_results_from_frecency(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT);
         let changed = root_file_result_fingerprint(&self.root_recent_file_results)
             != root_file_result_fingerprint(&next_results);
         self.root_recent_file_results = next_results;
