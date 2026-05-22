@@ -5,6 +5,7 @@ pub mod capture;
 mod device;
 pub mod download;
 mod history;
+mod microphone_popup_window;
 mod runtime;
 mod setup;
 mod transcription;
@@ -15,9 +16,11 @@ mod window;
 pub use capture::{start_capture, DictationCaptureHandle};
 pub use device::{
     apply_device_selection, build_device_menu_items, default_input_device,
-    list_input_device_menu_items, list_input_devices, microphone_permission_status,
+    device_selection_action_from_value, device_selection_value, list_input_device_menu_items,
+    list_input_devices, microphone_display_label, microphone_permission_status,
     request_microphone_permission, resolve_selected_input_device, save_dictation_device_id,
     DeviceResolution, DictationDeviceMenuItem, DictationDeviceSelectionAction,
+    DICTATION_SYSTEM_DEFAULT_DEVICE_VALUE,
 };
 pub use history::{
     build_history_entry, delete_history_entry, format_history_duration_ms,
@@ -26,6 +29,14 @@ pub use history::{
     search_history, search_root_dictation_history, search_root_dictation_history_cached,
     search_root_dictation_history_direct, DictationHistoryEntry, DictationHistorySearchField,
     DictationHistorySearchHit, RootDictationHistorySearchHit, RootDictationHistorySectionOptions,
+};
+pub(crate) use microphone_popup_window::{
+    batch_select_dictation_microphone_popup_row_by_semantic_id,
+    batch_select_dictation_microphone_popup_row_by_value,
+    build_dictation_microphone_popup_snapshot, close_dictation_microphone_popup_window,
+    is_dictation_microphone_popup_window_open, sync_dictation_microphone_popup_window,
+    DictationMicrophonePopupRequest, DictationMicrophonePopupRow, DictationMicrophonePopupSnapshot,
+    DICTATION_MICROPHONE_POPUP_AUTOMATION_ID,
 };
 pub use runtime::{
     abort_dictation, automation_state, can_cycle_dictation_target, current_dictation_phase,

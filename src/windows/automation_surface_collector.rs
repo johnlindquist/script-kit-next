@@ -149,6 +149,73 @@ pub(crate) fn remove_menu_syntax_prompt_popup_snapshot(window_id: &str) {
     }
 }
 
+#[allow(dead_code)] // Binary dictation overlay uses this; lib-only builds do not.
+pub(crate) fn upsert_dictation_microphone_prompt_popup_snapshot(
+    window_id: &str,
+    snapshot: &crate::dictation::DictationMicrophonePopupSnapshot,
+) {
+    let mut elements = Vec::new();
+    elements.push(element(
+        "panel:dictation-microphone-popup",
+        ElementType::Panel,
+        Some("Dictation Microphones".to_string()),
+        None,
+        None,
+        None,
+        None,
+    ));
+    elements.push(element(
+        "list:dictation-microphones",
+        ElementType::List,
+        Some(format!("{} rows", snapshot.rows.len())),
+        None,
+        None,
+        None,
+        None,
+    ));
+
+    let mut selected_semantic_id = None;
+    for (idx, row) in snapshot.rows.iter().enumerate() {
+        let is_selected = snapshot.selected_row_id.as_deref() == Some(row.row_id.as_str());
+        if is_selected {
+            selected_semantic_id = Some(row.semantic_id.clone());
+        }
+
+        let mut info = element(
+            &row.semantic_id,
+            ElementType::Choice,
+            Some(row.title.clone()),
+            Some(row.row_id.clone()),
+            Some(is_selected),
+            None,
+            Some(idx),
+        );
+        info.role = Some(row.subtitle.clone());
+        info.kind = Some("DictationMicrophone".to_string());
+        info.selectable = Some(true);
+        elements.push(info);
+    }
+
+    let focused_semantic_id = selected_semantic_id.clone();
+    if let Ok(mut cache) = prompt_popup_semantic_cache().lock() {
+        cache.insert(
+            window_id.to_string(),
+            PromptPopupElementSnapshot {
+                elements,
+                focused_semantic_id,
+                selected_semantic_id,
+            },
+        );
+    }
+}
+
+#[allow(dead_code)] // Binary dictation overlay uses this; lib-only builds do not.
+pub(crate) fn remove_dictation_microphone_prompt_popup_snapshot(window_id: &str) {
+    if let Ok(mut cache) = prompt_popup_semantic_cache().lock() {
+        cache.remove(window_id);
+    }
+}
+
 #[allow(dead_code)] // Binary app_impl uses this; lib-only builds do not.
 pub(crate) fn upsert_menu_syntax_object_selector_popup_snapshot(
     window_id: &str,

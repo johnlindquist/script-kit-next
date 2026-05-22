@@ -14,6 +14,8 @@ pub enum DictationDeviceSelectionAction {
     UseDevice(DictationDeviceId),
 }
 
+pub const DICTATION_SYSTEM_DEFAULT_DEVICE_VALUE: &str = "__system_default__";
+
 /// A single row in the microphone picker list.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DictationDeviceMenuItem {
@@ -21,6 +23,39 @@ pub struct DictationDeviceMenuItem {
     pub subtitle: String,
     pub action: DictationDeviceSelectionAction,
     pub is_selected: bool,
+}
+
+pub fn device_selection_value(action: &DictationDeviceSelectionAction) -> String {
+    match action {
+        DictationDeviceSelectionAction::UseSystemDefault => {
+            DICTATION_SYSTEM_DEFAULT_DEVICE_VALUE.to_string()
+        }
+        DictationDeviceSelectionAction::UseDevice(device_id) => device_id.0.clone(),
+    }
+}
+
+pub fn device_selection_action_from_value(value: &str) -> DictationDeviceSelectionAction {
+    if value == DICTATION_SYSTEM_DEFAULT_DEVICE_VALUE {
+        DictationDeviceSelectionAction::UseSystemDefault
+    } else {
+        DictationDeviceSelectionAction::UseDevice(DictationDeviceId(value.to_string()))
+    }
+}
+
+pub fn microphone_display_label(title: &str) -> String {
+    let title = title
+        .replace(" \u{00b7} default", "")
+        .replace(" (current)", "");
+    let title = title.trim();
+    if title.eq_ignore_ascii_case("system default") {
+        return "System Default".to_string();
+    }
+
+    if title.is_empty() {
+        "Microphone".to_string()
+    } else {
+        title.to_string()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +295,7 @@ pub fn save_dictation_device_id(device_id: Option<&str>) -> Result<()> {
         device_id = ?device_id,
         "Saved microphone preference"
     );
+    crate::dictation::runtime::notify_dictation_device_preference_changed();
     Ok(())
 }
 

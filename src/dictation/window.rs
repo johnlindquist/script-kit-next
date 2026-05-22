@@ -377,7 +377,7 @@ static ENTER_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomi
 /// Single-word action label for stopping/submitting the current recording.
 const ACTION_STOP_LABEL: &str = "Stop";
 /// Changes the preference used by the next capture; the live session keeps its opened mic.
-const ACTION_MIC_LABEL: &str = "Next Mic";
+const ACTION_MIC_LABEL: &str = "Mic";
 /// Single-word action label for discarding the current recording.
 const ACTION_CANCEL_LABEL: &str = "Cancel";
 /// Single-word action label for resuming from confirmation.
@@ -555,11 +555,16 @@ impl DictationOverlay {
         cx.notify();
     }
 
-    /// Cycle the configured dictation microphone through the shared picker items.
+    /// Open the attached microphone picker.
     ///
     /// The current recording keeps using the device it opened with; this updates
     /// the persisted preference used by the next dictation capture.
-    fn cycle_microphone(&mut self, cx: &mut Context<Self>) {
+    fn open_microphone_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.state.phase != DictationSessionPhase::Recording {
+            crate::dictation::close_dictation_microphone_popup_window(cx);
+            return;
+        }
+
         let prefs = crate::config::load_user_preferences();
         let selected_device_id = prefs.dictation.selected_device_id.as_deref();
         let menu_items = match crate::dictation::list_input_device_menu_items(selected_device_id) {
@@ -581,26 +586,34 @@ impl DictationOverlay {
             }
         };
 
-        let selected_index = menu_items
-            .iter()
-            .position(|item| item.is_selected)
-            .unwrap_or(0);
-        let next_index = (selected_index + 1) % menu_items.len();
-        let next_item = &menu_items[next_index];
-        if let Err(error) = crate::dictation::apply_device_selection(&next_item.action) {
+        let parent_bounds = window.bounds();
+        let parent_window_handle = window.window_handle();
+        let display = window.display(cx);
+        let display_id = display.as_ref().map(|display| display.id());
+        let display_bounds = display.as_ref().map(|display| display.visible_bounds());
+        let width = crate::components::inline_popup_window::inline_popup_width_for_window(
+            parent_bounds.size.width.as_f32(),
+        );
+        let snapshot =
+            crate::dictation::build_dictation_microphone_popup_snapshot(menu_items, width);
+        let request = crate::dictation::DictationMicrophonePopupRequest {
+            parent_window_handle,
+            parent_bounds,
+            display_bounds,
+            display_id,
+            source_view: cx.entity().downgrade(),
+            snapshot,
+        };
+
+        if let Err(error) = crate::dictation::sync_dictation_microphone_popup_window(cx, request) {
             tracing::warn!(
                 category = "DICTATION",
                 error = %error,
-                "Failed to persist microphone selection from overlay"
+                "Failed to open dictation microphone popup"
             );
             return;
         }
 
-        tracing::info!(
-            category = "DICTATION",
-            microphone = %next_item.title,
-            "Overlay microphone selector updated preference for next recording"
-        );
         cx.notify();
     }
 
@@ -614,6 +627,7 @@ impl DictationOverlay {
     /// the global slot empty — causing stacked overlay windows on the
     /// next toggle.
     fn abort_overlay_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        crate::dictation::close_dictation_microphone_popup_window(cx);
         let callback = OVERLAY_ABORT_CALLBACK.lock().take();
         *OVERLAY_SUBMIT_CALLBACK.lock() = None;
         // Pre-clear the global slot so if the callback calls
@@ -639,6 +653,7 @@ impl DictationOverlay {
     /// reopen/update the overlay into its transcribing state without reentrant
     /// updates to this entity.
     fn submit_overlay_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        crate::dictation::close_dictation_microphone_popup_window(cx);
         let callback = OVERLAY_SUBMIT_CALLBACK.lock().take();
         *OVERLAY_ABORT_CALLBACK.lock() = None;
         let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
@@ -663,7 +678,8 @@ impl DictationOverlay {
     ///
     /// Same reentrant-borrow avoidance as `abort_overlay_session`, but
     /// without invoking the abort callback (used for non-recording phases).
-    fn close_overlay_from_within(&mut self, window: &mut Window) {
+    fn close_overlay_from_within(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        crate::dictation::close_dictation_microphone_popup_window(cx);
         let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
         slot.lock().take();
         *OVERLAY_ABORT_CALLBACK.lock() = None;
@@ -721,7 +737,7 @@ impl DictationOverlay {
                 self.abort_overlay_session(window, cx);
             }
             OverlayEscapeAction::CloseOverlay => {
-                self.close_overlay_from_within(window);
+                self.close_overlay_from_within(window, cx);
             }
             OverlayEscapeAction::Propagate => {}
         }
@@ -850,9 +866,9 @@ impl DictationOverlay {
             render_clickable_action_chip(
                 "dictation-mic-button",
                 ACTION_MIC_LABEL.into(),
-                current_microphone_keycap(),
-                cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
-                    this.cycle_microphone(cx);
+                current_microphone_label(),
+                cx.listener(|this, _event: &MouseDownEvent, window, cx| {
+                    this.open_microphone_picker(window, cx);
                 }),
             )
             .into_any_element(),
@@ -898,8 +914,8 @@ impl DictationOverlay {
             "dictation-close-button",
             ACTION_CLOSE_LABEL.into(),
             ESC_KEYCAP.into(),
-            cx.listener(|this, _event: &MouseDownEvent, window, _cx| {
-                this.close_overlay_from_within(window);
+            cx.listener(|this, _event: &MouseDownEvent, window, cx| {
+                this.close_overlay_from_within(window, cx);
             }),
         )
         .into_any_element()])
@@ -929,6 +945,14 @@ impl DictationOverlay {
             phase = ?self.state.phase,
             "Overlay received key_down"
         );
+
+        if crate::ui_foundation::is_key_escape(key)
+            && crate::dictation::is_dictation_microphone_popup_window_open()
+        {
+            crate::dictation::close_dictation_microphone_popup_window(cx);
+            cx.stop_propagation();
+            return;
+        }
 
         // In Confirming state, only Enter and Escape have meaning.
         // All other keys are swallowed without changing state.
@@ -992,7 +1016,7 @@ impl DictationOverlay {
                     phase = ?self.state.phase,
                     "Escape pressed, dismissing dictation overlay"
                 );
-                self.close_overlay_from_within(window);
+                self.close_overlay_from_within(window, cx);
                 cx.stop_propagation();
             }
             OverlayEscapeAction::Propagate => {
@@ -1352,50 +1376,21 @@ fn dictation_hotkey_keycap(hotkey: &crate::config::HotkeyConfig) -> String {
     hotkey.to_display_string().replace("Semicolon", ";")
 }
 
-fn current_microphone_keycap() -> SharedString {
+fn current_microphone_label() -> SharedString {
     let prefs = crate::config::load_user_preferences();
     let selected_device_id = prefs.dictation.selected_device_id.as_deref();
     let label = crate::dictation::list_input_device_menu_items(selected_device_id)
         .ok()
         .and_then(|items| items.into_iter().find(|item| item.is_selected))
-        .map(|item| microphone_keycap_label(&item.title))
-        .unwrap_or_else(|| "mic".to_string());
+        .map(|item| crate::dictation::microphone_display_label(&item.title))
+        .unwrap_or_else(|| "Microphone".to_string());
     label.into()
-}
-
-fn microphone_keycap_label(title: &str) -> String {
-    let title = title
-        .replace(" \u{00b7} default", "")
-        .replace(" (current)", "");
-    let title = title.trim();
-    if title.eq_ignore_ascii_case("system default") {
-        return "default".to_string();
-    }
-
-    const MAX_CHARS: usize = 8;
-    let mut chars = title.chars();
-    let mut compact = String::new();
-    for _ in 0..MAX_CHARS {
-        if let Some(ch) = chars.next() {
-            compact.push(ch);
-        } else {
-            break;
-        }
-    }
-    if chars.next().is_some() {
-        compact.push('…');
-    }
-    if compact.is_empty() {
-        "mic".to_string()
-    } else {
-        compact
-    }
 }
 
 fn action_chip_width(label: &str) -> f32 {
     match label {
         ACTION_CONTINUE_LABEL => 112.0,
-        ACTION_MIC_LABEL => 152.0,
+        ACTION_MIC_LABEL => 188.0,
         ACTION_CLOSE_LABEL => 72.0,
         _ => 96.0,
     }
@@ -1426,7 +1421,12 @@ fn render_action_chip_content(label: SharedString, key: SharedString) -> impl In
         false,
     );
     let key = key.to_string();
-    let shortcut_tokens = crate::components::hint_strip::shortcut_tokens_from_hint(&key);
+    let is_microphone_label = label.as_ref() == ACTION_MIC_LABEL;
+    let shortcut_tokens = if is_microphone_label {
+        Vec::new()
+    } else {
+        crate::components::hint_strip::shortcut_tokens_from_hint(&key)
+    };
 
     div()
         .px(px(4.0))
@@ -1442,10 +1442,24 @@ fn render_action_chip_content(label: SharedString, key: SharedString) -> impl In
                 .text_color(footer_text)
                 .child(label),
         )
-        .child(crate::components::hint_strip::render_inline_shortcut_keys(
-            shortcut_tokens.iter().map(|token| token.as_str()),
-            shortcut_colors,
-        ))
+        .when(is_microphone_label, |row| {
+            row.child(
+                div()
+                    .max_w(px(118.0))
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .whitespace_nowrap()
+                    .text_size(px(12.0))
+                    .text_color(theme.colors.text.primary.with_opacity(OPACITY_ACTIVE))
+                    .child(key.clone()),
+            )
+        })
+        .when(!is_microphone_label, |row| {
+            row.child(crate::components::hint_strip::render_inline_shortcut_keys(
+                shortcut_tokens.iter().map(|token| token.as_str()),
+                shortcut_colors,
+            ))
+        })
 }
 
 fn render_action_chip(label: &'static str, key: SharedString) -> impl IntoElement {
@@ -1631,7 +1645,7 @@ pub(crate) fn render_dictation_overlay_state_preview(
                 .child(wrap_dictation_overlay_action_rail(
                     render_static_action_rail([
                         (ACTION_STOP_LABEL, dictation_stop_keycap()),
-                        (ACTION_MIC_LABEL, current_microphone_keycap()),
+                        (ACTION_MIC_LABEL, current_microphone_label()),
                         (ACTION_CANCEL_LABEL, ESC_KEYCAP.into()),
                     ]),
                     surface_bg,
@@ -2149,6 +2163,7 @@ pub fn update_dictation_overlay(state: DictationOverlayState, cx: &mut App) -> a
 
 /// Close the dictation overlay window.
 pub fn close_dictation_overlay(cx: &mut App) -> anyhow::Result<()> {
+    crate::dictation::close_dictation_microphone_popup_window(cx);
     *OVERLAY_ABORT_CALLBACK.lock() = None;
     *OVERLAY_SUBMIT_CALLBACK.lock() = None;
     ESCAPE_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
