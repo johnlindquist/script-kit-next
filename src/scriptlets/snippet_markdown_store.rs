@@ -268,9 +268,7 @@ fn parse_key_value_metadata(content: &str) -> Option<Map<String, Value>> {
         if line.is_empty() || line.starts_with("//") {
             continue;
         }
-        let Some((key, value)) = line.split_once(':') else {
-            return None;
-        };
+        let (key, value) = line.split_once(':')?;
         let key = normalize_metadata_key(key.trim());
         let value = value.trim();
         if key.is_empty() || value.is_empty() {
