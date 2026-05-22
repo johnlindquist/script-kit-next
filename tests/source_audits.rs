@@ -89,6 +89,9 @@ mod hotkey_builtin_visibility;
 #[path = "source_audits/keyword_expansion_latency_contract.rs"]
 mod keyword_expansion_latency_contract;
 
+#[path = "source_audits/keyword_monitor_activation_contract.rs"]
+mod keyword_monitor_activation_contract;
+
 #[path = "source_audits/emoji_picker.rs"]
 mod emoji_picker;
 
