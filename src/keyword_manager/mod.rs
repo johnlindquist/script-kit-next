@@ -50,6 +50,13 @@ fn keyword_post_delete_delay_ms() -> u64 {
         .map(|value| value.min(MAX_KEYWORD_POST_DELETE_DELAY_MS))
         .unwrap_or(DEFAULT_KEYWORD_POST_DELETE_DELAY_MS)
 }
+
+fn should_enable_monitor_after_trigger_update(
+    enabled_before: bool,
+    trigger_count_after: usize,
+) -> bool {
+    !enabled_before && trigger_count_after > 0
+}
 /// Configuration for the keyword manager
 #[derive(Debug, Clone)]
 pub struct KeywordManagerConfig {
@@ -269,7 +276,10 @@ impl KeywordManager {
         };
 
         if trigger_count == 0 {
-            warn!("No keyword triggers registered, keyboard monitoring will be ineffective");
+            info!(
+                trigger_count,
+                "Keyword monitor starting with no triggers; waiting for future scriptlet updates"
+            );
         }
 
         // Clone Arc references for the closure
@@ -943,14 +953,23 @@ pub fn init_keyword_manager() -> Result<Option<usize>> {
 
     // Load scriptlets with keyword triggers
     let count = guard.load_scriptlets()?;
+    let enabled_before = guard.is_enabled();
     if count == 0 {
-        info!("No keyword triggers found in scriptlets");
-        return Ok(Some(0));
+        info!(
+            count,
+            enabled_before,
+            "No keyword triggers found at startup; enabling keyword monitor for future scriptlet updates"
+        );
     }
 
     // Enable keyboard monitoring
     guard.enable()?;
-    info!(count, "Keyword manager initialized with triggers");
+    info!(
+        count,
+        enabled_before,
+        enabled_after = guard.is_enabled(),
+        "Keyword manager initialized"
+    );
 
     // List registered triggers for debugging
     for (trigger, name) in guard.list_triggers() {
@@ -1013,8 +1032,8 @@ pub fn update_keyword_triggers_for_file(
         .filter_map(|s| {
             s.keyword.as_ref().map(|kw| {
                 info!(
-                    keyword = %kw,
                     name = %s.name,
+                    trigger_len = kw.chars().count(),
                     content_len = s.code.len(),
                     "Found scriptlet with keyword trigger"
                 );
@@ -1028,7 +1047,47 @@ pub fn update_keyword_triggers_for_file(
         "Calling update_triggers_for_file"
     );
 
-    guard.update_triggers_for_file(path, &new_triggers)
+    let enabled_before = guard.is_enabled();
+    let trigger_count_before = guard.trigger_count();
+    let (added, removed, updated) = guard.update_triggers_for_file(path, &new_triggers);
+    let trigger_count_after = guard.trigger_count();
+    let mut enable_attempted = false;
+    let mut enable_failed = false;
+
+    if should_enable_monitor_after_trigger_update(enabled_before, trigger_count_after) {
+        enable_attempted = true;
+        if let Err(error) = guard.enable() {
+            enable_failed = true;
+            warn!(
+                path = %path.display(),
+                added,
+                removed,
+                updated,
+                trigger_count_before,
+                trigger_count_after,
+                error = %error,
+                "keyword_monitor_enable_after_update_failed"
+            );
+        }
+    }
+
+    info!(
+        path = %path.display(),
+        scriptlet_count = new_scriptlets.len(),
+        keyword_trigger_count = new_triggers.len(),
+        added,
+        removed,
+        updated,
+        trigger_count_before,
+        trigger_count_after,
+        enabled_before,
+        enabled_after = guard.is_enabled(),
+        enable_attempted,
+        enable_failed,
+        "keyword_trigger_update_applied"
+    );
+
+    (added, removed, updated)
 }
 #[cfg(not(target_os = "macos"))]
 pub fn update_keyword_triggers_for_file(
@@ -1080,6 +1139,13 @@ mod tests {
         let manager = KeywordManager::with_config(config.clone());
         assert_eq!(manager.config.stop_delay_ms, 100);
         assert_eq!(manager.config.restart_delay_ms, 200);
+    }
+
+    #[test]
+    fn test_should_enable_monitor_after_trigger_update() {
+        assert!(should_enable_monitor_after_trigger_update(false, 1));
+        assert!(!should_enable_monitor_after_trigger_update(false, 0));
+        assert!(!should_enable_monitor_after_trigger_update(true, 1));
     }
 
     #[test]
