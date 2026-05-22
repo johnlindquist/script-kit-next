@@ -35,6 +35,33 @@ pub fn snippets_markdown_path(sk_path: &Path) -> PathBuf {
     sk_path.join("plugins/main/scriptlets/snippets.md")
 }
 
+pub fn default_snippets_markdown_path() -> PathBuf {
+    snippets_markdown_path(&default_scriptkit_path())
+}
+
+pub fn render_snippet_draft_markdown_preview(
+    draft: &SnippetScriptletDraft,
+) -> Result<String, String> {
+    let name = draft
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| "Add name:<snippet name>.".to_string())?;
+    let body = draft
+        .body
+        .as_deref()
+        .map(str::trim)
+        .filter(|body| !body.is_empty())
+        .ok_or_else(|| "Add snippet text.".to_string())?;
+    let mut metadata = draft.metadata.clone();
+    metadata.insert("name".to_string(), Value::String(name.to_string()));
+    if !metadata.contains_key("tool") {
+        metadata.insert("tool".to_string(), Value::String("paste".to_string()));
+    }
+    render_section(name, &metadata, body)
+}
+
 pub fn load_snippet_sections(path: &Path) -> Result<Vec<SnippetMarkdownSection>, String> {
     let content = match std::fs::read_to_string(path) {
         Ok(content) => content,
@@ -163,6 +190,17 @@ fn read_or_default(path: &Path) -> Result<String, String> {
         }
         Err(error) => Err(format!("Read snippets.md failed: {error}")),
     }
+}
+
+fn default_scriptkit_path() -> PathBuf {
+    if let Ok(path) = std::env::var(crate::setup::SK_PATH_ENV) {
+        if !path.trim().is_empty() {
+            return PathBuf::from(path);
+        }
+    }
+    std::env::var("HOME")
+        .map(|home| PathBuf::from(home).join(".scriptkit"))
+        .unwrap_or_else(|_| PathBuf::from(".scriptkit"))
 }
 
 fn parse_sections(content: &str) -> Vec<SnippetMarkdownSection> {
@@ -501,6 +539,19 @@ mod tests {
 
     fn metadata_block(content: &str) -> &str {
         fence_content(content, "metadata").expect("metadata block")
+    }
+
+    #[test]
+    fn generated_markdown_preview_uses_same_section_renderer() {
+        let preview = render_snippet_draft_markdown_preview(&draft(
+            ";snippet name:Email keyword:@gma description:Gmail shortcut -- open gmail",
+        ))
+        .unwrap();
+
+        assert!(preview.contains("## Email"));
+        assert!(preview.contains("keyword: @gma"));
+        assert!(preview.contains("description: Gmail shortcut"));
+        assert!(preview.contains("```paste\nopen gmail\n```"));
     }
 
     #[test]

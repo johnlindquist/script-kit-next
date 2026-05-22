@@ -157,7 +157,7 @@ fn boundary_06_copy_filter_command_with_empty_argv_yields_bang_head() {
     assert_eq!(
         apply_safe_effect(&state, &MenuSyntaxActionKind::CopyFilterExpression),
         ActionEffect::WriteClipboard {
-            content: ">deploy".to_string(),
+            content: "!deploy".to_string(),
         }
     );
 }
@@ -174,7 +174,7 @@ fn boundary_07_copy_filter_command_with_empty_argv_entry_keeps_double_space() {
     assert_eq!(
         apply_safe_effect(&state, &MenuSyntaxActionKind::CopyFilterExpression),
         ActionEffect::WriteClipboard {
-            content: ">deploy  real".to_string(),
+            content: "!deploy  real".to_string(),
         }
     );
 }

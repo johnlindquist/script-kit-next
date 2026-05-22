@@ -110,6 +110,52 @@ fn capture_state_without_schema_omits_default_time_row() {
 }
 
 #[test]
+fn snippet_capture_state_emits_authoring_actions_in_fixed_order() {
+    let payload = capture_payload("snippet", "add -- const value = 1");
+    let state = MenuSyntaxActionState::CaptureComposer {
+        target: "snippet",
+        payload: &payload,
+        schema: None,
+    };
+    let actions = current_actions(&state);
+    assert_eq!(
+        ids(&actions),
+        vec![
+            "capture.cancel",
+            "snippet.copy_command",
+            "snippet.insert_name_field",
+            "snippet.insert_keyword_field",
+            "snippet.copy_generated_markdown",
+            "snippet.copy_markdown_path",
+        ],
+        "snippet authoring actions must stay ordered by workflow usefulness"
+    );
+}
+
+#[test]
+fn snippet_selected_ref_appends_update_delete_preparation_actions() {
+    let payload = capture_payload("snippet", "add @snippet:fj -- const value = 1");
+    let state = MenuSyntaxActionState::CaptureComposer {
+        target: "snippet",
+        payload: &payload,
+        schema: None,
+    };
+    let actions = current_actions(&state);
+    assert_eq!(
+        ids(&actions),
+        vec![
+            "capture.cancel",
+            "snippet.copy_command",
+            "snippet.copy_generated_markdown",
+            "snippet.copy_markdown_path",
+            "snippet.prepare_update_selected",
+            "snippet.prepare_delete_selected",
+        ],
+        "selected snippet refs should replace field-insertion nudges with update/delete preparation"
+    );
+}
+
+#[test]
 fn refine_state_emits_four_actions_in_fixed_order() {
     let query = parse_advanced_query(":foo bar");
     let state = MenuSyntaxActionState::RefineQuery { query: &query };
