@@ -152,7 +152,17 @@ impl ScriptListApp {
                                     return;
                                 }
                                 if *secondary {
-                                    cx.notify();
+                                    let value = input.read(cx).value().to_string();
+                                    this.menu_syntax_form_draft_field_id = Some(field_id.clone());
+                                    this.menu_syntax_form_draft_value = value.clone();
+                                    this.menu_syntax_form_syncing_from_input = true;
+                                    let _ = this.update_menu_syntax_form_field(
+                                        Some(&field_id),
+                                        value,
+                                        window,
+                                        cx,
+                                    );
+                                    this.menu_syntax_form_syncing_from_input = false;
                                 } else {
                                     this.submit_menu_syntax_form_enter(window, cx);
                                 }
