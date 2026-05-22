@@ -16,7 +16,7 @@ Usage: bash scripts/agent-check.sh [--quick] [changed-file ...]
 Runs scoped verification for agent changes.
 
 Options:
-  --quick      Run only cargo check (fast iteration mode)
+  --quick      Run only agent-cargo check (fast iteration mode)
   -h, --help   Show this help message
 
 Examples:
@@ -141,6 +141,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 START_TIME="$(date +%s)"
+CARGO_WRAPPER="./scripts/agentic/agent-cargo.sh"
 
 echo "=== Agent Scoped Verification ==="
 if [[ "$QUICK_MODE" == true ]]; then
@@ -158,7 +159,7 @@ else
   echo "Changed files: none provided (running full default verification)"
 fi
 
-if ! run_step "cargo check" cargo check; then
+if ! run_step "agent-cargo check" "$CARGO_WRAPPER" check; then
   TOTAL_TIME="$(( $(date +%s) - START_TIME ))"
   echo ""
   echo "=== RESULT: FAIL ($(format_duration "$TOTAL_TIME")) ==="
@@ -185,7 +186,7 @@ if [[ "${#RELATED_FILTERS[@]}" -gt 0 ]]; then
   echo ""
   echo "Related test filters (fast feedback): ${RELATED_FILTERS[*]}"
   for filter in "${RELATED_FILTERS[@]}"; do
-    if ! run_step "cargo test ${filter}" cargo test "$filter"; then
+    if ! run_step "agent-cargo test ${filter}" "$CARGO_WRAPPER" test "$filter"; then
       TOTAL_TIME="$(( $(date +%s) - START_TIME ))"
       echo ""
       echo "=== RESULT: FAIL ($(format_duration "$TOTAL_TIME")) ==="
@@ -197,14 +198,14 @@ else
   echo "No related test filters discovered from changed files."
 fi
 
-if ! run_step "cargo clippy --all-targets -- -D warnings" cargo clippy --all-targets -- -D warnings; then
+if ! run_step "agent-cargo clippy --all-targets -- -D warnings" "$CARGO_WRAPPER" clippy --all-targets -- -D warnings; then
   TOTAL_TIME="$(( $(date +%s) - START_TIME ))"
   echo ""
   echo "=== RESULT: FAIL ($(format_duration "$TOTAL_TIME")) ==="
   exit 1
 fi
 
-if ! run_step "cargo test" cargo test; then
+if ! run_step "agent-cargo test" "$CARGO_WRAPPER" test; then
   TOTAL_TIME="$(( $(date +%s) - START_TIME ))"
   echo ""
   echo "=== RESULT: FAIL ($(format_duration "$TOTAL_TIME")) ==="

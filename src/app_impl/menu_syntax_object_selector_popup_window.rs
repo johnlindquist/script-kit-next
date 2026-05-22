@@ -7,14 +7,14 @@ use gpui::{
 };
 
 use crate::components::inline_dropdown::{
-    inline_dropdown_visible_range_from_start, render_soft_compact_picker_row, InlineDropdown,
-    InlineDropdownColors, SOFT_COMPACT_PICKER_ROW_HEIGHT,
+    inline_dropdown_visible_range_from_start, InlineDropdown, InlineDropdownColors, MUTED_OP,
 };
 use crate::components::inline_popup_window::{
     configure_inline_popup_window, inline_popup_height_for_row_height,
-    inline_popup_width_for_window, inline_popup_window_options, set_inline_popup_window_bounds,
-    INLINE_POPUP_MAX_VISIBLE_ROWS, INLINE_POPUP_VERTICAL_PADDING,
+    inline_popup_window_options, set_inline_popup_window_bounds,
+    INLINE_POPUP_EDGE_GUTTER, INLINE_POPUP_MAX_VISIBLE_ROWS, INLINE_POPUP_VERTICAL_PADDING,
 };
+use crate::components::scrollbar::{Scrollbar, ScrollbarColors};
 use crate::menu_syntax::{ObjectSelectorRow, ObjectSelectorSnapshot};
 use crate::ScriptListApp;
 
@@ -91,6 +91,8 @@ fn clear_menu_syntax_object_selector_popup_slot() {
     }
 }
 
+const TRIGGER_POPUP_ROW_HEIGHT: f32 = 30.0;
+
 fn popup_height(snapshot: &MenuSyntaxObjectSelectorPopupSnapshot) -> f32 {
     inline_popup_height_for_row_height(
         snapshot
@@ -99,7 +101,7 @@ fn popup_height(snapshot: &MenuSyntaxObjectSelectorPopupSnapshot) -> f32 {
             .len()
             .min(snapshot.visible_row_limit)
             .min(INLINE_POPUP_MAX_VISIBLE_ROWS),
-        SOFT_COMPACT_PICKER_ROW_HEIGHT,
+        TRIGGER_POPUP_ROW_HEIGHT,
     )
 }
 
@@ -129,40 +131,40 @@ fn popup_visible_row_limit(
         .unwrap_or(1)
 }
 
-pub(crate) fn menu_syntax_object_selector_popup_layout_left_drawer(
+pub(crate) fn menu_syntax_object_selector_popup_layout_above(
     parent_bounds: Bounds<Pixels>,
     display_bounds: Option<Bounds<Pixels>>,
     snapshot: &MenuSyntaxObjectSelectorPopupSnapshot,
 ) -> MenuSyntaxObjectSelectorPopupLayout {
     let mut snapshot = snapshot.clone();
-    let visible_row_limit =
-        popup_visible_row_limit(&snapshot, f32::from(parent_bounds.size.height));
-    snapshot.visible_row_limit = visible_row_limit;
     let width = snapshot.width;
-    let preferred_left = parent_bounds.origin.x.as_f32() - width;
+
+    let display_top = display_bounds
+        .map(|db| db.origin.y.as_f32() + INLINE_POPUP_EDGE_GUTTER)
+        .unwrap_or(0.0);
+    let available_height = (parent_bounds.origin.y.as_f32() - display_top).max(1.0);
+
+    let visible_row_limit =
+        popup_visible_row_limit(&snapshot, available_height);
+    snapshot.visible_row_limit = visible_row_limit;
+
+    let height = popup_height(&snapshot);
+
+    let preferred_left = parent_bounds.origin.x.as_f32();
     let left = display_bounds
         .map(|display_bounds| {
             let display_left = display_bounds.origin.x.as_f32();
-            let display_right =
-                display_bounds.origin.x.as_f32() + display_bounds.size.width.as_f32();
-            if preferred_left >= display_left {
-                preferred_left
-            } else {
-                let parent_right =
-                    parent_bounds.origin.x.as_f32() + parent_bounds.size.width.as_f32();
-                let right_drawer_left = parent_right;
-                if right_drawer_left + width <= display_right {
-                    right_drawer_left
-                } else {
-                    (display_right - width).max(display_left)
-                }
-            }
+            let display_right = display_left + display_bounds.size.width.as_f32();
+            preferred_left.clamp(display_left, (display_right - width).max(display_left))
         })
         .unwrap_or(preferred_left);
+
+    let top = parent_bounds.origin.y.as_f32() - height;
+
     MenuSyntaxObjectSelectorPopupLayout {
         bounds: Bounds {
-            origin: gpui::point(gpui::px(left), parent_bounds.origin.y),
-            size: gpui::size(gpui::px(width), gpui::px(popup_height(&snapshot))),
+            origin: gpui::point(gpui::px(left), gpui::px(top)),
+            size: gpui::size(gpui::px(width), gpui::px(height)),
         },
         visible_row_limit,
     }
@@ -181,7 +183,8 @@ pub(crate) fn sync_menu_syntax_object_selector_popup_window(
         mut snapshot,
     } = request;
 
-    let layout = menu_syntax_object_selector_popup_layout_left_drawer(
+    snapshot.width = parent_bounds.size.width.as_f32();
+    let layout = menu_syntax_object_selector_popup_layout_above(
         parent_bounds,
         display_bounds,
         &snapshot,
@@ -418,18 +421,74 @@ impl MenuSyntaxObjectSelectorPopupWindow {
         is_selected: bool,
         colors: InlineDropdownColors,
     ) -> gpui::Stateful<gpui::Div> {
-        render_soft_compact_picker_row(
-            SharedString::from(format!("menu-syntax-object-selector-popup-row-{idx}")),
-            SharedString::from(row.title.clone()),
-            row.token
-                .clone()
-                .or_else(|| row.subtitle.clone())
-                .map(SharedString::from),
-            &[],
-            &[],
-            is_selected,
-            colors,
-        )
+        let label = SharedString::from(row.title.clone());
+        let meta = row.token.clone().or_else(|| row.subtitle.clone()).map(SharedString::from);
+        let label_hits = std::collections::HashSet::new();
+
+        let mut left_side = div()
+            .flex()
+            .items_center();
+
+        let label_spans = render_trigger_row_label(&label, &label_hits, if is_selected { colors.foreground } else { colors.foreground.opacity(MUTED_OP) }, colors.accent, is_selected);
+        left_side = left_side.child(label_spans);
+
+        let mut content = div()
+            .flex_1()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .child(left_side);
+
+        if let Some(meta_val) = meta.filter(|val| !val.is_empty()) {
+            let meta_hits = std::collections::HashSet::new();
+            content = content.child(
+                div()
+                    .px(gpui::px(6.0))
+                    .py(gpui::px(2.0))
+                    .rounded(gpui::px(4.0))
+                    .bg(colors.foreground.opacity(0.06))
+                    .child(render_trigger_row_meta_text(&meta_val, &meta_hits, if is_selected { colors.foreground.opacity(MUTED_OP) } else { colors.muted_foreground.opacity(0.45) }, colors.accent.opacity(0.45)))
+            );
+        }
+
+        let selected_row_bg = colors.foreground.opacity(0.18);
+        let hover_row_bg = colors.foreground.opacity(0.06);
+
+        let inner_row = div()
+            .w_full()
+            .flex_1()
+            .flex()
+            .flex_row()
+            .items_center()
+            .px(gpui::px(8.0))
+            .rounded(gpui::px(6.0))
+            .bg(if is_selected {
+                selected_row_bg
+            } else {
+                gpui::transparent_black()
+            })
+            .when(!is_selected, |row| {
+                row.hover(move |style| style.bg(hover_row_bg))
+            })
+            .child(content);
+
+        div()
+            .id(SharedString::from(format!("menu-syntax-object-selector-popup-row-{idx}")))
+            .h(gpui::px(30.0))
+            .w_full()
+            .px(gpui::px(4.0))
+            .py(gpui::px(2.0))
+            .flex()
+            .flex_col()
+            .justify_center()
+            .border_l(gpui::px(2.0))
+            .border_color(if is_selected {
+                colors.accent
+            } else {
+                gpui::transparent_black()
+            })
+            .child(inner_row)
     }
 
     fn render_picker(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
@@ -447,29 +506,45 @@ impl MenuSyntaxObjectSelectorPopupWindow {
             .take(visible.len())
             .collect::<Vec<_>>();
 
+        let scrollbar = Scrollbar::new(
+            self.snapshot.snapshot.rows.len(),
+            visible.len(),
+            visible.start,
+            ScrollbarColors::from_theme(&theme),
+        )
+        .container_height(popup_height(&self.snapshot));
+
         let body = div()
+            .relative()
             .size_full()
             .flex()
             .flex_col()
-            .children(visible_rows.into_iter().map(|(idx, row)| {
-                let is_selected = selected_index == Some(idx);
-                let source_view = self.source_view.clone();
-                let enabled = row.enabled;
-                self.render_picker_row(idx, row, is_selected, colors)
-                    .when(enabled, |row| row.cursor_pointer())
-                    .when(!enabled, |row| row.opacity(0.55).cursor_default())
-                    .on_click(cx.listener(move |this, event, window, cx| {
-                        if source_view.upgrade().is_none() {
-                            close_menu_syntax_object_selector_popup_window(cx);
-                            return;
-                        }
-                        if !enabled {
-                            return;
-                        }
-                        this.handle_row_click(idx, event, window, cx);
+            .child(
+                div()
+                    .size_full()
+                    .flex()
+                    .flex_col()
+                    .children(visible_rows.into_iter().map(|(idx, row)| {
+                        let is_selected = selected_index == Some(idx);
+                        let source_view = self.source_view.clone();
+                        let enabled = row.enabled;
+                        self.render_picker_row(idx, row, is_selected, colors)
+                            .when(enabled, |row| row.cursor_pointer())
+                            .when(!enabled, |row| row.opacity(0.55).cursor_default())
+                            .on_click(cx.listener(move |this, event, window, cx| {
+                                if source_view.upgrade().is_none() {
+                                    close_menu_syntax_object_selector_popup_window(cx);
+                                    return;
+                                }
+                                if !enabled {
+                                    return;
+                                }
+                                this.handle_row_click(idx, event, window, cx);
+                            }))
+                            .into_any_element()
                     }))
-                    .into_any_element()
-            }))
+            )
+            .child(scrollbar)
             .into_any_element();
 
         InlineDropdown::new(
@@ -506,6 +581,124 @@ impl Render for MenuSyntaxObjectSelectorPopupWindow {
     }
 }
 
+fn render_trigger_row_label(
+    text: &str,
+    hits: &std::collections::HashSet<usize>,
+    base: gpui::Hsla,
+    accent: gpui::Hsla,
+    is_selected: bool,
+) -> gpui::AnyElement {
+    let font_weight = if is_selected {
+        gpui::FontWeight::MEDIUM
+    } else {
+        gpui::FontWeight::NORMAL
+    };
+
+    if hits.is_empty() {
+        return div()
+            .text_sm()
+            .font_weight(font_weight)
+            .text_color(base)
+            .text_ellipsis()
+            .child(SharedString::from(text.to_string()))
+            .into_any_element();
+    }
+
+    let mut spans: Vec<gpui::AnyElement> = Vec::new();
+    let mut current = String::new();
+    let mut current_highlighted = false;
+
+    for (ix, ch) in text.chars().enumerate() {
+        let is_hit = hits.contains(&ix);
+        if ix > 0 && is_hit != current_highlighted {
+            spans.push(
+                div()
+                    .text_sm()
+                    .font_weight(font_weight)
+                    .text_color(if current_highlighted { accent } else { base })
+                    .child(SharedString::from(std::mem::take(&mut current)))
+                    .into_any_element(),
+            );
+        }
+        current_highlighted = is_hit;
+        current.push(ch);
+    }
+    if !current.is_empty() {
+        spans.push(
+            div()
+                .text_sm()
+                .font_weight(font_weight)
+                .text_color(if current_highlighted { accent } else { base })
+                .child(SharedString::from(current))
+                .into_any_element(),
+        );
+    }
+
+    div()
+        .flex()
+        .items_center()
+        .text_ellipsis()
+        .children(spans)
+        .into_any_element()
+}
+
+fn render_trigger_row_meta_text(
+    text: &str,
+    hits: &std::collections::HashSet<usize>,
+    base: gpui::Hsla,
+    accent: gpui::Hsla,
+) -> gpui::AnyElement {
+    if hits.is_empty() {
+        return div()
+            .text_size(gpui::px(10.5))
+            .line_height(gpui::px(14.0))
+            .font_family(crate::list_item::FONT_MONO)
+            .text_color(base)
+            .text_ellipsis()
+            .child(SharedString::from(text.to_string()))
+            .into_any_element();
+    }
+
+    let mut spans: Vec<gpui::AnyElement> = Vec::new();
+    let mut current = String::new();
+    let mut current_highlighted = false;
+
+    for (ix, ch) in text.chars().enumerate() {
+        let is_hit = hits.contains(&ix);
+        if ix > 0 && is_hit != current_highlighted {
+            spans.push(
+                div()
+                    .text_size(gpui::px(10.5))
+                    .line_height(gpui::px(14.0))
+                    .font_family(crate::list_item::FONT_MONO)
+                    .text_color(if current_highlighted { accent } else { base })
+                    .child(SharedString::from(std::mem::take(&mut current)))
+                    .into_any_element(),
+            );
+        }
+        current_highlighted = is_hit;
+        current.push(ch);
+    }
+    if !current.is_empty() {
+        spans.push(
+            div()
+                .text_size(gpui::px(10.5))
+                .line_height(gpui::px(14.0))
+                .font_family(crate::list_item::FONT_MONO)
+                .text_color(if current_highlighted { accent } else { base })
+                .child(SharedString::from(current))
+                .into_any_element(),
+        );
+    }
+
+    div()
+        .flex()
+        .items_center()
+        .text_ellipsis()
+        .children(spans)
+        .into_any_element()
+}
+
 impl ScriptListApp {
     pub(crate) fn sync_menu_syntax_object_selector_popup_window(
         &mut self,
@@ -527,7 +720,7 @@ impl ScriptListApp {
         let display = window.display(cx);
         let display_id = display.as_ref().map(|display| display.id());
         let display_bounds = display.as_ref().map(|display| display.visible_bounds());
-        let width = inline_popup_width_for_window(parent_bounds.size.width.as_f32());
+        let width = parent_bounds.size.width.as_f32();
         let popup_snapshot = MenuSyntaxObjectSelectorPopupSnapshot {
             snapshot,
             selected_row_id: self
