@@ -31,6 +31,7 @@ pub mod button;
 #[cfg(test)]
 mod error_handling_audit_tests;
 pub mod focusable_prompt_wrapper;
+pub(crate) mod footer_chrome;
 pub mod form_fields;
 #[cfg(test)]
 mod form_fields_tests;

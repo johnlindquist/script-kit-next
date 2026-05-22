@@ -4,6 +4,7 @@
 //! remains hidden, without activating the app or briefly flashing the launcher.
 
 const DICTATION_WINDOW: &str = include_str!("../src/dictation/window.rs");
+const FOOTER_CHROME: &str = include_str!("../src/components/footer_chrome.rs");
 
 fn section_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     let start_idx = source.find(start).expect("section start must exist");
@@ -102,6 +103,34 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
         ) && DICTATION_WINDOW.contains("rgba(chrome.divider_rgba)")
             && DICTATION_WINDOW.contains("HINT_STRIP_PADDING_X"),
         "dictation action rail must share the native main-window footer height, divider, and inset tokens"
+    );
+    assert!(
+        DICTATION_WINDOW.contains("crate::components::footer_chrome::render_footer_hint_content")
+            && DICTATION_WINDOW.contains("crate::components::footer_chrome::FooterHintKeyMode")
+            && !DICTATION_WINDOW.contains("render_inline_shortcut_keys("),
+        "dictation action chips must render through the shared footer chrome owner"
+    );
+    assert!(
+        FOOTER_CHROME.contains("pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.5;")
+            && FOOTER_CHROME
+                .contains("pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.18;")
+            && FOOTER_CHROME.contains(
+                "pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight::SEMIBOLD;"
+            )
+            && FOOTER_CHROME.contains("pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 16.0;")
+            && FOOTER_CHROME.contains("pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;")
+            && FOOTER_CHROME
+                .contains("pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;")
+            && FOOTER_CHROME
+                .contains("FOOTER_KEY_GLYPH_NUDGE_Y_PX + FOOTER_RETURN_GLYPH_NUDGE_Y_PX"),
+        "shared footer chrome tokens must pin the native font and keycap contract"
+    );
+    assert!(
+        FOOTER_CHROME.contains("\"esc\" | \"escape\" => \"⎋\".to_string()")
+            && FOOTER_CHROME.contains(".flex_none()")
+            && FOOTER_CHROME.contains(".min_h(px(FOOTER_KEYCAP_HEIGHT_PX))")
+            && FOOTER_CHROME.contains(".line_height(px(FOOTER_KEYCAP_HEIGHT_PX))"),
+        "shared footer keycaps must use the escape glyph and fixed native-footer sizing"
     );
     assert!(
         DICTATION_WINDOW.contains("\"dictation-stop-button\"")
