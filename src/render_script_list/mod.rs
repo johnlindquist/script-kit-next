@@ -189,10 +189,24 @@ fn render_menu_syntax_hint_chip(
         .into_any_element()
 }
 
+fn menu_syntax_single_line_text_for_gpui(raw: &str) -> String {
+    raw.chars()
+        .map(|ch| match ch {
+            '\n' | '\r' => ' ',
+            _ => ch,
+        })
+        .collect()
+}
+
+fn menu_syntax_text_contains_line_break(raw: &str) -> bool {
+    raw.chars().any(|ch| matches!(ch, '\n' | '\r'))
+}
+
 fn render_menu_syntax_hint_row(
     theme: &crate::theme::Theme,
     row: &crate::menu_syntax::MenuSyntaxMainHintRow,
 ) -> AnyElement {
+    let row_value = menu_syntax_single_line_text_for_gpui(&row.value);
     div()
         .w_full()
         .flex()
@@ -216,7 +230,7 @@ fn render_menu_syntax_hint_row(
                 .text_size(px(13.0))
                 .line_height(px(18.0))
                 .text_color(rgba((theme.colors.text.primary << 8) | 0xE6))
-                .child(row.value.clone()),
+                .child(row_value),
         )
         .children(
             row.chips
@@ -231,6 +245,8 @@ fn render_menu_syntax_fragment_preview_row(
     row: &crate::menu_syntax::MenuSyntaxFragmentPreviewRow,
 ) -> AnyElement {
     let color = menu_syntax_hint_tone_color(theme, row.tone);
+    let preview_text =
+        menu_syntax_single_line_text_for_gpui(&format!("{}: {}", row.label, row.value));
     div()
         .w_full()
         .flex()
@@ -260,7 +276,7 @@ fn render_menu_syntax_fragment_preview_row(
                 .text_size(px(12.0))
                 .line_height(px(17.0))
                 .text_color(rgba((theme.colors.text.primary << 8) | 0xE6))
-                .child(format!("{}: {}", row.label, row.value)),
+                .child(preview_text),
         )
         .children(
             row.chips
@@ -344,7 +360,7 @@ fn render_menu_syntax_form_field(
     } else {
         let has_value = !field.value.trim().is_empty();
         let display_value = if has_value {
-            field.value.clone()
+            menu_syntax_single_line_text_for_gpui(&field.value)
         } else {
             field.placeholder.clone()
         };
@@ -1735,7 +1751,33 @@ impl ScriptListApp {
                                     .flex()
                                     .flex_row()
                                     .items_center()
-                                    .child(self.render_search_input()),
+                                    .child({
+                                        if handler_form_owns_input_for_render
+                                            && menu_syntax_text_contains_line_break(
+                                                &filter_text_for_render,
+                                            )
+                                        {
+                                            div()
+                                                .w_full()
+                                                .h(px(
+                                                    crate::panel::CURSOR_HEIGHT_LG
+                                                        + (crate::panel::CURSOR_MARGIN_Y * 2.0),
+                                                ))
+                                                .flex()
+                                                .items_center()
+                                                .overflow_hidden()
+                                                .text_ellipsis()
+                                                .text_size(px(self.theme_font_size_xl()))
+                                                .line_height(px(crate::panel::CURSOR_HEIGHT_LG))
+                                                .text_color(rgb(text_primary))
+                                                .child(menu_syntax_single_line_text_for_gpui(
+                                                    &filter_text_for_render,
+                                                ))
+                                                .into_any_element()
+                                        } else {
+                                            self.render_search_input().into_any_element()
+                                        }
+                                    }),
                             )
                             .when(show_launcher_ask_ai_hint, |d| {
                                 d.child(crate::components::render_launcher_ask_ai_hint(chrome))
@@ -1978,7 +2020,8 @@ mod render_script_list_footer_tests {
     use super::{
         app_shell_footer_colors, inline_calc_list_item_hint_text_color,
         inline_calc_list_item_result_text_color, inline_calc_list_item_selected_overlay_rgba,
-        inline_calc_list_item_title, script_list_footer_info_label,
+        inline_calc_list_item_title, menu_syntax_single_line_text_for_gpui,
+        script_list_footer_info_label,
     };
     use crate::designs::DesignVariant;
     use crate::theme::ColorResolver;
@@ -2031,6 +2074,17 @@ mod render_script_list_footer_tests {
 
         assert_eq!(truncated.chars().count(), 27);
         assert!(std::str::from_utf8(truncated.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn test_menu_syntax_single_line_text_for_gpui_replaces_newlines() {
+        let rendered = menu_syntax_single_line_text_for_gpui("first\ns\r\nthird");
+
+        assert!(!rendered.contains('\n'));
+        assert!(!rendered.contains('\r'));
+        assert!(rendered.contains("first"));
+        assert!(rendered.contains('s'));
+        assert!(rendered.contains("third"));
     }
 
     #[test]
