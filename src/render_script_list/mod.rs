@@ -55,6 +55,21 @@ fn inline_calc_list_item_hint_text_color(color_resolver: crate::theme::ColorReso
     color_resolver.empty_text_color()
 }
 
+#[derive(Clone, Copy)]
+struct MenuSyntaxFormValueTypography {
+    font_size: f32,
+    line_height: f32,
+}
+
+fn menu_syntax_form_value_typography(design_variant: DesignVariant) -> MenuSyntaxFormValueTypography {
+    let typography = get_tokens(design_variant).typography();
+    let font_size = typography.font_size_sm;
+    MenuSyntaxFormValueTypography {
+        font_size,
+        line_height: font_size * typography.line_height_normal,
+    }
+}
+
 fn inline_calc_list_item_selected_overlay_rgba(
     theme: &crate::theme::Theme,
     color_resolver: crate::theme::ColorResolver,
@@ -257,9 +272,11 @@ fn render_menu_syntax_fragment_preview_row(
 
 fn render_menu_syntax_form_field(
     theme: &crate::theme::Theme,
+    design_variant: DesignVariant,
     field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
     input: Option<Entity<gpui_component::input::InputState>>,
 ) -> AnyElement {
+    let field_typography = menu_syntax_form_value_typography(design_variant);
     let border_color = if field.focused {
         rgba((theme.colors.accent.selected << 8) | 0xF2)
     } else {
@@ -305,12 +322,10 @@ fn render_menu_syntax_form_field(
         let input_element = gpui_component::input::Input::new(&input)
             .w_full()
             .h(px(input_height))
-            .line_height(px(crate::panel::CURSOR_HEIGHT_LG))
+            .line_height(px(field_typography.line_height))
             .px(px(0.0))
             .py(px(0.0))
-            .with_size(gpui_component::Size::Size(px(
-                theme.get_fonts().ui_size + 2.0
-            )))
+            .with_size(gpui_component::Size::Size(px(field_typography.font_size)))
             .appearance(false)
             .bordered(false)
             .focus_bordered(false);
@@ -328,8 +343,8 @@ fn render_menu_syntax_form_field(
                 .min_h(px(20.0))
                 .flex()
                 .items_center()
-                .text_size(px(13.0))
-                .line_height(px(18.0))
+                .text_size(px(field_typography.font_size))
+                .line_height(px(field_typography.line_height))
                 .text_color(if has_value {
                     rgba((theme.colors.text.primary << 8) | 0xFF)
                 } else {
@@ -350,6 +365,7 @@ fn render_menu_syntax_form_field(
 
 fn render_menu_syntax_form(
     theme: &crate::theme::Theme,
+    design_variant: DesignVariant,
     form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
     inputs: &[(String, Entity<gpui_component::input::InputState>)],
     _cx: &mut Context<ScriptListApp>,
@@ -371,7 +387,7 @@ fn render_menu_syntax_form(
                     let input = inputs
                         .iter()
                         .find_map(|(id, input)| (id == &field.id).then(|| input.clone()));
-                    render_menu_syntax_form_field(theme, field, input)
+                    render_menu_syntax_form_field(theme, design_variant, field, input)
                 })),
         )
         .into_any_element()
@@ -381,6 +397,7 @@ fn render_menu_syntax_main_hint(
     hint: &crate::menu_syntax::MenuSyntaxMainHintSnapshot,
     scroll_handle: &ScrollHandle,
     theme: &crate::theme::Theme,
+    design_variant: DesignVariant,
     form_inputs: &[(String, Entity<gpui_component::input::InputState>)],
     cx: &mut Context<ScriptListApp>,
 ) -> AnyElement {
@@ -484,7 +501,13 @@ fn render_menu_syntax_main_hint(
                 )
             })
             .when_some(hint.form.as_ref(), |d, form| {
-                d.child(render_menu_syntax_form(theme, form, form_inputs, cx))
+                d.child(render_menu_syntax_form(
+                    theme,
+                    design_variant,
+                    form,
+                    form_inputs,
+                    cx,
+                ))
             })
             .when(!hint.rows.is_empty(), |d| {
                 d.child(
@@ -866,6 +889,7 @@ impl ScriptListApp {
                         &hint,
                         &self.menu_syntax_main_hint_scroll_handle,
                         &self.theme,
+                        self.current_design,
                         &self.menu_syntax_form_inputs,
                         cx,
                     )
@@ -876,6 +900,7 @@ impl ScriptListApp {
                 &hint,
                 &self.menu_syntax_main_hint_scroll_handle,
                 &self.theme,
+                self.current_design,
                 &self.menu_syntax_form_inputs,
                 cx,
             )
@@ -885,6 +910,7 @@ impl ScriptListApp {
                     &hint,
                     &self.menu_syntax_main_hint_scroll_handle,
                     &self.theme,
+                    self.current_design,
                     &self.menu_syntax_form_inputs,
                     cx,
                 )
