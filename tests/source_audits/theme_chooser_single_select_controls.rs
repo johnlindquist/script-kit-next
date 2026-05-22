@@ -278,6 +278,62 @@ fn theme_chooser_management_buttons_use_theme_aware_hover_states() {
 }
 
 #[test]
+fn theme_chooser_customize_cards_use_whisper_tokens_not_panel_tokens() {
+    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let render_code = chooser
+        .split("#[cfg(test)]")
+        .next()
+        .expect("render code should precede tests");
+    let customize_section = source_between(
+        render_code,
+        "fn render_theme_chooser_customize_section(",
+        "fn theme_chooser_overlay_token(",
+    );
+    let management_section = source_between(
+        render_code,
+        "let management_section =",
+        "// 1. COLORS SECTION",
+    );
+
+    assert!(
+        customize_section.contains(".bg(rgba(chrome.whisper_surface_rgba))"),
+        "Theme Designer customize cards should use the shared whisper surface"
+    );
+    assert!(
+        customize_section.contains(".border_color(rgba(chrome.whisper_border_rgba))"),
+        "Theme Designer customize cards should use the shared whisper border"
+    );
+    assert!(
+        !customize_section.contains("panel_surface_rgba"),
+        "customize cards must not use panel_surface_rgba"
+    );
+    assert!(
+        !customize_section.contains("badge_border_rgba"),
+        "customize card borders must not use badge_border_rgba"
+    );
+    assert!(
+        management_section.contains("chrome.accent_badge_bg_rgba")
+            && management_section
+                .matches("chrome.whisper_surface_rgba")
+                .count()
+                == 3
+            && management_section
+                .matches("chrome.whisper_border_rgba")
+                .count()
+                == 3,
+        "Save Copy should keep accent chrome while Update/Delete/Restore use whisper chrome"
+    );
+    assert!(
+        !management_section.contains("chrome.panel_surface_rgba"),
+        "Theme Designer management buttons must not use panel_surface_rgba"
+    );
+    assert!(
+        !management_section.contains("chrome.badge_border_rgba"),
+        "Theme Designer management buttons must not use badge_border_rgba"
+    );
+}
+
+#[test]
 fn theme_gradients_propagate_to_secondary_windows() {
     let ui_foundation = read_source("src/ui_foundation/mod.rs");
     let main_window = read_source("src/main_sections/render_impl.rs");

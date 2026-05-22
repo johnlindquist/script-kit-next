@@ -1141,8 +1141,8 @@ impl ScriptListApp {
             .p(px(12.0))
             .rounded(px(10.0))
             .border_1()
-            .border_color(rgba(chrome.badge_border_rgba))
-            .bg(rgba(chrome.panel_surface_rgba))
+            .border_color(rgba(chrome.whisper_border_rgba))
+            .bg(rgba(chrome.whisper_surface_rgba))
             .child(
                 div()
                     .flex()
@@ -3506,8 +3506,8 @@ impl ScriptListApp {
                         } else {
                             text_primary
                         },
-                        chrome.panel_surface_rgba,
-                        chrome.badge_border_rgba,
+                        chrome.whisper_surface_rgba,
+                        chrome.whisper_border_rgba,
                         neutral_hover_rgba,
                         move |_, _, cx| {
                             if let Some(app) = update_click_entity.upgrade() {
@@ -3530,8 +3530,8 @@ impl ScriptListApp {
                         } else {
                             ui_error
                         },
-                        chrome.panel_surface_rgba,
-                        chrome.badge_border_rgba,
+                        chrome.whisper_surface_rgba,
+                        chrome.whisper_border_rgba,
                         destructive_hover_rgba,
                         move |_, _, cx| {
                             if let Some(app) = delete_click_entity.upgrade() {
@@ -3554,8 +3554,8 @@ impl ScriptListApp {
                         } else {
                             text_primary
                         },
-                        chrome.panel_surface_rgba,
-                        chrome.badge_border_rgba,
+                        chrome.whisper_surface_rgba,
+                        chrome.whisper_border_rgba,
                         neutral_hover_rgba,
                         move |_, _, cx| {
                             if let Some(app) = restore_click_entity.upgrade() {
