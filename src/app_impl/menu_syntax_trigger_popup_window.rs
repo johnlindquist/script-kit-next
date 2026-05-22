@@ -28,16 +28,14 @@ use gpui::{
 };
 
 use crate::components::inline_dropdown::{
-    inline_dropdown_visible_range_from_start, render_soft_compact_picker_row, InlineDropdown,
-    InlineDropdownColors, InlineDropdownSynopsis, CONTEXT_PICKER_SYNOPSIS_HEIGHT,
-    SOFT_COMPACT_PICKER_ROW_HEIGHT,
+    inline_dropdown_visible_range_from_start, InlineDropdown, InlineDropdownColors, MUTED_OP,
 };
 use crate::components::inline_popup_window::{
     configure_inline_popup_window, inline_popup_height_for_row_height,
-    inline_popup_width_for_window, inline_popup_window_options, set_inline_popup_window_bounds,
+    inline_popup_window_options, set_inline_popup_window_bounds,
 };
 use crate::components::inline_popup_window::{
-    INLINE_POPUP_MAX_VISIBLE_ROWS, INLINE_POPUP_VERTICAL_PADDING,
+    INLINE_POPUP_EDGE_GUTTER, INLINE_POPUP_MAX_VISIBLE_ROWS, INLINE_POPUP_VERTICAL_PADDING,
 };
 use crate::menu_syntax::{TriggerPickerRow, TriggerPickerRowKind, TriggerPickerSnapshot};
 use crate::menu_syntax_trigger_popup::{
@@ -195,28 +193,15 @@ fn menu_syntax_trigger_popup_index_from_semantic_id(semantic_id: &str) -> Option
     }
 }
 
-fn selected_row_has_synopsis(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> bool {
-    trigger_popup_footer_count(snapshot) == 0
-        && snapshot
-            .selected_index()
-            .and_then(|idx| snapshot.snapshot.rows.get(idx))
-            .is_some_and(|row| row.detail.is_some() || row.example.is_some())
-}
+const TRIGGER_POPUP_ROW_HEIGHT: f32 = 30.0;
 
 fn popup_height(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> f32 {
     if snapshot.snapshot.rows.is_empty() {
-        return inline_popup_height_for_row_height(0, SOFT_COMPACT_PICKER_ROW_HEIGHT);
+        return inline_popup_height_for_row_height(0, TRIGGER_POPUP_ROW_HEIGHT);
     }
 
     let row_count = trigger_popup_visible_row_count(snapshot);
-    let row_height = inline_popup_height_for_row_height(row_count, SOFT_COMPACT_PICKER_ROW_HEIGHT);
-
-    row_height
-        + if selected_row_has_synopsis(snapshot) {
-            CONTEXT_PICKER_SYNOPSIS_HEIGHT
-        } else {
-            0.0
-        }
+    inline_popup_height_for_row_height(row_count, TRIGGER_POPUP_ROW_HEIGHT)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -244,38 +229,40 @@ fn popup_visible_row_limit(snapshot: &MenuSyntaxTriggerPopupSnapshot, parent_hei
         .unwrap_or(1)
 }
 
-pub(crate) fn menu_syntax_trigger_popup_layout_left_drawer(
+pub(crate) fn menu_syntax_trigger_popup_layout_above(
     parent_bounds: Bounds<Pixels>,
     display_bounds: Option<Bounds<Pixels>>,
     snapshot: &MenuSyntaxTriggerPopupSnapshot,
 ) -> MenuSyntaxTriggerPopupLayout {
     let mut snapshot = snapshot.clone();
-    let visible_row_limit =
-        popup_visible_row_limit(&snapshot, f32::from(parent_bounds.size.height));
-    snapshot.visible_row_limit = visible_row_limit;
     let width = snapshot.width;
-    let preferred_left = parent_bounds.origin.x.as_f32() - width;
+
+    let display_top = display_bounds
+        .map(|db| db.origin.y.as_f32() + INLINE_POPUP_EDGE_GUTTER)
+        .unwrap_or(0.0);
+    let available_height = (parent_bounds.origin.y.as_f32() - display_top).max(1.0);
+
+    let visible_row_limit =
+        popup_visible_row_limit(&snapshot, available_height);
+    snapshot.visible_row_limit = visible_row_limit;
+
+    let height = popup_height(&snapshot);
+
+    let preferred_left = parent_bounds.origin.x.as_f32();
     let left = display_bounds
         .map(|display_bounds| {
             let display_left = display_bounds.origin.x.as_f32();
             let display_right = display_left + display_bounds.size.width.as_f32();
-            if preferred_left >= display_left {
-                preferred_left
-            } else {
-                let right_fallback =
-                    parent_bounds.origin.x.as_f32() + parent_bounds.size.width.as_f32();
-                if right_fallback + width <= display_right {
-                    right_fallback
-                } else {
-                    (display_right - width).max(display_left)
-                }
-            }
+            preferred_left.clamp(display_left, (display_right - width).max(display_left))
         })
         .unwrap_or(preferred_left);
+
+    let top = parent_bounds.origin.y.as_f32() - height;
+
     MenuSyntaxTriggerPopupLayout {
         bounds: Bounds {
-            origin: gpui::point(gpui::px(left), parent_bounds.origin.y),
-            size: gpui::size(gpui::px(width), gpui::px(popup_height(&snapshot))),
+            origin: gpui::point(gpui::px(left), gpui::px(top)),
+            size: gpui::size(gpui::px(width), gpui::px(height)),
         },
         visible_row_limit,
     }
@@ -296,7 +283,7 @@ pub(crate) fn sync_menu_syntax_trigger_popup_window(
     } = request;
 
     let layout =
-        menu_syntax_trigger_popup_layout_left_drawer(parent_bounds, display_bounds, &snapshot);
+        menu_syntax_trigger_popup_layout_above(parent_bounds, display_bounds, &snapshot);
     snapshot.visible_row_limit = layout.visible_row_limit;
     let bounds = layout.bounds;
 
@@ -586,15 +573,72 @@ impl MenuSyntaxTriggerPopupWindow {
         let label = neutral.title.clone();
         let meta = neutral.token.clone().or_else(|| neutral.subtitle.clone());
         let highlights = trigger_popup_row_highlight_indices(row, &self.snapshot.raw_filter_text);
-        render_soft_compact_picker_row(
-            SharedString::from(format!("menu-syntax-trigger-popup-row-{idx}")),
-            label,
-            meta,
-            &highlights.title,
-            &highlights.meta,
-            is_selected,
-            colors,
-        )
+        let label_hits: std::collections::HashSet<usize> = highlights.title.iter().copied().collect();
+
+        let mut left_side = div()
+            .flex()
+            .items_center();
+
+        let label_spans = render_trigger_row_label(&label, &label_hits, if is_selected { colors.foreground } else { colors.foreground.opacity(MUTED_OP) }, colors.accent, is_selected);
+        left_side = left_side.child(label_spans);
+
+        let mut content = div()
+            .flex_1()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .child(left_side);
+
+        if let Some(meta_val) = meta.filter(|val| !val.is_empty()) {
+            let meta_hits: std::collections::HashSet<usize> = highlights.meta.iter().copied().collect();
+            content = content.child(
+                div()
+                    .px(gpui::px(6.0))
+                    .py(gpui::px(2.0))
+                    .rounded(gpui::px(4.0))
+                    .bg(colors.foreground.opacity(0.06))
+                    .child(render_trigger_row_meta_text(&meta_val, &meta_hits, if is_selected { colors.foreground.opacity(MUTED_OP) } else { colors.muted_foreground.opacity(0.45) }, colors.accent.opacity(0.45)))
+            );
+        }
+
+        let selected_row_bg = colors.foreground.opacity(0.18);
+        let hover_row_bg = colors.foreground.opacity(0.06);
+
+        let inner_row = div()
+            .w_full()
+            .flex_1()
+            .flex()
+            .flex_row()
+            .items_center()
+            .px(gpui::px(8.0))
+            .rounded(gpui::px(6.0))
+            .bg(if is_selected {
+                selected_row_bg
+            } else {
+                gpui::transparent_black()
+            })
+            .when(!is_selected, |row| {
+                row.hover(move |style| style.bg(hover_row_bg))
+            })
+            .child(content);
+
+        div()
+            .id(SharedString::from(format!("menu-syntax-trigger-popup-row-{idx}")))
+            .h(gpui::px(30.0))
+            .w_full()
+            .px(gpui::px(4.0))
+            .py(gpui::px(2.0))
+            .flex()
+            .flex_col()
+            .justify_center()
+            .border_l(gpui::px(2.0))
+            .border_color(if is_selected {
+                colors.accent
+            } else {
+                gpui::transparent_black()
+            })
+            .child(inner_row)
     }
 
     fn render_picker(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
@@ -602,8 +646,6 @@ impl MenuSyntaxTriggerPopupWindow {
         let colors = InlineDropdownColors::popup_from_theme(&theme);
         let visible = self.visible_range();
         let selected_index = self.snapshot.selected_index();
-        let selected_row =
-            selected_index.and_then(|idx| self.snapshot.snapshot.rows.get(idx).cloned());
         let normal_rows: Vec<_> = self
             .snapshot
             .selectable_rows()
@@ -647,23 +689,7 @@ impl MenuSyntaxTriggerPopupWindow {
             }))
             .into_any_element();
 
-        let synopsis = (footer_rows.is_empty()).then_some(()).and_then(|_| {
-            let row = selected_row.as_ref()?;
-            let detail: String = row
-                .detail
-                .clone()
-                .or_else(|| row.example.clone())
-                .unwrap_or_default();
-            if detail.is_empty() {
-                return None;
-            }
-            let token: String = row.token.clone().unwrap_or_default();
-            Some(InlineDropdownSynopsis {
-                label: SharedString::from(row.title.clone()),
-                meta: SharedString::from(token),
-                description: SharedString::from(detail),
-            })
-        });
+
 
         tracing::info!(
             target: "script_kit::menu_syntax_popup",
@@ -677,7 +703,6 @@ impl MenuSyntaxTriggerPopupWindow {
             body,
             colors,
         )
-        .synopsis(synopsis)
         .vertical_padding(INLINE_POPUP_VERTICAL_PADDING / 2.0)
         .into_any_element()
     }
@@ -737,7 +762,7 @@ impl ScriptListApp {
         let display = window.display(cx);
         let display_id = display.as_ref().map(|display| display.id());
         let display_bounds = display.as_ref().map(|display| display.visible_bounds());
-        let width = inline_popup_width_for_window(parent_bounds.size.width.as_f32());
+        let width = parent_bounds.size.width.as_f32();
         let popup_snapshot = MenuSyntaxTriggerPopupSnapshot {
             snapshot,
             selected_row_id: self.menu_syntax_trigger_popup_state.selected_row_id.clone(),
@@ -1239,4 +1264,122 @@ impl ScriptListApp {
             }
         }
     }
+}
+
+fn render_trigger_row_label(
+    text: &str,
+    hits: &std::collections::HashSet<usize>,
+    base: gpui::Hsla,
+    accent: gpui::Hsla,
+    is_selected: bool,
+) -> gpui::AnyElement {
+    let font_weight = if is_selected {
+        gpui::FontWeight::MEDIUM
+    } else {
+        gpui::FontWeight::NORMAL
+    };
+
+    if hits.is_empty() {
+        return div()
+            .text_sm()
+            .font_weight(font_weight)
+            .text_color(base)
+            .text_ellipsis()
+            .child(SharedString::from(text.to_string()))
+            .into_any_element();
+    }
+
+    let mut spans: Vec<gpui::AnyElement> = Vec::new();
+    let mut current = String::new();
+    let mut current_highlighted = false;
+
+    for (ix, ch) in text.chars().enumerate() {
+        let is_hit = hits.contains(&ix);
+        if ix > 0 && is_hit != current_highlighted {
+            spans.push(
+                div()
+                    .text_sm()
+                    .font_weight(font_weight)
+                    .text_color(if current_highlighted { accent } else { base })
+                    .child(SharedString::from(std::mem::take(&mut current)))
+                    .into_any_element(),
+            );
+        }
+        current_highlighted = is_hit;
+        current.push(ch);
+    }
+    if !current.is_empty() {
+        spans.push(
+            div()
+                .text_sm()
+                .font_weight(font_weight)
+                .text_color(if current_highlighted { accent } else { base })
+                .child(SharedString::from(current))
+                .into_any_element(),
+        );
+    }
+
+    div()
+        .flex()
+        .items_center()
+        .text_ellipsis()
+        .children(spans)
+        .into_any_element()
+}
+
+fn render_trigger_row_meta_text(
+    text: &str,
+    hits: &std::collections::HashSet<usize>,
+    base: gpui::Hsla,
+    accent: gpui::Hsla,
+) -> gpui::AnyElement {
+    if hits.is_empty() {
+        return div()
+            .text_size(gpui::px(10.5))
+            .line_height(gpui::px(14.0))
+            .font_family(crate::list_item::FONT_MONO)
+            .text_color(base)
+            .text_ellipsis()
+            .child(SharedString::from(text.to_string()))
+            .into_any_element();
+    }
+
+    let mut spans: Vec<gpui::AnyElement> = Vec::new();
+    let mut current = String::new();
+    let mut current_highlighted = false;
+
+    for (ix, ch) in text.chars().enumerate() {
+        let is_hit = hits.contains(&ix);
+        if ix > 0 && is_hit != current_highlighted {
+            spans.push(
+                div()
+                    .text_size(gpui::px(10.5))
+                    .line_height(gpui::px(14.0))
+                    .font_family(crate::list_item::FONT_MONO)
+                    .text_color(if current_highlighted { accent } else { base })
+                    .child(SharedString::from(std::mem::take(&mut current)))
+                    .into_any_element(),
+            );
+        }
+        current_highlighted = is_hit;
+        current.push(ch);
+    }
+    if !current.is_empty() {
+        spans.push(
+            div()
+                .text_size(gpui::px(10.5))
+                .line_height(gpui::px(14.0))
+                .font_family(crate::list_item::FONT_MONO)
+                .text_color(if current_highlighted { accent } else { base })
+                .child(SharedString::from(current))
+                .into_any_element(),
+        );
+    }
+
+    div()
+        .flex()
+        .items_center()
+        .text_ellipsis()
+        .children(spans)
+        .into_any_element()
 }
