@@ -2,7 +2,7 @@ use nucleo_matcher::pattern::Pattern;
 use nucleo_matcher::{Matcher, Utf32Str};
 
 use super::super::types::{MatchIndices, SearchResult};
-use super::{fuzzy_match_with_indices_ascii, is_ascii_pair};
+use super::{find_ignore_ascii_case, fuzzy_match_with_indices_ascii, is_ascii_pair};
 
 /// Reusable highlight matcher that keeps ASCII fast-path behavior and
 /// falls back to Unicode-safe nucleo indices when needed.
@@ -26,6 +26,10 @@ impl SearchHighlightMatchCtx {
         }
 
         if is_ascii_pair(haystack, &self.query_lower) {
+            if let Some(start) = find_ignore_ascii_case(haystack, &self.query_lower) {
+                let end = start + self.query_lower.len();
+                return (true, (start..end).collect());
+            }
             return fuzzy_match_with_indices_ascii(haystack, &self.query_lower);
         }
 
@@ -462,6 +466,33 @@ mod tests {
         assert!(
             !indices.name_indices.is_empty(),
             "trailing spaces in the input should not clear the fallback row text highlight"
+        );
+    }
+
+    #[test]
+    fn fallback_label_highlight_prefers_contiguous_substring_over_fuzzy_prefix() {
+        let result = SearchResult::Fallback(
+            FallbackMatch::new(
+                FallbackItem::Builtin(BuiltinFallback::new(
+                    "create-event",
+                    "The event",
+                    "Create an event",
+                    "Calendar",
+                    FallbackAction::SearchFiles,
+                    FallbackCondition::Always,
+                    10,
+                )),
+                0,
+            )
+            .with_display_overrides("The event", "Create an event"),
+        );
+
+        let indices = compute_match_indices_for_result(&result, "event");
+
+        assert_eq!(
+            indices.name_indices,
+            vec![4, 5, 6, 7, 8],
+            "contiguous substring should beat earliest fuzzy chars like the 'e' in 'The'"
         );
     }
 }

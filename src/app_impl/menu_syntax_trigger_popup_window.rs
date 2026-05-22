@@ -37,7 +37,7 @@ use crate::components::inline_popup_window::{
 use crate::components::inline_popup_window::{
     INLINE_POPUP_EDGE_GUTTER, INLINE_POPUP_MAX_VISIBLE_ROWS, INLINE_POPUP_VERTICAL_PADDING,
 };
-use crate::components::scrollbar::{Scrollbar, ScrollbarColors};
+use gpui_component::scroll::Scrollbar;
 use crate::menu_syntax::{TriggerPickerRow, TriggerPickerRowKind, TriggerPickerSnapshot};
 use crate::menu_syntax_trigger_popup::{
     adapt_trigger_picker_row, trigger_popup_row_highlight_indices,
@@ -390,6 +390,31 @@ pub(crate) fn sync_menu_syntax_trigger_popup_window(
     Ok(())
 }
 
+#[derive(Clone)]
+struct PopupScrollbarHandle {
+    total_items: usize,
+    visible_items: usize,
+    scroll_offset: usize,
+}
+
+impl gpui_component::scroll::ScrollbarHandle for PopupScrollbarHandle {
+    fn offset(&self) -> gpui::Point<gpui::Pixels> {
+        gpui::point(
+            gpui::px(0.0),
+            gpui::px(-(self.scroll_offset as f32 * TRIGGER_POPUP_ROW_HEIGHT)),
+        )
+    }
+
+    fn set_offset(&self, _offset: gpui::Point<gpui::Pixels>) {}
+
+    fn content_size(&self) -> gpui::Size<gpui::Pixels> {
+        gpui::size(
+            gpui::px(0.0),
+            gpui::px(self.total_items as f32 * TRIGGER_POPUP_ROW_HEIGHT),
+        )
+    }
+}
+
 /// GPUI window entity backing the menu-syntax trigger popup.
 pub(crate) struct MenuSyntaxTriggerPopupWindow {
     snapshot: MenuSyntaxTriggerPopupSnapshot,
@@ -665,19 +690,46 @@ impl MenuSyntaxTriggerPopupWindow {
             .chain(footer_rows.iter().copied())
             .collect();
 
-        let scrollbar = Scrollbar::new(
-            normal_rows.len(),
-            visible.len(),
-            visible.start,
-            ScrollbarColors::from_theme(&theme),
-        )
-        .container_height(popup_height(&self.snapshot));
+        let scrollbar_handle = PopupScrollbarHandle {
+            total_items: normal_rows.len(),
+            visible_items: visible.len(),
+            scroll_offset: visible.start,
+        };
+
+        let scrollbar = Scrollbar::vertical(&scrollbar_handle)
+            .id("menu-syntax-trigger-popup-scrollbar");
 
         let body = div()
             .relative()
             .size_full()
             .flex()
             .flex_col()
+            .on_scroll_wheel(cx.listener(move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                let delta_y = event.delta.pixel_delta(gpui::px(1.0)).y.as_f32();
+                if delta_y.abs() > 1.0 {
+                    let normal_count = this
+                        .snapshot
+                        .snapshot
+                        .rows
+                        .iter()
+                        .filter(|row| !is_trigger_popup_footer_row(row))
+                        .count();
+                    let capacity = trigger_popup_normal_row_capacity(&this.snapshot);
+                    if normal_count > capacity {
+                        let max_start = normal_count.saturating_sub(capacity);
+                        let mut current_start = this.snapshot.visible_start;
+                        if delta_y < 0.0 {
+                            current_start = (current_start + 1).min(max_start);
+                        } else {
+                            current_start = current_start.saturating_sub(1);
+                        }
+                        if current_start != this.snapshot.visible_start {
+                            this.snapshot.visible_start = current_start;
+                            cx.notify();
+                        }
+                    }
+                }
+            }))
             .child(
                 div()
                     .size_full()

@@ -22,7 +22,7 @@ use crate::components::inline_popup_window::{
     inline_popup_height_for_row_height, INLINE_POPUP_EDGE_GUTTER, INLINE_POPUP_MAX_VISIBLE_ROWS,
     INLINE_POPUP_VERTICAL_PADDING,
 };
-use crate::components::scrollbar::{Scrollbar, ScrollbarColors};
+use gpui_component::scroll::Scrollbar;
 
 use super::view::AcpChatView;
 
@@ -407,6 +407,31 @@ pub(crate) fn sync_mention_popup_window(
     Ok(())
 }
 
+#[derive(Clone)]
+struct PopupScrollbarHandle {
+    total_items: usize,
+    visible_items: usize,
+    scroll_offset: usize,
+}
+
+impl gpui_component::scroll::ScrollbarHandle for PopupScrollbarHandle {
+    fn offset(&self) -> gpui::Point<gpui::Pixels> {
+        gpui::point(
+            gpui::px(0.0),
+            gpui::px(-(self.scroll_offset as f32 * TRIGGER_POPUP_ROW_HEIGHT)),
+        )
+    }
+
+    fn set_offset(&self, _offset: gpui::Point<gpui::Pixels>) {}
+
+    fn content_size(&self) -> gpui::Size<gpui::Pixels> {
+        gpui::size(
+            gpui::px(0.0),
+            gpui::px(self.total_items as f32 * TRIGGER_POPUP_ROW_HEIGHT),
+        )
+    }
+}
+
 pub(crate) struct AcpMentionPopupWindow {
     snapshot: AcpMentionPopupSnapshot,
     visible_row_limit: usize,
@@ -655,19 +680,43 @@ impl AcpMentionPopupWindow {
         let colors = InlineDropdownColors::popup_from_theme(&theme);
         let visible = self.visible_range();
 
-        let scrollbar = Scrollbar::new(
-            self.snapshot.items.len(),
-            visible.len(),
-            visible.start,
-            ScrollbarColors::from_theme(&theme),
-        )
-        .container_height(popup_height(&self.snapshot));
+        let scrollbar_handle = PopupScrollbarHandle {
+            total_items: self.snapshot.items.len(),
+            visible_items: visible.len(),
+            scroll_offset: visible.start,
+        };
+
+        let scrollbar = Scrollbar::vertical(&scrollbar_handle).id("acp-mention-popup-scrollbar");
 
         let body = div()
             .relative()
             .size_full()
             .flex()
             .flex_col()
+            .on_scroll_wheel(cx.listener(
+                move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                    let delta_y = event.delta.pixel_delta(gpui::px(1.0)).y.as_f32();
+                    if delta_y.abs() > 1.0 {
+                        let normal_count = this.snapshot.items.len();
+                        let capacity = this
+                            .visible_row_limit
+                            .clamp(1, super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS);
+                        if normal_count > capacity {
+                            let max_start = normal_count.saturating_sub(capacity);
+                            let mut current_start = this.snapshot.visible_start;
+                            if delta_y < 0.0 {
+                                current_start = (current_start + 1).min(max_start);
+                            } else {
+                                current_start = current_start.saturating_sub(1);
+                            }
+                            if current_start != this.snapshot.visible_start {
+                                this.snapshot.visible_start = current_start;
+                                cx.notify();
+                            }
+                        }
+                    }
+                },
+            ))
             .child(
                 div().size_full().flex().flex_col().children(
                     self.snapshot
