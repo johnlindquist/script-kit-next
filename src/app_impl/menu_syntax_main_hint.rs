@@ -84,7 +84,12 @@ impl ScriptListApp {
                 .placeholder(placeholder)
                 .default_value(value);
             if multiline {
-                state.auto_grow(2, 6).submit_on_enter(true)
+                state
+                    .auto_grow(
+                        crate::components::FormFieldMetrics::MULTILINE_MIN_ROWS,
+                        crate::components::FormFieldMetrics::MULTILINE_MAX_ROWS,
+                    )
+                    .submit_on_enter(true)
             } else {
                 state
             }

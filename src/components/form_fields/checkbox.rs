@@ -2,7 +2,7 @@ use gpui::*;
 
 use crate::protocol::Field;
 
-use super::{FormFieldColors, FormFieldState};
+use super::{FormFieldColors, FormFieldMetrics, FormFieldState};
 
 pub struct FormCheckbox {
     /// Field definition from protocol
@@ -79,6 +79,7 @@ impl Focusable for FormCheckbox {
 impl Render for FormCheckbox {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = self.colors;
+        let metrics = FormFieldMetrics::from_colors(colors);
         let is_focused = self.focus_handle.is_focused(window);
         let checked = self.checked;
         let label = self
@@ -118,12 +119,12 @@ impl Render for FormCheckbox {
             .flex()
             .items_center()
             .justify_center()
-            .w(rems(1.125))
-            .h(rems(1.125))
+            .w(rems(metrics.checkbox_box_size_rems))
+            .h(rems(metrics.checkbox_box_size_rems))
             .bg(box_bg)
             .border_1()
             .border_color(border_color)
-            .rounded(px(4.));
+            .rounded(px(metrics.checkbox_radius_px));
 
         // Add checkmark when checked
         if checked {
@@ -154,7 +155,7 @@ impl Render for FormCheckbox {
             .flex()
             .flex_row()
             .items_center()
-            .gap(rems(0.75))
+            .gap(rems(metrics.checkbox_gap_rems))
             .cursor_pointer()
             .child(checkbox_box)
             .child(

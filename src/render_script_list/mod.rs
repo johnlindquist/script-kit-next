@@ -55,32 +55,6 @@ fn inline_calc_list_item_hint_text_color(color_resolver: crate::theme::ColorReso
     color_resolver.empty_text_color()
 }
 
-#[derive(Clone, Copy)]
-struct MenuSyntaxFormValueTypography {
-    label_font_size: f32,
-    label_line_height: f32,
-    value_font_size: f32,
-    value_line_height: f32,
-}
-
-fn menu_syntax_form_value_typography(
-    theme: &crate::theme::Theme,
-    design_variant: DesignVariant,
-) -> MenuSyntaxFormValueTypography {
-    let field_colors = crate::components::FormFieldColors::from_theme(theme);
-    let typography = get_tokens(design_variant).typography();
-    let label_font_size = field_colors.label_font_size;
-    let value_font_size = field_colors.input_font_size;
-    MenuSyntaxFormValueTypography {
-        label_font_size,
-        label_line_height: (label_font_size * typography.line_height_normal)
-            .max(label_font_size + 4.0),
-        value_font_size,
-        value_line_height: (value_font_size * typography.line_height_normal)
-            .max(value_font_size + 4.0),
-    }
-}
-
 fn inline_calc_list_item_selected_overlay_rgba(
     theme: &crate::theme::Theme,
     color_resolver: crate::theme::ColorResolver,
@@ -303,7 +277,8 @@ fn render_menu_syntax_form_field(
     field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
     input: Option<Entity<gpui_component::input::InputState>>,
 ) -> AnyElement {
-    let field_typography = menu_syntax_form_value_typography(theme, design_variant);
+    let field_metrics =
+        crate::components::FormFieldMetrics::from_theme_and_design(theme, design_variant);
     let border_color = if field.focused {
         rgba((theme.colors.accent.selected << 8) | 0xF2)
     } else {
@@ -311,21 +286,18 @@ fn render_menu_syntax_form_field(
     };
     let placeholder_color =
         rgba(crate::theme::AppChromeColors::from_theme(theme).placeholder_text_rgba);
-    let single_line_input_height =
-        field_typography.value_line_height + (crate::panel::CURSOR_MARGIN_Y * 2.0);
-    let multiline_min_height =
-        (field_typography.value_line_height * 2.0) + (crate::panel::CURSOR_MARGIN_Y * 2.0);
-    let multiline_max_height =
-        (field_typography.value_line_height * 6.0) + (crate::panel::CURSOR_MARGIN_Y * 2.0);
+    let single_line_input_height = field_metrics.menu_syntax_single_line_height_px();
+    let multiline_min_height = field_metrics.menu_syntax_multiline_min_height_px();
+    let multiline_max_height = field_metrics.menu_syntax_multiline_max_height_px();
     let mut field_node = div()
         .id(format!("menu-syntax-form-field-{}", field.id))
         .w_full()
         .flex()
         .flex_col()
-        .gap(px(6.0))
-        .px(px(10.0))
-        .py(px(8.0))
-        .rounded(px(6.0))
+        .gap(px(field_metrics.field_gap_px))
+        .px(px(field_metrics.field_padding_x_px))
+        .py(px(field_metrics.field_padding_y_px))
+        .rounded(px(field_metrics.field_radius_px))
         .border_1()
         .border_color(border_color)
         .bg(if field.focused {
@@ -339,11 +311,11 @@ fn render_menu_syntax_form_field(
                 .flex()
                 .items_center()
                 .justify_between()
-                .gap(px(8.0))
+                .gap(px(field_metrics.field_header_gap_px))
                 .child(
                     div()
-                        .text_size(px(field_typography.label_font_size))
-                        .line_height(px(field_typography.label_line_height))
+                        .text_size(px(field_metrics.label_font_size))
+                        .line_height(px(field_metrics.label_line_height))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(rgba((theme.colors.text.muted << 8) | 0xB3))
                         .child(field.label.clone()),
@@ -353,11 +325,11 @@ fn render_menu_syntax_form_field(
     field_node = if let Some(input) = input {
         let input_element = gpui_component::input::Input::new(&input)
             .w_full()
-            .line_height(px(field_typography.value_line_height))
+            .line_height(px(field_metrics.input_line_height))
             .px(px(0.0))
             .py(px(0.0))
             .with_size(gpui_component::Size::Size(px(
-                field_typography.value_font_size,
+                field_metrics.input_font_size,
             )))
             .appearance(false)
             .bordered(false)
@@ -380,11 +352,11 @@ fn render_menu_syntax_form_field(
         field_node.child(
             div()
                 .w_full()
-                .min_h(px(field_typography.value_line_height))
+                .min_h(px(field_metrics.input_line_height))
                 .flex()
                 .items_center()
-                .text_size(px(field_typography.value_font_size))
-                .line_height(px(field_typography.value_line_height))
+                .text_size(px(field_metrics.input_font_size))
+                .line_height(px(field_metrics.input_line_height))
                 .text_color(if has_value {
                     rgba((theme.colors.text.primary << 8) | 0xFF)
                 } else {
@@ -410,6 +382,8 @@ fn render_menu_syntax_form(
     inputs: &[(String, Entity<gpui_component::input::InputState>)],
     _cx: &mut Context<ScriptListApp>,
 ) -> AnyElement {
+    let field_metrics =
+        crate::components::FormFieldMetrics::from_theme_and_design(theme, design_variant);
     div()
         .id("menu-syntax-handler-form")
         .w_full()
@@ -422,7 +396,7 @@ fn render_menu_syntax_form(
                 .flex_1()
                 .flex()
                 .flex_col()
-                .gap(px(6.0))
+                .gap(px(field_metrics.field_gap_px))
                 .children(form.fields.iter().map(|field| {
                     let input = inputs
                         .iter()

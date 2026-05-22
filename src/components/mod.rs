@@ -64,7 +64,9 @@ pub use focusable_prompt_wrapper::{
     match_focusable_prompt_intercepted_key, FocusablePrompt, FocusablePromptInterceptedKey,
 };
 #[allow(unused_imports)]
-pub use form_fields::{FormCheckbox, FormFieldColors, FormFieldState, FormTextArea, FormTextField};
+pub use form_fields::{
+    FormCheckbox, FormFieldColors, FormFieldMetrics, FormFieldState, FormTextArea, FormTextField,
+};
 #[allow(unused_imports)]
 pub use hint_strip::{
     render_hint_icons, render_hint_icons_clickable, render_hint_icons_hsla,

@@ -155,36 +155,47 @@ fn handler_form_field_typography_is_theme_form_owned_and_focus_stable() {
     let field_renderer = &render[field_start..form_start];
 
     assert!(
-        render.contains("fn menu_syntax_form_value_typography(")
-            && render.contains("crate::components::FormFieldColors::from_theme(theme)")
-            && render.contains("get_tokens(design_variant).typography()")
-            && render.contains("field_colors.label_font_size")
-            && render.contains("field_colors.input_font_size"),
-        "handler form field typography must be owned by theme form-field tokens"
+        read("src/components/form_fields/colors.rs").contains("pub struct FormFieldMetrics")
+            && render.contains("crate::components::FormFieldMetrics::from_theme_and_design"),
+        "handler form field typography and geometry must be owned by shared theme form-field metrics"
     );
     assert!(
         field_renderer.contains(
-            "let field_typography = menu_syntax_form_value_typography(theme, design_variant);"
+            "let field_metrics =\n        crate::components::FormFieldMetrics::from_theme_and_design(theme, design_variant);"
         ),
-        "field renderer must resolve typography once, outside the focus/live branches"
+        "field renderer must resolve shared metrics once, outside the focus/live branches"
     );
     assert!(
-        field_renderer
-            .contains("field_typography.label_font_size")
-            && field_renderer.contains("field_typography.label_line_height")
-            && field_renderer.contains("field_typography.value_font_size")
-            && field_renderer.contains("field_typography.value_line_height"),
-        "labels, live input text, fallback values, and placeholders must share theme-derived form typography"
+        field_renderer.contains("field_metrics.label_font_size")
+            && field_renderer.contains("field_metrics.label_line_height")
+            && field_renderer.contains("field_metrics.input_font_size")
+            && field_renderer.contains("field_metrics.input_line_height"),
+        "labels, live input text, fallback values, and placeholders must share theme-derived form metrics"
+    );
+    assert!(
+        field_renderer.contains(".gap(px(field_metrics.field_gap_px))")
+            && field_renderer.contains(".px(px(field_metrics.field_padding_x_px))")
+            && field_renderer.contains(".py(px(field_metrics.field_padding_y_px))")
+            && field_renderer.contains(".rounded(px(field_metrics.field_radius_px))")
+            && field_renderer.contains(".gap(px(field_metrics.field_header_gap_px))"),
+        "handler form field spacing, padding, and radius should come from shared form metrics"
+    );
+    assert!(
+        !field_renderer.contains(".gap(px(6.0))")
+            && !field_renderer.contains(".px(px(10.0))")
+            && !field_renderer.contains(".py(px(8.0))")
+            && !field_renderer.contains(".rounded(px(6.0))"),
+        "handler form fields should not regress to duplicated literal layout values"
     );
     assert!(
         field_renderer.contains(".with_size(gpui_component::Size::Size(px(")
-            && field_renderer.contains("field_typography.value_font_size")
-            && field_renderer.contains(".text_size(px(field_typography.value_font_size))"),
-        "live Input and fallback placeholder/value text must share the same form value font size"
+            && field_renderer.contains("field_metrics.input_font_size")
+            && field_renderer.contains(".text_size(px(field_metrics.input_font_size))"),
+        "live Input and fallback placeholder/value text must share the same form input font size"
     );
     assert!(
-        field_renderer.contains(".line_height(px(field_typography.value_line_height))"),
-        "live Input and fallback placeholder/value text must share the same form value line height"
+        field_renderer.contains(".line_height(px(field_metrics.input_line_height))"),
+        "live Input and fallback placeholder/value text must share the same form input line height"
     );
     assert!(
         !field_renderer.contains("typography.font_size_sm")
@@ -238,9 +249,14 @@ fn snippet_form_multiline_input_uses_chat_pattern_and_enter_routing() {
     let app = read("src/app_impl/menu_syntax_main_hint.rs");
     assert!(
         app.contains("field.multiline")
-            && app.contains(".auto_grow(2, 6)")
+            && app.contains("crate::components::FormFieldMetrics::MULTILINE_MIN_ROWS")
+            && app.contains("crate::components::FormFieldMetrics::MULTILINE_MAX_ROWS")
             && app.contains(".submit_on_enter(true)"),
         "multiline menu-syntax fields should use a two-row minimum and the agent-chat submit-on-enter pattern"
+    );
+    assert!(
+        !app.contains(".auto_grow(2, 6)"),
+        "multiline row bounds should come from shared form metrics"
     );
     assert!(
         app.contains("InputEvent::PressEnter { secondary }")
@@ -275,14 +291,14 @@ fn snippet_form_multiline_render_preserves_token_typography() {
 
     assert!(
         field_renderer.contains(
-            "let field_typography = menu_syntax_form_value_typography(theme, design_variant);"
-        ) && field_renderer.contains("field_typography.value_font_size")
-            && field_renderer.contains("field_typography.value_line_height"),
+            "let field_metrics =\n        crate::components::FormFieldMetrics::from_theme_and_design(theme, design_variant);"
+        ) && field_renderer.contains("field_metrics.input_font_size")
+            && field_renderer.contains("field_metrics.input_line_height"),
         "multiline height changes must preserve the theme form-field typography"
     );
     assert!(
-        field_renderer.contains("(field_typography.value_line_height * 2.0)")
-            && field_renderer.contains("(field_typography.value_line_height * 6.0)"),
+        field_renderer.contains("field_metrics.menu_syntax_multiline_min_height_px()")
+            && field_renderer.contains("field_metrics.menu_syntax_multiline_max_height_px()"),
         "multiline fields should render with a two-row minimum and six-row maximum"
     );
     assert!(

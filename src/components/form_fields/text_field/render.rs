@@ -1,6 +1,7 @@
 use gpui::*;
 
 use super::super::helpers::{char_len, slice_by_char_range};
+use super::super::FormFieldMetrics;
 use super::FormTextField;
 
 impl Focusable for FormTextField {
@@ -12,6 +13,7 @@ impl Focusable for FormTextField {
 impl Render for FormTextField {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = self.colors;
+        let metrics = FormFieldMetrics::from_colors(colors);
         let is_focused = self.focus_handle.is_focused(window);
         let display_text = self.display_text();
         let placeholder = self.field.placeholder.clone().unwrap_or_default();
@@ -68,7 +70,10 @@ impl Render for FormTextField {
         );
 
         // Build cursor element (2px width is fixed for crisp rendering)
-        let cursor_element = div().w(px(2.)).h(rems(1.125)).bg(colors.cursor);
+        let cursor_element = div()
+            .w(px(metrics.cursor_width_px))
+            .h(rems(metrics.cursor_height_rems))
+            .bg(colors.cursor);
 
         // Build text content based on value and focus state
         // IMPORTANT: cursor_pos is a CHAR index, not byte index.
@@ -138,7 +143,7 @@ impl Render for FormTextField {
             .flex()
             .flex_row()
             .items_center()
-            .min_h(rems(2.5))
+            .min_h(rems(metrics.text_input_min_height_rems))
             .cursor_text()
             .child(
                 div()
@@ -155,7 +160,7 @@ impl Render for FormTextField {
             .id(ElementId::Name(format!("form-field-{}", field_name).into()))
             .flex()
             .flex_col()
-            .gap(px(6.))
+            .gap(px(metrics.field_gap_px))
             .w_full();
 
         // Add label above input if present

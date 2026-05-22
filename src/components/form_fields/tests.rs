@@ -3,7 +3,7 @@
 //! These tests verify the UTF-8 char/byte conversion functions used by form fields.
 //! Separated from form_fields.rs due to GPUI macro recursion limit issues.
 
-use super::{form_field_type_allows_candidate_value, FormFieldColors};
+use super::{form_field_type_allows_candidate_value, FormFieldColors, FormFieldMetrics};
 use crate::designs::DesignColors;
 
 /// Count the number of Unicode scalar values (chars) in a string.
@@ -166,6 +166,63 @@ fn test_form_fields_use_theme_token_font_sizes() {
         all_sources.contains(".text_size(px(colors.label_font_size))"),
         "labels should use the shared label font-size token"
     );
+}
+
+#[test]
+fn test_form_fields_use_shared_metrics_for_layout_tokens() {
+    let colors_source = std::fs::read_to_string("src/components/form_fields/colors.rs")
+        .expect("failed to read src/components/form_fields/colors.rs");
+    let text_field_render_source =
+        std::fs::read_to_string("src/components/form_fields/text_field/render.rs")
+            .expect("failed to read src/components/form_fields/text_field/render.rs");
+    let text_area_render_source =
+        std::fs::read_to_string("src/components/form_fields/text_area/render.rs")
+            .expect("failed to read src/components/form_fields/text_area/render.rs");
+    let checkbox_source = std::fs::read_to_string("src/components/form_fields/checkbox.rs")
+        .expect("failed to read src/components/form_fields/checkbox.rs");
+
+    assert!(
+        colors_source.contains("pub struct FormFieldMetrics")
+            && colors_source.contains("from_theme_and_design")
+            && colors_source.contains("from_colors")
+            && colors_source.contains("MULTILINE_MIN_ROWS")
+            && colors_source.contains("MULTILINE_MAX_ROWS"),
+        "form field metrics should expose shared theme/design and color-backed constructors"
+    );
+    assert!(
+        text_field_render_source.contains("FormFieldMetrics::from_colors")
+            && text_field_render_source.contains("metrics.text_input_min_height_rems")
+            && text_field_render_source.contains("metrics.field_gap_px")
+            && text_field_render_source.contains("metrics.cursor_width_px")
+            && text_field_render_source.contains("metrics.cursor_height_rems"),
+        "text field layout should use shared form metrics"
+    );
+    assert!(
+        text_area_render_source.contains("FormFieldMetrics::from_colors")
+            && text_area_render_source.contains("metrics.text_area_height_rems(rows)")
+            && text_area_render_source.contains("metrics.field_gap_px")
+            && text_area_render_source.contains("metrics.cursor_width_px")
+            && text_area_render_source.contains("metrics.cursor_height_rems"),
+        "text area multiline sizing and label gap should use shared form metrics"
+    );
+    assert!(
+        checkbox_source.contains("FormFieldMetrics::from_colors")
+            && checkbox_source.contains("metrics.checkbox_box_size_rems")
+            && checkbox_source.contains("metrics.checkbox_gap_rems")
+            && checkbox_source.contains("metrics.checkbox_radius_px"),
+        "checkbox geometry should use shared form metrics"
+    );
+    assert!(
+        !text_field_render_source.contains(".min_h(rems(2.5))")
+            && !text_area_render_source.contains("(rows as f32) * 1.5 + 1.0")
+            && !checkbox_source.contains(".gap(rems(0.75))")
+            && !checkbox_source.contains(".rounded(px(4.))"),
+        "form renderers should not regress to duplicated literal layout values"
+    );
+
+    let metrics = FormFieldMetrics::from_colors(FormFieldColors::default());
+    assert_eq!(metrics.text_area_height_rems(2), 4.0);
+    assert_eq!(metrics.text_area_height_rems(6), 10.0);
 }
 
 #[test]
