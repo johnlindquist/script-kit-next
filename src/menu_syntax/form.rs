@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::capture_schema::{CaptureFieldSchema, FieldRequirement, ValidationResult};
 use super::history::{TagFrequency, ValueFrequency};
 use super::payload::{CaptureAlias, CaptureInvocation, DateRole};
+use super::snippet_scriptlet::{parse_snippet_scriptlet_capture, SnippetScriptletOperation};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +36,8 @@ pub struct MenuSyntaxFormFieldSnapshot {
     pub kind: MenuSyntaxFormFieldKind,
     pub value: String,
     pub placeholder: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub multiline: bool,
     pub required: bool,
     pub satisfied: bool,
     pub focused: bool,
@@ -244,15 +247,12 @@ fn normalize_tag_suggestion_value(value: &str) -> String {
 }
 
 fn serialize_capture_invocation(invocation: &CaptureInvocation) -> String {
+    if should_serialize_snippet_body_after_delimiter(invocation) {
+        return serialize_snippet_create_capture_invocation(invocation);
+    }
+
     let mut parts = Vec::new();
-    let head = if invocation.raw.starts_with('+') {
-        format!("+{}", invocation.target)
-    } else if matches!(invocation.alias_form, super::payload::CaptureAlias::Keyword) {
-        format!("{}:", invocation.target)
-    } else {
-        format!(";{}", invocation.target)
-    };
-    parts.push(head);
+    parts.push(capture_invocation_head(invocation));
 
     if !invocation.body.trim().is_empty() {
         parts.push(invocation.body.trim().to_string());
@@ -298,6 +298,81 @@ fn serialize_capture_invocation(invocation: &CaptureInvocation) -> String {
         if !key.is_empty() && !value.is_empty() {
             parts.push(format!("{key}:{}", quote_token_value(value)));
         }
+    }
+
+    parts.join(" ")
+}
+
+fn capture_invocation_head(invocation: &CaptureInvocation) -> String {
+    if invocation.raw.starts_with('+') {
+        format!("+{}", invocation.target)
+    } else if matches!(invocation.alias_form, super::payload::CaptureAlias::Keyword) {
+        format!("{}:", invocation.target)
+    } else {
+        format!(";{}", invocation.target)
+    }
+}
+
+fn should_serialize_snippet_body_after_delimiter(invocation: &CaptureInvocation) -> bool {
+    if !invocation.target.eq_ignore_ascii_case("snippet") {
+        return false;
+    }
+    parse_snippet_scriptlet_capture(invocation)
+        .map(|draft| matches!(draft.operation, SnippetScriptletOperation::Create))
+        .unwrap_or(false)
+}
+
+fn serialize_snippet_create_capture_invocation(invocation: &CaptureInvocation) -> String {
+    let mut parts = Vec::new();
+    parts.push(capture_invocation_head(invocation));
+
+    for tag in &invocation.tags {
+        let tag = tag.trim().trim_start_matches('#');
+        if !tag.is_empty() {
+            parts.push(format!("#{tag}"));
+        }
+    }
+    if let Some(priority) = invocation.priority {
+        parts.push(format!("p{priority}"));
+    }
+    for phrase in &invocation.date_phrases {
+        let source = phrase.source.trim();
+        if !source.is_empty() {
+            parts.push(format!(
+                "{}:{}",
+                date_role_token(phrase.role.clone()),
+                quote_token_value(source)
+            ));
+        }
+    }
+    if let Some(url) = invocation
+        .url
+        .as_deref()
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
+    {
+        parts.push(url.to_string());
+    }
+    if let Some(duration) = invocation
+        .duration
+        .as_deref()
+        .map(str::trim)
+        .filter(|duration| !duration.is_empty())
+    {
+        parts.push(format!("for:{}", quote_token_value(duration)));
+    }
+    for (key, value) in &invocation.kv {
+        let key = key.trim();
+        let value = value.trim();
+        if !key.is_empty() && !value.is_empty() {
+            parts.push(format!("{key}:{}", quote_token_value(value)));
+        }
+    }
+
+    let body = invocation.body.trim();
+    if !body.is_empty() {
+        parts.push("--".to_string());
+        parts.push(body.to_string());
     }
 
     parts.join(" ")
@@ -541,6 +616,27 @@ fn required_form_label(label: String, required: bool) -> String {
     }
 }
 
+fn menu_syntax_form_field_is_multiline(
+    schema: &CaptureFieldSchema,
+    requirement: &FieldRequirement,
+) -> bool {
+    matches!(requirement, FieldRequirement::Body) && schema.target.eq_ignore_ascii_case("snippet")
+}
+
+fn kv_placeholder_for_key(key: &str, schema_target: &str) -> String {
+    match key.to_ascii_lowercase().as_str() {
+        "name" if schema_target.eq_ignore_ascii_case("snippet") => "Snippet name".to_string(),
+        "keyword" if schema_target.eq_ignore_ascii_case("snippet") => {
+            "Expansion keyword".to_string()
+        }
+        "title" if schema_target.eq_ignore_ascii_case("link") => "Link title".to_string(),
+        "description" => "Optional description".to_string(),
+        "hidden" | "background" | "system" | "fallback" => "true or false".to_string(),
+        "tags" | "watch" => "Values separated by spaces or commas".to_string(),
+        _ => "Value".to_string(),
+    }
+}
+
 fn form_field_for_requirement(
     schema: &CaptureFieldSchema,
     invocation: &CaptureInvocation,
@@ -549,6 +645,7 @@ fn form_field_for_requirement(
 ) -> Option<MenuSyntaxFormFieldSnapshot> {
     let required = schema.required.contains(&requirement);
     let satisfied = requirement.is_satisfied(invocation);
+    let multiline = menu_syntax_form_field_is_multiline(schema, &requirement);
     let (id, label, kind, value, placeholder, suggestion_query, suggestions) = match &requirement {
         FieldRequirement::Body => (
             "body".to_string(),
@@ -673,7 +770,7 @@ fn form_field_for_requirement(
                 key.clone(),
                 MenuSyntaxFormFieldKind::KeyValue,
                 value.clone(),
-                format!("{key}:value"),
+                kv_placeholder_for_key(key, &schema.target),
                 active_completion_query(&value, false),
                 Vec::new(),
             )
@@ -690,7 +787,7 @@ fn form_field_for_requirement(
                 "Trigger".to_string(),
                 MenuSyntaxFormFieldKind::KeyValue,
                 value.clone(),
-                "trigger:shortcut or @existing".to_string(),
+                "Shortcut or @existing".to_string(),
                 active_completion_query(&value, false),
                 Vec::new(),
             )
@@ -707,7 +804,7 @@ fn form_field_for_requirement(
                 "name".to_string(),
                 MenuSyntaxFormFieldKind::KeyValue,
                 value.clone(),
-                "name:Snippet name".to_string(),
+                "Snippet name".to_string(),
                 active_completion_query(&value, false),
                 Vec::new(),
             )
@@ -721,6 +818,7 @@ fn form_field_for_requirement(
         kind,
         value,
         placeholder,
+        multiline,
         required,
         satisfied,
         focused: false,
@@ -869,6 +967,7 @@ mod tests {
             kind: MenuSyntaxFormFieldKind::Tags,
             value: "#e".to_string(),
             placeholder: String::new(),
+            multiline: false,
             required: false,
             satisfied: true,
             focused: true,
@@ -910,6 +1009,7 @@ mod tests {
             kind: MenuSyntaxFormFieldKind::Tags,
             value: "#food #".to_string(),
             placeholder: String::new(),
+            multiline: false,
             required: false,
             satisfied: true,
             focused: true,
@@ -977,6 +1077,7 @@ mod tests {
             kind: MenuSyntaxFormFieldKind::Priority,
             value: "p1".to_string(),
             placeholder: String::new(),
+            multiline: false,
             required: false,
             satisfied: true,
             focused: true,
@@ -1137,6 +1238,7 @@ mod tests {
             .expect("body field");
         assert_eq!(body.label, "Snippet");
         assert_eq!(body.placeholder, "Text to paste/expand");
+        assert!(body.multiline);
         assert!(snapshot
             .fields
             .iter()
@@ -1148,6 +1250,120 @@ mod tests {
             .any(|field| field.id == "kv:description"));
         assert!(!snapshot.fields.iter().any(|field| field.id == "trigger"));
         assert!(snapshot.can_submit);
+    }
+
+    #[test]
+    fn snippet_form_body_is_multiline_and_placeholder_clean() {
+        let schema = builtin_schema("snippet").expect("snippet schema");
+        let invocation = todo_invocation(
+            ";snippet Hello there! keyword:hi name:Hi description:Expands greeting",
+        );
+        let validation = validate(&invocation, &schema);
+        let snapshot = build_capture_form_snapshot(
+            &schema,
+            &invocation,
+            0,
+            &validation,
+            MenuSyntaxFormSuggestionPools::default(),
+        );
+
+        let body = snapshot
+            .fields
+            .iter()
+            .find(|field| field.id == "body")
+            .expect("body field");
+        assert_eq!(body.kind, MenuSyntaxFormFieldKind::Body);
+        assert!(body.multiline);
+        assert_eq!(body.placeholder, "Text to paste/expand");
+
+        let name = snapshot
+            .fields
+            .iter()
+            .find(|field| field.id == "kv:name")
+            .expect("name field");
+        assert_eq!(name.placeholder, "Snippet name");
+        let keyword = snapshot
+            .fields
+            .iter()
+            .find(|field| field.id == "kv:keyword")
+            .expect("keyword field");
+        assert_eq!(keyword.placeholder, "Expansion keyword");
+        let description = snapshot
+            .fields
+            .iter()
+            .find(|field| field.id == "kv:description")
+            .expect("description field");
+        assert_eq!(description.placeholder, "Optional description");
+
+        for field in snapshot
+            .fields
+            .iter()
+            .filter(|field| field.id.starts_with("kv:"))
+        {
+            let key = field.id.trim_start_matches("kv:");
+            assert!(
+                !field.placeholder.starts_with(&format!("{key}:")),
+                "{} placeholder should not duplicate its key prefix",
+                field.id
+            );
+            assert_ne!(field.placeholder, format!("{key}{}", ":value"));
+        }
+    }
+
+    #[test]
+    fn todo_body_remains_single_line() {
+        let schema = builtin_schema("todo").expect("todo schema");
+        let invocation = todo_invocation(";todo Renew passport");
+        let validation = validate(&invocation, &schema);
+        let snapshot = build_capture_form_snapshot(
+            &schema,
+            &invocation,
+            0,
+            &validation,
+            MenuSyntaxFormSuggestionPools::default(),
+        );
+
+        let body = snapshot
+            .fields
+            .iter()
+            .find(|field| field.id == "body")
+            .expect("body field");
+        assert_eq!(body.kind, MenuSyntaxFormFieldKind::Body);
+        assert!(!body.multiline);
+    }
+
+    #[test]
+    fn editing_snippet_body_preserves_internal_newlines() {
+        let invocation = todo_invocation(";snippet add name:\"Email reply\" keyword:reply");
+        let body = "Hello John,\n\nThanks for the update.\nBest,\nMe";
+        let rewritten = apply_capture_form_field_edit(&invocation, "body", body)
+            .expect("body edit should serialize");
+
+        assert!(rewritten.contains(" -- "));
+        let reparsed = todo_invocation(&rewritten);
+        let draft = parse_snippet_scriptlet_capture(&reparsed).expect("snippet draft");
+        assert_eq!(draft.operation, SnippetScriptletOperation::Create);
+        assert_eq!(draft.body.as_deref(), Some(body));
+        assert_eq!(draft.name.as_deref(), Some("Email reply"));
+        assert_eq!(draft.keyword.as_deref(), Some("reply"));
+    }
+
+    #[test]
+    fn editing_snippet_metadata_keeps_body_after_delimiter() {
+        let invocation = todo_invocation(";snippet add keyword:reply");
+        let body = "Hello,\n\nThis body mentions keyword:inside.\nBye";
+        let with_body = apply_capture_form_field_edit(&invocation, "body", body)
+            .expect("body edit should serialize");
+        let with_name =
+            apply_capture_form_field_edit(&todo_invocation(&with_body), "kv:name", "Email body")
+                .expect("name edit should serialize");
+
+        assert!(with_name.contains(" -- "));
+        let reparsed = todo_invocation(&with_name);
+        let draft = parse_snippet_scriptlet_capture(&reparsed).expect("snippet draft");
+        assert_eq!(draft.body.as_deref(), Some(body));
+        assert_eq!(draft.name.as_deref(), Some("Email body"));
+        assert_eq!(draft.keyword.as_deref(), Some("reply"));
     }
 
     #[test]
