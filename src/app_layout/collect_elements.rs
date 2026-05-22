@@ -248,6 +248,22 @@ impl ScriptListApp {
                 .into()
             }
 
+            AppView::FooterGalleryView {
+                filter,
+                selected_index,
+            } => {
+                let rows = Self::footer_gallery_visible_row_labels(filter);
+                self.collect_named_rows(
+                    "footer-gallery-filter",
+                    filter.clone(),
+                    "footer-gallery",
+                    &rows,
+                    *selected_index,
+                    limit,
+                )
+                .into()
+            }
+
             AppView::AcpHistoryView {
                 filter,
                 selected_index,

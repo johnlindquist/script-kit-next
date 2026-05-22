@@ -730,6 +730,7 @@ impl ScriptListApp {
             dictation_history_scroll_handle: ScrollHandle::new(),
             notes_browse_scroll_handle: ScrollHandle::new(),
             design_gallery_scroll_handle: UniformListScrollHandle::new(),
+            footer_gallery_scroll_handle: UniformListScrollHandle::new(),
             file_search_scroll_handle: UniformListScrollHandle::new(),
             theme_chooser_list_state: ListState::new(0, ListAlignment::Top, px(100.)).measure_all(),
             file_search_loading: false,

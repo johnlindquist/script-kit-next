@@ -278,6 +278,17 @@ impl ScriptListApp {
                 clear_hover: false,
                 resize: true,
             },
+            FilterableView::FooterGallery => FilterableRoutePlan {
+                next_view: AppView::FooterGalleryView {
+                    filter: String::new(),
+                    selected_index: 0,
+                },
+                reset_shared_filter: false,
+                pending_placeholder: None,
+                pending_focus: None,
+                clear_hover: false,
+                resize: true,
+            },
             FilterableView::ClipboardHistory => {
                 self.cached_clipboard_entries = crate::clipboard_history::get_cached_entries(100);
                 self.focused_clipboard_entry_id = self

@@ -443,6 +443,10 @@ fn capture_form_scroll_owner_and_tab_reveal_are_natural() {
     assert!(
         !reveal.contains("target_y = gpui::px(-((index as f32) * APPROX_FIELD_HEIGHT_PX))")
             && reveal.contains("REVEAL_MARGIN_PX")
+            && reveal.contains(
+                "const APPROX_VISIBLE_FORM_HEIGHT_PX: f32 = APPROX_FIELD_HEIGHT_PX * 3.0;"
+            )
+            && reveal.contains("const REVEAL_MARGIN_PX: f32 = 20.0;")
             && reveal.contains("field_top")
             && reveal.contains("field_bottom")
             && reveal.contains("current_scroll_y")
@@ -807,8 +811,9 @@ fn handler_form_control_keys_preserve_standard_form_navigation() {
     assert!(
         key_body.contains("handle_menu_syntax_form_control_key_input(")
             && key_body.contains("key_char")
+            && key_body.contains(".or_else(||")
             && key_body.contains("is_control"),
-        "handler form text input must route control keys first and reject literal control characters like tab"
+        "handler form text input must route control keys first, consume printable key fallbacks without key_char, and reject literal control characters like tab"
     );
 
     let elements = read("src/app_layout/collect_elements.rs");
@@ -874,6 +879,14 @@ fn live_input_field_updates_do_not_reset_existing_focus_selection() {
     assert!(
         update_body.contains("if !sync_from_focused_live_input {\n                    self.focus_menu_syntax_form_input_at(index, &form, window, cx);\n                }"),
         "updates coming from the already-focused live input must not re-run focus_menu_syntax_form_input_at and reset selection/scroll"
+    );
+    assert!(
+        update_body.contains("self.focus_menu_syntax_form_input_preserving_selection(\n                        index, &form, window, cx,\n                    );"),
+        "updates coming from the already-focused live input must restore field focus without resetting the cursor"
+    );
+    assert!(
+        update_body.contains("self.defer_menu_syntax_form_input_focus_restore(\n                        index,\n                        resolved_field_id.clone(),\n                        window,\n                        cx,\n                    );"),
+        "focused live-input updates must defer a second focus restore so Shift+Enter cannot fall back to the main input after serialized text sync"
     );
     assert!(
         update_body.contains("self.ensure_menu_syntax_form_inputs(&form, window, cx);")

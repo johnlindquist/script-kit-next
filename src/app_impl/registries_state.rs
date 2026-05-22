@@ -170,6 +170,7 @@ impl ScriptListApp {
             AppView::WindowSwitcherView { .. } => "WindowSwitcherView",
             AppView::BrowserTabsView { .. } => "BrowserTabsView",
             AppView::DesignGalleryView { .. } => "DesignGalleryView",
+            AppView::FooterGalleryView { .. } => "FooterGalleryView",
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => "DesignExplorerView",
             AppView::ScratchPadView { .. } => "ScratchPadView",

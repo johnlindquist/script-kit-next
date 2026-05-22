@@ -463,6 +463,18 @@ impl ScriptListApp {
                 }
                 return; // Don't run main menu filter logic
             }
+            AppView::FooterGalleryView {
+                filter,
+                selected_index,
+            } => {
+                self.filter_text = new_text.clone();
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
+                    self.footer_gallery_scroll_handle
+                        .scroll_to_item(0, ScrollStrategy::Top);
+                    cx.notify();
+                }
+                return; // Don't run main menu filter logic
+            }
             AppView::ThemeChooserView {
                 filter,
                 selected_index,
@@ -1274,6 +1286,7 @@ mod tests {
             "AppView::WindowSwitcherView",
             "AppView::BrowserTabsView",
             "AppView::DesignGalleryView",
+            "AppView::FooterGalleryView",
             "AppView::ThemeChooserView",
             "AppView::FileSearchView",
         ];

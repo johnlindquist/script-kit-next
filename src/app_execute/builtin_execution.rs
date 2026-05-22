@@ -1031,6 +1031,7 @@ enum SurfaceOpenBuiltinAction {
     Favorites,
     AppLauncher,
     DesignGallery,
+    FooterGallery,
     AiChat,
     EmojiPicker,
     Webcam,
@@ -1050,6 +1051,7 @@ impl SurfaceOpenBuiltinAction {
             builtins::BuiltInFeature::Favorites => Some(Self::Favorites),
             builtins::BuiltInFeature::AppLauncher => Some(Self::AppLauncher),
             builtins::BuiltInFeature::DesignGallery => Some(Self::DesignGallery),
+            builtins::BuiltInFeature::FooterGallery => Some(Self::FooterGallery),
             builtins::BuiltInFeature::AiChat => Some(Self::AiChat),
             builtins::BuiltInFeature::EmojiPicker => Some(Self::EmojiPicker),
             builtins::BuiltInFeature::Webcam => Some(Self::Webcam),
@@ -1070,6 +1072,7 @@ impl SurfaceOpenBuiltinAction {
             Self::Favorites => "open_favorites_view",
             Self::AppLauncher => "open_app_launcher",
             Self::DesignGallery => "open_design_gallery",
+            Self::FooterGallery => "open_footer_gallery",
             Self::AiChat => "open_ai_harness_dispatched",
             Self::EmojiPicker => "open_emoji_picker",
             Self::Webcam => "open_webcam",
@@ -1089,6 +1092,7 @@ impl SurfaceOpenBuiltinAction {
             Self::Favorites => "Opening Favorites browse view",
             Self::AppLauncher => "Opening App Launcher",
             Self::DesignGallery => "Opening Design Gallery",
+            Self::FooterGallery => "Opening Footer Gallery",
             Self::AiChat => "Opening Agent Chat",
             Self::EmojiPicker => "Opening Emoji Picker",
             Self::Webcam => "Opening Webcam",
@@ -4147,6 +4151,11 @@ impl ScriptListApp {
                     .expect("surface open arm should only receive DesignGallery");
                 self.execute_surface_open_builtin(open_action, dctx, cx)
             }
+            builtins::BuiltInFeature::FooterGallery => {
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive FooterGallery");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
+            }
             #[cfg(feature = "storybook")]
             builtins::BuiltInFeature::DesignExplorer => {
                 let design_action = DesignExplorerBuiltinAction::from_feature(&entry.feature)
@@ -4522,6 +4531,24 @@ impl ScriptListApp {
                         selected_index: 0,
                     },
                     "Search designs...",
+                    false,
+                    cx,
+                );
+            }
+            SurfaceOpenBuiltinAction::FooterGallery => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    action.log_message()
+                );
+
+                self.open_builtin_filterable_view(
+                    AppView::FooterGalleryView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search footer variations...",
                     false,
                     cx,
                 );

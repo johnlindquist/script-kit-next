@@ -29,6 +29,7 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::BrowserTabs => "Browser Tabs".to_string(),
         builtins::BuiltInFeature::SyncToGithub => "Sync to GitHub".to_string(),
         builtins::BuiltInFeature::DesignGallery => "Design Gallery".to_string(),
+        builtins::BuiltInFeature::FooterGallery => "Footer Gallery".to_string(),
         #[cfg(feature = "storybook")]
         builtins::BuiltInFeature::DesignExplorer => "Design Explorer".to_string(),
         builtins::BuiltInFeature::AiChat => "Agent Chat".to_string(),

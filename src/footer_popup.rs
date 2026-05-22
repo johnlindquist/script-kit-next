@@ -42,6 +42,8 @@ const FOOTER_ACTIVE_DOT_HALF_CYCLE_SECONDS: f64 = 1.1;
 #[cfg(target_os = "macos")]
 const FOOTER_RUN_SLOT_MIN_WIDTH: f64 = 96.0;
 #[cfg(target_os = "macos")]
+const FOOTER_RUN_SLOT_MAX_WIDTH: f64 = 176.0;
+#[cfg(target_os = "macos")]
 const FOOTER_ACTIONS_SLOT_WIDTH: f64 = 96.0;
 #[cfg(target_os = "macos")]
 const FOOTER_AI_SLOT_WIDTH: f64 = 56.0;
@@ -1063,7 +1065,9 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterB
     let mut items = Vec::new();
     let mut total_item_width = 0.0_f64;
     for (index, button_cfg) in buttons.iter().enumerate() {
-        let item = make_footer_hint_item(button_cfg, font, text_color);
+        let max_item_width =
+            footer_hint_max_item_width(button_cfg.action, hints_bounds.size.width, buttons);
+        let item = make_footer_hint_item(button_cfg, font, text_color, max_item_width);
         if item == nil {
             continue;
         }
@@ -1078,17 +1082,22 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterB
 
     let mut x = (hints_bounds.size.width - total_item_width).max(0.0);
     for (item, target_width, action, enabled) in items {
+        let item_y = crate::components::footer_chrome::FOOTER_BUTTON_VERTICAL_INSET_PX as f64;
+        let item_height =
+            crate::components::footer_chrome::footer_button_height(hints_bounds.size.height as f32)
+                as f64;
         let frame = NSRect::new(
-            NSPoint::new(x, 0.0),
-            NSSize::new(target_width, hints_bounds.size.height),
+            NSPoint::new(x, item_y),
+            NSSize::new(target_width, item_height),
         );
         tracing::debug!(
             target: "script_kit::footer_popup",
             event = "native_footer_item_layout",
             action = footer_action_key(action),
             x,
+            y = item_y,
             width = target_width,
-            height = hints_bounds.size.height,
+            height = item_height,
             enabled,
             "Laid out native footer item slot"
         );
@@ -1096,6 +1105,32 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterB
         let _: () = msg_send![hints_view, addSubview: item];
         x += target_width + FOOTER_HINT_ITEM_GAP;
     }
+}
+
+#[cfg(target_os = "macos")]
+fn footer_hint_max_item_width(
+    action: FooterAction,
+    hints_width: f64,
+    buttons: &[FooterButtonConfig],
+) -> Option<f64> {
+    if !matches!(action, FooterAction::Run) {
+        return None;
+    }
+
+    let gap_width = buttons.len().saturating_sub(1) as f64 * FOOTER_HINT_ITEM_GAP;
+    let reserved_width = buttons
+        .iter()
+        .filter(|button| !matches!(button.action, FooterAction::Run))
+        .map(|button| footer_hint_slot_width(button.action))
+        .sum::<f64>()
+        + gap_width;
+
+    Some(
+        (hints_width - reserved_width)
+            .max(FOOTER_RUN_SLOT_MIN_WIDTH)
+            .min(FOOTER_RUN_SLOT_MAX_WIDTH)
+            .round(),
+    )
 }
 
 #[cfg(target_os = "macos")]
@@ -1133,14 +1168,65 @@ fn footer_hint_content_layout(
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_color: id) -> id {
+fn footer_selected_background_rgba(
+    action: FooterAction,
+    chrome: &crate::theme::AppChromeColors,
+) -> u32 {
+    if matches!(action, FooterAction::Actions) {
+        chrome.hover_rgba
+    } else {
+        chrome.selection_rgba
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn footer_selected_background_rgba_for_actions_button(
+    is_actions_button: cocoa::base::BOOL,
+    chrome: &crate::theme::AppChromeColors,
+) -> u32 {
+    if is_actions_button == YES {
+        footer_selected_background_rgba(FooterAction::Actions, chrome)
+    } else {
+        chrome.selection_rgba
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn footer_hint_label_widths(
+    natural_label_width: f64,
+    label_padding_x: f64,
+    label_chip_height: f64,
+    max_item_width: Option<f64>,
+    keys_view_width: f64,
+) -> (f64, f64) {
+    let max_label_chip_width = max_item_width.map(|max_width| {
+        (max_width - (FOOTER_HINT_PADDING_X * 2.0) - FOOTER_HINT_KEY_LABEL_GAP - keys_view_width)
+            .max(label_chip_height)
+    });
+    let label_chip_width = (natural_label_width + label_padding_x * 2.0)
+        .max(label_chip_height)
+        .min(max_label_chip_width.unwrap_or(f64::MAX));
+    let label_text_width = (label_chip_width - label_padding_x * 2.0).max(0.0);
+    (label_chip_width, label_text_width)
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn make_footer_hint_item(
+    button_cfg: &FooterButtonConfig,
+    font: id,
+    text_color: id,
+    max_item_width: Option<f64>,
+) -> id {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     use objc::{class, msg_send, sel, sel_impl};
+
+    let item_height =
+        crate::components::footer_chrome::footer_button_height(footer_height() as f32) as f64;
 
     let container: id = msg_send![class!(NSView), alloc];
     let container: id = msg_send![
         container,
-        initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, footer_height()))
+        initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, item_height))
     ];
     if container == nil {
         return nil;
@@ -1158,10 +1244,15 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
 
     let theme = crate::theme::get_cached_theme();
     let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-    let border_hex = theme.colors.ui.border;
-    let chip_border_color = ns_color_from_hex_with_alpha(border_hex, 0x50 as f64 / 255.0);
-    let chip_bg_color = ns_color_from_hex_with_alpha(border_hex, 0x15 as f64 / 255.0);
-
+    let keycap_border_color = ns_color_from_hex_with_alpha(
+        theme.colors.text.primary,
+        crate::components::footer_chrome::footer_keycap_border_alpha(&theme, button_cfg.selected)
+            as f64,
+    );
+    let labelcap_border_color = ns_color_from_hex_with_alpha(
+        theme.colors.text.primary,
+        crate::theme::opacity::OPACITY_HIDDEN as f64,
+    );
     let key_font: id = font;
 
     let shortcut_keys = crate::components::footer_chrome::split_footer_shortcut(button_cfg.key);
@@ -1169,7 +1260,7 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
     let keys_view: id = msg_send![class!(NSView), alloc];
     let keys_view: id = msg_send![
         keys_view,
-        initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, footer_height()))
+        initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, item_height))
     ];
     if keys_view == nil {
         return nil;
@@ -1197,16 +1288,10 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
                 setCornerRadius: crate::components::footer_chrome::FOOTER_KEYCAP_RADIUS_PX as f64
             ];
             let _: () = msg_send![chip_layer, setBorderWidth: 1.0_f64];
-            if chip_border_color != nil {
-                let cg_border: id = msg_send![chip_border_color, CGColor];
+            if keycap_border_color != nil {
+                let cg_border: id = msg_send![keycap_border_color, CGColor];
                 if cg_border != nil {
                     let _: () = msg_send![chip_layer, setBorderColor: cg_border];
-                }
-            }
-            if chip_bg_color != nil {
-                let cg_bg: id = msg_send![chip_bg_color, CGColor];
-                if cg_bg != nil {
-                    let _: () = msg_send![chip_layer, setBackgroundColor: cg_bg];
                 }
             }
         }
@@ -1238,7 +1323,7 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
         ];
         let _: () = msg_send![chip_view, addSubview: glyph_field];
 
-        let chip_y = ((footer_height() - chip_height) / 2.0).round();
+        let chip_y = ((item_height - chip_height) / 2.0).round();
         let chip_x = keys_view_width;
 
         let _: () = msg_send![
@@ -1261,31 +1346,77 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
         keys_view,
         setFrame: NSRect::new(
             NSPoint::new(0.0, 0.0),
-            NSSize::new(keys_view_width, footer_height())
+            NSSize::new(keys_view_width, item_height)
         )
     ];
 
     let label_size: NSSize = msg_send![label_field, fittingSize];
+    let label_padding_x = crate::components::footer_chrome::FOOTER_KEYCAP_PADDING_X_PX as f64;
+    let label_chip_height = crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX as f64;
+    let (label_chip_width, label_text_width) = footer_hint_label_widths(
+        label_size.width,
+        label_padding_x,
+        label_chip_height,
+        max_item_width,
+        keys_view_width,
+    );
+    let label_view: id = msg_send![class!(NSView), alloc];
+    let label_view: id = msg_send![
+        label_view,
+        initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(label_chip_width, label_chip_height))
+    ];
+    if label_view == nil {
+        return nil;
+    }
+    let _: () = msg_send![label_view, setWantsLayer: YES];
+    let label_layer: id = msg_send![label_view, layer];
+    if label_layer != nil {
+        let _: () = msg_send![
+            label_layer,
+            setCornerRadius: crate::components::footer_chrome::FOOTER_KEYCAP_RADIUS_PX as f64
+        ];
+        let _: () = msg_send![label_layer, setBorderWidth: 1.0_f64];
+        if labelcap_border_color != nil {
+            let cg_border: id = msg_send![labelcap_border_color, CGColor];
+            if cg_border != nil {
+                let _: () = msg_send![label_layer, setBorderColor: cg_border];
+            }
+        }
+    }
+
+    let label_field_x = ((label_chip_width - label_text_width) / 2.0).round();
+    let label_field_y = ((label_chip_height - label_size.height) / 2.0).round();
+    let _: () = msg_send![
+        label_field,
+        setFrame: NSRect::new(
+            NSPoint::new(label_field_x, label_field_y),
+            NSSize::new(label_text_width, label_size.height)
+        )
+    ];
+    let _: () = msg_send![label_view, addSubview: label_field];
+
     let min_content_width = keys_view_width + (FOOTER_HINT_PADDING_X * 2.0) + 12.0;
-    let content_width = label_size.width + FOOTER_HINT_KEY_LABEL_GAP + keys_view_width;
+    let content_width = label_chip_width + FOOTER_HINT_KEY_LABEL_GAP + keys_view_width;
     let intrinsic_width = content_width + (FOOTER_HINT_PADDING_X * 2.0);
-    let item_width = footer_hint_slot_width(button_cfg.action)
+    let mut item_width = footer_hint_slot_width(button_cfg.action)
         .max(min_content_width)
         .max(intrinsic_width);
-    let item_height = footer_height();
-    let label_y = ((item_height - label_size.height) / 2.0).round();
+    if let Some(max_item_width) = max_item_width {
+        item_width = item_width.min(max_item_width.max(min_content_width));
+    }
+    let label_y = ((item_height - label_chip_height) / 2.0).round();
     let (label_x, key_x, _) = footer_hint_content_layout(
         button_cfg.action,
         item_width,
-        label_size.width,
+        label_chip_width,
         keys_view_width,
     );
 
     let _: () = msg_send![
-        label_field,
+        label_view,
         setFrame: NSRect::new(
             NSPoint::new(label_x, label_y),
-            NSSize::new(label_size.width, label_size.height)
+            NSSize::new(label_chip_width, label_chip_height)
         )
     ];
     let _: () = msg_send![
@@ -1300,7 +1431,8 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
     if container_layer != nil {
         let _: () = msg_send![container_layer, setCornerRadius: FOOTER_HINT_RADIUS];
         if button_cfg.selected {
-            let selected_ns: id = ns_color_from_rgba(chrome.selection_rgba);
+            let selected_ns: id =
+                ns_color_from_rgba(footer_selected_background_rgba(button_cfg.action, &chrome));
             if selected_ns != nil {
                 let cg: id = msg_send![selected_ns, CGColor];
                 if cg != nil {
@@ -1354,7 +1486,7 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
         }
     }
 
-    let _: () = msg_send![container, addSubview: label_field];
+    let _: () = msg_send![container, addSubview: label_view];
     let _: () = msg_send![container, addSubview: keys_view];
     if button != nil {
         let _: () = msg_send![container, addSubview: button];
@@ -1409,8 +1541,9 @@ unsafe fn make_footer_hint_text_field(
 #[cfg(test)]
 mod footer_layout_tests {
     use super::{
-        footer_active_dot_hex, footer_dot_hex, footer_hint_content_layout, footer_hint_slot_width,
-        FooterAction, FooterDotStatus,
+        footer_active_dot_hex, footer_dot_hex, footer_hint_content_layout,
+        footer_hint_label_widths, footer_hint_max_item_width, footer_hint_slot_width,
+        footer_selected_background_rgba, FooterAction, FooterButtonConfig, FooterDotStatus,
     };
 
     #[test]
@@ -1457,6 +1590,74 @@ mod footer_layout_tests {
         assert_eq!(long.1, 118.0);
         assert_eq!(96.0 - (short.1 + 18.0), 4.0);
         assert_eq!(140.0 - (long.1 + 18.0), 4.0);
+    }
+
+    #[test]
+    fn actions_selected_background_uses_hover_opacity() {
+        let theme = crate::theme::Theme::dark_default();
+        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+
+        assert_eq!(
+            footer_selected_background_rgba(FooterAction::Actions, &chrome),
+            chrome.hover_rgba
+        );
+        assert_eq!(
+            footer_selected_background_rgba(FooterAction::Run, &chrome),
+            chrome.selection_rgba
+        );
+        assert_ne!(chrome.hover_rgba, chrome.selection_rgba);
+    }
+
+    #[test]
+    fn run_hint_width_is_capped_to_stable_slot() {
+        let buttons = vec![
+            FooterButtonConfig::new(
+                FooterAction::Run,
+                "↵",
+                "Open Screen Recording Permission Assistant",
+            ),
+            FooterButtonConfig::new(FooterAction::Ai, "⌘↵", "Agent"),
+            FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions"),
+        ];
+
+        assert_eq!(
+            footer_hint_max_item_width(FooterAction::Run, 480.0, &buttons),
+            Some(176.0)
+        );
+        assert_eq!(
+            footer_hint_max_item_width(FooterAction::Run, 640.0, &buttons),
+            Some(176.0)
+        );
+        assert_eq!(
+            footer_hint_max_item_width(FooterAction::Run, 120.0, &buttons),
+            Some(96.0)
+        );
+        assert_eq!(
+            footer_hint_max_item_width(FooterAction::Ai, 480.0, &buttons),
+            None
+        );
+    }
+
+    #[test]
+    fn run_hint_label_text_width_truncates_inside_remaining_slot() {
+        let (chip_width, text_width) =
+            footer_hint_label_widths(360.0, 5.0, 18.0, Some(180.0), 20.0);
+
+        assert_eq!(chip_width, 149.0);
+        assert_eq!(text_width, 139.0);
+        assert!(text_width < 360.0);
+    }
+
+    #[test]
+    fn footer_buttons_keep_two_pixel_vertical_inset() {
+        assert_eq!(
+            crate::components::footer_chrome::FOOTER_BUTTON_VERTICAL_INSET_PX,
+            2.0
+        );
+        assert_eq!(
+            crate::components::footer_chrome::footer_button_height(32.0),
+            28.0
+        );
     }
 
     #[test]
@@ -1659,6 +1860,10 @@ fn footer_button_class() -> *const objc::runtime::Class {
                     as extern "C" fn(&Object, Sel) -> cocoa::base::BOOL,
             );
             decl.add_method(
+                sel!(mouseDown:),
+                footer_button_mouse_down as extern "C" fn(&Object, Sel, id),
+            );
+            decl.add_method(
                 sel!(resetCursorRects),
                 footer_button_reset_cursor_rects as extern "C" fn(&Object, Sel),
             );
@@ -1769,6 +1974,119 @@ extern "C" fn footer_button_update_tracking_areas(
 }
 
 #[cfg(target_os = "macos")]
+unsafe fn set_footer_button_text_opacity(view: id, opacity: f64) {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    if view == nil {
+        return;
+    }
+
+    let theme = crate::theme::get_cached_theme();
+    let color = ns_color_from_hex_with_alpha(theme.colors.text.primary, opacity);
+    if color == nil {
+        return;
+    }
+
+    let is_text_field: cocoa::base::BOOL = msg_send![view, isKindOfClass: class!(NSTextField)];
+    if is_text_field == YES {
+        let _: () = msg_send![view, setTextColor: color];
+    }
+
+    let subviews: id = msg_send![view, subviews];
+    if subviews == nil {
+        return;
+    }
+    let count: usize = msg_send![subviews, count];
+    for i in 0..count {
+        let child: id = msg_send![subviews, objectAtIndex: i];
+        set_footer_button_text_opacity(child, opacity);
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn apply_footer_button_background(button: id, rgba_value: Option<u32>) {
+    use objc::{msg_send, sel, sel_impl};
+
+    if button == nil {
+        return;
+    }
+
+    let superview: id = msg_send![button, superview];
+    if superview == nil {
+        return;
+    }
+
+    let layer: id = msg_send![superview, layer];
+    if layer == nil {
+        return;
+    }
+
+    if let Some(rgba_value) = rgba_value {
+        let ns_color: id = ns_color_from_rgba(rgba_value);
+        if ns_color != nil {
+            let cg: id = msg_send![ns_color, CGColor];
+            if cg != nil {
+                let _: () = msg_send![layer, setBackgroundColor: cg];
+            }
+        }
+    } else {
+        let null_color: id = std::ptr::null_mut();
+        let _: () = msg_send![layer, setBackgroundColor: null_color];
+    }
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_button_mouse_down(
+    this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    event: id,
+) {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    // SAFETY: `this` is our NSButton subclass. Actions opens a persistent popup,
+    // so it owns selected visuals on mouse down instead of waiting for AppKit's
+    // mouse-up action cycle to briefly clear and restore the state.
+    unsafe {
+        let enabled: cocoa::base::BOOL = *this.get_ivar::<cocoa::base::BOOL>("_enabled");
+        if enabled != YES {
+            let this_id = this as *const _ as id;
+            let _: () = msg_send![super(this_id, class!(NSButton)), mouseDown: event];
+            return;
+        }
+
+        let is_actions: cocoa::base::BOOL = *this.get_ivar::<cocoa::base::BOOL>("_isActionsButton");
+        if is_actions != YES {
+            let this_id = this as *const _ as id;
+            let _: () = msg_send![super(this_id, class!(NSButton)), mouseDown: event];
+            return;
+        }
+
+        let button_id = this as *const _ as id;
+        if let Some(obj) = button_id.as_mut() {
+            obj.set_ivar::<cocoa::base::BOOL>("_selected", YES);
+        }
+        let theme = crate::theme::get_cached_theme();
+        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+        apply_footer_button_background(
+            button_id,
+            Some(footer_selected_background_rgba(
+                FooterAction::Actions,
+                &chrome,
+            )),
+        );
+        let superview: id = msg_send![button_id, superview];
+        set_footer_button_text_opacity(superview, 1.0);
+
+        tracing::debug!(
+            target: "script_kit::footer_popup",
+            event = "native_footer_actions_mouse_down_selected",
+            "Selected native footer Actions on mouse down"
+        );
+        send_footer_action(FooterAction::Actions);
+    }
+}
+
+#[cfg(target_os = "macos")]
 extern "C" fn footer_button_mouse_entered(
     this: &objc::runtime::Object,
     _: objc::runtime::Sel,
@@ -1801,13 +2119,8 @@ extern "C" fn footer_button_mouse_entered(
         }
         let theme = crate::theme::get_cached_theme();
         let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-        let hover_ns: id = ns_color_from_rgba(chrome.hover_rgba);
-        if hover_ns != nil {
-            let cg: id = msg_send![hover_ns, CGColor];
-            if cg != nil {
-                let _: () = msg_send![layer, setBackgroundColor: cg];
-            }
-        }
+        apply_footer_button_background(this as *const _ as id, Some(chrome.hover_rgba));
+        set_footer_button_text_opacity(superview, 1.0);
     }
 }
 
@@ -1847,17 +2160,16 @@ extern "C" fn footer_button_mouse_exited(
         if selected == YES || (is_actions == YES && actions_window_open) {
             let theme = crate::theme::get_cached_theme();
             let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-            let selected_ns: id = ns_color_from_rgba(chrome.selection_rgba);
-            if selected_ns != nil {
-                let cg: id = msg_send![selected_ns, CGColor];
-                if cg != nil {
-                    let _: () = msg_send![layer, setBackgroundColor: cg];
-                }
-            }
+            apply_footer_button_background(
+                this as *const _ as id,
+                Some(footer_selected_background_rgba_for_actions_button(
+                    is_actions, &chrome,
+                )),
+            );
         } else {
-            let null_color: id = std::ptr::null_mut();
-            let _: () = msg_send![layer, setBackgroundColor: null_color];
+            apply_footer_button_background(this as *const _ as id, None);
         }
+        set_footer_button_text_opacity(superview, crate::theme::opacity::OPACITY_TEXT_MUTED as f64);
     }
 }
 

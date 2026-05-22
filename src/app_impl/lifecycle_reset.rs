@@ -367,6 +367,9 @@ impl ScriptListApp {
             AppView::DesignGalleryView { filter, .. } if !filter.is_empty() => {
                 Some("DesignGallery filter")
             }
+            AppView::FooterGalleryView { filter, .. } if !filter.is_empty() => {
+                Some("FooterGallery filter")
+            }
             AppView::ThemeChooserView { filter, .. } if !filter.is_empty() => {
                 Some("ThemeChooser filter")
             }
@@ -494,6 +497,14 @@ impl ScriptListApp {
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
                 self.design_gallery_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+            }
+            AppView::FooterGalleryView {
+                filter,
+                selected_index,
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
+                self.footer_gallery_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
             }
             AppView::ThemeChooserView {

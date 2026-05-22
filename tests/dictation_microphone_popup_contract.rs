@@ -63,12 +63,16 @@ fn popup_automation_rows_are_safe_and_batch_selectable() {
 }
 
 #[test]
-fn overlay_label_uses_full_microphone_display_label_not_tiny_keycap() {
+fn overlay_mic_control_uses_select_label_and_icon_not_keycap_value() {
     assert!(
-        WINDOW.contains("fn current_microphone_label()")
-            && WINDOW.contains("microphone_display_label(&item.title)")
+        WINDOW.contains("const ACTION_MIC_LABEL: &str = \"Select Mic\";")
+            && WINDOW.contains("const MIC_ICON_PATH: &str = concat!(")
+            && WINDOW.contains("fn render_mic_action_chip_content(")
+            && WINDOW.contains(".external_path(MIC_ICON_PATH)")
+            && !WINDOW.contains("fn current_microphone_label()")
+            && !WINDOW.contains("FooterHintKeyMode::TextValue")
             && !WINDOW.contains("fn current_microphone_keycap()")
             && !WINDOW.contains("const MAX_CHARS: usize = 8"),
-        "overlay mic label must reflect the chosen microphone instead of the old truncated keycap"
+        "overlay mic control must render as a Select Mic icon action, not a keyboard-like value chip"
     );
 }

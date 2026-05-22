@@ -1415,6 +1415,7 @@ impl ScriptListApp {
                 | AppView::AppLauncherView { .. }
                 | AppView::WindowSwitcherView { .. }
                 | AppView::DesignGalleryView { .. }
+                | AppView::FooterGalleryView { .. }
                 | AppView::ThemeChooserView { .. }
                 | AppView::EmojiPickerView { .. }
                 | AppView::BrowseKitsView { .. }
@@ -3012,6 +3013,7 @@ impl ScriptListApp {
             | AppView::NotesBrowseView { .. }
             | AppView::CurrentAppCommandsView { .. }
             | AppView::DesignGalleryView { .. }
+            | AppView::FooterGalleryView { .. }
             | AppView::CreationFeedback { .. }
             | AppView::ScriptIssuesView { .. }
             | AppView::SdkReferenceView { .. }
@@ -4306,6 +4308,7 @@ impl ScriptListApp {
             AppView::NamingPrompt { .. } => "NamingPrompt".to_string(),
             AppView::CreationFeedback { .. } => "CreationFeedback".to_string(),
             AppView::DesignGalleryView { .. } => "DesignGallery".to_string(),
+            AppView::FooterGalleryView { .. } => "FooterGallery".to_string(),
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => "DesignExplorer".to_string(),
             AppView::ActionsDialog => "ActionsDialog".to_string(),
@@ -4357,6 +4360,7 @@ impl ScriptListApp {
             | AppView::FavoritesBrowseView { filter, .. }
             | AppView::CurrentAppCommandsView { filter, .. }
             | AppView::DesignGalleryView { filter, .. }
+            | AppView::FooterGalleryView { filter, .. }
             | AppView::AcpHistoryView { filter, .. }
             | AppView::BrowserHistoryView { filter, .. }
             | AppView::DictationHistoryView { filter, .. }

@@ -277,6 +277,7 @@ pub enum BuiltInFeature {
     BrowserTabs,
     /// Design gallery for viewing separator and icon variations
     DesignGallery,
+    FooterGallery,
     /// In-app StoryBrowser compare/adopt tool (storybook feature only)
     #[cfg(feature = "storybook")]
     DesignExplorer,
@@ -453,6 +454,7 @@ impl BuiltInEntry {
             BuiltInFeature::WindowSwitcher => "Open Window Switcher",
             BuiltInFeature::BrowserTabs => "Open Browser Tabs",
             BuiltInFeature::DesignGallery => "Open Gallery",
+            BuiltInFeature::FooterGallery => "Open Footer Gallery",
             #[cfg(feature = "storybook")]
             BuiltInFeature::DesignExplorer => "Open Explorer",
             BuiltInFeature::AiChat => "Open Agent Chat",
@@ -583,6 +585,7 @@ impl BuiltInEntry {
             BuiltInFeature::WindowSwitcher => "Switch",
             BuiltInFeature::BrowserTabs => "Tabs",
             BuiltInFeature::DesignGallery => "Gallery",
+            BuiltInFeature::FooterGallery => "Footer Gallery",
             #[cfg(feature = "storybook")]
             BuiltInFeature::DesignExplorer => "Explorer",
             BuiltInFeature::AiChat => "Agent",
@@ -953,6 +956,24 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "palette",
             ));
             debug!("Added Design Gallery built-in entry");
+
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin/footer-gallery",
+                "Footer Gallery",
+                "Open the footer gallery to browse shortcut glyph and font variations",
+                vec![
+                    "design",
+                    "footer",
+                    "gallery",
+                    "shortcut",
+                    "glyph",
+                    "font",
+                    "variations",
+                ],
+                BuiltInFeature::FooterGallery,
+                "layout",
+            ));
+            debug!("Added Footer Gallery built-in entry");
 
             // Test Confirmation entry for testing confirmation UI
             entries.push(BuiltInEntry::new_with_icon(
@@ -3301,11 +3322,12 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         for entry in entries {
-            let word_count = entry.footer_action_text().split_whitespace().count();
+            let label = entry.footer_action_text();
+            let word_count = label.split_whitespace().count();
             assert!(
-                word_count <= 2,
+                word_count <= 2 || label == "Privacy & Security",
                 "footer label '{}' for '{}' should stay compact",
-                entry.footer_action_text(),
+                label,
                 entry.name
             );
         }

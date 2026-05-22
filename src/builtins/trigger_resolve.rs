@@ -179,6 +179,7 @@ fn render_variant(id: TriggerBuiltin) -> &'static str {
     // Hand-rolled to avoid relying on `Debug` output formatting.
     match id {
         TriggerBuiltin::DesignGallery => "DesignGallery",
+        TriggerBuiltin::FooterGallery => "FooterGallery",
         TriggerBuiltin::ClipboardHistory => "ClipboardHistory",
         TriggerBuiltin::AppLauncher => "AppLauncher",
         TriggerBuiltin::FileSearch => "FileSearch",

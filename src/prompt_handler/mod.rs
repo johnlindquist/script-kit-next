@@ -3433,6 +3433,25 @@ impl ScriptListApp {
                             selected_value,
                         )
                     }
+                    AppView::FooterGalleryView {
+                        filter,
+                        selected_index,
+                    } => {
+                        let dataset_count = crate::FOOTER_VARIATIONS.len();
+                        let visible_rows = Self::footer_gallery_visible_row_labels(filter);
+                        let visible_count = visible_rows.len();
+                        let selected_value = visible_rows.get(*selected_index).cloned();
+                        (
+                            "footerGallery".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            dataset_count,
+                            visible_count,
+                            *selected_index as i32,
+                            selected_value,
+                        )
+                    }
                     #[cfg(feature = "storybook")]
                     AppView::DesignExplorerView { .. } => (
                         "designExplorer".to_string(),

@@ -316,6 +316,13 @@ impl ScriptListApp {
                 Self::sync_builtin_query_state(filter, selected_index, text);
                 true
             }
+            AppView::FooterGalleryView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
             AppView::ThemeChooserView {
                 filter,
                 selected_index,

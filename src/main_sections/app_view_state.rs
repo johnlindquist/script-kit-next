@@ -143,6 +143,11 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Showing footer gallery (shortcut glyph and font variations)
+    FooterGalleryView {
+        filter: String,
+        selected_index: usize,
+    },
     /// Showing the in-app storybook compare view for design exploration
     #[cfg(feature = "storybook")]
     DesignExplorerView {
@@ -351,6 +356,7 @@ pub(crate) enum SurfaceKind {
     ProcessManager,
     CurrentAppCommands,
     DesignGallery,
+    FooterGallery,
     #[cfg(feature = "storybook")]
     DesignExplorer,
     UtilityChildContent,
@@ -703,6 +709,7 @@ impl AppView {
             AppView::ProcessManagerView { .. } => "ProcessManagerView",
             AppView::CurrentAppCommandsView { .. } => "CurrentAppCommandsView",
             AppView::DesignGalleryView { .. } => "DesignGalleryView",
+            AppView::FooterGalleryView { .. } => "FooterGalleryView",
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => "DesignExplorerView",
             AppView::ScratchPadView { .. } => "ScratchPadView",
@@ -763,6 +770,7 @@ impl AppView {
             AppView::ProcessManagerView { .. } => SurfaceKind::ProcessManager,
             AppView::CurrentAppCommandsView { .. } => SurfaceKind::CurrentAppCommands,
             AppView::DesignGalleryView { .. } => SurfaceKind::DesignGallery,
+            AppView::FooterGalleryView { .. } => SurfaceKind::FooterGallery,
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => SurfaceKind::DesignExplorer,
             AppView::ScratchPadView { .. } | AppView::QuickTerminalView { .. } => {
@@ -841,6 +849,7 @@ impl AppView {
             AppView::WindowSwitcherView { .. } => Some("window_switcher"),
             AppView::BrowserTabsView { .. } => Some("browser_tabs"),
             AppView::DesignGalleryView { .. } => Some("design_gallery"),
+            AppView::FooterGalleryView { .. } => Some("footer_gallery"),
             AppView::ScratchPadView { .. } => Some("scratch_pad"),
             AppView::ThemeChooserView { .. } => Some("theme_chooser"),
             AppView::ProcessManagerView { .. } => Some("process_manager"),
@@ -1148,6 +1157,20 @@ impl SurfaceKind {
                 SplitPreviewVisual,
                 standard,
                 "designGallery",
+            ),
+            SurfaceKind::FooterGallery => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    UtilityWorkspace,
+                    LauncherFilter,
+                    NoPersistentPreview,
+                ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
+                standard,
+                "footerGallery",
             ),
             #[cfg(feature = "storybook")]
             SurfaceKind::DesignExplorer => LauncherSurfaceContract::new(

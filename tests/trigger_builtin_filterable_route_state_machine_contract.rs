@@ -95,6 +95,7 @@ fn filterable_view_preparation_preserves_route_specific_side_effects() {
 
     for required in [
         "FilterableView::DesignGallery",
+        "FilterableView::FooterGallery",
         "FilterableView::ClipboardHistory",
         "FilterableView::AppLauncher",
         "FilterableView::BrowserTabs",

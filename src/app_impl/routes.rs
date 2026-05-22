@@ -59,6 +59,7 @@ pub enum AppRoute {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FilterableView {
     DesignGallery,
+    FooterGallery,
     ClipboardHistory,
     AppLauncher,
     BrowserTabs,
@@ -73,6 +74,7 @@ impl FilterableView {
     /// target of *some* `TriggerBuiltin`.
     pub const ALL: &'static [FilterableView] = &[
         FilterableView::DesignGallery,
+        FilterableView::FooterGallery,
         FilterableView::ClipboardHistory,
         FilterableView::AppLauncher,
         FilterableView::BrowserTabs,
@@ -89,6 +91,7 @@ impl FilterableView {
     pub const fn name(self) -> &'static str {
         match self {
             FilterableView::DesignGallery => "DesignGallery",
+            FilterableView::FooterGallery => "FooterGallery",
             FilterableView::ClipboardHistory => "ClipboardHistory",
             FilterableView::AppLauncher => "AppLauncher",
             FilterableView::BrowserTabs => "BrowserTabs",
@@ -163,6 +166,9 @@ pub const fn plan_trigger_builtin_route(id: TriggerBuiltin) -> AppRoute {
     match id {
         TriggerBuiltin::DesignGallery => {
             AppRoute::ShowFilterableView(FilterableView::DesignGallery)
+        }
+        TriggerBuiltin::FooterGallery => {
+            AppRoute::ShowFilterableView(FilterableView::FooterGallery)
         }
         TriggerBuiltin::ClipboardHistory => {
             AppRoute::ShowFilterableView(FilterableView::ClipboardHistory)
@@ -257,8 +263,10 @@ mod tests {
             ("builtin/browse-kit-store", 1),
             ("builtin/choose-theme", 1),
             ("builtin/manage-installed-kits", 1),
+            ("builtin/mini-main-window", 1),
             ("builtin/new-script", 1),
             ("builtin/quick-terminal", 1),
+            ("builtin/script-kit-selfie", 1),
             ("builtin/sdk-reference", 1),
             ("builtin/settings", 1),
             ("builtin/vault", 1),
