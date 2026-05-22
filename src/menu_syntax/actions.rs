@@ -1,5 +1,8 @@
 use crate::menu_syntax::capture_schema::{CaptureFieldSchema, FieldRequirement};
 use crate::menu_syntax::payload::{AdvancedQuery, CaptureInvocation};
+use crate::menu_syntax::snippet_scriptlet::{
+    parse_snippet_scriptlet_capture, SnippetLookup, SnippetScriptletOperation,
+};
 
 /// State the actions surface needs to discriminate which Power Syntax actions
 /// to offer. Borrows the live parse so callers (the Cmd+K actions dialog) do
@@ -43,6 +46,11 @@ pub enum MenuSyntaxActionKind {
     ChangeHandler,
     OpenCapturesBrowser { target: String },
     DefaultTime { phrase: String },
+    SnippetInsertField { key: String },
+    SnippetCopyGeneratedMarkdown,
+    SnippetCopyMarkdownPath,
+    SnippetPrepareUpdateSelected,
+    SnippetPrepareDeleteSelected,
     SaveFilterAsNamedSearch,
     AddToPinnedFilters,
     OpenAdvancedFilterBuilder,
@@ -75,6 +83,10 @@ fn capture_actions(
     payload: &CaptureInvocation,
     schema: Option<&CaptureFieldSchema>,
 ) -> Vec<MenuSyntaxAction> {
+    if target.eq_ignore_ascii_case("snippet") {
+        return snippet_capture_actions(payload);
+    }
+
     let mut actions = vec![
         MenuSyntaxAction {
             id: "capture.cancel".into(),
@@ -125,6 +137,123 @@ fn capture_actions(
                 kind: MenuSyntaxActionKind::DefaultTime {
                     phrase: "today 9am".into(),
                 },
+                enabled: true,
+            });
+        }
+    }
+
+    actions
+}
+
+fn snippet_capture_actions(payload: &CaptureInvocation) -> Vec<MenuSyntaxAction> {
+    let draft = parse_snippet_scriptlet_capture(payload).ok();
+    let selected_ref = draft.as_ref().and_then(|draft| match &draft.lookup {
+        Some(SnippetLookup::SelectedRef(id)) if !id.trim().is_empty() => Some(id.as_str()),
+        _ => None,
+    });
+    let has_name_or_selection = draft
+        .as_ref()
+        .map(|draft| {
+            draft
+                .name
+                .as_deref()
+                .map(|name| !name.trim().is_empty())
+                .unwrap_or(false)
+                || selected_ref.is_some()
+        })
+        .unwrap_or(false);
+    let has_keyword_or_selection = draft
+        .as_ref()
+        .map(|draft| {
+            draft
+                .keyword
+                .as_deref()
+                .map(|keyword| !keyword.trim().is_empty())
+                .unwrap_or(false)
+                || selected_ref.is_some()
+        })
+        .unwrap_or(false);
+    let can_preview_generated_markdown = draft
+        .as_ref()
+        .map(|draft| {
+            draft
+                .name
+                .as_deref()
+                .map(|name| !name.trim().is_empty())
+                .unwrap_or(false)
+                && draft
+                    .body
+                    .as_deref()
+                    .map(|body| !body.trim().is_empty())
+                    .unwrap_or(false)
+        })
+        .unwrap_or(false);
+
+    let mut actions = vec![
+        MenuSyntaxAction {
+            id: "capture.cancel".into(),
+            label: "Cancel without saving".into(),
+            kind: MenuSyntaxActionKind::Cancel,
+            enabled: true,
+        },
+        MenuSyntaxAction {
+            id: "snippet.copy_command".into(),
+            label: "Copy Snippet Command".into(),
+            kind: MenuSyntaxActionKind::CopyFilterExpression,
+            enabled: !payload.raw.trim().is_empty(),
+        },
+    ];
+
+    if !has_name_or_selection {
+        actions.push(MenuSyntaxAction {
+            id: "snippet.insert_name_field".into(),
+            label: "Insert Name Field".into(),
+            kind: MenuSyntaxActionKind::SnippetInsertField { key: "name".into() },
+            enabled: true,
+        });
+    }
+
+    if !has_keyword_or_selection {
+        actions.push(MenuSyntaxAction {
+            id: "snippet.insert_keyword_field".into(),
+            label: "Insert Keyword Field".into(),
+            kind: MenuSyntaxActionKind::SnippetInsertField {
+                key: "keyword".into(),
+            },
+            enabled: true,
+        });
+    }
+
+    actions.extend([
+        MenuSyntaxAction {
+            id: "snippet.copy_generated_markdown".into(),
+            label: "Copy Generated Markdown".into(),
+            kind: MenuSyntaxActionKind::SnippetCopyGeneratedMarkdown,
+            enabled: can_preview_generated_markdown,
+        },
+        MenuSyntaxAction {
+            id: "snippet.copy_markdown_path".into(),
+            label: "Copy snippets.md Path".into(),
+            kind: MenuSyntaxActionKind::SnippetCopyMarkdownPath,
+            enabled: true,
+        },
+    ]);
+
+    if selected_ref.is_some() {
+        let operation = draft.as_ref().map(|draft| &draft.operation);
+        if !matches!(operation, Some(SnippetScriptletOperation::Update)) {
+            actions.push(MenuSyntaxAction {
+                id: "snippet.prepare_update_selected".into(),
+                label: "Prepare Update for Selected Snippet".into(),
+                kind: MenuSyntaxActionKind::SnippetPrepareUpdateSelected,
+                enabled: true,
+            });
+        }
+        if !matches!(operation, Some(SnippetScriptletOperation::Delete)) {
+            actions.push(MenuSyntaxAction {
+                id: "snippet.prepare_delete_selected".into(),
+                label: "Prepare Delete for Selected Snippet".into(),
+                kind: MenuSyntaxActionKind::SnippetPrepareDeleteSelected,
                 enabled: true,
             });
         }
@@ -331,6 +460,77 @@ mod tests {
             MenuSyntaxActionKind::OpenCapturesBrowser { target } => assert_eq!(target, "note"),
             other => panic!("expected OpenCapturesBrowser, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn snippet_capture_state_returns_authoring_actions() {
+        let payload = invocation_with_body("snippet", "add -- const value = 1");
+        let state = MenuSyntaxActionState::CaptureComposer {
+            target: "snippet",
+            payload: &payload,
+            schema: None,
+        };
+        let actions = current_actions(&state);
+
+        assert_eq!(
+            ids(&actions),
+            vec![
+                "capture.cancel",
+                "snippet.copy_command",
+                "snippet.insert_name_field",
+                "snippet.insert_keyword_field",
+                "snippet.copy_generated_markdown",
+                "snippet.copy_markdown_path",
+            ]
+        );
+        assert!(
+            !actions
+                .iter()
+                .find(|action| action.id == "snippet.copy_generated_markdown")
+                .unwrap()
+                .enabled,
+            "preview stays disabled until name and body are both present"
+        );
+    }
+
+    #[test]
+    fn snippet_capture_with_name_and_keyword_enables_markdown_preview() {
+        let payload =
+            invocation_with_body("snippet", "add name:Fetch keyword:fj -- const value = 1");
+        let state = MenuSyntaxActionState::CaptureComposer {
+            target: "snippet",
+            payload: &payload,
+            schema: None,
+        };
+        let actions = current_actions(&state);
+
+        assert!(!ids(&actions).contains(&"snippet.insert_name_field"));
+        assert!(!ids(&actions).contains(&"snippet.insert_keyword_field"));
+        assert!(
+            actions
+                .iter()
+                .find(|action| action.id == "snippet.copy_generated_markdown")
+                .unwrap()
+                .enabled
+        );
+    }
+
+    #[test]
+    fn snippet_capture_with_selected_ref_offers_update_delete_preparation() {
+        let payload = invocation_with_body("snippet", "add @snippet:fj -- const value = 1");
+        let state = MenuSyntaxActionState::CaptureComposer {
+            target: "snippet",
+            payload: &payload,
+            schema: None,
+        };
+        let actions = current_actions(&state);
+
+        assert!(ids(&actions).contains(&"snippet.prepare_update_selected"));
+        assert!(ids(&actions).contains(&"snippet.prepare_delete_selected"));
+        assert!(
+            !ids(&actions).contains(&"snippet.insert_name_field"),
+            "selected ref satisfies name/selection workflow"
+        );
     }
 
     #[test]

@@ -8,6 +8,7 @@
 // back without surprise.
 
 use crate::menu_syntax::actions::{MenuSyntaxActionKind, MenuSyntaxActionState};
+use crate::menu_syntax::snippet_scriptlet::{parse_snippet_scriptlet_capture, SnippetLookup};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActionEffect {
@@ -70,6 +71,50 @@ pub fn apply_safe_effect(
             }
         }
 
+        (MenuSyntaxActionState::CaptureComposer { payload, .. }, SnippetInsertField { key })
+            if payload.target.eq_ignore_ascii_case("snippet") =>
+        {
+            ActionEffect::SetFilterText {
+                new_text: insert_snippet_metadata_field(&payload.raw, key),
+            }
+        }
+
+        (MenuSyntaxActionState::CaptureComposer { payload, .. }, SnippetCopyGeneratedMarkdown)
+            if payload.target.eq_ignore_ascii_case("snippet") =>
+        {
+            let content = parse_snippet_scriptlet_capture(payload)
+                .and_then(|draft| {
+                    crate::scriptlets::snippet_markdown_store::render_snippet_draft_markdown_preview(
+                        &draft,
+                    )
+                })
+                .unwrap_or_else(|_| payload.raw.clone());
+            ActionEffect::WriteClipboard { content }
+        }
+
+        (MenuSyntaxActionState::CaptureComposer { payload, .. }, SnippetCopyMarkdownPath)
+            if payload.target.eq_ignore_ascii_case("snippet") =>
+        {
+            ActionEffect::WriteClipboard {
+                content: crate::scriptlets::snippet_markdown_store::default_snippets_markdown_path(
+                )
+                .display()
+                .to_string(),
+            }
+        }
+
+        (MenuSyntaxActionState::CaptureComposer { payload, .. }, SnippetPrepareUpdateSelected)
+            if payload.target.eq_ignore_ascii_case("snippet") =>
+        {
+            snippet_prepare_selected_effect(payload, "update")
+        }
+
+        (MenuSyntaxActionState::CaptureComposer { payload, .. }, SnippetPrepareDeleteSelected)
+            if payload.target.eq_ignore_ascii_case("snippet") =>
+        {
+            snippet_prepare_selected_effect(payload, "delete")
+        }
+
         _ => ActionEffect::Unsupported,
     }
 }
@@ -83,6 +128,111 @@ fn format_command_filter(head: &str, argv: &[String]) -> String {
     out
 }
 
+fn insert_snippet_metadata_field(raw: &str, key: &str) -> String {
+    let trimmed = raw.trim_end();
+    let token = format!("{}:", key.trim());
+    if token == ":" {
+        return trimmed.to_string();
+    }
+    if let Some(idx) = find_double_dash_token(trimmed) {
+        let (before, after) = trimmed.split_at(idx);
+        let before = before.trim_end();
+        if before.is_empty() {
+            format!("{token} {after}")
+        } else {
+            format!("{before} {token} {after}")
+        }
+    } else if trimmed.is_empty() {
+        token
+    } else {
+        format!("{trimmed} {token}")
+    }
+}
+
+fn snippet_prepare_selected_effect(
+    payload: &crate::menu_syntax::CaptureInvocation,
+    operation: &str,
+) -> ActionEffect {
+    let Ok(draft) = parse_snippet_scriptlet_capture(payload) else {
+        return ActionEffect::Unsupported;
+    };
+    let Some(SnippetLookup::SelectedRef(id)) = draft.lookup.as_ref() else {
+        return ActionEffect::Unsupported;
+    };
+    let id = id.trim();
+    if id.is_empty() {
+        return ActionEffect::Unsupported;
+    }
+    if operation == "delete" {
+        return ActionEffect::SetFilterText {
+            new_text: format!(";snippet delete @snippet:{id}"),
+        };
+    }
+
+    let mut parts = vec![format!(";snippet {operation} @snippet:{id}")];
+    parts.extend(snippet_metadata_tokens(&draft.metadata));
+    if let Some(body) = draft
+        .body
+        .as_deref()
+        .map(str::trim)
+        .filter(|body| !body.is_empty())
+    {
+        parts.push("--".to_string());
+        parts.push(body.to_string());
+    }
+    ActionEffect::SetFilterText {
+        new_text: parts.join(" "),
+    }
+}
+
+fn snippet_metadata_tokens(metadata: &serde_json::Map<String, serde_json::Value>) -> Vec<String> {
+    metadata
+        .iter()
+        .filter_map(|(key, value)| snippet_metadata_token(key, value))
+        .collect()
+}
+
+fn snippet_metadata_token(key: &str, value: &serde_json::Value) -> Option<String> {
+    let key = key.trim();
+    if key.is_empty() {
+        return None;
+    }
+    let value = match value {
+        serde_json::Value::String(value) => value.trim().to_string(),
+        serde_json::Value::Bool(value) => value.to_string(),
+        serde_json::Value::Array(values) => values
+            .iter()
+            .filter_map(|value| value.as_str().map(str::trim))
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>()
+            .join(","),
+        _ => return None,
+    };
+    if value.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "{key}:{}",
+        crate::menu_syntax::quote_for_filter_value(&value)
+    ))
+}
+
+fn find_double_dash_token(input: &str) -> Option<usize> {
+    let bytes = input.as_bytes();
+    let mut i = 0usize;
+    while i + 1 < bytes.len() {
+        if bytes[i] == b'-'
+            && bytes[i + 1] == b'-'
+            && (i == 0 || bytes[i - 1].is_ascii_whitespace())
+            && (i + 2 == bytes.len() || bytes[i + 2].is_ascii_whitespace())
+        {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -90,8 +240,12 @@ mod tests {
     use crate::menu_syntax::payload::{AdvancedQuery, CaptureAlias, CaptureInvocation};
 
     fn capture(raw: &str) -> CaptureInvocation {
+        capture_for_target(raw, "cal")
+    }
+
+    fn capture_for_target(raw: &str, target: &str) -> CaptureInvocation {
         CaptureInvocation {
-            target: "cal".to_string(),
+            target: target.to_string(),
             alias_form: CaptureAlias::CapturePrefix,
             body: "Design review".to_string(),
             tags: vec![],
@@ -188,7 +342,7 @@ mod tests {
         assert_eq!(
             apply_safe_effect(&state, &MenuSyntaxActionKind::CopyFilterExpression),
             ActionEffect::WriteClipboard {
-                content: ">deploy --prod --dry-run".to_string(),
+                content: "!deploy --prod --dry-run".to_string(),
             }
         );
     }
@@ -253,7 +407,7 @@ mod tests {
         assert_eq!(
             apply_safe_effect(&state, &MenuSyntaxActionKind::EditCommandArgv),
             ActionEffect::SetFilterText {
-                new_text: ">deploy ".to_string(),
+                new_text: "!deploy ".to_string(),
             }
         );
     }
@@ -289,6 +443,11 @@ mod tests {
             MenuSyntaxActionKind::OpenCapturesBrowser {
                 target: "cal".into(),
             },
+            MenuSyntaxActionKind::SnippetInsertField { key: "name".into() },
+            MenuSyntaxActionKind::SnippetCopyGeneratedMarkdown,
+            MenuSyntaxActionKind::SnippetCopyMarkdownPath,
+            MenuSyntaxActionKind::SnippetPrepareUpdateSelected,
+            MenuSyntaxActionKind::SnippetPrepareDeleteSelected,
             MenuSyntaxActionKind::SaveFilterAsNamedSearch,
             MenuSyntaxActionKind::AddToPinnedFilters,
             MenuSyntaxActionKind::OpenAdvancedFilterBuilder,
@@ -302,5 +461,103 @@ mod tests {
                 "kind {kind:?} should be Unsupported in this pass"
             );
         }
+    }
+
+    #[test]
+    fn snippet_insert_name_field_inserts_before_body_delimiter() {
+        let inv = capture_for_target(";snippet keyword:fj -- const value = 1", "snippet");
+        let state = MenuSyntaxActionState::CaptureComposer {
+            target: "snippet",
+            payload: &inv,
+            schema: None,
+        };
+
+        assert_eq!(
+            apply_safe_effect(
+                &state,
+                &MenuSyntaxActionKind::SnippetInsertField { key: "name".into() }
+            ),
+            ActionEffect::SetFilterText {
+                new_text: ";snippet keyword:fj name: -- const value = 1".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn snippet_copy_generated_markdown_uses_snippets_markdown_format() {
+        let inv = capture_for_target(
+            ";snippet name:Fetch keyword:fj description:Fetches -- const value = 1",
+            "snippet",
+        );
+        let state = MenuSyntaxActionState::CaptureComposer {
+            target: "snippet",
+            payload: &inv,
+            schema: None,
+        };
+
+        match apply_safe_effect(&state, &MenuSyntaxActionKind::SnippetCopyGeneratedMarkdown) {
+            ActionEffect::WriteClipboard { content } => {
+                assert!(content.contains("## Fetch"));
+                assert!(content.contains("keyword: fj"));
+                assert!(content.contains("description: Fetches"));
+                assert!(content.contains("const value = 1"));
+            }
+            other => panic!("expected markdown clipboard, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn snippet_copy_markdown_path_uses_scriptkit_scriptlets_file() {
+        let inv = capture_for_target(";snippet name:Fetch -- const value = 1", "snippet");
+        let state = MenuSyntaxActionState::CaptureComposer {
+            target: "snippet",
+            payload: &inv,
+            schema: None,
+        };
+
+        match apply_safe_effect(&state, &MenuSyntaxActionKind::SnippetCopyMarkdownPath) {
+            ActionEffect::WriteClipboard { content } => {
+                assert!(content.ends_with("plugins/main/scriptlets/snippets.md"));
+            }
+            other => panic!("expected path clipboard, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn snippet_prepare_delete_selected_rewrites_to_non_destructive_delete_command() {
+        let inv = capture_for_target(";snippet add @snippet:fj -- const value = 1", "snippet");
+        let state = MenuSyntaxActionState::CaptureComposer {
+            target: "snippet",
+            payload: &inv,
+            schema: None,
+        };
+
+        assert_eq!(
+            apply_safe_effect(&state, &MenuSyntaxActionKind::SnippetPrepareDeleteSelected),
+            ActionEffect::SetFilterText {
+                new_text: ";snippet delete @snippet:fj".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn snippet_prepare_update_selected_preserves_metadata_and_body() {
+        let inv = capture_for_target(
+            ";snippet add @snippet:fj description:Fetches -- const value = 1",
+            "snippet",
+        );
+        let state = MenuSyntaxActionState::CaptureComposer {
+            target: "snippet",
+            payload: &inv,
+            schema: None,
+        };
+
+        assert_eq!(
+            apply_safe_effect(&state, &MenuSyntaxActionKind::SnippetPrepareUpdateSelected),
+            ActionEffect::SetFilterText {
+                new_text: ";snippet update @snippet:fj description:\"Fetches\" -- const value = 1"
+                    .to_string()
+            }
+        );
     }
 }
