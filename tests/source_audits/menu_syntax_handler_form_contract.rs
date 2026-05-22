@@ -144,6 +144,49 @@ fn form_mode_hides_ask_ai_hint_and_uses_accent_focus_style() {
 }
 
 #[test]
+fn handler_form_field_typography_is_design_token_owned_and_focus_stable() {
+    let render = read("src/render_script_list/mod.rs");
+    let field_start = render
+        .find("fn render_menu_syntax_form_field(")
+        .expect("handler form field renderer must exist");
+    let form_start = render
+        .find("fn render_menu_syntax_form(")
+        .expect("handler form renderer must exist");
+    let field_renderer = &render[field_start..form_start];
+
+    assert!(
+        render.contains("fn menu_syntax_form_value_typography(")
+            && render.contains("get_tokens(design_variant).typography()")
+            && render.contains("typography.font_size_sm"),
+        "handler form field typography must be owned by existing design typography tokens"
+    );
+    assert!(
+        field_renderer
+            .contains("let field_typography = menu_syntax_form_value_typography(design_variant);"),
+        "field renderer must resolve typography once, outside the focus/live branches"
+    );
+    assert!(
+        field_renderer
+            .contains(".with_size(gpui_component::Size::Size(px(field_typography.font_size)))")
+            && field_renderer.contains(".text_size(px(field_typography.font_size))"),
+        "live Input and fallback placeholder/value text must share the same form value font size"
+    );
+    assert!(
+        field_renderer.contains(".line_height(px(field_typography.line_height))"),
+        "live Input and fallback placeholder/value text must share the same form value line height"
+    );
+    assert!(
+        !field_renderer.contains("theme.get_fonts().ui_size + 2.0")
+            && !field_renderer.contains("text_size(px(13.0))"),
+        "handler form field value typography must not regress to the focused 18px input or ad hoc 13px fallback split"
+    );
+    assert!(
+        !field_renderer.contains(".when(field.focused"),
+        "handler form field typography must not be applied through a focus-only override"
+    );
+}
+
+#[test]
 fn capture_form_required_state_moves_to_labels_and_header_chips_are_empty() {
     let form = read("src/menu_syntax/form.rs");
     assert!(
