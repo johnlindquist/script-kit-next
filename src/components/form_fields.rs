@@ -32,7 +32,7 @@ mod text_area;
 mod text_field;
 
 pub use checkbox::FormCheckbox;
-pub use colors::FormFieldColors;
+pub use colors::{FormFieldColors, FormFieldMetrics};
 pub(crate) use helpers::form_field_type_allows_candidate_value;
 pub use state::FormFieldState;
 pub use text_area::FormTextArea;

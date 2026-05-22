@@ -2,6 +2,7 @@ use gpui::*;
 use gpui_component::scroll::ScrollableElement;
 
 use super::super::helpers::{char_len, slice_by_char_range};
+use super::super::FormFieldMetrics;
 use super::FormTextArea;
 
 impl Focusable for FormTextArea {
@@ -13,6 +14,7 @@ impl Focusable for FormTextArea {
 impl Render for FormTextArea {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = self.colors;
+        let metrics = FormFieldMetrics::from_colors(colors);
         let is_focused = self.focus_handle.is_focused(window);
         let display_text = self.value.clone();
         let placeholder = self.field.placeholder.clone().unwrap_or_default();
@@ -26,8 +28,7 @@ impl Render for FormTextArea {
         let border_color = surface.border;
         let bg_color = surface.background;
 
-        // Calculate height based on rows (1.5rem per row + 1rem padding)
-        let height_rems = (rows as f32) * 1.5 + 1.0;
+        let height_rems = metrics.text_area_height_rems(rows);
 
         let field_name = self.field.name.clone();
         let field_name_for_log = field_name.clone();
@@ -65,7 +66,10 @@ impl Render for FormTextArea {
             },
         );
 
-        let cursor_element = div().w(px(2.)).h(rems(1.125)).bg(colors.cursor);
+        let cursor_element = div()
+            .w(px(metrics.cursor_width_px))
+            .h(rems(metrics.cursor_height_rems))
+            .bg(colors.cursor);
 
         // Build text content with the same visible cursor affordance as text fields.
         let text_content: Div = if has_value {
@@ -122,7 +126,7 @@ impl Render for FormTextArea {
             ))
             .flex()
             .flex_col()
-            .gap(px(6.))
+            .gap(px(metrics.field_gap_px))
             .w_full();
 
         // Add label above textarea if present
