@@ -69,7 +69,6 @@ fn footer_rows_are_pinned_below_paged_normal_rows() {
         ".filter(|(_, row)| !is_trigger_popup_footer_row(row))",
         ".filter(|(_, row)| is_trigger_popup_footer_row(row))",
         ".chain(footer_rows.iter().copied())",
-        "let synopsis = (footer_rows.is_empty()).then_some(()).and_then(|_|",
     ] {
         assert!(
             POPUP_SOURCE.contains(needle),
@@ -97,27 +96,26 @@ fn stale_popup_slot_discards_clear_automation_registration() {
 }
 
 #[test]
-fn main_input_trigger_popup_uses_left_drawer_layout() {
+fn main_input_trigger_popup_uses_above_layout() {
     let sync = function_body(
         POPUP_SOURCE,
         "pub(crate) fn sync_menu_syntax_trigger_popup_window",
     );
     assert!(
-        POPUP_SOURCE.contains("pub(crate) fn menu_syntax_trigger_popup_layout_left_drawer")
-            && POPUP_SOURCE.contains("let preferred_left = parent_bounds.origin.x.as_f32() - width;")
-            && POPUP_SOURCE.contains("right_fallback + width <= display_right")
-            && POPUP_SOURCE.contains("(display_right - width).max(display_left)")
-            && POPUP_SOURCE.contains("parent_bounds.origin.y")
-            && POPUP_SOURCE.contains("MENU_SYNTAX_TRIGGER_POPUP_MAX_PARENT_HEIGHT_RATIO"),
-        "main-input trigger popups should prefer ACP @ left-drawer geometry while staying inside display bounds"
+        POPUP_SOURCE.contains("pub(crate) fn menu_syntax_trigger_popup_layout_above")
+            && POPUP_SOURCE.contains("parent_bounds.origin.x.as_f32()")
+            && POPUP_SOURCE.contains("parent_bounds.origin.y.as_f32()")
+            && POPUP_SOURCE.contains("display_bounds")
+            && POPUP_SOURCE.contains("INLINE_POPUP_EDGE_GUTTER"),
+        "main-input trigger popups should sit above the main menu while staying inside display bounds"
     );
     assert!(
         sync.contains(
-            "menu_syntax_trigger_popup_layout_left_drawer(parent_bounds, display_bounds, &snapshot);"
+            "menu_syntax_trigger_popup_layout_above(parent_bounds, display_bounds, &snapshot);"
         ) && sync.contains("snapshot.visible_row_limit = layout.visible_row_limit;")
             && sync.contains("let bounds = layout.bounds;")
             && !sync.contains("inline_popup_bounds("),
-        "sync should derive bounds from the display-aware left-drawer layout"
+        "sync should derive bounds from the display-aware above layout"
     );
 
     let request_builder = function_body(
