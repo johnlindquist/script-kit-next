@@ -71,16 +71,23 @@ impl ScriptListApp {
     }
 
     fn new_menu_syntax_form_input(
-        placeholder: String,
-        value: String,
+        field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Entity<gpui_component::input::InputState> {
+        let placeholder = field.placeholder.clone();
+        let value = field.value.clone();
+        let multiline = field.multiline;
         cx.new(|cx| {
-            gpui_component::input::InputState::new(window, cx)
+            let state = gpui_component::input::InputState::new(window, cx)
                 .tab_navigation(true)
                 .placeholder(placeholder)
-                .default_value(value)
+                .default_value(value);
+            if multiline {
+                state.auto_grow(1, 6).submit_on_enter(true)
+            } else {
+                state
+            }
         })
     }
 
@@ -96,13 +103,9 @@ impl ScriptListApp {
             self.menu_syntax_form_inputs.clear();
             self.menu_syntax_form_input_subscriptions.clear();
             for field in &form.fields {
-                let input = Self::new_menu_syntax_form_input(
-                    field.placeholder.clone(),
-                    field.value.clone(),
-                    window,
-                    cx,
-                );
+                let input = Self::new_menu_syntax_form_input(field, window, cx);
                 let field_id = field.id.clone();
+                let field_multiline = field.multiline;
                 let subscription = cx.subscribe_in(&input, window, {
                     let field_id = field_id.clone();
                     move |this, input, event: &gpui_component::input::InputEvent, window, cx| {
@@ -137,6 +140,16 @@ impl ScriptListApp {
                                     this.focus_previous_menu_syntax_form_field(window, cx);
                                 } else {
                                     this.focus_next_menu_syntax_form_field(window, cx);
+                                }
+                            }
+                            gpui_component::input::InputEvent::PressEnter { secondary } => {
+                                if !field_multiline {
+                                    return;
+                                }
+                                if *secondary {
+                                    cx.notify();
+                                } else {
+                                    this.submit_menu_syntax_form_enter(window, cx);
                                 }
                             }
                             _ => {}
@@ -568,6 +581,27 @@ impl ScriptListApp {
         key.eq_ignore_ascii_case("tab") || key_char == Some("\t")
     }
 
+    fn submit_menu_syntax_form_enter(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(snapshot) = self.menu_syntax_main_hint_snapshot(&self.filter_text, false) else {
+            return false;
+        };
+        let Some(form) = snapshot.form else {
+            return false;
+        };
+        if self.accept_menu_syntax_form_suggestion(&form, window, cx) {
+            true
+        } else if form.can_submit {
+            self.execute_selected(cx);
+            true
+        } else {
+            true
+        }
+    }
+
     pub(crate) fn handle_menu_syntax_form_control_key_input(
         &mut self,
         key: &str,
@@ -602,6 +636,9 @@ impl ScriptListApp {
         if !self.menu_syntax_form_input_active && !popup_active {
             return false;
         }
+        let active_field = form
+            .fields
+            .get(form.focused_index.min(form.fields.len().saturating_sub(1)));
 
         match key.to_ascii_lowercase().as_str() {
             "up" | "arrowup" => {
@@ -613,6 +650,9 @@ impl ScriptListApp {
                 true
             }
             "enter" | "return" => {
+                if modifiers.shift && active_field.is_some_and(|field| field.multiline) {
+                    return false;
+                }
                 if self.accept_menu_syntax_form_suggestion(&form, window, cx) {
                     true
                 } else {
@@ -646,7 +686,7 @@ impl ScriptListApp {
         if !self.menu_syntax_form_input_active || !self.menu_syntax_capture_form_owns_input() {
             return false;
         }
-        if modifiers.platform || modifiers.alt || modifiers.control {
+        if modifiers.alt || modifiers.control {
             return false;
         }
         let Some(snapshot) = self.menu_syntax_main_hint_snapshot(&self.filter_text, false) else {
@@ -670,6 +710,18 @@ impl ScriptListApp {
             .unwrap_or_else(|| field.value.clone());
 
         let key_lower = key.to_ascii_lowercase();
+        if matches!(key_lower.as_str(), "enter" | "return")
+            && field.multiline
+            && (modifiers.shift || modifiers.platform)
+        {
+            value.push('\n');
+            self.menu_syntax_form_draft_field_id = Some(field_id.clone());
+            self.menu_syntax_form_draft_value = value.clone();
+            return self.update_menu_syntax_form_field(Some(&field_id), value, window, cx);
+        }
+        if modifiers.platform {
+            return false;
+        }
         if key_lower == "backspace" {
             if value.pop().is_none() {
                 return true;

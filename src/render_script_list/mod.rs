@@ -284,7 +284,12 @@ fn render_menu_syntax_form_field(
     };
     let placeholder_color =
         rgba(crate::theme::AppChromeColors::from_theme(theme).placeholder_text_rgba);
-    let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
+    let single_line_input_height =
+        crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
+    let multiline_min_height =
+        field_typography.line_height + (crate::panel::CURSOR_MARGIN_Y * 2.0);
+    let multiline_max_height =
+        (field_typography.line_height * 6.0) + (crate::panel::CURSOR_MARGIN_Y * 2.0);
     let mut field_node = div()
         .id(format!("menu-syntax-form-field-{}", field.id))
         .w_full()
@@ -321,7 +326,6 @@ fn render_menu_syntax_form_field(
     field_node = if let Some(input) = input {
         let input_element = gpui_component::input::Input::new(&input)
             .w_full()
-            .h(px(input_height))
             .line_height(px(field_typography.line_height))
             .px(px(0.0))
             .py(px(0.0))
@@ -329,6 +333,13 @@ fn render_menu_syntax_form_field(
             .appearance(false)
             .bordered(false)
             .focus_bordered(false);
+        let input_element = if field.multiline {
+            input_element
+                .min_h(px(multiline_min_height))
+                .max_h(px(multiline_max_height))
+        } else {
+            input_element.h(px(single_line_input_height))
+        };
         field_node.child(input_element)
     } else {
         let has_value = !field.value.trim().is_empty();

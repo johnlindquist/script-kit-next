@@ -187,6 +187,98 @@ fn handler_form_field_typography_is_design_token_owned_and_focus_stable() {
 }
 
 #[test]
+fn snippet_form_body_is_state_visible_multiline_with_clean_placeholders() {
+    let form = read("src/menu_syntax/form.rs");
+    assert!(
+        form.contains("pub multiline: bool")
+            && form.contains("fn menu_syntax_form_field_is_multiline(")
+            && form.contains("matches!(requirement, FieldRequirement::Body)")
+            && form.contains("schema.target.eq_ignore_ascii_case(\"snippet\")"),
+        "snippet body multiline support must be state-visible and classified from schema/requirement"
+    );
+    assert!(
+        form.contains("fn kv_placeholder_for_key(")
+            && form.contains("\"Snippet name\".to_string()")
+            && form.contains("\"Expansion keyword\".to_string()")
+            && form.contains("\"Optional description\".to_string()")
+            && form.contains("\"Shortcut or @existing\".to_string()"),
+        "capture form placeholders should describe values without duplicating label/key prefixes"
+    );
+    assert!(
+        !form.contains("format!(\"{key}:value\")")
+            && !form.contains("\"name:Snippet name\"")
+            && !form.contains("\"trigger:shortcut or @existing\"")
+            && !form.contains("\"keyword:value\"")
+            && !form.contains("\"description:value\""),
+        "placeholder strings must not regress to duplicated key prefixes"
+    );
+    assert!(
+        form.contains("fn serialize_snippet_create_capture_invocation(")
+            && form.contains("parts.push(\"--\".to_string());")
+            && form.contains("parse_snippet_scriptlet_capture(invocation)")
+            && form.contains("SnippetScriptletOperation::Create"),
+        "snippet create serialization must isolate multiline body text after the -- delimiter"
+    );
+}
+
+#[test]
+fn snippet_form_multiline_input_uses_chat_pattern_and_enter_routing() {
+    let app = read("src/app_impl/menu_syntax_main_hint.rs");
+    assert!(
+        app.contains("field.multiline")
+            && app.contains(".auto_grow(1, 6)")
+            && app.contains(".submit_on_enter(true)"),
+        "multiline menu-syntax fields should reuse the agent-chat input pattern"
+    );
+    assert!(
+        app.contains("InputEvent::PressEnter { secondary }")
+            && app.contains("submit_menu_syntax_form_enter")
+            && app.contains("if *secondary")
+            && app.contains("cx.notify();"),
+        "multiline field Enter events should submit on plain Enter and leave secondary Enter newline insertion to InputState"
+    );
+    assert!(
+        app.contains("modifiers.shift && active_field.is_some_and(|field| field.multiline)")
+            && app.contains("return false;"),
+        "physical Shift+Enter on multiline fields must fall through to InputState before form-level Enter handling"
+    );
+    assert!(
+        app.contains("field.multiline")
+            && app.contains("value.push('\\n');")
+            && app.contains("modifiers.shift || modifiers.platform"),
+        "protocol/simulateKey secondary Enter should mirror newline insertion only for multiline fields"
+    );
+}
+
+#[test]
+fn snippet_form_multiline_render_preserves_token_typography() {
+    let render = read("src/render_script_list/mod.rs");
+    let field_start = render
+        .find("fn render_menu_syntax_form_field(")
+        .expect("handler form field renderer must exist");
+    let form_start = render
+        .find("fn render_menu_syntax_form(")
+        .expect("handler form renderer must exist");
+    let field_renderer = &render[field_start..form_start];
+
+    assert!(
+        field_renderer
+            .contains("let field_typography = menu_syntax_form_value_typography(design_variant);")
+            && field_renderer
+                .contains(".with_size(gpui_component::Size::Size(px(field_typography.font_size)))")
+            && field_renderer.contains(".line_height(px(field_typography.line_height))"),
+        "multiline height changes must preserve the font-size worker's token-owned typography"
+    );
+    assert!(
+        field_renderer.contains("if field.multiline")
+            && field_renderer.contains(".min_h(px(multiline_min_height))")
+            && field_renderer.contains(".max_h(px(multiline_max_height))")
+            && field_renderer.contains(".h(px(single_line_input_height))"),
+        "field renderer should only expand multiline fields and keep single-line fields fixed height"
+    );
+}
+
+#[test]
 fn capture_form_required_state_moves_to_labels_and_header_chips_are_empty() {
     let form = read("src/menu_syntax/form.rs");
     assert!(
