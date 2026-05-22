@@ -74,6 +74,7 @@ pub(crate) struct AcpMentionPopupParentWindow {
     pub(crate) handle: gpui::AnyWindowHandle,
     pub(crate) bounds: gpui::Bounds<gpui::Pixels>,
     pub(crate) display_id: Option<gpui::DisplayId>,
+    pub(crate) display_bounds: Option<gpui::Bounds<gpui::Pixels>>,
 }
 
 #[derive(Debug, Clone)]

@@ -646,10 +646,12 @@ impl AcpChatView {
     }
 
     fn cache_popup_parent_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let display = window.display(cx);
         let parent = AcpMentionPopupParentWindow {
             handle: window.window_handle(),
             bounds: window.bounds(),
-            display_id: window.display(cx).map(|display| display.id()),
+            display_id: display.as_ref().map(|display| display.id()),
+            display_bounds: display.as_ref().map(|display| display.visible_bounds()),
         };
         self.mention_popup_parent_window = Some(parent);
     }
@@ -1665,6 +1667,7 @@ impl AcpChatView {
                     parent_window_handle: parent.handle,
                     parent_bounds: parent.bounds,
                     display_id: parent.display_id,
+                    display_bounds: parent.display_bounds,
                     source_view,
                     snapshot,
                     left,
@@ -2227,10 +2230,17 @@ impl AcpChatView {
         display_id: Option<gpui::DisplayId>,
         cx: &mut Context<Self>,
     ) {
+        let display_bounds = display_id.and_then(|id| {
+            cx.displays()
+                .into_iter()
+                .find(|d| d.id() == id)
+                .map(|d| d.visible_bounds())
+        });
         self.mention_popup_parent_window = Some(AcpMentionPopupParentWindow {
             handle: parent_handle,
             bounds: parent_bounds,
             display_id,
+            display_bounds,
         });
 
         if self.history_menu.is_none() {
