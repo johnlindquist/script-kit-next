@@ -37,6 +37,7 @@ use crate::components::inline_popup_window::{
 use crate::components::inline_popup_window::{
     INLINE_POPUP_EDGE_GUTTER, INLINE_POPUP_MAX_VISIBLE_ROWS, INLINE_POPUP_VERTICAL_PADDING,
 };
+use crate::components::scrollbar::{Scrollbar, ScrollbarColors};
 use crate::menu_syntax::{TriggerPickerRow, TriggerPickerRowKind, TriggerPickerSnapshot};
 use crate::menu_syntax_trigger_popup::{
     adapt_trigger_picker_row, trigger_popup_row_highlight_indices,
@@ -664,29 +665,45 @@ impl MenuSyntaxTriggerPopupWindow {
             .chain(footer_rows.iter().copied())
             .collect();
 
+        let scrollbar = Scrollbar::new(
+            normal_rows.len(),
+            visible.len(),
+            visible.start,
+            ScrollbarColors::from_theme(&theme),
+        )
+        .container_height(popup_height(&self.snapshot));
+
         let body = div()
+            .relative()
             .size_full()
             .flex()
             .flex_col()
-            .children(visible_rows.into_iter().map(|(idx, row)| {
-                let is_selected = selected_index == Some(idx);
-                let source_view = self.source_view.clone();
-                let enabled = row.enabled;
-                self.render_picker_row(idx, row, is_selected, colors)
-                    .when(enabled, |row| row.cursor_pointer())
-                    .when(!enabled, |row| row.opacity(0.55).cursor_default())
-                    .on_click(cx.listener(move |this, event, window, cx| {
-                        if source_view.upgrade().is_none() {
-                            close_menu_syntax_trigger_popup_window(cx);
-                            return;
-                        }
-                        if !enabled {
-                            return;
-                        }
-                        this.handle_row_click(idx, event, window, cx);
+            .child(
+                div()
+                    .size_full()
+                    .flex()
+                    .flex_col()
+                    .children(visible_rows.into_iter().map(|(idx, row)| {
+                        let is_selected = selected_index == Some(idx);
+                        let source_view = self.source_view.clone();
+                        let enabled = row.enabled;
+                        self.render_picker_row(idx, row, is_selected, colors)
+                            .when(enabled, |row| row.cursor_pointer())
+                            .when(!enabled, |row| row.opacity(0.55).cursor_default())
+                            .on_click(cx.listener(move |this, event, window, cx| {
+                                if source_view.upgrade().is_none() {
+                                    close_menu_syntax_trigger_popup_window(cx);
+                                    return;
+                                }
+                                if !enabled {
+                                    return;
+                                }
+                                this.handle_row_click(idx, event, window, cx);
+                            }))
+                            .into_any_element()
                     }))
-                    .into_any_element()
-            }))
+            )
+            .child(scrollbar)
             .into_any_element();
 
 
