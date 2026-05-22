@@ -146,6 +146,25 @@ pub fn get_window_vibrancy_background() -> Rgba {
     gpui::rgba(hex_to_rgba_with_opacity(bg_hex, opacity))
 }
 
+/// Background tint used by floating/native windows that must visually match
+/// the main window's themed surface.
+///
+/// This intentionally uses the same opacity fallback as the HUD/main-window
+/// matched path: `vibrancy_background` when set, otherwise `main`.
+#[inline]
+pub fn main_window_matched_background(theme: &Theme) -> Rgba {
+    let opacity = theme.get_opacity();
+    let background_alpha = opacity
+        .vibrancy_background
+        .unwrap_or(opacity.main)
+        .clamp(0.0, 1.0);
+
+    gpui::rgba(hex_to_rgba_with_opacity(
+        theme.colors.background.main,
+        background_alpha,
+    ))
+}
+
 /// Lighter vibrancy background for floating surfaces (dialogs, notifications).
 /// Uses a lower alpha than the window root so native macOS blur shows through.
 pub fn get_vibrancy_surface_background(alpha: f32) -> Rgba {

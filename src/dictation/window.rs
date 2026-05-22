@@ -1011,7 +1011,7 @@ impl Focusable for DictationOverlay {
 impl Render for DictationOverlay {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = get_cached_theme();
-        let vibrancy_bg = crate::ui_foundation::get_vibrancy_background(&theme);
+        let window_background = crate::ui_foundation::main_window_matched_background(&theme);
         let theme_background_gradients =
             crate::ui_foundation::theme_background_gradient_layers("dictation-bg-layer", &theme);
         let surface_bg = rgba(crate::components::prompt_footer::footer_surface_rgba(
@@ -1249,7 +1249,7 @@ impl Render for DictationOverlay {
             .relative()
             .overflow_hidden()
             .rounded(px(radius))
-            .when_some(vibrancy_bg, |d, bg| d.bg(bg))
+            .bg(window_background)
             .children(theme_background_gradients)
             .border_1()
             .border_color(border_color)
@@ -1564,7 +1564,7 @@ pub(crate) fn render_dictation_overlay_state_preview(
     state: &DictationOverlayState,
 ) -> gpui::AnyElement {
     let theme = get_cached_theme();
-    let vibrancy_bg = crate::ui_foundation::get_vibrancy_background(&theme);
+    let window_background = crate::ui_foundation::main_window_matched_background(&theme);
     let theme_background_gradients = crate::ui_foundation::theme_background_gradient_layers(
         "dictation-preview-bg-layer",
         &theme,
@@ -1788,7 +1788,7 @@ pub(crate) fn render_dictation_overlay_state_preview(
         .relative()
         .overflow_hidden()
         .rounded(px(OVERLAY_RADIUS_PX))
-        .when_some(vibrancy_bg, |d, bg| d.bg(bg))
+        .bg(window_background)
         .children(theme_background_gradients)
         .border_1()
         .border_color(border_color)
