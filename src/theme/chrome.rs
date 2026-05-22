@@ -1,6 +1,9 @@
 use crate::ui_foundation::hex_to_rgba_with_opacity;
 
-use super::opacity::{OPACITY_GHOST, OPACITY_GHOST_SOFT};
+use super::opacity::{
+    OPACITY_GHOST, OPACITY_GHOST_SOFT, OPACITY_WHISPER_BORDER_IDLE,
+    OPACITY_WHISPER_SURFACE_FOCUSED, OPACITY_WHISPER_SURFACE_IDLE,
+};
 use super::Theme;
 
 fn composite_over(fg_hex: u32, alpha: f32, bg_hex: u32) -> u32 {
@@ -41,6 +44,12 @@ pub(crate) struct AppChromeColors {
     pub preview_surface_rgba: u32,
     pub panel_surface_rgba: u32,
     pub dialog_surface_rgba: u32,
+    /// Low-opacity card/field surface matching form-field whisper chrome.
+    pub whisper_surface_rgba: u32,
+    /// Focused low-opacity card/field surface matching form-field whisper chrome.
+    pub whisper_surface_focused_rgba: u32,
+    /// Low-opacity card/field border matching form-field whisper chrome.
+    pub whisper_border_rgba: u32,
     /// Dialog surface with vibrancy-aware opacity floor — use for all popup
     /// windows (actions dialog, slash picker, mention picker) so they share
     /// the same apparent background density.
@@ -142,6 +151,18 @@ impl AppChromeColors {
                 opacity.panel,
             ),
             dialog_surface_rgba: hex_to_rgba_with_opacity(colors.background.main, opacity.dialog),
+            whisper_surface_rgba: hex_to_rgba_with_opacity(
+                colors.background.search_box,
+                OPACITY_WHISPER_SURFACE_IDLE,
+            ),
+            whisper_surface_focused_rgba: hex_to_rgba_with_opacity(
+                colors.background.main,
+                OPACITY_WHISPER_SURFACE_FOCUSED,
+            ),
+            whisper_border_rgba: hex_to_rgba_with_opacity(
+                colors.ui.border,
+                OPACITY_WHISPER_BORDER_IDLE,
+            ),
             popup_surface_rgba: {
                 // Match the actions dialog: use vibrancy_background.
                 // so all popup windows share the same apparent density.
@@ -293,6 +314,40 @@ mod tests {
             light_chrome.inline_dropdown_surface_rgba,
             (light.colors.background.main << 8) | 0xff
         );
+    }
+
+    #[test]
+    fn whisper_surface_tokens_match_form_field_contract() {
+        use crate::theme::opacity::{
+            OPACITY_WHISPER_BORDER_IDLE, OPACITY_WHISPER_SURFACE_FOCUSED,
+            OPACITY_WHISPER_SURFACE_IDLE,
+        };
+
+        for theme in [Theme::dark_default(), Theme::light_default()] {
+            let chrome = AppChromeColors::from_theme(&theme);
+
+            assert_eq!(
+                chrome.whisper_surface_rgba,
+                hex_to_rgba_with_opacity(
+                    theme.colors.background.search_box,
+                    OPACITY_WHISPER_SURFACE_IDLE,
+                ),
+                "idle whisper surface must match FormFieldColors::whisper_surface(false)"
+            );
+            assert_eq!(
+                chrome.whisper_surface_focused_rgba,
+                hex_to_rgba_with_opacity(
+                    theme.colors.background.main,
+                    OPACITY_WHISPER_SURFACE_FOCUSED,
+                ),
+                "focused whisper surface must match FormFieldColors::whisper_surface(true)"
+            );
+            assert_eq!(
+                chrome.whisper_border_rgba,
+                hex_to_rgba_with_opacity(theme.colors.ui.border, OPACITY_WHISPER_BORDER_IDLE,),
+                "idle whisper border must match FormFieldColors::whisper_surface(false)"
+            );
+        }
     }
 
     #[test]
