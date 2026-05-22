@@ -1825,11 +1825,8 @@ fn capture_validation_snapshot(
     // specs (e.g. `;expense` from `capture-expense-ledger.ts`) flow into
     // the live snapshot's `captureValidation`. Builtin still wins when
     // present; falls back to the first matching dynamic schema.
-    let Some(schema) =
-        crate::menu_syntax::capture_gate::resolve_capture_schema_for_target(target, scripts)
-    else {
-        return None;
-    };
+    let schema =
+        crate::menu_syntax::capture_gate::resolve_capture_schema_for_target(target, scripts)?;
     // Use a synthetic empty payload when the user has only typed `;target ` —
     // the schema's `missing_required` still computes the correct Vec from
     // an empty body / no date_phrases / no kv. This matches the receipt

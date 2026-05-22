@@ -310,7 +310,7 @@ pub(crate) fn batch_select_dictation_microphone_popup_row_by_semantic_id(
 impl Clone for DictationMicrophonePopupSlot {
     fn clone(&self) -> Self {
         Self {
-            handle: self.handle.clone(),
+            handle: self.handle,
             parent_window_handle: self.parent_window_handle,
         }
     }
@@ -398,7 +398,7 @@ impl DictationMicrophonePopupWindow {
         );
         if let Some(view) = self.source_view.upgrade() {
             let _ = cx.update_window(self.parent_window_handle, |_entity, _window, cx| {
-                let _ = view.update(cx, |_overlay, cx| {
+                view.update(cx, |_overlay, cx| {
                     cx.notify();
                 });
             });

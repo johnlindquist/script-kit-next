@@ -1,6 +1,6 @@
 [package]
 name = "script-kit-gpui"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 default-run = "script-kit-gpui"
 autobins = false

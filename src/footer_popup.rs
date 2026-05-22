@@ -1127,8 +1127,7 @@ fn footer_hint_max_item_width(
 
     Some(
         (hints_width - reserved_width)
-            .max(FOOTER_RUN_SLOT_MIN_WIDTH)
-            .min(FOOTER_RUN_SLOT_MAX_WIDTH)
+            .clamp(FOOTER_RUN_SLOT_MIN_WIDTH, FOOTER_RUN_SLOT_MAX_WIDTH)
             .round(),
     )
 }
