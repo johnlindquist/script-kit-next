@@ -144,7 +144,7 @@ fn form_mode_hides_ask_ai_hint_and_uses_accent_focus_style() {
 }
 
 #[test]
-fn handler_form_field_typography_is_design_token_owned_and_focus_stable() {
+fn handler_form_field_typography_is_theme_form_owned_and_focus_stable() {
     let render = read("src/render_script_list/mod.rs");
     let field_start = render
         .find("fn render_menu_syntax_form_field(")
@@ -156,29 +156,41 @@ fn handler_form_field_typography_is_design_token_owned_and_focus_stable() {
 
     assert!(
         render.contains("fn menu_syntax_form_value_typography(")
+            && render.contains("crate::components::FormFieldColors::from_theme(theme)")
             && render.contains("get_tokens(design_variant).typography()")
-            && render.contains("typography.font_size_sm"),
-        "handler form field typography must be owned by existing design typography tokens"
+            && render.contains("field_colors.label_font_size")
+            && render.contains("field_colors.input_font_size"),
+        "handler form field typography must be owned by theme form-field tokens"
     );
     assert!(
-        field_renderer
-            .contains("let field_typography = menu_syntax_form_value_typography(design_variant);"),
+        field_renderer.contains(
+            "let field_typography = menu_syntax_form_value_typography(theme, design_variant);"
+        ),
         "field renderer must resolve typography once, outside the focus/live branches"
     );
     assert!(
         field_renderer
-            .contains(".with_size(gpui_component::Size::Size(px(field_typography.font_size)))")
-            && field_renderer.contains(".text_size(px(field_typography.font_size))"),
+            .contains("field_typography.label_font_size")
+            && field_renderer.contains("field_typography.label_line_height")
+            && field_renderer.contains("field_typography.value_font_size")
+            && field_renderer.contains("field_typography.value_line_height"),
+        "labels, live input text, fallback values, and placeholders must share theme-derived form typography"
+    );
+    assert!(
+        field_renderer.contains(".with_size(gpui_component::Size::Size(px(")
+            && field_renderer.contains("field_typography.value_font_size")
+            && field_renderer.contains(".text_size(px(field_typography.value_font_size))"),
         "live Input and fallback placeholder/value text must share the same form value font size"
     );
     assert!(
-        field_renderer.contains(".line_height(px(field_typography.line_height))"),
+        field_renderer.contains(".line_height(px(field_typography.value_line_height))"),
         "live Input and fallback placeholder/value text must share the same form value line height"
     );
     assert!(
-        !field_renderer.contains("theme.get_fonts().ui_size + 2.0")
+        !field_renderer.contains("typography.font_size_sm")
+            && !field_renderer.contains(".text_size(px(11.0))")
             && !field_renderer.contains("text_size(px(13.0))"),
-        "handler form field value typography must not regress to the focused 18px input or ad hoc 13px fallback split"
+        "handler form field typography must not regress to compact menu hint or ad hoc raw sizes"
     );
     assert!(
         !field_renderer.contains(".when(field.focused"),
@@ -226,9 +238,9 @@ fn snippet_form_multiline_input_uses_chat_pattern_and_enter_routing() {
     let app = read("src/app_impl/menu_syntax_main_hint.rs");
     assert!(
         app.contains("field.multiline")
-            && app.contains(".auto_grow(1, 6)")
+            && app.contains(".auto_grow(2, 6)")
             && app.contains(".submit_on_enter(true)"),
-        "multiline menu-syntax fields should reuse the agent-chat input pattern"
+        "multiline menu-syntax fields should use a two-row minimum and the agent-chat submit-on-enter pattern"
     );
     assert!(
         app.contains("InputEvent::PressEnter { secondary }")
@@ -262,12 +274,16 @@ fn snippet_form_multiline_render_preserves_token_typography() {
     let field_renderer = &render[field_start..form_start];
 
     assert!(
-        field_renderer
-            .contains("let field_typography = menu_syntax_form_value_typography(design_variant);")
-            && field_renderer
-                .contains(".with_size(gpui_component::Size::Size(px(field_typography.font_size)))")
-            && field_renderer.contains(".line_height(px(field_typography.line_height))"),
-        "multiline height changes must preserve the font-size worker's token-owned typography"
+        field_renderer.contains(
+            "let field_typography = menu_syntax_form_value_typography(theme, design_variant);"
+        ) && field_renderer.contains("field_typography.value_font_size")
+            && field_renderer.contains("field_typography.value_line_height"),
+        "multiline height changes must preserve the theme form-field typography"
+    );
+    assert!(
+        field_renderer.contains("(field_typography.value_line_height * 2.0)")
+            && field_renderer.contains("(field_typography.value_line_height * 6.0)"),
+        "multiline fields should render with a two-row minimum and six-row maximum"
     );
     assert!(
         field_renderer.contains("if field.multiline")
@@ -808,6 +824,37 @@ fn handler_form_focus_reveal_has_scroll_and_layout_contract() {
             && layout.contains("scrollContainerId")
             && read("src/protocol/types/grid_layout.rs").contains("handler_form"),
         "getLayoutInfo must expose handler form field bounds and focused-field visibility for DevTools proof"
+    );
+}
+
+#[test]
+fn live_input_field_updates_do_not_reset_existing_focus_selection() {
+    let app = read("src/app_impl/menu_syntax_main_hint.rs");
+    let update_start = app
+        .find("pub(crate) fn update_menu_syntax_form_field(")
+        .expect("form field update method must exist");
+    let tab_key_start = app[update_start..]
+        .find("fn is_menu_syntax_form_tab_key(")
+        .map(|offset| update_start + offset)
+        .expect("tab key helper must follow form update method");
+    let update_body = &app[update_start..tab_key_start];
+
+    assert!(
+        update_body.contains("let sync_from_focused_live_input = self.menu_syntax_form_syncing_from_input")
+            && update_body.contains("menu_syntax_form_input_active")
+            && update_body.contains("menu_syntax_form_draft_field_id")
+            && update_body.contains("id == resolved_field_id"),
+        "live InputEvent::Change updates must identify the already-focused form field before syncing serialized text"
+    );
+    assert!(
+        update_body.contains("if !sync_from_focused_live_input {\n                    self.focus_menu_syntax_form_input_at(index, &form, window, cx);\n                }"),
+        "updates coming from the already-focused live input must not re-run focus_menu_syntax_form_input_at and reset selection/scroll"
+    );
+    assert!(
+        update_body.contains("self.ensure_menu_syntax_form_inputs(&form, window, cx);")
+            && update_body.contains("self.menu_syntax_form_draft_field_id = Some(resolved_field_id.clone());")
+            && update_body.contains("self.sync_menu_syntax_form_trigger_popup_window(&form, window, cx);"),
+        "skipping live-input refocus must still sync form inputs, draft state, and autocomplete popup state"
     );
 }
 

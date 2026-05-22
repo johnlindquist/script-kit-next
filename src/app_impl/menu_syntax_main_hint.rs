@@ -84,7 +84,7 @@ impl ScriptListApp {
                 .placeholder(placeholder)
                 .default_value(value);
             if multiline {
-                state.auto_grow(1, 6).submit_on_enter(true)
+                state.auto_grow(2, 6).submit_on_enter(true)
             } else {
                 state
             }
@@ -536,6 +536,12 @@ impl ScriptListApp {
         if resolved_field_id.is_empty() {
             return false;
         }
+        let sync_from_focused_live_input = self.menu_syntax_form_syncing_from_input
+            && self.menu_syntax_form_input_active
+            && self
+                .menu_syntax_form_draft_field_id
+                .as_deref()
+                .is_some_and(|id| id == resolved_field_id);
         if self.menu_syntax_form_input_active
             && self
                 .menu_syntax_form_draft_field_id
@@ -562,7 +568,9 @@ impl ScriptListApp {
                 .position(|field| field.id == resolved_field_id)
             {
                 self.ensure_menu_syntax_form_inputs(&form, window, cx);
-                self.focus_menu_syntax_form_input_at(index, &form, window, cx);
+                if !sync_from_focused_live_input {
+                    self.focus_menu_syntax_form_input_at(index, &form, window, cx);
+                }
                 self.menu_syntax_form_draft_field_id = Some(resolved_field_id.clone());
                 self.menu_syntax_form_draft_value = value.clone();
                 self.sync_menu_syntax_form_trigger_popup_window(&form, window, cx);
