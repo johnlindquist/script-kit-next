@@ -423,6 +423,10 @@ fn bump_dictation_state_generation() -> u64 {
     DICTATION_STATE_GENERATION.fetch_add(1, Ordering::Relaxed) + 1
 }
 
+pub(crate) fn notify_dictation_device_preference_changed() -> u64 {
+    bump_dictation_state_generation()
+}
+
 fn dictation_model_status() -> DictationModelStatus {
     if is_parakeet_model_available() {
         DictationModelStatus::Available

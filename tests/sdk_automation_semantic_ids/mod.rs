@@ -78,6 +78,22 @@ fn microphone_choice_with_semantic_id_roundtrips_serde() {
     );
 }
 
+#[test]
+fn dictation_microphone_popup_semantic_ids_are_safe_source_contract() {
+    let popup = include_str!("../../src/dictation/microphone_popup_window.rs");
+    let collector = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        popup.contains("let row_id = format!(\"dictation-mic-row-{idx}\");")
+            && popup.contains("let semantic_id = format!(\"choice:{idx}:{row_id}\");"),
+        "dictation mic popup semantic IDs must be based on safe row IDs"
+    );
+    assert!(
+        collector.contains("Some(row.row_id.clone())")
+            && !collector.contains("device_selection_value(&row.action)"),
+        "dictation mic popup automation values must not expose raw device IDs"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Dictation Model prompt
 // ---------------------------------------------------------------------------

@@ -6383,6 +6383,9 @@ impl ScriptListApp {
                                         if let Some(v) = crate::confirm::batch_select_confirm_button_by_value(&value) {
                                             return Some(v);
                                         }
+                                        if let Some(v) = crate::dictation::batch_select_dictation_microphone_popup_row_by_value(&value, cx) {
+                                            return Some(v);
+                                        }
                                         if let Some(v) = _this.batch_select_menu_syntax_trigger_popup_row_by_value(&value, cx) {
                                             return Some(v);
                                         }
@@ -6434,6 +6437,9 @@ impl ScriptListApp {
                                             return Some(v);
                                         }
                                         if let Some(v) = crate::confirm::batch_select_confirm_button_by_semantic_id(&semantic_id) {
+                                            return Some(v);
+                                        }
+                                        if let Some(v) = crate::dictation::batch_select_dictation_microphone_popup_row_by_semantic_id(&semantic_id, cx) {
                                             return Some(v);
                                         }
                                         if let Some(v) = _this.batch_select_menu_syntax_trigger_popup_row_by_semantic_id(&semantic_id, cx) {
