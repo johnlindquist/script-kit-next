@@ -287,6 +287,7 @@ fn render_menu_syntax_form_field(
     let placeholder_color =
         rgba(crate::theme::AppChromeColors::from_theme(theme).placeholder_text_rgba);
     let single_line_input_height = field_metrics.menu_syntax_single_line_height_px();
+    let input_rendered_font_size = field_metrics.menu_syntax_input_rendered_font_size_px();
     let multiline_min_height = field_metrics.menu_syntax_multiline_min_height_px();
     let multiline_max_height = field_metrics.menu_syntax_multiline_max_height_px();
     let mut field_node = div()
@@ -355,7 +356,7 @@ fn render_menu_syntax_form_field(
                 .min_h(px(field_metrics.input_line_height))
                 .flex()
                 .items_center()
-                .text_size(px(field_metrics.input_font_size))
+                .text_size(px(input_rendered_font_size))
                 .line_height(px(field_metrics.input_line_height))
                 .text_color(if has_value {
                     rgba((theme.colors.text.primary << 8) | 0xFF)

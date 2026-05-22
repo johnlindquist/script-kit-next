@@ -190,8 +190,15 @@ fn handler_form_field_typography_is_theme_form_owned_and_focus_stable() {
     assert!(
         field_renderer.contains(".with_size(gpui_component::Size::Size(px(")
             && field_renderer.contains("field_metrics.input_font_size")
-            && field_renderer.contains(".text_size(px(field_metrics.input_font_size))"),
-        "live Input and fallback placeholder/value text must share the same form input font size"
+            && field_renderer.contains("field_metrics.menu_syntax_input_rendered_font_size_px()")
+            && field_renderer.contains(".text_size(px(input_rendered_font_size))"),
+        "live Input and fallback placeholder/value text must share the same rendered form input font size"
+    );
+    assert!(
+        read("src/components/form_fields/colors.rs")
+            .contains("pub fn menu_syntax_input_rendered_font_size_px(&self) -> f32")
+            && read("src/components/form_fields/colors.rs").contains("self.input_font_size * 0.875"),
+        "fallback placeholder/value text must use the same rendered custom-size scale as gpui_component::Input"
     );
     assert!(
         field_renderer.contains(".line_height(px(field_metrics.input_line_height))"),
@@ -262,8 +269,10 @@ fn snippet_form_multiline_input_uses_chat_pattern_and_enter_routing() {
         app.contains("InputEvent::PressEnter { secondary }")
             && app.contains("submit_menu_syntax_form_enter")
             && app.contains("if *secondary")
-            && app.contains("cx.notify();"),
-        "multiline field Enter events should submit on plain Enter and leave secondary Enter newline insertion to InputState"
+            && app.contains("input.read(cx).value().to_string()")
+            && app.contains("this.menu_syntax_form_syncing_from_input = true;")
+            && app.contains("update_menu_syntax_form_field(\n                                        Some(&field_id),"),
+        "multiline field Enter events should submit on plain Enter and sync secondary Enter newline insertion from InputState"
     );
     assert!(
         app.contains("modifiers.shift && active_field.is_some_and(|field| field.multiline)")

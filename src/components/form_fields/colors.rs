@@ -237,6 +237,11 @@ impl FormFieldMetrics {
         self.input_line_height + (crate::panel::CURSOR_MARGIN_Y * 2.0)
     }
 
+    /// Rendered text size for menu-syntax `Input` fields.
+    pub fn menu_syntax_input_rendered_font_size_px(&self) -> f32 {
+        self.input_font_size * 0.875
+    }
+
     /// Multiline min/max heights used by menu-syntax handler fields.
     pub fn menu_syntax_multiline_height_px(&self, rows: f32) -> f32 {
         (self.input_line_height * rows) + (crate::panel::CURSOR_MARGIN_Y * 2.0)
