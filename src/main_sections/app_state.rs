@@ -761,6 +761,8 @@ struct ScriptListApp {
     notes_browse_scroll_handle: ScrollHandle,
     // Scroll handle for design gallery list
     design_gallery_scroll_handle: UniformListScrollHandle,
+    // Scroll handle for footer gallery list
+    footer_gallery_scroll_handle: UniformListScrollHandle,
     // Scroll handle for file search list
     file_search_scroll_handle: UniformListScrollHandle,
     // Variable-height list state for the theme chooser

@@ -231,6 +231,8 @@ impl ScriptListApp {
                     return;
                 } else if self.dispatch_design_gallery_select_footer_action(cx) {
                     return;
+                } else if self.dispatch_footer_gallery_select_footer_action(cx) {
+                    return;
                 } else if self.dispatch_kit_store_primary_footer_action(cx) {
                     return;
                 } else if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
@@ -440,6 +442,20 @@ impl ScriptListApp {
             target: "script_kit::footer_popup",
             event = "design_gallery_footer_select_ignored",
             "Design Gallery native footer Select preserves current no-op selection behavior"
+        );
+        cx.notify();
+        true
+    }
+
+    fn dispatch_footer_gallery_select_footer_action(&mut self, cx: &mut Context<Self>) -> bool {
+        if !matches!(self.current_view, AppView::FooterGalleryView { .. }) {
+            return false;
+        }
+
+        tracing::info!(
+            target: "script_kit::footer_popup",
+            event = "footer_gallery_footer_select_ignored",
+            "Footer Gallery native footer Select preserves current no-op selection behavior"
         );
         cx.notify();
         true
@@ -1180,6 +1196,10 @@ impl ScriptListApp {
             AppView::DesignGalleryView { filter, .. } => Some((
                 ViewType::MiniMainWindow,
                 crate::design_gallery_filtered_len(filter),
+            )),
+            AppView::FooterGalleryView { filter, .. } => Some((
+                ViewType::MiniMainWindow,
+                crate::footer_gallery_filtered_len(filter),
             )),
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => Some((ViewType::DivPrompt, 0)),

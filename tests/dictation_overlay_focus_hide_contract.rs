@@ -81,12 +81,13 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
     );
     assert!(
         DICTATION_WINDOW.contains("const ACTION_STOP_LABEL: &str = \"Stop\";")
-            && DICTATION_WINDOW.contains("const ACTION_MIC_LABEL: &str = \"Mic\";")
+            && DICTATION_WINDOW.contains("const ACTION_MIC_LABEL: &str = \"Select Mic\";")
             && DICTATION_WINDOW.contains("const ACTION_CANCEL_LABEL: &str = \"Cancel\";")
             && DICTATION_WINDOW.contains("const ACTION_CONTINUE_LABEL: &str = \"Continue\";")
             && DICTATION_WINDOW.contains("const ACTION_CLOSE_LABEL: &str = \"Close\";")
             && DICTATION_WINDOW.contains("const ESC_KEYCAP: &str = \"esc\";")
-            && DICTATION_WINDOW.contains("const ENTER_KEYCAP: &str = \"\\u{21b5}\";"),
+            && DICTATION_WINDOW.contains("const ENTER_KEYCAP: &str = \"\\u{21b5}\";")
+            && DICTATION_WINDOW.contains("const MIC_ICON_PATH: &str = concat!("),
         "recording, confirming, and terminal phases must use compact action labels plus keycaps"
     );
     assert!(
@@ -107,8 +108,13 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
     assert!(
         DICTATION_WINDOW.contains("crate::components::footer_chrome::render_footer_hint_content")
             && DICTATION_WINDOW.contains("crate::components::footer_chrome::FooterHintKeyMode")
+            && DICTATION_WINDOW.contains("fn render_mic_action_chip_content(")
+            && DICTATION_WINDOW.contains(".external_path(MIC_ICON_PATH)")
+            && DICTATION_WINDOW.contains("fn footer_action_button_height()")
+            && DICTATION_WINDOW.contains(".h(px(footer_action_button_height()))")
+            && DICTATION_WINDOW.contains(".group(\"footer-action-button\")")
             && !DICTATION_WINDOW.contains("render_inline_shortcut_keys("),
-        "dictation action chips must render through the shared footer chrome owner"
+        "dictation action chips must render through the shared footer chrome owner with inset button height"
     );
     assert!(
         FOOTER_CHROME.contains("pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.5;")
@@ -117,20 +123,30 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
             && FOOTER_CHROME.contains(
                 "pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight::SEMIBOLD;"
             )
-            && FOOTER_CHROME.contains("pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 16.0;")
+            && FOOTER_CHROME.contains("pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 20.0;")
             && FOOTER_CHROME.contains("pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;")
             && FOOTER_CHROME
                 .contains("pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;")
+            && FOOTER_CHROME
+                .contains("pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;")
+            && FOOTER_CHROME.contains("pub(crate) const FOOTER_KEYCAP_BORDER_ALPHA: f32 = 0.50;")
+            && FOOTER_CHROME.contains("pub(crate) const FOOTER_LABELCAP_BORDER_ALPHA: f32 = 0.0;")
+            && FOOTER_CHROME.contains("pub(crate) fn footer_button_height(footer_height: f32)")
             && FOOTER_CHROME
                 .contains("FOOTER_KEY_GLYPH_NUDGE_Y_PX + FOOTER_RETURN_GLYPH_NUDGE_Y_PX"),
         "shared footer chrome tokens must pin the native font and keycap contract"
     );
     assert!(
         FOOTER_CHROME.contains("\"esc\" | \"escape\" => \"⎋\".to_string()")
+            && FOOTER_CHROME.contains("fn render_footer_labelcap(")
+            && FOOTER_CHROME.contains("footer_labelcap_border_color(theme)")
+            && !FOOTER_CHROME.contains(".bg(footer_keycap_bg_color(theme))")
+            && !FOOTER_CHROME.contains("FOOTER_KEYCAP_BG_ALPHA")
             && FOOTER_CHROME.contains(".flex_none()")
             && FOOTER_CHROME.contains(".min_h(px(FOOTER_KEYCAP_HEIGHT_PX))")
-            && FOOTER_CHROME.contains(".line_height(px(FOOTER_KEYCAP_HEIGHT_PX))"),
-        "shared footer keycaps must use the escape glyph and fixed native-footer sizing"
+            && FOOTER_CHROME.contains(".line_height(px(FOOTER_KEYCAP_HEIGHT_PX))")
+            && FOOTER_CHROME.contains(".group_hover(\"footer-action-button\""),
+        "shared footer keycaps must use the escape glyph, fixed native-footer sizing, labelcap balance, hover foreground, and no steady-state fill"
     );
     assert!(
         DICTATION_WINDOW.contains("\"dictation-stop-button\"")
@@ -142,11 +158,11 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
         "recording Stop, Mic, and Cancel controls must be clickable from the overlay"
     );
     assert!(
-        DICTATION_WINDOW.contains("fn current_microphone_label()")
+        DICTATION_WINDOW.contains("fn open_microphone_picker")
             && DICTATION_WINDOW.contains("list_input_device_menu_items(selected_device_id)")
             && DICTATION_WINDOW.contains("build_dictation_microphone_popup_snapshot")
             && DICTATION_WINDOW.contains("sync_dictation_microphone_popup_window"),
-        "overlay Mic selector must use the shared microphone menu items and attached popup window"
+        "overlay Select Mic control must use the shared microphone menu items and attached popup window"
     );
     assert!(
         DICTATION_WINDOW.contains("fn dictation_stop_keycap()")

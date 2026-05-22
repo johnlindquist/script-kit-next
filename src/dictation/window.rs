@@ -190,7 +190,7 @@ impl Default for DictationOverlayState {
 // ---------------------------------------------------------------------------
 
 use gpui::{
-    div, prelude::*, px, rgba, AnyElement, App, Context, FocusHandle, Focusable, IntoElement,
+    div, prelude::*, px, rgba, svg, AnyElement, App, Context, FocusHandle, Focusable, IntoElement,
     KeyDownEvent, MouseButton, MouseDownEvent, ParentElement, Render, StatefulInteractiveElement,
     Styled, Task, Window, WindowBounds, WindowOptions,
 };
@@ -376,8 +376,8 @@ static ENTER_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomi
 
 /// Single-word action label for stopping/submitting the current recording.
 const ACTION_STOP_LABEL: &str = "Stop";
-/// Changes the preference used by the next capture; the live session keeps its opened mic.
-const ACTION_MIC_LABEL: &str = "Mic";
+/// Opens the microphone picker; the live session keeps its opened mic.
+const ACTION_MIC_LABEL: &str = "Select Mic";
 /// Single-word action label for discarding the current recording.
 const ACTION_CANCEL_LABEL: &str = "Cancel";
 /// Single-word action label for resuming from confirmation.
@@ -388,6 +388,11 @@ const ACTION_CLOSE_LABEL: &str = "Close";
 const ESC_KEYCAP: &str = "esc";
 /// Keycap shown for Enter.
 const ENTER_KEYCAP: &str = "\u{21b5}";
+/// Lucide microphone icon used by the dictation footer mic selector.
+const MIC_ICON_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/vendor/gpui-component/crates/assets/assets/icons/mic.svg"
+);
 
 /// Interval between animation ticks for the transcribing dot pulse (ms).
 const TRANSCRIBING_TICK_MS: u64 = 50;
@@ -866,7 +871,7 @@ impl DictationOverlay {
             render_clickable_action_chip(
                 "dictation-mic-button",
                 ACTION_MIC_LABEL.into(),
-                current_microphone_label(),
+                SharedString::default(),
                 cx.listener(|this, _event: &MouseDownEvent, window, cx| {
                     this.open_microphone_picker(window, cx);
                 }),
@@ -1376,24 +1381,19 @@ fn dictation_hotkey_keycap(hotkey: &crate::config::HotkeyConfig) -> String {
     hotkey.to_display_string().replace("Semicolon", ";")
 }
 
-fn current_microphone_label() -> SharedString {
-    let prefs = crate::config::load_user_preferences();
-    let selected_device_id = prefs.dictation.selected_device_id.as_deref();
-    let label = crate::dictation::list_input_device_menu_items(selected_device_id)
-        .ok()
-        .and_then(|items| items.into_iter().find(|item| item.is_selected))
-        .map(|item| crate::dictation::microphone_display_label(&item.title))
-        .unwrap_or_else(|| "Microphone".to_string());
-    label.into()
-}
-
 fn action_chip_width(label: &str) -> f32 {
     match label {
         ACTION_CONTINUE_LABEL => 112.0,
-        ACTION_MIC_LABEL => 188.0,
+        ACTION_MIC_LABEL => 112.0,
         ACTION_CLOSE_LABEL => 72.0,
         _ => 96.0,
     }
+}
+
+fn footer_action_button_height() -> f32 {
+    crate::components::footer_chrome::footer_button_height(
+        crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+    )
 }
 
 fn render_glass_signal_band(body: AnyElement) -> impl IntoElement {
@@ -1409,24 +1409,60 @@ fn render_glass_signal_band(body: AnyElement) -> impl IntoElement {
 
 fn render_action_chip_content(label: SharedString, key: SharedString) -> impl IntoElement {
     let theme = get_cached_theme();
-    let mode = if label.as_ref() == ACTION_MIC_LABEL {
-        crate::components::footer_chrome::FooterHintKeyMode::TextValue {
-            max_width_px: 118.0,
-        }
-    } else {
-        crate::components::footer_chrome::FooterHintKeyMode::Shortcut
-    };
-    crate::components::footer_chrome::render_footer_hint_content(label, key, mode, &theme)
+    if label.as_ref() == ACTION_MIC_LABEL {
+        return render_mic_action_chip_content(&theme);
+    }
+
+    crate::components::footer_chrome::render_footer_hint_content(
+        label,
+        key,
+        crate::components::footer_chrome::FooterHintKeyMode::Shortcut,
+        &theme,
+    )
+}
+
+fn render_mic_action_chip_content(theme: &crate::theme::Theme) -> AnyElement {
+    let footer_text = crate::components::footer_chrome::footer_hint_text_color(theme);
+    let full_text = theme.colors.text.primary.to_rgb();
+
+    div()
+        .px(px(4.0))
+        .h(px(
+            crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX,
+        ))
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .gap(px(4.0))
+        .font_family(FONT_SYSTEM_UI)
+        .font_weight(crate::components::footer_chrome::FOOTER_HINT_FONT_WEIGHT_GPUI)
+        .text_size(px(
+            crate::components::footer_chrome::FOOTER_HINT_FONT_SIZE_PX,
+        ))
+        .text_color(footer_text)
+        .group_hover("footer-action-button", move |s| s.text_color(full_text))
+        .child(
+            svg()
+                .external_path(MIC_ICON_PATH)
+                .size(px(13.0))
+                .flex_shrink_0()
+                .text_color(footer_text)
+                .group_hover("footer-action-button", move |s| s.text_color(full_text)),
+        )
+        .child(ACTION_MIC_LABEL)
+        .into_any_element()
 }
 
 fn render_action_chip(label: &'static str, key: SharedString) -> impl IntoElement {
     div()
         .w(px(action_chip_width(label)))
-        .h_full()
+        .h(px(footer_action_button_height()))
         .flex()
         .flex_row()
         .items_center()
         .justify_center()
+        .group("footer-action-button")
         .child(render_action_chip_content(label.into(), key))
 }
 
@@ -1445,11 +1481,12 @@ fn render_clickable_action_chip(
     div()
         .id(id)
         .w(px(width))
-        .h_full()
+        .h(px(footer_action_button_height()))
         .flex()
         .flex_row()
         .items_center()
         .justify_center()
+        .group("footer-action-button")
         .rounded(px(4.0))
         .cursor_pointer()
         .hover(move |style| style.bg(hover_bg))
@@ -1458,12 +1495,11 @@ fn render_clickable_action_chip(
         .child(render_action_chip_content(label, key))
 }
 
-/// Paint the bottom action rail with the same footer surface tint used by PromptFooter.
 fn wrap_dictation_overlay_action_rail(
     rail: impl IntoElement,
-    surface_bg: gpui::Rgba,
+    _surface_bg: gpui::Rgba,
 ) -> impl IntoElement {
-    div().w_full().bg(surface_bg).child(rail)
+    div().w_full().child(rail)
 }
 
 fn render_clickable_action_rail(actions: impl IntoIterator<Item = AnyElement>) -> AnyElement {
@@ -1602,7 +1638,7 @@ pub(crate) fn render_dictation_overlay_state_preview(
                 .child(wrap_dictation_overlay_action_rail(
                     render_static_action_rail([
                         (ACTION_STOP_LABEL, dictation_stop_keycap()),
-                        (ACTION_MIC_LABEL, current_microphone_label()),
+                        (ACTION_MIC_LABEL, SharedString::default()),
                         (ACTION_CANCEL_LABEL, ESC_KEYCAP.into()),
                     ]),
                     surface_bg,

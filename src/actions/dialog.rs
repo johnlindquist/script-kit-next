@@ -3184,7 +3184,7 @@ mod actions_dialog_opacity_consistency_tests {
     #[test]
     fn test_actions_dialog_main_window_background_alpha_matches_dark_window_default() {
         let theme = Theme::dark_default();
-        assert_eq!(actions_dialog_main_window_background_alpha(&theme), 191);
+        assert_eq!(actions_dialog_main_window_background_alpha(&theme), 127);
     }
 
     #[test]
@@ -3934,6 +3934,7 @@ impl Render for ActionsDialog {
 
         // Use helper method for container colors
         let (main_bg, container_border, container_text) = self.get_container_colors(&colors);
+        let use_vibrancy = self.theme.is_vibrancy_enabled();
 
         // Get search position from config before height calculations
         let search_at_top = matches!(self.config.search_position, SearchPosition::Top);
@@ -4019,12 +4020,9 @@ impl Render for ActionsDialog {
             None
         };
 
-        // Main overlay popup container
-        // Fixed width, dynamic height based on content, rounded corners, shadow
-        // NOTE: Using visual.radius_lg from design tokens for consistency with child item rounding
-        //
-        // VIBRANCY: Background is handled in get_container_colors():
-        // Inline popups use 85% opacity floor (no real blur layer), opaque uses 95%.
+        // Main overlay popup container. In vibrancy mode the native popup
+        // window's material owns the steady-state background; GPUI only paints
+        // transient row/selection states.
 
         emit_actions_dialog_runtime_audit(&ActionsDialogRuntimeAudit::from_parts(
             "actions_dialog",
@@ -4132,7 +4130,7 @@ impl Render for ActionsDialog {
             .flex_col()
             .w(px(POPUP_WIDTH))
             .h(px(total_height)) // Use calculated height including footer
-            .bg(main_bg) // Always apply background with vibrancy-aware opacity
+            .when(!use_vibrancy, |d| d.bg(main_bg))
             .rounded(px(0.0))
             .overflow_hidden()
             .text_color(container_text)

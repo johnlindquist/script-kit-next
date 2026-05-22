@@ -30,6 +30,7 @@ impl ScriptListApp {
                     | AppView::NotesBrowseView { .. }
                     | AppView::CurrentAppCommandsView { .. }
                     | AppView::DesignGalleryView { .. }
+                    | AppView::FooterGalleryView { .. }
                     | AppView::CreationFeedback { .. }
                     | AppView::ScriptIssuesView { .. }
                     | AppView::SdkReferenceView { .. }

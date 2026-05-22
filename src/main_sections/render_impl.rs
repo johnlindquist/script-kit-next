@@ -519,6 +519,12 @@ impl Render for ScriptListApp {
             } => self
                 .render_design_gallery(filter, selected_index, cx)
                 .into_any_element(),
+            AppView::FooterGalleryView {
+                filter,
+                selected_index,
+            } => self
+                .render_footer_gallery(filter, selected_index, cx)
+                .into_any_element(),
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { entity } => {
                 gpui::div().size_full().child(entity).into_any_element()

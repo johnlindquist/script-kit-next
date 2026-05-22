@@ -26,6 +26,7 @@ use std::sync::OnceLock;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TriggerBuiltin {
     DesignGallery,
+    FooterGallery,
     ClipboardHistory,
     AppLauncher,
     FileSearch,
@@ -53,6 +54,7 @@ impl TriggerBuiltin {
     /// by uniqueness tests.
     pub const ALL: &'static [TriggerBuiltin] = &[
         TriggerBuiltin::DesignGallery,
+        TriggerBuiltin::FooterGallery,
         TriggerBuiltin::ClipboardHistory,
         TriggerBuiltin::AppLauncher,
         TriggerBuiltin::FileSearch,
@@ -80,6 +82,7 @@ impl TriggerBuiltin {
     pub const fn command_id(self) -> &'static str {
         match self {
             TriggerBuiltin::DesignGallery => "builtin/design-gallery",
+            TriggerBuiltin::FooterGallery => "builtin/footer-gallery",
             TriggerBuiltin::ClipboardHistory => "builtin/clipboard-history",
             TriggerBuiltin::AppLauncher => "builtin/app-launcher",
             TriggerBuiltin::FileSearch => "builtin/file-search",
@@ -141,6 +144,7 @@ impl TriggerBuiltin {
     pub const fn legacy_aliases(self) -> &'static [&'static str] {
         match self {
             TriggerBuiltin::DesignGallery => &["design-gallery", "designgallery", "design gallery"],
+            TriggerBuiltin::FooterGallery => &["footer-gallery", "footergallery", "footer gallery"],
             TriggerBuiltin::ClipboardHistory => {
                 &["clipboard", "clipboard-history", "clipboardhistory"]
             }
@@ -256,6 +260,7 @@ impl TriggerBuiltinRegistry {
 /// to the exhaustive variant list.
 pub const TRIGGER_BUILTIN_COMMAND_IDS: &[&str] = &[
     "builtin/design-gallery",
+    "builtin/footer-gallery",
     "builtin/clipboard-history",
     "builtin/app-launcher",
     "builtin/file-search",

@@ -3217,16 +3217,16 @@ fn overlay_microphone_control_is_labeled_as_next_recording_preference() {
     let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
     assert!(
-        window_src.contains("const ACTION_MIC_LABEL: &str = \"Next Mic\""),
-        "overlay mic action must not imply the active capture input changes live"
+        window_src.contains("const ACTION_MIC_LABEL: &str = \"Select Mic\""),
+        "overlay mic action must open the microphone picker without rendering as a keycap"
     );
     assert!(
         window_src.contains("The current recording keeps using the device it opened with"),
         "overlay source contract must document that cycling only changes the next recording"
     );
     assert!(
-        window_src.contains("updated preference for next recording"),
-        "overlay mic cycling logs/copy must state the preference applies next recording"
+        window_src.contains("persisted preference used by the next dictation capture"),
+        "overlay mic picker source must state the preference applies to the next capture"
     );
 }
 

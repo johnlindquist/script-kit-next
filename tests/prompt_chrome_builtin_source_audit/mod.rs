@@ -333,6 +333,7 @@ fn emoji_picker_advertises_and_wires_shared_actions() {
 
 const UI_WINDOW_SOURCE: &str = include_str!("../../src/app_impl/ui_window.rs");
 const FOOTER_POPUP_SOURCE: &str = include_str!("../../src/footer_popup.rs");
+const ACTIONS_DIALOG_RENDER_SOURCE: &str = include_str!("../../src/actions/dialog.rs");
 const PROMPT_LAYOUT_SHELL_SOURCE: &str =
     include_str!("../../src/components/prompt_layout_shell.rs");
 const RENDER_SCRIPT_LIST_SOURCE: &str = include_str!("../../src/render_script_list/mod.rs");
@@ -423,12 +424,30 @@ fn footer_popup_notify_none_removes_native_footer_host() {
     let notify_section =
         &FOOTER_POPUP_SOURCE[notify_pos..FOOTER_POPUP_SOURCE.len().min(notify_pos + 1200)];
 
+    let some_pos = notify_section
+        .find("if let Some(config) = config")
+        .expect("notify_main_footer_popup must branch on config");
+    let refresh_pos = notify_section
+        .find("refresh_main_footer_host(ns_window, config);")
+        .expect("notify_main_footer_popup(Some) must refresh the native footer host");
+    let else_pos = notify_section
+        .find("} else {")
+        .expect("notify_main_footer_popup must handle None");
+    let clear_pos = notify_section[else_pos..]
+        .find("clear_main_window_footer_refresh_signature();")
+        .map(|idx| else_pos + idx)
+        .expect("notify_main_footer_popup(None) must clear the cached refresh signature");
+    let remove_pos = notify_section[else_pos..]
+        .find("remove_main_footer_host(ns_window);")
+        .map(|idx| else_pos + idx)
+        .expect("notify_main_footer_popup(None) must remove the stale native footer host");
+
     assert!(
-        notify_section.contains("if let Some(config) = config")
-            && notify_section.contains("refresh_main_footer_host(ns_window, config);")
-            && notify_section
-                .contains("} else {\n                remove_main_footer_host(ns_window);"),
-        "notify_main_footer_popup(None) must remove the stale native footer host"
+        some_pos < refresh_pos
+            && refresh_pos < else_pos
+            && else_pos < clear_pos
+            && clear_pos < remove_pos,
+        "notify_main_footer_popup must refresh on Some and clear/remove the stale native footer host on None"
     );
 }
 
@@ -442,6 +461,19 @@ fn footer_popup_uses_subtle_hover_for_native_footer_buttons() {
         FOOTER_POPUP_SOURCE
             .contains("let selected_ns: id = ns_color_from_rgba(chrome.selection_rgba);"),
         "native footer selected state should still restore chrome.selection_rgba"
+    );
+}
+
+#[test]
+fn actions_dialog_vibrancy_render_path_leaves_background_to_native_material() {
+    assert!(
+        ACTIONS_DIALOG_RENDER_SOURCE
+            .contains("let use_vibrancy = self.theme.is_vibrancy_enabled();"),
+        "ActionsDialog render must resolve the current vibrancy mode"
+    );
+    assert!(
+        ACTIONS_DIALOG_RENDER_SOURCE.contains(".when(!use_vibrancy, |d| d.bg(main_bg))"),
+        "ActionsDialog must avoid painting a GPUI steady-state background when native vibrancy owns the material"
     );
 }
 

@@ -29,6 +29,8 @@ const HINT_BUTTON_RADIUS: f32 = 4.0;
 /// Size for keyboard glyph icons in the hint strip.
 /// Slightly larger than text_xs (12px) for visual clarity at hint opacity.
 const KEY_ICON_SIZE: f32 = 14.0;
+/// Optical Y nudge for the return icon in native/footer hint strips.
+const RETURN_ICON_NUDGE_Y_PX: f32 = 6.0;
 
 /// Gap between a key icon and its label text within a single hint.
 const KEY_ICON_LABEL_GAP: f32 = 3.0;
@@ -151,6 +153,14 @@ enum HintElement {
 enum KeyHintPart {
     Icon(&'static str),
     Keycap(SharedString),
+}
+
+fn icon_nudge_y(icon_path: &str) -> f32 {
+    if icon_path == RETURN_ICON_PATH {
+        RETURN_ICON_NUDGE_Y_PX
+    } else {
+        0.0
+    }
 }
 
 // ─── Shared compact shortcut renderer ────────────────────────────────
@@ -495,6 +505,7 @@ pub(crate) fn render_inline_shortcut_keys<'a>(
                 .external_path(icon_path)
                 .size(px(INLINE_SHORTCUT_ICON_SIZE))
                 .flex_shrink_0()
+                .mt(px(icon_nudge_y(icon_path)))
                 .text_color(colors.glyph)
                 .into_any_element(),
             InlineShortcutToken::Text(text) => div()
@@ -530,7 +541,10 @@ pub(crate) fn render_inline_shortcut_keys<'a>(
 
 #[cfg(test)]
 mod inline_shortcut_tests {
-    use super::{canonical_shortcut_hint, shortcut_tokens_from_hint};
+    use super::{
+        canonical_shortcut_hint, icon_nudge_y, shortcut_tokens_from_hint, COMMAND_ICON_PATH,
+        RETURN_ICON_NUDGE_Y_PX, RETURN_ICON_PATH,
+    };
 
     #[test]
     fn shortcut_tokens_handle_raw_and_symbol_inputs() {
@@ -561,6 +575,13 @@ mod inline_shortcut_tests {
         assert_eq!(canonical_shortcut_hint("⌘F1"), "cmd+f1");
         assert_eq!(canonical_shortcut_hint("⌃⇧↵"), "ctrl+shift+enter");
         assert_eq!(canonical_shortcut_hint("cmd+shift+k"), "cmd+shift+k");
+    }
+
+    #[test]
+    fn return_icon_gets_footer_optical_nudge() {
+        assert_eq!(RETURN_ICON_NUDGE_Y_PX, 6.0);
+        assert_eq!(icon_nudge_y(RETURN_ICON_PATH), 6.0);
+        assert_eq!(icon_nudge_y(COMMAND_ICON_PATH), 0.0);
     }
 }
 
@@ -697,6 +718,7 @@ fn render_hint_element_hsla(element: HintElement, color: gpui::Hsla) -> AnyEleme
                         .external_path(icon_path)
                         .size(px(KEY_ICON_SIZE))
                         .flex_shrink_0()
+                        .mt(px(icon_nudge_y(icon_path)))
                         .text_color(color)
                         .into_any_element(),
                     KeyHintPart::Keycap(text) => div()

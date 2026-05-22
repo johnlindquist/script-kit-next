@@ -1,4 +1,5 @@
 {"input":"builtin/design-gallery","expected":"ShowFilterableView::DesignGallery"}
+{"input":"builtin/footer-gallery","expected":"ShowFilterableView::FooterGallery"}
 {"input":"builtin/clipboard-history","expected":"ShowFilterableView::ClipboardHistory"}
 {"input":"builtin/app-launcher","expected":"ShowFilterableView::AppLauncher"}
 {"input":"builtin/file-search","expected":"OpenFileSearch"}
