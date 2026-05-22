@@ -86,6 +86,9 @@ mod script_kit_selfie;
 #[path = "source_audits/hotkey_builtin_visibility.rs"]
 mod hotkey_builtin_visibility;
 
+#[path = "source_audits/keyword_expansion_latency_contract.rs"]
+mod keyword_expansion_latency_contract;
+
 #[path = "source_audits/emoji_picker.rs"]
 mod emoji_picker;
 

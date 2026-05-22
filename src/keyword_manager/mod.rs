@@ -25,7 +25,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tracing::{debug, error, info, instrument, warn};
 // Import from crate (these are declared in main.rs)
 use crate::keyboard_monitor::{KeyEvent, KeyboardMonitor, KeyboardMonitorError};
@@ -37,8 +37,19 @@ use crate::template_variables::VariableContext;
 use crate::text_injector::{TextInjector, TextInjectorConfig};
 /// Delay after stopping monitor before performing expansion (ms)
 const STOP_DELAY_MS: u64 = 50;
+const DEFAULT_KEYWORD_POST_DELETE_DELAY_MS: u64 = 0;
+const MAX_KEYWORD_POST_DELETE_DELAY_MS: u64 = 250;
+const KEYWORD_POST_DELETE_DELAY_ENV: &str = "SCRIPT_KIT_KEYWORD_POST_DELETE_DELAY_MS";
 /// Delay after expansion before restarting monitor (ms)
 const RESTART_DELAY_MS: u64 = 100;
+
+fn keyword_post_delete_delay_ms() -> u64 {
+    std::env::var(KEYWORD_POST_DELETE_DELAY_ENV)
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(|value| value.min(MAX_KEYWORD_POST_DELETE_DELAY_MS))
+        .unwrap_or(DEFAULT_KEYWORD_POST_DELETE_DELAY_MS)
+}
 /// Configuration for the keyword manager
 #[derive(Debug, Clone)]
 pub struct KeywordManagerConfig {
@@ -367,32 +378,80 @@ impl KeywordManager {
                                 let injector =
                                     TextInjector::with_config((*injector_config_clone).clone());
 
+                                let expansion_start = Instant::now();
+                                let trigger_len = result.trigger.chars().count();
+
                                 // Delete trigger characters
+                                let delete_start = Instant::now();
                                 if let Err(e) = injector.delete_chars(chars_to_delete) {
+                                    let total_ms = expansion_start.elapsed().as_millis() as u64;
                                     error!(
                                         error = %e,
-                                        chars = chars_to_delete,
+                                        category = "KEYWORD",
+                                        event = "keyword_expansion_timing",
+                                        chars_to_delete,
+                                        trigger_len,
+                                        replacement_len = replacement.len(),
+                                        stop_delay_ms = config_clone.stop_delay_ms,
+                                        delete_ms = delete_start.elapsed().as_millis() as u64,
+                                        post_delete_delay_ms = keyword_post_delete_delay_ms(),
+                                        paste_ms = 0_u64,
+                                        total_ms,
+                                        success = false,
                                         "Failed to delete trigger characters"
                                     );
                                     return;
                                 }
+                                let delete_ms = delete_start.elapsed().as_millis() as u64;
 
-                                // Small delay between delete and paste
-                                thread::sleep(Duration::from_millis(50));
+                                let post_delete_delay_ms = keyword_post_delete_delay_ms();
+                                if post_delete_delay_ms > 0 {
+                                    thread::sleep(Duration::from_millis(post_delete_delay_ms));
+                                }
 
                                 // Paste replacement text
+                                let paste_start = Instant::now();
                                 if let Err(e) = injector.paste_text(&replacement) {
+                                    let paste_ms = paste_start.elapsed().as_millis() as u64;
+                                    let total_ms = expansion_start.elapsed().as_millis() as u64;
                                     error!(
                                         error = %e,
+                                        category = "KEYWORD",
+                                        event = "keyword_expansion_timing",
+                                        chars_to_delete,
+                                        trigger_len,
+                                        replacement_len = replacement.len(),
+                                        stop_delay_ms = config_clone.stop_delay_ms,
+                                        delete_ms,
+                                        post_delete_delay_ms,
+                                        paste_ms,
+                                        total_ms,
+                                        success = false,
                                         "Failed to paste replacement text"
                                     );
                                     return;
                                 }
+                                let paste_ms = paste_start.elapsed().as_millis() as u64;
+                                let total_ms = expansion_start.elapsed().as_millis() as u64;
 
                                 info!(
                                     trigger = %name,
                                     replacement_len = replacement.len(),
                                     "Expansion completed successfully"
+                                );
+                                info!(
+                                    category = "KEYWORD",
+                                    event = "keyword_expansion_timing",
+                                    chars_to_delete,
+                                    trigger_len,
+                                    replacement_len = replacement.len(),
+                                    stop_delay_ms = config_clone.stop_delay_ms,
+                                    delete_ms,
+                                    post_delete_delay_ms,
+                                    paste_ms,
+                                    total_ms,
+                                    success = true,
+                                    "Keyword expansion timing"
                                 );
                             });
 
