@@ -29,6 +29,11 @@ use gpui::*;
 use gpui_component::tooltip::Tooltip;
 use std::rc::Rc;
 
+use crate::components::footer_chrome::{
+    footer_key_glyph_nudge_y, is_footer_return_key_glyph, split_footer_shortcut,
+    FOOTER_KEYCAP_HEIGHT_PX, FOOTER_KEYCAP_PADDING_X_PX, FOOTER_KEYCAP_RADIUS_PX,
+    FOOTER_KEY_GLYPH_NUDGE_Y_PX, FOOTER_RETURN_GLYPH_NUDGE_Y_PX,
+};
 use crate::designs::DesignColors;
 use crate::theme::Theme;
 use crate::ui::chrome::alpha_from_opacity;
@@ -76,7 +81,6 @@ const PROMPT_FOOTER_INFO_FONT_MIN_PX: f32 = 9.0;
 const PROMPT_FOOTER_HELPER_FONT_DELTA_PX: f32 = 2.0;
 /// Minimum helper label font size.
 const PROMPT_FOOTER_HELPER_FONT_MIN_PX: f32 = 10.0;
-
 /// Pre-computed colors for PromptFooter rendering
 ///
 /// This struct holds the primitive color values needed for footer rendering,
@@ -165,6 +169,18 @@ fn is_footer_button_activation_key(key: &str) -> bool {
     )
 }
 
+fn return_key_glyph_nudge_y(configured: Option<f32>) -> f32 {
+    configured.unwrap_or(FOOTER_KEY_GLYPH_NUDGE_Y_PX + FOOTER_RETURN_GLYPH_NUDGE_Y_PX)
+}
+
+fn shortcut_key_glyph_nudge_y(key: &str, configured_return: Option<f32>) -> f32 {
+    if is_footer_return_key_glyph(key) {
+        return_key_glyph_nudge_y(configured_return)
+    } else {
+        footer_key_glyph_nudge_y(key)
+    }
+}
+
 fn footer_button_hover_rgba(colors: PromptFooterColors) -> u32 {
     (colors.background << 8) | (colors.hover_alpha as u32)
 }
@@ -202,6 +218,10 @@ pub struct PromptFooterConfig {
     pub helper_text: Option<String>,
     /// Optional info label shown before buttons (e.g., "typescript", "5 items")
     pub info_label: Option<String>,
+    /// Optional font family override for the keyboard shortcut glyphs
+    pub shortcut_font_family: Option<SharedString>,
+    /// Optional optical Y nudge for the return glyph inside shortcut keycaps.
+    pub shortcut_return_glyph_nudge_y: Option<f32>,
 }
 
 impl Default for PromptFooterConfig {
@@ -220,6 +240,8 @@ impl Default for PromptFooterConfig {
             secondary_active: false,
             helper_text: None,
             info_label: None,
+            shortcut_font_family: None,
+            shortcut_return_glyph_nudge_y: None,
         }
     }
 }
@@ -305,6 +327,18 @@ impl PromptFooterConfig {
     /// Set optional info label shown before buttons (e.g., language indicator)
     pub fn info_label(mut self, label: impl Into<String>) -> Self {
         self.info_label = Some(label.into());
+        self
+    }
+
+    /// Set optional font family override for the keyboard shortcut glyphs
+    pub fn shortcut_font_family(mut self, font_family: impl Into<SharedString>) -> Self {
+        self.shortcut_font_family = Some(font_family.into());
+        self
+    }
+
+    /// Set optional return glyph Y nudge for visual comparison/experiments.
+    pub fn shortcut_return_glyph_nudge_y(mut self, nudge_y: f32) -> Self {
+        self.shortcut_return_glyph_nudge_y = Some(nudge_y);
         self
     }
 }
@@ -416,22 +450,57 @@ impl PromptFooter {
             .text_size(px(button_font_size))
             .text_color(self.colors.accent.to_rgb())
             .child(label);
-        let shortcut_element = div()
-            .text_size(px(button_font_size))
-            .text_color(self.colors.text_muted.to_rgb())
-            .child(shortcut);
+
+        let shortcut_keys = split_footer_shortcut(&shortcut);
+        let shortcut_element =
+            hstack()
+                .gap(px(3.0))
+                .items_center()
+                .children(shortcut_keys.into_iter().map(|key| {
+                    let glyph_nudge_y =
+                        shortcut_key_glyph_nudge_y(&key, self.config.shortcut_return_glyph_nudge_y);
+                    let key_content: AnyElement = div()
+                        .h(px(FOOTER_KEYCAP_HEIGHT_PX))
+                        .line_height(px(FOOTER_KEYCAP_HEIGHT_PX))
+                        .mt(px(glyph_nudge_y))
+                        .child(key)
+                        .into_any_element();
+                    let mut key_el = div()
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .px(px(FOOTER_KEYCAP_PADDING_X_PX))
+                        .h(px(FOOTER_KEYCAP_HEIGHT_PX))
+                        .min_h(px(FOOTER_KEYCAP_HEIGHT_PX))
+                        .min_w(px(FOOTER_KEYCAP_HEIGHT_PX))
+                        .line_height(px(FOOTER_KEYCAP_HEIGHT_PX))
+                        .rounded(px(FOOTER_KEYCAP_RADIUS_PX))
+                        .border_1()
+                        .border_color(self.colors.border.rgba8(0x50))
+                        .bg(self.colors.border.rgba8(0x15))
+                        .text_size(px(button_font_size))
+                        .text_color(self.colors.text_muted.to_rgb())
+                        .child(key_content);
+                    if let Some(ref font_family) = self.config.shortcut_font_family {
+                        key_el = key_el.font_family(font_family.clone());
+                    }
+                    key_el
+                }));
 
         let mut button = div()
             .id(ElementId::Name(id.into()))
             .flex()
             .flex_row()
             .items_center()
-            .gap(px(6.))
             .px(px(8.))
             .py(px(6.))
             .rounded(px(4.))
-            .child(label_element)
-            .child(shortcut_element);
+            .child(label_element);
+
+        if !shortcut.is_empty() {
+            button = button.child(div().ml(px(6.0)).child(shortcut_element));
+        }
 
         if active {
             button = button
@@ -651,6 +720,10 @@ mod tests {
         PROMPT_FOOTER_LOGO_NUDGE_X_PX, PROMPT_FOOTER_LOGO_SIZE_PX, PROMPT_FOOTER_PADDING_BOTTOM_PX,
         PROMPT_FOOTER_PADDING_X_PX, PROMPT_FOOTER_SECTION_GAP_PX, PROMPT_FOOTER_SHADOW_BLUR_PX,
         PROMPT_FOOTER_SHADOW_OFFSET_Y_PX,
+    };
+    use crate::components::footer_chrome::{
+        is_footer_return_key_glyph, split_footer_shortcut, FOOTER_KEY_GLYPH_NUDGE_Y_PX,
+        FOOTER_RETURN_GLYPH_NUDGE_Y_PX,
     };
 
     #[test]
@@ -876,5 +949,31 @@ mod tests {
         assert_eq!(PROMPT_FOOTER_INFO_FONT_MIN_PX, 9.0);
         assert_eq!(PROMPT_FOOTER_HELPER_FONT_DELTA_PX, 2.0);
         assert_eq!(PROMPT_FOOTER_HELPER_FONT_MIN_PX, 10.0);
+        assert_eq!(FOOTER_KEY_GLYPH_NUDGE_Y_PX, 1.0);
+        assert_eq!(FOOTER_RETURN_GLYPH_NUDGE_Y_PX, 1.0);
+    }
+
+    #[test]
+    fn test_split_shortcut_parses_simple_and_complex_keys() {
+        assert_eq!(split_footer_shortcut(""), Vec::<String>::new());
+        assert_eq!(split_footer_shortcut("↵"), vec!["↵"]);
+        assert_eq!(split_footer_shortcut("⌘K"), vec!["⌘", "K"]);
+        assert_eq!(split_footer_shortcut("⌥↵"), vec!["⌥", "↵"]);
+        assert_eq!(split_footer_shortcut("Enter"), vec!["Enter"]);
+        assert_eq!(split_footer_shortcut("Cmd+K"), vec!["Cmd", "K"]);
+        assert_eq!(split_footer_shortcut("⌘F1"), vec!["⌘", "F1"]);
+        assert_eq!(split_footer_shortcut("⌥⌘I"), vec!["⌥", "⌘", "I"]);
+    }
+
+    #[test]
+    fn test_return_key_glyph_gets_special_optical_nudge() {
+        assert!(is_footer_return_key_glyph("↵"));
+        assert!(!is_footer_return_key_glyph("Enter"));
+        assert!(!is_footer_return_key_glyph("Return"));
+        assert!(!is_footer_return_key_glyph("⌘"));
+        assert_eq!(super::return_key_glyph_nudge_y(None), 2.0);
+        assert_eq!(super::return_key_glyph_nudge_y(Some(100.0)), 100.0);
+        assert_eq!(super::shortcut_key_glyph_nudge_y("⌘", None), 1.0);
+        assert_eq!(super::shortcut_key_glyph_nudge_y("↵", None), 2.0);
     }
 }

@@ -1409,57 +1409,14 @@ fn render_glass_signal_band(body: AnyElement) -> impl IntoElement {
 
 fn render_action_chip_content(label: SharedString, key: SharedString) -> impl IntoElement {
     let theme = get_cached_theme();
-    let footer_text = theme
-        .colors
-        .text
-        .primary
-        .with_opacity(crate::window_resize::mini_layout::HINT_TEXT_OPACITY)
-        .to_rgb();
-    let shortcut_colors = crate::components::hint_strip::whisper_inline_shortcut_colors(
-        footer_text.into(),
-        theme.colors.text.primary.to_rgb(),
-        false,
-    );
-    let key = key.to_string();
-    let is_microphone_label = label.as_ref() == ACTION_MIC_LABEL;
-    let shortcut_tokens = if is_microphone_label {
-        Vec::new()
+    let mode = if label.as_ref() == ACTION_MIC_LABEL {
+        crate::components::footer_chrome::FooterHintKeyMode::TextValue {
+            max_width_px: 118.0,
+        }
     } else {
-        crate::components::hint_strip::shortcut_tokens_from_hint(&key)
+        crate::components::footer_chrome::FooterHintKeyMode::Shortcut
     };
-
-    div()
-        .px(px(4.0))
-        .py(px(2.0))
-        .rounded(px(4.0))
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(px(3.0))
-        .child(
-            div()
-                .text_size(px(12.5))
-                .text_color(footer_text)
-                .child(label),
-        )
-        .when(is_microphone_label, |row| {
-            row.child(
-                div()
-                    .max_w(px(118.0))
-                    .overflow_hidden()
-                    .text_ellipsis()
-                    .whitespace_nowrap()
-                    .text_size(px(12.0))
-                    .text_color(theme.colors.text.primary.with_opacity(OPACITY_ACTIVE))
-                    .child(key.clone()),
-            )
-        })
-        .when(!is_microphone_label, |row| {
-            row.child(crate::components::hint_strip::render_inline_shortcut_keys(
-                shortcut_tokens.iter().map(|token| token.as_str()),
-                shortcut_colors,
-            ))
-        })
+    crate::components::footer_chrome::render_footer_hint_content(label, key, mode, &theme)
 }
 
 fn render_action_chip(label: &'static str, key: SharedString) -> impl IntoElement {

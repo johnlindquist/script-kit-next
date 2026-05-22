@@ -18,13 +18,7 @@ const FOOTER_HINT_SIDE_INSET: f64 = crate::window_resize::mini_layout::HINT_STRI
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_PADDING_X: f64 = 4.0;
 #[cfg(target_os = "macos")]
-const FOOTER_HINT_PADDING_Y: f64 = 2.0;
-#[cfg(target_os = "macos")]
 const FOOTER_HINT_RADIUS: f64 = 4.0;
-#[cfg(target_os = "macos")]
-const FOOTER_HINT_FONT_SIZE: f64 = 12.5;
-#[cfg(target_os = "macos")]
-const FOOTER_HINT_FONT_WEIGHT_LIGHT: f64 = 0.18;
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_TEXT_ALIGN_LEFT: usize = 0;
 #[cfg(target_os = "macos")]
@@ -861,8 +855,8 @@ unsafe fn ensure_footer_model_label(left_info_view: id, text: &str, text_color: 
 
     let font: id = msg_send![
         class!(NSFont),
-        systemFontOfSize: FOOTER_HINT_FONT_SIZE
-        weight: FOOTER_HINT_FONT_WEIGHT_LIGHT
+        systemFontOfSize: crate::components::footer_chrome::FOOTER_HINT_FONT_SIZE_PX as f64
+        weight: crate::components::footer_chrome::FOOTER_HINT_FONT_WEIGHT_APPKIT
     ];
     let label = find_subview_by_identifier(left_info_view, FOOTER_MODEL_LABEL_ID);
     if label != nil {
@@ -1062,8 +1056,8 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterB
     let hints_bounds: NSRect = msg_send![hints_view, bounds];
     let font: id = msg_send![
         objc::class!(NSFont),
-        systemFontOfSize: FOOTER_HINT_FONT_SIZE
-        weight: FOOTER_HINT_FONT_WEIGHT_LIGHT
+        systemFontOfSize: crate::components::footer_chrome::FOOTER_HINT_FONT_SIZE_PX as f64
+        weight: crate::components::footer_chrome::FOOTER_HINT_FONT_WEIGHT_APPKIT
     ];
 
     let mut items = Vec::new();
@@ -1152,40 +1146,139 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
         return nil;
     }
 
-    let key_field = make_footer_hint_text_field(
-        button_cfg.key,
-        font,
-        text_color,
-        FOOTER_HINT_TEXT_ALIGN_LEFT,
-    );
     let label_field = make_footer_hint_text_field(
         button_cfg.label.as_ref(),
         font,
         text_color,
         FOOTER_HINT_TEXT_ALIGN_RIGHT,
     );
-    if key_field == nil || label_field == nil {
+    if label_field == nil {
         return nil;
     }
 
-    let key_size: NSSize = msg_send![key_field, fittingSize];
+    let theme = crate::theme::get_cached_theme();
+    let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+    let border_hex = theme.colors.ui.border;
+    let chip_border_color = ns_color_from_hex_with_alpha(border_hex, 0x50 as f64 / 255.0);
+    let chip_bg_color = ns_color_from_hex_with_alpha(border_hex, 0x15 as f64 / 255.0);
+
+    let key_font: id = font;
+
+    let shortcut_keys = crate::components::footer_chrome::split_footer_shortcut(button_cfg.key);
+
+    let keys_view: id = msg_send![class!(NSView), alloc];
+    let keys_view: id = msg_send![
+        keys_view,
+        initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, footer_height()))
+    ];
+    if keys_view == nil {
+        return nil;
+    }
+    let _: () = msg_send![keys_view, setWantsLayer: YES];
+
+    let mut keys_view_width = 0.0_f64;
+    let key_gap = 3.0_f64;
+
+    for (i, key_str) in shortcut_keys.iter().enumerate() {
+        let chip_view: id = msg_send![class!(NSView), alloc];
+        let chip_view: id = msg_send![
+            chip_view,
+            initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0))
+        ];
+        if chip_view == nil {
+            continue;
+        }
+
+        let _: () = msg_send![chip_view, setWantsLayer: YES];
+        let chip_layer: id = msg_send![chip_view, layer];
+        if chip_layer != nil {
+            let _: () = msg_send![
+                chip_layer,
+                setCornerRadius: crate::components::footer_chrome::FOOTER_KEYCAP_RADIUS_PX as f64
+            ];
+            let _: () = msg_send![chip_layer, setBorderWidth: 1.0_f64];
+            if chip_border_color != nil {
+                let cg_border: id = msg_send![chip_border_color, CGColor];
+                if cg_border != nil {
+                    let _: () = msg_send![chip_layer, setBorderColor: cg_border];
+                }
+            }
+            if chip_bg_color != nil {
+                let cg_bg: id = msg_send![chip_bg_color, CGColor];
+                if cg_bg != nil {
+                    let _: () = msg_send![chip_layer, setBackgroundColor: cg_bg];
+                }
+            }
+        }
+
+        let glyph_field =
+            make_footer_hint_text_field(key_str, key_font, text_color, FOOTER_HINT_TEXT_ALIGN_LEFT);
+        if glyph_field == nil {
+            continue;
+        }
+
+        let glyph_size: NSSize = msg_send![glyph_field, fittingSize];
+        let chip_padding_x = crate::components::footer_chrome::FOOTER_KEYCAP_PADDING_X_PX as f64;
+        let chip_height = crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX as f64;
+        let chip_width = (glyph_size.width + chip_padding_x * 2.0).max(chip_height);
+
+        let glyph_x = ((chip_width - glyph_size.width) / 2.0).round();
+        let glyph_y = crate::components::footer_chrome::footer_appkit_glyph_y(
+            key_str,
+            chip_height,
+            glyph_size.height,
+        );
+
+        let _: () = msg_send![
+            glyph_field,
+            setFrame: NSRect::new(
+                NSPoint::new(glyph_x, glyph_y),
+                NSSize::new(glyph_size.width, glyph_size.height)
+            )
+        ];
+        let _: () = msg_send![chip_view, addSubview: glyph_field];
+
+        let chip_y = ((footer_height() - chip_height) / 2.0).round();
+        let chip_x = keys_view_width;
+
+        let _: () = msg_send![
+            chip_view,
+            setFrame: NSRect::new(
+                NSPoint::new(chip_x, chip_y),
+                NSSize::new(chip_width, chip_height)
+            )
+        ];
+
+        let _: () = msg_send![keys_view, addSubview: chip_view];
+
+        keys_view_width += chip_width;
+        if i < shortcut_keys.len() - 1 {
+            keys_view_width += key_gap;
+        }
+    }
+
+    let _: () = msg_send![
+        keys_view,
+        setFrame: NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(keys_view_width, footer_height())
+        )
+    ];
+
     let label_size: NSSize = msg_send![label_field, fittingSize];
-    let min_content_width = key_size.width + (FOOTER_HINT_PADDING_X * 2.0) + 12.0;
-    let content_width = label_size.width + FOOTER_HINT_KEY_LABEL_GAP + key_size.width;
+    let min_content_width = keys_view_width + (FOOTER_HINT_PADDING_X * 2.0) + 12.0;
+    let content_width = label_size.width + FOOTER_HINT_KEY_LABEL_GAP + keys_view_width;
     let intrinsic_width = content_width + (FOOTER_HINT_PADDING_X * 2.0);
     let item_width = footer_hint_slot_width(button_cfg.action)
         .max(min_content_width)
         .max(intrinsic_width);
     let item_height = footer_height();
-    let content_height = key_size.height.max(label_size.height) + (FOOTER_HINT_PADDING_Y * 2.0);
-    let content_y = ((item_height - content_height) / 2.0).round();
-    let key_y = (content_y + FOOTER_HINT_PADDING_Y).round();
-    let label_y = (content_y + FOOTER_HINT_PADDING_Y).round();
+    let label_y = ((item_height - label_size.height) / 2.0).round();
     let (label_x, key_x, _) = footer_hint_content_layout(
         button_cfg.action,
         item_width,
         label_size.width,
-        key_size.width,
+        keys_view_width,
     );
 
     let _: () = msg_send![
@@ -1196,10 +1289,10 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
         )
     ];
     let _: () = msg_send![
-        key_field,
+        keys_view,
         setFrame: NSRect::new(
-            NSPoint::new(key_x, key_y),
-            NSSize::new(key_size.width, key_size.height)
+            NSPoint::new(key_x, 0.0),
+            NSSize::new(keys_view_width, item_height)
         )
     ];
     let _: () = msg_send![container, setWantsLayer: YES];
@@ -1207,8 +1300,6 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
     if container_layer != nil {
         let _: () = msg_send![container_layer, setCornerRadius: FOOTER_HINT_RADIUS];
         if button_cfg.selected {
-            let theme = crate::theme::get_cached_theme();
-            let chrome = crate::theme::AppChromeColors::from_theme(&theme);
             let selected_ns: id = ns_color_from_rgba(chrome.selection_rgba);
             if selected_ns != nil {
                 let cg: id = msg_send![selected_ns, CGColor];
@@ -1264,7 +1355,7 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
     }
 
     let _: () = msg_send![container, addSubview: label_field];
-    let _: () = msg_send![container, addSubview: key_field];
+    let _: () = msg_send![container, addSubview: keys_view];
     if button != nil {
         let _: () = msg_send![container, addSubview: button];
     }
