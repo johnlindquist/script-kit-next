@@ -279,6 +279,56 @@ fn snippet_form_multiline_render_preserves_token_typography() {
 }
 
 #[test]
+fn snippet_multiline_values_are_sanitized_before_plain_gpui_text_children() {
+    let render = read("src/render_script_list/mod.rs");
+    assert!(
+        render.contains("fn menu_syntax_single_line_text_for_gpui("),
+        "menu syntax render must sanitize newline-bearing values before GPUI plain text children"
+    );
+    assert!(
+        render.contains("fn menu_syntax_text_contains_line_break("),
+        "menu syntax render must detect newline-bearing serialized filters before single-line input rendering"
+    );
+
+    let row_start = render
+        .find("fn render_menu_syntax_hint_row(")
+        .expect("hint row renderer must exist");
+    let preview_start = render
+        .find("fn render_menu_syntax_fragment_preview_row(")
+        .expect("fragment preview renderer must exist");
+    let field_start = render
+        .find("fn render_menu_syntax_form_field(")
+        .expect("form field renderer must exist");
+    let form_start = render
+        .find("fn render_menu_syntax_form(")
+        .expect("form renderer must exist");
+    let row_renderer = &render[row_start..preview_start];
+    let preview_renderer = &render[preview_start..field_start];
+    let field_renderer = &render[field_start..form_start];
+
+    assert!(
+        row_renderer.contains("menu_syntax_single_line_text_for_gpui(&row.value)")
+            && !row_renderer.contains(".child(row.value.clone())"),
+        "hint rows must not pass raw newline-bearing row values into GPUI text"
+    );
+    assert!(
+        preview_renderer.contains("menu_syntax_single_line_text_for_gpui(&format!(")
+            && !preview_renderer.contains(".child(format!(\"{}: {}\", row.label, row.value))"),
+        "fragment preview rows must not pass raw newline-bearing values into GPUI text"
+    );
+    assert!(
+        field_renderer.contains("menu_syntax_single_line_text_for_gpui(&field.value)"),
+        "form fallback display must sanitize multiline values without mutating field state"
+    );
+    assert!(
+        render.contains("handler_form_owns_input_for_render\n                                            && menu_syntax_text_contains_line_break(\n                                                &filter_text_for_render,\n                                            )")
+            && render.contains("self.render_search_input().into_any_element()")
+            && render.contains("menu_syntax_single_line_text_for_gpui(\n                                                    &filter_text_for_render,\n                                                )"),
+        "newline-bearing capture filters must bypass the single-line header input renderer with display-only sanitized text"
+    );
+}
+
+#[test]
 fn capture_form_required_state_moves_to_labels_and_header_chips_are_empty() {
     let form = read("src/menu_syntax/form.rs");
     assert!(
