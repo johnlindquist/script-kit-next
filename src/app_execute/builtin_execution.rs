@@ -1343,6 +1343,7 @@ impl SyncToGithubBuiltinAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DesignExplorerBuiltinAction {
     Open,
+    OpenNonListStates,
 }
 
 #[cfg(feature = "storybook")]
@@ -1350,6 +1351,7 @@ impl DesignExplorerBuiltinAction {
     fn from_feature(feature: &builtins::BuiltInFeature) -> Option<Self> {
         match feature {
             builtins::BuiltInFeature::DesignExplorer => Some(Self::Open),
+            builtins::BuiltInFeature::DesignNonListStates => Some(Self::OpenNonListStates),
             _ => None,
         }
     }
@@ -1357,6 +1359,7 @@ impl DesignExplorerBuiltinAction {
     fn success_detail(self) -> &'static str {
         match self {
             Self::Open => "open_design_explorer",
+            Self::OpenNonListStates => "open_design_non_list_states",
         }
     }
 }
@@ -4157,9 +4160,10 @@ impl ScriptListApp {
                 self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             #[cfg(feature = "storybook")]
-            builtins::BuiltInFeature::DesignExplorer => {
+            builtins::BuiltInFeature::DesignExplorer
+            | builtins::BuiltInFeature::DesignNonListStates => {
                 let design_action = DesignExplorerBuiltinAction::from_feature(&entry.feature)
-                    .expect("design explorer arm should only receive DesignExplorer");
+                    .expect("design explorer arm should only receive design explorer features");
                 self.execute_design_explorer_builtin(design_action, dctx, cx)
             }
             builtins::BuiltInFeature::AiChat => {
@@ -4931,17 +4935,32 @@ impl ScriptListApp {
 
         let explorer = cx.new(|cx| {
             let mut browser = script_kit_gpui::storybook::StoryBrowser::new(cx);
-            browser.configure_for_design_explorer(Some(
-                script_kit_gpui::storybook::StorySurface::MainMenu,
-            ));
-            browser.open_compare_mode();
-            let _ = browser.select_variant_id("current-main-menu");
+            match action {
+                DesignExplorerBuiltinAction::Open => {
+                    browser.configure_for_design_explorer(Some(
+                        script_kit_gpui::storybook::StorySurface::MainMenu,
+                    ));
+                    browser.open_compare_mode();
+                    let _ = browser.select_variant_id("current-main-menu");
+                }
+                DesignExplorerBuiltinAction::OpenNonListStates => {
+                    browser.configure_for_design_explorer(Some(
+                        script_kit_gpui::storybook::StorySurface::NonListState,
+                    ));
+                }
+            }
             tracing::info!(
                 event = "design_explorer_opened",
-                surface = "main-menu",
+                surface = match action {
+                    DesignExplorerBuiltinAction::Open => "main-menu",
+                    DesignExplorerBuiltinAction::OpenNonListStates => "non-list-states",
+                },
                 preview_mode = "compare",
-                variant_id = "current-main-menu",
-                "Opened in-app design explorer on the compare-ready Main Menu surface"
+                variant_id = match action {
+                    DesignExplorerBuiltinAction::Open => Some("current-main-menu"),
+                    DesignExplorerBuiltinAction::OpenNonListStates => None,
+                },
+                "Opened in-app design explorer"
             );
             browser
         });

@@ -1,4 +1,6 @@
 const COMPONENTS_MOD: &str = include_str!("../../src/components/mod.rs");
+const BUILTIN_EXECUTION: &str = include_str!("../../src/app_execute/builtin_execution.rs");
+const BUILTINS_MOD: &str = include_str!("../../src/builtins/mod.rs");
 const NON_LIST_STATE: &str = include_str!("../../src/components/non_list_state.rs");
 const STORYBOOK_MOD: &str = include_str!("../../src/storybook/mod.rs");
 const STORYBOOK_SHOWCASE: &str = include_str!("../../src/storybook/non_list_state_showcase.rs");
@@ -97,5 +99,35 @@ fn storybook_registry_exposes_non_list_state_story() {
             && STORIES_MOD.contains("NonListStateShowcaseStory")
             && STORIES_MOD.contains("StoryEntry::new(Box::new(NonListStateShowcaseStory))"),
         "stories registry should include the non-list showcase story"
+    );
+}
+
+#[test]
+fn non_list_state_design_command_routes_to_showcase_surface() {
+    assert!(
+        BUILTINS_MOD.contains("builtin/design-non-list-states"),
+        "builtins should register a stable command id for the non-list design showcase"
+    );
+    assert!(
+        BUILTINS_MOD.contains("Design: Non-List States"),
+        "builtins should expose a searchable command label for the non-list design showcase"
+    );
+    assert!(
+        BUILTINS_MOD.contains("BuiltInFeature::DesignNonListStates"),
+        "builtins command should use a dedicated non-list design feature"
+    );
+    assert!(
+        BUILTIN_EXECUTION.contains("OpenNonListStates"),
+        "execution should define the non-list design explorer action"
+    );
+    assert!(
+        BUILTIN_EXECUTION
+            .contains("configure_for_design_explorer(Some(\n                        script_kit_gpui::storybook::StorySurface::NonListState"),
+        "non-list design command should route directly to the NonListState surface"
+    );
+    assert!(
+        BUILTIN_EXECUTION.contains("configure_for_design_explorer(Some(\n                        script_kit_gpui::storybook::StorySurface::MainMenu")
+            && BUILTIN_EXECUTION.contains("select_variant_id(\"current-main-menu\")"),
+        "existing Design Explorer command should keep its MainMenu startup behavior"
     );
 }

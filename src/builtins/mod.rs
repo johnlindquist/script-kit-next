@@ -281,6 +281,9 @@ pub enum BuiltInFeature {
     /// In-app StoryBrowser compare/adopt tool (storybook feature only)
     #[cfg(feature = "storybook")]
     DesignExplorer,
+    /// In-app StoryBrowser focused on non-list information states.
+    #[cfg(feature = "storybook")]
+    DesignNonListStates,
     /// Agent Chat window for conversing with AI assistants
     AiChat,
     /// Notes window for quick notes and scratchpad
@@ -457,6 +460,8 @@ impl BuiltInEntry {
             BuiltInFeature::FooterGallery => "Open Footer Gallery",
             #[cfg(feature = "storybook")]
             BuiltInFeature::DesignExplorer => "Open Explorer",
+            #[cfg(feature = "storybook")]
+            BuiltInFeature::DesignNonListStates => "Open Non-List States",
             BuiltInFeature::AiChat => "Open Agent Chat",
             BuiltInFeature::Notes => "Open Notes",
             BuiltInFeature::EmojiPicker => "Open Emoji Picker",
@@ -588,6 +593,8 @@ impl BuiltInEntry {
             BuiltInFeature::FooterGallery => "Footer Gallery",
             #[cfg(feature = "storybook")]
             BuiltInFeature::DesignExplorer => "Explorer",
+            #[cfg(feature = "storybook")]
+            BuiltInFeature::DesignNonListStates => "Non-List States",
             BuiltInFeature::AiChat => "Agent",
             BuiltInFeature::Notes => "Notes",
             BuiltInFeature::EmojiPicker => "Emoji",
@@ -1007,6 +1014,36 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "flask-conical",
             ));
             debug!("Added Design Explorer built-in entry");
+
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin/design-non-list-states",
+                "Design: Non-List States",
+                "Open the non-list state language showcase in the design explorer",
+                vec![
+                    "design",
+                    "non-list",
+                    "non list",
+                    "state",
+                    "states",
+                    "language",
+                    "storybook",
+                    "showcase",
+                    "empty",
+                    "help",
+                    "form",
+                    "setup",
+                    "permission",
+                    "recovery",
+                    "about",
+                    "density",
+                    "compare",
+                    "variant",
+                    "ui",
+                ],
+                BuiltInFeature::DesignNonListStates,
+                "flask-conical",
+            ));
+            debug!("Added Non-List States design built-in entry");
         }
 
         // =========================================================================
