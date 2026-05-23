@@ -1,7 +1,7 @@
 //! Agent Client Protocol (ACP) integration.
 //!
 //! Provides a generic transport layer for communicating with ACP-compatible
-//! AI coding agents (Claude Code, Gemini CLI, Codex, OpenCode, etc.).
+//! AI coding agents (Claude Code, AGY, Codex, OpenCode, etc.).
 //!
 //! # Module Layout
 //!
@@ -16,6 +16,7 @@
 
 use gpui::AppContext as _;
 
+pub(crate) mod agy_adapter;
 pub(crate) mod catalog;
 pub(crate) mod chat_window;
 pub(crate) mod client;

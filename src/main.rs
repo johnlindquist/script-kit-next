@@ -364,6 +364,14 @@ include!("render_prompts/micro.rs");
 include!("render_script_list/mod.rs");
 
 fn main() {
+    if std::env::args().any(|arg| arg == "--agy-acp-adapter") {
+        if let Err(error) = ai::acp::agy_adapter::run_stdio() {
+            eprintln!("agy ACP adapter failed: {error:#}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
     include!("main_entry/app_run_setup.rs");
 }
 #[cfg(test)]

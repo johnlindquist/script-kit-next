@@ -1,7 +1,7 @@
 //! Tab AI harness configuration and context formatting.
 //!
 //! Defines the contract for connecting Tab AI to an external CLI harness
-//! (Claude Code, Codex, Gemini CLI, Copilot CLI, or a custom command).
+//! (Claude Code, Codex, AGY, Copilot CLI, or a custom command).
 //! The context assembly pipeline (`TabAiContextBlob`) is unchanged — this
 //! module only consumes it.
 
@@ -149,7 +149,7 @@ pub const TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION: u32 = 1;
 pub enum HarnessBackendKind {
     ClaudeCode,
     Codex,
-    GeminiCli,
+    Agy,
     CopilotCli,
     Custom,
 }

@@ -113,9 +113,9 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         let view_weak = view_entity.downgrade();
-        let generation =
-            ACP_OBSERVED_STATE_SYNC_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                + 1;
+        let generation = ACP_OBSERVED_STATE_SYNC_GENERATION
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1;
         cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(50))
@@ -176,7 +176,7 @@ impl ScriptListApp {
     /// Open the Tab AI surface (zero-intent).
     ///
     /// Routes to the harness terminal (`QuickTerminalView`), which connects
-    /// to a pre-running CLI harness (Claude Code, Codex, Gemini CLI, etc.)
+    /// to a pre-running CLI harness (Claude Code, Codex, AGY, etc.)
     /// and injects a flat text-native context block via PTY stdin.
     pub(crate) fn open_tab_ai_chat(&mut self, cx: &mut Context<Self>) {
         self.open_tab_ai_chat_with_entry_intent(None, cx);

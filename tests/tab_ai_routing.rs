@@ -1610,8 +1610,8 @@ fn smoke_matrix_codex_paste_only_stages_context() {
 }
 
 #[test]
-fn smoke_matrix_gemini_cli_paste_only_stages_context() {
-    let _config = config_for_backend(script_kit_gpui::ai::HarnessBackendKind::GeminiCli, "gemini");
+fn smoke_matrix_agy_paste_only_stages_context() {
+    let _config = config_for_backend(script_kit_gpui::ai::HarnessBackendKind::Agy, "agy");
     let context = smoke_matrix_context();
     let submission = script_kit_gpui::ai::build_tab_ai_harness_submission(
         &context,
@@ -1621,7 +1621,7 @@ fn smoke_matrix_gemini_cli_paste_only_stages_context() {
         None,
         &[],
     )
-    .expect("Gemini CLI PasteOnly submission must succeed");
+    .expect("AGY PasteOnly submission must succeed");
 
     assert!(submission.contains("Script Kit context"));
     assert!(submission.ends_with('\n'));
@@ -1659,9 +1659,9 @@ fn smoke_matrix_all_backends_produce_identical_context_block() {
     let codex =
         script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, None, &[])
             .expect("Codex");
-    let gemini =
+    let agy =
         script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, None, &[])
-            .expect("Gemini CLI");
+            .expect("AGY");
     let copilot =
         script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, None, &[])
             .expect("Copilot CLI");
@@ -1670,13 +1670,10 @@ fn smoke_matrix_all_backends_produce_identical_context_block() {
         claude, codex,
         "Claude Code and Codex must produce identical context"
     );
+    assert_eq!(codex, agy, "Codex and AGY must produce identical context");
     assert_eq!(
-        codex, gemini,
-        "Codex and Gemini CLI must produce identical context"
-    );
-    assert_eq!(
-        gemini, copilot,
-        "Gemini CLI and Copilot CLI must produce identical context"
+        agy, copilot,
+        "AGY and Copilot CLI must produce identical context"
     );
 }
 
@@ -1685,7 +1682,7 @@ fn smoke_matrix_submit_mode_appends_sentinel_for_all_backends() {
     let context = smoke_matrix_context();
     let mode = script_kit_gpui::ai::TabAiHarnessSubmissionMode::Submit;
 
-    for label in ["Claude Code", "Codex", "Gemini CLI", "Copilot CLI"] {
+    for label in ["Claude Code", "Codex", "AGY", "Copilot CLI"] {
         let submission = script_kit_gpui::ai::build_tab_ai_harness_submission(
             &context,
             None,

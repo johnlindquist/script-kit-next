@@ -224,9 +224,9 @@ fn classify_agent_source_distinguishes_legacy_from_builtin() {
     );
     assert!(
         ACP_CONFIG_SOURCE.contains(
-            r#""opencode" | "gemini-cli" | "codex-acp" => super::catalog::AcpAgentSource::BuiltIn"#
+            r#""opencode" | "codex-acp" | "agy-acp" => super::catalog::AcpAgentSource::BuiltIn"#
         ),
-        "opencode, gemini-cli, and codex-acp must be classified as BuiltIn"
+        "opencode, codex-acp, and agy-acp must be classified as BuiltIn"
     );
 }
 

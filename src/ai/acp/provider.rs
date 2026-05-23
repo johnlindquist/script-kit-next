@@ -1,6 +1,6 @@
 //! ACP-backed `AiProvider` implementation.
 //!
-//! Wraps `AcpRuntime` so that any ACP-compatible agent (Claude Code, Gemini CLI,
+//! Wraps `AcpRuntime` so that any ACP-compatible agent (Claude Code, AGY,
 //! Codex, OpenCode) can be used through the same `AiProvider` trait the rest of
 //! the codebase already relies on.
 

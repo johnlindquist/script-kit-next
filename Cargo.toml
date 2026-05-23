@@ -44,6 +44,10 @@ test = false
 required-features = ["menu-syntax-doctor"]
 
 [[test]]
+name = "agy_acp_adapter_harness"
+path = "tests/agy_acp_adapter_harness.rs"
+
+[[test]]
 name = "menu_syntax_doctor_cli"
 path = "tests/menu_syntax_doctor_cli.rs"
 required-features = ["menu-syntax-doctor"]
@@ -169,7 +173,7 @@ hex = "0.4.3"
 # ACP (Agent Client Protocol) — standardized editor ↔ AI-agent communication
 agent-client-protocol = { version = "0.10.4", features = ["unstable_session_usage", "unstable_session_model", "unstable_auth_methods"] }
 async-trait = "0.1"
-tokio = { version = "1", features = ["rt", "sync", "time", "process", "io-util"] }
+tokio = { version = "1", features = ["rt", "sync", "time", "process", "io-util", "io-std"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 
 # Secure temporary file creation (moved from dev-dependencies for production use)

@@ -132,18 +132,6 @@ const EMBEDDED_ACP_AGENTS_JSON: &str = r#"{
       }
     },
     {
-      "id": "gemini-cli",
-      "displayName": "Gemini CLI",
-      "command": "gemini",
-      "args": ["--acp"],
-      "env": {},
-      "models": [],
-      "install": {
-        "command": "npm",
-        "args": ["install", "-g", "@google/gemini-cli"]
-      }
-    },
-    {
       "id": "codex-acp",
       "displayName": "Codex",
       "command": "codex-acp",
@@ -152,6 +140,27 @@ const EMBEDDED_ACP_AGENTS_JSON: &str = r#"{
       "models": [],
       "auth": {
         "summary": "Authenticate with ChatGPT, CODEX_API_KEY, or OPENAI_API_KEY."
+      }
+    },
+    {
+      "id": "agy-acp",
+      "displayName": "Antigravity CLI",
+      "command": "script-kit-gpui",
+      "args": ["--agy-acp-adapter"],
+      "env": {},
+      "models": [
+        {
+          "id": "default",
+          "displayName": "Antigravity CLI Default",
+          "contextWindow": 1048576
+        }
+      ],
+      "install": {
+        "command": "agy",
+        "args": ["install"]
+      },
+      "auth": {
+        "summary": "Uses your local Antigravity CLI Google sign-in and subscription; no Gemini API key is required."
       }
     }
   ]

@@ -1162,12 +1162,12 @@ mod tests {
     fn ranking_prefers_non_legacy_when_equal() {
         let agents = vec![
             make_ranked_entry("claude-code", AcpAgentSource::LegacyClaudeCode, false),
-            make_ranked_entry("gemini-cli", AcpAgentSource::ScriptKitCatalog, false),
+            make_ranked_entry("agy-acp", AcpAgentSource::ScriptKitCatalog, false),
         ];
         let result = resolve_default_acp_launch(&agents, None);
         assert_eq!(
             result.selected_agent_id(),
-            Some("gemini-cli"),
+            Some("agy-acp"),
             "non-legacy should rank ahead of legacy when otherwise equal"
         );
     }
