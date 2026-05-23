@@ -1038,13 +1038,14 @@ impl ScriptListApp {
         let browser_history_generation =
             crate::browser_history::root_browser_history_snapshot_status().generation;
         let root_windows_generation = self.root_windows_refresh_generation;
+        let grouped_source_filter_key = format!("{grouped_source_filters:?}");
         let grouped_cache_key = match current_app_commands_app_name.as_deref() {
             Some(app_name) => format!(
-                "{}\x1Fcurrent-app={app_name}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}\x1Fbrowser-tabs-gen={browser_tabs_generation}\x1Fbrowser-history-gen={browser_history_generation}",
+                "{}\x1Fsource-filters={grouped_source_filter_key}\x1Fcurrent-app={app_name}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}\x1Fbrowser-tabs-gen={browser_tabs_generation}\x1Fbrowser-history-gen={browser_history_generation}",
                 self.computed_filter_text
             ),
             None => format!(
-                "{}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}\x1Fbrowser-tabs-gen={browser_tabs_generation}\x1Fbrowser-history-gen={browser_history_generation}",
+                "{}\x1Fsource-filters={grouped_source_filter_key}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}\x1Fbrowser-tabs-gen={browser_tabs_generation}\x1Fbrowser-history-gen={browser_history_generation}",
                 self.computed_filter_text
             ),
         };

@@ -1820,23 +1820,9 @@ impl ScriptListApp {
                 main_div = main_div.child(panel);
             }
 
-            // Hover blocker for the native footer zone. Uses deferred() so the
-            // hitbox is appended LAST (checked FIRST in GPUI's reverse-order
-            // hit test). block_mouse_except_scroll tells the hit test to exclude
-            // elements behind this hitbox from hover while allowing scroll.
-            // No background/border = nothing rendered into Metal layer = native
-            // NSVisualEffectView blur shows through.
-            main_div = main_div.child(gpui::deferred(
-                div()
-                    .absolute()
-                    .bottom_0()
-                    .left_0()
-                    .w_full()
-                    .h(px(
-                        crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
-                    ))
-                    .block_mouse_except_scroll(),
-            ));
+            main_div = main_div.child(
+                crate::components::prompt_layout_shell::render_native_main_window_footer_hover_blocker(),
+            );
 
             if state_changed && crate::logging::filter_perf_trace_enabled() {
                 tracing::info!(

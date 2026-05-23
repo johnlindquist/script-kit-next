@@ -3936,12 +3936,17 @@ impl ScriptListApp {
             ));
 
         // ── Footer: canonical three-key hint strip per .impeccable.md ──
-        let footer = self.main_window_footer_slot(
-            crate::components::prompt_layout_shell::render_simple_hint_strip(
-                Self::theme_chooser_hint_items(),
-                None,
-            ),
-        );
+        let uses_native_footer = self.main_window_uses_native_footer();
+        let footer = if uses_native_footer {
+            None
+        } else {
+            self.main_window_footer_slot(
+                crate::components::prompt_layout_shell::render_simple_hint_strip(
+                    Self::theme_chooser_hint_items(),
+                    None,
+                ),
+            )
+        };
 
         // ── Empty state when filter has no matches ─────────────────
         if filtered_count == 0 {
@@ -3953,6 +3958,7 @@ impl ScriptListApp {
                 .rounded(px(design_visual.radius_lg))
                 .text_color(rgb(text_primary))
                 .font_family(self.theme_font_family())
+                .relative()
                 .key_context("theme_chooser")
                 .track_focus(&self.focus_handle)
                 .on_key_down(handle_key)
@@ -3960,6 +3966,11 @@ impl ScriptListApp {
                 .child(header_divider)
                 .child(self.render_theme_chooser_empty_state_body(filter, summary, &chrome))
                 .when_some(footer, |d, footer| d.child(footer))
+                .when(uses_native_footer, |d| {
+                    d.child(
+                        crate::components::prompt_layout_shell::render_native_main_window_footer_hover_blocker(),
+                    )
+                })
                 .into_any_element();
         }
 
@@ -3972,6 +3983,7 @@ impl ScriptListApp {
             .rounded(px(design_visual.radius_lg))
             .text_color(rgb(text_primary))
             .font_family(self.theme_font_family())
+            .relative()
             .key_context("theme_chooser")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
@@ -3996,6 +4008,11 @@ impl ScriptListApp {
                     .child(preview_panel),
             )
             .when_some(footer, |d, footer| d.child(footer))
+            .when(uses_native_footer, |d| {
+                d.child(
+                    crate::components::prompt_layout_shell::render_native_main_window_footer_hover_blocker(),
+                )
+            })
             .into_any_element()
     }
 }

@@ -399,14 +399,17 @@ fn native_footer_height_uses_shared_token() {
         "AppKit native footer host height must use the shared native footer token"
     );
     assert!(
-        PROMPT_LAYOUT_SHELL_SOURCE
-            .contains("crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT"),
+        PROMPT_LAYOUT_SHELL_SOURCE.contains("render_native_main_window_footer_spacer()")
+            && PROMPT_LAYOUT_SHELL_SOURCE
+                .contains("crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT"),
         "GPUI native footer spacer must reserve the shared native footer height"
     );
     assert!(
-        RENDER_SCRIPT_LIST_SOURCE
-            .contains("crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT"),
-        "main list footer hover blocker must use the shared native footer height"
+        PROMPT_LAYOUT_SHELL_SOURCE.contains("render_native_main_window_footer_hover_blocker()")
+            && PROMPT_LAYOUT_SHELL_SOURCE
+                .contains("crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT")
+            && RENDER_SCRIPT_LIST_SOURCE.contains("render_native_main_window_footer_hover_blocker()"),
+        "main list footer hover blocker must use the shared native footer height through the shared helper"
     );
     assert!(
         APP_NAVIGATION_SCROLL_SOURCE

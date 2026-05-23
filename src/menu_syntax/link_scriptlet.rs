@@ -141,7 +141,13 @@ pub fn normalize_link_capture_invocation(invocation: &mut CaptureInvocation) {
         invocation.kv = draft
             .metadata
             .iter()
-            .filter_map(|(key, value)| value.as_str().map(|value| (key.clone(), value.to_string())))
+            .filter_map(|(key, value)| {
+                if key == "url" || key == "title" || key == "tool" {
+                    None
+                } else {
+                    value.as_str().map(|value| (key.clone(), value.to_string()))
+                }
+            })
             .collect();
         if let Some(tags) = draft.metadata.get("tags").and_then(Value::as_array) {
             for tag in tags.iter().filter_map(Value::as_str) {
@@ -277,7 +283,12 @@ pub fn parse_link_scriptlet_capture(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
-        .or_else(|| title_from_body(body.as_deref(), url.as_deref()));
+        .or_else(|| title_from_body(body.as_deref(), url.as_deref()))
+        .or_else(|| {
+            (operation == LinkScriptletOperation::Create)
+                .then(|| url.clone())
+                .flatten()
+        });
     if let Some(title) = title.as_deref() {
         metadata.insert("title".to_string(), Value::String(title.to_string()));
     }
@@ -509,8 +520,14 @@ fn unquote(value: &str) -> String {
 
 fn first_http_url(text: &str) -> Option<String> {
     text.split_whitespace()
-        .find(|part| is_http_url(part))
-        .map(ToString::to_string)
+        .find(|part| is_http_url(part) || is_domain_like(part))
+        .map(|part| {
+            if is_http_url(part) {
+                part.to_string()
+            } else {
+                format!("https://{}", part)
+            }
+        })
 }
 
 fn title_from_body(body: Option<&str>, url: Option<&str>) -> Option<String> {
@@ -519,7 +536,7 @@ fn title_from_body(body: Option<&str>, url: Option<&str>) -> Option<String> {
         .split_whitespace()
         .filter(|part| !part.starts_with('@'))
         .filter(|part| url.map(|url| *part != url).unwrap_or(true))
-        .filter(|part| !is_http_url(part))
+        .filter(|part| !is_http_url(part) && !is_domain_like(part))
         .collect::<Vec<_>>()
         .join(" ");
     (!title.trim().is_empty()).then(|| title.trim().to_string())
@@ -527,6 +544,24 @@ fn title_from_body(body: Option<&str>, url: Option<&str>) -> Option<String> {
 
 pub(crate) fn is_http_url(text: &str) -> bool {
     text.starts_with("http://") || text.starts_with("https://")
+}
+
+pub(crate) fn is_domain_like(tok: &str) -> bool {
+    if let Some(dot_idx) = tok.rfind('.') {
+        let suffix = &tok[dot_idx + 1..];
+        if suffix.len() >= 2 && suffix.chars().all(|c| c.is_ascii_alphabetic()) {
+            if tok.starts_with('#') || tok.starts_with('@') {
+                return false;
+            }
+            if tok.contains(':') || tok.contains('=') {
+                return false;
+            }
+            if dot_idx > 0 {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -605,5 +640,16 @@ mod tests {
             active_link_capture_field_selector_for_input(";link https://example.com ti:")
                 .expect("field selector");
         assert_eq!(selector.fields[0].key, "title");
+    }
+
+    #[test]
+    fn parses_domain_like_url_and_defaults_title() {
+        let d1 = draft(";link github.com");
+        assert_eq!(d1.url.as_deref(), Some("https://github.com"));
+        assert_eq!(d1.title.as_deref(), Some("https://github.com"));
+
+        let d2 = draft(";link zed.dev My Title");
+        assert_eq!(d2.url.as_deref(), Some("https://zed.dev"));
+        assert_eq!(d2.title.as_deref(), Some("My Title"));
     }
 }
