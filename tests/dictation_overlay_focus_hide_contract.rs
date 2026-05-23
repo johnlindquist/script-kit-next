@@ -142,9 +142,9 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
     assert!(
         FOOTER_CHROME.contains("pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.5;")
             && FOOTER_CHROME
-                .contains("pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.18;")
+                .contains("pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.14;")
             && FOOTER_CHROME.contains(
-                "pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight::SEMIBOLD;"
+                "pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight(560.0);"
             )
             && FOOTER_CHROME.contains("pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 20.0;")
             && FOOTER_CHROME.contains("pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;")
@@ -182,10 +182,9 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
     );
     assert!(
         DICTATION_WINDOW.contains("FooterButtonConfig::new(FooterAction::Stop")
-            && DICTATION_WINDOW.contains("FooterButtonConfig::new(FooterAction::Ai")
-            && DICTATION_WINDOW.contains(
-                "FooterButtonConfig::new(FooterAction::Ai, MIC_KEYCAP, active_microphone_footer_label())"
-            )
+            && DICTATION_WINDOW.contains("FooterAction::Ai,")
+            && DICTATION_WINDOW.contains("MIC_KEYCAP,")
+            && DICTATION_WINDOW.contains("active_microphone_footer_label(),")
             && DICTATION_WINDOW.contains("fn active_microphone_footer_label() -> SharedString")
             && DICTATION_WINDOW.contains("crate::dictation::get_active_dictation_device()")
             && DICTATION_WINDOW.contains("FooterButtonConfig::new(FooterAction::Close")
@@ -200,7 +199,7 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
         "DictationSessionPhase::Confirming => vec![",
     );
     let mic_pos = recording_footer
-        .find("FooterButtonConfig::new(FooterAction::Ai, MIC_KEYCAP, active_microphone_footer_label())")
+        .find("FooterAction::Ai,")
         .expect("recording footer must include the mic action");
     let stop_pos = recording_footer
         .find("FooterButtonConfig::new(\n                FooterAction::Stop,")

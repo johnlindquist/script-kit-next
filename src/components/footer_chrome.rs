@@ -9,8 +9,8 @@ use crate::theme::Theme;
 use crate::ui_foundation::HexColorExt;
 
 pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.5;
-pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.18;
-pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight::SEMIBOLD;
+pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.14;
+pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight(560.0);
 pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 20.0;
 pub(crate) const FOOTER_KEYCAP_PADDING_X_PX: f32 = 4.0;
 pub(crate) const FOOTER_KEYCAP_RADIUS_PX: f32 = 4.0;
