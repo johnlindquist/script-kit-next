@@ -40,13 +40,28 @@ fn dictation_window_uses_shared_theme_background_and_material() {
         "Dictation must preserve runtime and preview theme gradient layers"
     );
     assert!(
-        dictation.contains("crate::platform::configure_secondary_window_vibrancy(")
+        dictation.contains("crate::platform::configure_dictation_overlay_window(")
             && dictation.contains("theme.should_use_dark_vibrancy()"),
-        "Dictation native window must stay on the shared secondary-window vibrancy path"
+        "Dictation native window must use the explicit refreshable dictation material helper"
     );
     assert!(
         platform.contains("fn current_window_material()")
             && platform.contains("get_cached_theme().get_vibrancy().material"),
         "shared native window configuration must source material from the cached theme"
+    );
+    assert!(
+        platform.contains("pub unsafe fn configure_dictation_overlay_window")
+            && platform.contains(
+                "configure_window_vibrancy_common(window, \"DICTATION\", \"Dictation overlay\", is_dark)"
+            )
+            && platform.contains("Script Kit Dictation")
+            && platform.contains("title_string.contains(\"Script Kit Dictation\")"),
+        "Dictation overlay must be title-addressable by secondary-window appearance refresh"
+    );
+    assert!(
+        !dictation.contains("PromptFooterColors::from_theme")
+            && !dictation.contains("crate::components::prompt_footer::footer_surface_rgba")
+            && !dictation.contains("_surface_bg: gpui::Rgba"),
+        "Dictation must not keep dead PromptFooter surface background plumbing for its live footer"
     );
 }

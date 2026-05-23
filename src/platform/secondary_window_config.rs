@@ -254,7 +254,6 @@ pub unsafe fn configure_footer_popup_window(window: id, is_dark: bool) {
     if title != nil {
         let _: () = msg_send![window, setTitle: title];
     }
-
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -299,6 +298,31 @@ pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str,
     configure_window_vibrancy_common(window, "PANEL", window_name, is_dark);
 }
 
+/// Configure the live dictation overlay with the shared native material path.
+///
+/// The title is intentionally stable so appearance refresh can find the overlay
+/// without treating it as a main-window footer surface.
+#[cfg(target_os = "macos")]
+pub unsafe fn configure_dictation_overlay_window(window: id, is_dark: bool) {
+    if window.is_null() {
+        logging::log(
+            "DICTATION",
+            "WARNING: Cannot configure null Dictation overlay window vibrancy",
+        );
+        return;
+    }
+
+    configure_window_vibrancy_common(window, "DICTATION", "Dictation overlay", is_dark);
+
+    let title: id = msg_send![
+        class!(NSString),
+        stringWithUTF8String: c"Script Kit Dictation".as_ptr()
+    ];
+    if title != nil {
+        let _: () = msg_send![window, setTitle: title];
+    }
+}
+
 /// Configure a HUD overlay with the same native background and material path as
 /// the main window while preserving HUD-specific level and input behavior in the
 /// caller.
@@ -326,6 +350,11 @@ pub fn configure_secondary_window_vibrancy(
     _window_name: &str,
     _is_dark: bool,
 ) {
+    // No-op on non-macOS platforms
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn configure_dictation_overlay_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
     // No-op on non-macOS platforms
 }
 
@@ -437,6 +466,7 @@ pub fn update_all_secondary_windows_appearance(is_dark: bool) {
                 || title_string.contains("Script Kit Notes")
                 || title_string.contains("Actions")
                 || title_string.contains("Script Kit Footer")
+                || title_string.contains("Script Kit Dictation")
             {
                 // Clear window appearance so GPUI can detect system appearance changes.
                 // Set appearance on individual NSVisualEffectViews instead.

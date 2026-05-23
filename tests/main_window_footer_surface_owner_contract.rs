@@ -1,6 +1,7 @@
 //! Source-level contract for the native main-window footer surface owner.
 
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
+const DICTATION_WINDOW_SOURCE: &str = include_str!("../src/dictation/window.rs");
 const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
 const RENDER_PROMPTS_OTHER_SOURCE: &str = include_str!("../src/render_prompts/other.rs");
 const STARTUP_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
@@ -140,5 +141,30 @@ fn ui_window_delegates_footer_surface_to_app_view_contract() {
     assert!(
         !body.contains("match &self.current_view"),
         "ui_window must not duplicate the AppView footer surface map"
+    );
+}
+
+#[test]
+fn live_dictation_overlay_does_not_join_main_window_footer_ownership() {
+    let footer_map = function_body(APP_VIEW_STATE_SOURCE, "pub(crate) fn native_footer_surface");
+    assert!(
+        footer_map.contains("AppView::DictationHistoryView { .. } => Some(\"dictation_history\")"),
+        "DictationHistoryView is the main-window dictation history footer surface"
+    );
+    assert!(
+        !footer_map.contains("dictation_overlay"),
+        "Live DictationOverlay must not be owned by AppView::native_footer_surface"
+    );
+    assert!(
+        DICTATION_WINDOW_SOURCE.contains("DICTATION_OVERLAY_FOOTER_SURFACE")
+            && DICTATION_WINDOW_SOURCE.contains("\"dictation_overlay\""),
+        "Dictation overlay may keep a local footer identity for tests/logging"
+    );
+    assert!(
+        !DICTATION_WINDOW_SOURCE.contains("footer_action_channel")
+            && !DICTATION_WINDOW_SOURCE.contains("MainWindowFooterConfig")
+            && !DICTATION_WINDOW_SOURCE.contains("active_main_window_footer_surface")
+            && !DICTATION_WINDOW_SOURCE.contains("FooterAction::"),
+        "Dictation overlay must not dispatch through main-window native footer routing"
     );
 }

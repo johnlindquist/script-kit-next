@@ -99,11 +99,13 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
         "runtime and preview renders must both include the visible compact action rail"
     );
     assert!(
-        DICTATION_WINDOW.contains(
-            "crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT"
-        ) && DICTATION_WINDOW.contains("rgba(chrome.divider_rgba)")
-            && DICTATION_WINDOW.contains("HINT_STRIP_PADDING_X"),
-        "dictation action rail must share the native main-window footer height, divider, and inset tokens"
+        DICTATION_WINDOW
+            .contains("crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT")
+            && DICTATION_WINDOW.contains("crate::components::footer_chrome::footer_rail_chrome")
+            && DICTATION_WINDOW.contains(".bg(rgba(rail_chrome.surface_rgba))")
+            && DICTATION_WINDOW.contains("rgba(rail_chrome.divider_rgba)")
+            && DICTATION_WINDOW.contains(".px(px(rail_chrome.side_inset_px))"),
+        "dictation action rail must consume shared native-footer surface, height, divider, and inset tokens"
     );
     assert!(
         DICTATION_WINDOW.contains("crate::components::footer_chrome::render_footer_hint_content")
@@ -115,6 +117,19 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
             && DICTATION_WINDOW.contains(".group(\"footer-action-button\")")
             && !DICTATION_WINDOW.contains("render_inline_shortcut_keys("),
         "dictation action chips must render through the shared footer chrome owner with inset button height"
+    );
+    assert!(
+        DICTATION_WINDOW.contains(
+            "pub(crate) const DICTATION_OVERLAY_FOOTER_SURFACE: &str = \"dictation_overlay\";"
+        ),
+        "live dictation overlay should keep its own local footer/debug surface identity"
+    );
+    assert!(
+        !DICTATION_WINDOW.contains("footer_action_channel")
+            && !DICTATION_WINDOW.contains("MainWindowFooterConfig")
+            && !DICTATION_WINDOW.contains("active_main_window_footer_surface")
+            && !DICTATION_WINDOW.contains("FooterAction::"),
+        "dictation overlay must not import main-window native footer ownership or action routing"
     );
     assert!(
         FOOTER_CHROME.contains("pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.5;")
@@ -132,9 +147,14 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
             && FOOTER_CHROME.contains("pub(crate) const FOOTER_LABELCAP_BORDER_ALPHA: f32 = 0.0;")
             && FOOTER_CHROME.contains("let alpha = footer_keycap_border_alpha(theme, selected);")
             && FOOTER_CHROME.contains("pub(crate) fn footer_button_height(footer_height: f32)")
+            && FOOTER_CHROME.contains("pub(crate) fn footer_rail_chrome(theme: &Theme)")
+            && FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_ITEM_GAP_PX")
+            && FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_CONTENT_GAP_PX")
+            && FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX")
+            && FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX")
             && FOOTER_CHROME
                 .contains("FOOTER_KEY_GLYPH_NUDGE_Y_PX + FOOTER_RETURN_GLYPH_NUDGE_Y_PX"),
-        "shared footer chrome tokens must pin the native font and keycap opacity contract"
+        "shared footer chrome tokens must pin native font, keycap, rail, and button chrome contracts"
     );
     assert!(
         FOOTER_CHROME.contains("\"esc\" | \"escape\" => \"⎋\".to_string()")

@@ -17,11 +17,73 @@ pub(crate) const FOOTER_KEYCAP_RADIUS_PX: f32 = 4.0;
 pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;
+pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 4.0;
+pub(crate) const FOOTER_ACTION_CONTENT_GAP_PX: f32 = 3.0;
+pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX: f32 = 4.0;
+pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 4.0;
+pub(crate) const FOOTER_RUN_SLOT_MIN_WIDTH_PX: f32 = 96.0;
+pub(crate) const FOOTER_RUN_SLOT_MAX_WIDTH_PX: f32 = 176.0;
+pub(crate) const FOOTER_ACTIONS_SLOT_WIDTH_PX: f32 = 96.0;
+pub(crate) const FOOTER_AI_SLOT_WIDTH_PX: f32 = 56.0;
+pub(crate) const FOOTER_APPLY_SLOT_WIDTH_PX: f32 = 88.0;
+pub(crate) const FOOTER_CLOSE_SLOT_WIDTH_PX: f32 = 88.0;
+pub(crate) const FOOTER_STOP_SLOT_WIDTH_PX: f32 = 80.0;
+pub(crate) const FOOTER_PASTE_RESPONSE_SLOT_WIDTH_PX: f32 = 144.0;
 
 pub(crate) const FOOTER_LABELCAP_BORDER_ALPHA: f32 = 0.0;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) enum FooterActionSlot {
+    Run,
+    Actions,
+    Ai,
+    Apply,
+    Close,
+    Stop,
+    PasteResponse,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct FooterRailChrome {
+    pub height_px: f32,
+    pub side_inset_px: f32,
+    pub item_gap_px: f32,
+    pub surface_rgba: u32,
+    pub divider_rgba: u32,
+    pub hover_rgba: u32,
+    pub active_rgba: u32,
+    pub button_radius_px: f32,
+}
+
 pub(crate) enum FooterHintKeyMode {
     Shortcut,
+}
+
+pub(crate) fn footer_action_slot_width(slot: FooterActionSlot) -> f32 {
+    match slot {
+        FooterActionSlot::Run => FOOTER_RUN_SLOT_MIN_WIDTH_PX,
+        FooterActionSlot::Actions => FOOTER_ACTIONS_SLOT_WIDTH_PX,
+        FooterActionSlot::Ai => FOOTER_AI_SLOT_WIDTH_PX,
+        FooterActionSlot::Apply => FOOTER_APPLY_SLOT_WIDTH_PX,
+        FooterActionSlot::Close => FOOTER_CLOSE_SLOT_WIDTH_PX,
+        FooterActionSlot::Stop => FOOTER_STOP_SLOT_WIDTH_PX,
+        FooterActionSlot::PasteResponse => FOOTER_PASTE_RESPONSE_SLOT_WIDTH_PX,
+    }
+}
+
+pub(crate) fn footer_rail_chrome(theme: &Theme) -> FooterRailChrome {
+    let chrome = crate::theme::AppChromeColors::from_theme(theme);
+    FooterRailChrome {
+        height_px: crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+        side_inset_px: crate::window_resize::mini_layout::HINT_STRIP_PADDING_X,
+        item_gap_px: FOOTER_ACTION_ITEM_GAP_PX,
+        surface_rgba: chrome.inline_dropdown_surface_rgba,
+        divider_rgba: chrome.divider_rgba,
+        hover_rgba: chrome.hover_rgba,
+        active_rgba: chrome.selection_rgba,
+        button_radius_px: FOOTER_ACTION_BUTTON_RADIUS_PX,
+    }
 }
 
 fn normalize_footer_key_token(token: &str) -> String {
@@ -159,13 +221,13 @@ pub(crate) fn render_footer_hint_content(
     let full_text = theme.colors.text.primary.to_rgb();
 
     div()
-        .px(px(4.0))
+        .px(px(FOOTER_ACTION_CONTENT_PADDING_X_PX))
         .py(px(2.0))
-        .rounded(px(4.0))
+        .rounded(px(FOOTER_ACTION_BUTTON_RADIUS_PX))
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(3.0))
+        .gap(px(FOOTER_ACTION_CONTENT_GAP_PX))
         .group("footer-action-button")
         .child(render_footer_labelcap(label, theme, footer_text, full_text))
         .child(match mode {
@@ -207,7 +269,7 @@ fn render_footer_shortcut_keycaps(shortcut: String, theme: &Theme) -> AnyElement
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(3.0))
+        .gap(px(FOOTER_ACTION_CONTENT_GAP_PX))
         .children(
             split_footer_shortcut(&shortcut)
                 .into_iter()
@@ -285,6 +347,47 @@ mod tests {
         assert_eq!(footer_appkit_glyph_y("⌘", 20.0, 10.0), 4.0);
         assert_eq!(footer_appkit_glyph_y("↵", 20.0, 10.0), 3.0);
         assert_eq!(footer_button_height(32.0), 28.0);
+    }
+
+    #[test]
+    fn footer_action_chrome_tokens_match_native_footer_contract() {
+        assert_eq!(FOOTER_ACTION_ITEM_GAP_PX, 4.0);
+        assert_eq!(FOOTER_ACTION_CONTENT_GAP_PX, 3.0);
+        assert_eq!(FOOTER_ACTION_CONTENT_PADDING_X_PX, 4.0);
+        assert_eq!(FOOTER_ACTION_BUTTON_RADIUS_PX, 4.0);
+        assert_eq!(FOOTER_RUN_SLOT_MIN_WIDTH_PX, 96.0);
+        assert_eq!(FOOTER_RUN_SLOT_MAX_WIDTH_PX, 176.0);
+        assert_eq!(footer_action_slot_width(FooterActionSlot::Actions), 96.0);
+        assert_eq!(footer_action_slot_width(FooterActionSlot::Ai), 56.0);
+        assert_eq!(footer_action_slot_width(FooterActionSlot::Apply), 88.0);
+        assert_eq!(footer_action_slot_width(FooterActionSlot::Close), 88.0);
+        assert_eq!(footer_action_slot_width(FooterActionSlot::Stop), 80.0);
+        assert_eq!(
+            footer_action_slot_width(FooterActionSlot::PasteResponse),
+            144.0
+        );
+
+        let mut theme = Theme::dark_default();
+        let mut opacity = theme.get_opacity();
+        opacity.hover = 0.21;
+        opacity.selected = 0.47;
+        theme.opacity = Some(opacity);
+
+        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+        let rail = footer_rail_chrome(&theme);
+        assert_eq!(
+            rail.height_px,
+            crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT
+        );
+        assert_eq!(
+            rail.side_inset_px,
+            crate::window_resize::mini_layout::HINT_STRIP_PADDING_X
+        );
+        assert_eq!(rail.surface_rgba, chrome.inline_dropdown_surface_rgba);
+        assert_eq!(rail.divider_rgba, chrome.divider_rgba);
+        assert_eq!(rail.hover_rgba, chrome.hover_rgba);
+        assert_eq!(rail.active_rgba, chrome.selection_rgba);
+        assert_eq!(rail.button_radius_px, FOOTER_ACTION_BUTTON_RADIUS_PX);
     }
 
     #[test]

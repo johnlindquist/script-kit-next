@@ -10,15 +10,19 @@ const FOOTER_DIVIDER_ID: &str = "script-kit-footer-divider";
 #[cfg(target_os = "macos")]
 const FOOTER_HINTS_ID: &str = "script-kit-footer-hints";
 #[cfg(target_os = "macos")]
-const FOOTER_HINT_ITEM_GAP: f64 = 4.0;
+const FOOTER_HINT_ITEM_GAP: f64 =
+    crate::components::footer_chrome::FOOTER_ACTION_ITEM_GAP_PX as f64;
 #[cfg(target_os = "macos")]
-const FOOTER_HINT_KEY_LABEL_GAP: f64 = 3.0;
+const FOOTER_HINT_KEY_LABEL_GAP: f64 =
+    crate::components::footer_chrome::FOOTER_ACTION_CONTENT_GAP_PX as f64;
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_SIDE_INSET: f64 = crate::window_resize::mini_layout::HINT_STRIP_PADDING_X as f64;
 #[cfg(target_os = "macos")]
-const FOOTER_HINT_PADDING_X: f64 = 4.0;
+const FOOTER_HINT_PADDING_X: f64 =
+    crate::components::footer_chrome::FOOTER_ACTION_CONTENT_PADDING_X_PX as f64;
 #[cfg(target_os = "macos")]
-const FOOTER_HINT_RADIUS: f64 = 4.0;
+const FOOTER_HINT_RADIUS: f64 =
+    crate::components::footer_chrome::FOOTER_ACTION_BUTTON_RADIUS_PX as f64;
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_TEXT_ALIGN_LEFT: usize = 0;
 #[cfg(target_os = "macos")]
@@ -40,21 +44,28 @@ const FOOTER_ACTIVE_DOT_MIN_OPACITY: f32 = 0.22;
 #[cfg(target_os = "macos")]
 const FOOTER_ACTIVE_DOT_HALF_CYCLE_SECONDS: f64 = 1.1;
 #[cfg(target_os = "macos")]
-const FOOTER_RUN_SLOT_MIN_WIDTH: f64 = 96.0;
+const FOOTER_RUN_SLOT_MIN_WIDTH: f64 =
+    crate::components::footer_chrome::FOOTER_RUN_SLOT_MIN_WIDTH_PX as f64;
 #[cfg(target_os = "macos")]
-const FOOTER_RUN_SLOT_MAX_WIDTH: f64 = 176.0;
+const FOOTER_RUN_SLOT_MAX_WIDTH: f64 =
+    crate::components::footer_chrome::FOOTER_RUN_SLOT_MAX_WIDTH_PX as f64;
 #[cfg(target_os = "macos")]
-const FOOTER_ACTIONS_SLOT_WIDTH: f64 = 96.0;
+const FOOTER_ACTIONS_SLOT_WIDTH: f64 =
+    crate::components::footer_chrome::FOOTER_ACTIONS_SLOT_WIDTH_PX as f64;
 #[cfg(target_os = "macos")]
-const FOOTER_AI_SLOT_WIDTH: f64 = 56.0;
+const FOOTER_AI_SLOT_WIDTH: f64 = crate::components::footer_chrome::FOOTER_AI_SLOT_WIDTH_PX as f64;
 #[cfg(target_os = "macos")]
-const FOOTER_APPLY_SLOT_WIDTH: f64 = 88.0;
+const FOOTER_APPLY_SLOT_WIDTH: f64 =
+    crate::components::footer_chrome::FOOTER_APPLY_SLOT_WIDTH_PX as f64;
 #[cfg(target_os = "macos")]
-const FOOTER_CLOSE_SLOT_WIDTH: f64 = 88.0;
+const FOOTER_CLOSE_SLOT_WIDTH: f64 =
+    crate::components::footer_chrome::FOOTER_CLOSE_SLOT_WIDTH_PX as f64;
 #[cfg(target_os = "macos")]
-const FOOTER_STOP_SLOT_WIDTH: f64 = 80.0;
+const FOOTER_STOP_SLOT_WIDTH: f64 =
+    crate::components::footer_chrome::FOOTER_STOP_SLOT_WIDTH_PX as f64;
 #[cfg(target_os = "macos")]
-const FOOTER_PASTE_RESPONSE_SLOT_WIDTH: f64 = 144.0;
+const FOOTER_PASTE_RESPONSE_SLOT_WIDTH: f64 =
+    crate::components::footer_chrome::FOOTER_PASTE_RESPONSE_SLOT_WIDTH_PX as f64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FooterAction {

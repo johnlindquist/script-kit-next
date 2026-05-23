@@ -12,6 +12,8 @@ use crate::dictation::visualizer::silent_bars;
 pub(crate) const OVERLAY_WIDTH_PX: f32 = 520.0;
 /// Glass bar height in pixels.
 pub(crate) const OVERLAY_HEIGHT_PX: f32 = 72.0;
+/// Local footer/debug identity for the live overlay, separate from AppView footer ownership.
+pub(crate) const DICTATION_OVERLAY_FOOTER_SURFACE: &str = "dictation_overlay";
 /// Confirming phase uses the same bar height so content swaps inline.
 /// Rounded corner radius for the standalone glass bar.
 pub(crate) const OVERLAY_RADIUS_PX: f32 = 12.0;
@@ -196,8 +198,8 @@ use gpui::{
 };
 
 use crate::list_item::FONT_SYSTEM_UI;
+use crate::theme::get_cached_theme;
 use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED, OPACITY_SUBTLE, OPACITY_TEXT_MUTED};
-use crate::theme::{get_cached_theme, AppChromeColors};
 use crate::ui_foundation::HexColorExt;
 
 use parking_lot::Mutex;
@@ -1043,9 +1045,6 @@ impl Render for DictationOverlay {
         let window_background = crate::ui_foundation::main_window_matched_background(&theme);
         let theme_background_gradients =
             crate::ui_foundation::theme_background_gradient_layers("dictation-bg-layer", &theme);
-        let surface_bg = rgba(crate::components::prompt_footer::footer_surface_rgba(
-            crate::components::prompt_footer::PromptFooterColors::from_theme(&theme),
-        ));
         let border_color = rgba((theme.colors.ui.border << 8) | 0x40);
 
         let timer_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
@@ -1110,7 +1109,6 @@ impl Render for DictationOverlay {
                     ))
                     .child(wrap_dictation_overlay_action_rail(
                         self.render_recording_actions(cx),
-                        surface_bg,
                     ))
             }
             DictationSessionPhase::Confirming => {
@@ -1165,7 +1163,6 @@ impl Render for DictationOverlay {
                     ))
                     .child(wrap_dictation_overlay_action_rail(
                         self.render_confirming_actions(cx),
-                        surface_bg,
                     ))
             }
             DictationSessionPhase::Transcribing => {
@@ -1194,7 +1191,6 @@ impl Render for DictationOverlay {
                     ))
                     .child(wrap_dictation_overlay_action_rail(
                         self.render_close_action(cx),
-                        surface_bg,
                     ))
             }
             DictationSessionPhase::Delivering => div()
@@ -1215,7 +1211,6 @@ impl Render for DictationOverlay {
                 ))
                 .child(wrap_dictation_overlay_action_rail(
                     self.render_close_action(cx),
-                    surface_bg,
                 )),
             DictationSessionPhase::Finished => div()
                 .flex()
@@ -1235,7 +1230,6 @@ impl Render for DictationOverlay {
                 ))
                 .child(wrap_dictation_overlay_action_rail(
                     self.render_close_action(cx),
-                    surface_bg,
                 )),
             DictationSessionPhase::Failed(ref msg) => {
                 let err_text: SharedString = format!("Error: {msg}").into();
@@ -1257,7 +1251,6 @@ impl Render for DictationOverlay {
                     ))
                     .child(wrap_dictation_overlay_action_rail(
                         self.render_close_action(cx),
-                        surface_bg,
                     ))
             }
             DictationSessionPhase::Idle => div(),
@@ -1382,11 +1375,16 @@ fn dictation_hotkey_keycap(hotkey: &crate::config::HotkeyConfig) -> String {
 }
 
 fn action_chip_width(label: &str) -> f32 {
+    use crate::components::footer_chrome::{footer_action_slot_width, FooterActionSlot};
+
     match label {
-        ACTION_CONTINUE_LABEL => 112.0,
-        ACTION_MIC_LABEL => 112.0,
-        ACTION_CLOSE_LABEL => 72.0,
-        _ => 96.0,
+        ACTION_STOP_LABEL => footer_action_slot_width(FooterActionSlot::Stop),
+        ACTION_CANCEL_LABEL | ACTION_CLOSE_LABEL => {
+            footer_action_slot_width(FooterActionSlot::Close)
+        }
+        ACTION_MIC_LABEL => footer_action_slot_width(FooterActionSlot::PasteResponse),
+        ACTION_CONTINUE_LABEL => footer_action_slot_width(FooterActionSlot::Actions),
+        _ => footer_action_slot_width(FooterActionSlot::Run),
     }
 }
 
@@ -1434,7 +1432,9 @@ fn render_mic_action_chip_content(theme: &crate::theme::Theme) -> AnyElement {
         .flex_row()
         .items_center()
         .justify_center()
-        .gap(px(4.0))
+        .gap(px(
+            crate::components::footer_chrome::FOOTER_ACTION_ITEM_GAP_PX,
+        ))
         .font_family(FONT_SYSTEM_UI)
         .font_weight(crate::components::footer_chrome::FOOTER_HINT_FONT_WEIGHT_GPUI)
         .text_size(px(
@@ -1473,9 +1473,9 @@ fn render_clickable_action_chip(
     listener: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     let theme = get_cached_theme();
-    let chrome = AppChromeColors::from_theme(&theme);
-    let hover_bg = rgba(chrome.hover_rgba);
-    let active_bg = rgba(chrome.selection_rgba);
+    let rail_chrome = crate::components::footer_chrome::footer_rail_chrome(&theme);
+    let hover_bg = rgba(rail_chrome.hover_rgba);
+    let active_bg = rgba(rail_chrome.active_rgba);
     let width = action_chip_width(label.as_ref());
 
     div()
@@ -1487,7 +1487,7 @@ fn render_clickable_action_chip(
         .items_center()
         .justify_center()
         .group("footer-action-button")
-        .rounded(px(4.0))
+        .rounded(px(rail_chrome.button_radius_px))
         .cursor_pointer()
         .hover(move |style| style.bg(hover_bg))
         .active(move |style| style.bg(active_bg))
@@ -1495,34 +1495,28 @@ fn render_clickable_action_chip(
         .child(render_action_chip_content(label, key))
 }
 
-fn wrap_dictation_overlay_action_rail(
-    rail: impl IntoElement,
-    _surface_bg: gpui::Rgba,
-) -> impl IntoElement {
+fn wrap_dictation_overlay_action_rail(rail: impl IntoElement) -> impl IntoElement {
     div().w_full().child(rail)
 }
 
 fn render_clickable_action_rail(actions: impl IntoIterator<Item = AnyElement>) -> AnyElement {
     let theme = get_cached_theme();
-    let chrome = AppChromeColors::from_theme(&theme);
+    let rail_chrome = crate::components::footer_chrome::footer_rail_chrome(&theme);
 
     let mut rail = div()
         .id("dictation-action-rail")
         .w_full()
-        .h(px(
-            crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
-        ))
-        .min_h(px(
-            crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
-        ))
+        .h(px(rail_chrome.height_px))
+        .min_h(px(rail_chrome.height_px))
+        .bg(rgba(rail_chrome.surface_rgba))
         .border_t_1()
-        .border_color(rgba(chrome.divider_rgba))
-        .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
+        .border_color(rgba(rail_chrome.divider_rgba))
+        .px(px(rail_chrome.side_inset_px))
         .flex()
         .flex_row()
         .items_center()
-        .justify_center()
-        .gap(px(4.0));
+        .justify_end()
+        .gap(px(rail_chrome.item_gap_px));
 
     for action in actions {
         rail = rail.child(action);
@@ -1535,25 +1529,22 @@ fn render_static_action_rail(
     actions: impl IntoIterator<Item = (&'static str, SharedString)>,
 ) -> impl IntoElement {
     let theme = get_cached_theme();
-    let chrome = AppChromeColors::from_theme(&theme);
+    let rail_chrome = crate::components::footer_chrome::footer_rail_chrome(&theme);
 
     let mut rail = div()
         .id("dictation-action-rail")
         .w_full()
-        .h(px(
-            crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
-        ))
-        .min_h(px(
-            crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
-        ))
+        .h(px(rail_chrome.height_px))
+        .min_h(px(rail_chrome.height_px))
+        .bg(rgba(rail_chrome.surface_rgba))
         .border_t_1()
-        .border_color(rgba(chrome.divider_rgba))
-        .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
+        .border_color(rgba(rail_chrome.divider_rgba))
+        .px(px(rail_chrome.side_inset_px))
         .flex()
         .flex_row()
         .items_center()
-        .justify_center()
-        .gap(px(4.0));
+        .justify_end()
+        .gap(px(rail_chrome.item_gap_px));
 
     for (label, key) in actions {
         rail = rail.child(render_action_chip(label, key));
@@ -1576,9 +1567,6 @@ pub(crate) fn render_dictation_overlay_state_preview(
         "dictation-preview-bg-layer",
         &theme,
     );
-    let surface_bg = rgba(crate::components::prompt_footer::footer_surface_rgba(
-        crate::components::prompt_footer::PromptFooterColors::from_theme(&theme),
-    ));
     let border_color = rgba((theme.colors.ui.border << 8) | 0x40);
     let timer_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
     let muted_text = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
@@ -1641,7 +1629,6 @@ pub(crate) fn render_dictation_overlay_state_preview(
                         (ACTION_MIC_LABEL, SharedString::default()),
                         (ACTION_CANCEL_LABEL, ESC_KEYCAP.into()),
                     ]),
-                    surface_bg,
                 ))
         }
         DictationSessionPhase::Confirming => {
@@ -1695,7 +1682,6 @@ pub(crate) fn render_dictation_overlay_state_preview(
                         (ACTION_STOP_LABEL, ENTER_KEYCAP.into()),
                         (ACTION_CONTINUE_LABEL, ESC_KEYCAP.into()),
                     ]),
-                    surface_bg,
                 ))
         }
         DictationSessionPhase::Transcribing => div()
@@ -1717,7 +1703,6 @@ pub(crate) fn render_dictation_overlay_state_preview(
             ))
             .child(wrap_dictation_overlay_action_rail(
                 render_static_action_rail([(ACTION_CLOSE_LABEL, ESC_KEYCAP.into())]),
-                surface_bg,
             )),
         DictationSessionPhase::Delivering => div()
             .flex()
@@ -1737,7 +1722,6 @@ pub(crate) fn render_dictation_overlay_state_preview(
             ))
             .child(wrap_dictation_overlay_action_rail(
                 render_static_action_rail([(ACTION_CLOSE_LABEL, ESC_KEYCAP.into())]),
-                surface_bg,
             )),
         DictationSessionPhase::Finished => div()
             .flex()
@@ -1757,7 +1741,6 @@ pub(crate) fn render_dictation_overlay_state_preview(
             ))
             .child(wrap_dictation_overlay_action_rail(
                 render_static_action_rail([(ACTION_CLOSE_LABEL, ESC_KEYCAP.into())]),
-                surface_bg,
             )),
         DictationSessionPhase::Failed(msg) => {
             let err_text: SharedString = format!("Error: {msg}").into();
@@ -1779,7 +1762,6 @@ pub(crate) fn render_dictation_overlay_state_preview(
                 ))
                 .child(wrap_dictation_overlay_action_rail(
                     render_static_action_rail([(ACTION_CLOSE_LABEL, ESC_KEYCAP.into())]),
-                    surface_bg,
                 ))
         }
         DictationSessionPhase::Idle => div(),
@@ -2044,11 +2026,7 @@ pub fn open_dictation_overlay(
                     // Called on the main thread as required by AppKit.
                     unsafe {
                         let ns_window: cocoa::base::id = msg_send![ns_view, window];
-                        crate::platform::configure_secondary_window_vibrancy(
-                            ns_window,
-                            "Dictation",
-                            is_dark,
-                        );
+                        crate::platform::configure_dictation_overlay_window(ns_window, is_dark);
                     }
                 }
             }
