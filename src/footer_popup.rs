@@ -1778,11 +1778,11 @@ mod footer_layout_tests {
 
     #[test]
     fn footer_hint_slot_widths_are_stable_per_action() {
-        assert_eq!(footer_hint_slot_width(FooterAction::Run), 96.0);
-        assert_eq!(footer_hint_slot_width(FooterAction::Actions), 96.0);
-        assert_eq!(footer_hint_slot_width(FooterAction::Ai), 56.0);
-        assert_eq!(footer_hint_slot_width(FooterAction::Stop), 80.0);
-        assert_eq!(footer_hint_slot_width(FooterAction::PasteResponse), 144.0);
+        assert_eq!(footer_hint_slot_width(FooterAction::Run), 92.0);
+        assert_eq!(footer_hint_slot_width(FooterAction::Actions), 92.0);
+        assert_eq!(footer_hint_slot_width(FooterAction::Ai), 52.0);
+        assert_eq!(footer_hint_slot_width(FooterAction::Stop), 76.0);
+        assert_eq!(footer_hint_slot_width(FooterAction::PasteResponse), 140.0);
     }
 
     #[test]
@@ -1798,7 +1798,7 @@ mod footer_layout_tests {
 
     #[test]
     fn footer_hint_content_group_is_centered_within_slot() {
-        let item_width = 96.0;
+        let item_width = 92.0;
         let label_width = 34.0;
         let key_width = 18.0;
 
@@ -1807,19 +1807,19 @@ mod footer_layout_tests {
         let left_padding = label_x;
         let right_padding = item_width - (key_x + key_width);
 
-        assert_eq!(content_width, label_width + 3.0 + key_width);
+        assert_eq!(content_width, label_width + 2.0 + key_width);
         assert!((left_padding - right_padding).abs() <= 1.0);
     }
 
     #[test]
     fn run_hint_keeps_key_glyph_anchored_to_trailing_padding() {
-        let short = footer_hint_content_layout(FooterAction::Run, 96.0, 20.0, 18.0);
+        let short = footer_hint_content_layout(FooterAction::Run, 92.0, 20.0, 18.0);
         let long = footer_hint_content_layout(FooterAction::Run, 140.0, 64.0, 18.0);
 
-        assert_eq!(short.1, 74.0);
-        assert_eq!(long.1, 118.0);
-        assert_eq!(96.0 - (short.1 + 18.0), 4.0);
-        assert_eq!(140.0 - (long.1 + 18.0), 4.0);
+        assert_eq!(short.1, 72.0);
+        assert_eq!(long.1, 120.0);
+        assert_eq!(92.0 - (short.1 + 18.0), 2.0);
+        assert_eq!(140.0 - (long.1 + 18.0), 2.0);
     }
 
     #[test]
@@ -1852,15 +1852,15 @@ mod footer_layout_tests {
 
         assert_eq!(
             footer_hint_max_item_width(FooterAction::Run, 480.0, &buttons),
-            Some(176.0)
+            Some(172.0)
         );
         assert_eq!(
             footer_hint_max_item_width(FooterAction::Run, 640.0, &buttons),
-            Some(176.0)
+            Some(172.0)
         );
         assert_eq!(
             footer_hint_max_item_width(FooterAction::Run, 120.0, &buttons),
-            Some(96.0)
+            Some(92.0)
         );
         assert_eq!(
             footer_hint_max_item_width(FooterAction::Ai, 480.0, &buttons),
@@ -1873,8 +1873,8 @@ mod footer_layout_tests {
         let (chip_width, text_width) =
             footer_hint_label_widths(360.0, 5.0, 18.0, Some(180.0), 20.0);
 
-        assert_eq!(chip_width, 149.0);
-        assert_eq!(text_width, 139.0);
+        assert_eq!(chip_width, 154.0);
+        assert_eq!(text_width, 144.0);
         assert!(text_width < 360.0);
     }
 

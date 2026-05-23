@@ -165,6 +165,13 @@ impl TextViewState {
         self.increment_update(text, false, cx);
     }
 
+    /// Print parsed blocks for debugging.
+    pub fn debug_print(&self) {
+        let content = self.parsed_content.lock().unwrap();
+        println!("TEXT: {:?}", self.text);
+        println!("BLOCKS: {:#?}", content.document.blocks);
+    }
+
     /// Append partial text content to the existing text.
     pub fn push_str(&mut self, new_text: &str, cx: &mut Context<Self>) {
         if new_text.is_empty() {

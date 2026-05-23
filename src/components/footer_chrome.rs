@@ -8,28 +8,28 @@ use crate::theme::opacity::{OPACITY_HIDDEN, OPACITY_TEXT_MUTED};
 use crate::theme::Theme;
 use crate::ui_foundation::HexColorExt;
 
-pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.5;
+pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.0;
 pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.14;
 pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight(560.0);
 pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 20.0;
-pub(crate) const FOOTER_KEYCAP_PADDING_X_PX: f32 = 4.0;
+pub(crate) const FOOTER_KEYCAP_PADDING_X_PX: f32 = 3.0;
 pub(crate) const FOOTER_KEYCAP_RADIUS_PX: f32 = 4.0;
 pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_SEMICOLON_GLYPH_NUDGE_Y_PX: f32 = -1.0;
 pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;
-pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 4.0;
-pub(crate) const FOOTER_ACTION_CONTENT_GAP_PX: f32 = 3.0;
-pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX: f32 = 4.0;
+pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 3.0;
+pub(crate) const FOOTER_ACTION_CONTENT_GAP_PX: f32 = 2.0;
+pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX: f32 = 2.0;
 pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 4.0;
-pub(crate) const FOOTER_RUN_SLOT_MIN_WIDTH_PX: f32 = 96.0;
-pub(crate) const FOOTER_RUN_SLOT_MAX_WIDTH_PX: f32 = 176.0;
-pub(crate) const FOOTER_ACTIONS_SLOT_WIDTH_PX: f32 = 96.0;
-pub(crate) const FOOTER_AI_SLOT_WIDTH_PX: f32 = 56.0;
-pub(crate) const FOOTER_APPLY_SLOT_WIDTH_PX: f32 = 88.0;
-pub(crate) const FOOTER_CLOSE_SLOT_WIDTH_PX: f32 = 88.0;
-pub(crate) const FOOTER_STOP_SLOT_WIDTH_PX: f32 = 80.0;
-pub(crate) const FOOTER_PASTE_RESPONSE_SLOT_WIDTH_PX: f32 = 144.0;
+pub(crate) const FOOTER_RUN_SLOT_MIN_WIDTH_PX: f32 = 92.0;
+pub(crate) const FOOTER_RUN_SLOT_MAX_WIDTH_PX: f32 = 172.0;
+pub(crate) const FOOTER_ACTIONS_SLOT_WIDTH_PX: f32 = 92.0;
+pub(crate) const FOOTER_AI_SLOT_WIDTH_PX: f32 = 52.0;
+pub(crate) const FOOTER_APPLY_SLOT_WIDTH_PX: f32 = 84.0;
+pub(crate) const FOOTER_CLOSE_SLOT_WIDTH_PX: f32 = 84.0;
+pub(crate) const FOOTER_STOP_SLOT_WIDTH_PX: f32 = 76.0;
+pub(crate) const FOOTER_PASTE_RESPONSE_SLOT_WIDTH_PX: f32 = 140.0;
 
 pub(crate) const FOOTER_LABELCAP_BORDER_ALPHA: f32 = 0.0;
 pub(crate) const FOOTER_MIC_ICON_TOKEN: &str = "mic";
@@ -371,20 +371,20 @@ mod tests {
 
     #[test]
     fn footer_action_chrome_tokens_match_native_footer_contract() {
-        assert_eq!(FOOTER_ACTION_ITEM_GAP_PX, 4.0);
-        assert_eq!(FOOTER_ACTION_CONTENT_GAP_PX, 3.0);
-        assert_eq!(FOOTER_ACTION_CONTENT_PADDING_X_PX, 4.0);
+        assert_eq!(FOOTER_ACTION_ITEM_GAP_PX, 3.0);
+        assert_eq!(FOOTER_ACTION_CONTENT_GAP_PX, 2.0);
+        assert_eq!(FOOTER_ACTION_CONTENT_PADDING_X_PX, 2.0);
         assert_eq!(FOOTER_ACTION_BUTTON_RADIUS_PX, 4.0);
-        assert_eq!(FOOTER_RUN_SLOT_MIN_WIDTH_PX, 96.0);
-        assert_eq!(FOOTER_RUN_SLOT_MAX_WIDTH_PX, 176.0);
-        assert_eq!(footer_action_slot_width(FooterActionSlot::Actions), 96.0);
-        assert_eq!(footer_action_slot_width(FooterActionSlot::Ai), 56.0);
-        assert_eq!(footer_action_slot_width(FooterActionSlot::Apply), 88.0);
-        assert_eq!(footer_action_slot_width(FooterActionSlot::Close), 88.0);
-        assert_eq!(footer_action_slot_width(FooterActionSlot::Stop), 80.0);
+        assert_eq!(FOOTER_RUN_SLOT_MIN_WIDTH_PX, 92.0);
+        assert_eq!(FOOTER_RUN_SLOT_MAX_WIDTH_PX, 172.0);
+        assert_eq!(footer_action_slot_width(FooterActionSlot::Actions), 92.0);
+        assert_eq!(footer_action_slot_width(FooterActionSlot::Ai), 52.0);
+        assert_eq!(footer_action_slot_width(FooterActionSlot::Apply), 84.0);
+        assert_eq!(footer_action_slot_width(FooterActionSlot::Close), 84.0);
+        assert_eq!(footer_action_slot_width(FooterActionSlot::Stop), 76.0);
         assert_eq!(
             footer_action_slot_width(FooterActionSlot::PasteResponse),
-            144.0
+            140.0
         );
 
         let mut theme = Theme::dark_default();

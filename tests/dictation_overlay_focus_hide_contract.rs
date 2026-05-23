@@ -140,7 +140,7 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
         "dictation overlay must reuse the native footer renderer while keeping action routing on a dictation-specific channel"
     );
     assert!(
-        FOOTER_CHROME.contains("pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.5;")
+        FOOTER_CHROME.contains("pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.0;")
             && FOOTER_CHROME
                 .contains("pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.14;")
             && FOOTER_CHROME.contains(

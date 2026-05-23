@@ -3,10 +3,10 @@ use gpui::{
     ListOffset, ListSizingBehavior, ListState, Render, SharedString, Window,
 };
 use gpui_component::scroll::ScrollableElement;
-use std::collections::HashSet;
+use gpui_component::text::{TextView, TextViewState};
+use std::collections::{HashMap, HashSet};
 
 use super::super::thread::{AcpThread, AcpThreadMessage, AcpThreadMessageRole};
-use crate::prompts::markdown::render_markdown_with_scope;
 use crate::theme::{self, PromptColors};
 
 pub enum AcpTranscriptEvent {
@@ -15,12 +15,12 @@ pub enum AcpTranscriptEvent {
 
 impl gpui::EventEmitter<AcpTranscriptEvent> for AcpTranscript {}
 
-type ToggleHandler = Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static>;
-
 pub struct AcpTranscript {
     list_state: ListState,
     messages: Vec<AcpThreadMessage>,
     collapsed_ids: HashSet<u64>,
+    message_views: HashMap<u64, gpui::Entity<TextViewState>>,
+    message_texts: HashMap<u64, String>,
 }
 
 impl AcpTranscript {
@@ -33,6 +33,8 @@ impl AcpTranscript {
             list_state,
             messages,
             collapsed_ids: HashSet::new(),
+            message_views: HashMap::new(),
+            message_texts: HashMap::new(),
         }
     }
 
@@ -48,6 +50,12 @@ impl AcpTranscript {
         if new_count != old_count {
             self.list_state.reset(new_count);
         }
+
+        // Clean up message inputs for deleted messages
+        let active_ids: HashSet<u64> = self.messages.iter().map(|m| m.id).collect();
+        self.message_views.retain(|id, _| active_ids.contains(id));
+        self.message_texts.retain(|id, _| active_ids.contains(id));
+
         cx.notify();
     }
 
@@ -93,67 +101,81 @@ impl AcpTranscript {
         self.list_state.scroll_to_end();
     }
 
-    fn render_message_static(
+    fn render_message(
         msg: &AcpThreadMessage,
         colors: &PromptColors,
         is_collapsed: bool,
+        text_view_state: &gpui::Entity<TextViewState>,
     ) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
 
         match msg.role {
-            AcpThreadMessageRole::User => Self::render_user_message_static(msg, colors, &theme),
+            AcpThreadMessageRole::User => {
+                Self::render_user_message(msg, colors, &theme, text_view_state)
+            }
             AcpThreadMessageRole::Assistant => {
-                Self::render_assistant_message_static(msg, colors, &theme)
+                Self::render_assistant_message(msg, colors, &theme, text_view_state)
             }
-            AcpThreadMessageRole::Thought => {
-                Self::render_collapsible_block_static(msg, colors, &theme, is_collapsed, false)
+            AcpThreadMessageRole::Thought => Self::render_collapsible_block(
+                msg,
+                colors,
+                &theme,
+                is_collapsed,
+                false,
+                text_view_state,
+            ),
+            AcpThreadMessageRole::Tool => Self::render_collapsible_block(
+                msg,
+                colors,
+                &theme,
+                is_collapsed,
+                true,
+                text_view_state,
+            ),
+            AcpThreadMessageRole::Error => Self::render_error_message(msg, colors, text_view_state),
+            AcpThreadMessageRole::System => {
+                Self::render_system_message(msg, colors, &theme, text_view_state)
             }
-            AcpThreadMessageRole::Tool => {
-                Self::render_collapsible_block_static(msg, colors, &theme, is_collapsed, true)
-            }
-            AcpThreadMessageRole::Error => Self::render_error_message_static(msg, colors),
-            AcpThreadMessageRole::System => Self::render_system_message_static(msg, colors, &theme),
         }
     }
 
-    fn render_user_message_static(
-        msg: &AcpThreadMessage,
-        colors: &PromptColors,
+    fn render_user_message(
+        _msg: &AcpThreadMessage,
+        _colors: &PromptColors,
         theme: &crate::theme::Theme,
+        text_view_state: &gpui::Entity<TextViewState>,
     ) -> gpui::AnyElement {
-        let scope_id = format!("acp-msg-{}", msg.id);
-
         div()
             .w_full()
             .px(px(12.0))
             .py(px(8.0))
             .rounded(px(8.0))
             .bg(rgba((theme.colors.text.primary << 8) | 0x06))
-            .child(render_markdown_with_scope(&msg.body, colors, Some(&scope_id)).w_full())
+            .child(TextView::new(text_view_state).selectable(true).w_full())
             .into_any_element()
     }
 
-    fn render_assistant_message_static(
-        msg: &AcpThreadMessage,
-        colors: &PromptColors,
+    fn render_assistant_message(
+        _msg: &AcpThreadMessage,
+        _colors: &PromptColors,
         _theme: &crate::theme::Theme,
+        text_view_state: &gpui::Entity<TextViewState>,
     ) -> gpui::AnyElement {
-        let scope_id = format!("acp-msg-{}", msg.id);
-
         div()
             .w_full()
             .px(px(12.0))
             .py(px(4.0))
-            .child(render_markdown_with_scope(&msg.body, colors, Some(&scope_id)).w_full())
+            .child(TextView::new(text_view_state).selectable(true).w_full())
             .into_any_element()
     }
 
-    fn render_collapsible_block_static(
+    fn render_collapsible_block(
         msg: &AcpThreadMessage,
-        colors: &PromptColors,
+        _colors: &PromptColors,
         theme: &crate::theme::Theme,
         is_collapsed: bool,
         is_tool: bool,
+        text_view_state: &gpui::Entity<TextViewState>,
     ) -> gpui::AnyElement {
         let (label, status_hint) = if is_tool {
             let mut lines = msg.body.lines();
@@ -184,8 +206,6 @@ impl AcpTranscript {
         } else {
             rgba((theme.colors.text.primary << 8) | 0x18)
         };
-
-        let scope_id = format!("acp-msg-{}", msg.id);
 
         let mut container = div()
             .w_full()
@@ -231,7 +251,7 @@ impl AcpTranscript {
                 .pt(px(4.0))
                 .max_h(px(200.0))
                 .overflow_y_hidden()
-                .child(render_markdown_with_scope(&msg.body, colors, Some(&scope_id)).w_full());
+                .child(TextView::new(text_view_state).selectable(true).w_full());
 
             container = container.child(body);
         }
@@ -239,12 +259,11 @@ impl AcpTranscript {
         container.into_any_element()
     }
 
-    fn render_error_message_static(
-        msg: &AcpThreadMessage,
-        colors: &PromptColors,
+    fn render_error_message(
+        _msg: &AcpThreadMessage,
+        _colors: &PromptColors,
+        text_view_state: &gpui::Entity<TextViewState>,
     ) -> gpui::AnyElement {
-        let scope_id = format!("acp-msg-{}", msg.id);
-
         div()
             .w_full()
             .px(px(12.0))
@@ -268,7 +287,7 @@ impl AcpTranscript {
                             .child("Error"),
                     ),
             )
-            .child(render_markdown_with_scope(&msg.body, colors, Some(&scope_id)).w_full())
+            .child(TextView::new(text_view_state).selectable(true).w_full())
             .child(
                 div().pt(px(4.0)).text_xs().opacity(0.40).child(
                     "Try sending your message again or use \u{2318}N for a new conversation",
@@ -277,13 +296,12 @@ impl AcpTranscript {
             .into_any_element()
     }
 
-    fn render_system_message_static(
-        msg: &AcpThreadMessage,
-        colors: &PromptColors,
+    fn render_system_message(
+        _msg: &AcpThreadMessage,
+        _colors: &PromptColors,
         theme: &crate::theme::Theme,
+        text_view_state: &gpui::Entity<TextViewState>,
     ) -> gpui::AnyElement {
-        let scope_id = format!("acp-msg-{}", msg.id);
-
         div()
             .w_full()
             .px(px(12.0))
@@ -291,18 +309,37 @@ impl AcpTranscript {
             .opacity(0.60)
             .border_l_2()
             .border_color(rgba((theme.colors.ui.border << 8) | 0x30))
-            .child(render_markdown_with_scope(&msg.body, colors, Some(&scope_id)).w_full())
+            .child(TextView::new(text_view_state).selectable(true).w_full())
             .into_any_element()
     }
 }
 
 impl Render for AcpTranscript {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = theme::get_cached_theme();
         let colors = PromptColors::from_theme(&theme);
 
         let messages_snapshot = self.messages.clone();
         let collapsed_ids = self.collapsed_ids.clone();
+
+        // Reconcile/sync TextViewState entities for each message
+        for msg in &messages_snapshot {
+            let text_view_state = self
+                .message_views
+                .entry(msg.id)
+                .or_insert_with(|| cx.new(|cx| TextViewState::markdown(&msg.body, cx)));
+
+            // Update text buffer if it's changing (e.g. streaming assistant output)
+            let last_text = self.message_texts.get(&msg.id).cloned().unwrap_or_default();
+            if last_text != msg.body.as_ref() {
+                text_view_state.update(cx, |state, cx| {
+                    state.set_text(&msg.body, cx);
+                });
+                self.message_texts.insert(msg.id, msg.body.to_string());
+            }
+        }
+
+        let message_views_snapshot = self.message_views.clone();
 
         div()
             .relative()
@@ -326,6 +363,10 @@ impl Render for AcpTranscript {
                         && matches!(msg.role, AcpThreadMessageRole::User)
                         && !matches!(messages_snapshot[ix - 1].role, AcpThreadMessageRole::User);
 
+                    let text_view_state = message_views_snapshot
+                        .get(&msg.id)
+                        .expect("TextViewState must be synced");
+
                     div()
                         .w_full()
                         .px(px(8.0))
@@ -337,7 +378,12 @@ impl Render for AcpTranscript {
                                 .border_t_1()
                                 .border_color(rgba((theme.colors.ui.border << 8) | 0x18))
                         })
-                        .child(Self::render_message_static(msg, &colors, is_collapsed))
+                        .child(Self::render_message(
+                            msg,
+                            &colors,
+                            is_collapsed,
+                            text_view_state,
+                        ))
                         .into_any()
                 })
                 .size_full()
