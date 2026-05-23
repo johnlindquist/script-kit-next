@@ -1,7 +1,7 @@
 use nucleo_matcher::pattern::Pattern;
 use nucleo_matcher::{Matcher, Utf32Str};
 
-use super::super::types::{MatchIndices, SearchResult};
+use super::super::types::{MatchIndices, ScriptMatchKind, SearchResult};
 use super::{find_ignore_ascii_case, fuzzy_match_with_indices_ascii, is_ascii_pair};
 
 /// Reusable highlight matcher that keeps ASCII fast-path behavior and
@@ -108,26 +108,29 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
         SearchResult::Script(sm) => {
             let mut indices = MatchIndices::default();
 
-            // Try name first
-            let (name_matched, name_indices) = highlight_ctx.indices_for(&sm.script.name);
-            if name_matched {
-                indices.name_indices = name_indices;
-            }
-
-            // Also compute description indices for highlighting
-            if let Some(ref desc) = sm.script.description {
-                let (desc_matched, desc_indices) = highlight_ctx.indices_for(desc);
-                if desc_matched {
-                    indices.description_indices = desc_indices;
+            match sm.match_kind {
+                ScriptMatchKind::Name => {
+                    let (name_matched, name_indices) = highlight_ctx.indices_for(&sm.script.name);
+                    if name_matched {
+                        indices.name_indices = name_indices;
+                    }
                 }
-            }
-
-            // If name didn't match, fall back to filename
-            if indices.name_indices.is_empty() {
-                let (filename_matched, filename_indices) = highlight_ctx.indices_for(&sm.filename);
-                if filename_matched {
-                    indices.filename_indices = filename_indices;
+                ScriptMatchKind::Description => {
+                    if let Some(ref desc) = sm.script.description {
+                        let (desc_matched, desc_indices) = highlight_ctx.indices_for(desc);
+                        if desc_matched {
+                            indices.description_indices = desc_indices;
+                        }
+                    }
                 }
+                ScriptMatchKind::Filename => {
+                    let (filename_matched, filename_indices) =
+                        highlight_ctx.indices_for(&sm.filename);
+                    if filename_matched {
+                        indices.filename_indices = filename_indices;
+                    }
+                }
+                ScriptMatchKind::Content => {}
             }
 
             indices

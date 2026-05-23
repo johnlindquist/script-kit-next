@@ -21,7 +21,7 @@ pub(super) fn build_search_mode_results(
     // The bonus is capped so a good fuzzy match still beats a poor match with high frecency.
     {
         let max_frecency_bonus = 50i32;
-        let preferred_match_bonus = 100_000i32;
+        let preferred_match_bonus = 500i32;
 
         // Helper to get the frecency path for a result (mirrors grouped-view logic).
         // Skills and scriptlets use plugin-qualified keys.
@@ -96,11 +96,14 @@ pub(super) fn build_search_mode_results(
             })
             .collect();
 
-        // Build an index array sorted by boosted score descending, then name ascending
+        // Build an index array sorted by relevance tier first. Frecency and
+        // preferred-result memory only affect ordering inside the same tier.
         let mut sort_indices: Vec<usize> = (0..results.len()).collect();
         sort_indices.sort_by(|&a, &b| {
-            boosted[b]
-                .cmp(&boosted[a])
+            results[b]
+                .match_tier()
+                .cmp(&results[a].match_tier())
+                .then_with(|| boosted[b].cmp(&boosted[a]))
                 .then_with(|| results[a].name().cmp(results[b].name()))
         });
 
@@ -112,48 +115,45 @@ pub(super) fn build_search_mode_results(
         results = reordered;
     }
 
-    // Partition results into non-menu-bar and menu-bar items
-    let mut non_menu_bar_indices: Vec<usize> = Vec::new();
-    let mut menu_bar_indices: Vec<usize> = Vec::new();
-
-    for (idx, result) in results.iter().enumerate() {
-        if let SearchResult::BuiltIn(bm) = result {
-            if bm.entry.group == BuiltInGroup::MenuBar {
-                // Only include menu bar items that meet minimum score threshold
-                if bm.score >= MIN_MENU_BAR_SCORE {
-                    menu_bar_indices.push(idx);
-                }
-                continue;
-            }
-        }
-        non_menu_bar_indices.push(idx);
-    }
-
-    // Limit menu bar items to prevent overwhelming results
-    menu_bar_indices.truncate(MAX_MENU_BAR_ITEMS);
-
     let mut grouped: Vec<GroupedListItem> = Vec::new();
 
-    // Track counts before consuming the vectors
-    let non_menu_bar_count = non_menu_bar_indices.len();
-    let menu_bar_count = menu_bar_indices.len();
-    let has_other_results = non_menu_bar_count > 0 || menu_bar_count > 0;
+    let mut menu_bar_count = 0usize;
+    let mut in_menu_bar_run = false;
 
-    // Add non-menu-bar items first
-    for idx in non_menu_bar_indices {
+    for (idx, result) in results.iter().enumerate() {
+        let is_menu_bar_result = matches!(
+            result,
+            SearchResult::BuiltIn(bm)
+                if bm.entry.group == BuiltInGroup::MenuBar
+                    && bm.score >= MIN_MENU_BAR_SCORE
+                    && menu_bar_count < MAX_MENU_BAR_ITEMS
+        );
+
+        if matches!(
+            result,
+            SearchResult::BuiltIn(bm) if bm.entry.group == BuiltInGroup::MenuBar
+        ) && !is_menu_bar_result
+        {
+            continue;
+        }
+
+        if is_menu_bar_result {
+            if !in_menu_bar_run {
+                grouped.push(GroupedListItem::SectionHeader(
+                    "MENU BAR ACTIONS".to_string(),
+                    None,
+                ));
+            }
+            in_menu_bar_run = true;
+            menu_bar_count += 1;
+        } else {
+            in_menu_bar_run = false;
+        }
+
         grouped.push(GroupedListItem::Item(idx));
     }
 
-    // Add menu bar section with header if there are menu bar items
-    if menu_bar_count > 0 {
-        grouped.push(GroupedListItem::SectionHeader(
-            "MENU BAR ACTIONS".to_string(),
-            None,
-        ));
-        for idx in menu_bar_indices {
-            grouped.push(GroupedListItem::Item(idx));
-        }
-    }
+    let has_other_results = !grouped.is_empty();
 
     // Collect fallback commands and append as "Use {query} with..." section
     let fallbacks = collect_fallbacks(filter_text, scripts);
@@ -203,4 +203,70 @@ fn reserved_exact_builtin_preferred_result_key(
         }
         _ => None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::app_launcher::AppInfo;
+    use crate::builtins::{BuiltInEntry, BuiltInFeature, BuiltInGroup};
+    use crate::frecency::FrecencyStore;
+    use crate::list_item::GroupedListItem;
+    use crate::scripts::search::score_from_tier;
+    use crate::scripts::{AppMatch, BuiltInMatch, SearchResult};
+
+    use super::build_search_mode_results;
+
+    fn builtin(name: &str, group: BuiltInGroup, score: i32) -> SearchResult {
+        SearchResult::BuiltIn(BuiltInMatch {
+            entry: BuiltInEntry {
+                id: name.to_lowercase().replace(' ', "-"),
+                name: name.to_string(),
+                description: String::new(),
+                keywords: Vec::new(),
+                feature: BuiltInFeature::Settings,
+                icon: None,
+                group,
+            },
+            score,
+        })
+    }
+
+    fn app(name: &str, score: i32) -> SearchResult {
+        SearchResult::App(AppMatch {
+            app: AppInfo {
+                name: name.to_string(),
+                path: PathBuf::from(format!("/Applications/{name}.app")),
+                bundle_id: None,
+                icon: None,
+            },
+            score,
+        })
+    }
+
+    #[test]
+    fn search_mode_keeps_exact_menu_bar_action_above_weaker_results() {
+        let results = vec![
+            app("Position Helper", score_from_tier(700, 0)),
+            builtin(
+                "Reset Window Positions",
+                BuiltInGroup::MenuBar,
+                score_from_tier(1000, 0),
+            ),
+        ];
+
+        let (grouped, sorted_results) =
+            build_search_mode_results(results, &[], &FrecencyStore::new(), "position", None);
+
+        let first_item = grouped
+            .iter()
+            .find_map(|item| match item {
+                GroupedListItem::Item(idx) => sorted_results.get(*idx),
+                _ => None,
+            })
+            .expect("at least one grouped result");
+
+        assert_eq!(first_item.name(), "Reset Window Positions");
+    }
 }

@@ -5,8 +5,8 @@ use crate::plugins::PluginSkill;
 
 use super::super::types::{MatchIndices, SkillMatch};
 use super::{
-    contains_ignore_ascii_case, find_ignore_ascii_case, is_exact_name_match,
-    is_word_boundary_match, NucleoCtx, MIN_FUZZY_QUERY_LEN,
+    better_match, low_tier_substring_match, primary_text_match, NucleoCtx, TIER_DESCRIPTION,
+    TIER_FILENAME, TIER_KEYWORD,
 };
 
 /// Fuzzy search plugin skills by query string.
@@ -28,71 +28,37 @@ pub fn fuzzy_search_skills(skills: &[Arc<PluginSkill>], query: &str) -> Vec<Skil
     let mut matches: Vec<(usize, i32, MatchIndices)> = Vec::with_capacity(skills.len());
 
     let mut nucleo = NucleoCtx::new(&query_lower);
-    let query_is_ascii = query_lower.is_ascii();
-    let use_nucleo = query_lower.len() >= MIN_FUZZY_QUERY_LEN;
-
     for (index, skill) in skills.iter().enumerate() {
-        let mut score = 0i32;
+        let mut best = None;
         let mut name_indices = Vec::new();
 
-        // Exact title match
-        if query_is_ascii
-            && skill.title.is_ascii()
-            && is_exact_name_match(&skill.title, &query_lower)
-        {
-            score += 500;
+        let title_match = primary_text_match(&skill.title, &query_lower, &mut nucleo);
+        if let Some(title_match) = title_match {
+            name_indices = title_match.indices.clone();
+            best = Some(title_match);
         }
 
-        // Substring match in title
-        if query_is_ascii && skill.title.is_ascii() {
-            if let Some(pos) = find_ignore_ascii_case(&skill.title, &query_lower) {
-                score += if pos == 0 { 100 } else { 75 };
-                if pos > 0 && is_word_boundary_match(&skill.title, pos) {
-                    score += 20;
-                }
-                // Record matched character indices for highlighting
-                for i in 0..query_lower.len() {
-                    name_indices.push(pos + i);
-                }
-            }
+        better_match(
+            &mut best,
+            low_tier_substring_match(&skill.skill_id, &query_lower, TIER_FILENAME),
+        );
+
+        better_match(
+            &mut best,
+            low_tier_substring_match(&skill.plugin_title, &query_lower, TIER_KEYWORD),
+        );
+
+        if !skill.description.is_empty() {
+            better_match(
+                &mut best,
+                low_tier_substring_match(&skill.description, &query_lower, TIER_DESCRIPTION),
+            );
         }
 
-        // Nucleo fuzzy match in title
-        if use_nucleo {
-            if let Some(nucleo_s) = nucleo.compact_score(&skill.title, &query_lower) {
-                score += 50 + (nucleo_s / 20) as i32;
-            }
-        }
-
-        // Substring match in skill_id
-        if query_is_ascii
-            && skill.skill_id.is_ascii()
-            && contains_ignore_ascii_case(&skill.skill_id, &query_lower)
-        {
-            score += 30;
-        }
-
-        // Substring match in plugin_title
-        if query_is_ascii
-            && skill.plugin_title.is_ascii()
-            && contains_ignore_ascii_case(&skill.plugin_title, &query_lower)
-        {
-            score += 15;
-        }
-
-        // Substring match in description
-        if !skill.description.is_empty()
-            && query_is_ascii
-            && skill.description.is_ascii()
-            && contains_ignore_ascii_case(&skill.description, &query_lower)
-        {
-            score += 10;
-        }
-
-        if score > 0 {
+        if let Some(best) = best {
             matches.push((
                 index,
-                score,
+                best.score,
                 MatchIndices {
                     name_indices,
                     filename_indices: Vec::new(),

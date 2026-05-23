@@ -4,7 +4,9 @@ use crate::scripts::RootWindowEntry;
 use crate::window_control::WindowInfo;
 
 use super::super::types::WindowMatch;
-use super::{find_ignore_ascii_case, NucleoCtx, MIN_FUZZY_QUERY_LEN};
+use super::{
+    better_match, low_tier_substring_match, primary_text_match, NucleoCtx, TIER_DESCRIPTION,
+};
 
 /// Fuzzy search windows by query string
 /// Searches across app name and window title
@@ -55,65 +57,24 @@ pub fn fuzzy_search_root_windows(windows: &[RootWindowEntry], query: &str) -> Ve
 
     // Create nucleo context once for all windows - reuses buffer across calls
     let mut nucleo = NucleoCtx::new(&query_lower);
-    // Check if query is ASCII once for all items
-    let query_is_ascii = query_lower.is_ascii();
-
-    // Gate nucleo fuzzy matching on minimum query length to reduce noise
-    let use_nucleo = query_lower.len() >= MIN_FUZZY_QUERY_LEN;
-
     for (index, entry) in windows.iter().enumerate() {
         let window = &entry.window;
-        let mut score = 0i32;
+        let mut best = None;
+        better_match(
+            &mut best,
+            primary_text_match(&window.app, &query_lower, &mut nucleo),
+        );
+        better_match(
+            &mut best,
+            primary_text_match(&window.title, &query_lower, &mut nucleo),
+        );
+        better_match(
+            &mut best,
+            low_tier_substring_match(&entry.subtitle, &query_lower, TIER_DESCRIPTION),
+        );
 
-        // Score by app name match - highest priority
-        // App names can have Unicode
-        if query_is_ascii && window.app.is_ascii() {
-            if let Some(pos) = find_ignore_ascii_case(&window.app, &query_lower) {
-                // Bonus for exact substring match at start of app name
-                score += if pos == 0 { 100 } else { 75 };
-            }
-        }
-
-        // Score by window title match - high priority
-        // Window titles can have Unicode content
-        if query_is_ascii && window.title.is_ascii() {
-            if let Some(pos) = find_ignore_ascii_case(&window.title, &query_lower) {
-                // Bonus for exact substring match at start of title
-                score += if pos == 0 { 90 } else { 65 };
-            }
-        }
-
-        // Fuzzy character matching in app name using nucleo (handles Unicode)
-        if use_nucleo {
-            if let Some(nucleo_s) = nucleo.compact_score(&window.app, &query_lower) {
-                // Scale nucleo score to match existing weights (~50 for app name fuzzy match)
-                score += 50 + (nucleo_s / 20) as i32;
-            }
-        }
-
-        // Fuzzy character matching in window title using nucleo (handles Unicode)
-        if use_nucleo {
-            if let Some(nucleo_s) = nucleo.compact_score(&window.title, &query_lower) {
-                // Scale nucleo score to match existing weights (~40 for title fuzzy match)
-                score += 40 + (nucleo_s / 25) as i32;
-            }
-        }
-
-        if query_is_ascii {
-            if let Some(pos) = window
-                .bundle_id
-                .as_deref()
-                .and_then(|bundle_id| find_ignore_ascii_case(bundle_id, &query_lower))
-            {
-                score += if pos == 0 { 35 } else { 20 };
-            }
-            if let Some(pos) = find_ignore_ascii_case(&entry.subtitle, &query_lower) {
-                score += if pos == 0 { 30 } else { 15 };
-            }
-        }
-
-        if score > 0 {
-            matches.push((index, score));
+        if let Some(best) = best {
+            matches.push((index, best.score));
         }
     }
 

@@ -4,8 +4,10 @@ use std::sync::Arc;
 
 use super::super::types::{MatchIndices, Script, ScriptContentMatch, ScriptMatch, ScriptMatchKind};
 use super::{
-    contains_ignore_ascii_case, extract_filename, find_ignore_ascii_case, is_exact_name_match,
-    is_word_boundary_match, NucleoCtx, MIN_FUZZY_QUERY_LEN,
+    better_match, byte_range_for_char_indices, extract_filename, find_ignore_ascii_case,
+    low_tier_substring_match, normalized_substring_match, primary_text_match, score_from_tier,
+    NucleoCtx, TextMatch, TextMatchKind, MIN_BODY_EXACT_QUERY_LEN, TIER_ALIAS, TIER_BODY,
+    TIER_DESCRIPTION, TIER_FILENAME, TIER_KEYWORD,
 };
 
 const SCORE_EXACT_NAME_MATCH: i32 = 500;
@@ -35,25 +37,6 @@ const SCORE_DESC_FUZZY_DIV: u32 = 30;
 const SCORE_PATH_SUBSTRING: i32 = 10;
 const SCORE_CONTENT_MATCH: i32 = 5;
 const CURRENT_APP_RECIPE_HEADER_PREFIX: &str = "// Current-App-Recipe-";
-
-fn dominant_primary_text_match_kind(
-    name_score: i32,
-    filename_score: i32,
-    description_score: i32,
-) -> Option<ScriptMatchKind> {
-    if name_score <= 0 && filename_score <= 0 && description_score <= 0 {
-        return None;
-    }
-    // Tie-break priority stays deterministic:
-    // Name > Filename > Description
-    if name_score >= filename_score && name_score >= description_score {
-        return Some(ScriptMatchKind::Name);
-    }
-    if filename_score >= description_score {
-        return Some(ScriptMatchKind::Filename);
-    }
-    Some(ScriptMatchKind::Description)
-}
 
 fn is_legacy_ai_vault_wrapper_script(script: &Script) -> bool {
     let name_is_vault = script.name.trim().eq_ignore_ascii_case("vault");
@@ -92,11 +75,11 @@ fn legacy_ai_vault_direct_match_score(
 
         let candidate = candidate.trim().to_ascii_lowercase();
         let score = if candidate == query_lower {
-            Some(SCORE_EXACT_NAME_MATCH)
+            Some(score_from_tier(1000, 900))
         } else if query_lower.len() >= 3 && candidate.starts_with(query_lower) {
-            Some(220)
+            Some(score_from_tier(950, 900))
         } else if query_lower.len() >= 3 && candidate.contains(query_lower) {
-            Some(160)
+            Some(score_from_tier(850, 900))
         } else {
             None
         };
@@ -116,6 +99,66 @@ fn legacy_ai_vault_direct_match_score(
     consider("aivault");
 
     best
+}
+
+fn metadata_match(candidate: &str, query_lower: &str, tier: i32) -> Option<TextMatch> {
+    low_tier_substring_match(candidate, query_lower, tier)
+}
+
+fn property_keyword_match(
+    typed_meta: &crate::metadata_parser::TypedMetadata,
+    query_lower: &str,
+) -> Option<TextMatch> {
+    let mut best = None;
+    let mut consider = |enabled: bool, keyword: &str| {
+        if enabled {
+            better_match(
+                &mut best,
+                low_tier_substring_match(keyword, query_lower, TIER_KEYWORD),
+            );
+        }
+    };
+    consider(
+        typed_meta.cron.is_some() || typed_meta.schedule.is_some(),
+        "cron",
+    );
+    consider(
+        typed_meta.cron.is_some() || typed_meta.schedule.is_some(),
+        "scheduled",
+    );
+    consider(
+        typed_meta.cron.is_some() || typed_meta.schedule.is_some(),
+        "schedule",
+    );
+    consider(typed_meta.background, "background");
+    consider(typed_meta.background, "bg");
+    consider(typed_meta.system, "system");
+    consider(!typed_meta.watch.is_empty(), "watch");
+    consider(!typed_meta.watch.is_empty(), "watching");
+    best
+}
+
+fn script_match_kind_for_candidate(
+    current_kind: ScriptMatchKind,
+    current: &Option<TextMatch>,
+    candidate: Option<TextMatch>,
+    candidate_kind: ScriptMatchKind,
+) -> (Option<TextMatch>, ScriptMatchKind) {
+    let Some(candidate) = candidate else {
+        return (current.clone(), current_kind);
+    };
+    let replace = match current {
+        None => true,
+        Some(existing) => {
+            candidate.tier > existing.tier
+                || (candidate.tier == existing.tier && candidate.score > existing.score)
+        }
+    };
+    if replace {
+        (Some(candidate), candidate_kind)
+    } else {
+        (current.clone(), current_kind)
+    }
 }
 
 /// Fuzzy search scripts by query string
@@ -152,11 +195,6 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
     // Create nucleo context once for all scripts - reuses buffer across calls
     let mut nucleo = NucleoCtx::new(&query_lower);
     // Check if query is ASCII once for all items
-    let query_is_ascii = query_lower.is_ascii();
-
-    // Gate nucleo fuzzy matching on minimum query length to reduce noise
-    let use_nucleo = query_lower.len() >= MIN_FUZZY_QUERY_LEN;
-
     for script in scripts {
         // Skip hidden scripts - they should not appear in search results or grouped view
         // Hidden flag comes from typed metadata: metadata = { hidden: true }
@@ -164,10 +202,8 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             continue;
         }
 
-        let mut score = 0i32;
-        let mut name_score = 0i32;
-        let mut filename_score = 0i32;
-        let mut description_score = 0i32;
+        let mut best: Option<TextMatch> = None;
+        let mut match_kind = ScriptMatchKind::Name;
         // Lazy match indices - don't compute during scoring, will be computed on-demand
         let match_indices = MatchIndices::default();
 
@@ -188,108 +224,45 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             continue;
         }
 
-        // Exact name match boost: if the query IS the full name, always rank first
-        if query_is_ascii
-            && script.name.is_ascii()
-            && is_exact_name_match(&script.name, &query_lower)
-        {
-            score += SCORE_EXACT_NAME_MATCH;
-            name_score += SCORE_EXACT_NAME_MATCH;
-        }
+        let (next, kind) = script_match_kind_for_candidate(
+            match_kind,
+            &best,
+            primary_text_match(&script.name, &query_lower, &mut nucleo),
+            ScriptMatchKind::Name,
+        );
+        best = next;
+        match_kind = kind;
 
-        // Score by name match - highest priority
-        // Only use ASCII fast-path when both strings are ASCII
-        if query_is_ascii && script.name.is_ascii() {
-            if let Some(pos) = find_ignore_ascii_case(&script.name, &query_lower) {
-                let delta = if pos == 0 {
-                    SCORE_NAME_PREFIX
-                } else {
-                    SCORE_NAME_SUBSTRING
-                };
-                score += delta;
-                name_score += delta;
-                // Extra bonus for word-boundary matches (e.g., "new" in "New Tab")
-                if pos > 0 && is_word_boundary_match(&script.name, pos) {
-                    score += SCORE_WORD_BOUNDARY;
-                    name_score += SCORE_WORD_BOUNDARY;
-                }
-            }
-        }
-
-        // Fuzzy character matching in name using nucleo (handles Unicode correctly)
-        // Only for queries >= MIN_FUZZY_QUERY_LEN to avoid noisy single-char matches
-        if use_nucleo {
-            if let Some(nucleo_s) = nucleo.compact_score(&script.name, &query_lower) {
-                let delta = SCORE_NAME_FUZZY_BASE + (nucleo_s / SCORE_NAME_FUZZY_DIV) as i32;
-                score += delta;
-                name_score += delta;
-            }
-        }
-
-        // Score by filename match - high priority (allows searching by ".ts", ".js", etc.)
-        // Filenames are typically ASCII
-        if query_is_ascii && filename.is_ascii() {
-            if let Some(pos) = find_ignore_ascii_case(&filename, &query_lower) {
-                let delta = if pos == 0 {
-                    SCORE_FILENAME_PREFIX
-                } else {
-                    SCORE_FILENAME_SUBSTRING
-                };
-                score += delta;
-                filename_score += delta;
-            }
-        }
-
-        // Fuzzy character matching in filename using nucleo (handles Unicode)
-        if use_nucleo {
-            if let Some(nucleo_s) = nucleo.compact_score(&filename, &query_lower) {
-                let delta =
-                    SCORE_FILENAME_FUZZY_BASE + (nucleo_s / SCORE_FILENAME_FUZZY_DIV) as i32;
-                score += delta;
-                filename_score += delta;
-            }
-        }
+        let (next, kind) = script_match_kind_for_candidate(
+            match_kind,
+            &best,
+            low_tier_substring_match(&filename, &query_lower, TIER_FILENAME),
+            ScriptMatchKind::Filename,
+        );
+        best = next;
+        match_kind = kind;
 
         // Score by alias match - allows users to search by trigger alias
         if let Some(ref alias) = script.alias {
-            if query_is_ascii && alias.is_ascii() {
-                if let Some(pos) = find_ignore_ascii_case(alias, &query_lower) {
-                    // Strong bonus for alias match (aliases are explicit shortcuts)
-                    score += if pos == 0 {
-                        SCORE_ALIAS_PREFIX
-                    } else {
-                        SCORE_ALIAS_SUBSTRING
-                    };
-                }
-            }
+            better_match(&mut best, metadata_match(alias, &query_lower, TIER_ALIAS));
         }
 
         // Score by keyboard shortcut match - allows finding scripts by their hotkey
         // Users may type "opt i" or "cmd shift k" to find which script has that shortcut
         if let Some(ref shortcut) = script.shortcut {
-            if query_is_ascii && shortcut.is_ascii() {
-                if let Some(pos) = find_ignore_ascii_case(shortcut, &query_lower) {
-                    // Strong bonus for shortcut match (shortcuts are explicit bindings)
-                    score += if pos == 0 {
-                        SCORE_SHORTCUT_PREFIX
-                    } else {
-                        SCORE_SHORTCUT_SUBSTRING
-                    };
-                }
-            }
+            better_match(
+                &mut best,
+                metadata_match(shortcut, &query_lower, TIER_ALIAS),
+            );
         }
 
         // Score by kit name match - allows searching by kit (e.g., "cleanshot")
         if let Some(ref kit_name) = script.kit_name {
-            if kit_name != "main" && query_is_ascii && kit_name.is_ascii() {
-                if let Some(pos) = find_ignore_ascii_case(kit_name, &query_lower) {
-                    // Moderate bonus for kit name match (helps find all scripts from a kit)
-                    score += if pos == 0 {
-                        SCORE_KIT_PREFIX
-                    } else {
-                        SCORE_KIT_SUBSTRING
-                    };
-                }
+            if kit_name != "main" {
+                better_match(
+                    &mut best,
+                    metadata_match(kit_name, &query_lower, TIER_KEYWORD),
+                );
             }
         }
 
@@ -297,17 +270,7 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         // Tags come from typed metadata: metadata = { tags: ["productivity", "notes"] }
         if let Some(ref typed_meta) = script.typed_metadata {
             for tag in &typed_meta.tags {
-                if query_is_ascii && tag.is_ascii() {
-                    if let Some(pos) = find_ignore_ascii_case(tag, &query_lower) {
-                        // Moderate bonus for tag match (helps discover scripts by category)
-                        score += if pos == 0 {
-                            SCORE_TAG_PREFIX
-                        } else {
-                            SCORE_TAG_SUBSTRING
-                        };
-                        break; // Only count best tag match once
-                    }
-                }
+                better_match(&mut best, metadata_match(tag, &query_lower, TIER_KEYWORD));
             }
         }
 
@@ -315,16 +278,10 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         // Author comes from typed metadata: metadata = { author: "John Lindquist" }
         if let Some(ref typed_meta) = script.typed_metadata {
             if let Some(ref author) = typed_meta.author {
-                if query_is_ascii && author.is_ascii() {
-                    if let Some(pos) = find_ignore_ascii_case(author, &query_lower) {
-                        // Moderate bonus for author match
-                        score += if pos == 0 {
-                            SCORE_AUTHOR_PREFIX
-                        } else {
-                            SCORE_AUTHOR_SUBSTRING
-                        };
-                    }
-                }
+                better_match(
+                    &mut best,
+                    metadata_match(author, &query_lower, TIER_KEYWORD),
+                );
             }
         }
 
@@ -332,108 +289,59 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         // Users can type "cron", "scheduled", "background", "system", or "watch" to find
         // scripts with those runtime properties. This makes special scripts discoverable.
         if let Some(ref typed_meta) = script.typed_metadata {
-            let ql = query_lower.as_str();
-            if (typed_meta.cron.is_some() || typed_meta.schedule.is_some())
-                && (contains_ignore_ascii_case("cron", ql)
-                    || contains_ignore_ascii_case("scheduled", ql)
-                    || contains_ignore_ascii_case("schedule", ql))
-            {
-                score += SCORE_PROPERTY_KEYWORD;
-            }
-            if typed_meta.background
-                && (contains_ignore_ascii_case("background", ql)
-                    || contains_ignore_ascii_case("bg", ql))
-            {
-                score += SCORE_PROPERTY_KEYWORD;
-            }
-            if typed_meta.system && contains_ignore_ascii_case("system", ql) {
-                score += SCORE_PROPERTY_KEYWORD;
-            }
-            if !typed_meta.watch.is_empty()
-                && (contains_ignore_ascii_case("watch", ql)
-                    || contains_ignore_ascii_case("watching", ql))
-            {
-                score += SCORE_PROPERTY_KEYWORD;
-            }
+            better_match(&mut best, property_keyword_match(typed_meta, &query_lower));
         }
 
-        // Score by description match - medium priority
-        // Substring match + nucleo fuzzy for catching typos and partial matches
         if let Some(ref desc) = script.description {
-            if query_is_ascii && desc.is_ascii() && contains_ignore_ascii_case(desc, &query_lower) {
-                score += SCORE_DESC_SUBSTRING;
-                description_score += SCORE_DESC_SUBSTRING;
-            }
-            // Fuzzy match on description using nucleo (catches typos and partial terms)
-            if use_nucleo {
-                if let Some(nucleo_s) = nucleo.compact_score(desc, &query_lower) {
-                    let delta = SCORE_DESC_FUZZY_BASE + (nucleo_s / SCORE_DESC_FUZZY_DIV) as i32;
-                    score += delta;
-                    description_score += delta;
-                }
-            }
+            let (next, kind) = script_match_kind_for_candidate(
+                match_kind,
+                &best,
+                normalized_substring_match(desc, &query_lower, TIER_DESCRIPTION),
+                ScriptMatchKind::Description,
+            );
+            best = next;
+            match_kind = kind;
         }
 
-        // Score by path match - lower priority
-        // Paths are typically ASCII
-        let path_str = script.path.to_string_lossy();
-        if query_is_ascii
-            && path_str.is_ascii()
-            && contains_ignore_ascii_case(&path_str, &query_lower)
-        {
-            score += SCORE_PATH_SUBSTRING;
-        }
-
-        // Determine match kind from the dominant primary text field score
-        let primary_text_kind =
-            dominant_primary_text_match_kind(name_score, filename_score, description_score);
-        let primary_text_match = primary_text_kind.is_some();
-        let match_kind = match primary_text_kind {
-            Some(ref k) => k.clone(),
-            None => ScriptMatchKind::default(),
-        };
-
-        // Content body search — lowest-priority tier (+5)
-        // Always search body so content bonus stacks with other tiers
         let mut content_match = None;
         if let Some(ref body) = script.body {
             if let Some(hit) = find_best_content_line(body, &query_lower) {
-                score += SCORE_CONTENT_MATCH;
                 if crate::logging::filter_perf_trace_enabled() {
                     crate::logging::log(
                         "FILTER_PERF",
                         &format!(
-                            "[CONTENT_MATCH] script='{}' line={} name_score={} filename_score={} description_score={} primary_text_kind={:?} bonus={}",
+                            "[CONTENT_MATCH] script='{}' line={} current_tier={} bonus={}",
                             script.name,
                             hit.line_number,
-                            name_score,
-                            filename_score,
-                            description_score,
-                            primary_text_kind,
+                            best.as_ref().map(|m| m.tier).unwrap_or(0),
                             SCORE_CONTENT_MATCH
                         ),
                     );
                 }
-                // Only surface the snippet row when no stronger field won
-                if !primary_text_match {
+                let candidate = TextMatch {
+                    kind: TextMatchKind::Substring,
+                    tier: TIER_BODY,
+                    score: score_from_tier(TIER_BODY, SCORE_CONTENT_MATCH),
+                    indices: hit.line_match_indices.clone(),
+                };
+                let replace = best
+                    .as_ref()
+                    .is_none_or(|current| candidate.tier > current.tier);
+                if replace {
+                    best = Some(candidate);
+                    match_kind = ScriptMatchKind::Content;
                     content_match = Some(hit);
                 }
             }
         }
 
-        let final_match_kind = if content_match.is_some() {
-            ScriptMatchKind::Content
-        } else {
-            match_kind
-        };
-
-        if score > 0 {
+        if let Some(best) = best {
             matches.push(ScriptMatch {
                 script: Arc::clone(script),
-                score,
+                score: best.score,
                 filename,
                 match_indices,
-                match_kind: final_match_kind,
+                match_kind,
                 content_match,
             });
         }
@@ -460,14 +368,15 @@ struct ContentLineCandidate {
 
 /// Scan body text line-by-line.
 ///
-/// Single-token queries keep fuzzy matching for code identifiers and imports.
-/// Multi-word queries require an exact phrase so natural-language prompts do
-/// not sparsely match arbitrary source lines and outrank launcher fallbacks.
+/// Body matches are exact-only and low-tier. This avoids source identifiers or
+/// imports admitting launcher rows through sparse fuzzy matches.
 /// Returns the best-scoring line with its 1-based line number and match indices.
 fn find_best_content_line(body: &str, query_lower: &str) -> Option<ScriptContentMatch> {
+    if query_lower.chars().count() < MIN_BODY_EXACT_QUERY_LEN {
+        return None;
+    }
+
     let mut best: Option<ContentLineCandidate> = None;
-    let use_fuzzy_content_search = should_use_fuzzy_content_search(query_lower);
-    let mut ctx = use_fuzzy_content_search.then(|| NucleoCtx::new(query_lower));
     let mut byte_offset = 0usize;
 
     for (idx, segment) in body.split_inclusive('\n').enumerate() {
@@ -482,47 +391,11 @@ fn find_best_content_line(body: &str, query_lower: &str) -> Option<ScriptContent
             continue;
         }
 
-        let candidate = if use_fuzzy_content_search {
-            let ctx = match ctx.as_mut() {
-                Some(ctx) => ctx,
-                None => panic!("fuzzy content search requires a Nucleo context"),
-            };
-            let Some(score) = ctx.compact_score(trimmed, query_lower) else {
-                byte_offset += segment.len();
-                continue;
-            };
-
-            let Some(line_match_indices) = ctx.indices(trimmed) else {
-                byte_offset += segment.len();
-                continue;
-            };
-
-            let byte_range = match matched_span_byte_range(line, trimmed, &line_match_indices) {
-                Some(line_relative_range) => {
-                    (byte_offset + line_relative_range.start)
-                        ..(byte_offset + line_relative_range.end)
-                }
-                None => {
-                    byte_offset += segment.len();
-                    continue;
-                }
-            };
-
-            ContentLineCandidate {
-                score,
-                line_number: idx + 1,
-                line_text: trimmed.to_string(),
-                line_match_indices,
-                byte_range,
-            }
-        } else {
-            let Some(exact) =
-                exact_content_line_match(line, trimmed, query_lower, byte_offset, idx + 1)
-            else {
-                byte_offset += segment.len();
-                continue;
-            };
-            exact
+        let Some(candidate) =
+            exact_content_line_match(line, trimmed, query_lower, byte_offset, idx + 1)
+        else {
+            byte_offset += segment.len();
+            continue;
         };
 
         let replace = match &best {
@@ -548,10 +421,6 @@ fn find_best_content_line(body: &str, query_lower: &str) -> Option<ScriptContent
     })
 }
 
-fn should_use_fuzzy_content_search(query_lower: &str) -> bool {
-    !query_lower.chars().any(char::is_whitespace)
-}
-
 fn exact_content_line_match(
     raw_line: &str,
     trimmed_line: &str,
@@ -560,48 +429,24 @@ fn exact_content_line_match(
     line_number: usize,
 ) -> Option<ContentLineCandidate> {
     let trimmed_start = raw_line.find(trimmed_line)?;
-    let query_len = query_lower.len();
-    let match_start = if trimmed_line.is_ascii() && query_lower.is_ascii() {
-        find_ignore_ascii_case(trimmed_line, query_lower)?
+    let line_match_indices = if trimmed_line.is_ascii() && query_lower.is_ascii() {
+        let match_start = find_ignore_ascii_case(trimmed_line, query_lower)?;
+        (match_start..match_start + query_lower.chars().count()).collect()
     } else {
-        trimmed_line.to_lowercase().find(query_lower)?
+        low_tier_substring_match(trimmed_line, query_lower, TIER_BODY)?.indices
     };
-    let match_end = match_start.checked_add(query_len)?;
-    let line_match_indices = (match_start..match_end).collect();
+    let line_relative_range = byte_range_for_char_indices(trimmed_line, &line_match_indices)?;
 
     Some(ContentLineCandidate {
-        score: query_len as u32,
+        score: query_lower.chars().count() as u32,
         line_number,
         line_text: trimmed_line.to_string(),
         line_match_indices,
-        byte_range: (body_byte_offset + trimmed_start + match_start)
-            ..(body_byte_offset + trimmed_start + match_end),
+        byte_range: (body_byte_offset + trimmed_start + line_relative_range.start)
+            ..(body_byte_offset + trimmed_start + line_relative_range.end),
     })
 }
 
 fn should_skip_body_search_line(trimmed_line: &str) -> bool {
     trimmed_line.starts_with(CURRENT_APP_RECIPE_HEADER_PREFIX)
-}
-
-fn matched_span_byte_range(
-    raw_line: &str,
-    trimmed_line: &str,
-    line_match_indices: &[usize],
-) -> Option<Range<usize>> {
-    let &first_char = line_match_indices.first()?;
-    let &last_char = line_match_indices.last()?;
-    if first_char > last_char {
-        return None;
-    }
-
-    let trimmed_start = raw_line.find(trimmed_line)?;
-    let mut offsets: Vec<usize> = trimmed_line
-        .char_indices()
-        .map(|(byte_idx, _)| byte_idx)
-        .collect();
-    offsets.push(trimmed_line.len());
-
-    let start = *offsets.get(first_char)?;
-    let end = *offsets.get(last_char + 1)?;
-    Some((trimmed_start + start)..(trimmed_start + end))
 }

@@ -547,6 +547,15 @@ impl SearchResult {
         }
     }
 
+    /// Relevance tier encoded into active launcher search scores.
+    ///
+    /// Raw scores can still carry within-tier quality, but sorting should compare
+    /// this first so usage memory does not lift weak hidden-field matches above
+    /// visible primary-name matches.
+    pub fn match_tier(&self) -> i32 {
+        crate::scripts::search::match_tier_from_score(self.score())
+    }
+
     /// Get the type label for UI display
     pub fn type_label(&self) -> &'static str {
         match self {
