@@ -1,5 +1,6 @@
 const COMPONENTS_MOD: &str = include_str!("../../src/components/mod.rs");
 const ABOUT_RENDER: &str = include_str!("../../src/about/render.rs");
+const AI_WELCOME_RENDER: &str = include_str!("../../src/ai/window/render_welcome.rs");
 const BUILTIN_EXECUTION: &str = include_str!("../../src/app_execute/builtin_execution.rs");
 const BUILTINS_MOD: &str = include_str!("../../src/builtins/mod.rs");
 const NON_LIST_STATE: &str = include_str!("../../src/components/non_list_state.rs");
@@ -166,5 +167,54 @@ fn about_surface_consumes_non_list_state_language() {
     assert!(
         ABOUT_RENDER.contains("palette: NonListPalette"),
         "About action buttons should receive NonListPalette instead of AppChromeColors"
+    );
+}
+
+#[test]
+fn ai_empty_chat_welcome_consumes_non_list_state_language() {
+    assert!(
+        AI_WELCOME_RENDER.contains("non_list_palette(&theme)"),
+        "AI empty welcome should route colors through NonListPalette"
+    );
+    assert!(
+        AI_WELCOME_RENDER.contains("non_list_metrics(NonListDensity::Compact)"),
+        "Mini AI welcome should use compact non-list density"
+    );
+    assert!(
+        AI_WELCOME_RENDER.contains("non_list_metrics(NonListDensity::Comfortable)"),
+        "Full AI welcome should use comfortable non-list density"
+    );
+    assert!(
+        AI_WELCOME_RENDER.contains("non_list_centered_shell(\"ai-welcome-non-list\""),
+        "Full AI welcome should use the shared centered non-list shell"
+    );
+    assert!(
+        AI_WELCOME_RENDER.contains(
+            "non_list_content_stack(\n                    \"ai-mini-welcome-suggestions\""
+        ) || AI_WELCOME_RENDER.contains("non_list_content_stack(\"ai-mini-welcome-suggestions\""),
+        "Mini AI welcome should use the shared non-list content stack"
+    );
+    assert!(
+        AI_WELCOME_RENDER.contains("non_list_card(\"ai-welcome-suggestions\""),
+        "Full AI welcome suggestion group should use the shared non-list card primitive"
+    );
+    assert!(
+        AI_WELCOME_RENDER.contains("non_list_intro("),
+        "AI empty welcome should use shared non-list intro hierarchy"
+    );
+    assert!(
+        AI_WELCOME_RENDER
+            .matches("return self.render_setup_card(cx).into_any_element();")
+            .count()
+            >= 2,
+        "Mini and Full welcome must preserve setup-card branching"
+    );
+    assert!(
+        !AI_WELCOME_RENDER.contains("crate::theme::opacity"),
+        "AI empty welcome should not hand-roll design colors through theme opacity constants"
+    );
+    assert!(
+        !AI_WELCOME_RENDER.contains("const SUGGESTION_MAX_W"),
+        "Full AI welcome should use non-list metrics instead of local full-mode suggestion width"
     );
 }

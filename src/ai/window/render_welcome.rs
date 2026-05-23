@@ -1,14 +1,11 @@
 use super::*;
-use crate::theme::opacity::{
-    OPACITY_ACCENT_MEDIUM, OPACITY_CARD_BG, OPACITY_STRONG, OPACITY_SUGGESTION_HOVER,
+use crate::{
+    components::{
+        non_list_card, non_list_centered_shell, non_list_content_stack, non_list_intro,
+        non_list_metrics, non_list_palette, NonListDensity, NonListMetrics, NonListPalette,
+    },
+    theme,
 };
-
-/// Icon container size for suggestion cards (provides consistent hit area around the icon).
-const SUGGESTION_ICON_CONTAINER: Pixels = px(36.);
-/// Icon size within suggestion cards.
-const SUGGESTION_ICON_SIZE: Pixels = px(18.);
-/// Maximum width of the suggestion card column.
-const SUGGESTION_MAX_W: Pixels = px(540.);
 
 /// Script Kit-specific welcome suggestions shown on the AI chat welcome screen.
 /// Each tuple: (title, description, icon).
@@ -57,7 +54,9 @@ impl AiApp {
             return self.render_setup_card(cx).into_any_element();
         }
 
-        let suggestion_hover_bg = cx.theme().muted.opacity(MINI_WELCOME_HOVER_OPACITY);
+        let theme = theme::get_cached_theme();
+        let palette = non_list_palette(&theme);
+        let metrics = non_list_metrics(NonListDensity::Compact);
         let all_suggestions = script_kit_welcome_suggestions();
 
         info!(
@@ -74,118 +73,90 @@ impl AiApp {
             .justify_end()
             .pb(S4)
             .flex_1()
-            .gap(S3)
+            .gap(px(metrics.item_gap))
             .px(S4)
             // Heading — whisper-quiet, no subtitle
             .child(
                 div()
                     .text_sm()
-                    .text_color(
-                        cx.theme()
-                            .muted_foreground
-                            .opacity(mini_style.welcome_heading_opacity),
-                    )
+                    .text_color(palette.hint)
                     .child("Try a suggestion"),
             )
             // Suggestion rows — single-line, whisper chrome
             .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(SP_2)
-                    .w_full()
-                    .max_w(MINI_WELCOME_MAX_W)
-                    .children(
-                        all_suggestions
-                            .into_iter()
-                            .take(mini_style.suggestion_count)
-                            .enumerate()
-                            .map(|(i, (title, _desc, icon))| {
-                                let prompt_text = SharedString::from(format!(
-                                    "{} {}",
-                                    title, all_suggestions[i].1
-                                ));
-                                let title_s: SharedString = title.into();
-                                div()
-                                    .id(SharedString::from(format!("mini-suggestion-{}", i)))
-                                    .flex()
-                                    .items_center()
-                                    .gap(S2)
-                                    .px(S2)
-                                    .py(SP_3)
-                                    .rounded(R_SM)
-                                    .cursor_pointer()
-                                    .hover(move |s| s.bg(suggestion_hover_bg))
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        info!(
-                                            category = "mini_welcome",
-                                            event = "suggestion_clicked",
-                                            suggestion_index = i,
-                                            suggestion_text = %prompt_text,
-                                            "Mini welcome suggestion clicked"
-                                        );
-                                        this.set_composer_value(
-                                            prompt_text.to_string(),
-                                            window,
-                                            cx,
-                                        );
-                                        this.submit_message(window, cx);
-                                    }))
-                                    // Compact icon — whisper-quiet accent
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .size(MINI_WELCOME_ICON_CONTAINER)
-                                            .flex_shrink_0()
-                                            .child(
-                                                svg()
-                                                    .external_path(icon.external_path())
-                                                    .size(MINI_WELCOME_ICON_SIZE)
-                                                    .text_color(
-                                                        cx.theme().accent.opacity(
-                                                            mini_style.welcome_icon_opacity,
-                                                        ),
-                                                    ),
-                                            ),
-                                    )
-                                    // Title only — subdued foreground
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .flex_1()
-                                            .text_color(
-                                                cx.theme()
-                                                    .foreground
-                                                    .opacity(mini_style.welcome_title_opacity),
-                                            )
-                                            .child(title_s),
-                                    )
-                                    // Keyboard shortcut badge — barely-there
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .px(SP_2)
-                                            .py(SP_1)
-                                            .rounded(SP_2)
-                                            .bg(cx
-                                                .theme()
-                                                .muted
-                                                .opacity(mini_style.welcome_badge_bg_opacity))
-                                            .text_color(
-                                                cx.theme()
-                                                    .muted_foreground
-                                                    .opacity(MINI_WELCOME_BADGE_TEXT_OPACITY),
-                                            )
-                                            .flex_shrink_0()
-                                            .child(SharedString::from(format!(
-                                                "\u{2318}{}",
-                                                i + 1
-                                            ))),
-                                    )
-                            }),
-                    ),
+                non_list_content_stack(
+                    "ai-mini-welcome-suggestions",
+                    metrics.max_width,
+                    metrics.item_gap,
+                )
+                .max_w(MINI_WELCOME_MAX_W)
+                .children(
+                    all_suggestions
+                        .into_iter()
+                        .take(mini_style.suggestion_count)
+                        .enumerate()
+                        .map(|(i, (title, _desc, icon))| {
+                            let prompt_text =
+                                SharedString::from(format!("{} {}", title, all_suggestions[i].1));
+                            let title_s: SharedString = title.into();
+                            div()
+                                .id(SharedString::from(format!("mini-suggestion-{}", i)))
+                                .flex()
+                                .items_center()
+                                .gap(S2)
+                                .px(S2)
+                                .py(SP_3)
+                                .rounded(px(metrics.card_radius))
+                                .cursor_pointer()
+                                .hover(move |s| s.bg(palette.hover))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    info!(
+                                        category = "mini_welcome",
+                                        event = "suggestion_clicked",
+                                        suggestion_index = i,
+                                        suggestion_text = %prompt_text,
+                                        "Mini welcome suggestion clicked"
+                                    );
+                                    this.set_composer_value(prompt_text.to_string(), window, cx);
+                                    this.submit_message(window, cx);
+                                }))
+                                // Compact icon — whisper-quiet accent
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .size(MINI_WELCOME_ICON_CONTAINER)
+                                        .flex_shrink_0()
+                                        .child(
+                                            svg()
+                                                .external_path(icon.external_path())
+                                                .size(MINI_WELCOME_ICON_SIZE)
+                                                .text_color(palette.accent),
+                                        ),
+                                )
+                                // Title only — subdued foreground
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .flex_1()
+                                        .text_color(palette.title)
+                                        .child(title_s),
+                                )
+                                // Keyboard shortcut badge — barely-there
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .px(SP_2)
+                                        .py(SP_1)
+                                        .rounded(SP_2)
+                                        .bg(palette.panel)
+                                        .text_color(palette.hint)
+                                        .flex_shrink_0()
+                                        .child(SharedString::from(format!("\u{2318}{}", i + 1))),
+                                )
+                        }),
+                ),
             )
             .into_any_element()
     }
@@ -200,60 +171,35 @@ impl AiApp {
             return self.render_setup_card(cx).into_any_element();
         }
 
-        let suggestion_bg = cx.theme().muted.opacity(OPACITY_CARD_BG);
-        let suggestion_hover_bg = cx.theme().muted.opacity(OPACITY_SUGGESTION_HOVER);
-
+        let theme = theme::get_cached_theme();
+        let palette = non_list_palette(&theme);
+        let metrics = non_list_metrics(NonListDensity::Comfortable);
         let all_suggestions = script_kit_welcome_suggestions();
+        let subtitle: SharedString = self
+            .selected_model
+            .as_ref()
+            .map(|m| {
+                format!(
+                    "Start a conversation with {} or try a suggestion below",
+                    m.display_name
+                )
+            })
+            .unwrap_or_else(|| "Start a conversation or try a suggestion below".to_string())
+            .into();
 
-        div()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
+        non_list_centered_shell("ai-welcome-non-list", metrics.max_width, metrics.block_gap)
             .flex_1()
-            .gap(S7)
-            .px(S6)
             .child(
-                div()
-                    .flex()
-                    .flex_col()
+                non_list_intro("Ask Anything", subtitle, palette, metrics)
                     .items_center()
-                    .gap(S2)
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(gpui::FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child("Ask Anything"),
-                    )
-                    .child({
-                        let subtitle: SharedString = self
-                            .selected_model
-                            .as_ref()
-                            .map(|m| {
-                                format!(
-                                    "Start a conversation with {} or try a suggestion below",
-                                    m.display_name
-                                )
-                            })
-                            .unwrap_or_else(|| {
-                                "Start a conversation or try a suggestion below".to_string()
-                            })
-                            .into();
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground.opacity(OPACITY_STRONG))
-                            .child(subtitle)
-                    }),
+                    .text_center(),
             )
             // Suggestion cards
             .child(
-                div()
+                non_list_card("ai-welcome-suggestions", palette, metrics)
                     .flex()
                     .flex_col()
-                    .gap(S1)
-                    .w_full()
-                    .max_w(SUGGESTION_MAX_W)
+                    .gap(px(metrics.item_gap))
                     .children(
                         all_suggestions
                             .into_iter()
@@ -267,13 +213,12 @@ impl AiApp {
                                     .id(SharedString::from(format!("suggestion-{}", i)))
                                     .flex()
                                     .items_center()
-                                    .gap(S3)
-                                    .pl(S3)
-                                    .pr(S4)
-                                    .py(S3)
-                                    .rounded(R_LG)
+                                    .gap(px(metrics.item_gap))
+                                    .px(px(metrics.card_padding_x))
+                                    .py(px(metrics.card_padding_y))
+                                    .rounded(px(metrics.card_radius))
                                     .cursor_pointer()
-                                    .hover(move |s| s.bg(suggestion_hover_bg))
+                                    .hover(move |s| s.bg(palette.hover))
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         info!(
                                             suggestion_text = %prompt_text,
@@ -292,19 +237,17 @@ impl AiApp {
                                             .flex()
                                             .items_center()
                                             .justify_center()
-                                            .size(SUGGESTION_ICON_CONTAINER)
-                                            .rounded(R_SM)
-                                            .bg(suggestion_bg)
+                                            .size(px(metrics.icon_size))
+                                            .rounded(px(metrics.card_radius))
+                                            .border_1()
+                                            .border_color(palette.border)
+                                            .bg(palette.input)
                                             .flex_shrink_0()
                                             .child(
                                                 svg()
                                                     .external_path(icon.external_path())
-                                                    .size(SUGGESTION_ICON_SIZE)
-                                                    .text_color(
-                                                        cx.theme()
-                                                            .accent
-                                                            .opacity(OPACITY_ACCENT_MEDIUM),
-                                                    ),
+                                                    .size(px(metrics.icon_size * 0.45))
+                                                    .text_color(palette.accent),
                                             ),
                                     )
                                     .child(
@@ -315,19 +258,17 @@ impl AiApp {
                                             .gap(SP_1)
                                             .child(
                                                 div()
-                                                    .text_sm()
+                                                    .text_size(px(metrics.body_size))
+                                                    .line_height(px(metrics.body_line))
                                                     .font_weight(gpui::FontWeight::MEDIUM)
-                                                    .text_color(cx.theme().foreground)
+                                                    .text_color(palette.title)
                                                     .child(title_s),
                                             )
                                             .child(
                                                 div()
                                                     .text_xs()
-                                                    .text_color(
-                                                        cx.theme()
-                                                            .muted_foreground
-                                                            .opacity(OPACITY_ACCENT_MEDIUM),
-                                                    )
+                                                    .line_height(px(16.0))
+                                                    .text_color(palette.body)
                                                     .child(desc_s),
                                             ),
                                     )
@@ -338,10 +279,8 @@ impl AiApp {
                                             .px(SP_3)
                                             .py(SP_1)
                                             .rounded(SP_2)
-                                            .bg(cx.theme().muted.opacity(OPACITY_CARD_BG))
-                                            .text_color(
-                                                cx.theme().muted_foreground.opacity(OPACITY_STRONG),
-                                            )
+                                            .bg(palette.panel)
+                                            .text_color(palette.hint)
                                             .flex_shrink_0()
                                             .child(SharedString::from(format!(
                                                 "\u{2318}{}",
