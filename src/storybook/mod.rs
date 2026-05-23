@@ -82,6 +82,7 @@ pub mod main_menu_variations;
 pub mod mini_ai_chat_presenter;
 pub mod mini_ai_chat_states;
 pub mod mini_ai_chat_variations;
+pub mod non_list_state_showcase;
 pub mod notes_window_states;
 pub mod notes_window_variations;
 pub(crate) mod playground_overlay_metrics;
@@ -173,6 +174,10 @@ pub use mini_ai_chat_variations::{
     render_mini_ai_chat_story_preview, resolve_mini_ai_chat_style, MiniAiChatStyle,
     MiniAiChatSurface, MiniAiChatVariationId, MiniAiChatVariationSpec,
     SPECS as MINI_AI_CHAT_VARIATION_SPECS,
+};
+pub use non_list_state_showcase::{
+    non_list_state_showcase_story_variants, render_non_list_state_showcase_compare_thumbnail,
+    render_non_list_state_showcase_preview, NonListStateShowcaseId,
 };
 pub use notes_window_states::{
     notes_window_state_story_variants, render_notes_window_state_compare_thumbnail,

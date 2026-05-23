@@ -42,6 +42,7 @@ pub mod inline_popup_window;
 pub mod inline_prompt_input;
 pub(crate) mod launcher_ask_ai_hint;
 pub mod minimal_prompt_shell;
+pub(crate) mod non_list_state;
 pub(crate) mod overlay_modal;
 pub mod prompt_container;
 pub mod prompt_footer;
@@ -85,6 +86,13 @@ pub use inline_prompt_input::InlinePromptInput;
 pub(crate) use launcher_ask_ai_hint::render_launcher_ask_ai_hint;
 #[allow(unused_imports)]
 pub use minimal_prompt_shell::MinimalPromptShell;
+#[allow(unused_imports)]
+pub(crate) use non_list_state::{
+    non_list_action_row, non_list_callout, non_list_card, non_list_centered_shell,
+    non_list_content_stack, non_list_footer_note, non_list_icon_glyph, non_list_intro,
+    non_list_metrics, non_list_palette, non_list_requirement_row, NonListDensity, NonListMetrics,
+    NonListPalette,
+};
 #[allow(unused_imports)]
 pub use scrollbar::{
     Scrollbar, ScrollbarColors, MIN_THUMB_HEIGHT, SCROLLBAR_PADDING, SCROLLBAR_WIDTH,

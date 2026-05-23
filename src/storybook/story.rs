@@ -87,6 +87,7 @@ pub enum StorySurface {
     BuiltInBrowser,
     QuickTerminal,
     AboutSurface,
+    NonListState,
 }
 
 impl StorySurface {
@@ -111,6 +112,7 @@ impl StorySurface {
             Self::BuiltInBrowser => "Built-In Browser",
             Self::QuickTerminal => "Quick Terminal",
             Self::AboutSurface => "About Surface",
+            Self::NonListState => "Non-List States",
         }
     }
 }

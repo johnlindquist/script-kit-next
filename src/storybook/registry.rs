@@ -71,6 +71,7 @@ mod tests {
         let _ = stories_by_surface(StorySurface::AcpChat);
         let _ = stories_by_surface(StorySurface::BuiltInBrowser);
         let _ = stories_by_surface(StorySurface::QuickTerminal);
+        let _ = stories_by_surface(StorySurface::NonListState);
     }
 
     #[test]
@@ -146,6 +147,10 @@ mod tests {
             !stories_by_surface(StorySurface::QuickTerminal).is_empty(),
             "Quick Terminal surface should have at least one story"
         );
+        assert!(
+            !stories_by_surface(StorySurface::NonListState).is_empty(),
+            "Non-List States surface should have at least one story"
+        );
     }
 
     #[test]
@@ -157,6 +162,7 @@ mod tests {
         );
         assert!(categories.contains(&"Launcher"));
         assert!(categories.contains(&"Adoptable Surfaces"));
+        assert!(categories.contains(&"Design Language"));
     }
 
     #[test]

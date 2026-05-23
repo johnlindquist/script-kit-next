@@ -11,6 +11,7 @@ mod component_primitives_states;
 mod dictation_states;
 mod main_menu_variations;
 mod mini_ai_chat_states;
+mod non_list_state_showcase;
 mod popup_component_states;
 mod quick_terminal_states;
 mod utility_builtin_states;
@@ -29,6 +30,7 @@ pub use component_primitives_states::ComponentPrimitivesStatesStory;
 pub use dictation_states::DictationStatesStory;
 pub use main_menu_variations::MainMenuStory;
 pub use mini_ai_chat_states::MiniAiChatStatesStory;
+pub use non_list_state_showcase::NonListStateShowcaseStory;
 pub use popup_component_states::{
     AcpChatStatesStory, ConfirmPopupStatesStory, ContextPickerPopupStatesStory,
     NotesWindowStatesStory, ShortcutRecorderStatesStory,
@@ -58,6 +60,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(QuickTerminalStatesStory)),
         StoryEntry::new(Box::new(ComponentPrimitivesStatesStory)),
         StoryEntry::new(Box::new(UtilityBuiltinStatesStory)),
+        StoryEntry::new(Box::new(NonListStateShowcaseStory)),
     ]
 });
 
