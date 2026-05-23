@@ -487,7 +487,7 @@ fn find_best_content_line(body: &str, query_lower: &str) -> Option<ScriptContent
                 Some(ctx) => ctx,
                 None => panic!("fuzzy content search requires a Nucleo context"),
             };
-            let Some(score) = ctx.score(trimmed) else {
+            let Some(score) = ctx.compact_score(trimmed, query_lower) else {
                 byte_offset += segment.len();
                 continue;
             };

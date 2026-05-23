@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::builtins::{BuiltInEntry, BuiltInFeature, BuiltInGroup};
+use crate::scripts::ScriptMatchKind;
 
 use super::super::*;
 
@@ -59,6 +60,19 @@ pub(super) fn make_script(name: &str, desc: Option<&str>) -> Arc<Script> {
         )),
         extension: "ts".to_string(),
         description: desc.map(|d| d.to_string()),
+        ..Default::default()
+    })
+}
+
+fn make_script_with_body(name: &str, body: &str) -> Arc<Script> {
+    Arc::new(Script {
+        name: name.to_string(),
+        path: PathBuf::from(format!(
+            "/test/{}.ts",
+            name.to_lowercase().replace(' ', "-")
+        )),
+        extension: "ts".to_string(),
+        body: Some(body.to_string()),
         ..Default::default()
     })
 }
@@ -266,6 +280,36 @@ fn test_short_fuzzy_query_rejects_sparse_script_description_match() {
         results.is_empty(),
         "short ordered query should not match script descriptions through mid-word chunks"
     );
+}
+
+#[test]
+fn test_short_fuzzy_query_rejects_sparse_script_body_match() {
+    let scripts = vec![make_script_with_body(
+        "Add to Google Calendar",
+        "const capture = await createPromptFromSavedInput();",
+    )];
+
+    let results = fuzzy_search_scripts(&scripts, "posi");
+
+    assert!(
+        results.is_empty(),
+        "short ordered query should not match script body lines through scattered source letters"
+    );
+}
+
+#[test]
+fn test_script_body_search_keeps_exact_content_match() {
+    let scripts = vec![make_script_with_body(
+        "Window Helper",
+        "const position = await getWindowPosition();",
+    )];
+
+    let results = fuzzy_search_scripts(&scripts, "position");
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].script.name, "Window Helper");
+    assert!(matches!(results[0].match_kind, ScriptMatchKind::Content));
+    assert!(results[0].content_match.is_some());
 }
 
 #[test]
