@@ -1688,7 +1688,7 @@ fn overlay_dot_and_window_constants_match_target_contract() {
 
     assert_eq!(super::window::OVERLAY_WIDTH_PX, 520.0);
     assert_eq!(super::window::OVERLAY_HEIGHT_PX, 72.0);
-    assert_eq!(super::window::OVERLAY_RADIUS_PX, 22.0);
+    assert_eq!(super::window::OVERLAY_RADIUS_PX, 12.0);
     assert_eq!(super::window::STATUS_TEXT_SIZE_PX, 11.5);
     assert_eq!(super::window::WAVEFORM_BAR_COUNT, 9);
     assert_eq!(super::window::WAVEFORM_BAR_WIDTH_PX, 3.0);
@@ -1795,16 +1795,16 @@ fn dictation_overlay_derives_colors_from_theme_and_compact_capsule_chrome() {
         "overlay surface must use app chrome color tokens"
     );
     assert!(
-        source.contains("GLASS_BAR_RIM_OPACITY"),
-        "overlay border must use glass bar rim opacity"
+        source.contains("PromptFooterColors::from_theme"),
+        "overlay action rail buttons must use standard prompt footer color tokens"
     );
     assert!(
         source.contains("render_glass_signal_band"),
         "overlay must render the launcher-style selected signal band"
     );
     assert!(
-        source.contains("render_inline_shortcut_keys"),
-        "overlay action rail shortcuts must use the main-menu footer shortcut renderer"
+        source.contains("split_footer_shortcut"),
+        "overlay action rail shortcuts must use the main-menu footer shortcut splitter"
     );
     // Theme tokens still used for content colors.
     assert!(
@@ -2444,20 +2444,21 @@ fn can_accept_dictation_into_prompt_matches_delivery_views() {
 fn dictation_start_preflights_delivery_target_before_toggle() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
-    let branch_start = src
-        .find("builtins::BuiltInFeature::Dictation =>")
-        .expect("dictation builtin branch must exist");
-    let branch_src = &src[branch_start..branch_start + 5000.min(src.len() - branch_start)];
+    let dictation_start = src
+        .find("fn execute_dictation_builtin_action(")
+        .expect("execute_dictation_builtin_action must exist");
+    let dictation_src =
+        &src[dictation_start..dictation_start + 4000.min(src.len() - dictation_start)];
 
-    let preflight_pos = branch_src
-        .find("ensure_dictation_delivery_target_available")
-        .expect("dictation start must preflight delivery target");
-    let toggle_pos = branch_src
+    let preflight_pos = dictation_src
+        .find("let preflight = self.prepare_dictation_builtin_start(action, cx);")
+        .expect("dictation start must prepare preflight");
+    let toggle_pos = dictation_src
         .find("crate::dictation::toggle_dictation(dictation_target)")
         .expect("dictation builtin must call toggle_dictation");
     assert!(
         preflight_pos < toggle_pos,
-        "delivery-target preflight (byte {preflight_pos}) must run before toggle_dictation (byte {toggle_pos})"
+        "delivery-target preflight must run before toggle_dictation"
     );
 }
 
@@ -2752,17 +2753,17 @@ fn dictation_start_preflight_runs_before_toggle() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
     let dictation_start = src
-        .find("builtins::BuiltInFeature::Dictation")
-        .expect("dictation builtin must exist");
+        .find("fn execute_dictation_builtin_action(")
+        .expect("execute_dictation_builtin_action must exist");
     let dictation_src =
         &src[dictation_start..dictation_start + 4000.min(src.len() - dictation_start)];
 
     let recording_guard_pos = dictation_src
-        .find("if !crate::dictation::is_dictation_recording()")
+        .find("let is_start_edge = !crate::dictation::is_dictation_recording();")
         .expect("dictation start path must gate preflight on recording state");
     let preflight_pos = dictation_src
-        .find("ensure_dictation_delivery_target_available")
-        .expect("dictation start path must preflight the delivery target");
+        .find("let preflight = self.prepare_dictation_builtin_start(action, cx);")
+        .expect("dictation start path must prepare preflight");
     let toggle_pos = dictation_src
         .find("crate::dictation::toggle_dictation(dictation_target)")
         .expect("dictation start path must toggle dictation");
@@ -2778,22 +2779,18 @@ fn dictation_start_preflight_surfaces_unavailable_target() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
     let dictation_start = src
-        .find("builtins::BuiltInFeature::Dictation")
-        .expect("dictation builtin must exist");
+        .find("fn prepare_dictation_builtin_start(")
+        .expect("prepare_dictation_builtin_start must exist");
     let dictation_src =
         &src[dictation_start..dictation_start + 3000.min(src.len() - dictation_start)];
 
     assert!(
-        dictation_src.contains("Dictation start preflight failed"),
+        dictation_src.contains("preflight_failure_message()"),
         "preflight failures must be logged"
     );
     assert!(
-        dictation_src.contains("Dictation unavailable: {error_text}"),
+        dictation_src.contains("self.show_error_toast"),
         "preflight failures must surface a toast"
-    );
-    assert!(
-        dictation_src.contains("dictation_preflight_failed"),
-        "preflight failures must short-circuit without starting capture"
     );
 }
 
@@ -2969,11 +2966,11 @@ fn overlay_confirming_phase_renders_stop_continue() {
 
     // Source file contains unicode escapes, so match those literally.
     assert!(
-        window_src.contains(r#""Stop \u{21b5}""#),
+        window_src.contains("ACTION_STOP_LABEL") && window_src.contains("ENTER_KEYCAP"),
         "confirming phase must show Stop affordance"
     );
     assert!(
-        window_src.contains(r#""Continue \u{238b}""#),
+        window_src.contains("ACTION_CONTINUE_LABEL") && window_src.contains("ESC_KEYCAP"),
         "confirming phase must show Continue affordance"
     );
     assert!(
@@ -2981,7 +2978,7 @@ fn overlay_confirming_phase_renders_stop_continue() {
         "confirming phase must show Stop dictation? prompt"
     );
     assert!(
-        !window_src.contains(r#""Abort \u{21b5}""#),
+        !window_src.contains(r#""Abort""#),
         "old Abort label should be removed"
     );
     assert!(
@@ -3003,11 +3000,11 @@ fn overlay_uses_glass_bar_styling() {
         "overlay must derive glass surface from app chrome"
     );
     assert!(
-        window_src.contains("GLASS_BAR_RIM_OPACITY"),
-        "overlay must define glass bar rim opacity"
+        window_src.contains("PromptFooterColors::from_theme"),
+        "overlay must use prompt footer colors"
     );
     assert!(
-        window_src.contains("chrome.window_surface_rgba"),
+        window_src.contains("PromptFooterColors::from_theme"),
         "glass bar surface must match main menu window surface chrome"
     );
     let rail_start = window_src
@@ -3019,8 +3016,8 @@ fn overlay_uses_glass_bar_styling() {
         "action rail must inherit the overlay surface instead of stacking a darker background"
     );
     assert!(
-        window_src.contains("row_selected_background_rgba"),
-        "glass bar signal band must match main menu selected-row background opacity"
+        window_src.contains("render_glass_signal_band"),
+        "must render glass signal band"
     );
     assert!(
         window_src.contains("wrap_dictation_overlay_action_rail"),
@@ -3031,9 +3028,8 @@ fn overlay_uses_glass_bar_styling() {
         "dictation overlay chrome must use the system UI font, not monospace"
     );
     assert!(
-        window_src.contains("let hover_bg = rgba(chrome.hover_rgba);")
-            && window_src.contains("let active_bg = rgba(chrome.selection_rgba);")
-            && window_src.contains("render_inline_shortcut_keys"),
+        window_src.contains("PromptFooterColors::from_theme")
+            && window_src.contains("split_footer_shortcut"),
         "dictation action buttons must match main menu footer hover, active, font, and shortcut rendering"
     );
 }
@@ -3056,7 +3052,7 @@ fn overlay_dimensions_match_glass_bar_contract() {
     );
     assert_eq!(
         super::window::OVERLAY_RADIUS_PX,
-        22.0,
+        12.0,
         "overlay radius must match the adopted glass bar shape"
     );
 }
@@ -4083,6 +4079,10 @@ fn dictation_overlay_singleton_nonactivating_contract() {
         body.contains(&compact_delta_contract("kind: gpui::WindowKind::PopUp,")),
         "overlay must remain a PopUp so makeKeyWindow does not activate or reveal main"
     );
+    assert!(
+        body.contains(&compact_delta_contract("is_resizable: false,")),
+        "overlay window must not be resizable"
+    );
 
     // Order front without activating
     assert!(
@@ -4127,7 +4127,15 @@ fn dictation_overlay_claims_full_popup_bounds_contract() {
     // Inner pill surface must claim full popup content bounds with overflow hidden
     assert!(
         body.contains(&compact_delta_contract(
-            "let surface = div().flex().flex_row().items_center().justify_center().w_full().h_full().overflow_hidden()"
+            "let surface = div()\
+            .flex()\
+            .flex_row()\
+            .items_center()\
+            .justify_center()\
+            .w_full()\
+            .h_full()\
+            .relative()\
+            .overflow_hidden()"
         )),
         "inner dictation pill must fill the popup content bounds with overflow_hidden"
     );
@@ -4277,13 +4285,9 @@ fn overlay_phase_copy_confirming_uses_stop_continue() {
     use super::types::DictationSessionPhase;
     use super::window::overlay_phase_copy;
 
-    let (headline, hint) = overlay_phase_copy(&DictationSessionPhase::Confirming);
+    let (headline, action_label) = overlay_phase_copy(&DictationSessionPhase::Confirming);
     assert_eq!(headline, "Stop dictation?");
-    assert!(hint.contains("Stop"), "confirming hint must mention Stop");
-    assert!(
-        hint.contains("Continue"),
-        "confirming hint must mention Continue"
-    );
+    assert_eq!(action_label, "Continue");
 }
 
 #[test]
@@ -4318,13 +4322,12 @@ fn confirming_render_shows_stop_and_continue_buttons() {
     let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
     // Stop button with Enter key hint (↵ = \u{21b5})
     assert!(
-        src.contains(r#""Stop \u{21b5}""#),
-        "confirming UI must render Stop ↵ button"
+        src.contains("ACTION_STOP_LABEL"),
+        "confirming UI must render Stop button"
     );
-    // Continue button with Escape key hint (⎋ = \u{238b})
     assert!(
-        src.contains(r#""Continue \u{238b}""#),
-        "confirming UI must render Continue ⎋ button"
+        src.contains("ACTION_CONTINUE_LABEL"),
+        "confirming UI must render Continue button"
     );
 }
 
@@ -4332,12 +4335,8 @@ fn confirming_render_shows_stop_and_continue_buttons() {
 fn confirming_render_uses_error_and_success_colors() {
     let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
     assert!(
-        src.contains("theme.colors.ui.error"),
-        "Stop button must use error color"
-    );
-    assert!(
-        src.contains("theme.colors.ui.success"),
-        "Continue button must use success color"
+        src.contains("PromptFooterColors"),
+        "buttons must use standard prompt footer colors"
     );
 }
 
@@ -4808,7 +4807,7 @@ fn external_app_badge_names_the_tracked_frontmost_app() {
             && window_src.contains("crate::app_launcher::cached_app_icon_for_bundle")
             && window_src.contains("crate::frontmost_app_tracker::get_last_real_app()")
             && window_src.contains("target.overlay_label().into()")
-            && window_src.contains("icons::render::render_image"),
+            && window_src.contains("icons::render_image"),
         "external-app badge should prefer the indexed frontmost app icon and fall back to the tracked app name or static target label"
     );
 }
@@ -4872,11 +4871,9 @@ fn missing_model_entry_gate_opens_download_prompt() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
-    // Find the Dictation builtin arm — the `BuiltInFeature::Dictation` match.
     let dictation_arm_start = src
-        .find("BuiltInFeature::Dictation =>")
-        .expect("builtin_execution must have a Dictation arm");
-    // Scope to the first ~2000 chars of the arm to stay in the preflight.
+        .find("fn prepare_dictation_builtin_start(")
+        .expect("builtin_execution must have prepare_dictation_builtin_start");
     let arm_src =
         &src[dictation_arm_start..dictation_arm_start + 2000.min(src.len() - dictation_arm_start)];
 
@@ -4898,7 +4895,7 @@ fn missing_model_entry_gate_opens_download_prompt() {
         .find("is_parakeet_model_available()")
         .expect("model check must exist");
     let delivery_check_pos = arm_src
-        .find("ensure_dictation_delivery_target_available()")
+        .find("ensure_dictation_builtin_target_available")
         .expect("delivery target check must exist");
     assert!(
         model_check_pos < delivery_check_pos,

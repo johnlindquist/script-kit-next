@@ -1407,63 +1407,153 @@ fn render_glass_signal_band(body: AnyElement) -> impl IntoElement {
         .child(body)
 }
 
-fn render_action_chip_content(label: SharedString, key: SharedString) -> impl IntoElement {
-    let theme = get_cached_theme();
-    if label.as_ref() == ACTION_MIC_LABEL {
-        return render_mic_action_chip_content(&theme);
+fn shortcut_key_glyph_nudge_y(key: &str, configured_return: Option<f32>) -> f32 {
+    if crate::components::footer_chrome::is_footer_return_key_glyph(key) {
+        configured_return.unwrap_or(
+            crate::components::footer_chrome::FOOTER_KEY_GLYPH_NUDGE_Y_PX
+                + crate::components::footer_chrome::FOOTER_RETURN_GLYPH_NUDGE_Y_PX,
+        )
+    } else {
+        crate::components::footer_chrome::footer_key_glyph_nudge_y(key)
     }
-
-    crate::components::footer_chrome::render_footer_hint_content(
-        label,
-        key,
-        crate::components::footer_chrome::FooterHintKeyMode::Shortcut,
-        &theme,
-    )
 }
 
-fn render_mic_action_chip_content(theme: &crate::theme::Theme) -> AnyElement {
-    let footer_text = crate::components::footer_chrome::footer_hint_text_color(theme);
-    let full_text = theme.colors.text.primary.to_rgb();
+type FooterButtonMouseListener =
+    std::rc::Rc<dyn Fn(&MouseDownEvent, &mut Window, &mut App) + 'static>;
 
-    div()
-        .px(px(4.0))
-        .h(px(
-            crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX,
-        ))
+fn render_footer_button_element(
+    id: Option<&'static str>,
+    label: SharedString,
+    shortcut: SharedString,
+    is_mic: bool,
+    listener: Option<FooterButtonMouseListener>,
+) -> AnyElement {
+    let theme = get_cached_theme();
+    let colors = crate::components::prompt_footer::PromptFooterColors::from_theme(&theme);
+    let button_font_size = (theme.get_fonts().ui_size - 2.0).max(10.0);
+
+    let label_element = if is_mic {
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(4.0))
+            .child(
+                svg()
+                    .external_path(MIC_ICON_PATH)
+                    .size(px(13.0))
+                    .flex_shrink_0()
+                    .text_color(colors.accent.to_rgb()),
+            )
+            .child(
+                div()
+                    .text_size(px(button_font_size))
+                    .text_color(colors.accent.to_rgb())
+                    .child(label.clone()),
+            )
+            .into_any_element()
+    } else {
+        div()
+            .text_size(px(button_font_size))
+            .text_color(colors.accent.to_rgb())
+            .child(label.clone())
+            .into_any_element()
+    };
+
+    let shortcut_keys = crate::components::footer_chrome::split_footer_shortcut(&shortcut);
+    let shortcut_element = div()
         .flex()
         .flex_row()
+        .gap(px(3.0))
         .items_center()
-        .justify_center()
-        .gap(px(4.0))
-        .font_family(FONT_SYSTEM_UI)
-        .font_weight(crate::components::footer_chrome::FOOTER_HINT_FONT_WEIGHT_GPUI)
-        .text_size(px(
-            crate::components::footer_chrome::FOOTER_HINT_FONT_SIZE_PX,
-        ))
-        .text_color(footer_text)
-        .group_hover("footer-action-button", move |s| s.text_color(full_text))
-        .child(
-            svg()
-                .external_path(MIC_ICON_PATH)
-                .size(px(13.0))
-                .flex_shrink_0()
-                .text_color(footer_text)
-                .group_hover("footer-action-button", move |s| s.text_color(full_text)),
-        )
-        .child(ACTION_MIC_LABEL)
-        .into_any_element()
+        .children(shortcut_keys.into_iter().map(move |key| {
+            let glyph_nudge_y = shortcut_key_glyph_nudge_y(&key, None);
+            let key_content: AnyElement = div()
+                .h(px(
+                    crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX,
+                ))
+                .line_height(px(
+                    crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX,
+                ))
+                .mt(px(glyph_nudge_y))
+                .child(key.clone())
+                .into_any_element();
+            div()
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .px(px(
+                    crate::components::footer_chrome::FOOTER_KEYCAP_PADDING_X_PX,
+                ))
+                .h(px(
+                    crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX,
+                ))
+                .min_h(px(
+                    crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX,
+                ))
+                .min_w(px(
+                    crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX,
+                ))
+                .line_height(px(
+                    crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX,
+                ))
+                .rounded(px(
+                    crate::components::footer_chrome::FOOTER_KEYCAP_RADIUS_PX,
+                ))
+                .border_1()
+                .border_color(colors.border.rgba8(0x50))
+                .bg(colors.border.rgba8(0x15))
+                .text_size(px(button_font_size))
+                .text_color(colors.text_muted.to_rgb())
+                .child(key_content)
+        }));
+
+    if let (Some(id_str), Some(listener)) = (id, listener) {
+        let hover_bg = rgba((colors.background << 8) | (colors.hover_alpha as u32));
+        let active_bg = rgba((colors.text_primary << 8) | (colors.selected_alpha as u32));
+
+        let mut button = div()
+            .id(id_str)
+            .flex()
+            .flex_row()
+            .items_center()
+            .px(px(8.0))
+            .py(px(6.0))
+            .rounded(px(4.0))
+            .cursor_pointer()
+            .hover(move |s| s.bg(hover_bg))
+            .active(move |s| s.bg(active_bg))
+            .on_mouse_down(MouseButton::Left, move |e, w, a| listener(e, w, a))
+            .child(label_element);
+
+        if !shortcut.is_empty() {
+            button = button.child(div().ml(px(6.0)).child(shortcut_element));
+        }
+
+        button.into_any_element()
+    } else {
+        let mut button = div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .px(px(8.0))
+            .py(px(6.0))
+            .rounded(px(4.0))
+            .cursor_default()
+            .child(label_element);
+
+        if !shortcut.is_empty() {
+            button = button.child(div().ml(px(6.0)).child(shortcut_element));
+        }
+
+        button.into_any_element()
+    }
 }
 
 fn render_action_chip(label: &'static str, key: SharedString) -> impl IntoElement {
-    div()
-        .w(px(action_chip_width(label)))
-        .h(px(footer_action_button_height()))
-        .flex()
-        .flex_row()
-        .items_center()
-        .justify_center()
-        .group("footer-action-button")
-        .child(render_action_chip_content(label.into(), key))
+    let is_mic = label == ACTION_MIC_LABEL;
+    render_footer_button_element(None, label.into(), key, is_mic, None)
 }
 
 fn render_clickable_action_chip(
@@ -1472,27 +1562,14 @@ fn render_clickable_action_chip(
     key: SharedString,
     listener: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    let theme = get_cached_theme();
-    let chrome = AppChromeColors::from_theme(&theme);
-    let hover_bg = rgba(chrome.hover_rgba);
-    let active_bg = rgba(chrome.selection_rgba);
-    let width = action_chip_width(label.as_ref());
-
-    div()
-        .id(id)
-        .w(px(width))
-        .h(px(footer_action_button_height()))
-        .flex()
-        .flex_row()
-        .items_center()
-        .justify_center()
-        .group("footer-action-button")
-        .rounded(px(4.0))
-        .cursor_pointer()
-        .hover(move |style| style.bg(hover_bg))
-        .active(move |style| style.bg(active_bg))
-        .on_mouse_down(MouseButton::Left, listener)
-        .child(render_action_chip_content(label, key))
+    let is_mic = label.as_ref() == ACTION_MIC_LABEL;
+    render_footer_button_element(
+        Some(id),
+        label,
+        key,
+        is_mic,
+        Some(std::rc::Rc::new(listener)),
+    )
 }
 
 fn wrap_dictation_overlay_action_rail(
@@ -2021,6 +2098,7 @@ pub fn open_dictation_overlay(
         focus: false,
         show: false,
         kind: gpui::WindowKind::PopUp,
+        is_resizable: false,
         ..Default::default()
     };
 
