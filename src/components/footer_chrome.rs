@@ -70,7 +70,7 @@ pub(crate) enum FooterHintKeyMode {
 pub(crate) enum FooterHintContentJustify {
     Start,
     Center,
-    End,
+    KeyAnchored,
 }
 
 pub(crate) fn footer_action_slot_width(slot: FooterActionSlot) -> f32 {
@@ -280,7 +280,14 @@ fn render_footer_hint_content_impl(
     let label_max_width_px =
         slot_width_px.map(|slot| footer_labelcap_max_width_for_slot(slot, key_width_px));
     let labelcap = if let Some(max_width_px) = label_max_width_px {
-        render_footer_labelcap_constrained(label, theme, footer_text, full_text, Some(max_width_px))
+        render_footer_labelcap_constrained(
+            label,
+            theme,
+            footer_text,
+            full_text,
+            Some(max_width_px),
+            matches!(justify, FooterHintContentJustify::KeyAnchored),
+        )
     } else {
         render_footer_labelcap(label, theme, footer_text, full_text)
     };
@@ -307,7 +314,7 @@ fn render_footer_hint_content_impl(
     row = match justify {
         FooterHintContentJustify::Start => row.justify_start(),
         FooterHintContentJustify::Center => row.justify_center(),
-        FooterHintContentJustify::End => row.justify_end(),
+        FooterHintContentJustify::KeyAnchored => row.justify_start(),
     };
 
     if key_first {
@@ -403,7 +410,7 @@ fn render_footer_labelcap(
     footer_text: gpui::Rgba,
     full_text: gpui::Hsla,
 ) -> AnyElement {
-    render_footer_labelcap_constrained(label, theme, footer_text, full_text, None)
+    render_footer_labelcap_constrained(label, theme, footer_text, full_text, None, false)
 }
 
 fn render_footer_labelcap_constrained(
@@ -412,6 +419,7 @@ fn render_footer_labelcap_constrained(
     footer_text: gpui::Rgba,
     full_text: gpui::Hsla,
     max_width_px: Option<f32>,
+    force_width: bool,
 ) -> AnyElement {
     let mut cap = div()
         .flex_none()
@@ -434,6 +442,9 @@ fn render_footer_labelcap_constrained(
 
     if let Some(max_width_px) = max_width_px {
         cap = cap.max_w(px(max_width_px)).overflow_hidden();
+        if force_width {
+            cap = cap.w(px(max_width_px));
+        }
     }
 
     cap.child(

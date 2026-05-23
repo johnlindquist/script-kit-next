@@ -219,8 +219,14 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
             && FOOTER_POPUP.contains("let label_x = (key_x + key_width + gap_width).round();")
             && FOOTER_POPUP.contains("if left_pinned { 0.0 } else { trailing_x }")
             && FOOTER_POPUP.contains("setContentTintColor: text_color")
-            && FOOTER_POPUP.contains("setAlphaValue: 1.0_f64"),
-        "native footer must pin the dictation mic glyph+label to x=0, render icon before text, and tint the icon like other footer glyphs"
+            && FOOTER_POPUP.contains("setAlphaValue: 1.0_f64")
+            && FOOTER_POPUP.contains("setImageScaling: 0usize"),
+        "native footer must pin the dictation mic glyph+label to x=0, render icon before text, scale it down into the keycap, and tint the icon like other footer glyphs"
+    );
+    assert!(
+        FOOTER_POPUP.contains("isKindOfClass: class!(NSImageView)")
+            && FOOTER_POPUP.contains("setContentTintColor: color"),
+        "native footer image glyphs must use the same recursive opacity/tint updates as text key glyphs"
     );
     assert!(
         DICTATION_WINDOW.contains("fn open_microphone_picker")

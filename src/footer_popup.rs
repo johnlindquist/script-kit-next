@@ -55,6 +55,7 @@ const FOOTER_RUN_SLOT_MIN_WIDTH: f64 =
 #[cfg(target_os = "macos")]
 const FOOTER_RUN_SLOT_MAX_WIDTH: f64 =
     crate::components::footer_chrome::FOOTER_RUN_SLOT_MAX_WIDTH_PX as f64;
+const FOOTER_RUN_LABEL_WIDTH_SAFETY_PX: f32 = 8.0;
 #[cfg(target_os = "macos")]
 const FOOTER_ACTIONS_SLOT_WIDTH: f64 =
     crate::components::footer_chrome::FOOTER_ACTIONS_SLOT_WIDTH_PX as f64;
@@ -401,7 +402,7 @@ impl GpuiFooterOverlay {
         let justify = if key_first {
             crate::components::footer_chrome::FooterHintContentJustify::Start
         } else if matches!(action, FooterAction::Run) {
-            crate::components::footer_chrome::FooterHintContentJustify::End
+            crate::components::footer_chrome::FooterHintContentJustify::KeyAnchored
         } else {
             crate::components::footer_chrome::FooterHintContentJustify::Center
         };
@@ -535,13 +536,20 @@ fn footer_overlay_button_width_px(
 }
 
 fn footer_overlay_button_full_width_px(button: &FooterButtonConfig) -> f32 {
-    crate::components::footer_chrome::footer_hint_content_estimated_width_px(
+    let width = crate::components::footer_chrome::footer_hint_content_estimated_width_px(
         button.label.as_ref(),
         button.key.as_ref(),
         crate::components::footer_chrome::FooterHintKeyMode::Shortcut,
-    )
-    .max(footer_hint_slot_width(button.action) as f32)
-    .ceil()
+    );
+    let width = if matches!(button.action, FooterAction::Run) && !button.label.trim().is_empty() {
+        width + FOOTER_RUN_LABEL_WIDTH_SAFETY_PX
+    } else {
+        width
+    };
+
+    width
+        .max(footer_hint_slot_width(button.action) as f32)
+        .ceil()
 }
 
 fn gpui_footer_overlay_spike_enabled() -> bool {
@@ -2021,7 +2029,7 @@ unsafe fn make_footer_hint_item(
             let _: () = msg_send![image_view, setImage: image];
             let _: () = msg_send![image_view, setContentTintColor: text_color];
             let _: () = msg_send![image_view, setAlphaValue: 1.0_f64];
-            let _: () = msg_send![image_view, setImageScaling: 2usize];
+            let _: () = msg_send![image_view, setImageScaling: 0usize];
             (image_view, NSSize::new(13.0_f64, 13.0_f64))
         } else {
             let glyph_field = make_footer_hint_text_field(
@@ -2289,7 +2297,8 @@ mod footer_layout_tests {
     use super::{
         footer_active_dot_hex, footer_dot_hex, footer_hint_content_layout,
         footer_hint_label_widths, footer_hint_max_item_width, footer_hint_slot_width,
-        footer_selected_background_rgba, FooterAction, FooterButtonConfig, FooterDotStatus,
+        footer_overlay_button_full_width_px, footer_selected_background_rgba, FooterAction,
+        FooterButtonConfig, FooterDotStatus,
     };
 
     #[test]
@@ -2381,6 +2390,17 @@ mod footer_layout_tests {
         assert_eq!(
             footer_hint_max_item_width(FooterAction::Ai, 480.0, &buttons),
             None
+        );
+    }
+
+    #[test]
+    fn run_command_label_gets_natural_width_before_truncation() {
+        let run_command = FooterButtonConfig::new(FooterAction::Run, "↵", "Run Command");
+
+        assert!(footer_overlay_button_full_width_px(&run_command) > 112.0);
+        assert!(
+            footer_overlay_button_full_width_px(&run_command)
+                < crate::components::footer_chrome::FOOTER_RUN_SLOT_MAX_WIDTH_PX
         );
     }
 
@@ -2777,6 +2797,10 @@ unsafe fn set_footer_button_text_opacity(view: id, opacity: f64) {
     let is_text_field: cocoa::base::BOOL = msg_send![view, isKindOfClass: class!(NSTextField)];
     if is_text_field == YES {
         let _: () = msg_send![view, setTextColor: color];
+    }
+    let is_image_view: cocoa::base::BOOL = msg_send![view, isKindOfClass: class!(NSImageView)];
+    if is_image_view == YES {
+        let _: () = msg_send![view, setContentTintColor: color];
     }
 
     let subviews: id = msg_send![view, subviews];
