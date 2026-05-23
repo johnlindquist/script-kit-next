@@ -129,12 +129,12 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
                 .contains("pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;")
             && FOOTER_CHROME
                 .contains("pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;")
-            && FOOTER_CHROME.contains("pub(crate) const FOOTER_KEYCAP_BORDER_ALPHA: f32 = 0.50;")
             && FOOTER_CHROME.contains("pub(crate) const FOOTER_LABELCAP_BORDER_ALPHA: f32 = 0.0;")
+            && FOOTER_CHROME.contains("let alpha = footer_keycap_border_alpha(theme, selected);")
             && FOOTER_CHROME.contains("pub(crate) fn footer_button_height(footer_height: f32)")
             && FOOTER_CHROME
                 .contains("FOOTER_KEY_GLYPH_NUDGE_Y_PX + FOOTER_RETURN_GLYPH_NUDGE_Y_PX"),
-        "shared footer chrome tokens must pin the native font and keycap contract"
+        "shared footer chrome tokens must pin the native font and keycap opacity contract"
     );
     assert!(
         FOOTER_CHROME.contains("\"esc\" | \"escape\" => \"⎋\".to_string()")

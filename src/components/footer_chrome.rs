@@ -18,7 +18,6 @@ pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;
 
-pub(crate) const FOOTER_KEYCAP_BORDER_ALPHA: f32 = 0.50;
 pub(crate) const FOOTER_LABELCAP_BORDER_ALPHA: f32 = 0.0;
 
 pub(crate) enum FooterHintKeyMode {
@@ -51,11 +50,7 @@ pub(crate) fn footer_hint_text_color(theme: &Theme) -> gpui::Rgba {
 }
 
 pub(crate) fn footer_keycap_border_color_for_state(theme: &Theme, selected: bool) -> gpui::Hsla {
-    let alpha = if selected {
-        footer_keycap_border_alpha(theme, true)
-    } else {
-        FOOTER_KEYCAP_BORDER_ALPHA
-    };
+    let alpha = footer_keycap_border_alpha(theme, selected);
     theme.colors.text.primary.with_opacity(alpha)
 }
 
@@ -311,7 +306,7 @@ mod tests {
         );
         assert_eq!(
             footer_keycap_border_color(&theme).a,
-            ((FOOTER_KEYCAP_BORDER_ALPHA * 255.0) as u8) as f32 / 255.0
+            ((list_colors.hover_opacity * 255.0) as u8) as f32 / 255.0
         );
         assert_eq!(
             footer_keycap_border_color_for_state(&theme, true).a,
