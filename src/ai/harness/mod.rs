@@ -2323,14 +2323,10 @@ mod tests {
     }
 
     #[test]
-    fn start_here_includes_agent_backend_suffix_table() {
+    fn start_here_omits_deprecated_gemini_cli_suffixes() {
         let block = build_tab_ai_artifact_authoring_guidance_block();
-        assert!(block.contains("Agent Backend Quick Pick"));
-        assert!(block.contains(".claude.md"));
-        assert!(block.contains(".gemini.md"));
-        assert!(block.contains(".codex.md"));
-        assert!(block.contains(".copilot.md"));
-        assert!(block.contains(".i.gemini.md"));
+        assert!(!block.contains(".gemini.md"));
+        assert!(!block.contains(".i.gemini.md"));
     }
 
     #[test]

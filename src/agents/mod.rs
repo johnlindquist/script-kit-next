@@ -17,7 +17,7 @@
 //! | Pattern | Backend |
 //! |---------|---------|
 //! | `*.claude.md` | Claude |
-//! | `*.gemini.md` | Gemini |
+//! | `*.agy.md` | AGY |
 //! | `*.codex.md` | Codex |
 //! | `*.copilot.md` | Copilot |
 //! | `*.md` | Generic |

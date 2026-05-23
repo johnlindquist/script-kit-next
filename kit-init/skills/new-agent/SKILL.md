@@ -16,10 +16,10 @@ Create mdflow-backed agent files for Script Kit. For new reusable AI work, prefe
 | Filename | Meaning |
 |----------|---------|
 | `review.claude.md` | Claude backend |
-| `plan.gemini.md` | Gemini backend |
+| `plan.agy.md` | AGY backend |
 | `code.codex.md` | Codex backend |
 | `triage.copilot.md` | Copilot backend |
-| `chat.i.gemini.md` | Interactive agent (`.i.` or `_interactive: true`) |
+| `chat.i.agy.md` | Interactive agent (`.i.` or `_interactive: true`) |
 | `generic.md` | Generic agent; use `_command` when needed |
 
 ## Script Kit Metadata Keys

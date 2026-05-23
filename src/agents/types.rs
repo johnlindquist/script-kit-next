@@ -2,7 +2,7 @@
 //!
 //! This module contains the core data types for mdflow agents:
 //! - `Agent` - Represents an agent parsed from a .md file
-//! - `AgentBackend` - Supported AI backends (Claude, Gemini, Codex, Copilot)
+//! - `AgentBackend` - Supported AI backends (Claude, AGY, Codex, Copilot)
 //! - `AgentFrontmatter` - Parsed YAML frontmatter from agent files
 //! - `AgentMatch` - Scored match result for fuzzy search
 //! - `MdflowInput` - Typed input specification from `_inputs`
@@ -35,7 +35,7 @@ use std::path::PathBuf;
 /// Agents are markdown files in `~/.scriptkit/plugins/*/agents/` that can be executed
 /// via the mdflow CLI. The filename determines the AI backend to use:
 /// - `task.claude.md` → runs via `claude` CLI
-/// - `task.gemini.md` → runs via `gemini` CLI
+/// - `task.agy.md` → runs via `agy` CLI
 /// - `task.codex.md` → runs via `codex` CLI
 /// - `task.copilot.md` → runs via `copilot` CLI
 ///
@@ -57,7 +57,7 @@ pub struct Agent {
     pub name: String,
     /// File path to the .md file
     pub path: PathBuf,
-    /// Backend inferred from filename (claude, gemini, codex, copilot)
+    /// Backend inferred from filename (claude, agy, codex, copilot)
     pub backend: AgentBackend,
     /// Whether this is interactive mode (has `.i.` in filename or `_interactive: true`)
     pub interactive: bool,
@@ -102,7 +102,7 @@ impl Default for Agent {
 ///
 /// The backend is inferred from the filename pattern:
 /// - `*.claude.md` → Claude
-/// - `*.gemini.md` → Gemini
+/// - `*.agy.md` → AGY
 /// - `*.codex.md` → Codex
 /// - `*.copilot.md` → Copilot
 /// - `*.md` (no backend suffix) → Generic
@@ -111,7 +111,7 @@ impl Default for Agent {
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum AgentBackend {
     Claude,
-    Gemini,
+    Agy,
     Codex,
     Copilot,
     /// Generic backend - no specific command suffix in filename
@@ -129,7 +129,7 @@ impl AgentBackend {
     /// use script_kit_gpui::agents::AgentBackend;
     ///
     /// assert_eq!(AgentBackend::from_filename("review.claude.md"), AgentBackend::Claude);
-    /// assert_eq!(AgentBackend::from_filename("task.gemini.md"), AgentBackend::Gemini);
+    /// assert_eq!(AgentBackend::from_filename("task.agy.md"), AgentBackend::Agy);
     /// assert_eq!(AgentBackend::from_filename("analyze.i.codex.md"), AgentBackend::Codex);
     /// assert_eq!(AgentBackend::from_filename("generic.md"), AgentBackend::Generic);
     /// ```
@@ -137,8 +137,8 @@ impl AgentBackend {
         let name = filename.to_lowercase();
         if name.contains(".claude.") || name.ends_with(".claude.md") {
             Self::Claude
-        } else if name.contains(".gemini.") || name.ends_with(".gemini.md") {
-            Self::Gemini
+        } else if name.contains(".agy.") || name.ends_with(".agy.md") {
+            Self::Agy
         } else if name.contains(".codex.") || name.ends_with(".codex.md") {
             Self::Codex
         } else if name.contains(".copilot.") || name.ends_with(".copilot.md") {
@@ -154,7 +154,7 @@ impl AgentBackend {
     pub fn command(&self) -> Option<&str> {
         match self {
             Self::Claude => Some("claude"),
-            Self::Gemini => Some("gemini"),
+            Self::Agy => Some("agy"),
             Self::Codex => Some("codex"),
             Self::Copilot => Some("copilot"),
             Self::Generic => None,
@@ -166,7 +166,7 @@ impl AgentBackend {
     pub fn icon(&self) -> &'static str {
         match self {
             Self::Claude => "bot",
-            Self::Gemini => "sparkles",
+            Self::Agy => "sparkles",
             Self::Codex => "terminal",
             Self::Copilot => "github",
             Self::Generic => "bot",
@@ -178,7 +178,7 @@ impl AgentBackend {
     pub fn label(&self) -> &str {
         match self {
             Self::Claude => "Claude",
-            Self::Gemini => "Gemini",
+            Self::Agy => "AGY",
             Self::Codex => "Codex",
             Self::Copilot => "Copilot",
             Self::Generic => "Agent",
@@ -383,14 +383,14 @@ mod tests {
     }
 
     #[test]
-    fn test_backend_from_filename_gemini() {
+    fn test_backend_from_filename_agy() {
         assert_eq!(
-            AgentBackend::from_filename("task.gemini.md"),
-            AgentBackend::Gemini
+            AgentBackend::from_filename("task.agy.md"),
+            AgentBackend::Agy
         );
         assert_eq!(
-            AgentBackend::from_filename("analyze.gemini.md"),
-            AgentBackend::Gemini
+            AgentBackend::from_filename("analyze.agy.md"),
+            AgentBackend::Agy
         );
     }
 
@@ -434,15 +434,15 @@ mod tests {
             AgentBackend::Claude
         );
         assert_eq!(
-            AgentBackend::from_filename("code.i.gemini.md"),
-            AgentBackend::Gemini
+            AgentBackend::from_filename("code.i.agy.md"),
+            AgentBackend::Agy
         );
     }
 
     #[test]
     fn test_backend_commands() {
         assert_eq!(AgentBackend::Claude.command(), Some("claude"));
-        assert_eq!(AgentBackend::Gemini.command(), Some("gemini"));
+        assert_eq!(AgentBackend::Agy.command(), Some("agy"));
         assert_eq!(AgentBackend::Codex.command(), Some("codex"));
         assert_eq!(AgentBackend::Copilot.command(), Some("copilot"));
         assert_eq!(AgentBackend::Generic.command(), None);
@@ -455,7 +455,7 @@ mod tests {
     #[test]
     fn test_backend_labels() {
         assert_eq!(AgentBackend::Claude.label(), "Claude");
-        assert_eq!(AgentBackend::Gemini.label(), "Gemini");
+        assert_eq!(AgentBackend::Agy.label(), "AGY");
         assert_eq!(AgentBackend::Codex.label(), "Codex");
         assert_eq!(AgentBackend::Copilot.label(), "Copilot");
         assert_eq!(AgentBackend::Generic.label(), "Agent");
@@ -465,7 +465,7 @@ mod tests {
     #[test]
     fn test_backend_icons() {
         assert_eq!(AgentBackend::Claude.icon(), "bot");
-        assert_eq!(AgentBackend::Gemini.icon(), "sparkles");
+        assert_eq!(AgentBackend::Agy.icon(), "sparkles");
         assert_eq!(AgentBackend::Codex.icon(), "terminal");
         assert_eq!(AgentBackend::Copilot.icon(), "github");
         assert_eq!(AgentBackend::Generic.icon(), "bot");
@@ -485,8 +485,8 @@ mod tests {
             "Should not detect interactive marker without .i."
         );
         assert!(
-            "interactive.i.gemini.md".contains(".i."),
-            "Should detect interactive marker in gemini file"
+            "interactive.i.agy.md".contains(".i."),
+            "Should detect interactive marker in agy file"
         );
     }
 

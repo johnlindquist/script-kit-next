@@ -884,7 +884,7 @@ fn agy_install_spec() -> AcpAgentInstallSpec {
 
 fn agy_auth_hint() -> AcpAgentAuthHint {
     AcpAgentAuthHint {
-        summary: "Uses your local Antigravity CLI Google sign-in and subscription; no Gemini API key is required.".to_string(),
+        summary: "Uses your local Antigravity CLI Google sign-in and subscription; no separate Google AI API key is required.".to_string(),
     }
 }
 

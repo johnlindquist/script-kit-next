@@ -160,7 +160,7 @@ const EMBEDDED_ACP_AGENTS_JSON: &str = r#"{
         "args": ["install"]
       },
       "auth": {
-        "summary": "Uses your local Antigravity CLI Google sign-in and subscription; no Gemini API key is required."
+        "summary": "Uses your local Antigravity CLI Google sign-in and subscription; no separate Google AI API key is required."
       }
     }
   ]
@@ -1069,7 +1069,7 @@ fn migrate_plugin_extensions_to_scriptlets(kit_dir: &Path, warnings: &mut Vec<St
 /// artifact directories just because the managed starter pack changed.
 fn prune_managed_examples_plugin(root: &Path, warnings: &mut Vec<String>) {
     const STALE_MANAGED_EXAMPLE_FILES: &[&str] = &[
-        "agents/plan-feature.i.gemini.md",
+        "agents/plan-feature.i.agy.md",
         "agents/review-pr.claude.md",
         "scripts/choose-from-list.ts",
         "scripts/clipboard-transform.ts",

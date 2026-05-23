@@ -1,5 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -24,6 +25,7 @@ struct AgySessionState {
 type ActiveKillers = Arc<Mutex<HashMap<String, Box<dyn ChildKiller + Send + Sync>>>>;
 
 pub(crate) fn run_stdio() -> Result<()> {
+    adapter_trace("stdio_start");
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -50,6 +52,7 @@ pub(crate) fn run_stdio() -> Result<()> {
         io_task.await
     })?;
 
+    adapter_trace("stdio_stop");
     Ok(())
 }
 
@@ -79,6 +82,7 @@ impl AgyAcpAgent {
             .ok()
             .and_then(|mut killers| killers.remove(session_id));
         if let Some(mut killer) = killer {
+            adapter_trace_kv("kill_requested", &[("session", session_id)]);
             let _ = killer.kill();
         }
     }
@@ -87,6 +91,18 @@ impl AgyAcpAgent {
         if text.trim().is_empty() {
             return Ok(());
         }
+
+        let bytes = text.len().to_string();
+        let lines = text.lines().count().to_string();
+        let session_label = session_id.0.to_string();
+        adapter_trace_kv(
+            "chunk_forward",
+            &[
+                ("session", session_label.as_str()),
+                ("bytes", bytes.as_str()),
+                ("lines", lines.as_str()),
+            ],
+        );
 
         let (ack_tx, ack_rx) = oneshot::channel();
         self.session_update_tx
@@ -111,6 +127,11 @@ impl acp::Agent for AgyAcpAgent {
         &self,
         args: acp::InitializeRequest,
     ) -> acp::Result<acp::InitializeResponse> {
+        let protocol_version = format!("{:?}", args.protocol_version);
+        adapter_trace_kv(
+            "initialize",
+            &[("protocol_version", protocol_version.as_str())],
+        );
         Ok(acp::InitializeResponse::new(args.protocol_version)
             .agent_info(
                 acp::Implementation::new("script-kit-agy-acp", AGY_ADAPTER_VERSION)
@@ -140,6 +161,7 @@ impl acp::Agent for AgyAcpAgent {
         let next = self.next_session_id.get();
         self.next_session_id.set(next.saturating_add(1));
         let session_id = format!("agy-{next}");
+        adapter_trace_kv("session_new", &[("session", session_id.as_str())]);
 
         self.sessions.borrow_mut().insert(
             session_id.clone(),
@@ -164,6 +186,7 @@ impl acp::Agent for AgyAcpAgent {
 
         let prompt = text_from_prompt_blocks(&args.prompt);
         if prompt.trim().is_empty() {
+            adapter_trace_kv("prompt_rejected_empty", &[("session", session_id.as_str())]);
             return Err(acp::Error::invalid_params());
         }
 
@@ -176,6 +199,19 @@ impl acp::Agent for AgyAcpAgent {
                 session.seen_lines.clone(),
             )
         };
+
+        let prompt_len = prompt.len().to_string();
+        let prompt_hash = stable_fingerprint(&prompt);
+        let has_conversation = conversation_id.is_some().to_string();
+        adapter_trace_kv(
+            "prompt_received",
+            &[
+                ("session", session_id.as_str()),
+                ("chars", prompt_len.as_str()),
+                ("prompt_hash", prompt_hash.as_str()),
+                ("has_conversation", has_conversation.as_str()),
+            ],
+        );
 
         let active_killers = Arc::clone(&self.active_killers);
         let worker_session_id = session_id.clone();
@@ -211,15 +247,31 @@ impl acp::Agent for AgyAcpAgent {
                     self.send_agent_chunk(&args.session_id, text).await?;
                 }
                 AgyPromptEvent::BoundConversation(id) => {
+                    adapter_trace_kv(
+                        "conversation_bound",
+                        &[
+                            ("session", session_id.as_str()),
+                            ("conversation", id.as_str()),
+                        ],
+                    );
                     next_conversation_id = Some(id);
                 }
                 AgyPromptEvent::Done {
                     cancelled: was_cancelled,
                 } => {
+                    let cancelled_value = was_cancelled.to_string();
+                    adapter_trace_kv(
+                        "prompt_done",
+                        &[
+                            ("session", session_id.as_str()),
+                            ("cancelled", cancelled_value.as_str()),
+                        ],
+                    );
                     cancelled = was_cancelled;
                     break;
                 }
                 AgyPromptEvent::Error(message) => {
+                    adapter_trace_kv("prompt_error", &[("session", session_id.as_str())]);
                     return Err(acp::Error::internal_error().data(message));
                 }
             }
@@ -303,6 +355,15 @@ fn run_agy_prompt_inner(
 ) -> Result<()> {
     let agy_path = find_agy_path();
     let started_at = SystemTime::now();
+    let has_conversation = conversation_id.is_some().to_string();
+    adapter_trace_kv(
+        "agy_prepare_spawn",
+        &[
+            ("session", session_id),
+            ("agy", agy_path.as_str()),
+            ("has_conversation", has_conversation.as_str()),
+        ],
+    );
 
     let pty_system = native_pty_system();
     let pair = pty_system
@@ -331,6 +392,7 @@ fn run_agy_prompt_inner(
     command.env("PAGER", "cat");
 
     let mut child = pair.slave.spawn_command(command).context("spawn agy")?;
+    adapter_trace_kv("agy_spawned", &[("session", session_id)]);
     if let Ok(mut killers) = active_killers.lock() {
         killers.insert(session_id.to_string(), child.clone_killer());
     }
@@ -349,6 +411,11 @@ fn run_agy_prompt_inner(
                 let chunk = String::from_utf8_lossy(&buffer[..count]);
                 let filtered = filter.push(&chunk, false);
                 if !filtered.trim().is_empty() {
+                    let bytes = filtered.len().to_string();
+                    adapter_trace_kv(
+                        "agy_filtered_chunk",
+                        &[("session", session_id), ("bytes", bytes.as_str())],
+                    );
                     let _ = event_tx.send(AgyPromptEvent::Chunk(filtered));
                 }
             }
@@ -359,10 +426,20 @@ fn run_agy_prompt_inner(
 
     let tail = filter.push("", true);
     if !tail.trim().is_empty() {
+        let bytes = tail.len().to_string();
+        adapter_trace_kv(
+            "agy_filtered_tail",
+            &[("session", session_id), ("bytes", bytes.as_str())],
+        );
         let _ = event_tx.send(AgyPromptEvent::Chunk(tail));
     }
 
     let status = child.wait().context("wait for agy")?;
+    let success = status.success().to_string();
+    adapter_trace_kv(
+        "agy_exit",
+        &[("session", session_id), ("success", success.as_str())],
+    );
     if conversation_id.is_none() {
         if let Some(id) = find_conversation_created_after(started_at) {
             let _ = event_tx.send(AgyPromptEvent::BoundConversation(id));
@@ -383,6 +460,40 @@ fn text_from_prompt_blocks(blocks: &[acp::ContentBlock]) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn stable_fingerprint(text: &str) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
+}
+
+fn adapter_trace(event: &str) {
+    eprintln!("agy_acp_adapter event={event}");
+}
+
+fn adapter_trace_kv(event: &str, fields: &[(&str, &str)]) {
+    let mut line = format!("agy_acp_adapter event={event}");
+    for (key, value) in fields {
+        line.push(' ');
+        line.push_str(key);
+        line.push('=');
+        line.push_str(&sanitize_trace_value(value));
+    }
+    eprintln!("{line}");
+}
+
+fn sanitize_trace_value(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '/' | ':' | '=' | '@') {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 fn find_agy_path() -> String {
@@ -455,6 +566,13 @@ impl TranscriptFilter {
             }
         }
 
+        if !flush && !self.buffer.is_empty() && !self.should_hold_partial_buffer() {
+            let partial = std::mem::take(&mut self.buffer);
+            if let Some(filtered) = self.filter_line(&partial) {
+                output.push_str(&filtered);
+            }
+        }
+
         if flush && !self.buffer.is_empty() {
             let line = std::mem::take(&mut self.buffer);
             if let Some(filtered) = self.filter_line(&line) {
@@ -463,6 +581,18 @@ impl TranscriptFilter {
         }
 
         output
+    }
+
+    fn should_hold_partial_buffer(&self) -> bool {
+        let trimmed = self.buffer.trim_start();
+        trimmed.starts_with("[Task")
+            || trimmed.starts_with("/Users/")
+            || trimmed.starts_with("file:///Users/")
+            || trimmed.contains("/Cache/")
+            || trimmed.contains("/Cache_Data/")
+            || trimmed.contains("/IndexedDB/")
+            || trimmed.contains("/Library/")
+            || trimmed.contains("/Application Support/")
     }
 
     fn filter_line(&mut self, line: &str) -> Option<String> {
@@ -599,6 +729,21 @@ mod tests {
         ignored.insert("saved".to_string());
         let mut filter = TranscriptFilter::new(ignored);
         assert_eq!(filter.push("savedkumquat", true), "kumquat");
+    }
+
+    #[test]
+    fn transcript_filter_streams_partial_text_without_newline() {
+        let mut filter = TranscriptFilter::new(HashSet::new());
+        assert_eq!(filter.push("Planning", false), "Planning");
+        assert_eq!(filter.push(" the day", false), " the day");
+        assert_eq!(filter.push("", true), "");
+    }
+
+    #[test]
+    fn transcript_filter_holds_partial_tool_paths_until_suppressed() {
+        let mut filter = TranscriptFilter::new(HashSet::new());
+        assert_eq!(filter.push("/Users/me/Library/Caches", false), "");
+        assert_eq!(filter.push("/file\nvisible", true), "visible");
     }
 
     #[test]

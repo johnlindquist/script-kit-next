@@ -180,12 +180,12 @@ Please review the following:
         )
         .unwrap();
 
-        // Create an interactive Gemini agent
+        // Create an interactive AGY agent
         fs::write(
-            main_agents.join("chat.i.gemini.md"),
+            main_agents.join("chat.i.agy.md"),
             r#"---
 _sk_name: "Chat"
-model: gemini-2.0-flash
+model: default
 ---
 Interactive chat session
 "#,
@@ -267,7 +267,7 @@ Generate code for:
         // Find the Chat agent (interactive)
         let chat = agents.iter().find(|a| a.name == "Chat").unwrap();
         assert!(chat.interactive);
-        assert_eq!(chat.backend, crate::agents::AgentBackend::Gemini);
+        assert_eq!(chat.backend, crate::agents::AgentBackend::Agy);
     }
 
     #[test]

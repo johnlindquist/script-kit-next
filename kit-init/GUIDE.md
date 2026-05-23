@@ -749,10 +749,10 @@ Agent files are reusable backend-specific markdown prompts. They are not TypeScr
 Write them in `~/.scriptkit/plugins/main/agents/` with a backend suffix in the filename:
 
 - `review.claude.md`
-- `plan.gemini.md`
+- `plan.agy.md`
 - `code.codex.md`
 - `assist.copilot.md`
-- `chat.i.gemini.md` for interactive Gemini agents
+- `chat.i.agy.md` for interactive AGY agents
 
 Minimal example:
 
@@ -1105,7 +1105,7 @@ Agent defaults, model preferences, profiles, and related runtime settings live i
 - **Markdown rendering** for formatted AI responses
 - **Model picker** to select agent-advertised models
 - **Chat history** with sidebar navigation
-- **Multiple agent support** (Claude Code, OpenCode, Gemini CLI, Codex, and compatible adapters)
+- **Multiple agent support** (Claude Code, OpenCode, AGY, Codex, and compatible adapters)
 - **Context injection** — the harness terminal captures desktop context automatically via Tab
 
 ### Agent Chat SDK

@@ -297,7 +297,16 @@ async fn run_acp_event_loop(
             let reader = tokio::io::BufReader::new(stderr);
             let mut lines = reader.lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                tracing::debug!(agent = %agent_id, stderr = %line, "acp_agent_stderr");
+                if line.starts_with("agy_acp_adapter ") {
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_agent_stderr",
+                        agent = %agent_id,
+                        stderr = %line,
+                    );
+                } else {
+                    tracing::debug!(agent = %agent_id, stderr = %line, "acp_agent_stderr");
+                }
             }
         });
     }

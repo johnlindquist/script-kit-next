@@ -462,7 +462,7 @@ pub fn name_from_filename(filename: &str) -> String {
         .trim_end_matches(".md")
         // Remove backend suffixes
         .trim_end_matches(".claude")
-        .trim_end_matches(".gemini")
+        .trim_end_matches(".agy")
         .trim_end_matches(".codex")
         .trim_end_matches(".copilot")
         // Remove interactive marker
@@ -1012,7 +1012,7 @@ Build context:
     #[test]
     fn test_name_from_filename_with_backend() {
         assert_eq!(name_from_filename("review.claude.md"), "review");
-        assert_eq!(name_from_filename("task.gemini.md"), "task");
+        assert_eq!(name_from_filename("task.agy.md"), "task");
         assert_eq!(name_from_filename("analyze.codex.md"), "analyze");
         assert_eq!(name_from_filename("help.copilot.md"), "help");
     }
@@ -1020,7 +1020,7 @@ Build context:
     #[test]
     fn test_name_from_filename_with_interactive() {
         assert_eq!(name_from_filename("task.i.claude.md"), "task");
-        assert_eq!(name_from_filename("review.i.gemini.md"), "review");
+        assert_eq!(name_from_filename("review.i.agy.md"), "review");
     }
 
     // === Interactive filename detection tests ===
@@ -1028,7 +1028,7 @@ Build context:
     #[test]
     fn test_is_interactive_filename_true() {
         assert!(is_interactive_filename("task.i.claude.md"));
-        assert!(is_interactive_filename("review.I.gemini.md"));
+        assert!(is_interactive_filename("review.I.agy.md"));
     }
 
     #[test]
@@ -1079,16 +1079,16 @@ Interactive chat session
 
     #[test]
     fn test_parse_agent_name_from_filename() {
-        let path = Path::new("/path/to/my-cool-task.gemini.md");
+        let path = Path::new("/path/to/my-cool-task.agy.md");
         let content = r#"---
-model: gemini-2.0-flash
+model: default
 ---
 Do something cool
 "#;
 
         let agent = parse_agent(path, content).unwrap();
         assert_eq!(agent.name, "my cool task");
-        assert_eq!(agent.backend, AgentBackend::Gemini);
+        assert_eq!(agent.backend, AgentBackend::Agy);
     }
 
     #[test]

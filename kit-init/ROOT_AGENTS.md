@@ -40,7 +40,7 @@ Use this plain-text route first:
 - For new reusable AI work, create a skill (`plugins/main/skills/<name>/SKILL.md`), not an agent.
 - For `tool:<name>` scriptlets, the first line must be `import "@scriptkit/sdk";`.
 - Agent files do not use `export const metadata`; use underscore-prefixed `_sk_*` keys.
-- Choose the backend suffix deliberately: `.claude.md`, `.gemini.md`, `.codex.md`, `.copilot.md`, or `.i.gemini.md`.
+- Choose the backend suffix deliberately: `.claude.md`, `.agy.md`, `.codex.md`, `.copilot.md`, or `.i.agy.md`.
 
 ## Read Next
 

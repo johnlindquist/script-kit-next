@@ -323,7 +323,7 @@ pub mod notes;
 pub mod ai;
 
 // Agents - mdflow agent integration
-// Executable markdown prompts that run against Claude, Gemini, Codex, or Copilot
+// Executable markdown prompts that run against Claude, AGY, Codex, or Copilot
 // Located in ~/.scriptkit/plugins/*/agents/*.md
 pub mod agents;
 
