@@ -66,6 +66,13 @@ pub(crate) enum FooterHintKeyMode {
     Shortcut,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FooterHintContentJustify {
+    Start,
+    Center,
+    End,
+}
+
 pub(crate) fn footer_action_slot_width(slot: FooterActionSlot) -> f32 {
     match slot {
         FooterActionSlot::Run => FOOTER_RUN_SLOT_MIN_WIDTH_PX,
@@ -225,10 +232,63 @@ pub(crate) fn render_footer_hint_content(
     mode: FooterHintKeyMode,
     theme: &Theme,
 ) -> AnyElement {
+    render_footer_hint_content_impl(
+        label,
+        key,
+        mode,
+        theme,
+        None,
+        false,
+        FooterHintContentJustify::Center,
+    )
+}
+
+pub(crate) fn render_footer_hint_content_constrained(
+    label: SharedString,
+    key: SharedString,
+    mode: FooterHintKeyMode,
+    theme: &Theme,
+    slot_width_px: f32,
+    key_first: bool,
+    justify: FooterHintContentJustify,
+) -> AnyElement {
+    render_footer_hint_content_impl(
+        label,
+        key,
+        mode,
+        theme,
+        Some(slot_width_px),
+        key_first,
+        justify,
+    )
+}
+
+fn render_footer_hint_content_impl(
+    label: SharedString,
+    key: SharedString,
+    mode: FooterHintKeyMode,
+    theme: &Theme,
+    slot_width_px: Option<f32>,
+    key_first: bool,
+    justify: FooterHintContentJustify,
+) -> AnyElement {
     let footer_text = footer_hint_text_color(theme);
     let full_text = theme.colors.text.primary.to_rgb();
+    let key_width_px = match mode {
+        FooterHintKeyMode::Shortcut => footer_shortcut_keycaps_width_px(key.as_ref()),
+    };
+    let label_max_width_px =
+        slot_width_px.map(|slot| footer_labelcap_max_width_for_slot(slot, key_width_px));
+    let labelcap = if let Some(max_width_px) = label_max_width_px {
+        render_footer_labelcap_constrained(label, theme, footer_text, full_text, Some(max_width_px))
+    } else {
+        render_footer_labelcap(label, theme, footer_text, full_text)
+    };
+    let keycaps = match mode {
+        FooterHintKeyMode::Shortcut => render_footer_shortcut_keycaps(key.to_string(), theme),
+    };
 
-    div()
+    let mut row = div()
         .px(px(FOOTER_ACTION_CONTENT_PADDING_X_PX))
         .py(px(2.0))
         .rounded(px(FOOTER_ACTION_BUTTON_RADIUS_PX))
@@ -237,11 +297,104 @@ pub(crate) fn render_footer_hint_content(
         .items_center()
         .gap(px(FOOTER_ACTION_CONTENT_GAP_PX))
         .group("footer-action-button")
-        .child(render_footer_labelcap(label, theme, footer_text, full_text))
-        .child(match mode {
-            FooterHintKeyMode::Shortcut => render_footer_shortcut_keycaps(key.to_string(), theme),
+        .min_w(px(0.0))
+        .overflow_hidden();
+
+    if let Some(slot_width_px) = slot_width_px {
+        row = row.w_full().max_w(px(slot_width_px));
+    }
+
+    row = match justify {
+        FooterHintContentJustify::Start => row.justify_start(),
+        FooterHintContentJustify::Center => row.justify_center(),
+        FooterHintContentJustify::End => row.justify_end(),
+    };
+
+    if key_first {
+        row.child(keycaps).child(labelcap).into_any_element()
+    } else {
+        row.child(labelcap).child(keycaps).into_any_element()
+    }
+}
+
+pub(crate) fn footer_shortcut_keycaps_width_px(shortcut: &str) -> f32 {
+    let tokens = split_footer_shortcut(shortcut);
+    if tokens.is_empty() {
+        return 0.0;
+    }
+
+    let keys_width = tokens
+        .iter()
+        .map(|token| footer_keycap_estimated_width_px(token))
+        .sum::<f32>();
+    keys_width + tokens.len().saturating_sub(1) as f32 * FOOTER_ACTION_CONTENT_GAP_PX
+}
+
+pub(crate) fn footer_hint_content_estimated_width_px(
+    label: &str,
+    key: &str,
+    mode: FooterHintKeyMode,
+) -> f32 {
+    let label_width_px = footer_labelcap_estimated_width_px(label);
+    let key_width_px = match mode {
+        FooterHintKeyMode::Shortcut => footer_shortcut_keycaps_width_px(key),
+    };
+    let content_gap = if !label.trim().is_empty() && key_width_px > 0.0 {
+        FOOTER_ACTION_CONTENT_GAP_PX
+    } else {
+        0.0
+    };
+
+    FOOTER_ACTION_CONTENT_PADDING_X_PX * 2.0 + label_width_px + content_gap + key_width_px
+}
+
+fn footer_labelcap_estimated_width_px(label: &str) -> f32 {
+    let estimated_text_width = label
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                FOOTER_HINT_FONT_SIZE_PX * 0.62
+            } else if ch.is_whitespace() {
+                FOOTER_HINT_FONT_SIZE_PX * 0.35
+            } else {
+                FOOTER_HINT_FONT_SIZE_PX * 0.82
+            }
         })
-        .into_any_element()
+        .sum::<f32>();
+
+    (estimated_text_width + FOOTER_KEYCAP_PADDING_X_PX * 2.0)
+        .max(FOOTER_KEYCAP_HEIGHT_PX)
+        .ceil()
+}
+
+fn footer_keycap_estimated_width_px(token: &str) -> f32 {
+    if token == FOOTER_MIC_ICON_TOKEN {
+        return FOOTER_KEYCAP_HEIGHT_PX;
+    }
+
+    let estimated_text_width = token
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                FOOTER_HINT_FONT_SIZE_PX * 0.62
+            } else {
+                FOOTER_HINT_FONT_SIZE_PX * 0.82
+            }
+        })
+        .sum::<f32>();
+    (estimated_text_width + FOOTER_KEYCAP_PADDING_X_PX * 2.0)
+        .max(FOOTER_KEYCAP_HEIGHT_PX)
+        .ceil()
+}
+
+pub(crate) fn footer_labelcap_max_width_for_slot(slot_width_px: f32, key_width_px: f32) -> f32 {
+    let key_gap = if key_width_px > 0.0 {
+        FOOTER_ACTION_CONTENT_GAP_PX
+    } else {
+        0.0
+    };
+    (slot_width_px - (FOOTER_ACTION_CONTENT_PADDING_X_PX * 2.0) - key_gap - key_width_px)
+        .max(FOOTER_KEYCAP_HEIGHT_PX)
 }
 
 fn render_footer_labelcap(
@@ -250,7 +403,17 @@ fn render_footer_labelcap(
     footer_text: gpui::Rgba,
     full_text: gpui::Hsla,
 ) -> AnyElement {
-    div()
+    render_footer_labelcap_constrained(label, theme, footer_text, full_text, None)
+}
+
+fn render_footer_labelcap_constrained(
+    label: SharedString,
+    theme: &Theme,
+    footer_text: gpui::Rgba,
+    full_text: gpui::Hsla,
+    max_width_px: Option<f32>,
+) -> AnyElement {
+    let mut cap = div()
         .flex_none()
         .min_w(px(FOOTER_KEYCAP_HEIGHT_PX))
         .min_h(px(FOOTER_KEYCAP_HEIGHT_PX))
@@ -267,14 +430,27 @@ fn render_footer_labelcap(
         .font_weight(FOOTER_HINT_FONT_WEIGHT_GPUI)
         .text_size(px(FOOTER_HINT_FONT_SIZE_PX))
         .text_color(footer_text)
-        .group_hover("footer-action-button", move |s| s.text_color(full_text))
-        .child(label)
-        .into_any_element()
+        .group_hover("footer-action-button", move |s| s.text_color(full_text));
+
+    if let Some(max_width_px) = max_width_px {
+        cap = cap.max_w(px(max_width_px)).overflow_hidden();
+    }
+
+    cap.child(
+        div()
+            .min_w(px(0.0))
+            .overflow_hidden()
+            .text_ellipsis()
+            .whitespace_nowrap()
+            .child(label),
+    )
+    .into_any_element()
 }
 
 fn render_footer_shortcut_keycaps(shortcut: String, theme: &Theme) -> AnyElement {
     div()
         .flex()
+        .flex_none()
         .flex_row()
         .items_center()
         .gap(px(FOOTER_ACTION_CONTENT_GAP_PX))
@@ -354,6 +530,31 @@ mod tests {
         assert_eq!(split_footer_shortcut("⌘F1"), vec!["⌘", "F1"]);
         assert_eq!(split_footer_shortcut("⌥⌘I"), vec!["⌥", "⌘", "I"]);
         assert_eq!(split_footer_shortcut("click"), vec!["click"]);
+    }
+
+    #[test]
+    fn footer_shortcut_width_reserves_split_keycaps() {
+        assert_eq!(footer_shortcut_keycaps_width_px(""), 0.0);
+        assert!(
+            footer_shortcut_keycaps_width_px("⌘K")
+                >= (FOOTER_KEYCAP_HEIGHT_PX * 2.0) + FOOTER_ACTION_CONTENT_GAP_PX
+        );
+        assert!(footer_shortcut_keycaps_width_px("↵") >= FOOTER_KEYCAP_HEIGHT_PX);
+    }
+
+    #[test]
+    fn constrained_footer_content_leaves_room_for_keycaps() {
+        let key_width = footer_shortcut_keycaps_width_px("↵");
+        let label_max = footer_labelcap_max_width_for_slot(FOOTER_RUN_SLOT_MIN_WIDTH_PX, key_width);
+
+        assert!(label_max >= FOOTER_KEYCAP_HEIGHT_PX);
+        assert!(
+            label_max
+                + key_width
+                + FOOTER_ACTION_CONTENT_GAP_PX
+                + FOOTER_ACTION_CONTENT_PADDING_X_PX * 2.0
+                <= FOOTER_RUN_SLOT_MIN_WIDTH_PX
+        );
     }
 
     #[test]

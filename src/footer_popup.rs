@@ -1,4 +1,10 @@
-use gpui::{App, SharedString, Window};
+use gpui::{
+    div, prelude::FluentBuilder, px, rgba, AnyElement, AnyWindowHandle, App, AppContext, Bounds,
+    Context, DisplayId, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
+    ParentElement, Pixels, Render, SharedString, StatefulInteractiveElement, Styled, Window,
+    WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
+};
+use std::sync::{Mutex, OnceLock};
 
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil, NO, YES};
@@ -251,10 +257,406 @@ static MAIN_WINDOW_FOOTER_REFRESH_SIGNATURE: std::sync::Mutex<
     Option<MainWindowFooterRefreshSignature>,
 > = std::sync::Mutex::new(None);
 
+struct GpuiFooterOverlaySlot {
+    handle: WindowHandle<GpuiFooterOverlay>,
+    parent_window_handle: AnyWindowHandle,
+}
+
+static MAIN_WINDOW_GPUI_FOOTER_OVERLAY: OnceLock<Mutex<Option<GpuiFooterOverlaySlot>>> =
+    OnceLock::new();
+
+struct GpuiFooterOverlay {
+    config: MainWindowFooterConfig,
+    overlay_width_px: f32,
+}
+
+impl GpuiFooterOverlay {
+    fn new(config: MainWindowFooterConfig, overlay_width_px: f32) -> Self {
+        Self {
+            config,
+            overlay_width_px,
+        }
+    }
+
+    fn set_config(&mut self, config: MainWindowFooterConfig, overlay_width_px: f32) {
+        self.config = config;
+        self.overlay_width_px = overlay_width_px;
+    }
+
+    fn content_width_px(&self) -> f32 {
+        (self.overlay_width_px - crate::window_resize::mini_layout::HINT_STRIP_PADDING_X * 2.0)
+            .max(0.0)
+    }
+
+    fn button_width_px(&self, button: &FooterButtonConfig) -> f32 {
+        footer_overlay_button_width_px(button, self.content_width_px(), &self.config.buttons)
+    }
+
+    fn trailing_button_widths(&self, buttons: &[FooterButtonConfig]) -> Vec<f32> {
+        if buttons.is_empty() {
+            return Vec::new();
+        }
+
+        let fixed_tail_width = buttons
+            .iter()
+            .skip(1)
+            .map(footer_overlay_button_full_width_px)
+            .sum::<f32>();
+        let gap_width = buttons.len().saturating_sub(1) as f32
+            * crate::components::footer_chrome::FOOTER_ACTION_ITEM_GAP_PX;
+        let first = &buttons[0];
+        let first_base = footer_hint_slot_width(first.action) as f32;
+        let first_full = footer_overlay_button_full_width_px(first);
+        let first_max = if matches!(first.action, FooterAction::Run) {
+            crate::components::footer_chrome::FOOTER_RUN_SLOT_MAX_WIDTH_PX
+        } else {
+            first_full
+        };
+        let first_available = self.content_width_px() - fixed_tail_width - gap_width;
+        let first_width = first_available
+            .clamp(first_base, first_max.max(first_base))
+            .min(first_full.max(first_base));
+
+        std::iter::once(first_width)
+            .chain(
+                buttons
+                    .iter()
+                    .skip(1)
+                    .map(footer_overlay_button_full_width_px),
+            )
+            .collect()
+    }
+
+    fn render_left_info(
+        &self,
+        left_info: Option<&FooterLeftInfo>,
+        theme: &crate::theme::Theme,
+    ) -> AnyElement {
+        let Some(info) = left_info else {
+            return div().into_any_element();
+        };
+
+        let mut row = div()
+            .flex()
+            .flex_1()
+            .items_center()
+            .gap(px(FOOTER_LEFT_DOT_LABEL_GAP as f32))
+            .min_w(px(0.0))
+            .overflow_hidden();
+
+        if !matches!(info.dot_status, FooterDotStatus::Hidden) {
+            row = row.child(
+                div()
+                    .size(px(FOOTER_STREAMING_DOT_SIZE as f32))
+                    .rounded(px((FOOTER_STREAMING_DOT_SIZE / 2.0) as f32))
+                    .bg(rgba(
+                        (footer_dot_hex(
+                            info.dot_status,
+                            theme,
+                            info.prefer_accent_for_active_states,
+                        ) << 8)
+                            | 0xff,
+                    )),
+            );
+        }
+
+        if !info.model_name.trim().is_empty() {
+            row = row.child(
+                div()
+                    .min_w(px(0.0))
+                    .font_family(crate::list_item::FONT_SYSTEM_UI)
+                    .font_weight(crate::components::footer_chrome::FOOTER_HINT_FONT_WEIGHT_GPUI)
+                    .text_size(px(
+                        crate::components::footer_chrome::FOOTER_HINT_FONT_SIZE_PX,
+                    ))
+                    .text_color(crate::components::footer_chrome::footer_hint_text_color(
+                        theme,
+                    ))
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .whitespace_nowrap()
+                    .child(info.model_name.clone()),
+            );
+        }
+
+        row.into_any_element()
+    }
+
+    fn render_button(
+        &self,
+        button: FooterButtonConfig,
+        slot_width: f32,
+        theme: &crate::theme::Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let chrome = crate::theme::AppChromeColors::from_theme(theme);
+        let action = button.action;
+        let selected_bg = rgba(footer_selected_background_rgba(action, &chrome));
+        let hover_bg = rgba(chrome.hover_rgba);
+        let active_bg = rgba(chrome.selection_rgba);
+        let item_height = crate::components::footer_chrome::footer_button_height(
+            crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+        );
+        let key_first = is_footer_left_pinned_mic_button(&button);
+        let justify = if key_first {
+            crate::components::footer_chrome::FooterHintContentJustify::Start
+        } else if matches!(action, FooterAction::Run) {
+            crate::components::footer_chrome::FooterHintContentJustify::End
+        } else {
+            crate::components::footer_chrome::FooterHintContentJustify::Center
+        };
+
+        let mut item = div()
+            .id(format!(
+                "gpui-footer-overlay-button-{}",
+                footer_action_key(action)
+            ))
+            .w(px(slot_width))
+            .min_w(px(slot_width))
+            .max_w(px(slot_width))
+            .h(px(item_height))
+            .rounded(px(
+                crate::components::footer_chrome::FOOTER_ACTION_BUTTON_RADIUS_PX,
+            ))
+            .overflow_hidden()
+            .flex()
+            .items_center()
+            .justify_center()
+            .group("footer-action-button")
+            .when(button.selected, |style| style.bg(selected_bg))
+            .child(
+                crate::components::footer_chrome::render_footer_hint_content_constrained(
+                    button.label.clone(),
+                    button.key.clone(),
+                    crate::components::footer_chrome::FooterHintKeyMode::Shortcut,
+                    theme,
+                    slot_width,
+                    key_first,
+                    justify,
+                ),
+            );
+
+        if button.enabled {
+            item = item
+                .cursor_pointer()
+                .hover(move |style| style.bg(hover_bg))
+                .active(move |style| style.bg(active_bg))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |_this, _event: &MouseDownEvent, _window, cx| {
+                        cx.stop_propagation();
+                        send_footer_action_to_channel(action, false);
+                    }),
+                );
+        } else {
+            item = item.opacity(0.45);
+        }
+
+        item.into_any_element()
+    }
+}
+
+impl Render for GpuiFooterOverlay {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = crate::theme::get_cached_theme();
+        let left_pinned_buttons: Vec<_> = self
+            .config
+            .buttons
+            .iter()
+            .filter(|button| is_footer_left_pinned_mic_button(button))
+            .cloned()
+            .collect();
+        let trailing_buttons: Vec<_> = self
+            .config
+            .buttons
+            .iter()
+            .filter(|button| !is_footer_left_pinned_mic_button(button))
+            .cloned()
+            .collect();
+        let trailing_button_widths = self.trailing_button_widths(&trailing_buttons);
+
+        div()
+            .id("gpui-footer-overlay-spike")
+            .w_full()
+            .h_full()
+            .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
+            .py(px(
+                crate::components::footer_chrome::FOOTER_BUTTON_VERTICAL_INSET_PX,
+            ))
+            .flex()
+            .items_center()
+            .gap(px(
+                crate::components::footer_chrome::FOOTER_ACTION_ITEM_GAP_PX,
+            ))
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .items_center()
+                    .gap(px(
+                        crate::components::footer_chrome::FOOTER_ACTION_ITEM_GAP_PX,
+                    ))
+                    .min_w(px(0.0))
+                    .overflow_hidden()
+                    .children(left_pinned_buttons.into_iter().map(|button| {
+                        let slot_width = self.button_width_px(&button);
+                        self.render_button(button, slot_width, &theme, cx)
+                    }))
+                    .child(self.render_left_info(self.config.left_info.as_ref(), &theme)),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .gap(px(
+                        crate::components::footer_chrome::FOOTER_ACTION_ITEM_GAP_PX,
+                    ))
+                    .children(
+                        trailing_buttons
+                            .into_iter()
+                            .zip(trailing_button_widths)
+                            .map(|(button, slot_width)| {
+                                self.render_button(button, slot_width, &theme, cx)
+                            }),
+                    ),
+            )
+    }
+}
+
+fn footer_overlay_button_width_px(
+    button: &FooterButtonConfig,
+    content_width_px: f32,
+    buttons: &[FooterButtonConfig],
+) -> f32 {
+    footer_hint_max_item_width(button.action, content_width_px as f64, buttons)
+        .unwrap_or_else(|| footer_hint_slot_width(button.action))
+        .max(footer_hint_slot_width(button.action)) as f32
+}
+
+fn footer_overlay_button_full_width_px(button: &FooterButtonConfig) -> f32 {
+    crate::components::footer_chrome::footer_hint_content_estimated_width_px(
+        button.label.as_ref(),
+        button.key.as_ref(),
+        crate::components::footer_chrome::FooterHintKeyMode::Shortcut,
+    )
+    .max(footer_hint_slot_width(button.action) as f32)
+    .ceil()
+}
+
+fn gpui_footer_overlay_spike_enabled() -> bool {
+    std::env::var("SCRIPT_KIT_GPUI_FOOTER_OVERLAY_SPIKE")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn gpui_footer_overlay_bounds(parent_bounds: Bounds<Pixels>) -> Bounds<Pixels> {
+    let footer_height = crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT;
+    Bounds {
+        origin: gpui::point(
+            parent_bounds.origin.x,
+            parent_bounds.origin.y + parent_bounds.size.height - px(footer_height),
+        ),
+        size: gpui::size(parent_bounds.size.width, px(footer_height)),
+    }
+}
+
+fn gpui_footer_overlay_window_options(
+    bounds: Bounds<Pixels>,
+    display_id: Option<DisplayId>,
+) -> WindowOptions {
+    WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(bounds)),
+        titlebar: None,
+        window_background: WindowBackgroundAppearance::Transparent,
+        focus: false,
+        show: true,
+        kind: WindowKind::PopUp,
+        is_movable: false,
+        is_resizable: false,
+        is_minimizable: false,
+        display_id,
+        ..Default::default()
+    }
+}
+
 fn clear_main_window_footer_refresh_signature() {
     *MAIN_WINDOW_FOOTER_REFRESH_SIGNATURE
         .lock()
         .unwrap_or_else(|poison| poison.into_inner()) = None;
+}
+
+fn close_gpui_footer_overlay(cx: &mut App) {
+    let storage = MAIN_WINDOW_GPUI_FOOTER_OVERLAY.get_or_init(|| Mutex::new(None));
+    let slot = storage.lock().ok().and_then(|mut guard| guard.take());
+    if let Some(slot) = slot {
+        let _ = slot.handle.update(cx, |_overlay, window, _cx| {
+            window.remove_window();
+        });
+    }
+}
+
+fn sync_gpui_footer_overlay(
+    cx: &mut App,
+    parent_window_handle: AnyWindowHandle,
+    parent_bounds: Bounds<Pixels>,
+    display_id: Option<DisplayId>,
+    config: MainWindowFooterConfig,
+) {
+    if !gpui_footer_overlay_spike_enabled() {
+        close_gpui_footer_overlay(cx);
+        return;
+    }
+
+    let bounds = gpui_footer_overlay_bounds(parent_bounds);
+    let overlay_width_px: f32 = bounds.size.width.into();
+    let storage = MAIN_WINDOW_GPUI_FOOTER_OVERLAY.get_or_init(|| Mutex::new(None));
+    if let Ok(mut guard) = storage.lock() {
+        if let Some(slot) = guard.as_ref() {
+            if slot.parent_window_handle == parent_window_handle {
+                let update_result = slot.handle.update(cx, |overlay, window, cx| {
+                    overlay.set_config(config.clone(), overlay_width_px);
+                    set_gpui_footer_overlay_window_bounds(window, bounds, cx);
+                    cx.notify();
+                });
+                if update_result.is_ok() {
+                    return;
+                }
+                *guard = None;
+            } else {
+                let _ = slot.handle.update(cx, |_overlay, window, _cx| {
+                    window.remove_window();
+                });
+                *guard = None;
+            }
+        }
+    }
+
+    let options = gpui_footer_overlay_window_options(bounds, display_id);
+    let Ok(handle) = cx.open_window(options, |_window, cx| {
+        cx.new(|_| GpuiFooterOverlay::new(config.clone(), overlay_width_px))
+    }) else {
+        tracing::warn!(
+            target: "script_kit::footer_popup",
+            event = "gpui_footer_overlay_open_failed",
+            "Failed to open experimental GPUI footer overlay"
+        );
+        return;
+    };
+
+    if configure_gpui_footer_overlay_window(&handle, cx, parent_window_handle).is_err() {
+        let _ = handle.update(cx, |_overlay, window, _cx| {
+            window.remove_window();
+        });
+        return;
+    }
+
+    if let Ok(mut guard) = storage.lock() {
+        *guard = Some(GpuiFooterOverlaySlot {
+            handle,
+            parent_window_handle,
+        });
+    }
 }
 
 fn update_main_window_footer_host_state(
@@ -298,10 +700,13 @@ pub(crate) fn dictation_footer_action_channel() -> &'static (
 pub(crate) fn sync_main_footer_popup(
     window: &mut Window,
     config: Option<&MainWindowFooterConfig>,
-    _cx: &mut App,
+    cx: &mut App,
 ) {
     let requested_surface = config.map(|cfg| cfg.surface);
     update_main_window_footer_host_state(requested_surface, None, false);
+    let parent_window_handle = window.window_handle();
+    let parent_bounds = window.bounds();
+    let display_id = window.display(cx).as_ref().map(|display| display.id());
 
     #[cfg(target_os = "macos")]
     {
@@ -340,6 +745,18 @@ pub(crate) fn sync_main_footer_popup(
         }
     }
 
+    if let Some(config) = config {
+        sync_gpui_footer_overlay(
+            cx,
+            parent_window_handle,
+            parent_bounds,
+            display_id,
+            config.clone(),
+        );
+    } else {
+        close_gpui_footer_overlay(cx);
+    }
+
     #[cfg(not(target_os = "macos"))]
     let _ = (window, config);
 }
@@ -374,10 +791,13 @@ pub(crate) fn sync_window_footer_popup(window: &mut Window, config: &MainWindowF
 pub(crate) fn notify_main_footer_popup(
     window: &mut Window,
     config: Option<&MainWindowFooterConfig>,
-    _cx: &mut App,
+    cx: &mut App,
 ) {
     let requested_surface = config.map(|cfg| cfg.surface);
     update_main_window_footer_host_state(requested_surface, None, false);
+    let parent_window_handle = window.window_handle();
+    let parent_bounds = window.bounds();
+    let display_id = window.display(cx).as_ref().map(|display| display.id());
 
     #[cfg(target_os = "macos")]
     {
@@ -403,6 +823,18 @@ pub(crate) fn notify_main_footer_popup(
         }
     }
 
+    if let Some(config) = config {
+        sync_gpui_footer_overlay(
+            cx,
+            parent_window_handle,
+            parent_bounds,
+            display_id,
+            config.clone(),
+        );
+    } else {
+        close_gpui_footer_overlay(cx);
+    }
+
     #[cfg(not(target_os = "macos"))]
     let _ = (window, config);
 }
@@ -410,6 +842,7 @@ pub(crate) fn notify_main_footer_popup(
 pub(crate) fn close_main_footer_popup(cx: &mut App) {
     clear_main_window_footer_refresh_signature();
     update_main_window_footer_host_state(None, None, false);
+    close_gpui_footer_overlay(cx);
 
     let Some(window_handle) = crate::get_main_window_handle() else {
         return;
@@ -453,6 +886,78 @@ fn main_window_ns_window(window: &mut Window) -> Option<id> {
     }
 
     None
+}
+
+fn set_gpui_footer_overlay_window_bounds(
+    window: &mut Window,
+    bounds: Bounds<Pixels>,
+    cx: &mut App,
+) {
+    crate::components::inline_popup_window::set_inline_popup_window_bounds(window, bounds, cx);
+}
+
+fn configure_gpui_footer_overlay_window<T: 'static>(
+    handle: &WindowHandle<T>,
+    cx: &mut App,
+    parent_window_handle: AnyWindowHandle,
+) -> anyhow::Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        handle
+            .update(cx, move |_overlay, window, cx| {
+                window.defer(cx, move |window, cx| {
+                    if let Some(ns_window) =
+                        crate::components::inline_popup_window::inline_popup_ns_window(window)
+                    {
+                        // SAFETY: `ns_window` is the live GPUI overlay NSWindow.
+                        // The spike overlay is visual-only; mouse and key focus
+                        // must continue to belong to the main launcher window.
+                        unsafe {
+                            configure_gpui_footer_overlay_ns_window(ns_window);
+                        }
+                        crate::components::inline_popup_window::attach_inline_popup_to_parent_window(
+                            cx,
+                            parent_window_handle,
+                            ns_window,
+                        );
+                    }
+                });
+            })
+            .map_err(|_| anyhow::anyhow!("failed to configure GPUI footer overlay window"))?;
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = (handle, cx, parent_window_handle);
+
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn configure_gpui_footer_overlay_ns_window(ns_window: id) {
+    use cocoa::base::NO;
+    use objc::{class, msg_send, sel, sel_impl};
+
+    if ns_window == nil {
+        return;
+    }
+
+    let clear_color: id = msg_send![class!(NSColor), clearColor];
+    if clear_color != nil {
+        let _: () = msg_send![ns_window, setBackgroundColor: clear_color];
+    }
+    let _: () = msg_send![ns_window, setOpaque: NO];
+    let _: () = msg_send![ns_window, setHasShadow: NO];
+    let _: () = msg_send![ns_window, setIgnoresMouseEvents: NO];
+    let _: () = msg_send![ns_window, setBecomesKeyOnlyIfNeeded: YES];
+    let _: () = msg_send![ns_window, setMovable: NO];
+    let _: () = msg_send![ns_window, setMovableByWindowBackground: NO];
+    let _: () = msg_send![ns_window, setAnimationBehavior: 2isize];
+    let _: () = msg_send![ns_window, setRestorable: NO];
+
+    let title = ns_string("Script Kit GPUI Footer Overlay Spike");
+    if title != nil {
+        let _: () = msg_send![ns_window, setTitle: title];
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -684,7 +1189,14 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
     let hints_view = find_subview_by_identifier(footer_view, FOOTER_HINTS_ID);
     if hints_view != nil {
         let _: () = msg_send![hints_view, setFrame: footer_hints_frame(content_bounds.size.width)];
-        layout_footer_hints(hints_view, text_color, &config.buttons, &theme);
+        if gpui_footer_overlay_spike_enabled() {
+            // The spike proves the sandwich layering: AppKit keeps only the
+            // material/divider while GPUI owns the footer glyphs in a child
+            // overlay window above this footer host.
+            layout_footer_hints(hints_view, text_color, &[], &theme);
+        } else {
+            layout_footer_hints(hints_view, text_color, &config.buttons, &theme);
+        }
     }
 
     // Left info (streaming dot + model name)
@@ -694,7 +1206,11 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
             left_info_view,
             setFrame: footer_left_info_frame(content_bounds.size.width)
         ];
-        layout_footer_left_info(left_info_view, config.left_info.as_ref(), text_color);
+        if gpui_footer_overlay_spike_enabled() {
+            layout_footer_left_info(left_info_view, None, text_color);
+        } else {
+            layout_footer_left_info(left_info_view, config.left_info.as_ref(), text_color);
+        }
     }
 
     tracing::info!(

@@ -2,6 +2,7 @@
 
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
 const DICTATION_WINDOW_SOURCE: &str = include_str!("../src/dictation/window.rs");
+const FOOTER_POPUP_SOURCE: &str = include_str!("../src/footer_popup.rs");
 const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
 const RENDER_PROMPTS_OTHER_SOURCE: &str = include_str!("../src/render_prompts/other.rs");
 const STARTUP_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
@@ -167,5 +168,48 @@ fn live_dictation_overlay_does_not_join_main_window_footer_ownership() {
             && DICTATION_WINDOW_SOURCE.contains("FooterAction::Stop")
             && DICTATION_WINDOW_SOURCE.contains("FooterAction::Close"),
         "Dictation overlay must reuse the native footer renderer without joining main-window surface ownership"
+    );
+}
+
+#[test]
+fn experimental_gpui_footer_overlay_keeps_native_material_as_background_only() {
+    assert!(
+        FOOTER_POPUP_SOURCE.contains("struct GpuiFooterOverlay")
+            && FOOTER_POPUP_SOURCE.contains("render_footer_hint_content_constrained(")
+            && FOOTER_POPUP_SOURCE.contains("left_pinned_buttons")
+            && FOOTER_POPUP_SOURCE.contains("trailing_buttons")
+            && FOOTER_POPUP_SOURCE.contains("render_left_info")
+            && FOOTER_POPUP_SOURCE.contains("SCRIPT_KIT_GPUI_FOOTER_OVERLAY_SPIKE"),
+        "footer overlay spike must be explicit, config-driven, and reuse the GPUI footer chrome renderer"
+    );
+    assert!(
+        FOOTER_POPUP_SOURCE.contains("WindowBackgroundAppearance::Transparent")
+            && FOOTER_POPUP_SOURCE.contains("attach_inline_popup_to_parent_window")
+            && FOOTER_POPUP_SOURCE.contains("setIgnoresMouseEvents: NO")
+            && FOOTER_POPUP_SOURCE.contains("setBecomesKeyOnlyIfNeeded: YES")
+            && FOOTER_POPUP_SOURCE.contains("send_footer_action_to_channel(action, false)"),
+        "GPUI footer overlay spike must be a transparent child surface that owns hover/click without stealing key focus"
+    );
+    assert!(
+        FOOTER_POPUP_SOURCE.contains("layout_footer_hints(hints_view, text_color, &[], &theme)")
+            && FOOTER_POPUP_SOURCE.contains("layout_footer_hints(hints_view, text_color, &config.buttons, &theme)"),
+        "AppKit footer text must be bypassed only while the experimental GPUI overlay spike is enabled"
+    );
+    assert!(
+        FOOTER_POPUP_SOURCE.contains("layout_footer_left_info(left_info_view, None, text_color)")
+            && FOOTER_POPUP_SOURCE.contains(
+                "layout_footer_left_info(left_info_view, config.left_info.as_ref(), text_color)"
+            ),
+        "AppKit left-info text must also be bypassed only while GPUI overlay owns footer visuals"
+    );
+    assert!(
+        FOOTER_POPUP_SOURCE.contains("footer_overlay_button_width_px")
+            && FOOTER_POPUP_SOURCE.contains("overlay_width_px")
+            && FOOTER_POPUP_SOURCE.contains(".min_w(px(slot_width))")
+            && FOOTER_POPUP_SOURCE.contains(".max_w(px(slot_width))")
+            && FOOTER_POPUP_SOURCE.contains(".overflow_hidden()")
+            && FOOTER_POPUP_SOURCE.contains(".flex_1()")
+            && FOOTER_POPUP_SOURCE.contains(".flex_none()"),
+        "GPUI footer overlay buttons must allocate fixed slots and truncate before neighboring chips overlap"
     );
 }
