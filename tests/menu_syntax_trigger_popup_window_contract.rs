@@ -31,8 +31,9 @@ fn default_selection_predicate_excludes_footer_actions() {
         "pub(crate) fn trigger_popup_row_is_default_selectable",
     );
     assert!(
-        body.contains("row.enabled && row.kind != TriggerPickerRowKind::FooterAction"),
-        "default selection must skip footer actions while keeping them clickable"
+        body.contains("row.kind != TriggerPickerRowKind::FooterAction")
+            && body.contains("TriggerPickerAction::CreateHandler"),
+        "default selection must skip footer actions except when the action is CreateHandler"
     );
 
     let preserve = function_body(STATE_SOURCE, "fn preserve_or_pick_first_enabled");
