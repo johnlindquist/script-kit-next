@@ -1077,8 +1077,26 @@ impl ScriptListApp {
                 } else {
                     nearest_targets.join(", ")
                 };
+                let mut chars = slug.chars();
+                let capitalized = match chars.next() {
+                    None => String::new(),
+                    Some(f) => f.to_uppercase().collect::<String>() + chars.as_str(),
+                };
                 let prompt = format!(
-                    "You are scaffolding a new Script Kit capture handler.\n\nSlug: {slug}\nTyped by user: ;{slug}\nNearest existing targets: {nearest}\n\nGenerate a TypeScript handler that registers `capture.v1` with target \"{slug}\" and a sensible `label`. Output ONLY the TypeScript code."
+                    "You are a helpful assistant guiding the user through creating a new Script Kit capture handler.\n\
+                     The user typed `;{slug}` in the launcher, but does not have a capture handler for it yet.\n\
+                     Nearest existing targets: {nearest}\n\n\
+                     Existing capture handler examples in Script Kit:\n\
+                     - `todo` (targets: [\"todo\"], accepts: [\"tags\", \"date\", \"priority\", \"url\", \"kv\"]) -> Appends to `$SK_PATH/menu-syntax/todos.jsonl`\n\
+                     - `cal` (targets: [\"cal\"], accepts: [\"date\", \"duration\", \"tags\", \"kv\"]) -> Appends to `$SK_PATH/menu-syntax/events.jsonl`\n\
+                     - `note` (targets: [\"note\"], accepts: [\"tags\", \"date\", \"kv\"]) -> Appends to `$SK_PATH/menu-syntax/notes.jsonl`\n\
+                     - `social` (targets: [\"social\"], accepts: [\"tags\", \"url\", \"kv\"]) -> Appends to `$SK_PATH/menu-syntax/drafts.jsonl`\n\
+                     - `link` (targets: [\"link\"], accepts: [\"url\", \"tags\", \"kv\"]) -> Appends to `$SK_PATH/menu-syntax/bookmarks.jsonl`\n\n\
+                     Your task is to walk the user through scaffolding a capture handler for target \"{slug}\".\n\n\
+                     Do NOT generate the final code immediately. Instead, start by introducing yourself, explain that you will help them build their ;{slug} capture handler, and ask them a series of questions to understand their needs:\n\
+                     1. What human-readable name/label should this handler have? (e.g. \"Capture {capitalized}\")\n\
+                     2. What fields/parameters should it accept from the captured text? (e.g. tags, dates, priority, URLs, custom key-values)\n\
+                     3. What should the handler do when it executes? (e.g. append to a local JSONL file, call a webhook/API, run a shell command, etc.)"
                 );
                 self.menu_syntax_trigger_popup_state = Default::default();
                 close_menu_syntax_trigger_popup_window(cx);

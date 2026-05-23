@@ -134,6 +134,8 @@ const ICON_GITHUB_SVG: &str = include_str!("../../assets/icons/github.svg");
 const ICON_DISCORD_SVG: &str = include_str!("../../assets/icons/discord.svg");
 const ICON_NOTES_SVG: &str = include_str!("../../assets/icons/notes.svg");
 const ICON_AGENT_CHAT_SVG: &str = include_str!("../../assets/icons/agent_chat.svg");
+const ICON_SETTINGS_SVG: &str = include_str!("../../assets/icons/settings.svg");
+const ICON_INFO_SVG: &str = include_str!("../../assets/icons/info.svg");
 
 /// Walk a muda `ContextMenu`'s underlying `NSMenu` and mark every menu-item
 /// image as a template, so AppKit auto-tints it for light/dark/highlighted/
@@ -546,12 +548,25 @@ impl TrayManager {
             }
         };
 
-        let settings_item = MenuItem::with_id(
-            TrayMenuAction::Settings.id(),
-            "Settings",
-            true,
-            Some(Accelerator::new(Some(Modifiers::META), Code::Comma)),
-        );
+        let settings_item = match menu_icon_from_svg(ICON_SETTINGS_SVG) {
+            Ok(icon) => IconMenuItem::with_id(
+                TrayMenuAction::Settings.id(),
+                "Settings",
+                true,
+                Some(icon),
+                Some(Accelerator::new(Some(Modifiers::META), Code::Comma)),
+            ),
+            Err(e) => {
+                tracing::warn!(error = %e, "tray.settings_icon_fallback");
+                IconMenuItem::with_id(
+                    TrayMenuAction::Settings.id(),
+                    "Settings",
+                    true,
+                    None,
+                    Some(Accelerator::new(Some(Modifiers::META), Code::Comma)),
+                )
+            }
+        };
         let reload_scripts_item = IconMenuItem::with_id_and_native_icon(
             TrayMenuAction::ReloadScripts.id(),
             "Reload Scripts",
@@ -582,12 +597,25 @@ impl TrayManager {
             None,
         );
 
-        let about_item = MenuItem::with_id(
-            TrayMenuAction::OpenAbout.id(),
-            "About Script Kit",
-            true,
-            None,
-        );
+        let about_item = match menu_icon_from_svg(ICON_INFO_SVG) {
+            Ok(icon) => IconMenuItem::with_id(
+                TrayMenuAction::OpenAbout.id(),
+                "About Script Kit",
+                true,
+                Some(icon),
+                None,
+            ),
+            Err(e) => {
+                tracing::warn!(error = %e, "tray.about_icon_fallback");
+                IconMenuItem::with_id(
+                    TrayMenuAction::OpenAbout.id(),
+                    "About Script Kit",
+                    true,
+                    None,
+                    None,
+                )
+            }
+        };
 
         let quit_item = MenuItem::with_id(TrayMenuAction::Quit.id(), "Quit Script Kit", true, None);
 
@@ -1286,10 +1314,10 @@ mod tests {
 
     #[test]
     fn test_create_menu_uses_native_menu_icons() {
-        // Only template-style NativeIcon variants are wired up. Manual,
-        // Settings, and About intentionally have NO icon because the
-        // AppKit equivalents (Info, PreferencesGeneral) render as
-        // full-colour status images that clash with a Raycast-style menu.
+        // Only template-style NativeIcon variants are wired up. Manual
+        // intentionally has NO icon because the AppKit equivalents
+        // render as full-colour status images that clash with a Raycast-style menu.
+        // Settings and About use custom SVG templates.
         // Follow Us / GitHub / Discord ship brand-correct SVG glyphs and
         // only fall back to NativeIcon if the SVG render fails.
         const TRAY_SOURCE: &str = include_str!("mod.rs");
@@ -1336,6 +1364,8 @@ mod tests {
             ("discord", ICON_DISCORD_SVG),
             ("notes", ICON_NOTES_SVG),
             ("agent_chat", ICON_AGENT_CHAT_SVG),
+            ("settings", ICON_SETTINGS_SVG),
+            ("info", ICON_INFO_SVG),
         ] {
             let icon = menu_icon_from_svg(svg);
             assert!(
