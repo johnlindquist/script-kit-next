@@ -15,7 +15,7 @@ use crate::components::inline_dropdown::{
 use crate::components::inline_popup_window::{
     configure_inline_popup_window, inline_popup_height_for_row_height,
     inline_popup_width_for_window, inline_popup_window_options, set_inline_popup_window_bounds,
-    INLINE_POPUP_MAX_VISIBLE_ROWS, INLINE_POPUP_VERTICAL_PADDING,
+    INLINE_POPUP_EDGE_GUTTER, INLINE_POPUP_MAX_VISIBLE_ROWS, INLINE_POPUP_VERTICAL_PADDING,
 };
 
 use super::{
@@ -40,6 +40,7 @@ pub(crate) struct DictationMicrophonePopupSnapshot {
     pub rows: Vec<DictationMicrophonePopupRow>,
     pub selected_row_id: Option<String>,
     pub visible_start: usize,
+    pub visible_row_limit: usize,
     pub width: f32,
 }
 
@@ -89,40 +90,64 @@ pub(crate) fn build_dictation_microphone_popup_snapshot(
         rows,
         selected_row_id,
         visible_start: 0,
+        visible_row_limit: INLINE_POPUP_MAX_VISIBLE_ROWS,
         width,
     }
 }
 
-fn dictation_microphone_popup_bounds(
+fn dictation_microphone_popup_height(snapshot: &DictationMicrophonePopupSnapshot) -> f32 {
+    inline_popup_height_for_row_height(
+        snapshot.rows.len().min(snapshot.visible_row_limit),
+        SOFT_COMPACT_PICKER_ROW_HEIGHT,
+    )
+}
+
+fn dictation_microphone_popup_visible_row_limit(
+    snapshot: &DictationMicrophonePopupSnapshot,
+    available_height: f32,
+) -> usize {
+    let row_count = snapshot.rows.len();
+    if row_count == 0 {
+        return 0;
+    }
+
+    let hard_limit = row_count.min(INLINE_POPUP_MAX_VISIBLE_ROWS);
+    (1..=hard_limit)
+        .rev()
+        .find(|rows| {
+            let mut candidate = snapshot.clone();
+            candidate.visible_row_limit = *rows;
+            dictation_microphone_popup_height(&candidate) <= available_height.max(1.0)
+        })
+        .unwrap_or(1)
+}
+
+fn dictation_microphone_popup_bounds_above(
     parent_bounds: Bounds<Pixels>,
     display_bounds: Option<Bounds<Pixels>>,
-    snapshot: &DictationMicrophonePopupSnapshot,
+    snapshot: &mut DictationMicrophonePopupSnapshot,
 ) -> Bounds<Pixels> {
     let width = snapshot.width;
-    let height = inline_popup_height_for_row_height(
-        snapshot.rows.len().min(INLINE_POPUP_MAX_VISIBLE_ROWS),
-        SOFT_COMPACT_PICKER_ROW_HEIGHT,
-    );
-    let preferred_left = parent_bounds.origin.x.as_f32() - width;
+    let display_top = display_bounds
+        .map(|db| db.origin.y.as_f32() + INLINE_POPUP_EDGE_GUTTER)
+        .unwrap_or(0.0);
+    let available_height = (parent_bounds.origin.y.as_f32() - display_top).max(1.0);
+    snapshot.visible_row_limit =
+        dictation_microphone_popup_visible_row_limit(snapshot, available_height);
+    let height = dictation_microphone_popup_height(snapshot);
+
+    let preferred_left = parent_bounds.origin.x.as_f32();
     let left = display_bounds
         .map(|display_bounds| {
             let display_left = display_bounds.origin.x.as_f32();
             let display_right = display_left + display_bounds.size.width.as_f32();
-            if preferred_left >= display_left {
-                preferred_left
-            } else {
-                let right_fallback =
-                    parent_bounds.origin.x.as_f32() + parent_bounds.size.width.as_f32();
-                if right_fallback + width <= display_right {
-                    right_fallback
-                } else {
-                    (display_right - width).max(display_left)
-                }
-            }
+            preferred_left.clamp(display_left, (display_right - width).max(display_left))
         })
         .unwrap_or(preferred_left);
+    let top = parent_bounds.origin.y.as_f32() - height;
+
     Bounds {
-        origin: gpui::point(gpui::px(left), parent_bounds.origin.y),
+        origin: gpui::point(gpui::px(left), gpui::px(top)),
         size: gpui::size(gpui::px(width), gpui::px(height)),
     }
 }
@@ -137,9 +162,10 @@ pub(crate) fn sync_dictation_microphone_popup_window(
         display_bounds,
         display_id,
         source_view,
-        snapshot,
+        mut snapshot,
     } = request;
-    let bounds = dictation_microphone_popup_bounds(parent_bounds, display_bounds, &snapshot);
+    let bounds =
+        dictation_microphone_popup_bounds_above(parent_bounds, display_bounds, &mut snapshot);
 
     let storage = DICTATION_MICROPHONE_POPUP_WINDOW.get_or_init(|| Mutex::new(None));
     if let Ok(mut guard) = storage.lock() {
@@ -363,7 +389,9 @@ impl DictationMicrophonePopupWindow {
             self.snapshot.visible_start,
             selected_index,
             row_count,
-            INLINE_POPUP_MAX_VISIBLE_ROWS,
+            self.snapshot
+                .visible_row_limit
+                .clamp(1, INLINE_POPUP_MAX_VISIBLE_ROWS),
         )
     }
 

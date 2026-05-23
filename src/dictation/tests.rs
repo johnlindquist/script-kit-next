@@ -2861,22 +2861,22 @@ fn overlay_positioned_bottom_center_of_screen() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn overlay_uses_active_display_not_mouse_position() {
+fn overlay_uses_mouse_display_alignment() {
     let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
-    // Must use get_active_display() (key-window heuristic), not mouse position.
+    // Must use get_global_mouse_position() and display_for_point() for display selection (matching the main window)
     assert!(
-        window_src.contains("get_active_display()"),
-        "overlay must resolve display via get_active_display() (key-window screen)"
-    );
-    // Must NOT use mouse-position-based display selection.
-    assert!(
-        !window_src.contains("get_global_mouse_position()"),
-        "overlay must NOT use get_global_mouse_position() for display selection"
+        window_src.contains("get_global_mouse_position()"),
+        "overlay must use get_global_mouse_position() for display selection"
     );
     assert!(
-        !window_src.contains("display_for_point("),
-        "overlay must NOT use display_for_point() for display selection"
+        window_src.contains("display_for_point("),
+        "overlay must use display_for_point() for display selection"
+    );
+    // Must NOT use the key-window get_active_display() heuristic
+    assert!(
+        !window_src.contains("get_active_display()"),
+        "overlay must NOT resolve display via get_active_display()"
     );
 }
 

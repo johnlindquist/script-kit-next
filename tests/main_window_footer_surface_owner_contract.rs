@@ -161,10 +161,11 @@ fn live_dictation_overlay_does_not_join_main_window_footer_ownership() {
         "Dictation overlay may keep a local footer identity for tests/logging"
     );
     assert!(
-        !DICTATION_WINDOW_SOURCE.contains("footer_action_channel")
-            && !DICTATION_WINDOW_SOURCE.contains("MainWindowFooterConfig")
+        DICTATION_WINDOW_SOURCE.contains("dictation_footer_action_channel")
+            && DICTATION_WINDOW_SOURCE.contains("MainWindowFooterConfig")
             && !DICTATION_WINDOW_SOURCE.contains("active_main_window_footer_surface")
-            && !DICTATION_WINDOW_SOURCE.contains("FooterAction::"),
-        "Dictation overlay must not dispatch through main-window native footer routing"
+            && DICTATION_WINDOW_SOURCE.contains("FooterAction::Stop")
+            && DICTATION_WINDOW_SOURCE.contains("FooterAction::Close"),
+        "Dictation overlay must reuse the native footer renderer without joining main-window surface ownership"
     );
 }

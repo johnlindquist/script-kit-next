@@ -6939,8 +6939,22 @@ impl ScriptListApp {
         );
 
         let is_start_edge = !crate::dictation::is_dictation_recording();
+        tracing::info!(
+            category = "DICTATION",
+            action = ?action,
+            trace_id = %dctx.trace_id,
+            is_start_edge,
+            "Dictation builtin shortcut flow reached toggle boundary"
+        );
         if is_start_edge {
             let preflight = self.prepare_dictation_builtin_start(action, cx);
+            tracing::info!(
+                category = "DICTATION",
+                action = ?action,
+                trace_id = %dctx.trace_id,
+                preflight = ?preflight,
+                "Dictation builtin start preflight completed"
+            );
             if preflight != DictationStartPreflight::Ready {
                 return Self::builtin_success(dctx, preflight.success_detail());
             }
@@ -6952,9 +6966,24 @@ impl ScriptListApp {
             crate::dictation::get_dictation_target()
                 .unwrap_or_else(|| action.stop_fallback_target())
         };
+        tracing::info!(
+            category = "DICTATION",
+            action = ?action,
+            trace_id = %dctx.trace_id,
+            is_start_edge,
+            ?dictation_target,
+            "Invoking dictation toggle from builtin shortcut flow"
+        );
 
         match crate::dictation::toggle_dictation(dictation_target) {
             Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                tracing::info!(
+                    category = "DICTATION",
+                    action = ?action,
+                    trace_id = %dctx.trace_id,
+                    ?dictation_target,
+                    "Dictation toggle returned Started"
+                );
                 if is_start_edge
                     && matches!(
                         dictation_target,
@@ -6966,9 +6995,25 @@ impl ScriptListApp {
                 self.handle_dictation_started(action, dictation_target, cx);
             }
             Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
+                tracing::info!(
+                    category = "DICTATION",
+                    action = ?action,
+                    trace_id = %dctx.trace_id,
+                    ?dictation_target,
+                    audio_duration_ms = capture.audio_duration.as_millis() as u64,
+                    chunk_count = capture.chunks.len(),
+                    "Dictation toggle returned Stopped with capture"
+                );
                 self.begin_dictation_transcription(capture, dictation_target, cx);
             }
             Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
+                tracing::info!(
+                    category = "DICTATION",
+                    action = ?action,
+                    trace_id = %dctx.trace_id,
+                    ?dictation_target,
+                    "Dictation toggle returned Stopped without capture"
+                );
                 let _ = crate::dictation::close_dictation_overlay(cx);
                 self.dispatch_window_event(
                     crate::window_orchestrator::WindowEvent::AbortDictation,

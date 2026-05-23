@@ -139,7 +139,7 @@ impl ListItemMetricsOverride {
             desc_line_height: DESC_LINE_HEIGHT,
             section_header_font_size: SECTION_HEADER_FONT_SIZE,
             section_gap: SECTION_GAP,
-            name_weight: FontWeight::NORMAL,
+            name_weight: FontWeight(450.0),
             selected_name_weight: FontWeight::MEDIUM,
             desc_weight: FontWeight::NORMAL,
             section_weight: FontWeight::NORMAL,

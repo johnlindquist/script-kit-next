@@ -27,10 +27,13 @@ fn popup_uses_trigger_popup_window_primitives_and_prompt_popup_registration() {
         POPUP.contains("configure_inline_popup_window")
             && POPUP.contains("inline_popup_window_options")
             && POPUP.contains("set_inline_popup_window_bounds")
+            && POPUP.contains("dictation_microphone_popup_bounds_above")
+            && POPUP.contains("INLINE_POPUP_EDGE_GUTTER")
+            && POPUP.contains("parent_bounds.origin.y.as_f32() - height")
             && POPUP.contains("register_attached_popup")
             && POPUP.contains("AutomationWindowKind::PromptPopup")
             && POPUP.contains("dictationMicrophonePopup"),
-        "dictation mic selector must reuse the attached trigger-popup window primitives"
+        "dictation mic selector must reuse attached trigger-popup window primitives and appear above the overlay"
     );
 }
 
@@ -66,13 +69,21 @@ fn popup_automation_rows_are_safe_and_batch_selectable() {
 fn overlay_mic_control_uses_select_label_and_icon_not_keycap_value() {
     assert!(
         WINDOW.contains("const ACTION_MIC_LABEL: &str = \"Select Mic\";")
-            && WINDOW.contains("const MIC_ICON_PATH: &str = concat!(")
+            && WINDOW.contains(
+                "const MIC_KEYCAP: &str = crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN;"
+            )
             && WINDOW.contains("fn render_mic_action_chip_content(")
-            && WINDOW.contains(".external_path(MIC_ICON_PATH)")
+            && WINDOW.contains(
+                ".external_path(crate::components::footer_chrome::FOOTER_MIC_ICON_PATH)"
+            )
+            && WINDOW.contains(
+                "FooterButtonConfig::new(FooterAction::Ai, MIC_KEYCAP, active_microphone_footer_label())"
+            )
+            && WINDOW.contains("crate::dictation::get_active_dictation_device()")
             && !WINDOW.contains("fn current_microphone_label()")
             && !WINDOW.contains("FooterHintKeyMode::TextValue")
             && !WINDOW.contains("fn current_microphone_keycap()")
             && !WINDOW.contains("const MAX_CHARS: usize = 8"),
-        "overlay mic control must render as a Select Mic icon action, not a keyboard-like value chip"
+        "overlay mic control must render as a left-side mic glyph action, not a text/keycap value chip"
     );
 }

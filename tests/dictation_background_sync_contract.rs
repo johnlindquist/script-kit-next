@@ -10,6 +10,7 @@ fn read_source(path: &str) -> String {
 fn dictation_window_uses_shared_theme_background_and_material() {
     let ui_foundation = read_source("src/ui_foundation/mod.rs");
     let dictation = read_source("src/dictation/window.rs");
+    let footer_popup = read_source("src/footer_popup.rs");
     let platform = read_source("src/platform/secondary_window_config.rs");
 
     assert!(
@@ -43,6 +44,21 @@ fn dictation_window_uses_shared_theme_background_and_material() {
         dictation.contains("crate::platform::configure_dictation_overlay_window(")
             && dictation.contains("theme.should_use_dark_vibrancy()"),
         "Dictation native window must use the explicit refreshable dictation material helper"
+    );
+    assert!(
+        dictation.contains("crate::footer_popup::sync_window_footer_popup(")
+            && dictation.contains("dictation_native_footer_config(")
+            && footer_popup.contains("pub(crate) fn sync_window_footer_popup")
+            && footer_popup.contains("ensure_main_footer_host(ns_window)")
+            && footer_popup.contains("refresh_main_footer_host(ns_window, config)"),
+        "Dictation footer must use the same native footer NSVisualEffectView and button refresh path as the main footer"
+    );
+    assert!(
+        footer_popup.contains("static DICTATION_FOOTER_ACTION_CHANNEL")
+            && footer_popup.contains("pub(crate) fn dictation_footer_action_channel")
+            && footer_popup.contains("send_footer_action_from_sender(sender")
+            && footer_popup.contains("footer_sender_is_dictation_window(sender)"),
+        "Shared native footer buttons must route dictation-window clicks through the dictation channel, not the main-window listener"
     );
     assert!(
         platform.contains("fn current_window_material()")

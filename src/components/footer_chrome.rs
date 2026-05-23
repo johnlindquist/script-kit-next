@@ -1,6 +1,6 @@
 use gpui::{
-    div, px, AnyElement, FontWeight, InteractiveElement, IntoElement, ParentElement, SharedString,
-    Styled,
+    div, px, svg, AnyElement, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    SharedString, Styled,
 };
 
 use crate::list_item::FONT_SYSTEM_UI;
@@ -16,6 +16,7 @@ pub(crate) const FOOTER_KEYCAP_PADDING_X_PX: f32 = 4.0;
 pub(crate) const FOOTER_KEYCAP_RADIUS_PX: f32 = 4.0;
 pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;
+pub(crate) const FOOTER_SEMICOLON_GLYPH_NUDGE_Y_PX: f32 = -1.0;
 pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;
 pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 4.0;
 pub(crate) const FOOTER_ACTION_CONTENT_GAP_PX: f32 = 3.0;
@@ -31,6 +32,11 @@ pub(crate) const FOOTER_STOP_SLOT_WIDTH_PX: f32 = 80.0;
 pub(crate) const FOOTER_PASTE_RESPONSE_SLOT_WIDTH_PX: f32 = 144.0;
 
 pub(crate) const FOOTER_LABELCAP_BORDER_ALPHA: f32 = 0.0;
+pub(crate) const FOOTER_MIC_ICON_TOKEN: &str = "mic";
+pub(crate) const FOOTER_MIC_ICON_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/vendor/gpui-component/crates/assets/assets/icons/mic.svg"
+);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -197,6 +203,8 @@ pub(crate) fn is_footer_return_key_glyph(key: &str) -> bool {
 pub(crate) fn footer_key_glyph_nudge_y(key: &str) -> f32 {
     if is_footer_return_key_glyph(key) {
         FOOTER_KEY_GLYPH_NUDGE_Y_PX + FOOTER_RETURN_GLYPH_NUDGE_Y_PX
+    } else if key == ";" {
+        FOOTER_SEMICOLON_GLYPH_NUDGE_Y_PX
     } else {
         FOOTER_KEY_GLYPH_NUDGE_Y_PX
     }
@@ -281,12 +289,22 @@ fn render_footer_shortcut_keycaps(shortcut: String, theme: &Theme) -> AnyElement
 fn render_footer_keycap(token: String, max_width_px: Option<f32>, theme: &Theme) -> AnyElement {
     let footer_text = footer_hint_text_color(theme);
     let full_text = theme.colors.text.primary.to_rgb();
-    let token_child: AnyElement = div()
-        .h(px(FOOTER_KEYCAP_HEIGHT_PX))
-        .line_height(px(FOOTER_KEYCAP_HEIGHT_PX))
-        .mt(px(footer_key_glyph_nudge_y(&token)))
-        .child(token)
-        .into_any_element();
+    let token_child: AnyElement = if token == FOOTER_MIC_ICON_TOKEN {
+        svg()
+            .external_path(FOOTER_MIC_ICON_PATH)
+            .size(px(13.0))
+            .flex_shrink_0()
+            .text_color(footer_text)
+            .group_hover("footer-action-button", move |s| s.text_color(full_text))
+            .into_any_element()
+    } else {
+        div()
+            .h(px(FOOTER_KEYCAP_HEIGHT_PX))
+            .line_height(px(FOOTER_KEYCAP_HEIGHT_PX))
+            .mt(px(footer_key_glyph_nudge_y(&token)))
+            .child(token)
+            .into_any_element()
+    };
 
     let mut keycap = div()
         .flex_none()
@@ -344,8 +362,10 @@ mod tests {
         assert!(!is_footer_return_key_glyph("Enter"));
         assert_eq!(footer_key_glyph_nudge_y("⌘"), 1.0);
         assert_eq!(footer_key_glyph_nudge_y("↵"), 2.0);
+        assert_eq!(footer_key_glyph_nudge_y(";"), -1.0);
         assert_eq!(footer_appkit_glyph_y("⌘", 20.0, 10.0), 4.0);
         assert_eq!(footer_appkit_glyph_y("↵", 20.0, 10.0), 3.0);
+        assert_eq!(footer_appkit_glyph_y(";", 20.0, 10.0), 6.0);
         assert_eq!(footer_button_height(32.0), 28.0);
     }
 

@@ -81,7 +81,7 @@ pub(crate) enum FooterAction {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct FooterButtonConfig {
     pub action: FooterAction,
-    pub key: &'static str,
+    pub key: SharedString,
     pub label: SharedString,
     pub selected: bool,
     pub enabled: bool,
@@ -91,12 +91,12 @@ pub(crate) struct FooterButtonConfig {
 impl FooterButtonConfig {
     pub(crate) fn new(
         action: FooterAction,
-        key: &'static str,
+        key: impl Into<SharedString>,
         label: impl Into<SharedString>,
     ) -> Self {
         Self {
             action,
-            key,
+            key: key.into(),
             label: label.into(),
             selected: false,
             enabled: true,
@@ -213,6 +213,11 @@ static FOOTER_ACTION_CHANNEL: std::sync::LazyLock<(
     async_channel::Receiver<FooterAction>,
 )> = std::sync::LazyLock::new(|| async_channel::bounded(32));
 
+static DICTATION_FOOTER_ACTION_CHANNEL: std::sync::LazyLock<(
+    async_channel::Sender<FooterAction>,
+    async_channel::Receiver<FooterAction>,
+)> = std::sync::LazyLock::new(|| async_channel::bounded(32));
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct MainWindowFooterHostSnapshot {
     pub requested_surface: Option<&'static str>,
@@ -283,6 +288,13 @@ pub(crate) fn footer_action_channel() -> &'static (
     &FOOTER_ACTION_CHANNEL
 }
 
+pub(crate) fn dictation_footer_action_channel() -> &'static (
+    async_channel::Sender<FooterAction>,
+    async_channel::Receiver<FooterAction>,
+) {
+    &DICTATION_FOOTER_ACTION_CHANNEL
+}
+
 pub(crate) fn sync_main_footer_popup(
     window: &mut Window,
     config: Option<&MainWindowFooterConfig>,
@@ -324,6 +336,33 @@ pub(crate) fn sync_main_footer_popup(
                 clear_main_window_footer_refresh_signature();
                 remove_main_footer_host(ns_window);
                 update_main_window_footer_host_state(None, None, false);
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = (window, config);
+}
+
+pub(crate) fn sync_window_footer_popup(window: &mut Window, config: &MainWindowFooterConfig) {
+    #[cfg(target_os = "macos")]
+    {
+        let Some(ns_window) = main_window_ns_window(window) else {
+            tracing::warn!(
+                target: "script_kit::footer_popup",
+                event = "native_footer_missing_ns_window",
+                surface = config.surface,
+                "Unable to resolve NSWindow for reusable native footer host"
+            );
+            return;
+        };
+
+        // SAFETY: `ns_window` comes from the live GPUI window currently being
+        // rendered/observed on the AppKit thread.
+        unsafe {
+            let installed = ensure_main_footer_host(ns_window);
+            if installed {
+                let _ = refresh_main_footer_host(ns_window, config);
             }
         }
     }
@@ -1079,8 +1118,8 @@ unsafe fn layout_footer_hints(
     ];
 
     let mut items = Vec::new();
-    let mut total_item_width = 0.0_f64;
-    for (index, button_cfg) in buttons.iter().enumerate() {
+    let mut trailing_item_width = 0.0_f64;
+    for button_cfg in buttons {
         let max_item_width =
             footer_hint_max_item_width(button_cfg.action, hints_bounds.size.width, buttons);
         let item = make_footer_hint_item(button_cfg, font, text_color, max_item_width, theme);
@@ -1089,15 +1128,32 @@ unsafe fn layout_footer_hints(
         }
         let item_frame: NSRect = msg_send![item, frame];
         let target_width = footer_hint_slot_width(button_cfg.action).max(item_frame.size.width);
-        total_item_width += target_width;
-        if index > 0 {
-            total_item_width += FOOTER_HINT_ITEM_GAP;
+        let left_pinned = is_footer_left_pinned_mic_button(button_cfg);
+        if !left_pinned {
+            if trailing_item_width > 0.0 {
+                trailing_item_width += FOOTER_HINT_ITEM_GAP;
+            }
+            trailing_item_width += target_width;
         }
-        items.push((item, target_width, button_cfg.action, button_cfg.enabled));
+        items.push((
+            item,
+            target_width,
+            button_cfg.action,
+            button_cfg.enabled,
+            left_pinned,
+        ));
     }
 
-    let mut x = (hints_bounds.size.width - total_item_width).max(0.0);
-    for (item, target_width, action, enabled) in items {
+    let left_pinned_width = items
+        .iter()
+        .filter(|(_, _, _, _, left_pinned)| *left_pinned)
+        .map(|(_, target_width, _, _, _)| *target_width + FOOTER_HINT_ITEM_GAP)
+        .sum::<f64>();
+    let mut trailing_x = (hints_bounds.size.width - trailing_item_width)
+        .max(left_pinned_width)
+        .max(0.0);
+    for (item, target_width, action, enabled, left_pinned) in items {
+        let x = if left_pinned { 0.0 } else { trailing_x };
         let item_y = crate::components::footer_chrome::FOOTER_BUTTON_VERTICAL_INSET_PX as f64;
         let item_height =
             crate::components::footer_chrome::footer_button_height(hints_bounds.size.height as f32)
@@ -1119,8 +1175,16 @@ unsafe fn layout_footer_hints(
         );
         let _: () = msg_send![item, setFrame: frame];
         let _: () = msg_send![hints_view, addSubview: item];
-        x += target_width + FOOTER_HINT_ITEM_GAP;
+        if !left_pinned {
+            trailing_x += target_width + FOOTER_HINT_ITEM_GAP;
+        }
     }
+}
+
+#[cfg(target_os = "macos")]
+fn is_footer_left_pinned_mic_button(button_cfg: &FooterButtonConfig) -> bool {
+    matches!(button_cfg.action, FooterAction::Ai)
+        && button_cfg.key.as_ref() == crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN
 }
 
 #[cfg(target_os = "macos")]
@@ -1129,6 +1193,25 @@ fn footer_hint_max_item_width(
     hints_width: f64,
     buttons: &[FooterButtonConfig],
 ) -> Option<f64> {
+    let mic_button = buttons
+        .iter()
+        .find(|button| is_footer_left_pinned_mic_button(button));
+    if let Some(mic_button) = mic_button {
+        if matches!(action, FooterAction::Ai) && is_footer_left_pinned_mic_button(mic_button) {
+            let trailing_reserved_width = buttons
+                .iter()
+                .filter(|button| !is_footer_left_pinned_mic_button(button))
+                .map(|button| footer_hint_slot_width(button.action))
+                .sum::<f64>()
+                + buttons.len().saturating_sub(1) as f64 * FOOTER_HINT_ITEM_GAP;
+            return Some(
+                (hints_width - trailing_reserved_width)
+                    .clamp(FOOTER_AI_SLOT_WIDTH, 220.0)
+                    .round(),
+            );
+        }
+    }
+
     if !matches!(action, FooterAction::Run) {
         return None;
     }
@@ -1167,19 +1250,44 @@ fn footer_hint_content_layout(
     label_width: f64,
     key_width: f64,
 ) -> (f64, f64, f64) {
-    let content_width = label_width + FOOTER_HINT_KEY_LABEL_GAP + key_width;
+    let has_label = label_width > 0.0;
+    let has_key = key_width > 0.0;
+    let gap_width = if has_label && has_key {
+        FOOTER_HINT_KEY_LABEL_GAP
+    } else {
+        0.0
+    };
+    let content_width = label_width + gap_width + key_width;
 
     if matches!(action, FooterAction::Run) {
         let key_x = (item_width - FOOTER_HINT_PADDING_X - key_width).round();
-        let label_x = (key_x - FOOTER_HINT_KEY_LABEL_GAP - label_width)
-            .max(0.0)
-            .round();
+        let label_x = (key_x - gap_width - label_width).max(0.0).round();
         return (label_x, key_x, content_width);
     }
 
     let label_x = ((item_width - content_width) / 2.0).max(0.0).round();
-    let key_x = (label_x + label_width + FOOTER_HINT_KEY_LABEL_GAP).round();
+    let key_x = (label_x + label_width + gap_width).round();
     (label_x, key_x, content_width)
+}
+
+fn footer_hint_content_layout_for_button(
+    button_cfg: &FooterButtonConfig,
+    item_width: f64,
+    label_width: f64,
+    key_width: f64,
+) -> (f64, f64, f64) {
+    if is_footer_left_pinned_mic_button(button_cfg) {
+        let gap_width = if label_width > 0.0 && key_width > 0.0 {
+            FOOTER_HINT_KEY_LABEL_GAP
+        } else {
+            0.0
+        };
+        let key_x = FOOTER_HINT_PADDING_X.round();
+        let label_x = (key_x + key_width + gap_width).round();
+        return (label_x, key_x, label_width + gap_width + key_width);
+    }
+
+    footer_hint_content_layout(button_cfg.action, item_width, label_width, key_width)
 }
 
 #[cfg(target_os = "macos")]
@@ -1226,6 +1334,64 @@ fn footer_hint_label_widths(
 }
 
 #[cfg(target_os = "macos")]
+const FOOTER_MIC_ICON_SVG: &str =
+    include_str!("../vendor/gpui-component/crates/assets/assets/icons/mic.svg");
+
+#[cfg(target_os = "macos")]
+fn footer_mic_icon_png_data() -> Option<&'static [u8]> {
+    static PNG_DATA: std::sync::OnceLock<Option<Vec<u8>>> = std::sync::OnceLock::new();
+    PNG_DATA
+        .get_or_init(|| {
+            let svg = FOOTER_MIC_ICON_SVG.replace("currentColor", "white");
+            let opts = usvg::Options::default();
+            let tree = usvg::Tree::from_str(&svg, &opts).ok()?;
+            let size = 32_u32;
+            let mut pixmap = tiny_skia::Pixmap::new(size, size)?;
+            let svg_size = tree.size();
+            let scale = (size as f32 / svg_size.width()).min(size as f32 / svg_size.height());
+            resvg::render(
+                &tree,
+                tiny_skia::Transform::from_scale(scale, scale),
+                &mut pixmap.as_mut(),
+            );
+            let rgba = pixmap.take();
+            if !rgba.chunks_exact(4).any(|pixel| pixel[3] != 0) {
+                return None;
+            }
+            let image = image::RgbaImage::from_raw(size, size, rgba)?;
+            let mut cursor = std::io::Cursor::new(Vec::new());
+            image::DynamicImage::ImageRgba8(image)
+                .write_to(&mut cursor, image::ImageFormat::Png)
+                .ok()?;
+            Some(cursor.into_inner())
+        })
+        .as_deref()
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn footer_mic_icon_image() -> id {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let Some(png_data) = footer_mic_icon_png_data() else {
+        return nil;
+    };
+    let data: id = msg_send![
+        class!(NSData),
+        dataWithBytes: png_data.as_ptr()
+        length: png_data.len()
+    ];
+    if data == nil {
+        return nil;
+    }
+    let image: id = msg_send![class!(NSImage), alloc];
+    let image: id = msg_send![image, initWithData: data];
+    if image != nil {
+        let _: () = msg_send![image, setTemplate: YES];
+    }
+    image
+}
+
+#[cfg(target_os = "macos")]
 unsafe fn make_footer_hint_item(
     button_cfg: &FooterButtonConfig,
     font: id,
@@ -1248,13 +1414,18 @@ unsafe fn make_footer_hint_item(
         return nil;
     }
 
-    let label_field = make_footer_hint_text_field(
-        button_cfg.label.as_ref(),
-        font,
-        text_color,
-        FOOTER_HINT_TEXT_ALIGN_RIGHT,
-    );
-    if label_field == nil {
+    let has_label = !button_cfg.label.as_ref().is_empty();
+    let label_field = if has_label {
+        make_footer_hint_text_field(
+            button_cfg.label.as_ref(),
+            font,
+            text_color,
+            FOOTER_HINT_TEXT_ALIGN_RIGHT,
+        )
+    } else {
+        nil
+    };
+    if has_label && label_field == nil {
         return nil;
     }
 
@@ -1270,7 +1441,8 @@ unsafe fn make_footer_hint_item(
     );
     let key_font: id = font;
 
-    let shortcut_keys = crate::components::footer_chrome::split_footer_shortcut(button_cfg.key);
+    let shortcut_keys =
+        crate::components::footer_chrome::split_footer_shortcut(button_cfg.key.as_ref());
 
     let keys_view: id = msg_send![class!(NSView), alloc];
     let keys_view: id = msg_send![
@@ -1311,15 +1483,43 @@ unsafe fn make_footer_hint_item(
             }
         }
 
-        let glyph_field =
-            make_footer_hint_text_field(key_str, key_font, text_color, FOOTER_HINT_TEXT_ALIGN_LEFT);
-        if glyph_field == nil {
-            continue;
-        }
-
-        let glyph_size: NSSize = msg_send![glyph_field, fittingSize];
+        let is_mic_icon = key_str == crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN;
         let chip_padding_x = crate::components::footer_chrome::FOOTER_KEYCAP_PADDING_X_PX as f64;
         let chip_height = crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX as f64;
+        let (glyph_view, glyph_size) = if is_mic_icon {
+            let image = footer_mic_icon_image();
+            if image == nil {
+                continue;
+            }
+            let image_view: id = msg_send![class!(NSImageView), alloc];
+            let image_view: id = msg_send![
+                image_view,
+                initWithFrame: NSRect::new(
+                    NSPoint::new(0.0, 0.0),
+                    NSSize::new(13.0_f64, 13.0_f64)
+                )
+            ];
+            if image_view == nil {
+                continue;
+            }
+            let _: () = msg_send![image_view, setImage: image];
+            let _: () = msg_send![image_view, setContentTintColor: text_color];
+            let _: () = msg_send![image_view, setAlphaValue: 1.0_f64];
+            let _: () = msg_send![image_view, setImageScaling: 2usize];
+            (image_view, NSSize::new(13.0_f64, 13.0_f64))
+        } else {
+            let glyph_field = make_footer_hint_text_field(
+                key_str,
+                key_font,
+                text_color,
+                FOOTER_HINT_TEXT_ALIGN_LEFT,
+            );
+            if glyph_field == nil {
+                continue;
+            }
+            let glyph_size: NSSize = msg_send![glyph_field, fittingSize];
+            (glyph_field, glyph_size)
+        };
         let chip_width = (glyph_size.width + chip_padding_x * 2.0).max(chip_height);
 
         let glyph_x = ((chip_width - glyph_size.width) / 2.0).round();
@@ -1330,13 +1530,13 @@ unsafe fn make_footer_hint_item(
         );
 
         let _: () = msg_send![
-            glyph_field,
+            glyph_view,
             setFrame: NSRect::new(
                 NSPoint::new(glyph_x, glyph_y),
                 NSSize::new(glyph_size.width, glyph_size.height)
             )
         ];
-        let _: () = msg_send![chip_view, addSubview: glyph_field];
+        let _: () = msg_send![chip_view, addSubview: glyph_view];
 
         let chip_y = ((item_height - chip_height) / 2.0).round();
         let chip_x = keys_view_width;
@@ -1365,53 +1565,64 @@ unsafe fn make_footer_hint_item(
         )
     ];
 
-    let label_size: NSSize = msg_send![label_field, fittingSize];
     let label_padding_x = crate::components::footer_chrome::FOOTER_KEYCAP_PADDING_X_PX as f64;
     let label_chip_height = crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX as f64;
-    let (label_chip_width, label_text_width) = footer_hint_label_widths(
-        label_size.width,
-        label_padding_x,
-        label_chip_height,
-        max_item_width,
-        keys_view_width,
-    );
-    let label_view: id = msg_send![class!(NSView), alloc];
-    let label_view: id = msg_send![
-        label_view,
-        initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(label_chip_width, label_chip_height))
-    ];
-    if label_view == nil {
-        return nil;
-    }
-    let _: () = msg_send![label_view, setWantsLayer: YES];
-    let label_layer: id = msg_send![label_view, layer];
-    if label_layer != nil {
-        let _: () = msg_send![
-            label_layer,
-            setCornerRadius: crate::components::footer_chrome::FOOTER_KEYCAP_RADIUS_PX as f64
+    let (label_view, label_chip_width, _label_text_width) = if has_label {
+        let label_size: NSSize = msg_send![label_field, fittingSize];
+        let (label_chip_width, label_text_width) = footer_hint_label_widths(
+            label_size.width,
+            label_padding_x,
+            label_chip_height,
+            max_item_width,
+            keys_view_width,
+        );
+        let label_view: id = msg_send![class!(NSView), alloc];
+        let label_view: id = msg_send![
+            label_view,
+            initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(label_chip_width, label_chip_height))
         ];
-        let _: () = msg_send![label_layer, setBorderWidth: 1.0_f64];
-        if labelcap_border_color != nil {
-            let cg_border: id = msg_send![labelcap_border_color, CGColor];
-            if cg_border != nil {
-                let _: () = msg_send![label_layer, setBorderColor: cg_border];
+        if label_view == nil {
+            return nil;
+        }
+        let _: () = msg_send![label_view, setWantsLayer: YES];
+        let label_layer: id = msg_send![label_view, layer];
+        if label_layer != nil {
+            let _: () = msg_send![
+                label_layer,
+                setCornerRadius: crate::components::footer_chrome::FOOTER_KEYCAP_RADIUS_PX as f64
+            ];
+            let _: () = msg_send![label_layer, setBorderWidth: 1.0_f64];
+            if labelcap_border_color != nil {
+                let cg_border: id = msg_send![labelcap_border_color, CGColor];
+                if cg_border != nil {
+                    let _: () = msg_send![label_layer, setBorderColor: cg_border];
+                }
             }
         }
-    }
 
-    let label_field_x = ((label_chip_width - label_text_width) / 2.0).round();
-    let label_field_y = ((label_chip_height - label_size.height) / 2.0).round();
-    let _: () = msg_send![
-        label_field,
-        setFrame: NSRect::new(
-            NSPoint::new(label_field_x, label_field_y),
-            NSSize::new(label_text_width, label_size.height)
-        )
-    ];
-    let _: () = msg_send![label_view, addSubview: label_field];
+        let label_field_x = ((label_chip_width - label_text_width) / 2.0).round();
+        let label_field_y = ((label_chip_height - label_size.height) / 2.0).round();
+        let _: () = msg_send![
+            label_field,
+            setFrame: NSRect::new(
+                NSPoint::new(label_field_x, label_field_y),
+                NSSize::new(label_text_width, label_size.height)
+            )
+        ];
+        let _: () = msg_send![label_view, addSubview: label_field];
+        (label_view, label_chip_width, label_text_width)
+    } else {
+        (nil, 0.0_f64, 0.0_f64)
+    };
 
-    let min_content_width = keys_view_width + (FOOTER_HINT_PADDING_X * 2.0) + 12.0;
-    let content_width = label_chip_width + FOOTER_HINT_KEY_LABEL_GAP + keys_view_width;
+    let gap_width = if has_label && keys_view_width > 0.0 {
+        FOOTER_HINT_KEY_LABEL_GAP
+    } else {
+        0.0
+    };
+    let min_content_width =
+        keys_view_width + label_chip_width + gap_width + (FOOTER_HINT_PADDING_X * 2.0) + 12.0;
+    let content_width = label_chip_width + gap_width + keys_view_width;
     let intrinsic_width = content_width + (FOOTER_HINT_PADDING_X * 2.0);
     let mut item_width = footer_hint_slot_width(button_cfg.action)
         .max(min_content_width)
@@ -1420,20 +1631,22 @@ unsafe fn make_footer_hint_item(
         item_width = item_width.min(max_item_width.max(min_content_width));
     }
     let label_y = ((item_height - label_chip_height) / 2.0).round();
-    let (label_x, key_x, _) = footer_hint_content_layout(
-        button_cfg.action,
+    let (label_x, key_x, _) = footer_hint_content_layout_for_button(
+        button_cfg,
         item_width,
         label_chip_width,
         keys_view_width,
     );
 
-    let _: () = msg_send![
-        label_view,
-        setFrame: NSRect::new(
-            NSPoint::new(label_x, label_y),
-            NSSize::new(label_chip_width, label_chip_height)
-        )
-    ];
+    if has_label && label_view != nil {
+        let _: () = msg_send![
+            label_view,
+            setFrame: NSRect::new(
+                NSPoint::new(label_x, label_y),
+                NSSize::new(label_chip_width, label_chip_height)
+            )
+        ];
+    }
     let _: () = msg_send![
         keys_view,
         setFrame: NSRect::new(
@@ -1501,7 +1714,9 @@ unsafe fn make_footer_hint_item(
         }
     }
 
-    let _: () = msg_send![container, addSubview: label_view];
+    if has_label && label_view != nil {
+        let _: () = msg_send![container, addSubview: label_view];
+    }
     let _: () = msg_send![container, addSubview: keys_view];
     if button != nil {
         let _: () = msg_send![container, addSubview: button];
@@ -1726,15 +1941,26 @@ mod footer_layout_tests {
 }
 
 #[cfg(target_os = "macos")]
-fn send_footer_action(action: FooterAction) {
+fn send_footer_action_from_sender(sender: id, action: FooterAction) {
+    let is_dictation_footer = unsafe { footer_sender_is_dictation_window(sender) };
+    send_footer_action_to_channel(action, is_dictation_footer);
+}
+
+#[cfg(target_os = "macos")]
+fn send_footer_action_to_channel(action: FooterAction, dictation_footer: bool) {
     let action_name = footer_action_key(action);
     tracing::info!(
         target: "script_kit::footer_popup",
         event = "native_footer_action_enqueued",
         action = action_name,
+        dictation_footer,
         "Enqueued native footer action"
     );
-    let (tx, _) = footer_action_channel();
+    let (tx, _) = if dictation_footer {
+        dictation_footer_action_channel()
+    } else {
+        footer_action_channel()
+    };
     if let Err(error) = tx.try_send(action) {
         tracing::warn!(
             target: "script_kit::footer_popup",
@@ -1744,6 +1970,36 @@ fn send_footer_action(action: FooterAction) {
             "Failed to enqueue footer action"
         );
     }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn footer_sender_is_dictation_window(sender: id) -> bool {
+    use std::ffi::CStr;
+
+    use objc::{msg_send, sel, sel_impl};
+
+    if sender == nil {
+        return false;
+    }
+
+    let ns_window: id = msg_send![sender, window];
+    if ns_window == nil {
+        return false;
+    }
+
+    let title: id = msg_send![ns_window, title];
+    if title == nil {
+        return false;
+    }
+
+    let utf8: *const std::os::raw::c_char = msg_send![title, UTF8String];
+    if utf8.is_null() {
+        return false;
+    }
+
+    CStr::from_ptr(utf8)
+        .to_string_lossy()
+        .contains("Script Kit Dictation")
 }
 
 fn footer_action_key(action: FooterAction) -> &'static str {
@@ -2097,7 +2353,8 @@ extern "C" fn footer_button_mouse_down(
             event = "native_footer_actions_mouse_down_selected",
             "Selected native footer Actions on mouse down"
         );
-        send_footer_action(FooterAction::Actions);
+        let this_id = this as *const _ as id;
+        send_footer_action_from_sender(this_id, FooterAction::Actions);
     }
 }
 
@@ -2558,40 +2815,52 @@ fn footer_action_target_class() -> *const objc::runtime::Class {
 }
 
 #[cfg(target_os = "macos")]
-extern "C" fn footer_run_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
-    send_footer_action(FooterAction::Run);
+extern "C" fn footer_run_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, sender: id) {
+    send_footer_action_from_sender(sender, FooterAction::Run);
 }
 
 #[cfg(target_os = "macos")]
-extern "C" fn footer_actions_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
-    send_footer_action(FooterAction::Actions);
+extern "C" fn footer_actions_action(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    sender: id,
+) {
+    send_footer_action_from_sender(sender, FooterAction::Actions);
 }
 
 #[cfg(target_os = "macos")]
-extern "C" fn footer_ai_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
-    send_footer_action(FooterAction::Ai);
+extern "C" fn footer_ai_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, sender: id) {
+    send_footer_action_from_sender(sender, FooterAction::Ai);
 }
 
 #[cfg(target_os = "macos")]
-extern "C" fn footer_apply_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
-    send_footer_action(FooterAction::Apply);
+extern "C" fn footer_apply_action(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    sender: id,
+) {
+    send_footer_action_from_sender(sender, FooterAction::Apply);
 }
 
 #[cfg(target_os = "macos")]
-extern "C" fn footer_close_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
-    send_footer_action(FooterAction::Close);
+extern "C" fn footer_close_action(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    sender: id,
+) {
+    send_footer_action_from_sender(sender, FooterAction::Close);
 }
 
 #[cfg(target_os = "macos")]
-extern "C" fn footer_stop_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
-    send_footer_action(FooterAction::Stop);
+extern "C" fn footer_stop_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, sender: id) {
+    send_footer_action_from_sender(sender, FooterAction::Stop);
 }
 
 #[cfg(target_os = "macos")]
 extern "C" fn footer_paste_response_action(
     _this: &objc::runtime::Object,
     _: objc::runtime::Sel,
-    _: id,
+    sender: id,
 ) {
-    send_footer_action(FooterAction::PasteResponse);
+    send_footer_action_from_sender(sender, FooterAction::PasteResponse);
 }

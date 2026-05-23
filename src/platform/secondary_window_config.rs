@@ -312,6 +312,11 @@ pub unsafe fn configure_dictation_overlay_window(window: id, is_dark: bool) {
         return;
     }
 
+    tracing::info!(
+        category = "DICTATION",
+        is_dark,
+        "Configuring dictation overlay shared native material"
+    );
     configure_window_vibrancy_common(window, "DICTATION", "Dictation overlay", is_dark);
 
     let title: id = msg_send![
@@ -320,6 +325,16 @@ pub unsafe fn configure_dictation_overlay_window(window: id, is_dark: bool) {
     ];
     if title != nil {
         let _: () = msg_send![window, setTitle: title];
+        tracing::info!(
+            category = "DICTATION",
+            title = "Script Kit Dictation",
+            "Set dictation overlay NSWindow title for material refresh"
+        );
+    } else {
+        tracing::warn!(
+            category = "DICTATION",
+            "Failed to allocate dictation overlay NSWindow title"
+        );
     }
 }
 

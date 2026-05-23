@@ -390,11 +390,8 @@ const ACTION_CLOSE_LABEL: &str = "Close";
 const ESC_KEYCAP: &str = "esc";
 /// Keycap shown for Enter.
 const ENTER_KEYCAP: &str = "\u{21b5}";
-/// Lucide microphone icon used by the dictation footer mic selector.
-const MIC_ICON_PATH: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/vendor/gpui-component/crates/assets/assets/icons/mic.svg"
-);
+/// Keycap token rendered as a Lucide microphone glyph by footer chrome.
+const MIC_KEYCAP: &str = crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN;
 
 /// Interval between animation ticks for the transcribing dot pulse (ms).
 const TRANSCRIBING_TICK_MS: u64 = 50;
@@ -511,12 +508,15 @@ pub struct DictationOverlay {
     state: DictationOverlayState,
     display_bars: [f32; WAVEFORM_BAR_COUNT],
     focus_handle: FocusHandle,
+    last_render_logged_phase: Option<DictationSessionPhase>,
     /// When the transcribing animation started (for pulse phase computation).
     transcribing_started_at: Option<Instant>,
     /// Whether the user has "Reduce motion" enabled in system accessibility.
     reduced_motion: bool,
     /// Keeps the transcribing tick loop alive; dropped when phase changes.
     _animation_task: Option<Task<()>>,
+    /// Drains native footer button clicks for the dictation window.
+    _footer_action_task: Option<Task<()>>,
 }
 
 impl DictationOverlay {
@@ -525,9 +525,71 @@ impl DictationOverlay {
             state: DictationOverlayState::default(),
             display_bars: silent_bars(),
             focus_handle: cx.focus_handle(),
+            last_render_logged_phase: None,
             transcribing_started_at: None,
             reduced_motion: crate::platform::prefers_reduced_motion(),
             _animation_task: None,
+            _footer_action_task: None,
+        }
+    }
+
+    fn ensure_native_footer_action_listener(&mut self, window: &Window, cx: &mut Context<Self>) {
+        if self._footer_action_task.is_some() {
+            return;
+        }
+
+        let rx = crate::footer_popup::dictation_footer_action_channel()
+            .1
+            .clone();
+        self._footer_action_task = Some(cx.spawn_in(window, async move |this, cx| {
+            while let Ok(action) = rx.recv().await {
+                if let Err(error) = this.update_in(cx, |overlay, window, cx| {
+                    overlay.handle_native_footer_action(action, window, cx);
+                }) {
+                    tracing::warn!(
+                        target: "script_kit::dictation",
+                        event = "dictation_native_footer_action_dispatch_failed",
+                        action = ?action,
+                        %error,
+                        "Failed to dispatch native footer action into DictationOverlay"
+                    );
+                }
+            }
+        }));
+    }
+
+    fn handle_native_footer_action(
+        &mut self,
+        action: crate::footer_popup::FooterAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::footer_popup::FooterAction;
+
+        match action {
+            FooterAction::Stop | FooterAction::Run | FooterAction::Apply => {
+                if self.state.phase == DictationSessionPhase::Recording {
+                    self.submit_overlay_session(window, cx);
+                } else if self.state.phase == DictationSessionPhase::Confirming {
+                    self.abort_overlay_session(window, cx);
+                } else {
+                    self.close_overlay_from_within(window, cx);
+                }
+            }
+            FooterAction::Ai | FooterAction::PasteResponse => {
+                if self.state.phase == DictationSessionPhase::Recording {
+                    self.open_microphone_picker(window, cx);
+                }
+            }
+            FooterAction::Close | FooterAction::Actions => {
+                if self.state.phase == DictationSessionPhase::Confirming {
+                    self.resume_recording(window, cx);
+                } else if self.state.phase == DictationSessionPhase::Recording {
+                    self.abort_overlay_session(window, cx);
+                } else {
+                    self.close_overlay_from_within(window, cx);
+                }
+            }
         }
     }
 
@@ -757,6 +819,7 @@ impl DictationOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let previous_phase = self.state.phase.clone();
         let entering_transcribing = state.phase == DictationSessionPhase::Transcribing
             && self.state.phase != DictationSessionPhase::Transcribing;
         let leaving_transcribing = state.phase != DictationSessionPhase::Transcribing
@@ -766,7 +829,29 @@ impl DictationOverlay {
         let old_height = overlay_height_for_phase(&self.state.phase);
         let new_height = overlay_height_for_phase(&state.phase);
         if (new_height - old_height).abs() > f32::EPSILON {
+            tracing::info!(
+                category = "DICTATION",
+                from_phase = ?previous_phase,
+                to_phase = ?state.phase,
+                old_height,
+                new_height,
+                "Resizing dictation overlay for phase change"
+            );
             resize_overlay_for_phase(window, new_height);
+        }
+
+        if previous_phase != state.phase {
+            let max_bar = state.bars.iter().copied().fold(0.0_f32, f32::max);
+            tracing::info!(
+                category = "DICTATION",
+                from_phase = ?previous_phase,
+                to_phase = ?state.phase,
+                elapsed_ms = state.elapsed.as_millis() as u64,
+                transcript_len = state.transcript.len(),
+                target = ?state.target,
+                max_bar,
+                "Dictation overlay state phase changed"
+            );
         }
 
         // Smoothly animate bars during recording; snap for other phases.
@@ -862,20 +947,20 @@ impl DictationOverlay {
     fn render_recording_actions(&self, cx: &mut Context<Self>) -> AnyElement {
         render_clickable_action_rail([
             render_clickable_action_chip(
+                "dictation-mic-button",
+                SharedString::default(),
+                MIC_KEYCAP.into(),
+                cx.listener(|this, _event: &MouseDownEvent, window, cx| {
+                    this.open_microphone_picker(window, cx);
+                }),
+            )
+            .into_any_element(),
+            render_clickable_action_chip(
                 "dictation-stop-button",
                 ACTION_STOP_LABEL.into(),
                 dictation_stop_keycap(),
                 cx.listener(|this, _event: &MouseDownEvent, window, cx| {
                     this.submit_overlay_session(window, cx);
-                }),
-            )
-            .into_any_element(),
-            render_clickable_action_chip(
-                "dictation-mic-button",
-                ACTION_MIC_LABEL.into(),
-                SharedString::default(),
-                cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                    this.open_microphone_picker(window, cx);
                 }),
             )
             .into_any_element(),
@@ -1040,8 +1125,25 @@ impl Focusable for DictationOverlay {
 }
 
 impl Render for DictationOverlay {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.ensure_native_footer_action_listener(window, cx);
+        crate::footer_popup::sync_window_footer_popup(
+            window,
+            &dictation_native_footer_config(&self.state.phase),
+        );
+
         let theme = get_cached_theme();
+        if self.last_render_logged_phase.as_ref() != Some(&self.state.phase) {
+            tracing::info!(
+                category = "DICTATION",
+                phase = ?self.state.phase,
+                elapsed_ms = self.state.elapsed.as_millis() as u64,
+                target = ?self.state.target,
+                reduced_motion = self.reduced_motion,
+                "Rendering dictation overlay phase"
+            );
+            self.last_render_logged_phase = Some(self.state.phase.clone());
+        }
         let window_background = crate::ui_foundation::main_window_matched_background(&theme);
         let theme_background_gradients =
             crate::ui_foundation::theme_background_gradient_layers("dictation-bg-layer", &theme);
@@ -1107,9 +1209,7 @@ impl Render for DictationOverlay {
                             .child(self.render_target_badge_slot(target_badge_interactive, cx))
                             .into_any_element(),
                     ))
-                    .child(wrap_dictation_overlay_action_rail(
-                        self.render_recording_actions(cx),
-                    ))
+                    .child(native_footer_spacer())
             }
             DictationSessionPhase::Confirming => {
                 let timer_text = format_elapsed(*elapsed);
@@ -1161,9 +1261,7 @@ impl Render for DictationOverlay {
                             .child(self.render_target_badge_slot(false, cx))
                             .into_any_element(),
                     ))
-                    .child(wrap_dictation_overlay_action_rail(
-                        self.render_confirming_actions(cx),
-                    ))
+                    .child(native_footer_spacer())
             }
             DictationSessionPhase::Transcribing => {
                 // 3 green dots matching vercel-voice .transcribing-dots
@@ -1189,9 +1287,7 @@ impl Render for DictationOverlay {
                             .child(render_transcribing_dots(&dot_opacities))
                             .into_any_element(),
                     ))
-                    .child(wrap_dictation_overlay_action_rail(
-                        self.render_close_action(cx),
-                    ))
+                    .child(native_footer_spacer())
             }
             DictationSessionPhase::Delivering => div()
                 .flex()
@@ -1209,9 +1305,7 @@ impl Render for DictationOverlay {
                         .child("Delivering\u{2026}")
                         .into_any_element(),
                 ))
-                .child(wrap_dictation_overlay_action_rail(
-                    self.render_close_action(cx),
-                )),
+                .child(native_footer_spacer()),
             DictationSessionPhase::Finished => div()
                 .flex()
                 .flex_col()
@@ -1228,9 +1322,7 @@ impl Render for DictationOverlay {
                         .child(finished_label())
                         .into_any_element(),
                 ))
-                .child(wrap_dictation_overlay_action_rail(
-                    self.render_close_action(cx),
-                )),
+                .child(native_footer_spacer()),
             DictationSessionPhase::Failed(ref msg) => {
                 let err_text: SharedString = format!("Error: {msg}").into();
                 div()
@@ -1249,9 +1341,7 @@ impl Render for DictationOverlay {
                             .child(err_text)
                             .into_any_element(),
                     ))
-                    .child(wrap_dictation_overlay_action_rail(
-                        self.render_close_action(cx),
-                    ))
+                    .child(native_footer_spacer())
             }
             DictationSessionPhase::Idle => div(),
         };
@@ -1374,10 +1464,19 @@ fn dictation_hotkey_keycap(hotkey: &crate::config::HotkeyConfig) -> String {
     hotkey.to_display_string().replace("Semicolon", ";")
 }
 
+fn active_microphone_footer_label() -> SharedString {
+    crate::dictation::get_active_dictation_device()
+        .map(|device| crate::dictation::microphone_display_label(&device.name))
+        .filter(|label| !label.trim().is_empty())
+        .unwrap_or_else(|| ACTION_MIC_LABEL.to_string())
+        .into()
+}
+
 fn action_chip_width(label: &str) -> f32 {
     use crate::components::footer_chrome::{footer_action_slot_width, FooterActionSlot};
 
     match label {
+        "" => footer_action_slot_width(FooterActionSlot::Ai),
         ACTION_STOP_LABEL => footer_action_slot_width(FooterActionSlot::Stop),
         ACTION_CANCEL_LABEL | ACTION_CLOSE_LABEL => {
             footer_action_slot_width(FooterActionSlot::Close)
@@ -1386,6 +1485,55 @@ fn action_chip_width(label: &str) -> f32 {
         ACTION_CONTINUE_LABEL => footer_action_slot_width(FooterActionSlot::Actions),
         _ => footer_action_slot_width(FooterActionSlot::Run),
     }
+}
+
+fn dictation_native_footer_config(
+    phase: &DictationSessionPhase,
+) -> crate::footer_popup::MainWindowFooterConfig {
+    use crate::footer_popup::{FooterAction, FooterButtonConfig, MainWindowFooterConfig};
+
+    let buttons = match phase {
+        DictationSessionPhase::Recording => vec![
+            FooterButtonConfig::new(
+                FooterAction::Ai,
+                MIC_KEYCAP,
+                active_microphone_footer_label(),
+            ),
+            FooterButtonConfig::new(
+                FooterAction::Stop,
+                dictation_stop_keycap(),
+                ACTION_STOP_LABEL,
+            ),
+            FooterButtonConfig::new(FooterAction::Close, ESC_KEYCAP, ACTION_CANCEL_LABEL),
+        ],
+        DictationSessionPhase::Confirming => vec![
+            FooterButtonConfig::new(FooterAction::Stop, ENTER_KEYCAP, ACTION_STOP_LABEL),
+            FooterButtonConfig::new(FooterAction::Close, ESC_KEYCAP, ACTION_CONTINUE_LABEL),
+        ],
+        DictationSessionPhase::Idle => Vec::new(),
+        DictationSessionPhase::Transcribing
+        | DictationSessionPhase::Delivering
+        | DictationSessionPhase::Finished
+        | DictationSessionPhase::Failed(_) => {
+            vec![FooterButtonConfig::new(
+                FooterAction::Close,
+                ESC_KEYCAP,
+                ACTION_CLOSE_LABEL,
+            )]
+        }
+    };
+
+    MainWindowFooterConfig::new(DICTATION_OVERLAY_FOOTER_SURFACE, buttons)
+}
+
+fn native_footer_spacer() -> impl IntoElement {
+    let rail_chrome = crate::components::footer_chrome::footer_rail_chrome(&get_cached_theme());
+
+    div()
+        .id("dictation-action-rail")
+        .w_full()
+        .h(px(rail_chrome.height_px))
+        .min_h(px(rail_chrome.height_px))
 }
 
 fn footer_action_button_height() -> f32 {
@@ -1407,7 +1555,7 @@ fn render_glass_signal_band(body: AnyElement) -> impl IntoElement {
 
 fn render_action_chip_content(label: SharedString, key: SharedString) -> impl IntoElement {
     let theme = get_cached_theme();
-    if label.as_ref() == ACTION_MIC_LABEL {
+    if key.as_ref() == MIC_KEYCAP {
         return render_mic_action_chip_content(&theme);
     }
 
@@ -1424,33 +1572,36 @@ fn render_mic_action_chip_content(theme: &crate::theme::Theme) -> AnyElement {
     let full_text = theme.colors.text.primary.to_rgb();
 
     div()
-        .px(px(4.0))
+        .min_w(px(
+            crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX,
+        ))
+        .min_h(px(
+            crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX,
+        ))
         .h(px(
             crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX,
         ))
+        .px(px(
+            crate::components::footer_chrome::FOOTER_KEYCAP_PADDING_X_PX,
+        ))
+        .rounded(px(
+            crate::components::footer_chrome::FOOTER_KEYCAP_RADIUS_PX,
+        ))
+        .border_1()
+        .border_color(crate::components::footer_chrome::footer_keycap_border_color(theme))
         .flex()
-        .flex_row()
         .items_center()
         .justify_center()
-        .gap(px(
-            crate::components::footer_chrome::FOOTER_ACTION_ITEM_GAP_PX,
-        ))
-        .font_family(FONT_SYSTEM_UI)
-        .font_weight(crate::components::footer_chrome::FOOTER_HINT_FONT_WEIGHT_GPUI)
-        .text_size(px(
-            crate::components::footer_chrome::FOOTER_HINT_FONT_SIZE_PX,
-        ))
         .text_color(footer_text)
         .group_hover("footer-action-button", move |s| s.text_color(full_text))
         .child(
             svg()
-                .external_path(MIC_ICON_PATH)
+                .external_path(crate::components::footer_chrome::FOOTER_MIC_ICON_PATH)
                 .size(px(13.0))
                 .flex_shrink_0()
                 .text_color(footer_text)
                 .group_hover("footer-action-button", move |s| s.text_color(full_text)),
         )
-        .child(ACTION_MIC_LABEL)
         .into_any_element()
 }
 
@@ -1508,9 +1659,6 @@ fn render_clickable_action_rail(actions: impl IntoIterator<Item = AnyElement>) -
         .w_full()
         .h(px(rail_chrome.height_px))
         .min_h(px(rail_chrome.height_px))
-        .bg(rgba(rail_chrome.surface_rgba))
-        .border_t_1()
-        .border_color(rgba(rail_chrome.divider_rgba))
         .px(px(rail_chrome.side_inset_px))
         .flex()
         .flex_row()
@@ -1536,9 +1684,6 @@ fn render_static_action_rail(
         .w_full()
         .h(px(rail_chrome.height_px))
         .min_h(px(rail_chrome.height_px))
-        .bg(rgba(rail_chrome.surface_rgba))
-        .border_t_1()
-        .border_color(rgba(rail_chrome.divider_rgba))
         .px(px(rail_chrome.side_inset_px))
         .flex()
         .flex_row()
@@ -1813,21 +1958,22 @@ fn render_static_target_badge_slot(target: crate::dictation::DictationTarget) ->
 
 /// Calculate bottom-center bounds for the overlay on the active display.
 ///
-/// Resolves the active display via `get_active_display()`, which returns the
-/// screen containing the currently focused window (key window). This ensures the
-/// overlay appears on the display the user is actively working on, not wherever
-/// the mouse cursor happens to be parked.
+/// Resolves the active display containing the mouse cursor, matching the main window
+/// positioning logic.
 /// Falls back to the first visible display, then to a hardcoded 1920×1080 default.
 /// Positions the pill centered horizontally and `OVERLAY_BOTTOM_OFFSET_PX` above
 /// the bottom edge of the chosen display's visible area.
 fn calculate_overlay_bottom_center_bounds() -> gpui::Bounds<gpui::Pixels> {
-    // Prefer the display with the key window (active/focused display).
+    // Align with main window positioning:
+    // Prefer the display containing the mouse cursor.
     // Fall back to the first visible display (primary) if unavailable.
-    let active_display = crate::platform::get_active_display().or_else(|| {
-        let displays = crate::platform::get_macos_visible_displays();
-        displays.into_iter().next()
-    });
+    let displays = crate::platform::get_macos_visible_displays();
+    let display_count = displays.len();
+    let active_display = crate::platform::get_global_mouse_position()
+        .and_then(|mouse_pt| crate::platform::display_for_point(mouse_pt, &displays))
+        .or_else(|| displays.into_iter().next());
 
+    let used_display = active_display.is_some();
     let (vis_x, vis_y, vis_w, vis_h) = if let Some(display) = active_display {
         let v = &display.visible_area;
         (
@@ -1844,10 +1990,14 @@ fn calculate_overlay_bottom_center_bounds() -> gpui::Bounds<gpui::Pixels> {
     let x = vis_x + (vis_w - OVERLAY_WIDTH_PX) / 2.0;
     let y = vis_y + vis_h - OVERLAY_BOTTOM_OFFSET_PX - OVERLAY_HEIGHT_PX;
 
-    tracing::debug!(
+    tracing::info!(
         category = "DICTATION",
         x,
         y,
+        width = OVERLAY_WIDTH_PX,
+        height = OVERLAY_HEIGHT_PX,
+        display_count,
+        used_display,
         vis_x,
         vis_y,
         vis_w,
@@ -1869,6 +2019,10 @@ fn calculate_overlay_bottom_center_bounds() -> gpui::Bounds<gpui::Pixels> {
 /// white sliver artifacts at the pill's rounded corners.
 #[cfg(target_os = "macos")]
 fn configure_overlay_window_surface(window: &mut Window) {
+    tracing::info!(
+        category = "DICTATION",
+        "Configuring dictation overlay native surface"
+    );
     if let Ok(wh) = raw_window_handle::HasWindowHandle::window_handle(window) {
         if let raw_window_handle::RawWindowHandle::AppKit(appkit) = wh.as_raw() {
             use cocoa::base::{id, NO, YES};
@@ -1882,6 +2036,10 @@ fn configure_overlay_window_surface(window: &mut Window) {
             unsafe {
                 let ns_window: id = msg_send![ns_view, window];
                 if ns_window.is_null() {
+                    tracing::warn!(
+                        category = "DICTATION",
+                        "Cannot configure dictation overlay surface: NSWindow is null"
+                    );
                     return;
                 }
                 let () = msg_send![ns_window, setOpaque: NO];
@@ -1897,17 +2055,35 @@ fn configure_overlay_window_surface(window: &mut Window) {
 
                 let content_view: id = msg_send![ns_window, contentView];
                 if content_view.is_null() {
+                    tracing::warn!(
+                        category = "DICTATION",
+                        "Cannot configure dictation overlay surface: contentView is null"
+                    );
                     return;
                 }
                 let () = msg_send![content_view, setWantsLayer: YES];
                 let layer: id = msg_send![content_view, layer];
                 if layer.is_null() {
+                    tracing::warn!(
+                        category = "DICTATION",
+                        "Cannot configure dictation overlay surface: layer is null"
+                    );
                     return;
                 }
                 let () = msg_send![layer, setCornerRadius: OVERLAY_RADIUS_PX as f64];
                 let () = msg_send![layer, setMasksToBounds: YES];
+                tracing::info!(
+                    category = "DICTATION",
+                    radius = OVERLAY_RADIUS_PX,
+                    "Configured dictation overlay native surface"
+                );
             }
         }
+    } else {
+        tracing::warn!(
+            category = "DICTATION",
+            "Cannot configure dictation overlay surface: raw window handle unavailable"
+        );
     }
 }
 
@@ -1953,6 +2129,12 @@ pub fn open_dictation_overlay(
 ) -> anyhow::Result<gpui::WindowHandle<DictationOverlay>> {
     use anyhow::Context as _;
 
+    let generation = overlay_generation();
+    tracing::info!(
+        category = "DICTATION",
+        generation,
+        "open_dictation_overlay requested"
+    );
     ESCAPE_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
 
     // If already open AND the native window is still alive, return the
@@ -1964,6 +2146,11 @@ pub fn open_dictation_overlay(
         if let Some(handle) = *guard {
             let alive = handle.update(cx, |_view, _window, _cx| {}).is_ok();
             if alive {
+                tracing::info!(
+                    category = "DICTATION",
+                    generation,
+                    "Reusing existing live dictation overlay handle"
+                );
                 return Ok(handle);
             }
             // Stale handle — clear and recreate.
@@ -1981,15 +2168,37 @@ pub fn open_dictation_overlay(
     } else {
         gpui::WindowBackgroundAppearance::Opaque
     };
+    tracing::info!(
+        category = "DICTATION",
+        generation,
+        vibrancy_enabled = theme.is_vibrancy_enabled(),
+        dark_vibrancy = theme.should_use_dark_vibrancy(),
+        "Resolved dictation overlay theme/window background"
+    );
 
     // Bottom-center positioning matching vercel-voice: centered horizontally,
     // 15px above the bottom of the active display's visible area.
     let bounds = calculate_overlay_bottom_center_bounds();
+    tracing::info!(
+        category = "DICTATION",
+        generation,
+        x = bounds.origin.x.as_f32(),
+        y = bounds.origin.y.as_f32(),
+        width = bounds.size.width.as_f32(),
+        height = bounds.size.height.as_f32(),
+        "Dictation overlay bounds ready"
+    );
 
     // Snapshot main-window visibility BEFORE any native window operations.
     // If it was hidden, we must ensure it stays hidden after creating the
     // overlay — macOS may surface sibling panels at the same level.
     let main_was_visible = crate::is_main_window_visible();
+    tracing::info!(
+        category = "DICTATION",
+        generation,
+        main_was_visible,
+        "Captured launcher visibility before dictation overlay open"
+    );
 
     // focus: false + show: false — the overlay must not activate the app or
     // surface the main window.  Creating a PopUp with show:true causes macOS
@@ -2007,14 +2216,32 @@ pub fn open_dictation_overlay(
         ..Default::default()
     };
 
+    tracing::info!(
+        category = "DICTATION",
+        generation,
+        focus = window_options.focus,
+        show = window_options.show,
+        resizable = window_options.is_resizable,
+        "Opening dictation overlay GPUI popup window"
+    );
     let handle = cx
         .open_window(window_options, |_window, cx| cx.new(DictationOverlay::new))
         .context("Failed to open dictation overlay window")?;
+    tracing::info!(
+        category = "DICTATION",
+        generation,
+        "Dictation overlay GPUI window handle created"
+    );
 
     // Configure vibrancy on macOS (never call setLevel on PopUp windows).
     #[cfg(target_os = "macos")]
     {
-        let _ = handle.update(cx, |_view, window, _cx| {
+        tracing::info!(
+            category = "DICTATION",
+            generation,
+            "Configuring dictation overlay vibrancy and native surface"
+        );
+        match handle.update(cx, |_view, window, _cx| {
             let is_dark = theme.should_use_dark_vibrancy();
             // Obtain the NSView from the raw window handle, then get its parent NSWindow.
             if let Ok(wh) = raw_window_handle::HasWindowHandle::window_handle(window) {
@@ -2033,7 +2260,19 @@ pub fn open_dictation_overlay(
 
             // Apply clear background + corner mask after vibrancy.
             configure_overlay_window_surface(window);
-        });
+        }) {
+            Ok(()) => tracing::info!(
+                category = "DICTATION",
+                generation,
+                "Configured dictation overlay vibrancy and native surface"
+            ),
+            Err(error) => tracing::warn!(
+                category = "DICTATION",
+                generation,
+                %error,
+                "Failed to configure dictation overlay vibrancy/native surface"
+            ),
+        }
     }
 
     // Always make the overlay key window so it receives Escape/Enter key
@@ -2046,7 +2285,14 @@ pub fn open_dictation_overlay(
 
     #[cfg(target_os = "macos")]
     {
-        let _ = handle.update(cx, |_view, window, _cx| {
+        tracing::info!(
+            category = "DICTATION",
+            generation,
+            main_was_visible,
+            should_key_overlay,
+            "Surfacing dictation overlay NSWindow"
+        );
+        match handle.update(cx, |_view, window, _cx| {
             if let Ok(wh) = raw_window_handle::HasWindowHandle::window_handle(window) {
                 if let raw_window_handle::RawWindowHandle::AppKit(appkit) = wh.as_raw() {
                     use objc::{msg_send, sel, sel_impl};
@@ -2086,16 +2332,45 @@ pub fn open_dictation_overlay(
                     }
                 }
             }
-        });
+        }) {
+            Ok(()) => tracing::info!(
+                category = "DICTATION",
+                generation,
+                "Dictation overlay NSWindow surfacing step completed"
+            ),
+            Err(error) => tracing::warn!(
+                category = "DICTATION",
+                generation,
+                %error,
+                "Failed during dictation overlay NSWindow surfacing step"
+            ),
+        }
     }
 
     // Focus the GPUI focus handle so key events (Escape) are delivered —
     // but only when we also made the window key, otherwise this would
     // activate the app.
     if should_key_overlay {
-        let _ = handle.update(cx, |view, window, cx| {
+        tracing::info!(
+            category = "DICTATION",
+            generation,
+            "Focusing dictation overlay GPUI focus handle"
+        );
+        match handle.update(cx, |view, window, cx| {
             view.focus_handle.focus(window, cx);
-        });
+        }) {
+            Ok(()) => tracing::info!(
+                category = "DICTATION",
+                generation,
+                "Focused dictation overlay GPUI focus handle"
+            ),
+            Err(error) => tracing::warn!(
+                category = "DICTATION",
+                generation,
+                %error,
+                "Failed to focus dictation overlay GPUI focus handle"
+            ),
+        }
     }
 
     // Store handle.
@@ -2103,12 +2378,21 @@ pub fn open_dictation_overlay(
         let mut guard = slot.lock();
         *guard = Some(handle);
     }
+    tracing::info!(
+        category = "DICTATION",
+        generation,
+        "Stored dictation overlay handle"
+    );
 
     // Install global escape monitor so Escape works even when the overlay
     // doesn't have keyboard focus (user clicked on another app).
     install_global_escape_monitor();
 
-    tracing::info!(category = "DICTATION", "Dictation overlay window opened");
+    tracing::info!(
+        category = "DICTATION",
+        generation,
+        "Dictation overlay window opened"
+    );
     Ok(handle)
 }
 
