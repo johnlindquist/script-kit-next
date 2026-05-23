@@ -82,6 +82,7 @@ fn source_name_prefers_plugin_title_for_scripts() {
         match_indices: MatchIndices::default(),
         match_kind: ScriptMatchKind::Name,
         content_match: None,
+        match_evidence: None,
     });
 
     assert_eq!(result.source_name(), Some("Dev Tools"));
@@ -104,6 +105,7 @@ fn source_name_falls_back_to_plugin_id_for_scripts() {
         match_indices: MatchIndices::default(),
         match_kind: ScriptMatchKind::Name,
         content_match: None,
+        match_evidence: None,
     });
 
     assert_eq!(result.source_name(), Some("tools"));
@@ -126,6 +128,7 @@ fn source_name_falls_back_to_kit_name_when_plugin_id_empty() {
         match_indices: MatchIndices::default(),
         match_kind: ScriptMatchKind::Name,
         content_match: None,
+        match_evidence: None,
     });
 
     assert_eq!(result.source_name(), Some("legacy-kit"));
@@ -153,6 +156,7 @@ fn source_name_prefers_plugin_title_for_scriptlets() {
         score: 100,
         display_file_path: None,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     });
 
     assert_eq!(result.source_name(), Some("Quick Links Plugin"));
@@ -180,6 +184,7 @@ fn source_name_falls_back_to_plugin_id_for_scriptlets() {
         score: 100,
         display_file_path: None,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     });
 
     assert_eq!(result.source_name(), Some("quicklinks"));
@@ -207,6 +212,7 @@ fn source_name_falls_back_to_group_when_plugin_id_empty() {
         score: 100,
         display_file_path: None,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     });
 
     assert_eq!(result.source_name(), Some("Legacy Group"));
@@ -253,12 +259,14 @@ fn duplicate_group_names_across_plugins_keep_distinct_plugin_ids() {
         score: 100,
         display_file_path: None,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     });
     let result_b = SearchResult::Scriptlet(ScriptletMatch {
         scriptlet: scriptlet_b,
         score: 100,
         display_file_path: None,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     });
 
     assert_eq!(result_a.source_name(), Some("Alpha"));

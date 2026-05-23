@@ -50,6 +50,7 @@ fn make_script_match(name: &str, path: &str) -> ScriptMatch {
         match_indices: MatchIndices::default(),
         match_kind: ScriptMatchKind::default(),
         content_match: None,
+        match_evidence: None,
     }
 }
 
@@ -72,6 +73,7 @@ fn make_scriptlet_match() -> ScriptletMatch {
         score: 100,
         display_file_path: None,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     }
 }
 
@@ -87,6 +89,7 @@ fn make_builtin_match() -> BuiltInMatch {
             group: BuiltInGroup::Core,
         },
         score: 100,
+        match_evidence: None,
     }
 }
 
@@ -99,6 +102,7 @@ fn make_app_match(name: &str, path: &str) -> AppMatch {
             icon: None,
         },
         score: 100,
+        match_evidence: None,
     }
 }
 
@@ -127,6 +131,7 @@ fn make_window_match() -> WindowMatch {
         app_icon: None,
         subtitle: "Test App - 800x600 - pid 1234".to_string(),
         score: 100,
+        match_evidence: None,
     }
 }
 

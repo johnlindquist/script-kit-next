@@ -443,6 +443,7 @@ mod tests {
             match_indices: MatchIndices::default(),
             match_kind: ScriptMatchKind::Name,
             content_match: None,
+            match_evidence: None,
         })
     }
 
@@ -452,6 +453,7 @@ mod tests {
             score: 100,
             display_file_path: None,
             match_indices: MatchIndices::default(),
+            match_evidence: None,
         })
     }
 

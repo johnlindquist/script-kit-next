@@ -279,6 +279,7 @@ fn test_search_result_type_label() {
         match_indices: MatchIndices::default(),
         match_kind: ScriptMatchKind::default(),
         content_match: None,
+            match_evidence: None,
     });
 
     let scriptlet = SearchResult::Scriptlet(ScriptletMatch {
@@ -286,6 +287,7 @@ fn test_search_result_type_label() {
         score: 50,
         display_file_path: None,
         match_indices: MatchIndices::default(),
+            match_evidence: None,
     });
 
     assert_eq!(script.type_label(), "Script");

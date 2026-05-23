@@ -1292,6 +1292,7 @@ mod tests {
             match_indices: Default::default(),
             match_kind: Default::default(),
             content_match: None,
+            match_evidence: None,
         });
         assert!(matches!(
             root_unified_action_owner_for_result(&result),
@@ -1312,6 +1313,7 @@ mod tests {
                 group: crate::builtins::BuiltInGroup::Core,
             },
             score: 1,
+            match_evidence: None,
         });
         let app = SearchResult::App(crate::scripts::AppMatch {
             app: crate::app_launcher::AppInfo {
@@ -1321,6 +1323,7 @@ mod tests {
                 icon: None,
             },
             score: 1,
+            match_evidence: None,
         });
 
         for result in [builtin, app] {

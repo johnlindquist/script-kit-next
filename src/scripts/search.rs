@@ -36,9 +36,10 @@ pub(crate) use ascii::{
     is_ascii_pair, is_word_boundary_match, MIN_FUZZY_QUERY_LEN,
 };
 pub(crate) use match_contract::{
-    better_match, byte_range_for_char_indices, low_tier_substring_match, match_tier_from_score,
-    normalized_substring_match, primary_text_match, score_from_tier, TextMatch, TextMatchKind,
-    MIN_BODY_EXACT_QUERY_LEN, TIER_ALIAS, TIER_BODY, TIER_DESCRIPTION, TIER_FILENAME, TIER_KEYWORD,
+    better_match, better_match_evidence, byte_range_for_char_indices, low_tier_substring_match,
+    match_evidence, match_tier_from_score, normalized_substring_match, primary_text_match,
+    score_from_tier, TextMatch, TextMatchKind, MIN_BODY_EXACT_QUERY_LEN, TIER_ALIAS, TIER_BODY,
+    TIER_DESCRIPTION, TIER_FILENAME, TIER_KEYWORD,
 };
 
 #[cfg(test)]

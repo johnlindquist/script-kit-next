@@ -189,6 +189,7 @@ fn test_search_result_name_never_empty() {
             match_indices: result.match_indices.clone(),
             match_kind: ScriptMatchKind::default(),
             content_match: None,
+            match_evidence: None,
         };
         let search_result = SearchResult::Script(script_match);
         assert!(!search_result.name().is_empty());
@@ -323,6 +324,7 @@ fn test_search_result_type_label_consistency() {
         match_indices: MatchIndices::default(),
         match_kind: ScriptMatchKind::default(),
         content_match: None,
+            match_evidence: None,
     });
 
     // Should always return "Script"
@@ -333,6 +335,7 @@ fn test_search_result_type_label_consistency() {
         score: 0,
         display_file_path: None,
         match_indices: MatchIndices::default(),
+            match_evidence: None,
     });
 
     // Should always return "Snippet"

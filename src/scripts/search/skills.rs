@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use crate::plugins::PluginSkill;
 
-use super::super::types::{MatchIndices, SkillMatch};
+use super::super::types::{MatchEvidence, MatchEvidenceField, MatchIndices, SkillMatch};
 use super::{
-    better_match, low_tier_substring_match, primary_text_match, NucleoCtx, TIER_DESCRIPTION,
-    TIER_FILENAME, TIER_KEYWORD,
+    better_match_evidence, low_tier_substring_match, match_evidence, primary_text_match, NucleoCtx,
+    TIER_DESCRIPTION, TIER_FILENAME, TIER_KEYWORD,
 };
 
 /// Fuzzy search plugin skills by query string.
@@ -20,12 +20,13 @@ pub fn fuzzy_search_skills(skills: &[Arc<PluginSkill>], query: &str) -> Vec<Skil
                 skill: s.clone(),
                 score: 0,
                 match_indices: MatchIndices::default(),
+                match_evidence: None,
             })
             .collect();
     }
 
     let query_lower = query.to_lowercase();
-    let mut matches: Vec<(usize, i32, MatchIndices)> = Vec::with_capacity(skills.len());
+    let mut matches: Vec<(usize, MatchEvidence, MatchIndices)> = Vec::with_capacity(skills.len());
 
     let mut nucleo = NucleoCtx::new(&query_lower);
     for (index, skill) in skills.iter().enumerate() {
@@ -33,32 +34,47 @@ pub fn fuzzy_search_skills(skills: &[Arc<PluginSkill>], query: &str) -> Vec<Skil
         let mut name_indices = Vec::new();
 
         let title_match = primary_text_match(&skill.title, &query_lower, &mut nucleo);
-        if let Some(title_match) = title_match {
+        if let Some(title_match) = title_match.clone() {
             name_indices = title_match.indices.clone();
-            best = Some(title_match);
         }
-
-        better_match(
+        better_match_evidence(
             &mut best,
-            low_tier_substring_match(&skill.skill_id, &query_lower, TIER_FILENAME),
+            match_evidence(MatchEvidenceField::Name, &skill.title, title_match),
         );
 
-        better_match(
+        better_match_evidence(
             &mut best,
-            low_tier_substring_match(&skill.plugin_title, &query_lower, TIER_KEYWORD),
+            match_evidence(
+                MatchEvidenceField::SkillId,
+                &skill.skill_id,
+                low_tier_substring_match(&skill.skill_id, &query_lower, TIER_FILENAME),
+            ),
+        );
+
+        better_match_evidence(
+            &mut best,
+            match_evidence(
+                MatchEvidenceField::PluginTitle,
+                &skill.plugin_title,
+                low_tier_substring_match(&skill.plugin_title, &query_lower, TIER_KEYWORD),
+            ),
         );
 
         if !skill.description.is_empty() {
-            better_match(
+            better_match_evidence(
                 &mut best,
-                low_tier_substring_match(&skill.description, &query_lower, TIER_DESCRIPTION),
+                match_evidence(
+                    MatchEvidenceField::Description,
+                    &skill.description,
+                    low_tier_substring_match(&skill.description, &query_lower, TIER_DESCRIPTION),
+                ),
             );
         }
 
         if let Some(best) = best {
             matches.push((
                 index,
-                best.score,
+                best,
                 MatchIndices {
                     name_indices,
                     filename_indices: Vec::new(),
@@ -68,19 +84,20 @@ pub fn fuzzy_search_skills(skills: &[Arc<PluginSkill>], query: &str) -> Vec<Skil
         }
     }
 
-    matches.sort_by(
-        |(a_idx, a_score, _), (b_idx, b_score, _)| match b_score.cmp(a_score) {
+    matches.sort_by(|(a_idx, a_evidence, _), (b_idx, b_evidence, _)| {
+        match b_evidence.score.cmp(&a_evidence.score) {
             Ordering::Equal => skills[*a_idx].title.cmp(&skills[*b_idx].title),
             other => other,
-        },
-    );
+        }
+    });
 
     matches
         .into_iter()
-        .map(|(index, score, match_indices)| SkillMatch {
+        .map(|(index, evidence, match_indices)| SkillMatch {
             skill: skills[index].clone(),
-            score,
+            score: evidence.score,
             match_indices,
+            match_evidence: Some(evidence),
         })
         .collect()
 }

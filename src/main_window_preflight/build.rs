@@ -43,6 +43,7 @@ fn selected_result(app: &crate::ScriptListApp) -> Option<crate::scripts::SearchR
                 SearchResult::App(AppMatch {
                     app: (*info).clone(),
                     score: 0,
+                    match_evidence: None,
                 })
             })
         }
@@ -69,6 +70,7 @@ fn selected_result(app: &crate::ScriptListApp) -> Option<crate::scripts::SearchR
                     app_icon: None,
                     subtitle: info.descriptor.clone(),
                     score: 0,
+                    match_evidence: None,
                 })
             })
         }

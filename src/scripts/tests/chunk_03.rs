@@ -376,6 +376,7 @@ fn test_search_result_properties() {
         match_indices: MatchIndices::default(),
         match_kind: ScriptMatchKind::default(),
         content_match: None,
+            match_evidence: None,
     };
 
     let result = SearchResult::Script(script_match);

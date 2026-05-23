@@ -230,6 +230,7 @@ fn test_builtin_match_struct() {
     let builtin_match = BuiltInMatch {
         entry: entry.clone(),
         score: 100,
+            match_evidence: None,
     };
 
     assert_eq!(builtin_match.entry.name, "Test Entry");

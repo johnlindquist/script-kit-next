@@ -1,7 +1,9 @@
 use nucleo_matcher::pattern::Pattern;
 use nucleo_matcher::{Matcher, Utf32Str};
 
-use super::super::types::{MatchIndices, ScriptMatchKind, SearchResult};
+use super::super::types::{
+    MatchEvidence, MatchEvidenceField, MatchIndices, ScriptMatchKind, SearchResult,
+};
 use super::{find_ignore_ascii_case, fuzzy_match_with_indices_ascii, is_ascii_pair};
 
 /// Reusable highlight matcher that keeps ASCII fast-path behavior and
@@ -86,6 +88,42 @@ impl UnicodeHighlightCtx {
     }
 }
 
+fn indices_from_evidence(
+    evidence: Option<&MatchEvidence>,
+    rendered_name: &str,
+    rendered_description: Option<&str>,
+    rendered_filename: Option<&str>,
+) -> Option<MatchIndices> {
+    let evidence = evidence?;
+    let mut indices = MatchIndices::default();
+
+    match evidence.field {
+        MatchEvidenceField::Name if evidence.text == rendered_name => {
+            indices.name_indices = evidence.indices.clone();
+        }
+        MatchEvidenceField::Description if rendered_description == Some(evidence.text.as_str()) => {
+            indices.description_indices = evidence.indices.clone();
+        }
+        MatchEvidenceField::Filename if rendered_filename == Some(evidence.text.as_str()) => {
+            indices.filename_indices = evidence.indices.clone();
+        }
+        MatchEvidenceField::Content
+        | MatchEvidenceField::Alias
+        | MatchEvidenceField::Shortcut
+        | MatchEvidenceField::Keyword
+        | MatchEvidenceField::Source
+        | MatchEvidenceField::Tool
+        | MatchEvidenceField::WindowApp
+        | MatchEvidenceField::SkillId
+        | MatchEvidenceField::PluginTitle
+        | MatchEvidenceField::Name
+        | MatchEvidenceField::Description
+        | MatchEvidenceField::Filename => {}
+    }
+
+    Some(indices)
+}
+
 /// Compute match indices for a search result on-demand (lazy evaluation)
 ///
 /// This function is called by the UI layer only for visible rows, avoiding
@@ -106,6 +144,15 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
 
     match result {
         SearchResult::Script(sm) => {
+            if let Some(indices) = indices_from_evidence(
+                sm.match_evidence.as_ref(),
+                &sm.script.name,
+                sm.script.description.as_deref(),
+                Some(&sm.filename),
+            ) {
+                return indices;
+            }
+
             let mut indices = MatchIndices::default();
 
             match sm.match_kind {
@@ -136,6 +183,15 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
             indices
         }
         SearchResult::Scriptlet(sm) => {
+            if let Some(indices) = indices_from_evidence(
+                sm.match_evidence.as_ref(),
+                &sm.scriptlet.name,
+                sm.scriptlet.description.as_deref(),
+                sm.display_file_path.as_deref(),
+            ) {
+                return indices;
+            }
+
             let mut indices = MatchIndices::default();
 
             // Try name first
@@ -165,6 +221,15 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
             indices
         }
         SearchResult::BuiltIn(bm) => {
+            if let Some(indices) = indices_from_evidence(
+                bm.match_evidence.as_ref(),
+                &bm.entry.name,
+                Some(&bm.entry.description),
+                None,
+            ) {
+                return indices;
+            }
+
             let mut indices = MatchIndices::default();
 
             let (name_matched, name_indices) = highlight_ctx.indices_for(&bm.entry.name);
@@ -181,6 +246,12 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
             indices
         }
         SearchResult::App(am) => {
+            if let Some(indices) =
+                indices_from_evidence(am.match_evidence.as_ref(), &am.app.name, None, None)
+            {
+                return indices;
+            }
+
             let mut indices = MatchIndices::default();
 
             let (name_matched, name_indices) = highlight_ctx.indices_for(&am.app.name);
@@ -191,6 +262,15 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
             indices
         }
         SearchResult::Window(wm) => {
+            if let Some(indices) = indices_from_evidence(
+                wm.match_evidence.as_ref(),
+                &wm.window.title,
+                Some(&wm.subtitle),
+                None,
+            ) {
+                return indices;
+            }
+
             let mut indices = MatchIndices::default();
 
             // Try app name first, then title
@@ -383,6 +463,15 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
             indices
         }
         SearchResult::Skill(sm) => {
+            if let Some(indices) = indices_from_evidence(
+                sm.match_evidence.as_ref(),
+                &sm.skill.title,
+                (!sm.skill.description.is_empty()).then_some(sm.skill.description.as_str()),
+                None,
+            ) {
+                return indices;
+            }
+
             let mut indices = MatchIndices::default();
 
             let (name_matched, name_indices) = highlight_ctx.indices_for(&sm.skill.title);
