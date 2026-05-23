@@ -1,4 +1,5 @@
 const COMPONENTS_MOD: &str = include_str!("../../src/components/mod.rs");
+const ABOUT_RENDER: &str = include_str!("../../src/about/render.rs");
 const BUILTIN_EXECUTION: &str = include_str!("../../src/app_execute/builtin_execution.rs");
 const BUILTINS_MOD: &str = include_str!("../../src/builtins/mod.rs");
 const NON_LIST_STATE: &str = include_str!("../../src/components/non_list_state.rs");
@@ -129,5 +130,41 @@ fn non_list_state_design_command_routes_to_showcase_surface() {
         BUILTIN_EXECUTION.contains("configure_for_design_explorer(Some(\n                        script_kit_gpui::storybook::StorySurface::MainMenu")
             && BUILTIN_EXECUTION.contains("select_variant_id(\"current-main-menu\")"),
         "existing Design Explorer command should keep its MainMenu startup behavior"
+    );
+}
+
+#[test]
+fn about_surface_consumes_non_list_state_language() {
+    assert!(
+        ABOUT_RENDER.contains("non_list_palette(&theme)"),
+        "About surface should route visual colors through NonListPalette"
+    );
+    assert!(
+        ABOUT_RENDER.contains("non_list_metrics(NonListDensity::Comfortable)"),
+        "About surface should use comfortable non-list density"
+    );
+    assert!(
+        ABOUT_RENDER.contains("non_list_content_stack(\"about-non-list-content\""),
+        "About surface body should use the shared non-list content stack"
+    );
+    assert!(
+        ABOUT_RENDER.contains("non_list_card(\"about-update-card\""),
+        "About update card should use the shared non-list card primitive"
+    );
+    assert!(
+        ABOUT_RENDER.contains("non_list_card(\"about-acknowledgements\""),
+        "About acknowledgements should use the shared non-list card primitive"
+    );
+    assert!(
+        ABOUT_RENDER.contains("non_list_action_row(vec!["),
+        "About quick actions should use the shared non-list action row"
+    );
+    assert!(
+        ABOUT_RENDER.contains("non_list_footer_note("),
+        "About footer copy should use the shared non-list footer-note primitive"
+    );
+    assert!(
+        ABOUT_RENDER.contains("palette: NonListPalette"),
+        "About action buttons should receive NonListPalette instead of AppChromeColors"
     );
 }

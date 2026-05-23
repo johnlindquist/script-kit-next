@@ -11,6 +11,10 @@ fn about_surface_uses_shared_chrome_tokens_not_local_alpha_packing() {
         ABOUT_RENDER_SOURCE.contains("AppChromeColors::from_theme"),
         "About should resolve chrome through shared AppChromeColors"
     );
+    assert!(
+        ABOUT_RENDER_SOURCE.contains("non_list_palette(&theme)"),
+        "About body should route product-surface colors through the shared non-list palette"
+    );
     for needle in [
         "<< 8",
         "text_secondary_hex",
@@ -22,10 +26,10 @@ fn about_surface_uses_shared_chrome_tokens_not_local_alpha_packing() {
             "About should not use local packed or pre-dimmed text chrome: {needle}"
         );
     }
-    for needle in ["text_muted_rgba", "text_hint_rgba", "text_icon_rgba"] {
+    for needle in ["palette.body", "palette.hint", "palette.title"] {
         assert!(
             ABOUT_RENDER_SOURCE.contains(needle),
-            "About should use semantic text RGBA ladder token: {needle}"
+            "About should use semantic non-list text token: {needle}"
         );
     }
 }
@@ -78,7 +82,7 @@ fn about_surface_controls_keep_disabled_items_out_of_tab_order() {
 #[test]
 fn about_surface_text_is_contained_in_fixed_rows() {
     for needle in [
-        ".w_full()\n        .max_w(px(500.0))",
+        ".max_w(px(metrics.max_width))",
         ".min_w(px(0.0))",
         ".overflow_hidden()",
         ".text_ellipsis()",
@@ -169,11 +173,10 @@ fn about_quick_actions_wrap_before_overflowing_narrow_widths() {
             .expect("quick action row should precede update card")];
 
     assert!(
-        quick_actions.contains(".w_full()")
-            && quick_actions.contains(".max_w(px(500.0))")
-            && quick_actions.contains(".min_w(px(0.0))")
+        quick_actions.contains("non_list_action_row(vec![")
+            && quick_actions.contains(".max_w(px(metrics.max_width))")
             && quick_actions.contains(".flex_wrap()"),
-        "About quick actions should wrap within the fixed content column instead of overflowing"
+        "About quick actions should use the shared non-list action row and wrap within the content column"
     );
     assert!(
         quick_actions.contains("128.0"),
