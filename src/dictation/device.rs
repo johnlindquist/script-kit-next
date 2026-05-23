@@ -268,9 +268,72 @@ pub fn request_microphone_permission() -> crate::dictation::DictationMicrophoneP
     }
 }
 
+#[cfg(target_os = "macos")]
+pub fn request_microphone_permission_nonblocking(
+    on_result: impl FnOnce(crate::dictation::DictationMicrophonePermissionStatus) + Send + 'static,
+) {
+    use cocoa::base::{id, nil};
+    use cocoa::foundation::NSString;
+    use std::sync::{Arc, Mutex};
+
+    if !matches!(
+        microphone_permission_status(),
+        crate::dictation::DictationMicrophonePermissionStatus::NotDetermined
+    ) {
+        on_result(microphone_permission_status());
+        return;
+    }
+
+    #[link(name = "AVFoundation", kind = "framework")]
+    extern "C" {}
+
+    let callback = Arc::new(Mutex::new(Some(Box::new(on_result)
+        as Box<
+            dyn FnOnce(crate::dictation::DictationMicrophonePermissionStatus) + Send,
+        >)));
+    let callback_for_block = callback.clone();
+    let block = block::ConcreteBlock::new(move |granted: BOOL| {
+        if let Ok(mut callback) = callback_for_block.lock() {
+            if let Some(callback) = callback.take() {
+                callback(if granted == YES {
+                    crate::dictation::DictationMicrophonePermissionStatus::Granted
+                } else {
+                    crate::dictation::DictationMicrophonePermissionStatus::Denied
+                });
+            }
+        }
+    });
+    let block = block.copy();
+
+    unsafe {
+        let media_type = NSString::alloc(nil).init_str("soun");
+        if media_type == nil {
+            if let Ok(mut callback) = callback.lock() {
+                if let Some(callback) = callback.take() {
+                    callback(crate::dictation::DictationMicrophonePermissionStatus::Unknown);
+                }
+            }
+            return;
+        }
+
+        let _: () = msg_send![
+            class!(AVCaptureDevice),
+            requestAccessForMediaType: media_type as id
+            completionHandler: &*block
+        ];
+    }
+}
+
 #[cfg(not(target_os = "macos"))]
 pub fn request_microphone_permission() -> crate::dictation::DictationMicrophonePermissionStatus {
     crate::dictation::DictationMicrophonePermissionStatus::Unknown
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn request_microphone_permission_nonblocking(
+    on_result: impl FnOnce(crate::dictation::DictationMicrophonePermissionStatus) + Send + 'static,
+) {
+    on_result(crate::dictation::DictationMicrophonePermissionStatus::Unknown);
 }
 
 /// Persist a picker selection to config-backed preferences.

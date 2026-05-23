@@ -409,6 +409,13 @@ pub(crate) enum OverlayEscapeAction {
     Propagate,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GlobalKeyProcessResult {
+    None,
+    StateChanged,
+    Closed,
+}
+
 /// Return phase-appropriate (headline, action label) copy for the dictation overlay.
 ///
 /// The headline is the primary status text (e.g. "Listening…", "Stop dictation?").
@@ -705,11 +712,13 @@ impl DictationOverlay {
         let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
         slot.lock().take();
         remove_global_escape_monitor();
-        if let Some(cb) = callback {
-            cb(cx);
-        }
         prepare_overlay_window_for_close(window);
         window.remove_window();
+        if let Some(cb) = callback {
+            cx.defer(move |cx| {
+                cb(cx);
+            });
+        }
         tracing::info!(
             category = "DICTATION",
             "Overlay closed from within entity (abort)"
@@ -762,11 +771,11 @@ impl DictationOverlay {
     /// Check whether the global key monitor flagged an Escape or Enter press
     /// and process it.  Called from the overlay pump tick (every 16ms) so the
     /// action runs inside GPUI context with full `&mut self` access.
-    pub fn process_global_keys_if_requested(
+    fn process_global_keys_if_requested(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> GlobalKeyProcessResult {
         // Enter is only meaningful in the Confirming phase (= abort session).
         let enter = ENTER_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst);
         if enter && self.state.phase == DictationSessionPhase::Confirming {
@@ -777,11 +786,11 @@ impl DictationOverlay {
             self.abort_overlay_session(window, cx);
             // Clear any pending escape too — we've already acted.
             ESCAPE_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
-            return;
+            return GlobalKeyProcessResult::Closed;
         }
 
         if !ESCAPE_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst) {
-            return;
+            return GlobalKeyProcessResult::None;
         }
 
         let elapsed = crate::dictation::dictation_elapsed().unwrap_or(self.state.elapsed);
@@ -798,17 +807,21 @@ impl DictationOverlay {
         match action {
             OverlayEscapeAction::TransitionToConfirming => {
                 self.enter_confirming(window, cx);
+                GlobalKeyProcessResult::StateChanged
             }
             OverlayEscapeAction::ResumeRecording => {
                 self.resume_recording(window, cx);
+                GlobalKeyProcessResult::StateChanged
             }
             OverlayEscapeAction::AbortSession => {
                 self.abort_overlay_session(window, cx);
+                GlobalKeyProcessResult::Closed
             }
             OverlayEscapeAction::CloseOverlay => {
                 self.close_overlay_from_within(window, cx);
+                GlobalKeyProcessResult::Closed
             }
-            OverlayEscapeAction::Propagate => {}
+            OverlayEscapeAction::Propagate => GlobalKeyProcessResult::None,
         }
     }
 
@@ -2136,28 +2149,30 @@ pub fn open_dictation_overlay(
         "open_dictation_overlay requested"
     );
     ESCAPE_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
+    ENTER_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
 
     // If already open AND the native window is still alive, return the
     // existing handle.  If the handle is stale (window was closed natively),
     // clear the slot and fall through to create a fresh one.
     let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
-    {
-        let mut guard = slot.lock();
-        if let Some(handle) = *guard {
-            let alive = handle.update(cx, |_view, _window, _cx| {}).is_ok();
-            if alive {
-                tracing::info!(
-                    category = "DICTATION",
-                    generation,
-                    "Reusing existing live dictation overlay handle"
-                );
-                return Ok(handle);
-            }
-            // Stale handle — clear and recreate.
-            tracing::warn!(
+    let existing_handle = { *slot.lock() };
+    if let Some(handle) = existing_handle {
+        let alive = handle.update(cx, |_view, _window, _cx| {}).is_ok();
+        if alive {
+            tracing::info!(
                 category = "DICTATION",
-                "Overlay handle was stale, clearing slot"
+                generation,
+                "Reusing existing live dictation overlay handle"
             );
+            return Ok(handle);
+        }
+        // Stale handle — clear and recreate.
+        tracing::warn!(
+            category = "DICTATION",
+            "Overlay handle was stale, clearing slot"
+        );
+        let mut guard = slot.lock();
+        if guard.is_some() {
             *guard = None;
         }
     }
@@ -2410,8 +2425,15 @@ pub fn update_dictation_overlay(state: DictationOverlayState, cx: &mut App) -> a
     let _ = handle.update(cx, |view, window, cx| {
         // Check for global escape before applying state — the escape may
         // close the overlay, in which case set_state is a no-op.
-        view.process_global_keys_if_requested(window, cx);
-        view.set_state(state, window, cx);
+        match view.process_global_keys_if_requested(window, cx) {
+            GlobalKeyProcessResult::None => view.set_state(state, window, cx),
+            GlobalKeyProcessResult::StateChanged | GlobalKeyProcessResult::Closed => {
+                tracing::debug!(
+                    category = "DICTATION",
+                    "Skipped stale overlay pump state after global key action"
+                );
+            }
+        }
     });
 
     Ok(())
@@ -2423,6 +2445,7 @@ pub fn close_dictation_overlay(cx: &mut App) -> anyhow::Result<()> {
     *OVERLAY_ABORT_CALLBACK.lock() = None;
     *OVERLAY_SUBMIT_CALLBACK.lock() = None;
     ESCAPE_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
+    ENTER_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
     // Overlay window already gone is a warning, not an error.
     remove_global_escape_monitor();
 

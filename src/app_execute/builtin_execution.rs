@@ -6957,7 +6957,7 @@ impl ScriptListApp {
             "{}", action.opening_message()
         );
 
-        let is_start_edge = !crate::dictation::is_dictation_recording();
+        let is_start_edge = !crate::dictation::is_dictation_busy();
         tracing::info!(
             category = "DICTATION",
             action = ?action,
@@ -6994,6 +6994,16 @@ impl ScriptListApp {
             "Invoking dictation toggle from builtin shortcut flow"
         );
 
+        if !is_start_edge {
+            self.request_active_dictation_stop(
+                crate::dictation::DictationStopReason::Hotkey,
+                dictation_target,
+                true,
+                cx,
+            );
+            return Self::builtin_success(dctx, action.success_detail());
+        }
+
         match crate::dictation::toggle_dictation(dictation_target) {
             Ok(crate::dictation::DictationToggleOutcome::Started) => {
                 tracing::info!(
@@ -7013,32 +7023,7 @@ impl ScriptListApp {
                 }
                 self.handle_dictation_started(action, dictation_target, cx);
             }
-            Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
-                tracing::info!(
-                    category = "DICTATION",
-                    action = ?action,
-                    trace_id = %dctx.trace_id,
-                    ?dictation_target,
-                    audio_duration_ms = capture.audio_duration.as_millis() as u64,
-                    chunk_count = capture.chunks.len(),
-                    "Dictation toggle returned Stopped with capture"
-                );
-                self.begin_dictation_transcription(capture, dictation_target, cx);
-            }
-            Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
-                tracing::info!(
-                    category = "DICTATION",
-                    action = ?action,
-                    trace_id = %dctx.trace_id,
-                    ?dictation_target,
-                    "Dictation toggle returned Stopped without capture"
-                );
-                let _ = crate::dictation::close_dictation_overlay(cx);
-                self.dispatch_window_event(
-                    crate::window_orchestrator::WindowEvent::AbortDictation,
-                    cx,
-                );
-            }
+            Ok(crate::dictation::DictationToggleOutcome::Stopped(_)) => {}
             Err(error) => {
                 tracing::error!(
                     category = "DICTATION",
@@ -7069,10 +7054,6 @@ impl ScriptListApp {
         action: DictationBuiltinAction,
         cx: &mut Context<Self>,
     ) -> DictationStartPreflight {
-        if self.open_dictation_setup_if_microphone_not_ready(cx) {
-            return DictationStartPreflight::OpenedSetup;
-        }
-
         if !crate::dictation::is_parakeet_model_available() {
             if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS.load(std::sync::atomic::Ordering::Acquire) {
                 self.open_dictation_model_prompt(cx);
@@ -7084,6 +7065,10 @@ impl ScriptListApp {
             );
             self.open_dictation_model_prompt(cx);
             return DictationStartPreflight::OpenedModelPrompt;
+        }
+
+        if self.open_dictation_setup_if_not_ready(cx) {
+            return DictationStartPreflight::OpenedSetup;
         }
 
         if let Err(error) = self.ensure_dictation_builtin_target_available(action) {
@@ -7175,18 +7160,14 @@ impl ScriptListApp {
         let app_entity = cx.entity().downgrade();
         let abort_app_entity = app_entity.clone();
         crate::dictation::set_overlay_abort_callback(move |cx| {
-            if let Err(error) = crate::dictation::abort_dictation() {
-                tracing::error!(
-                    category = "DICTATION",
-                    error = %error,
-                    "Failed to abort dictation from overlay"
-                );
-            }
-            let _ = crate::dictation::close_dictation_overlay(cx);
             if let Some(app) = abort_app_entity.upgrade() {
                 app.update(cx, |this, cx| {
-                    this.dispatch_window_event(
-                        crate::window_orchestrator::WindowEvent::AbortDictation,
+                    let dictation_target = crate::dictation::get_dictation_target()
+                        .unwrap_or_else(|| this.resolve_dictation_target());
+                    this.request_active_dictation_stop(
+                        crate::dictation::DictationStopReason::OverlayAbort,
+                        dictation_target,
+                        false,
                         cx,
                     );
                 });
@@ -7216,26 +7197,109 @@ impl ScriptListApp {
         let dictation_target = crate::dictation::get_dictation_target()
             .unwrap_or_else(|| self.resolve_dictation_target());
 
-        match crate::dictation::toggle_dictation(dictation_target) {
-            Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
-                let _ = crate::dictation::begin_overlay_session();
-                let _ = crate::dictation::open_dictation_overlay(cx);
-                self.begin_dictation_transcription(capture, dictation_target, cx);
+        self.request_active_dictation_stop(
+            crate::dictation::DictationStopReason::OverlaySubmit,
+            dictation_target,
+            true,
+            cx,
+        );
+    }
+
+    fn request_active_dictation_stop(
+        &mut self,
+        reason: crate::dictation::DictationStopReason,
+        _dictation_target: crate::dictation::DictationTarget,
+        transcribe: bool,
+        cx: &mut Context<Self>,
+    ) {
+        match crate::dictation::begin_stop_capture(reason) {
+            Ok(crate::dictation::BeginStopCapture::Started {
+                request_id,
+                target,
+                job,
+            }) => {
+                if transcribe {
+                    let _ = crate::dictation::begin_overlay_session();
+                    let _ = crate::dictation::open_dictation_overlay(cx);
+                    let _ = crate::dictation::update_dictation_overlay(
+                        crate::dictation::DictationOverlayState {
+                            phase: crate::dictation::DictationSessionPhase::Transcribing,
+                            target,
+                            ..Default::default()
+                        },
+                        cx,
+                    );
+                }
+                cx.spawn(async move |this, cx| {
+                    let stop_result = cx
+                        .background_executor()
+                        .spawn(async move {
+                            job.collect_with_deadline(std::time::Duration::from_secs(2))
+                        })
+                        .await;
+                    let _ = this.update(cx, |this, cx| {
+                        if !crate::dictation::finish_stop_capture(request_id, &stop_result) {
+                            return;
+                        }
+                        match stop_result {
+                            Ok(Some(capture)) if transcribe => {
+                                this.begin_dictation_transcription(capture, target, cx);
+                            }
+                            Ok(_) => {
+                                let _ = crate::dictation::close_dictation_overlay(cx);
+                                this.dispatch_window_event(
+                                    crate::window_orchestrator::WindowEvent::AbortDictation,
+                                    cx,
+                                );
+                            }
+                            Err(error) => {
+                                let error_text = error.to_string();
+                                tracing::error!(
+                                    category = "DICTATION",
+                                    error = %error_text,
+                                    request_id,
+                                    ?reason,
+                                    "Failed to stop dictation capture"
+                                );
+                                let _ = crate::dictation::open_dictation_overlay(cx);
+                                let _ = crate::dictation::update_dictation_overlay(
+                                    crate::dictation::DictationOverlayState {
+                                        phase: crate::dictation::DictationSessionPhase::Failed(
+                                            error_text,
+                                        ),
+                                        target,
+                                        ..Default::default()
+                                    },
+                                    cx,
+                                );
+                                this.schedule_dictation_overlay_close(
+                                    cx,
+                                    std::time::Duration::from_millis(800),
+                                );
+                                this.dispatch_window_event(
+                                    crate::window_orchestrator::WindowEvent::AbortDictation,
+                                    cx,
+                                );
+                            }
+                        }
+                    });
+                })
+                .detach();
             }
-            Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
+            Ok(crate::dictation::BeginStopCapture::AlreadyStopping { request_id }) => {
+                tracing::info!(
+                    category = "DICTATION",
+                    stop_request_id = request_id,
+                    ?reason,
+                    "Ignoring dictation stop request while stop is already in flight"
+                );
+            }
+            Ok(crate::dictation::BeginStopCapture::NotRecording) => {
                 let _ = crate::dictation::close_dictation_overlay(cx);
                 self.dispatch_window_event(
                     crate::window_orchestrator::WindowEvent::AbortDictation,
                     cx,
                 );
-            }
-            Ok(crate::dictation::DictationToggleOutcome::Started) => {
-                tracing::warn!(
-                    category = "DICTATION",
-                    ?dictation_target,
-                    "Overlay submit started dictation unexpectedly"
-                );
-                self.start_dictation_overlay_session(cx);
             }
             Err(error) => {
                 tracing::error!(
@@ -7274,6 +7338,7 @@ impl ScriptListApp {
             crate::dictation::DictationOverlayState {
                 phase: crate::dictation::DictationSessionPhase::Transcribing,
                 elapsed: capture.audio_duration,
+                target,
                 ..Default::default()
             },
             cx,
@@ -8353,32 +8418,93 @@ impl ScriptListApp {
     /// - the launcher/main filter is active, or
     /// - a Script Kit prompt is active and can accept dictated text, or
     /// - the frontmost-app tracker already has a previously tracked external target.
-    fn open_dictation_setup_if_microphone_not_ready(&mut self, cx: &mut Context<Self>) -> bool {
+    fn open_dictation_setup_if_not_ready(&mut self, cx: &mut Context<Self>) -> bool {
         let permission = crate::dictation::microphone_permission_status();
-        match permission {
+        let prefs = crate::config::load_user_preferences();
+        let config = crate::config::load_config();
+        let selected_device_id = prefs.dictation.selected_device_id.as_deref();
+        let devices = match permission {
             crate::dictation::DictationMicrophonePermissionStatus::Granted
-            | crate::dictation::DictationMicrophonePermissionStatus::Unknown => return false,
-            crate::dictation::DictationMicrophonePermissionStatus::NotDetermined => {
-                self.show_hud(
-                    "Allow microphone access to start dictation".to_string(),
-                    Some(HUD_LONG_MS),
-                    cx,
-                );
-                let permission = crate::dictation::request_microphone_permission();
-                if matches!(
-                    permission,
-                    crate::dictation::DictationMicrophonePermissionStatus::Granted
-                        | crate::dictation::DictationMicrophonePermissionStatus::Unknown
-                ) {
-                    return false;
-                }
+            | crate::dictation::DictationMicrophonePermissionStatus::Unknown => {
+                crate::dictation::list_input_devices().map_err(|error| error.to_string())
             }
-            crate::dictation::DictationMicrophonePermissionStatus::Denied => {}
+            crate::dictation::DictationMicrophonePermissionStatus::Denied
+            | crate::dictation::DictationMicrophonePermissionStatus::NotDetermined => Ok(Vec::new()),
+        };
+        let device_count = devices.as_ref().map(|devices| devices.len()).unwrap_or(0);
+        let setup_state = crate::dictation::build_dictation_setup_state(
+            crate::dictation::DictationModelStatus::Available,
+            permission,
+            devices,
+            selected_device_id,
+            config.get_dictation_hotkey().as_ref(),
+            config.is_dictation_hotkey_enabled(),
+        );
+
+        if setup_state.ready {
+            return false;
         }
 
-        self.show_error_toast(
-            "Microphone access is denied. Enable Script Kit in System Settings → Privacy & Security → Microphone",
-            cx,
+        match setup_state.microphone_status {
+            crate::dictation::DictationMicrophoneStatus::SavedDeviceMissing { fallback_name } => {
+                if let Err(error) = crate::dictation::save_dictation_device_id(None) {
+                    tracing::warn!(
+                        category = "DICTATION",
+                        error = %error,
+                        "Failed to clear stale dictation microphone before start"
+                    );
+                }
+                let message = fallback_name
+                    .map(|name| {
+                        format!("Saved microphone unavailable — using System Default ({name})")
+                    })
+                    .unwrap_or_else(|| {
+                        "Saved microphone unavailable — using System Default".to_string()
+                    });
+                self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                return false;
+            }
+            crate::dictation::DictationMicrophoneStatus::PermissionNeeded(
+                crate::dictation::DictationMicrophonePermissionStatus::NotDetermined,
+            ) => {
+                self.show_error_toast(
+                    "Microphone access is needed. Open Dictation Setup and choose Allow Microphone.",
+                    cx,
+                );
+                self.open_dictation_model_prompt(cx);
+            }
+            crate::dictation::DictationMicrophoneStatus::PermissionNeeded(
+                crate::dictation::DictationMicrophonePermissionStatus::Denied,
+            ) => {
+                self.show_error_toast(
+                    "Microphone access is off. Enable Script Kit in System Settings → Privacy & Security → Microphone.",
+                    cx,
+                );
+                self.open_dictation_model_prompt(cx);
+            }
+            crate::dictation::DictationMicrophoneStatus::NoDevices => {
+                self.show_error_toast(
+                    "No microphone found. Connect an input device or choose one in macOS Sound settings.",
+                    cx,
+                );
+                self.open_dictation_model_prompt(cx);
+            }
+            crate::dictation::DictationMicrophoneStatus::EnumerationFailed(error) => {
+                self.show_error_toast(format!("Could not list microphones: {error}"), cx);
+                self.open_dictation_model_prompt(cx);
+            }
+            crate::dictation::DictationMicrophoneStatus::Ready { .. }
+            | crate::dictation::DictationMicrophoneStatus::PermissionNeeded(
+                crate::dictation::DictationMicrophonePermissionStatus::Granted
+                | crate::dictation::DictationMicrophonePermissionStatus::Unknown,
+            ) => {}
+        }
+        tracing::info!(
+            category = "DICTATION",
+            permission = ?permission,
+            device_count,
+            ready = setup_state.ready,
+            "Dictation start preflight opened setup instead of starting capture"
         );
         true
     }

@@ -16,7 +16,7 @@ use anyhow::{Context, Result};
 use gpui::SharedString;
 use parking_lot::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 // ---------------------------------------------------------------------------
 // Session state
@@ -49,6 +49,44 @@ struct DictationSession {
 /// `None` means idle (no recording in progress).
 static SESSION: Mutex<Option<DictationSession>> = Mutex::new(None);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DictationStopReason {
+    Hotkey,
+    OverlaySubmit,
+    OverlayAbort,
+    GlobalEscape,
+    NativeFooter,
+    Synthetic,
+}
+
+#[derive(Debug, Clone)]
+struct StopState {
+    request_id: u64,
+    reason: DictationStopReason,
+    target: DictationTarget,
+    requested_at: Instant,
+}
+
+pub enum BeginStopCapture {
+    Started {
+        request_id: u64,
+        target: DictationTarget,
+        job: DictationStopJob,
+    },
+    AlreadyStopping {
+        request_id: u64,
+    },
+    NotRecording,
+}
+
+pub struct DictationStopJob {
+    session: DictationSession,
+}
+
+static STOP_IN_FLIGHT: Mutex<Option<StopState>> = Mutex::new(None);
+static STOP_GENERATION: AtomicU64 = AtomicU64::new(0);
+static LAST_STOP_RECEIPT: Mutex<Option<serde_json::Value>> = Mutex::new(None);
+
 /// Lazily-initialized transcriber, kept alive across sessions so the model
 /// does not need to be reloaded for every dictation.  Unloaded after an idle
 /// timeout via `maybe_unload_transcriber()`.
@@ -71,6 +109,14 @@ static LAST_DELIVERY_RECEIPT: Mutex<Option<serde_json::Value>> = Mutex::new(None
 /// Returns `true` when a dictation capture session is currently active.
 pub fn is_dictation_recording() -> bool {
     SESSION.lock().is_some()
+}
+
+pub fn is_dictation_stopping() -> bool {
+    STOP_IN_FLIGHT.lock().is_some()
+}
+
+pub fn is_dictation_busy() -> bool {
+    is_dictation_recording() || is_dictation_stopping()
 }
 
 /// Returns the elapsed duration of the active dictation session, or `None`
@@ -123,6 +169,137 @@ pub fn toggle_dictation(target: DictationTarget) -> Result<DictationToggleOutcom
 
     start_recording(target)?;
     Ok(DictationToggleOutcome::Started)
+}
+
+pub fn begin_stop_capture(reason: DictationStopReason) -> Result<BeginStopCapture> {
+    if let Some(existing) = STOP_IN_FLIGHT.lock().as_ref().cloned() {
+        tracing::info!(
+            category = "DICTATION",
+            stop_request_id = existing.request_id,
+            ?reason,
+            existing_reason = ?existing.reason,
+            "Dictation stop already in flight"
+        );
+        return Ok(BeginStopCapture::AlreadyStopping {
+            request_id: existing.request_id,
+        });
+    }
+
+    let session = SESSION.lock().take();
+    let Some(session) = session else {
+        return Ok(BeginStopCapture::NotRecording);
+    };
+
+    let request_id = STOP_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    let target = session.target;
+    let target_label = target.overlay_label();
+    let requested_at = Instant::now();
+    *STOP_IN_FLIGHT.lock() = Some(StopState {
+        request_id,
+        reason,
+        target,
+        requested_at,
+    });
+    *LAST_STOP_RECEIPT.lock() = Some(serde_json::json!({
+        "inFlight": true,
+        "requestId": request_id,
+        "reason": format!("{:?}", reason),
+        "target": format!("{:?}", target),
+        "targetLabel": target_label,
+        "collectDurationMs": null,
+        "timedOut": false,
+        "chunkCount": null,
+        "audioDurationMs": null,
+        "source": "runtime.dictation.stopCoordinator",
+        "redacted": true,
+    }));
+    bump_dictation_state_generation();
+
+    tracing::info!(
+        category = "DICTATION",
+        event = "dictation_stop_requested",
+        stop_request_id = request_id,
+        ?reason,
+        ?target,
+        target_label,
+        "Dictation stop handed to coordinator"
+    );
+
+    Ok(BeginStopCapture::Started {
+        request_id,
+        target,
+        job: DictationStopJob { session },
+    })
+}
+
+pub fn finish_stop_capture(
+    request_id: u64,
+    result: &Result<Option<CompletedDictationCapture>>,
+) -> bool {
+    let stop_state = {
+        let mut guard = STOP_IN_FLIGHT.lock();
+        match guard.as_ref() {
+            Some(state) if state.request_id == request_id => guard.take(),
+            Some(state) => {
+                tracing::warn!(
+                    category = "DICTATION",
+                    stop_request_id = request_id,
+                    active_stop_request_id = state.request_id,
+                    "Ignoring stale dictation stop completion"
+                );
+                None
+            }
+            None => None,
+        }
+    };
+
+    let Some(stop_state) = stop_state else {
+        return false;
+    };
+
+    let collect_duration = stop_state.requested_at.elapsed();
+    let (chunk_count, audio_duration_ms, error) = match result {
+        Ok(Some(capture)) => (
+            Some(capture.chunks.len()),
+            Some(capture.audio_duration.as_millis() as u64),
+            None,
+        ),
+        Ok(None) => (Some(0), Some(0), None),
+        Err(error) => (None, None, Some(error.to_string())),
+    };
+    *LAST_STOP_RECEIPT.lock() = Some(serde_json::json!({
+        "inFlight": false,
+        "requestId": request_id,
+        "reason": format!("{:?}", stop_state.reason),
+        "target": format!("{:?}", stop_state.target),
+        "targetLabel": stop_state.target.overlay_label(),
+        "collectDurationMs": collect_duration.as_millis() as u64,
+        "timedOut": error.as_ref().is_some_and(|message| message.contains("timed out")),
+        "chunkCount": chunk_count,
+        "audioDurationMs": audio_duration_ms,
+        "error": error,
+        "source": "runtime.dictation.stopCoordinator",
+        "redacted": true,
+    }));
+    bump_dictation_state_generation();
+
+    tracing::info!(
+        category = "DICTATION",
+        event = "dictation_stop_completed",
+        stop_request_id = request_id,
+        reason = ?stop_state.reason,
+        target = ?stop_state.target,
+        collect_ms = collect_duration.as_millis() as u64,
+        chunk_count = ?chunk_count,
+        audio_duration_ms = ?audio_duration_ms,
+        "Dictation stop coordinator completed"
+    );
+
+    true
+}
+
+pub fn last_stop_receipt() -> Option<serde_json::Value> {
+    LAST_STOP_RECEIPT.lock().clone()
 }
 
 /// Return the delivery target that was captured when the current dictation
@@ -315,6 +492,21 @@ pub fn automation_state() -> serde_json::Value {
                     "stopReason": null,
                 }),
             )
+        } else if let Some(stop_state) = STOP_IN_FLIGHT.lock().as_ref().cloned() {
+            (
+                false,
+                "stopping".to_string(),
+                Some(format!("{:?}", stop_state.target)),
+                Some(stop_state.target.overlay_label().to_string()),
+                Some(stop_state.requested_at.elapsed().as_millis() as u64),
+                serde_json::json!({
+                    "available": false,
+                    "bars": [],
+                    "barCount": 0,
+                    "source": "runtime.session.lastBars",
+                    "stopReason": "capture stop in flight",
+                }),
+            )
         } else {
             (
                 false,
@@ -402,8 +594,10 @@ pub fn automation_state() -> serde_json::Value {
         },
         "lastDelivery": crate::dictation::last_delivery_receipt(),
         "deliveryReceiptAvailable": crate::dictation::last_delivery_receipt().is_some(),
+        "stop": crate::dictation::last_stop_receipt(),
         "cleanup": {
             "captureActive": is_recording,
+            "captureStopInProgress": crate::dictation::is_dictation_stopping(),
             "transcriberCached": TRANSCRIBER.lock().is_some(),
             "generation": generation,
             "source": "runtime.dictation.cleanupState",
@@ -714,6 +908,40 @@ fn stop_recording() -> Result<Option<CompletedDictationCapture>> {
     }))
 }
 
+impl DictationStopJob {
+    pub fn collect_with_deadline(
+        mut self,
+        timeout: Duration,
+    ) -> Result<Option<CompletedDictationCapture>> {
+        let started = Instant::now();
+        tracing::info!(
+            category = "DICTATION",
+            timeout_ms = timeout.as_millis() as u64,
+            "capture_stop_job_started"
+        );
+
+        stop_capture_and_collect_with_deadline(&mut self.session, timeout)?;
+
+        let audio_duration = captured_duration(&self.session.chunks);
+        tracing::info!(
+            category = "DICTATION",
+            chunks = self.session.chunks.len(),
+            audio_duration_ms = audio_duration.as_millis() as u64,
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "capture_stop_job_finished"
+        );
+
+        if self.session.chunks.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(CompletedDictationCapture {
+            chunks: self.session.chunks,
+            audio_duration,
+        }))
+    }
+}
+
 /// Drop the capture handle first so the processor thread can flush its tail
 /// chunk and send `EndOfStream`, then blocking-drain the channel.
 fn stop_capture_and_collect(session: &mut DictationSession) -> Result<()> {
@@ -731,6 +959,35 @@ fn stop_capture_and_collect(session: &mut DictationSession) -> Result<()> {
     }
 
     anyhow::bail!("dictation capture stream closed before EndOfStream")
+}
+
+fn stop_capture_and_collect_with_deadline(
+    session: &mut DictationSession,
+    timeout: Duration,
+) -> Result<()> {
+    let started = Instant::now();
+    let _ = session.capture_handle.take();
+
+    loop {
+        if started.elapsed() > timeout {
+            tracing::warn!(
+                category = "DICTATION",
+                event = "capture_stop_job_timed_out",
+                elapsed_ms = started.elapsed().as_millis() as u64,
+                chunks = session.chunks.len(),
+                "Timed out waiting for dictation capture EndOfStream; using partial capture"
+            );
+            return Ok(());
+        }
+
+        match session.event_rx.try_recv() {
+            Ok(DictationCaptureEvent::Chunk(chunk)) => session.chunks.push(chunk),
+            Ok(DictationCaptureEvent::Bars(bars)) => session.last_bars = bars,
+            Ok(DictationCaptureEvent::EndOfStream) => return Ok(()),
+            Err(async_channel::TryRecvError::Empty) => std::thread::sleep(Duration::from_millis(5)),
+            Err(async_channel::TryRecvError::Closed) => return Ok(()),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

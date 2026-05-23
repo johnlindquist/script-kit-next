@@ -78,17 +78,17 @@ fn released_bundle_declares_microphone_usage_reason() {
 }
 
 #[test]
-fn explicit_dictation_start_requests_undetermined_microphone_permission() {
+fn explicit_dictation_start_uses_nonblocking_permission_setup() {
     assert!(
-        DEVICE.contains("pub fn request_microphone_permission()")
+        DEVICE.contains("pub fn request_microphone_permission_nonblocking(")
             && DEVICE.contains("requestAccessForMediaType"),
-        "explicit dictation start must have an active microphone request path"
+        "setup must expose an explicit nonblocking microphone request path"
     );
     assert!(
         BUILTIN_EXECUTION.contains("DictationMicrophonePermissionStatus::NotDetermined")
-            && BUILTIN_EXECUTION.contains("request_microphone_permission()")
+            && !BUILTIN_EXECUTION.contains("request_microphone_permission()")
             && BUILTIN_EXECUTION.contains("System Settings → Privacy & Security → Microphone"),
-        "dictation start preflight must prompt on first use and provide denied-state guidance"
+        "dictation start preflight must guide setup without blocking on a hidden TCC prompt"
     );
 }
 
@@ -97,7 +97,7 @@ fn explicit_dictation_start_requests_undetermined_microphone_permission() {
 fn dictation_start_paths_open_setup_when_microphone_is_not_ready() {
     assert!(
         BUILTIN_EXECUTION.contains("fn prepare_dictation_builtin_start(")
-            && BUILTIN_EXECUTION.contains("open_dictation_setup_if_microphone_not_ready(cx)"),
+            && BUILTIN_EXECUTION.contains("open_dictation_setup_if_not_ready(cx)"),
         "shared dictation start preflight must open setup before starting capture when microphone readiness fails"
     );
 

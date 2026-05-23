@@ -1459,7 +1459,7 @@ fn generic_dictation_builtin_remains_contextual() {
 
     assert!(
         branch_src.contains("DictationBuiltinAction::CurrentSurface")
-            && src.contains("let is_start_edge = !crate::dictation::is_dictation_recording();")
+            && src.contains("let is_start_edge = !crate::dictation::is_dictation_busy();")
             && src.contains("self.dictation_start_target(action)")
             && src.contains(".unwrap_or_else(|| self.resolve_dictation_target())"),
         "generic dictation builtin must continue resolving context-sensitive targets"
@@ -2759,7 +2759,7 @@ fn dictation_start_preflight_runs_before_toggle() {
         &src[dictation_start..dictation_start + 4000.min(src.len() - dictation_start)];
 
     let recording_guard_pos = dictation_src
-        .find("let is_start_edge = !crate::dictation::is_dictation_recording();")
+        .find("let is_start_edge = !crate::dictation::is_dictation_busy();")
         .expect("dictation start path must gate preflight on recording state");
     let preflight_pos = dictation_src
         .find("let preflight = self.prepare_dictation_builtin_start(action, cx);")
@@ -3395,16 +3395,10 @@ fn abort_callback_never_invokes_transcript_delivery() {
     let callback_src = &callback_tail[..callback_end];
 
     assert!(
-        callback_src.contains("abort_dictation()"),
-        "abort callback must call abort_dictation() to discard the recording"
-    );
-    assert!(
-        callback_src.contains("close_dictation_overlay"),
-        "abort callback must close the overlay"
-    );
-    assert!(
-        callback_src.contains("WindowEvent::AbortDictation"),
-        "abort callback must notify the window orchestrator so main-window toggle state does not get stuck"
+        callback_src.contains("request_active_dictation_stop(")
+            && callback_src.contains("DictationStopReason::OverlayAbort")
+            && callback_src.contains("false"),
+        "abort callback must request a non-transcribing stop so the recording is discarded off the UI path"
     );
     assert!(
         !callback_src.contains("handle_dictation_transcript"),

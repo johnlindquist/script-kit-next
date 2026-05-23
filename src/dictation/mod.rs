@@ -18,9 +18,9 @@ pub use device::{
     apply_device_selection, build_device_menu_items, default_input_device,
     device_selection_action_from_value, device_selection_value, list_input_device_menu_items,
     list_input_devices, microphone_display_label, microphone_permission_status,
-    request_microphone_permission, resolve_selected_input_device, save_dictation_device_id,
-    DeviceResolution, DictationDeviceMenuItem, DictationDeviceSelectionAction,
-    DICTATION_SYSTEM_DEFAULT_DEVICE_VALUE,
+    request_microphone_permission, request_microphone_permission_nonblocking,
+    resolve_selected_input_device, save_dictation_device_id, DeviceResolution,
+    DictationDeviceMenuItem, DictationDeviceSelectionAction, DICTATION_SYSTEM_DEFAULT_DEVICE_VALUE,
 };
 pub use history::{
     build_history_entry, delete_history_entry, format_history_duration_ms,
@@ -39,11 +39,13 @@ pub(crate) use microphone_popup_window::{
     DICTATION_MICROPHONE_POPUP_AUTOMATION_ID,
 };
 pub use runtime::{
-    abort_dictation, automation_state, can_cycle_dictation_target, current_dictation_phase,
-    cycle_dictation_target, dictation_elapsed, get_active_dictation_device, get_dictation_target,
-    is_dictation_recording, last_delivery_receipt, maybe_unload_transcriber,
+    abort_dictation, automation_state, begin_stop_capture, can_cycle_dictation_target,
+    current_dictation_phase, cycle_dictation_target, dictation_elapsed, finish_stop_capture,
+    get_active_dictation_device, get_dictation_target, is_dictation_busy, is_dictation_recording,
+    is_dictation_stopping, last_delivery_receipt, last_stop_receipt, maybe_unload_transcriber,
     record_delivery_receipt, redacted_transcript_fingerprint, set_dictation_target_cycle,
     set_overlay_phase, snapshot_overlay_state, toggle_dictation, transcribe_captured_audio,
+    BeginStopCapture, DictationStopJob, DictationStopReason,
 };
 pub use setup::{
     build_dictation_setup_state, DictationHotkeyStatus, DictationMicrophonePermissionStatus,

@@ -123,10 +123,13 @@ pub(crate) fn run_processor(
         // window has been processed.
         if let Some(bars) = visualiser.feed(&normalized.samples) {
             if event_tx
-                .send_blocking(DictationCaptureEvent::Bars(bars))
+                .try_send(DictationCaptureEvent::Bars(bars))
                 .is_err()
             {
-                return;
+                tracing::debug!(
+                    category = "DICTATION",
+                    "Dropping dictation waveform bars because the UI event channel is full"
+                );
             }
         }
 
@@ -135,16 +138,21 @@ pub(crate) fn run_processor(
         while pending_samples.len() >= chunk_sample_count {
             let tail = pending_samples.split_off(chunk_sample_count);
             let chunk_samples = std::mem::replace(&mut pending_samples, tail);
+            let sample_count = chunk_samples.len();
             let duration = duration_from_samples(chunk_samples.len(), sample_rate_hz);
             if event_tx
-                .send_blocking(DictationCaptureEvent::Chunk(CapturedAudioChunk {
+                .try_send(DictationCaptureEvent::Chunk(CapturedAudioChunk {
                     sample_rate_hz,
                     samples: chunk_samples,
                     duration,
                 }))
                 .is_err()
             {
-                return;
+                tracing::warn!(
+                    category = "DICTATION",
+                    sample_count,
+                    "Dropping dictation audio chunk because the UI event channel is full"
+                );
             }
         }
     }
@@ -152,14 +160,14 @@ pub(crate) fn run_processor(
     // Flush remaining samples as a tail chunk.
     if !pending_samples.is_empty() {
         let duration = duration_from_samples(pending_samples.len(), sample_rate_hz);
-        let _ = event_tx.send_blocking(DictationCaptureEvent::Chunk(CapturedAudioChunk {
+        let _ = event_tx.try_send(DictationCaptureEvent::Chunk(CapturedAudioChunk {
             sample_rate_hz,
             samples: pending_samples,
             duration,
         }));
     }
 
-    let _ = event_tx.send_blocking(DictationCaptureEvent::EndOfStream);
+    let _ = event_tx.try_send(DictationCaptureEvent::EndOfStream);
 }
 
 fn samples_for_duration(sample_rate_hz: u32, duration: Duration) -> usize {
@@ -222,7 +230,11 @@ impl Drop for DictationCaptureHandle {
         }
 
         if let Some(processor_thread) = self.processor_thread.take() {
-            let _ = processor_thread.join();
+            tracing::debug!(
+                category = "DICTATION",
+                "Detaching dictation processor thread after capture teardown"
+            );
+            drop(processor_thread);
         }
     }
 }
@@ -231,7 +243,7 @@ impl Drop for DictationCaptureHandle {
 impl Drop for DictationCaptureHandle {
     fn drop(&mut self) {
         if let Some(processor_thread) = self.processor_thread.take() {
-            let _ = processor_thread.join();
+            drop(processor_thread);
         }
     }
 }
