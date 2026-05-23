@@ -3,13 +3,11 @@ use std::cmp::Ordering;
 use crate::app_launcher::AppInfo;
 
 use super::super::types::AppMatch;
-use super::{
-    contains_ignore_ascii_case, find_ignore_ascii_case, is_exact_name_match,
-    is_word_boundary_match, NucleoCtx, MIN_FUZZY_QUERY_LEN,
-};
+use super::{primary_text_match, NucleoCtx};
 
 /// Fuzzy search applications by query string
-/// Searches across name and bundle_id
+/// Searches across the visible app name only. Bundle identifiers and paths are
+/// intentionally not admission fields for normal launcher search.
 /// Returns results sorted by relevance score (highest first)
 pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
     if query.is_empty() {
@@ -29,73 +27,9 @@ pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
     // Create nucleo context once for all apps - reuses buffer across calls
     let mut nucleo = NucleoCtx::new(&query_lower);
     // Check if query is ASCII once for all items
-    let query_is_ascii = query_lower.is_ascii();
-
-    // Gate nucleo fuzzy matching on minimum query length to reduce noise
-    let use_nucleo = query_lower.len() >= MIN_FUZZY_QUERY_LEN;
-
     for (index, app) in apps.iter().enumerate() {
-        let mut score = 0i32;
-        let mut has_name_match = false;
-
-        // Exact name match boost
-        if query_is_ascii && app.name.is_ascii() && is_exact_name_match(&app.name, &query_lower) {
-            score += 500;
-        }
-
-        // Score by name match - highest priority
-        // App names can have Unicode (e.g., "日本語アプリ")
-        if query_is_ascii && app.name.is_ascii() {
-            if let Some(pos) = find_ignore_ascii_case(&app.name, &query_lower) {
-                has_name_match = true;
-                // Bonus for exact substring match at start of name
-                score += if pos == 0 { 100 } else { 75 };
-                // Extra bonus for word-boundary matches
-                if pos > 0 && is_word_boundary_match(&app.name, pos) {
-                    score += 20;
-                }
-            }
-        }
-
-        // Fuzzy character matching in name using nucleo (handles Unicode)
-        if use_nucleo {
-            if let Some(nucleo_s) = nucleo.compact_score(&app.name, &query_lower) {
-                has_name_match = true;
-                // Scale nucleo score to match existing weights (~50 for fuzzy match)
-                score += 50 + (nucleo_s / 20) as i32;
-            }
-        }
-
-        // Apps are installed software — when the name matches, boost them above
-        // scriptlets/scripts that accumulate extra points from metadata fields
-        // (description, file_path, keyword, alias, group, tool type).
-        if has_name_match {
-            score += 200;
-        }
-
-        // Score by bundle_id match - lower priority
-        // Bundle IDs are always ASCII (e.g., "com.apple.Safari")
-        if let Some(ref bundle_id) = app.bundle_id {
-            if query_is_ascii
-                && bundle_id.is_ascii()
-                && contains_ignore_ascii_case(bundle_id, &query_lower)
-            {
-                score += 15;
-            }
-        }
-
-        // Score by path match - lowest priority
-        // Paths are typically ASCII
-        let path_str = app.path.to_string_lossy();
-        if query_is_ascii
-            && path_str.is_ascii()
-            && contains_ignore_ascii_case(&path_str, &query_lower)
-        {
-            score += 5;
-        }
-
-        if score > 0 {
-            matches.push((index, score));
+        if let Some(name_match) = primary_text_match(&app.name, &query_lower, &mut nucleo) {
+            matches.push((index, name_match.score));
         }
     }
 

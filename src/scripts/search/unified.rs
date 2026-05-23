@@ -12,7 +12,7 @@ use super::{
     fuzzy_search_builtins, fuzzy_search_scriptlets, fuzzy_search_scripts, fuzzy_search_skills,
     fuzzy_search_windows, parse_query_prefix, script_passes_prefix_filter,
     scriptlet_passes_prefix_filter, should_search_scriptlets, should_search_scripts,
-    window_passes_prefix_filter,
+    skill_passes_prefix_filter, window_passes_prefix_filter,
 };
 
 #[inline]
@@ -153,7 +153,7 @@ pub fn fuzzy_search_unified_all_with_skills(
 
     // Search plugin skills (always included, not affected by prefix filters)
     let skills_start = std::time::Instant::now();
-    if !skills.is_empty() {
+    if !skills.is_empty() && skill_passes_prefix_filter(&parsed) {
         let skill_matches = fuzzy_search_skills(skills, search_query);
         for sm in skill_matches {
             tracing::info!(
@@ -208,17 +208,20 @@ pub fn fuzzy_search_unified_all_with_skills(
         );
     }
 
-    // Sort by score (highest first), then by type order, then by name
+    // Sort by explicit relevance tier first, then score, type order, and name.
     let sort_start = std::time::Instant::now();
-    results.sort_by(|a, b| match b.score().cmp(&a.score()) {
-        Ordering::Equal => {
-            let type_order_a = result_type_order(a);
-            let type_order_b = result_type_order(b);
-            match type_order_a.cmp(&type_order_b) {
-                Ordering::Equal => a.name().cmp(b.name()),
-                other => other,
+    results.sort_by(|a, b| match b.match_tier().cmp(&a.match_tier()) {
+        Ordering::Equal => match b.score().cmp(&a.score()) {
+            Ordering::Equal => {
+                let type_order_a = result_type_order(a);
+                let type_order_b = result_type_order(b);
+                match type_order_a.cmp(&type_order_b) {
+                    Ordering::Equal => a.name().cmp(b.name()),
+                    other => other,
+                }
             }
-        }
+            other => other,
+        },
         other => other,
     });
 
@@ -342,17 +345,20 @@ pub fn fuzzy_search_unified_with_windows(
         }
     });
 
-    // Sort by score (highest first), then by type (builtins first, apps, windows, scripts, scriptlets), then by name
+    // Sort by explicit relevance tier first, then score, type, and name.
     // Fallbacks always sort last (they have their own ordering by priority)
-    results.sort_by(|a, b| match b.score().cmp(&a.score()) {
-        Ordering::Equal => {
-            let type_order_a = result_type_order(a);
-            let type_order_b = result_type_order(b);
-            match type_order_a.cmp(&type_order_b) {
-                Ordering::Equal => a.name().cmp(b.name()),
-                other => other,
+    results.sort_by(|a, b| match b.match_tier().cmp(&a.match_tier()) {
+        Ordering::Equal => match b.score().cmp(&a.score()) {
+            Ordering::Equal => {
+                let type_order_a = result_type_order(a);
+                let type_order_b = result_type_order(b);
+                match type_order_a.cmp(&type_order_b) {
+                    Ordering::Equal => a.name().cmp(b.name()),
+                    other => other,
+                }
             }
-        }
+            other => other,
+        },
         other => other,
     });
 

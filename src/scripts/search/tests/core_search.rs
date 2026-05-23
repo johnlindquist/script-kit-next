@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::builtins::{BuiltInEntry, BuiltInFeature, BuiltInGroup};
+use crate::plugins::PluginSkill;
 use crate::scripts::ScriptMatchKind;
 
 use super::super::*;
@@ -164,6 +165,18 @@ fn test_compute_match_indices_for_result_handles_unicode_normalization_in_descri
     );
 }
 
+#[test]
+fn test_event_highlight_prefers_contiguous_substring_in_script_name() {
+    let scripts = vec![make_script("The event", Some("Create an event"))];
+    let mut matches = fuzzy_search_scripts(&scripts, "event");
+
+    assert_eq!(matches.len(), 1);
+    let result = SearchResult::Script(matches.remove(0));
+    let indices = compute_match_indices_for_result(&result, "event");
+
+    assert_eq!(indices.name_indices, vec![4, 5, 6, 7, 8]);
+}
+
 fn make_builtin(name: &str, description: &str) -> BuiltInEntry {
     BuiltInEntry {
         id: name.to_lowercase().replace(' ', "-"),
@@ -183,6 +196,33 @@ fn make_app(name: &str) -> crate::app_launcher::AppInfo {
         bundle_id: None,
         icon: None,
     }
+}
+
+fn make_app_with_bundle_path(
+    name: &str,
+    bundle_id: Option<&str>,
+    path: &str,
+) -> crate::app_launcher::AppInfo {
+    crate::app_launcher::AppInfo {
+        name: name.to_string(),
+        path: PathBuf::from(path),
+        bundle_id: bundle_id.map(str::to_string),
+        icon: None,
+    }
+}
+
+fn make_skill(title: &str) -> Arc<PluginSkill> {
+    Arc::new(PluginSkill {
+        plugin_id: "test-plugin".to_string(),
+        plugin_title: "Test Plugin".to_string(),
+        skill_id: title.to_lowercase().replace(' ', "-"),
+        path: PathBuf::from(format!(
+            "/test/{}.md",
+            title.to_lowercase().replace(' ', "-")
+        )),
+        title: title.to_string(),
+        description: String::new(),
+    })
 }
 
 #[test]
@@ -253,6 +293,22 @@ fn test_short_fuzzy_query_rejects_mid_word_app_matches() {
 }
 
 #[test]
+fn test_apps_do_not_match_bundle_or_path_only_in_normal_search() {
+    let apps = vec![make_app_with_bundle_path(
+        "Safari",
+        Some("com.example.positions-helper"),
+        "/Applications/Position Helper.app",
+    )];
+
+    let results = fuzzy_search_apps(&apps, "posi");
+
+    assert!(
+        results.is_empty(),
+        "normal app search should admit apps by visible name, not bundle id or path"
+    );
+}
+
+#[test]
 fn test_compact_fuzzy_query_rejects_sparse_script_description_match() {
     let scripts = vec![make_script(
         "Sync to GitHub",
@@ -264,6 +320,18 @@ fn test_compact_fuzzy_query_rejects_sparse_script_description_match() {
     assert!(
         results.is_empty(),
         "description-only sparse fuzzy matches should not clutter short ordered queries"
+    );
+}
+
+#[test]
+fn test_description_normalized_substring_rejects_gapped_match() {
+    let scripts = vec![make_script("Helper", Some("Restore default positions"))];
+
+    let results = fuzzy_search_scripts(&scripts, "psit");
+
+    assert!(
+        results.is_empty(),
+        "description matching should require a contiguous exact/normalized substring"
     );
 }
 
@@ -313,6 +381,20 @@ fn test_script_body_search_keeps_exact_content_match() {
 }
 
 #[test]
+fn test_script_body_search_uses_character_indices_for_non_ascii() {
+    let scripts = vec![make_script_with_body(
+        "Cafe Helper",
+        "const label = \"Résumé position\";",
+    )];
+
+    let results = fuzzy_search_scripts(&scripts, "resume");
+
+    assert_eq!(results.len(), 1);
+    let hit = results[0].content_match.as_ref().expect("content hit");
+    assert_eq!(hit.line_match_indices, vec![15, 16, 17, 18, 19, 20]);
+}
+
+#[test]
 fn test_compact_fuzzy_query_preserves_common_abbreviation() {
     let scripts = vec![make_script("Google Calendar", None)];
 
@@ -320,4 +402,77 @@ fn test_compact_fuzzy_query_preserves_common_abbreviation() {
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].script.name, "Google Calendar");
+}
+
+#[test]
+fn test_gcal_highlight_uses_structured_abbreviation_indices() {
+    let scripts = vec![make_script("Google Calendar", None)];
+    let mut matches = fuzzy_search_scripts(&scripts, "gcal");
+
+    assert_eq!(matches.len(), 1);
+    let result = SearchResult::Script(matches.remove(0));
+    let indices = compute_match_indices_for_result(&result, "gcal");
+
+    assert_eq!(indices.name_indices, vec![0, 7, 8, 9]);
+}
+
+#[test]
+fn test_unified_posi_filters_unrelated_main_menu_rows() {
+    let builtins = vec![
+        make_builtin(
+            "Reset Window Positions",
+            "Restore all windows to default positions",
+        ),
+        make_builtin(
+            "Open Force Quit Apps",
+            "Open the macOS Force Quit Applications dialog",
+        ),
+        make_builtin("Draft Social Post", "Create a social media post"),
+    ];
+    let apps = vec![
+        make_app("AirPort Base Station Agent"),
+        make_app("PeopleMessageService"),
+        make_app("PeopleViewService"),
+    ];
+    let scripts = vec![
+        make_script(
+            "Sync to GitHub",
+            Some("Initialize git and sync the Script Kit workspace to GitHub"),
+        ),
+        make_script_with_body(
+            "Add to Google Calendar",
+            "const capture = await createPromptFromSavedInput();",
+        ),
+    ];
+
+    let results = fuzzy_search_unified_all(&scripts, &[], &builtins, &apps, "posi");
+    let names = results.iter().map(SearchResult::name).collect::<Vec<_>>();
+
+    assert_eq!(names, vec!["Reset Window Positions"]);
+}
+
+#[test]
+fn test_type_app_filter_excludes_matching_skills() {
+    let apps = vec![make_app("Calendar")];
+    let skills = vec![make_skill("Calendar Helper")];
+
+    let results =
+        fuzzy_search_unified_all_with_skills(&[], &[], &[], &apps, &skills, "type:app calendar");
+    let names = results.iter().map(SearchResult::name).collect::<Vec<_>>();
+
+    assert_eq!(names, vec!["Calendar"]);
+}
+
+#[test]
+fn test_primary_name_tier_beats_body_only_match() {
+    let builtins = vec![make_builtin("Position", "A visible exact command")];
+    let scripts = vec![make_script_with_body(
+        "Window Helper",
+        "const position = await getWindowPosition();",
+    )];
+
+    let results = fuzzy_search_unified_all(&scripts, &[], &builtins, &[], "position");
+
+    assert!(!results.is_empty());
+    assert_eq!(results[0].name(), "Position");
 }
