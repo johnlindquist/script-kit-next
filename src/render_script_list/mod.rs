@@ -416,10 +416,8 @@ fn render_menu_syntax_main_hint(
     form_inputs: &[(String, Entity<gpui_component::input::InputState>)],
     cx: &mut Context<ScriptListApp>,
 ) -> AnyElement {
-    let accent = theme.colors.accent.selected;
-    let border = theme.colors.ui.border;
-    let body_text = rgba((theme.colors.text.secondary << 8) | 0xD9);
-    let muted_text = rgba((theme.colors.text.muted << 8) | 0xB3);
+    let palette = crate::components::non_list_palette(theme);
+    let metrics = crate::components::non_list_metrics(crate::components::NonListDensity::Compact);
     let examples = if hint.examples.is_empty() {
         hint.example.iter().cloned().collect::<Vec<_>>()
     } else {
@@ -431,7 +429,6 @@ fn render_menu_syntax_main_hint(
     // OUTER div carries the layout pad/centering so content has breathing
     // room, but there's no longer a visible "card within a card" — see
     // story `hint-card-fills-main-window-no-nested-container` (Run 12).
-    let _ = border; // chrome dropped; kept binding to avoid widening unused-warning set
     gpui_component::scroll::ScrollableElement::vertical_scrollbar(
         div()
             .id("menu-syntax-main-hint-scroll")
@@ -440,188 +437,182 @@ fn render_menu_syntax_main_hint(
             .flex()
             .items_start()
             .justify_center()
-            .px(px(18.0))
-            .pt(px(12.0))
-            .pb(main_list_footer_overlay_total_padding() + px(12.0))
+            .px(px(metrics.card_padding_x))
+            .pt(px(metrics.card_padding_y))
+            .pb(main_list_footer_overlay_total_padding() + px(metrics.card_padding_y))
             .track_scroll(scroll_handle)
             .overflow_y_scroll(),
         scroll_handle,
     )
     .child(
-        div()
-            .w_full()
-            .min_h(px(0.0))
-            .flex()
-            .flex_col()
-            .gap(px(12.0))
-            .child(
-                div()
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(12.0))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.0))
-                            .overflow_hidden()
-                            .text_ellipsis()
-                            .text_size(px(19.0))
-                            .line_height(px(24.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(theme.colors.text.primary))
-                            .child(hint.title.clone()),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(6.0))
-                            .when_some(hint.mode_chip.as_ref(), |d, chip| {
-                                d.child(render_menu_syntax_hint_chip(theme, chip))
-                            })
-                            // Multi-chip capture-validation row (Pass 22 added the data,
-                            // Pass 23 wires the rendering): when `status_chips` is non-empty
-                            // the snapshot has already inserted the mode chip at index 0 plus
-                            // per-missing-field chips. Skip the mode_chip rendered above to
-                            // avoid duplication, and render the rest.
-                            .when(!hint.status_chips.is_empty(), |d| {
-                                let skip = if hint.mode_chip.is_some() { 1 } else { 0 };
-                                d.children(
-                                    hint.status_chips
-                                        .iter()
-                                        .skip(skip)
-                                        .map(|chip| render_menu_syntax_hint_chip(theme, chip)),
-                                )
-                            })
-                            // Single-chip status (legacy non-capture path) — only render
-                            // when the multi-chip path didn't already populate. Prevents
-                            // double-chips on capture composer surfaces.
-                            .when_some(
-                                hint.status_chip
-                                    .as_ref()
-                                    .filter(|_| hint.status_chips.is_empty()),
-                                |d, chip| d.child(render_menu_syntax_hint_chip(theme, chip)),
-                            ),
-                    ),
-            )
-            .when_some(hint.subtitle.as_ref(), |d, subtitle| {
-                d.child(
+        crate::components::non_list_content_stack(
+            "menu-syntax-main-hint-content",
+            metrics.max_width,
+            metrics.block_gap,
+        )
+        .min_h(px(0.0))
+        .child(
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(px(metrics.item_gap))
+                .child(
                     div()
-                        .text_size(px(13.0))
-                        .line_height(px(19.0))
-                        .text_color(body_text)
-                        .child(subtitle.clone()),
+                        .flex_1()
+                        .min_w(px(0.0))
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .text_size(px(metrics.title_size))
+                        .line_height(px(metrics.title_line))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(palette.title)
+                        .child(hint.title.clone()),
                 )
-            })
-            .when_some(hint.form.as_ref(), |d, form| {
-                d.child(render_menu_syntax_form(
-                    theme,
-                    design_variant,
-                    form,
-                    form_inputs,
-                    cx,
-                ))
-            })
-            .when(!hint.rows.is_empty(), |d| {
-                d.child(
-                    div().flex().flex_col().gap(px(7.0)).children(
-                        hint.rows
-                            .iter()
-                            .map(|row| render_menu_syntax_hint_row(theme, row)),
-                    ),
-                )
-            })
-            .when_some(hint.fragment_preview.as_ref(), |d, preview| {
-                d.when(!preview.rows.is_empty(), |d| {
-                    d.child(
-                        div().flex().flex_col().gap(px(6.0)).children(
-                            preview
-                                .rows
-                                .iter()
-                                .map(|row| render_menu_syntax_fragment_preview_row(theme, row)),
-                        ),
-                    )
-                })
-            })
-            .when_some(hint.warning.as_ref(), |d, warning| {
-                d.child(
-                    div()
-                        .rounded(px(6.0))
-                        .border_1()
-                        .border_color(rgba((theme.colors.ui.warning << 8) | 0x66))
-                        .bg(rgba((theme.colors.ui.warning << 8) | 0x14))
-                        .px(px(10.0))
-                        .py(px(7.0))
-                        .text_size(px(12.0))
-                        .line_height(px(17.0))
-                        .text_color(rgb(theme.colors.ui.warning))
-                        .child(warning.clone()),
-                )
-            })
-            .child(div().h(px(1.0)).w_full().bg(rgba((border << 8) | 0x66)))
-            .when_some(hint.primary_hint.as_ref(), |d, primary| {
-                d.child(
-                    div()
-                        .text_size(px(13.0))
-                        .line_height(px(18.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgb(accent))
-                        .child(primary.clone()),
-                )
-            })
-            .when_some(hint.secondary_hint.as_ref(), |d, secondary| {
-                d.child(
-                    div()
-                        .text_size(px(12.0))
-                        .line_height(px(17.0))
-                        .text_color(muted_text)
-                        .child(secondary.clone()),
-                )
-            })
-            .when(!examples.is_empty(), |d| {
-                d.child(
+                .child(
                     div()
                         .flex()
-                        .flex_col()
-                        .gap(px(5.0))
-                        .child(
-                            div()
-                                .text_size(px(11.0))
-                                .line_height(px(14.0))
-                                .text_color(rgba((theme.colors.text.muted << 8) | 0xB3))
-                                .child(if examples.len() == 1 {
-                                    "Example"
-                                } else {
-                                    "Examples"
-                                }),
-                        )
-                        .child(
-                            div()
-                                .rounded(px(6.0))
-                                .border_1()
-                                .border_color(rgba((border << 8) | 0x66))
-                                .bg(rgba((theme.colors.background.search_box << 8) | 0x4D))
-                                .px(px(10.0))
-                                .py(px(7.0))
-                                .flex()
-                                .flex_col()
-                                .gap(px(3.0))
-                                .text_size(px(12.0))
-                                .line_height(px(17.0))
-                                .font_family("JetBrains Mono")
-                                .text_color(rgba((theme.colors.text.secondary << 8) | 0xE6))
-                                .children(examples.iter().map(|example| {
-                                    div()
-                                        .w_full()
-                                        .overflow_hidden()
-                                        .text_ellipsis()
-                                        .child(example.clone())
-                                })),
+                        .items_center()
+                        .gap(px(6.0))
+                        .when_some(hint.mode_chip.as_ref(), |d, chip| {
+                            d.child(render_menu_syntax_hint_chip(theme, chip))
+                        })
+                        // Multi-chip capture-validation row (Pass 22 added the data,
+                        // Pass 23 wires the rendering): when `status_chips` is non-empty
+                        // the snapshot has already inserted the mode chip at index 0 plus
+                        // per-missing-field chips. Skip the mode_chip rendered above to
+                        // avoid duplication, and render the rest.
+                        .when(!hint.status_chips.is_empty(), |d| {
+                            let skip = if hint.mode_chip.is_some() { 1 } else { 0 };
+                            d.children(
+                                hint.status_chips
+                                    .iter()
+                                    .skip(skip)
+                                    .map(|chip| render_menu_syntax_hint_chip(theme, chip)),
+                            )
+                        })
+                        // Single-chip status (legacy non-capture path) — only render
+                        // when the multi-chip path didn't already populate. Prevents
+                        // double-chips on capture composer surfaces.
+                        .when_some(
+                            hint.status_chip
+                                .as_ref()
+                                .filter(|_| hint.status_chips.is_empty()),
+                            |d, chip| d.child(render_menu_syntax_hint_chip(theme, chip)),
                         ),
+                ),
+        )
+        .when_some(hint.subtitle.as_ref(), |d, subtitle| {
+            d.child(
+                div()
+                    .text_size(px(metrics.body_size))
+                    .line_height(px(metrics.body_line))
+                    .text_color(palette.body)
+                    .child(subtitle.clone()),
+            )
+        })
+        .when_some(hint.form.as_ref(), |d, form| {
+            d.child(render_menu_syntax_form(
+                theme,
+                design_variant,
+                form,
+                form_inputs,
+                cx,
+            ))
+        })
+        .when(!hint.rows.is_empty(), |d| {
+            d.child(
+                div().flex().flex_col().gap(px(7.0)).children(
+                    hint.rows
+                        .iter()
+                        .map(|row| render_menu_syntax_hint_row(theme, row)),
+                ),
+            )
+        })
+        .when_some(hint.fragment_preview.as_ref(), |d, preview| {
+            d.when(!preview.rows.is_empty(), |d| {
+                d.child(
+                    div().flex().flex_col().gap(px(6.0)).children(
+                        preview
+                            .rows
+                            .iter()
+                            .map(|row| render_menu_syntax_fragment_preview_row(theme, row)),
+                    ),
                 )
-            }),
+            })
+        })
+        .when_some(hint.warning.as_ref(), |d, warning| {
+            d.child(
+                crate::components::non_list_card("menu-syntax-main-hint-warning", palette, metrics)
+                    .border_color(rgba((theme.colors.ui.warning << 8) | 0x66))
+                    .bg(rgba((theme.colors.ui.warning << 8) | 0x14))
+                    .text_size(px(metrics.body_size))
+                    .line_height(px(metrics.body_line))
+                    .text_color(rgb(theme.colors.ui.warning))
+                    .child(warning.clone()),
+            )
+        })
+        .child(div().h(px(1.0)).w_full().bg(palette.border))
+        .when_some(hint.primary_hint.as_ref(), |d, primary| {
+            d.child(
+                div()
+                    .text_size(px(metrics.body_size))
+                    .line_height(px(metrics.body_line))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(palette.accent)
+                    .child(primary.clone()),
+            )
+        })
+        .when_some(hint.secondary_hint.as_ref(), |d, secondary| {
+            d.child(
+                div()
+                    .text_size(px(metrics.body_size))
+                    .line_height(px(metrics.body_line))
+                    .text_color(palette.hint)
+                    .child(secondary.clone()),
+            )
+        })
+        .when(!examples.is_empty(), |d| {
+            d.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(5.0))
+                    .child(
+                        div()
+                            .text_size(px(metrics.body_size - 1.0))
+                            .line_height(px(metrics.body_line - 2.0))
+                            .text_color(palette.hint)
+                            .child(if examples.len() == 1 {
+                                "Example"
+                            } else {
+                                "Examples"
+                            }),
+                    )
+                    .child(
+                        crate::components::non_list_card(
+                            "menu-syntax-main-hint-examples",
+                            palette,
+                            metrics,
+                        )
+                        .flex()
+                        .flex_col()
+                        .gap(px(3.0))
+                        .text_size(px(metrics.body_size))
+                        .line_height(px(metrics.body_line))
+                        .font_family("JetBrains Mono")
+                        .text_color(palette.body)
+                        .children(examples.iter().map(|example| {
+                            div()
+                                .w_full()
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .child(example.clone())
+                        })),
+                    ),
+            )
+        }),
     )
     .into_any_element()
 }

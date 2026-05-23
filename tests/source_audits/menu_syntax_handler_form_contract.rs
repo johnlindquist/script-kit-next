@@ -68,6 +68,57 @@ fn rendered_capture_composer_uses_form_before_instruction_rows() {
 }
 
 #[test]
+fn semicolon_capture_composer_outer_shell_consumes_non_list_language_without_owning_fields() {
+    let render = read("src/render_script_list/mod.rs");
+    let hint_start = render
+        .find("fn render_menu_syntax_main_hint(")
+        .expect("render_menu_syntax_main_hint must exist");
+    let hint_end = render[hint_start..]
+        .find("fn render_script_list_empty_state(")
+        .map(|offset| hint_start + offset)
+        .expect("empty-state renderer must follow menu syntax hint renderer");
+    let hint_renderer = &render[hint_start..hint_end];
+
+    assert!(
+        hint_renderer.contains("crate::components::non_list_palette(theme)")
+            && hint_renderer.contains(
+                "crate::components::non_list_metrics(crate::components::NonListDensity::Compact)"
+            )
+            && hint_renderer.contains("crate::components::non_list_content_stack(")
+            && hint_renderer.contains("\"menu-syntax-main-hint-content\"")
+            && hint_renderer.contains("metrics.max_width")
+            && hint_renderer.contains("metrics.block_gap"),
+        "semicolon capture composer outer shell should use the shared compact non-list language"
+    );
+    assert!(
+        hint_renderer.contains(".id(\"menu-syntax-main-hint-scroll\")")
+            && hint_renderer.contains(".track_scroll(scroll_handle)")
+            && hint_renderer.contains(".overflow_y_scroll()"),
+        "non-list shell adoption must preserve the main-hint scroll owner"
+    );
+    assert!(
+        hint_renderer.contains("hint.form.as_ref()")
+            && hint_renderer.contains("render_menu_syntax_form("),
+        "non-list shell adoption must keep the parser-backed form renderer in place"
+    );
+
+    let field_start = render
+        .find("fn render_menu_syntax_form_field(")
+        .expect("handler form field renderer must exist");
+    let form_start = render
+        .find("fn render_menu_syntax_form(")
+        .expect("handler form renderer must exist");
+    let field_renderer = &render[field_start..form_start];
+    assert!(
+        field_renderer.contains("FormFieldMetrics::from_theme_and_design")
+            && !field_renderer.contains("non_list_palette")
+            && !field_renderer.contains("non_list_metrics")
+            && !field_renderer.contains("non_list_card"),
+        "handler field internals should remain owned by shared form-field metrics, not the non-list shell"
+    );
+}
+
+#[test]
 fn form_mode_hides_ask_ai_hint_and_uses_accent_focus_style() {
     let render = read("src/render_script_list/mod.rs");
     let ask_hint = render
