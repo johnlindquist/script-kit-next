@@ -438,7 +438,7 @@ fn has_field_value_rows_for_active_token(active: &str) -> Option<Vec<TriggerPick
             .iter()
             .filter(|spec| {
                 partial.is_empty()
-                    || spec.token.to_ascii_lowercase().starts_with(partial)
+                    || spec.canonical.to_ascii_lowercase().starts_with(partial)
                     || spec
                         .aliases
                         .iter()
@@ -561,10 +561,7 @@ fn build_capture_picker_snapshot(
             .iter()
             .find(|entry| entry.slug.eq_ignore_ascii_case(needle))
         {
-            let rows = vec![
-                capture_target_row_from_entry(entry),
-                footer_create_handler_row(Some(entry.slug.clone())),
-            ];
+            let rows = vec![capture_target_row_from_entry(entry)];
             return TriggerPickerSnapshot {
                 mode: TriggerPickerMode::Capture,
                 target: Some(entry.slug.clone()),
@@ -605,7 +602,9 @@ fn build_capture_picker_snapshot(
         }
     };
 
-    rows.push(footer_create_handler_row(footer_target));
+    if filter.is_some() {
+        rows.push(footer_create_handler_row(footer_target));
+    }
 
     TriggerPickerSnapshot {
         mode: TriggerPickerMode::Capture,
@@ -1923,8 +1922,8 @@ mod tests {
 
         assert_eq!(row.title, "Filter by tag");
         assert_eq!(row.token.as_deref(), Some("#"));
-        assert!(row.subtitle.as_deref().unwrap().contains(":#work"));
-        assert!(row.example.as_deref().unwrap().contains(":#work"));
+        assert!(row.subtitle.as_deref().unwrap().contains("#work"));
+        assert!(row.example.as_deref().unwrap().contains("#work"));
     }
 
     #[test]
@@ -1939,7 +1938,7 @@ mod tests {
 
         match &row.action {
             TriggerPickerAction::InsertToken { token, keep_open } => {
-                assert_eq!(token, ":#");
+                assert_eq!(token, "#");
                 assert!(*keep_open, "tag filter row should stay open for a tag name");
             }
             other => panic!("expected InsertToken, got {other:?}"),
@@ -1958,7 +1957,7 @@ mod tests {
 
         match &row.action {
             TriggerPickerAction::InsertToken { token, keep_open } => {
-                assert_eq!(token, ":tag:");
+                assert_eq!(token, "tag:");
                 assert!(
                     *keep_open,
                     "canonical tag row should stay open for a tag name"
@@ -2092,7 +2091,7 @@ mod tests {
     #[test]
     fn correct_qualifier_does_not_produce_fix_row() {
         let ctx = ctx_empty();
-        let snap = build_trigger_picker_snapshot(":type:script git", &ctx).expect("snapshot");
+        let snap = build_trigger_picker_snapshot(":type:script", &ctx).expect("snapshot");
         assert!(
             !snap
                 .rows
@@ -2230,7 +2229,7 @@ mod tests {
     #[test]
     fn plus_footer_action_routes_to_create_handler() {
         let ctx = ctx_empty();
-        let snap = build_trigger_picker_snapshot(";todo", &ctx).expect("snapshot");
+        let snap = build_trigger_picker_snapshot(";unknown_target", &ctx).expect("snapshot");
         let footer = snap
             .rows
             .iter()
@@ -2238,27 +2237,18 @@ mod tests {
             .expect("create handler footer");
         match &footer.action {
             TriggerPickerAction::CreateHandler { target } => {
-                assert_eq!(target.as_deref(), Some("todo"));
+                assert_eq!(target.as_deref(), Some("unknown_target"));
             }
             other => panic!("expected CreateHandler, got {other:?}"),
         }
     }
 
     #[test]
-    fn bare_plus_create_handler_has_no_target() {
+    fn bare_plus_has_no_create_handler_footer() {
         let ctx = ctx_empty();
         let snap = build_trigger_picker_snapshot("+", &ctx).expect("snapshot");
-        let footer = snap
-            .rows
-            .iter()
-            .find(|r| r.id == "footer:create-handler")
-            .expect("create handler footer");
-        match &footer.action {
-            TriggerPickerAction::CreateHandler { target } => {
-                assert!(target.is_none());
-            }
-            other => panic!("expected CreateHandler, got {other:?}"),
-        }
+        let has_footer = snap.rows.iter().any(|r| r.id == "footer:create-handler");
+        assert!(!has_footer, "bare + must not show create handler footer");
     }
 
     #[test]

@@ -83,7 +83,12 @@ pub fn last_selectable_index(snapshot: &TriggerPickerSnapshot) -> Option<usize> 
 }
 
 fn row_is_selectable(row: &super::trigger_picker::TriggerPickerRow) -> bool {
-    row.enabled && row.kind != TriggerPickerRowKind::FooterAction
+    row.enabled
+        && (row.kind != TriggerPickerRowKind::FooterAction
+            || matches!(
+                row.action,
+                super::trigger_picker::TriggerPickerAction::CreateHandler { .. }
+            ))
 }
 
 /// Return the NEXT selectable index after `current`, skipping footer rows.
@@ -275,8 +280,26 @@ fn resolve_row_action(
             target: target.clone(),
         },
         TriggerPickerAction::CreateHandler { target } => {
-            TriggerPickerIntentOutcome::CreateHandler {
-                target: target.clone(),
+            let slug = target.clone().unwrap_or_default();
+            let nearest_targets = if slug.is_empty() {
+                Vec::new()
+            } else {
+                snapshot
+                    .rows
+                    .iter()
+                    .filter(|candidate| candidate.kind == TriggerPickerRowKind::CaptureTarget)
+                    .filter_map(|candidate| {
+                        candidate
+                            .token
+                            .as_deref()
+                            .and_then(|token| token.strip_prefix(';'))
+                            .map(str::to_string)
+                    })
+                    .collect()
+            };
+            TriggerPickerIntentOutcome::AiScaffoldHandler {
+                slug,
+                nearest_targets,
             }
         }
         TriggerPickerAction::OpenHelp => TriggerPickerIntentOutcome::OpenHelp,
@@ -635,7 +658,7 @@ mod tests {
     }
 
     #[test]
-    fn primary_action_on_create_handler_footer_creates_blank_scaffold() {
+    fn primary_action_on_create_handler_footer_routes_to_ai_scaffold() {
         let snap = build_trigger_picker_snapshot(";gcal", &ctx()).expect("capture snapshot");
         let footer_idx = snap
             .rows
@@ -660,8 +683,9 @@ mod tests {
 
         assert_eq!(
             outcome,
-            TriggerPickerIntentOutcome::CreateHandler {
-                target: Some("gcal".to_string())
+            TriggerPickerIntentOutcome::AiScaffoldHandler {
+                slug: "gcal".to_string(),
+                nearest_targets: Vec::new(),
             }
         );
     }

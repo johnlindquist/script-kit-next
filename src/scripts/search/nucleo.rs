@@ -58,7 +58,7 @@ impl NucleoCtx {
     pub fn compact_score(&mut self, haystack: &str, query: &str) -> Option<u32> {
         let score = self.score(haystack)?;
 
-        if fuzzy_match_is_compact(query, &self.indices(haystack)?) {
+        if fuzzy_match_is_compact(haystack, query, &self.indices(haystack)?) {
             Some(score)
         } else {
             None
@@ -80,7 +80,7 @@ impl NucleoCtx {
     }
 }
 
-fn fuzzy_match_is_compact(query: &str, indices: &[usize]) -> bool {
+fn fuzzy_match_is_compact(haystack: &str, query: &str, indices: &[usize]) -> bool {
     let query_len = query.chars().count();
     if query_len < 4 {
         return true;
@@ -93,10 +93,61 @@ fn fuzzy_match_is_compact(query: &str, indices: &[usize]) -> bool {
         return false;
     };
 
-    // Allow a small typo/gap budget, but reject matches like:
-    // "posit" -> "Accessibility Permission Assistant".
-    let max_span = query_len.saturating_mul(2).saturating_add(2);
-    last.saturating_sub(first).saturating_add(1) <= max_span
+    let span = last.saturating_sub(first).saturating_add(1);
+    if span <= query_len.saturating_add(1) {
+        return true;
+    }
+
+    fuzzy_match_is_structured_abbreviation(haystack, indices)
+}
+
+fn fuzzy_match_is_structured_abbreviation(haystack: &str, indices: &[usize]) -> bool {
+    let Some(first) = indices.first().copied() else {
+        return false;
+    };
+
+    if !is_word_start(haystack, first) {
+        return false;
+    }
+
+    let mut run_count = 1;
+    let mut previous = first;
+
+    for current in indices.iter().copied().skip(1) {
+        if current == previous.saturating_add(1) {
+            previous = current;
+            continue;
+        }
+
+        if !is_word_start(haystack, current) {
+            return false;
+        }
+
+        run_count += 1;
+        previous = current;
+    }
+
+    run_count >= 2
+}
+
+fn is_word_start(haystack: &str, char_index: usize) -> bool {
+    if char_index == 0 {
+        return true;
+    }
+
+    let mut previous: Option<char> = None;
+    for (index, current) in haystack.chars().enumerate() {
+        if index == char_index {
+            let Some(previous) = previous else {
+                return false;
+            };
+            return !previous.is_alphanumeric()
+                || (previous.is_lowercase() && current.is_uppercase());
+        }
+        previous = Some(current);
+    }
+
+    false
 }
 
 #[cfg(test)]
@@ -130,12 +181,27 @@ mod tests {
     }
 
     #[test]
+    fn compact_score_rejects_single_word_ordered_letters() {
+        assert!(!compact_match("posi", "Change Tone (Professional)"));
+    }
+
+    #[test]
+    fn compact_score_rejects_mid_word_sparse_chunks() {
+        assert!(!compact_match("posi", "AirPort Base Station Agent"));
+        assert!(!compact_match("posi", "PeopleMessageService"));
+        assert!(!compact_match(
+            "posi",
+            "Initialize git and sync the Script Kit workspace to GitHub"
+        ));
+    }
+
+    #[test]
     fn compact_score_preserves_common_compact_abbreviations() {
         assert!(compact_match("gcal", "Google Calendar"));
     }
 
     #[test]
     fn compact_score_leaves_very_short_queries_unchanged() {
-        assert!(compact_match("gt", "Google Calendar"));
+        assert!(compact_match("gc", "Google Calendar"));
     }
 }

@@ -45,8 +45,8 @@ use crate::components::inline_picker::{
     InlinePickerRowKind,
 };
 use crate::menu_syntax::{
-    build_trigger_picker_snapshot, TriggerPickerContext, TriggerPickerMode, TriggerPickerRow,
-    TriggerPickerRowKind, TriggerPickerSnapshot,
+    build_trigger_picker_snapshot, TriggerPickerAction, TriggerPickerContext, TriggerPickerMode,
+    TriggerPickerRow, TriggerPickerRowKind, TriggerPickerSnapshot,
 };
 use gpui::SharedString;
 
@@ -256,7 +256,9 @@ fn partial_trigger_snapshot(
 /// the default keyboard target.
 #[allow(dead_code)] // Lib-crate copy has no consumer; see plan_trigger_popup_transition comment.
 pub(crate) fn trigger_popup_row_is_default_selectable(row: &TriggerPickerRow) -> bool {
-    row.enabled && row.kind != TriggerPickerRowKind::FooterAction
+    row.enabled
+        && (row.kind != TriggerPickerRowKind::FooterAction
+            || matches!(row.action, TriggerPickerAction::CreateHandler { .. }))
 }
 
 /// Try to keep `previous_id` selected if the row still exists in

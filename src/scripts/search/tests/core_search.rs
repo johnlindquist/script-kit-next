@@ -162,6 +162,15 @@ fn make_builtin(name: &str, description: &str) -> BuiltInEntry {
     }
 }
 
+fn make_app(name: &str) -> crate::app_launcher::AppInfo {
+    crate::app_launcher::AppInfo {
+        name: name.to_string(),
+        path: PathBuf::from(format!("/Applications/{}.app", name)),
+        bundle_id: None,
+        icon: None,
+    }
+}
+
 #[test]
 fn test_compact_fuzzy_query_keeps_meaningful_word_match() {
     let builtins = vec![make_builtin(
@@ -191,6 +200,45 @@ fn test_compact_fuzzy_query_rejects_sparse_builtin_name_match() {
 }
 
 #[test]
+fn test_short_fuzzy_query_keeps_posi_results_targeted() {
+    let builtins = vec![
+        make_builtin(
+            "Reset Window Positions",
+            "Restore all windows to default positions",
+        ),
+        make_builtin(
+            "Change Tone (Professional)",
+            "Rewrite text in a professional tone",
+        ),
+        make_builtin(
+            "Open Force Quit Apps",
+            "Open the macOS Force Quit Applications dialog",
+        ),
+    ];
+
+    let results = fuzzy_search_builtins(&builtins, "posi");
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].entry.name, "Reset Window Positions");
+}
+
+#[test]
+fn test_short_fuzzy_query_rejects_mid_word_app_matches() {
+    let apps = vec![
+        make_app("AirPort Base Station Agent"),
+        make_app("PeopleMessageService"),
+        make_app("PeopleViewService"),
+    ];
+
+    let results = fuzzy_search_apps(&apps, "posi");
+
+    assert!(
+        results.is_empty(),
+        "short ordered query should not match app/service names through mid-word chunks"
+    );
+}
+
+#[test]
 fn test_compact_fuzzy_query_rejects_sparse_script_description_match() {
     let scripts = vec![make_script(
         "Sync to GitHub",
@@ -202,6 +250,21 @@ fn test_compact_fuzzy_query_rejects_sparse_script_description_match() {
     assert!(
         results.is_empty(),
         "description-only sparse fuzzy matches should not clutter short ordered queries"
+    );
+}
+
+#[test]
+fn test_short_fuzzy_query_rejects_sparse_script_description_match() {
+    let scripts = vec![make_script(
+        "Sync to GitHub",
+        Some("Initialize git and sync the Script Kit workspace to GitHub"),
+    )];
+
+    let results = fuzzy_search_scripts(&scripts, "posi");
+
+    assert!(
+        results.is_empty(),
+        "short ordered query should not match script descriptions through mid-word chunks"
     );
 }
 
