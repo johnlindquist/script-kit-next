@@ -758,6 +758,25 @@ pub(crate) fn render_native_main_window_footer_spacer() -> AnyElement {
         .into_any_element()
 }
 
+/// Transparent absolute hit-test layer for surfaces whose content should keep
+/// flowing behind the native main-window footer material.
+#[allow(dead_code)]
+pub(crate) fn render_native_main_window_footer_hover_blocker() -> AnyElement {
+    gpui::deferred(
+        div()
+            .id("native-main-window-footer-hover-blocker")
+            .absolute()
+            .bottom_0()
+            .left_0()
+            .w_full()
+            .h(px(
+                crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+            ))
+            .block_mouse_except_scroll(),
+    )
+    .into_any_element()
+}
+
 /// Return a GPUI fallback footer or the native-footer spacer for prompt entities.
 ///
 /// Prompt entities cannot call `ScriptListApp::main_window_footer_slot`, but

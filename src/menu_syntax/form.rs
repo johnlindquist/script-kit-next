@@ -282,7 +282,13 @@ fn serialize_capture_invocation(invocation: &CaptureInvocation) -> String {
         .map(str::trim)
         .filter(|url| !url.is_empty())
     {
-        parts.push(url.to_string());
+        let has_body = !invocation.body.trim().is_empty();
+        if !invocation.target.eq_ignore_ascii_case("link")
+            || !has_body
+            || invocation.body.trim() != url
+        {
+            parts.push(url.to_string());
+        }
     }
     if let Some(duration) = invocation
         .duration
@@ -759,6 +765,18 @@ fn form_field_for_requirement(
             )
         }
         FieldRequirement::Kv(key) => {
+            if schema.target.eq_ignore_ascii_case("link")
+                && (key.eq_ignore_ascii_case("title") || key.eq_ignore_ascii_case("url"))
+            {
+                return None;
+            }
+            if (key.eq_ignore_ascii_case("tags") || key.eq_ignore_ascii_case("tag"))
+                && (schema.required.contains(&FieldRequirement::Tag)
+                    || schema.optional.contains(&FieldRequirement::Tag))
+            {
+                return None;
+            }
+
             let value = invocation
                 .kv
                 .iter()
@@ -1390,12 +1408,13 @@ mod tests {
             .fields
             .iter()
             .any(|field| field.id == "url" && field.required));
-        assert!(snapshot.fields.iter().any(|field| field.id == "kv:title"));
+        assert!(!snapshot.fields.iter().any(|field| field.id == "kv:title"));
         assert!(snapshot
             .fields
             .iter()
             .any(|field| field.id == "kv:description"));
-        assert!(snapshot.fields.iter().any(|field| field.id == "kv:tags"));
+        assert!(snapshot.fields.iter().any(|field| field.id == "tags"));
+        assert!(!snapshot.fields.iter().any(|field| field.id == "kv:tags"));
         assert!(snapshot.can_submit);
     }
 }

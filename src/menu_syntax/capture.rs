@@ -80,6 +80,15 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
             continue;
         }
 
+        if super::link_scriptlet::is_domain_like(&tok.text) {
+            let mut domain = tok.text.clone();
+            if !domain.starts_with("http://") && !domain.starts_with("https://") {
+                domain = format!("https://{}", domain);
+            }
+            url = Some(domain);
+            continue;
+        }
+
         if let Some((key, value)) = split_colon_key(&tok.text) {
             let key_lower = key.to_ascii_lowercase();
             match key_lower.as_str() {
@@ -430,10 +439,8 @@ mod tests {
 
         let inv2 = ok(";link url:https://example.com title=\"Menu syntax\" #research");
         assert_eq!(inv2.url.as_deref(), Some("https://example.com"));
-        assert_eq!(
-            inv2.kv,
-            vec![("title".to_string(), "Menu syntax".to_string())]
-        );
+        assert_eq!(inv2.body, "Menu syntax");
+        assert!(inv2.kv.is_empty());
     }
 
     #[test]

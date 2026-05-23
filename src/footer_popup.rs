@@ -634,7 +634,7 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
     let hints_view = find_subview_by_identifier(footer_view, FOOTER_HINTS_ID);
     if hints_view != nil {
         let _: () = msg_send![hints_view, setFrame: footer_hints_frame(content_bounds.size.width)];
-        layout_footer_hints(hints_view, text_color, &config.buttons);
+        layout_footer_hints(hints_view, text_color, &config.buttons, &theme);
     }
 
     // Left info (streaming dot + model name)
@@ -1015,7 +1015,12 @@ unsafe fn remove_active_dot_scale_animation(layer: id) {
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterButtonConfig]) {
+unsafe fn layout_footer_hints(
+    hints_view: id,
+    text_color: id,
+    buttons: &[FooterButtonConfig],
+    theme: &crate::theme::Theme,
+) {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     use objc::{msg_send, sel, sel_impl};
 
@@ -1067,7 +1072,7 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterB
     for (index, button_cfg) in buttons.iter().enumerate() {
         let max_item_width =
             footer_hint_max_item_width(button_cfg.action, hints_bounds.size.width, buttons);
-        let item = make_footer_hint_item(button_cfg, font, text_color, max_item_width);
+        let item = make_footer_hint_item(button_cfg, font, text_color, max_item_width, theme);
         if item == nil {
             continue;
         }
@@ -1215,6 +1220,7 @@ unsafe fn make_footer_hint_item(
     font: id,
     text_color: id,
     max_item_width: Option<f64>,
+    theme: &crate::theme::Theme,
 ) -> id {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     use objc::{class, msg_send, sel, sel_impl};
@@ -1241,11 +1247,10 @@ unsafe fn make_footer_hint_item(
         return nil;
     }
 
-    let theme = crate::theme::get_cached_theme();
-    let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+    let chrome = crate::theme::AppChromeColors::from_theme(theme);
     let keycap_border_color = ns_color_from_hex_with_alpha(
         theme.colors.text.primary,
-        crate::components::footer_chrome::footer_keycap_border_alpha(&theme, button_cfg.selected)
+        crate::components::footer_chrome::footer_keycap_border_alpha(theme, button_cfg.selected)
             as f64,
     );
     let labelcap_border_color = ns_color_from_hex_with_alpha(
