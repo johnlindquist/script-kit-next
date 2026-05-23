@@ -1,13 +1,29 @@
+use gpui::{
+    div, px, AnyElement, FontWeight, InteractiveElement, IntoElement, ParentElement, SharedString,
+    Styled,
+};
+
+use crate::list_item::FONT_SYSTEM_UI;
+use crate::theme::opacity::{OPACITY_HIDDEN, OPACITY_TEXT_MUTED};
 use crate::theme::Theme;
+use crate::ui_foundation::HexColorExt;
 
 pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.5;
 pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.18;
+pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight::SEMIBOLD;
 pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 20.0;
 pub(crate) const FOOTER_KEYCAP_PADDING_X_PX: f32 = 4.0;
 pub(crate) const FOOTER_KEYCAP_RADIUS_PX: f32 = 4.0;
 pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;
+
+pub(crate) const FOOTER_KEYCAP_BORDER_ALPHA: f32 = 0.50;
+pub(crate) const FOOTER_LABELCAP_BORDER_ALPHA: f32 = 0.0;
+
+pub(crate) enum FooterHintKeyMode {
+    Shortcut,
+}
 
 fn normalize_footer_key_token(token: &str) -> String {
     match token.trim().to_lowercase().as_str() {
@@ -23,6 +39,36 @@ pub(crate) fn footer_keycap_border_alpha(theme: &Theme, selected: bool) -> f32 {
     } else {
         opacity.hover
     }
+}
+
+pub(crate) fn footer_hint_text_color(theme: &Theme) -> gpui::Rgba {
+    theme
+        .colors
+        .text
+        .primary
+        .with_opacity(OPACITY_TEXT_MUTED)
+        .to_rgb()
+}
+
+pub(crate) fn footer_keycap_border_color_for_state(theme: &Theme, selected: bool) -> gpui::Hsla {
+    let alpha = if selected {
+        footer_keycap_border_alpha(theme, true)
+    } else {
+        FOOTER_KEYCAP_BORDER_ALPHA
+    };
+    theme.colors.text.primary.with_opacity(alpha)
+}
+
+pub(crate) fn footer_keycap_border_color(theme: &Theme) -> gpui::Hsla {
+    footer_keycap_border_color_for_state(theme, false)
+}
+
+pub(crate) fn footer_labelcap_border_color(theme: &Theme) -> gpui::Hsla {
+    theme
+        .colors
+        .text
+        .primary
+        .with_opacity(FOOTER_LABELCAP_BORDER_ALPHA.max(OPACITY_HIDDEN))
 }
 
 pub(crate) fn split_footer_shortcut(shortcut: &str) -> Vec<String> {
@@ -108,6 +154,114 @@ pub(crate) fn footer_button_height(footer_height: f32) -> f32 {
     (footer_height - (FOOTER_BUTTON_VERTICAL_INSET_PX * 2.0)).max(0.0)
 }
 
+pub(crate) fn render_footer_hint_content(
+    label: SharedString,
+    key: SharedString,
+    mode: FooterHintKeyMode,
+    theme: &Theme,
+) -> AnyElement {
+    let footer_text = footer_hint_text_color(theme);
+    let full_text = theme.colors.text.primary.to_rgb();
+
+    div()
+        .px(px(4.0))
+        .py(px(2.0))
+        .rounded(px(4.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(3.0))
+        .group("footer-action-button")
+        .child(render_footer_labelcap(label, theme, footer_text, full_text))
+        .child(match mode {
+            FooterHintKeyMode::Shortcut => render_footer_shortcut_keycaps(key.to_string(), theme),
+        })
+        .into_any_element()
+}
+
+fn render_footer_labelcap(
+    label: SharedString,
+    theme: &Theme,
+    footer_text: gpui::Rgba,
+    full_text: gpui::Hsla,
+) -> AnyElement {
+    div()
+        .flex_none()
+        .min_w(px(FOOTER_KEYCAP_HEIGHT_PX))
+        .min_h(px(FOOTER_KEYCAP_HEIGHT_PX))
+        .h(px(FOOTER_KEYCAP_HEIGHT_PX))
+        .line_height(px(FOOTER_KEYCAP_HEIGHT_PX))
+        .px(px(FOOTER_KEYCAP_PADDING_X_PX))
+        .rounded(px(FOOTER_KEYCAP_RADIUS_PX))
+        .border_1()
+        .border_color(footer_labelcap_border_color(theme))
+        .flex()
+        .items_center()
+        .justify_center()
+        .font_family(FONT_SYSTEM_UI)
+        .font_weight(FOOTER_HINT_FONT_WEIGHT_GPUI)
+        .text_size(px(FOOTER_HINT_FONT_SIZE_PX))
+        .text_color(footer_text)
+        .group_hover("footer-action-button", move |s| s.text_color(full_text))
+        .child(label)
+        .into_any_element()
+}
+
+fn render_footer_shortcut_keycaps(shortcut: String, theme: &Theme) -> AnyElement {
+    div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(3.0))
+        .children(
+            split_footer_shortcut(&shortcut)
+                .into_iter()
+                .map(|token| render_footer_keycap(token, None, theme)),
+        )
+        .into_any_element()
+}
+
+fn render_footer_keycap(token: String, max_width_px: Option<f32>, theme: &Theme) -> AnyElement {
+    let footer_text = footer_hint_text_color(theme);
+    let full_text = theme.colors.text.primary.to_rgb();
+    let token_child: AnyElement = div()
+        .h(px(FOOTER_KEYCAP_HEIGHT_PX))
+        .line_height(px(FOOTER_KEYCAP_HEIGHT_PX))
+        .mt(px(footer_key_glyph_nudge_y(&token)))
+        .child(token)
+        .into_any_element();
+
+    let mut keycap = div()
+        .flex_none()
+        .min_w(px(FOOTER_KEYCAP_HEIGHT_PX))
+        .min_h(px(FOOTER_KEYCAP_HEIGHT_PX))
+        .h(px(FOOTER_KEYCAP_HEIGHT_PX))
+        .line_height(px(FOOTER_KEYCAP_HEIGHT_PX))
+        .px(px(FOOTER_KEYCAP_PADDING_X_PX))
+        .rounded(px(FOOTER_KEYCAP_RADIUS_PX))
+        .border_1()
+        .border_color(footer_keycap_border_color(theme))
+        .flex()
+        .items_center()
+        .justify_center()
+        .font_family(FONT_SYSTEM_UI)
+        .font_weight(FOOTER_HINT_FONT_WEIGHT_GPUI)
+        .text_size(px(FOOTER_HINT_FONT_SIZE_PX))
+        .text_color(footer_text)
+        .group_hover("footer-action-button", move |s| s.text_color(full_text))
+        .child(token_child);
+
+    if let Some(max_width_px) = max_width_px {
+        keycap = keycap
+            .max_w(px(max_width_px))
+            .overflow_hidden()
+            .text_ellipsis()
+            .whitespace_nowrap();
+    }
+
+    keycap.into_any_element()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,6 +308,14 @@ mod tests {
         assert_eq!(
             footer_keycap_border_alpha(&theme, true),
             list_colors.selected_opacity
+        );
+        assert_eq!(
+            footer_keycap_border_color(&theme).a,
+            ((FOOTER_KEYCAP_BORDER_ALPHA * 255.0) as u8) as f32 / 255.0
+        );
+        assert_eq!(
+            footer_keycap_border_color_for_state(&theme, true).a,
+            ((list_colors.selected_opacity * 255.0) as u8) as f32 / 255.0
         );
     }
 }
