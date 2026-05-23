@@ -146,6 +146,7 @@ fn is_suppressed_agent_false_for_script_variant() {
         match_indices: MatchIndices::default(),
         match_kind: Default::default(),
         content_match: None,
+        match_evidence: None,
     });
     assert!(!result.is_suppressed_agent());
 }
@@ -157,6 +158,7 @@ fn is_suppressed_agent_false_for_skill_variant() {
         skill,
         score: 100,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     });
     assert!(!result.is_suppressed_agent());
 }
@@ -169,6 +171,7 @@ fn is_suppressed_agent_false_for_scriptlet_variant() {
         score: 100,
         display_file_path: None,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     });
     assert!(!result.is_suppressed_agent());
 }
@@ -291,6 +294,7 @@ fn skill_default_action_text_is_open_skill() {
         skill,
         score: 100,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     });
     assert_eq!(result.get_default_action_text(), "Open Skill");
 }

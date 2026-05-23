@@ -281,6 +281,7 @@ fn inline_script_list_portal_results_attach_like_full_portal_selection() {
             },
             match_kind: crate::scripts::ScriptMatchKind::Name,
             content_match: None,
+            match_evidence: None,
         }),
     )
     .expect("script result should map to inline item");
@@ -306,6 +307,7 @@ fn inline_script_list_portal_results_attach_like_full_portal_selection() {
             skill: Arc::new(skill),
             score: 99,
             match_indices: crate::scripts::MatchIndices::default(),
+            match_evidence: None,
         }),
     )
     .expect("skill result should map to inline item");

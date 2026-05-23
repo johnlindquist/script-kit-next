@@ -358,6 +358,7 @@ fn make_script_search_result(script: Script) -> SearchResult {
         match_indices: MatchIndices::default(),
         match_kind: ScriptMatchKind::default(),
         content_match: None,
+        match_evidence: None,
     })
 }
 
@@ -367,6 +368,7 @@ fn make_scriptlet_search_result(scriptlet: Scriptlet) -> SearchResult {
         score: 100,
         display_file_path: None,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     })
 }
 
@@ -1283,6 +1285,7 @@ fn make_content_script_match(
             line_match_indices,
             byte_range: 0..line_text.len(),
         }),
+        match_evidence: None,
     }
 }
 
@@ -1302,6 +1305,7 @@ fn test_non_content_match_keeps_original_description() {
         match_indices: MatchIndices::default(),
         match_kind: ScriptMatchKind::Name,
         content_match: None,
+        match_evidence: None,
     };
     // Non-content match: description should come from auto_description_for_script
     assert_eq!(sm.match_kind, ScriptMatchKind::Name);
@@ -1342,6 +1346,7 @@ fn test_content_match_uses_normal_fallback_description_in_render_logic() {
             line_match_indices: vec![15, 16, 17],
             byte_range: 0..31,
         }),
+        match_evidence: None,
     };
 
     let description = auto_description_for_script(&sm.script);

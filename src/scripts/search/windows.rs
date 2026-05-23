@@ -3,9 +3,10 @@ use std::cmp::Ordering;
 use crate::scripts::RootWindowEntry;
 use crate::window_control::WindowInfo;
 
-use super::super::types::WindowMatch;
+use super::super::types::{MatchEvidence, MatchEvidenceField, WindowMatch};
 use super::{
-    better_match, low_tier_substring_match, primary_text_match, NucleoCtx, TIER_DESCRIPTION,
+    better_match_evidence, low_tier_substring_match, match_evidence, primary_text_match, NucleoCtx,
+    TIER_DESCRIPTION,
 };
 
 /// Fuzzy search windows by query string
@@ -48,51 +49,65 @@ pub fn fuzzy_search_root_windows(windows: &[RootWindowEntry], query: &str) -> Ve
                 app_icon: windows[index].app_icon.clone(),
                 subtitle: windows[index].subtitle.clone(),
                 score: 0,
+                match_evidence: None,
             })
             .collect();
     }
 
     let query_lower = query.to_lowercase();
-    let mut matches: Vec<(usize, i32)> = Vec::with_capacity(windows.len());
+    let mut matches: Vec<(usize, MatchEvidence)> = Vec::with_capacity(windows.len());
 
     // Create nucleo context once for all windows - reuses buffer across calls
     let mut nucleo = NucleoCtx::new(&query_lower);
     for (index, entry) in windows.iter().enumerate() {
         let window = &entry.window;
         let mut best = None;
-        better_match(
+        better_match_evidence(
             &mut best,
-            primary_text_match(&window.app, &query_lower, &mut nucleo),
+            match_evidence(
+                MatchEvidenceField::WindowApp,
+                &window.app,
+                primary_text_match(&window.app, &query_lower, &mut nucleo),
+            ),
         );
-        better_match(
+        better_match_evidence(
             &mut best,
-            primary_text_match(&window.title, &query_lower, &mut nucleo),
+            match_evidence(
+                MatchEvidenceField::Name,
+                &window.title,
+                primary_text_match(&window.title, &query_lower, &mut nucleo),
+            ),
         );
-        better_match(
+        better_match_evidence(
             &mut best,
-            low_tier_substring_match(&entry.subtitle, &query_lower, TIER_DESCRIPTION),
+            match_evidence(
+                MatchEvidenceField::Description,
+                &entry.subtitle,
+                low_tier_substring_match(&entry.subtitle, &query_lower, TIER_DESCRIPTION),
+            ),
         );
 
         if let Some(best) = best {
-            matches.push((index, best.score));
+            matches.push((index, best));
         }
     }
 
     // Sort by score (highest first), then focus/recency signals for ties.
-    matches.sort_by(
-        |(a_idx, a_score), (b_idx, b_score)| match b_score.cmp(a_score) {
+    matches.sort_by(|(a_idx, a_evidence), (b_idx, b_evidence)| {
+        match b_evidence.score.cmp(&a_evidence.score) {
             Ordering::Equal => compare_window_entries(&windows[*a_idx], &windows[*b_idx]),
             other => other,
-        },
-    );
+        }
+    });
 
     matches
         .into_iter()
-        .map(|(index, score)| WindowMatch {
+        .map(|(index, evidence)| WindowMatch {
             window: windows[index].window.clone(),
             app_icon: windows[index].app_icon.clone(),
             subtitle: windows[index].subtitle.clone(),
-            score,
+            score: evidence.score,
+            match_evidence: Some(evidence),
         })
         .collect()
 }

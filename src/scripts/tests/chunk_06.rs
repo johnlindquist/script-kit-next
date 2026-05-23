@@ -118,6 +118,7 @@ fn test_search_result_name_accessor() {
         match_indices: MatchIndices::default(),
         match_kind: ScriptMatchKind::default(),
         content_match: None,
+            match_evidence: None,
     });
 
     assert_eq!(script.name(), "TestName");
@@ -135,6 +136,7 @@ fn test_search_result_description_accessor() {
         score: 75,
         display_file_path: None,
         match_indices: MatchIndices::default(),
+            match_evidence: None,
     });
 
     assert_eq!(scriptlet.description(), Some("Test Description"));

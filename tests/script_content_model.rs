@@ -78,6 +78,7 @@ fn script_match_encodes_content_hit() {
             line_match_indices: vec![4, 5, 6],
             byte_range: 10..13,
         }),
+        match_evidence: None,
     };
 
     assert_eq!(sm.match_kind, ScriptMatchKind::Content);
@@ -100,6 +101,7 @@ fn script_match_without_content_hit() {
         match_indices: MatchIndices::default(),
         match_kind: ScriptMatchKind::Name,
         content_match: None,
+        match_evidence: None,
     };
 
     assert_eq!(sm.match_kind, ScriptMatchKind::Name);

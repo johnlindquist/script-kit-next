@@ -588,6 +588,7 @@ mod app_actions_tests {
             match_indices: scripts::MatchIndices::default(),
             match_kind: scripts::ScriptMatchKind::default(),
             content_match: None,
+            match_evidence: None,
         });
 
         let script_target = script_removal_target_from_result(&script_result);
@@ -618,6 +619,7 @@ mod app_actions_tests {
             score: 0,
             display_file_path: Some("tools.md#open-github".to_string()),
             match_indices: scripts::MatchIndices::default(),
+            match_evidence: None,
         });
 
         let scriptlet_target = script_removal_target_from_result(&scriptlet_result);

@@ -29,6 +29,7 @@ fn skill_search_result_has_correct_type_label() {
         skill,
         score: 100,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     });
     assert_eq!(result.type_label(), "Skill");
 }
@@ -40,6 +41,7 @@ fn skill_search_result_has_correct_action_text() {
         skill,
         score: 100,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     });
     assert_eq!(result.get_default_action_text(), "Open Skill");
 }
@@ -51,6 +53,7 @@ fn skill_search_result_name_is_title() {
         skill,
         score: 100,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     });
     assert_eq!(result.name(), "New Scriptlet");
 }
@@ -62,6 +65,7 @@ fn skill_search_result_description_from_skill() {
         skill,
         score: 100,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     });
     assert_eq!(
         result.description(),
@@ -76,6 +80,7 @@ fn skill_search_result_source_name_is_plugin_title() {
         skill,
         score: 100,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     });
     assert_eq!(result.source_name(), Some("Script Kit"));
 }
@@ -87,6 +92,7 @@ fn skill_search_result_type_accessory_uses_workflow_icon() {
         skill,
         score: 100,
         match_indices: MatchIndices::default(),
+        match_evidence: None,
     });
     let (label, icon_name) = result.type_accessory_info();
     assert_eq!(label, "Skill");

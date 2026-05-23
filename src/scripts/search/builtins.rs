@@ -2,44 +2,40 @@ use std::cmp::Ordering;
 
 use crate::builtins::{BuiltInEntry, BuiltInFeature, BuiltInGroup};
 
-use super::super::types::BuiltInMatch;
+use super::super::types::{BuiltInMatch, MatchEvidence, MatchEvidenceField};
 use super::{
-    better_match, low_tier_substring_match, primary_text_match, score_from_tier, NucleoCtx,
+    better_match_evidence, low_tier_substring_match, match_evidence, primary_text_match, NucleoCtx,
     TIER_KEYWORD,
 };
 
 const TIER_BUILTIN_DESCRIPTION: i32 = 450;
 
-fn restricted_builtin_alias_score(entry: &BuiltInEntry, query_lower: &str) -> Option<i32> {
+fn restricted_builtin_alias_match(
+    entry: &BuiltInEntry,
+    query_lower: &str,
+) -> Option<MatchEvidence> {
     if !matches!(entry.feature, BuiltInFeature::AiVault) {
         return None;
     }
 
-    let mut best = None::<i32>;
-    let mut score_candidate = |candidate: &str| {
-        if !candidate.is_ascii() {
-            return;
-        }
-
-        let candidate_lower = candidate.to_lowercase();
-        let score = if candidate_lower == query_lower {
-            Some(score_from_tier(1000, 900))
-        } else if query_lower.len() >= 3 && candidate_lower.starts_with(query_lower) {
-            Some(score_from_tier(950, 900))
-        } else if query_lower.len() >= 3 && candidate_lower.contains(query_lower) {
-            Some(score_from_tier(850, 900))
-        } else {
-            None
-        };
-
-        if let Some(score) = score {
-            best = Some(best.map_or(score, |current| current.max(score)));
-        }
-    };
-
-    score_candidate(&entry.name);
+    let mut best = None::<MatchEvidence>;
+    better_match_evidence(
+        &mut best,
+        match_evidence(
+            MatchEvidenceField::Name,
+            &entry.name,
+            low_tier_substring_match(&entry.name, query_lower, 1000),
+        ),
+    );
     for keyword in &entry.keywords {
-        score_candidate(keyword);
+        better_match_evidence(
+            &mut best,
+            match_evidence(
+                MatchEvidenceField::Keyword,
+                keyword,
+                low_tier_substring_match(keyword, query_lower, TIER_KEYWORD),
+            ),
+        );
     }
 
     best
@@ -64,6 +60,7 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
             .map(|e| BuiltInMatch {
                 entry: e.clone(),
                 score: 0,
+                match_evidence: None,
             })
             .collect();
     }
@@ -75,10 +72,11 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
 
     for entry in entries {
         if matches!(entry.feature, BuiltInFeature::AiVault) {
-            if let Some(score) = restricted_builtin_alias_score(entry, &query_lower) {
+            if let Some(evidence) = restricted_builtin_alias_match(entry, &query_lower) {
                 matches.push(BuiltInMatch {
                     entry: entry.clone(),
-                    score,
+                    score: evidence.score,
+                    match_evidence: Some(evidence),
                 });
             }
             continue;
@@ -87,27 +85,46 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
         let mut best = None;
 
         if entry.group == BuiltInGroup::MenuBar {
-            let leaf_name = entry.leaf_name();
-            better_match(
+            better_match_evidence(
                 &mut best,
-                low_tier_substring_match(leaf_name, &query_lower, 900),
+                match_evidence(
+                    MatchEvidenceField::Name,
+                    &entry.name,
+                    low_tier_substring_match(&entry.name, &query_lower, 900),
+                ),
             );
         } else {
-            better_match(
+            better_match_evidence(
                 &mut best,
-                primary_text_match(&entry.name, &query_lower, &mut nucleo),
+                match_evidence(
+                    MatchEvidenceField::Name,
+                    &entry.name,
+                    primary_text_match(&entry.name, &query_lower, &mut nucleo),
+                ),
             );
         }
 
-        better_match(
+        better_match_evidence(
             &mut best,
-            low_tier_substring_match(&entry.description, &query_lower, TIER_BUILTIN_DESCRIPTION),
+            match_evidence(
+                MatchEvidenceField::Description,
+                &entry.description,
+                low_tier_substring_match(
+                    &entry.description,
+                    &query_lower,
+                    TIER_BUILTIN_DESCRIPTION,
+                ),
+            ),
         );
 
         for keyword in &entry.keywords {
-            better_match(
+            better_match_evidence(
                 &mut best,
-                low_tier_substring_match(keyword, &query_lower, TIER_KEYWORD),
+                match_evidence(
+                    MatchEvidenceField::Keyword,
+                    keyword,
+                    low_tier_substring_match(keyword, &query_lower, TIER_KEYWORD),
+                ),
             );
         }
 
@@ -115,6 +132,7 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
             matches.push(BuiltInMatch {
                 entry: entry.clone(),
                 score: best.score,
+                match_evidence: Some(best),
             });
         }
     }

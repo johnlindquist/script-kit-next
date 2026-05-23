@@ -230,6 +230,7 @@ mod tests {
                 group,
             },
             score,
+            match_evidence: None,
         })
     }
 
@@ -242,6 +243,7 @@ mod tests {
                 icon: None,
             },
             score,
+            match_evidence: None,
         })
     }
 

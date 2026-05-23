@@ -133,6 +133,7 @@ fn test_search_result_description_accessor() {
         score: 75,
         display_file_path: None,
         match_indices: MatchIndices::default(),
+            match_evidence: None,
     });
 
     assert_eq!(scriptlet.description(), Some("Test Description"));

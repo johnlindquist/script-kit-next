@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::builtins::{BuiltInEntry, BuiltInFeature, BuiltInGroup};
 use crate::plugins::PluginSkill;
-use crate::scripts::ScriptMatchKind;
+use crate::scripts::{MatchEvidenceField, ScriptMatchKind};
 
 use super::super::*;
 
@@ -222,6 +222,37 @@ fn make_skill(title: &str) -> Arc<PluginSkill> {
         )),
         title: title.to_string(),
         description: String::new(),
+    })
+}
+
+fn make_skill_with_description(title: &str, description: &str) -> Arc<PluginSkill> {
+    Arc::new(PluginSkill {
+        plugin_id: "test-plugin".to_string(),
+        plugin_title: "Test Plugin".to_string(),
+        skill_id: title.to_lowercase().replace(' ', "-"),
+        path: PathBuf::from(format!(
+            "/test/{}.md",
+            title.to_lowercase().replace(' ', "-")
+        )),
+        title: title.to_string(),
+        description: description.to_string(),
+    })
+}
+
+fn make_scriptlet(name: &str, description: Option<&str>) -> Arc<Scriptlet> {
+    Arc::new(Scriptlet {
+        name: name.to_string(),
+        description: description.map(str::to_string),
+        code: "echo hi".to_string(),
+        tool: "bash".to_string(),
+        shortcut: None,
+        keyword: None,
+        group: None,
+        plugin_id: "test-plugin".to_string(),
+        plugin_title: Some("Test Plugin".to_string()),
+        file_path: None,
+        command: None,
+        alias: None,
     })
 }
 
@@ -475,4 +506,70 @@ fn test_primary_name_tier_beats_body_only_match() {
 
     assert!(!results.is_empty());
     assert_eq!(results[0].name(), "Position");
+}
+
+#[test]
+fn test_scriptlet_description_evidence_prevents_sparse_name_highlight() {
+    let scriptlets = vec![make_scriptlet(
+        "PeopleMessageService",
+        Some("Restore default positions"),
+    )];
+
+    let mut matches = fuzzy_search_scriptlets(&scriptlets, "posi");
+
+    assert_eq!(matches.len(), 1);
+    assert_eq!(
+        matches[0].match_evidence.as_ref().map(|e| e.field),
+        Some(MatchEvidenceField::Description)
+    );
+
+    let result = SearchResult::Scriptlet(matches.remove(0));
+    let indices = compute_match_indices_for_result(&result, "posi");
+
+    assert!(indices.name_indices.is_empty());
+    assert_eq!(indices.description_indices, vec![16, 17, 18, 19]);
+}
+
+#[test]
+fn test_builtin_description_evidence_prevents_sparse_name_highlight() {
+    let builtins = vec![make_builtin(
+        "PeopleMessageService",
+        "Restore default positions",
+    )];
+
+    let mut matches = fuzzy_search_builtins(&builtins, "posi");
+
+    assert_eq!(matches.len(), 1);
+    assert_eq!(
+        matches[0].match_evidence.as_ref().map(|e| e.field),
+        Some(MatchEvidenceField::Description)
+    );
+
+    let result = SearchResult::BuiltIn(matches.remove(0));
+    let indices = compute_match_indices_for_result(&result, "posi");
+
+    assert!(indices.name_indices.is_empty());
+    assert_eq!(indices.description_indices, vec![16, 17, 18, 19]);
+}
+
+#[test]
+fn test_skill_description_evidence_prevents_stale_title_indices() {
+    let skills = vec![make_skill_with_description(
+        "PeopleMessageService",
+        "Restore default positions",
+    )];
+
+    let mut matches = fuzzy_search_skills(&skills, "posi");
+
+    assert_eq!(matches.len(), 1);
+    assert_eq!(
+        matches[0].match_evidence.as_ref().map(|e| e.field),
+        Some(MatchEvidenceField::Description)
+    );
+
+    let result = SearchResult::Skill(matches.remove(0));
+    let indices = compute_match_indices_for_result(&result, "posi");
+
+    assert!(indices.name_indices.is_empty());
+    assert_eq!(indices.description_indices, vec![16, 17, 18, 19]);
 }

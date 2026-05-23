@@ -95,6 +95,36 @@ pub struct MatchIndices {
     pub description_indices: Vec<usize>,
 }
 
+/// Field that produced the winning match evidence for an active launcher row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MatchEvidenceField {
+    Name,
+    Description,
+    Filename,
+    Content,
+    Alias,
+    Shortcut,
+    Keyword,
+    Source,
+    Tool,
+    WindowApp,
+    SkillId,
+    PluginTitle,
+}
+
+/// Winning search evidence captured during scoring.
+///
+/// Stored evidence prevents the renderer from recomputing highlights against a
+/// different field than the one that admitted and ranked the row.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MatchEvidence {
+    pub field: MatchEvidenceField,
+    pub text: String,
+    pub indices: Vec<usize>,
+    pub tier: i32,
+    pub score: i32,
+}
+
 /// Describes which field produced the winning match for a script
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum ScriptMatchKind {
@@ -158,6 +188,8 @@ pub struct ScriptMatch {
     pub match_kind: ScriptMatchKind,
     /// Content-hit metadata when match_kind == Content
     pub content_match: Option<ScriptContentMatch>,
+    /// Winning field evidence captured during scoring.
+    pub match_evidence: Option<MatchEvidence>,
 }
 
 /// Represents a scored match result for fuzzy search on scriptlets
@@ -170,6 +202,8 @@ pub struct ScriptletMatch {
     pub display_file_path: Option<String>,
     /// Indices of matched characters for UI highlighting
     pub match_indices: MatchIndices,
+    /// Winning field evidence captured during scoring.
+    pub match_evidence: Option<MatchEvidence>,
 }
 
 /// Represents a scored match result for fuzzy search on built-in entries
@@ -177,6 +211,8 @@ pub struct ScriptletMatch {
 pub struct BuiltInMatch {
     pub entry: crate::builtins::BuiltInEntry,
     pub score: i32,
+    /// Winning field evidence captured during scoring.
+    pub match_evidence: Option<MatchEvidence>,
 }
 
 /// Represents a scored match result for fuzzy search on applications
@@ -184,6 +220,8 @@ pub struct BuiltInMatch {
 pub struct AppMatch {
     pub app: crate::app_launcher::AppInfo,
     pub score: i32,
+    /// Winning field evidence captured during scoring.
+    pub match_evidence: Option<MatchEvidence>,
 }
 
 /// Represents a scored match result for fuzzy search on windows
@@ -193,6 +231,8 @@ pub struct WindowMatch {
     pub app_icon: Option<crate::app_launcher::DecodedIcon>,
     pub subtitle: String,
     pub score: i32,
+    /// Winning field evidence captured during scoring.
+    pub match_evidence: Option<MatchEvidence>,
 }
 
 /// Root/unified Windows row enriched by the app layer for rendering.
@@ -214,6 +254,8 @@ pub struct SkillMatch {
     pub score: i32,
     /// Indices of matched characters for UI highlighting
     pub match_indices: MatchIndices,
+    /// Winning field evidence captured during scoring.
+    pub match_evidence: Option<MatchEvidence>,
 }
 
 /// Represents a scored match result for fuzzy search on agents

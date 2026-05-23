@@ -1,3 +1,4 @@
+use super::super::types::{MatchEvidence, MatchEvidenceField};
 use super::{find_ignore_ascii_case, is_word_boundary_match, NucleoCtx};
 
 pub(crate) const TIER_EXACT_PRIMARY: i32 = 1000;
@@ -169,6 +170,39 @@ pub(crate) fn primary_text_match(
 }
 
 pub(crate) fn better_match(current: &mut Option<TextMatch>, candidate: Option<TextMatch>) {
+    let Some(candidate) = candidate else {
+        return;
+    };
+    let replace = match current {
+        None => true,
+        Some(existing) => {
+            candidate.tier > existing.tier
+                || (candidate.tier == existing.tier && candidate.score > existing.score)
+        }
+    };
+    if replace {
+        *current = Some(candidate);
+    }
+}
+
+pub(crate) fn match_evidence(
+    field: MatchEvidenceField,
+    text: &str,
+    candidate: Option<TextMatch>,
+) -> Option<MatchEvidence> {
+    candidate.map(|candidate| MatchEvidence {
+        field,
+        text: text.to_string(),
+        indices: candidate.indices,
+        tier: candidate.tier,
+        score: candidate.score,
+    })
+}
+
+pub(crate) fn better_match_evidence(
+    current: &mut Option<MatchEvidence>,
+    candidate: Option<MatchEvidence>,
+) {
     let Some(candidate) = candidate else {
         return;
     };

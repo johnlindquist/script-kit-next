@@ -1459,6 +1459,7 @@ mod files_action_tests {
                 group: crate::builtins::BuiltInGroup::Core,
             },
             score: 1,
+            match_evidence: None,
         });
         let app = scripts::SearchResult::App(scripts::AppMatch {
             app: crate::app_launcher::AppInfo {
@@ -1468,6 +1469,7 @@ mod files_action_tests {
                 icon: None,
             },
             score: 1,
+            match_evidence: None,
         });
 
         assert_eq!(

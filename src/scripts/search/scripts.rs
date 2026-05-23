@@ -2,12 +2,15 @@ use std::cmp::Ordering;
 use std::ops::Range;
 use std::sync::Arc;
 
-use super::super::types::{MatchIndices, Script, ScriptContentMatch, ScriptMatch, ScriptMatchKind};
+use super::super::types::{
+    MatchEvidence, MatchEvidenceField, MatchIndices, Script, ScriptContentMatch, ScriptMatch,
+    ScriptMatchKind,
+};
 use super::{
-    better_match, byte_range_for_char_indices, extract_filename, find_ignore_ascii_case,
-    low_tier_substring_match, normalized_substring_match, primary_text_match, score_from_tier,
-    NucleoCtx, TextMatch, TextMatchKind, MIN_BODY_EXACT_QUERY_LEN, TIER_ALIAS, TIER_BODY,
-    TIER_DESCRIPTION, TIER_FILENAME, TIER_KEYWORD,
+    better_match, better_match_evidence, byte_range_for_char_indices, extract_filename,
+    find_ignore_ascii_case, low_tier_substring_match, match_evidence, normalized_substring_match,
+    primary_text_match, score_from_tier, NucleoCtx, TextMatch, TextMatchKind,
+    MIN_BODY_EXACT_QUERY_LEN, TIER_ALIAS, TIER_BODY, TIER_DESCRIPTION, TIER_FILENAME, TIER_KEYWORD,
 };
 
 const SCORE_EXACT_NAME_MATCH: i32 = 500;
@@ -58,45 +61,39 @@ fn is_legacy_ai_vault_wrapper_script(script: &Script) -> bool {
         && (description.contains("resume") || description.contains("past"))
 }
 
-fn legacy_ai_vault_direct_match_score(
+fn legacy_ai_vault_direct_match(
     script: &Script,
     filename: &str,
     query_lower: &str,
-) -> Option<i32> {
+) -> Option<MatchEvidence> {
     if !query_lower.is_ascii() {
         return None;
     }
 
-    let mut best = None::<i32>;
-    let mut consider = |candidate: &str| {
+    let mut best = None::<MatchEvidence>;
+    let mut consider = |field: MatchEvidenceField, candidate: &str| {
         if !candidate.is_ascii() {
             return;
         }
 
-        let candidate = candidate.trim().to_ascii_lowercase();
-        let score = if candidate == query_lower {
-            Some(score_from_tier(1000, 900))
-        } else if query_lower.len() >= 3 && candidate.starts_with(query_lower) {
-            Some(score_from_tier(950, 900))
-        } else if query_lower.len() >= 3 && candidate.contains(query_lower) {
-            Some(score_from_tier(850, 900))
-        } else {
-            None
-        };
-
-        if let Some(score) = score {
-            best = Some(best.map_or(score, |current| current.max(score)));
-        }
+        better_match_evidence(
+            &mut best,
+            match_evidence(
+                field,
+                candidate,
+                low_tier_substring_match(candidate.trim(), query_lower, 1000),
+            ),
+        );
     };
 
-    consider(&script.name);
-    consider(filename);
+    consider(MatchEvidenceField::Name, &script.name);
+    consider(MatchEvidenceField::Filename, filename);
     if let Some(alias) = script.alias.as_deref() {
-        consider(alias);
+        consider(MatchEvidenceField::Alias, alias);
     }
-    consider("vault");
-    consider("ai-vault");
-    consider("aivault");
+    consider(MatchEvidenceField::Keyword, "vault");
+    consider(MatchEvidenceField::Keyword, "ai-vault");
+    consider(MatchEvidenceField::Keyword, "aivault");
 
     best
 }
@@ -136,6 +133,52 @@ fn property_keyword_match(
     consider(!typed_meta.watch.is_empty(), "watch");
     consider(!typed_meta.watch.is_empty(), "watching");
     best
+}
+
+fn property_keyword_match_evidence(
+    typed_meta: &crate::metadata_parser::TypedMetadata,
+    query_lower: &str,
+) -> Option<MatchEvidence> {
+    let mut best = None;
+    let mut consider = |enabled: bool, keyword: &str| {
+        if enabled {
+            better_match_evidence(
+                &mut best,
+                match_evidence(
+                    MatchEvidenceField::Keyword,
+                    keyword,
+                    low_tier_substring_match(keyword, query_lower, TIER_KEYWORD),
+                ),
+            );
+        }
+    };
+    consider(
+        typed_meta.cron.is_some() || typed_meta.schedule.is_some(),
+        "cron",
+    );
+    consider(
+        typed_meta.cron.is_some() || typed_meta.schedule.is_some(),
+        "scheduled",
+    );
+    consider(
+        typed_meta.cron.is_some() || typed_meta.schedule.is_some(),
+        "schedule",
+    );
+    consider(typed_meta.background, "background");
+    consider(typed_meta.background, "bg");
+    consider(typed_meta.system, "system");
+    consider(!typed_meta.watch.is_empty(), "watch");
+    consider(!typed_meta.watch.is_empty(), "watching");
+    best
+}
+
+fn script_match_kind_for_evidence(evidence: &MatchEvidence) -> ScriptMatchKind {
+    match evidence.field {
+        MatchEvidenceField::Description => ScriptMatchKind::Description,
+        MatchEvidenceField::Filename => ScriptMatchKind::Filename,
+        MatchEvidenceField::Content => ScriptMatchKind::Content,
+        _ => ScriptMatchKind::Name,
+    }
 }
 
 fn script_match_kind_for_candidate(
@@ -184,6 +227,7 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
                     match_indices: MatchIndices::default(),
                     match_kind: ScriptMatchKind::default(),
                     content_match: None,
+                    match_evidence: None,
                 }
             })
             .collect();
@@ -202,66 +246,81 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             continue;
         }
 
-        let mut best: Option<TextMatch> = None;
-        let mut match_kind = ScriptMatchKind::Name;
+        let mut best: Option<MatchEvidence> = None;
         // Lazy match indices - don't compute during scoring, will be computed on-demand
         let match_indices = MatchIndices::default();
 
         let filename = extract_filename(&script.path);
 
         if is_legacy_ai_vault_wrapper_script(script) {
-            if let Some(score) = legacy_ai_vault_direct_match_score(script, &filename, &query_lower)
-            {
+            if let Some(evidence) = legacy_ai_vault_direct_match(script, &filename, &query_lower) {
+                let match_kind = script_match_kind_for_evidence(&evidence);
                 matches.push(ScriptMatch {
                     script: Arc::clone(script),
-                    score,
+                    score: evidence.score,
                     filename,
                     match_indices,
-                    match_kind: ScriptMatchKind::Name,
+                    match_kind,
                     content_match: None,
+                    match_evidence: Some(evidence),
                 });
             }
             continue;
         }
 
-        let (next, kind) = script_match_kind_for_candidate(
-            match_kind,
-            &best,
-            primary_text_match(&script.name, &query_lower, &mut nucleo),
-            ScriptMatchKind::Name,
+        better_match_evidence(
+            &mut best,
+            match_evidence(
+                MatchEvidenceField::Name,
+                &script.name,
+                primary_text_match(&script.name, &query_lower, &mut nucleo),
+            ),
         );
-        best = next;
-        match_kind = kind;
 
-        let (next, kind) = script_match_kind_for_candidate(
-            match_kind,
-            &best,
-            low_tier_substring_match(&filename, &query_lower, TIER_FILENAME),
-            ScriptMatchKind::Filename,
+        better_match_evidence(
+            &mut best,
+            match_evidence(
+                MatchEvidenceField::Filename,
+                &filename,
+                low_tier_substring_match(&filename, &query_lower, TIER_FILENAME),
+            ),
         );
-        best = next;
-        match_kind = kind;
 
         // Score by alias match - allows users to search by trigger alias
         if let Some(ref alias) = script.alias {
-            better_match(&mut best, metadata_match(alias, &query_lower, TIER_ALIAS));
+            better_match_evidence(
+                &mut best,
+                match_evidence(
+                    MatchEvidenceField::Alias,
+                    alias,
+                    metadata_match(alias, &query_lower, TIER_ALIAS),
+                ),
+            );
         }
 
         // Score by keyboard shortcut match - allows finding scripts by their hotkey
         // Users may type "opt i" or "cmd shift k" to find which script has that shortcut
         if let Some(ref shortcut) = script.shortcut {
-            better_match(
+            better_match_evidence(
                 &mut best,
-                metadata_match(shortcut, &query_lower, TIER_ALIAS),
+                match_evidence(
+                    MatchEvidenceField::Shortcut,
+                    shortcut,
+                    metadata_match(shortcut, &query_lower, TIER_ALIAS),
+                ),
             );
         }
 
         // Score by kit name match - allows searching by kit (e.g., "cleanshot")
         if let Some(ref kit_name) = script.kit_name {
             if kit_name != "main" {
-                better_match(
+                better_match_evidence(
                     &mut best,
-                    metadata_match(kit_name, &query_lower, TIER_KEYWORD),
+                    match_evidence(
+                        MatchEvidenceField::Source,
+                        kit_name,
+                        metadata_match(kit_name, &query_lower, TIER_KEYWORD),
+                    ),
                 );
             }
         }
@@ -270,7 +329,14 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         // Tags come from typed metadata: metadata = { tags: ["productivity", "notes"] }
         if let Some(ref typed_meta) = script.typed_metadata {
             for tag in &typed_meta.tags {
-                better_match(&mut best, metadata_match(tag, &query_lower, TIER_KEYWORD));
+                better_match_evidence(
+                    &mut best,
+                    match_evidence(
+                        MatchEvidenceField::Keyword,
+                        tag,
+                        metadata_match(tag, &query_lower, TIER_KEYWORD),
+                    ),
+                );
             }
         }
 
@@ -278,9 +344,13 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         // Author comes from typed metadata: metadata = { author: "John Lindquist" }
         if let Some(ref typed_meta) = script.typed_metadata {
             if let Some(ref author) = typed_meta.author {
-                better_match(
+                better_match_evidence(
                     &mut best,
-                    metadata_match(author, &query_lower, TIER_KEYWORD),
+                    match_evidence(
+                        MatchEvidenceField::Keyword,
+                        author,
+                        metadata_match(author, &query_lower, TIER_KEYWORD),
+                    ),
                 );
             }
         }
@@ -289,18 +359,21 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         // Users can type "cron", "scheduled", "background", "system", or "watch" to find
         // scripts with those runtime properties. This makes special scripts discoverable.
         if let Some(ref typed_meta) = script.typed_metadata {
-            better_match(&mut best, property_keyword_match(typed_meta, &query_lower));
+            better_match_evidence(
+                &mut best,
+                property_keyword_match_evidence(typed_meta, &query_lower),
+            );
         }
 
         if let Some(ref desc) = script.description {
-            let (next, kind) = script_match_kind_for_candidate(
-                match_kind,
-                &best,
-                normalized_substring_match(desc, &query_lower, TIER_DESCRIPTION),
-                ScriptMatchKind::Description,
+            better_match_evidence(
+                &mut best,
+                match_evidence(
+                    MatchEvidenceField::Description,
+                    desc,
+                    normalized_substring_match(desc, &query_lower, TIER_DESCRIPTION),
+                ),
             );
-            best = next;
-            match_kind = kind;
         }
 
         let mut content_match = None;
@@ -324,18 +397,25 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
                     score: score_from_tier(TIER_BODY, SCORE_CONTENT_MATCH),
                     indices: hit.line_match_indices.clone(),
                 };
+                let evidence = MatchEvidence {
+                    field: MatchEvidenceField::Content,
+                    text: hit.line_text.clone(),
+                    indices: candidate.indices,
+                    tier: candidate.tier,
+                    score: candidate.score,
+                };
                 let replace = best
                     .as_ref()
-                    .is_none_or(|current| candidate.tier > current.tier);
+                    .is_none_or(|current| evidence.tier > current.tier);
                 if replace {
-                    best = Some(candidate);
-                    match_kind = ScriptMatchKind::Content;
+                    best = Some(evidence);
                     content_match = Some(hit);
                 }
             }
         }
 
         if let Some(best) = best {
+            let match_kind = script_match_kind_for_evidence(&best);
             matches.push(ScriptMatch {
                 script: Arc::clone(script),
                 score: best.score,
@@ -343,6 +423,7 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
                 match_indices,
                 match_kind,
                 content_match,
+                match_evidence: Some(best),
             });
         }
     }

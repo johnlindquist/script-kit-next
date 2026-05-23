@@ -109,6 +109,7 @@ fn test_compute_match_indices_for_scriptlet_result() {
         score: 100,
         display_file_path: Some("copy.md#copy-text".to_string()),
         match_indices: MatchIndices::default(),
+            match_evidence: None,
     };
     let result = SearchResult::Scriptlet(scriptlet_match);
 

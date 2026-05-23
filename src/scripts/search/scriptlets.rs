@@ -1,10 +1,13 @@
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-use super::super::types::{MatchIndices, Scriptlet, ScriptletMatch};
+use super::super::types::{
+    MatchEvidence, MatchEvidenceField, MatchIndices, Scriptlet, ScriptletMatch,
+};
 use super::{
-    better_match, extract_scriptlet_display_path, low_tier_substring_match, primary_text_match,
-    NucleoCtx, TIER_ALIAS, TIER_DESCRIPTION, TIER_FILENAME, TIER_KEYWORD,
+    better_match_evidence, extract_scriptlet_display_path, low_tier_substring_match,
+    match_evidence, primary_text_match, NucleoCtx, TIER_ALIAS, TIER_DESCRIPTION, TIER_FILENAME,
+    TIER_KEYWORD,
 };
 
 /// Fuzzy search scriptlets by query string
@@ -27,6 +30,7 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
                     score: 0,
                     display_file_path,
                     match_indices: MatchIndices::default(),
+                    match_evidence: None,
                 }
             })
             .collect();
@@ -38,64 +42,96 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
     // Create nucleo context once for all scriptlets - reuses buffer across calls
     let mut nucleo = NucleoCtx::new(&query_lower);
     for scriptlet in scriptlets {
-        let mut best = None;
+        let mut best = None::<MatchEvidence>;
         // Lazy match indices - don't compute during scoring
         let match_indices = MatchIndices::default();
 
         let display_file_path = extract_scriptlet_display_path(&scriptlet.file_path);
 
-        better_match(
+        better_match_evidence(
             &mut best,
-            primary_text_match(&scriptlet.name, &query_lower, &mut nucleo),
+            match_evidence(
+                MatchEvidenceField::Name,
+                &scriptlet.name,
+                primary_text_match(&scriptlet.name, &query_lower, &mut nucleo),
+            ),
         );
 
         if let Some(ref fp) = display_file_path {
-            better_match(
+            better_match_evidence(
                 &mut best,
-                low_tier_substring_match(fp, &query_lower, TIER_FILENAME),
+                match_evidence(
+                    MatchEvidenceField::Filename,
+                    fp,
+                    low_tier_substring_match(fp, &query_lower, TIER_FILENAME),
+                ),
             );
         }
 
         if let Some(ref desc) = scriptlet.description {
-            better_match(
+            better_match_evidence(
                 &mut best,
-                low_tier_substring_match(desc, &query_lower, TIER_DESCRIPTION),
+                match_evidence(
+                    MatchEvidenceField::Description,
+                    desc,
+                    low_tier_substring_match(desc, &query_lower, TIER_DESCRIPTION),
+                ),
             );
         }
 
         if let Some(ref keyword) = scriptlet.keyword {
-            better_match(
+            better_match_evidence(
                 &mut best,
-                low_tier_substring_match(keyword, &query_lower, TIER_ALIAS),
+                match_evidence(
+                    MatchEvidenceField::Keyword,
+                    keyword,
+                    low_tier_substring_match(keyword, &query_lower, TIER_ALIAS),
+                ),
             );
         }
 
         if let Some(ref alias) = scriptlet.alias {
-            better_match(
+            better_match_evidence(
                 &mut best,
-                low_tier_substring_match(alias, &query_lower, TIER_ALIAS),
+                match_evidence(
+                    MatchEvidenceField::Alias,
+                    alias,
+                    low_tier_substring_match(alias, &query_lower, TIER_ALIAS),
+                ),
             );
         }
 
         if let Some(ref shortcut) = scriptlet.shortcut {
-            better_match(
+            better_match_evidence(
                 &mut best,
-                low_tier_substring_match(shortcut, &query_lower, TIER_ALIAS),
+                match_evidence(
+                    MatchEvidenceField::Shortcut,
+                    shortcut,
+                    low_tier_substring_match(shortcut, &query_lower, TIER_ALIAS),
+                ),
             );
         }
 
         if let Some(ref group) = scriptlet.group {
             if group != "main" {
-                better_match(
+                better_match_evidence(
                     &mut best,
-                    low_tier_substring_match(group, &query_lower, TIER_KEYWORD),
+                    match_evidence(
+                        MatchEvidenceField::Source,
+                        group,
+                        low_tier_substring_match(group, &query_lower, TIER_KEYWORD),
+                    ),
                 );
             }
         }
 
-        better_match(
+        better_match_evidence(
             &mut best,
-            low_tier_substring_match(&scriptlet.tool, &query_lower, TIER_KEYWORD),
+            match_evidence(
+                MatchEvidenceField::Tool,
+                &scriptlet.tool,
+                low_tier_substring_match(&scriptlet.tool, &query_lower, TIER_KEYWORD),
+            ),
         );
 
         if let Some(best) = best {
@@ -104,6 +140,7 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
                 score: best.score,
                 display_file_path,
                 match_indices,
+                match_evidence: Some(best),
             });
         }
     }

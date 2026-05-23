@@ -96,6 +96,7 @@ fn test_compute_match_indices_for_script_result() {
         match_indices: MatchIndices::default(),
         match_kind: ScriptMatchKind::default(),
         content_match: None,
+            match_evidence: None,
     };
     let result = SearchResult::Script(script_match);
 
@@ -111,6 +112,7 @@ fn test_compute_match_indices_for_scriptlet_result() {
         score: 100,
         display_file_path: Some("copy.md#copy-text".to_string()),
         match_indices: MatchIndices::default(),
+            match_evidence: None,
     };
     let result = SearchResult::Scriptlet(scriptlet_match);
 
@@ -137,6 +139,7 @@ fn test_compute_match_indices_empty_query() {
         match_indices: MatchIndices::default(),
         match_kind: ScriptMatchKind::default(),
         content_match: None,
+            match_evidence: None,
     };
     let result = SearchResult::Script(script_match);
 

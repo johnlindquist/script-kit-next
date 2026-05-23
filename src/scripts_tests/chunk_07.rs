@@ -329,6 +329,7 @@ fn test_search_result_type_label_consistency() {
         score: 0,
         display_file_path: None,
         match_indices: MatchIndices::default(),
+            match_evidence: None,
     });
 
     // Should always return "Snippet"

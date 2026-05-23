@@ -1917,6 +1917,7 @@ pub(crate) fn build_capture_mode_results(
             match_indices: MatchIndices::default(),
             match_kind: ScriptMatchKind::Name,
             content_match: None,
+            match_evidence: None,
         }));
         grouped.push(GroupedListItem::Item(idx));
     }
@@ -2097,6 +2098,7 @@ mod advanced_query_tests {
                 group: crate::builtins::BuiltInGroup::Core,
             },
             score: i32::MAX,
+            match_evidence: None,
         })
     }
 
