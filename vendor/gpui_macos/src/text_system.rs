@@ -35,8 +35,8 @@ use font_kit::{
 };
 use gpui::{
     Bounds, DevicePixels, Font, FontFallbacks, FontFeatures, FontId, FontMetrics, FontRun,
-    FontStyle, FontWeight, GlyphId, LineLayout, Pixels, PlatformTextSystem, RenderGlyphParams,
-    Result, SUBPIXEL_VARIANTS_X, ShapedGlyph, ShapedRun, SharedString, Size, TextRenderingMode,
+    FontStyle, FontWeight, GlyphId, Hsla, LineLayout, Pixels, PlatformTextSystem, RenderGlyphParams,
+    Result, Rgba, SUBPIXEL_VARIANTS_X, ShapedGlyph, ShapedRun, SharedString, Size, TextRenderingMode,
     point, px, size, swap_rgba_pa_to_bgra,
 };
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
@@ -46,7 +46,7 @@ use pathfinder_geometry::{
     vector::Vector2F,
 };
 use smallvec::SmallVec;
-use std::{borrow::Cow, char, convert::TryFrom, sync::Arc};
+use std::{borrow::Cow, char, convert::TryFrom, sync::{Arc, OnceLock}};
 
 use crate::open_type::apply_features_and_fallbacks;
 
@@ -214,9 +214,46 @@ impl PlatformTextSystem for MacTextSystem {
     ) -> TextRenderingMode {
         TextRenderingMode::Grayscale
     }
+
+    fn glyph_dilation_for_color(&self, color: Hsla) -> u8 {
+        self.0.read().glyph_dilation_for_color(color)
+    }
+}
+
+fn font_smoothing_allowed_by_user() -> bool {
+    static ALLOWED: OnceLock<bool> = OnceLock::new();
+    *ALLOWED.get_or_init(|| {
+        use core_foundation_sys::preferences::{
+            CFPreferencesCopyAppValue, kCFPreferencesCurrentApplication,
+        };
+
+        let key = CFString::new("AppleFontSmoothing");
+        let value_ref = unsafe {
+            CFPreferencesCopyAppValue(key.as_concrete_TypeRef(), kCFPreferencesCurrentApplication)
+        };
+        if value_ref.is_null() {
+            return true;
+        }
+        let number = unsafe { CFNumber::wrap_under_create_rule(value_ref as _) };
+        // Only an explicit value of `0` means that font smoothing is disabled.
+        number.to_i64() != Some(0)
+    })
 }
 
 impl MacTextSystemState {
+    fn glyph_dilation_for_color(&self, color: Hsla) -> u8 {
+        // When font smoothing is enabled, CoreGraphics thickens glyph strokes by an amount that
+        // depends on the foreground color's luminance. We replicate the logic used by CoreGraphics
+        // to select between the different levels of dilation.
+        if !font_smoothing_allowed_by_user() {
+            return 0;
+        }
+        let rgba: Rgba = color.into();
+        let luminance = 0.2126 * rgba.r + 0.7152 * rgba.g + 0.0722 * rgba.b;
+        let level = ((4.0 * luminance) + 0.5).floor() as i32;
+        level.clamp(0, 4) as u8
+    }
+
     fn add_fonts(&mut self, fonts: Vec<Cow<'static, [u8]>>) -> Result<()> {
         let fonts = fonts
             .into_iter()
@@ -438,7 +475,13 @@ impl MacTextSystemState {
                 .subpixel_variant
                 .map(|v| v as f32 / SUBPIXEL_VARIANTS_X as f32);
             cx.set_text_drawing_mode(CGTextDrawingMode::CGTextFill);
-            cx.set_gray_fill_color(0.0, 1.0);
+            if params.dilation > 0 {
+                let luminance = params.dilation as f64 * 0.25;
+                cx.set_should_smooth_fonts(true);
+                cx.set_gray_fill_color(luminance, 1.0);
+            } else {
+                cx.set_gray_fill_color(0.0, 1.0);
+            }
             cx.set_allows_antialiasing(true);
             cx.set_should_antialias(true);
             cx.set_allows_font_subpixel_positioning(true);
