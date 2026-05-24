@@ -17,6 +17,11 @@
 ///
 /// Uses Objective-C message sending internally.
 #[cfg(target_os = "macos")]
+static LAST_MAIN_WINDOW_VIBRANCY_SIGNATURE: std::sync::Mutex<
+    Option<(usize, bool, crate::theme::VibrancyMaterial)>,
+> = std::sync::Mutex::new(None);
+
+#[cfg(target_os = "macos")]
 pub fn configure_window_vibrancy_material_for_appearance(
     is_dark: bool,
     material: crate::theme::VibrancyMaterial,
@@ -38,6 +43,24 @@ pub fn configure_window_vibrancy_material_for_appearance(
                 return;
             }
         };
+
+        // Get the content view
+        let content_view: id = msg_send![window, contentView];
+        if content_view.is_null() {
+            logging::log("PANEL", "WARNING: Window has no content view");
+            return;
+        }
+
+        let signature = (window as usize, is_dark, material);
+        {
+            let mut guard = LAST_MAIN_WINDOW_VIBRANCY_SIGNATURE
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner());
+            if guard.as_ref() == Some(&signature) {
+                return;
+            }
+            *guard = Some(signature);
+        }
 
         // Clear window appearance so GPUI can detect system appearance changes.
         // The appearance is set on individual NSVisualEffectViews instead (see
@@ -72,13 +95,6 @@ pub fn configure_window_vibrancy_material_for_appearance(
             "PANEL",
             "Set window backgroundColor to windowBackgroundColor, hasShadow=true, opaque=false",
         );
-
-        // Get the content view
-        let content_view: id = msg_send![window, contentView];
-        if content_view.is_null() {
-            logging::log("PANEL", "WARNING: Window has no content view");
-            return;
-        }
 
         // Recursively find and configure ALL NSVisualEffectViews
         // Expert feedback: GPUI may nest effect views, so we need to walk the whole tree

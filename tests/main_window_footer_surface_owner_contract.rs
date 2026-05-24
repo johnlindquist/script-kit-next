@@ -6,6 +6,7 @@ const FOOTER_POPUP_SOURCE: &str = include_str!("../src/footer_popup.rs");
 const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
 const RENDER_PROMPTS_OTHER_SOURCE: &str = include_str!("../src/render_prompts/other.rs");
 const STARTUP_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
+const VIBRANCY_CONFIG_SOURCE: &str = include_str!("../src/platform/vibrancy_config.rs");
 const RUNTIME_STDIN_MATCH_SIMULATE_KEY_SOURCE: &str =
     include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
 
@@ -128,6 +129,58 @@ fn script_issues_enter_routes_to_agent_chat_prompt_submission() {
         render_script_issues.contains("has_cmd && key.eq_ignore_ascii_case(\"w\")")
             && render_script_issues.contains("this.go_back_or_close(window, cx);"),
         "ScriptIssuesView must handle Cmd+W as a close/back shortcut"
+    );
+}
+
+#[test]
+fn native_footer_visual_effect_refresh_invalidates_without_synchronous_redisplay() {
+    let refresh = function_body(FOOTER_POPUP_SOURCE, "unsafe fn refresh_main_footer_host");
+    let invalidate = function_body(
+        FOOTER_POPUP_SOURCE,
+        "unsafe fn invalidate_footer_effect_view_theme",
+    );
+
+    assert!(
+        refresh.contains("footer_content_changed")
+            && refresh.contains("footer_visuals_changed")
+            && refresh.contains("effect_theme_changed")
+            && refresh.contains("invalidate_footer_effect_view_theme(footer_view, effect_theme_changed);"),
+        "native footer refresh must invalidate the AppKit visual-effect background after theme/material changes"
+    );
+    assert!(
+        refresh.contains("if footer_content_changed")
+            && refresh.contains("} else if footer_visuals_changed {")
+            && refresh.contains("recolor_footer_hint_subviews(hints_view, &theme);")
+            && refresh.contains("layout_footer_hints(hints_view, text_color, &config.buttons, &theme);"),
+        "theme-only native footer refreshes must recolor existing AppKit hint subviews instead of rebuilding buttons"
+    );
+    assert!(
+        invalidate.contains("effect_theme_changed")
+            && invalidate.contains("setNeedsLayout: YES")
+            && invalidate.contains("setNeedsDisplay: YES")
+            && invalidate.contains("footer_layer")
+            && invalidate.contains("setNeedsDisplay")
+            && !invalidate.contains("layoutSubtreeIfNeeded")
+            && !invalidate.contains("displayIfNeeded"),
+        "native footer visual-effect refresh should invalidate layout/display without forcing synchronous AppKit display"
+    );
+}
+
+#[test]
+fn native_vibrancy_config_skips_redundant_same_window_reapply() {
+    let body = function_body(
+        VIBRANCY_CONFIG_SOURCE,
+        "pub fn configure_window_vibrancy_material_for_appearance",
+    );
+
+    assert!(
+        VIBRANCY_CONFIG_SOURCE.contains("static LAST_MAIN_WINDOW_VIBRANCY_SIGNATURE")
+            && body.contains("let signature = (window as usize, is_dark, material);")
+            && body.contains("guard.as_ref() == Some(&signature)")
+            && body.contains("return;")
+            && body.find("guard.as_ref() == Some(&signature)")
+                < body.find("configure_visual_effect_views_recursive("),
+        "theme preview must not recursively reconfigure native vibrancy when window, appearance, and material are unchanged"
     );
 }
 

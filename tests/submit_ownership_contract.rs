@@ -4,6 +4,8 @@ const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
 const STARTUP_NEW_PRELUDE: &str = include_str!("../src/app_impl/startup_new_prelude.rs");
 const SELECTION_FALLBACK: &str = include_str!("../src/app_impl/selection_fallback.rs");
 const SUBMIT_DIAGNOSTICS: &str = include_str!("../src/app_impl/submit_diagnostics.rs");
+const THEME_CHOOSER: &str = include_str!("../src/render_builtins/theme_chooser.rs");
+const LIFECYCLE_RESET: &str = include_str!("../src/app_impl/lifecycle_reset.rs");
 const PROTOCOL_QUERY_VARIANTS: &str = include_str!("../src/protocol/message/variants/query_ops.rs");
 const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
 const DEVTOOLS_FOCUS: &str = include_str!("../scripts/devtools/focus.ts");
@@ -45,6 +47,38 @@ fn mini_prompt_enter_records_submit_owner_before_resetting_to_script_list() {
             && submit_fn.contains("BUILTIN_SNAP_MODE_PROMPT_ID")
             && submit_fn.contains("handle_builtin_snap_mode_selection(&value, cx);"),
         "built-in snap mode prompt submit must record ownership before returning to ScriptList"
+    );
+}
+
+#[test]
+fn builtin_submit_transitions_that_return_to_script_list_arm_enter_echo_guard() {
+    let theme_submit = source_between(
+        THEME_CHOOSER,
+        "pub(crate) fn submit_theme_chooser_from_input_enter(",
+        "\n    fn theme_chooser_match_summary",
+    );
+    assert!(
+        SUBMIT_DIAGNOSTICS.contains("fn record_return_to_script_list_submit")
+            && SUBMIT_DIAGNOSTICS.contains("self.record_submit_diagnostic(owner, route, None, value, true);")
+            && theme_submit.contains("record_return_to_script_list_submit")
+            && theme_submit.contains("\"theme_chooser\"")
+            && theme_submit.contains("\"submit_theme_chooser_from_input_enter\"")
+            && theme_submit.find("record_return_to_script_list_submit")
+                < theme_submit.find("self.go_back_or_close(window, cx);"),
+        "Theme Designer Apply must use the return-to-ScriptList submit helper before returning to the main menu"
+    );
+
+    let reset_positions = source_between(
+        LIFECYCLE_RESET,
+        "pub(crate) fn reset_window_positions_to_default_main_menu(",
+        "\n    pub(crate) fn cancel_script_execution",
+    );
+    assert!(
+        reset_positions.contains("record_return_to_script_list_submit")
+            && reset_positions.contains("\"reset_window_positions_to_default_main_menu\"")
+            && reset_positions.find("record_return_to_script_list_submit")
+                < reset_positions.find("self.reset_to_script_list(cx);"),
+        "Reset Window Positions must use the return-to-ScriptList submit helper before resetting to the main menu"
     );
 }
 

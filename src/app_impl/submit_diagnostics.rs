@@ -50,6 +50,15 @@ impl ScriptListApp {
         );
     }
 
+    pub(crate) fn record_return_to_script_list_submit(
+        &mut self,
+        owner: &'static str,
+        route: &'static str,
+        value: Option<&str>,
+    ) {
+        self.record_submit_diagnostic(owner, route, None, value, true);
+    }
+
     pub(crate) fn should_consume_script_list_enter_after_submit(
         &mut self,
         route: &'static str,

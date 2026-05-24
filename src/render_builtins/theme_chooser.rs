@@ -1331,6 +1331,11 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         logging::log("KEY", "PressEnter routed to ThemeChooser");
+        self.record_return_to_script_list_submit(
+            "theme_chooser",
+            "submit_theme_chooser_from_input_enter",
+            Some("theme_chooser_done"),
+        );
         if let Err(e) = crate::theme::service::persist_theme_and_sync_all_windows(
             cx,
             self.theme.as_ref(),

@@ -29,6 +29,11 @@ impl ScriptListApp {
             "WINDOW_STATE",
             "Resetting window positions and returning main window to default menu",
         );
+        self.record_return_to_script_list_submit(
+            "settings",
+            "reset_window_positions_to_default_main_menu",
+            Some("Reset Window Positions"),
+        );
 
         crate::window_state::suppress_save();
         crate::window_state::reset_all_positions();

@@ -1149,7 +1149,12 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
         hover_rgba: chrome.hover_rgba,
         left_dot_hex,
     };
-    {
+    let (
+        footer_geometry_changed,
+        footer_content_changed,
+        footer_visuals_changed,
+        effect_theme_changed,
+    ) = {
         let mut guard = MAIN_WINDOW_FOOTER_REFRESH_SIGNATURE
             .lock()
             .unwrap_or_else(|poison| poison.into_inner());
@@ -1157,46 +1162,86 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
             update_main_window_footer_host_state(Some(config.surface), Some(config.surface), true);
             return true;
         }
+        let footer_geometry_changed = guard
+            .as_ref()
+            .map(|previous| previous.content_width_bits != signature.content_width_bits)
+            .unwrap_or(true);
+        let footer_content_changed = guard
+            .as_ref()
+            .map(|previous| {
+                previous.config != signature.config
+                    || previous.content_width_bits != signature.content_width_bits
+            })
+            .unwrap_or(true);
+        let footer_visuals_changed = guard
+            .as_ref()
+            .map(|previous| {
+                previous.divider_rgba != signature.divider_rgba
+                    || previous.text_primary_hex != signature.text_primary_hex
+                    || previous.background_hex != signature.background_hex
+                    || previous.accent_hex != signature.accent_hex
+                    || previous.selection_rgba != signature.selection_rgba
+                    || previous.hover_rgba != signature.hover_rgba
+                    || previous.left_dot_hex != signature.left_dot_hex
+            })
+            .unwrap_or(true);
+        let effect_theme_changed = guard
+            .as_ref()
+            .map(|previous| {
+                previous.dark != signature.dark || previous.material != signature.material
+            })
+            .unwrap_or(true);
         *guard = Some(signature);
-    }
-
-    let appearance_name = if is_dark {
-        ns_string("NSAppearanceNameVibrantDark")
-    } else {
-        ns_string("NSAppearanceNameVibrantLight")
+        (
+            footer_geometry_changed,
+            footer_content_changed,
+            footer_visuals_changed,
+            effect_theme_changed,
+        )
     };
-    if appearance_name != nil {
-        let appearance: id = msg_send![class!(NSAppearance), appearanceNamed: appearance_name];
-        if appearance != nil {
-            let _: () = msg_send![footer_view, setAppearance: appearance];
+
+    if effect_theme_changed {
+        let appearance_name = if is_dark {
+            ns_string("NSAppearanceNameVibrantDark")
+        } else {
+            ns_string("NSAppearanceNameVibrantLight")
+        };
+        if appearance_name != nil {
+            let appearance: id = msg_send![class!(NSAppearance), appearanceNamed: appearance_name];
+            if appearance != nil {
+                let _: () = msg_send![footer_view, setAppearance: appearance];
+            }
         }
+
+        let _: () = msg_send![footer_view, setMaterial: material];
+        let _: () = msg_send![footer_view, setState: 1isize];
+        let _: () = msg_send![footer_view, setBlendingMode: 1isize];
+        let _: () = msg_send![footer_view, setEmphasized: is_dark];
     }
 
-    let _: () = msg_send![footer_view, setMaterial: material];
-    let _: () = msg_send![footer_view, setState: 1isize];
-    let _: () = msg_send![footer_view, setBlendingMode: 1isize];
-    let _: () = msg_send![footer_view, setEmphasized: is_dark];
-    let _: () = msg_send![footer_view, setNeedsDisplay: YES];
+    if footer_geometry_changed {
+        let footer_frame = NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(content_bounds.size.width, footer_height()),
+        );
+        let _: () = msg_send![footer_view, setFrame: footer_frame];
 
-    let footer_frame = NSRect::new(
-        NSPoint::new(0.0, 0.0),
-        NSSize::new(content_bounds.size.width, footer_height()),
-    );
-    let _: () = msg_send![footer_view, setFrame: footer_frame];
-
-    let footer_layer: id = msg_send![footer_view, layer];
-    if footer_layer != nil {
-        let _: () = msg_send![footer_layer, setCornerRadius: 0.0_f64];
-        let _: () = msg_send![footer_layer, setMasksToBounds: YES];
+        let footer_layer: id = msg_send![footer_view, layer];
+        if footer_layer != nil {
+            let _: () = msg_send![footer_layer, setCornerRadius: 0.0_f64];
+            let _: () = msg_send![footer_layer, setMasksToBounds: YES];
+        }
     }
 
     let divider_view = find_subview_by_identifier(footer_view, FOOTER_DIVIDER_ID);
     if divider_view != nil {
-        let divider_frame = NSRect::new(
-            NSPoint::new(0.0, footer_height() - 1.0),
-            NSSize::new(content_bounds.size.width, 1.0),
-        );
-        let _: () = msg_send![divider_view, setFrame: divider_frame];
+        if footer_geometry_changed {
+            let divider_frame = NSRect::new(
+                NSPoint::new(0.0, footer_height() - 1.0),
+                NSSize::new(content_bounds.size.width, 1.0),
+            );
+            let _: () = msg_send![divider_view, setFrame: divider_frame];
+        }
         let divider_layer: id = msg_send![divider_view, layer];
         if divider_layer != nil {
             let divider_color = ns_color_from_rgba(chrome.divider_rgba);
@@ -1214,32 +1259,42 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
 
     let hints_view = find_subview_by_identifier(footer_view, FOOTER_HINTS_ID);
     if hints_view != nil {
-        let _: () = msg_send![hints_view, setFrame: footer_hints_frame(content_bounds.size.width)];
-        if gpui_footer_overlay_spike_enabled() {
-            // The spike proves the sandwich layering: AppKit keeps only the
-            // material/divider while GPUI owns the footer glyphs in a child
-            // overlay window above this footer host.
-            layout_footer_hints(hints_view, text_color, &[], &theme);
-        } else {
-            layout_footer_hints(hints_view, text_color, &config.buttons, &theme);
+        if footer_content_changed {
+            let _: () =
+                msg_send![hints_view, setFrame: footer_hints_frame(content_bounds.size.width)];
+            if gpui_footer_overlay_spike_enabled() {
+                // The spike proves the sandwich layering: AppKit keeps only the
+                // material/divider while GPUI owns the footer glyphs in a child
+                // overlay window above this footer host.
+                layout_footer_hints(hints_view, text_color, &[], &theme);
+            } else {
+                layout_footer_hints(hints_view, text_color, &config.buttons, &theme);
+            }
+        } else if footer_visuals_changed {
+            recolor_footer_hint_subviews(hints_view, &theme);
         }
     }
 
     // Left info (streaming dot + model name)
     let left_info_view = find_subview_by_identifier(footer_view, FOOTER_LEFT_INFO_ID);
     if left_info_view != nil {
-        let _: () = msg_send![
-            left_info_view,
-            setFrame: footer_left_info_frame(content_bounds.size.width)
-        ];
-        if gpui_footer_overlay_spike_enabled() {
-            layout_footer_left_info(left_info_view, None, text_color);
-        } else {
-            layout_footer_left_info(left_info_view, config.left_info.as_ref(), text_color);
+        if footer_content_changed {
+            let _: () = msg_send![
+                left_info_view,
+                setFrame: footer_left_info_frame(content_bounds.size.width)
+            ];
+        }
+        if footer_content_changed || (footer_visuals_changed && config.left_info.is_some()) {
+            if gpui_footer_overlay_spike_enabled() {
+                layout_footer_left_info(left_info_view, None, text_color);
+            } else {
+                layout_footer_left_info(left_info_view, config.left_info.as_ref(), text_color);
+            }
         }
     }
+    invalidate_footer_effect_view_theme(footer_view, effect_theme_changed);
 
-    tracing::info!(
+    tracing::debug!(
         target: "script_kit::footer_popup",
         event = "native_footer_host_refreshed",
         surface = config.surface,
@@ -1247,10 +1302,29 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
         width = content_bounds.size.width,
         height = footer_height(),
         dark = is_dark,
+        footer_geometry_changed,
+        footer_content_changed,
+        footer_visuals_changed,
+        effect_theme_changed,
         "Refreshed native footer host"
     );
 
     true
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn invalidate_footer_effect_view_theme(footer_view: id, effect_theme_changed: bool) {
+    use objc::{msg_send, sel, sel_impl};
+
+    if footer_view != nil && effect_theme_changed {
+        let _: () = msg_send![footer_view, setNeedsLayout: YES];
+        let _: () = msg_send![footer_view, setNeedsDisplay: YES];
+
+        let footer_layer: id = msg_send![footer_view, layer];
+        if footer_layer != nil {
+            let _: () = msg_send![footer_layer, setNeedsDisplay];
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -1603,6 +1677,67 @@ unsafe fn remove_active_dot_scale_animation(layer: id) {
     let scale_key = ns_string("pulseScale");
     if scale_key != nil {
         let _: () = msg_send![layer, removeAnimationForKey: scale_key];
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn recolor_footer_hint_subviews(view: id, theme: &crate::theme::Theme) {
+    if view == nil {
+        return;
+    }
+
+    let text_color = ns_color_from_hex_with_alpha(
+        theme.colors.text.primary,
+        crate::window_resize::mini_layout::HINT_TEXT_OPACITY as f64,
+    );
+    let border_color = ns_color_from_hex_with_alpha(
+        theme.colors.text.primary,
+        crate::components::footer_chrome::footer_keycap_border_alpha(theme, false) as f64,
+    );
+
+    recolor_footer_hint_subviews_with_colors(view, text_color, border_color);
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn recolor_footer_hint_subviews_with_colors(view: id, text_color: id, border_color: id) {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    if view == nil {
+        return;
+    }
+
+    if text_color != nil {
+        let is_text_field: cocoa::base::BOOL = msg_send![view, isKindOfClass: class!(NSTextField)];
+        if is_text_field == YES {
+            let _: () = msg_send![view, setTextColor: text_color];
+        }
+        let is_image_view: cocoa::base::BOOL = msg_send![view, isKindOfClass: class!(NSImageView)];
+        if is_image_view == YES {
+            let _: () = msg_send![view, setContentTintColor: text_color];
+        }
+    }
+
+    if border_color != nil {
+        let layer: id = msg_send![view, layer];
+        if layer != nil {
+            let border_width: f64 = msg_send![layer, borderWidth];
+            if border_width > 0.0 {
+                let cg_border: id = msg_send![border_color, CGColor];
+                if cg_border != nil {
+                    let _: () = msg_send![layer, setBorderColor: cg_border];
+                }
+            }
+        }
+    }
+
+    let subviews: id = msg_send![view, subviews];
+    if subviews == nil {
+        return;
+    }
+    let count: usize = msg_send![subviews, count];
+    for i in 0..count {
+        let child: id = msg_send![subviews, objectAtIndex: i];
+        recolor_footer_hint_subviews_with_colors(child, text_color, border_color);
     }
 }
 
