@@ -113,19 +113,37 @@ interface DictationPreferences {
   selectedDeviceId?: string;
 }
 
+type AgentChatBackend = "acp" | "pi";
+
 interface AiProfile {
-  id: string;
-  label: string;
-  selectedModelId?: string;
-  selectedAcpAgentId?: string;
-  systemPromptSlug?: string;
+  id?: string;
+  name: string;
+  backend?: AgentChatBackend;
+  agent?: string;
+  provider?: string;
+  model?: string;
+  systemPrompt?: string;
+  appendSystemPrompt?: string;
+  cwd?: string;
+  tools?: string[];
+  disableExtensions?: boolean;
+  disableSkills?: boolean;
+  disablePromptTemplates?: boolean;
+  hideCwdInPrompt?: boolean;
+  thinking?: string;
+  extensionPolicy?: string;
+  sessionDir?: string;
+  noSession?: boolean;
+  sessionDurability?: string;
 }
 
 interface AiPreferences {
   selectedModelId?: string;
   selectedAcpAgentId?: string;
+  selectedProfileId?: string;
+  selectedBackend?: AgentChatBackend;
   profiles?: AiProfile[];
-  activeProfileId?: string;
+  selectedProfileName?: string;
 }
 
 type SnapMode = "off" | "simple" | "expanded" | "precision";

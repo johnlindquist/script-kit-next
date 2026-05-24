@@ -251,12 +251,25 @@ Agent Chat uses the Agent Catalog and `~/.scriptkit/config.ts`. The stable confi
 ai: {
   selectedAcpAgentId: "codex-acp",
   selectedModelId: "gpt-5.4",
+  selectedProfileId: "script-kit",
   profiles: [
     {
       name: "Code Review",
       agent: "codex-acp",
       model: "gpt-5.4",
       systemPrompt: "Review changes and call out risks first."
+    },
+    {
+      id: "script-kit",
+      name: "Script Kit",
+      backend: "pi",
+      provider: "openai-codex",
+      model: "gpt-5.4",
+      cwd: "~/.scriptkit",
+      tools: ["read", "write", "edit", "bash", "grep", "find", "ls", "hashline_edit"],
+      disableExtensions: true,
+      disableSkills: true,
+      disablePromptTemplates: true
     }
   ],
   selectedProfileName: "Code Review"

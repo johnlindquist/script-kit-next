@@ -1415,6 +1415,30 @@ export interface DictationPreferences {
 /**
  * ACP Chat runtime preferences stored in `~/.scriptkit/config.ts`.
  */
+export type AgentChatBackend = "acp" | "pi";
+
+export interface AiProfile {
+  id?: string;
+  name: string;
+  backend?: AgentChatBackend;
+  agent?: string;
+  provider?: string;
+  model?: string;
+  systemPrompt?: string;
+  appendSystemPrompt?: string;
+  cwd?: string;
+  tools?: string[];
+  disableExtensions?: boolean;
+  disableSkills?: boolean;
+  disablePromptTemplates?: boolean;
+  hideCwdInPrompt?: boolean;
+  thinking?: string;
+  extensionPolicy?: string;
+  sessionDir?: string;
+  noSession?: boolean;
+  sessionDurability?: string;
+}
+
 export interface AiPreferences {
   /**
    * Last-selected model ID.
@@ -1429,6 +1453,26 @@ export interface AiPreferences {
    * @example "codex-acp"
    */
   selectedAcpAgentId?: string;
+
+  /**
+   * Last-selected Agent Chat profile id.
+   */
+  selectedProfileId?: string;
+
+  /**
+   * Last-selected Agent Chat backend.
+   */
+  selectedBackend?: AgentChatBackend;
+
+  /**
+   * Named Agent Chat configuration profiles.
+   */
+  profiles?: AiProfile[];
+
+  /**
+   * Legacy active profile name.
+   */
+  selectedProfileName?: string;
 }
 
 export type SnapMode = "off" | "simple" | "expanded" | "precision";

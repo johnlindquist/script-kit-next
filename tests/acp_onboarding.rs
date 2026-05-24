@@ -6,6 +6,7 @@
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 const ACP_LAUNCH_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
+const ACP_SETUP_CARD_SOURCE: &str = include_str!("../src/ai/acp/components/setup_card.rs");
 const SETUP_RENDER_SOURCE: &str = include_str!("../src/ai/window/render_setup.rs");
 const SETUP_SOURCE: &str = include_str!("../src/ai/window/setup.rs");
 const CLIENT_SOURCE: &str = include_str!("../src/ai/acp/client.rs");
@@ -162,6 +163,51 @@ fn ai_preferences_include_selected_acp_agent_id() {
     assert!(
         CONFIG_TYPES_SOURCE.contains("selected_acp_agent_id"),
         "AiPreferences must persist selected_acp_agent_id"
+    );
+}
+
+#[test]
+fn agent_chat_profile_config_keeps_legacy_ai_keys() {
+    for needed in [
+        "selected_model_id",
+        "selected_acp_agent_id",
+        "selected_profile_name",
+        "profiles: Vec<AcpProfile>",
+        "system_prompt",
+    ] {
+        assert!(
+            CONFIG_TYPES_SOURCE.contains(needed),
+            "Agent Chat profile config must keep legacy ai key/source `{needed}`"
+        );
+    }
+
+    for needed in [
+        "pub enum AgentChatBackend",
+        "selected_profile_id",
+        "selected_backend",
+        "provider",
+        "append_system_prompt",
+        "disable_extensions",
+        "disable_skills",
+        "disable_prompt_templates",
+    ] {
+        assert!(
+            CONFIG_TYPES_SOURCE.contains(needed),
+            "Agent Chat profile config must expose Pi extension `{needed}`"
+        );
+    }
+}
+
+#[test]
+fn phase_one_does_not_route_tab_runtime_to_pi() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("open_tab_ai_acp_with_entry_intent"),
+        "phase one must keep the Tab Agent Chat launch path on the current ACP entry point"
+    );
+    assert!(
+        !TAB_AI_MODE_SOURCE.contains("PiLaunchSpec")
+            && !TAB_AI_MODE_SOURCE.contains("agent_chat::pi"),
+        "phase one must not route Tab runtime directly to Pi"
     );
 }
 
@@ -542,7 +588,7 @@ fn from_resolution_has_capability_gap_message_helper() {
 #[test]
 fn picker_row_includes_auth_label() {
     assert!(
-        ACP_VIEW_SOURCE.contains("setup_agent_auth_label"),
+        ACP_SETUP_CARD_SOURCE.contains("setup_agent_auth_label"),
         "picker must render auth state labels"
     );
 }
@@ -550,7 +596,7 @@ fn picker_row_includes_auth_label() {
 #[test]
 fn picker_row_includes_capability_label() {
     assert!(
-        ACP_VIEW_SOURCE.contains("setup_agent_capability_label"),
+        ACP_SETUP_CARD_SOURCE.contains("setup_agent_capability_label"),
         "picker must render capability compatibility labels"
     );
 }

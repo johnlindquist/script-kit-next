@@ -808,6 +808,15 @@ pub struct ScriptKitUserPreferences {
     pub window_management: WindowManagementPreferences,
 }
 
+/// Agent Chat backend selected for a profile or runtime preference.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum AgentChatBackend {
+    #[default]
+    Acp,
+    Pi,
+}
+
 /// AI chat preferences loaded from `config.ts`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -819,6 +828,15 @@ pub struct AiPreferences {
     /// Last-selected ACP agent ID (e.g. "opencode", "claude-code").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_acp_agent_id: Option<String>,
+
+    /// Last-selected Agent Chat profile id. Takes precedence over the legacy
+    /// selected profile name when both are present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_profile_id: Option<String>,
+
+    /// Last-selected Agent Chat backend.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_backend: Option<AgentChatBackend>,
 
     /// Pre-configured Agent Chat profiles. Each profile bundles a display name,
     /// optional agent id + model hint, and a custom system prompt.
@@ -838,8 +856,16 @@ pub struct AiPreferences {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AcpProfile {
+    /// Stable profile id. Legacy profiles may omit this and use the name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+
     /// Human-readable profile name used as the menu label and selection key.
     pub name: String,
+
+    /// Backend for this profile. Omitted legacy profiles remain ACP-backed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend: Option<AgentChatBackend>,
 
     /// Optional ACP agent ID override (e.g. `"claude-code"`). Falls back to the
     /// globally selected agent when omitted.
@@ -850,10 +876,53 @@ pub struct AcpProfile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
 
+    /// Optional Pi provider id. This is not mapped onto ACP launch args.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+
     /// Custom system prompt text appended to the agent's system prompt on
     /// `session/new`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_prompt: Option<String>,
+
+    /// Extra system prompt text appended to the backend's default prompt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub append_system_prompt: Option<String>,
+
+    /// Working directory for process-backed Agent Chat backends.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+
+    /// Pi tool allow-list. `Some([])` means `--no-tools`; `None` keeps Pi defaults.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<String>>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disable_extensions: Option<bool>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disable_skills: Option<bool>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disable_prompt_templates: Option<bool>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hide_cwd_in_prompt: Option<bool>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extension_policy: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_dir: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub no_session: Option<bool>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_durability: Option<String>,
 }
 
 /// Window-management preferences loaded from `config.ts`.

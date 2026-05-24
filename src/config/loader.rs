@@ -845,7 +845,7 @@ mod tests {
         build_bun_extract_command, load_user_preferences, parse_config_json,
         parse_user_preferences_json, save_user_preferences,
     };
-    use crate::config::HotkeyConfig;
+    use crate::config::{AgentChatBackend, HotkeyConfig};
     use std::fs;
     use std::path::Path;
 
@@ -1006,6 +1006,113 @@ mod tests {
             config.window_management.as_ref().unwrap().snap_mode,
             Some(crate::window_control::SnapMode::Precision)
         );
+    }
+
+    #[test]
+    fn test_config_loader_parses_agent_chat_profile_extensions_without_breaking_legacy_keys() {
+        let json = r#"{
+            "ai": {
+                "selectedModelId": "gpt-5.4",
+                "selectedAcpAgentId": "codex-acp",
+                "selectedProfileId": "general",
+                "selectedBackend": "pi",
+                "selectedProfileName": "Legacy",
+                "profiles": [
+                    {
+                        "id": "script-kit",
+                        "name": "Script Kit",
+                        "backend": "pi",
+                        "provider": "openai-codex",
+                        "model": "gpt-5.4",
+                        "systemPrompt": "replace prompt",
+                        "appendSystemPrompt": "append prompt",
+                        "cwd": "~/.scriptkit",
+                        "tools": ["read", "write"],
+                        "disableExtensions": true,
+                        "disableSkills": true,
+                        "disablePromptTemplates": true,
+                        "hideCwdInPrompt": false,
+                        "thinking": "medium",
+                        "extensionPolicy": "deny",
+                        "sessionDir": "~/.scriptkit/agent-chat/sessions",
+                        "noSession": false,
+                        "sessionDurability": "sync"
+                    }
+                ]
+            }
+        }"#;
+
+        let config = parse_config_json(json, "test-correlation-id");
+        let ai = config.ai.as_ref().expect("ai preferences should parse");
+        assert_eq!(ai.selected_model_id.as_deref(), Some("gpt-5.4"));
+        assert_eq!(ai.selected_acp_agent_id.as_deref(), Some("codex-acp"));
+        assert_eq!(ai.selected_profile_id.as_deref(), Some("general"));
+        assert_eq!(ai.selected_backend, Some(AgentChatBackend::Pi));
+        assert_eq!(ai.selected_profile_name.as_deref(), Some("Legacy"));
+
+        let profile = ai.profiles.first().expect("profile should parse");
+        assert_eq!(profile.id.as_deref(), Some("script-kit"));
+        assert_eq!(profile.name, "Script Kit");
+        assert_eq!(profile.backend, Some(AgentChatBackend::Pi));
+        assert_eq!(profile.provider.as_deref(), Some("openai-codex"));
+        assert_eq!(profile.agent.as_deref(), None);
+        assert_eq!(profile.model.as_deref(), Some("gpt-5.4"));
+        assert_eq!(profile.system_prompt.as_deref(), Some("replace prompt"));
+        assert_eq!(
+            profile.append_system_prompt.as_deref(),
+            Some("append prompt")
+        );
+        assert_eq!(profile.cwd.as_deref(), Some("~/.scriptkit"));
+        assert_eq!(
+            profile.tools.as_ref().map(Vec::as_slice),
+            Some(["read".to_string(), "write".to_string()].as_slice())
+        );
+        assert_eq!(profile.disable_extensions, Some(true));
+        assert_eq!(profile.disable_skills, Some(true));
+        assert_eq!(profile.disable_prompt_templates, Some(true));
+        assert_eq!(profile.hide_cwd_in_prompt, Some(false));
+        assert_eq!(profile.thinking.as_deref(), Some("medium"));
+        assert_eq!(profile.extension_policy.as_deref(), Some("deny"));
+        assert_eq!(
+            profile.session_dir.as_deref(),
+            Some("~/.scriptkit/agent-chat/sessions")
+        );
+        assert_eq!(profile.no_session, Some(false));
+        assert_eq!(profile.session_durability.as_deref(), Some("sync"));
+    }
+
+    #[test]
+    fn test_config_loader_parses_legacy_agent_chat_profile_shape() {
+        let json = r#"{
+            "ai": {
+                "selectedModelId": "claude-sonnet-4-6",
+                "selectedAcpAgentId": "claude-code",
+                "selectedProfileName": "Legacy",
+                "profiles": [
+                    {
+                        "name": "Legacy",
+                        "agent": "opencode",
+                        "model": "gpt-5.4",
+                        "systemPrompt": "legacy prompt"
+                    }
+                ]
+            }
+        }"#;
+
+        let config = parse_config_json(json, "test-correlation-id");
+        let ai = config.ai.as_ref().expect("ai preferences should parse");
+        assert_eq!(ai.selected_profile_id, None);
+        assert_eq!(ai.selected_backend, None);
+
+        let profile = ai.profiles.first().expect("profile should parse");
+        assert_eq!(profile.id, None);
+        assert_eq!(profile.backend, None);
+        assert_eq!(profile.name, "Legacy");
+        assert_eq!(profile.agent.as_deref(), Some("opencode"));
+        assert_eq!(profile.model.as_deref(), Some("gpt-5.4"));
+        assert_eq!(profile.system_prompt.as_deref(), Some("legacy prompt"));
+        assert_eq!(profile.provider, None);
+        assert_eq!(profile.append_system_prompt, None);
     }
 
     #[test]

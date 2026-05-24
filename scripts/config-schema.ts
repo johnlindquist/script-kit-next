@@ -1219,30 +1219,61 @@ export interface UpdatesConfig {
   autoCheck?: boolean;
 }
 
+export type AgentChatBackend = "acp" | "pi";
+
 /**
- * Named ACP Chat configuration profile stored in `~/.scriptkit/config.ts`.
+ * Named Agent Chat configuration profile stored in `~/.scriptkit/config.ts`.
  */
 export interface AiProfile {
   /**
-   * Stable profile identifier.
+   * Stable profile identifier. Legacy profiles may omit this and use `name`.
    *
    * @example "writing"
    */
-  id: string;
+  id?: string;
 
   /**
    * Human-readable profile label shown in launchers and pickers.
    *
    * @example "Long-form writing"
    */
-  label: string;
+  name: string;
+
+  /**
+   * Agent Chat backend for this profile.
+   */
+  backend?: AgentChatBackend;
+
+  /**
+   * ACP agent id. Ignored by Pi profiles.
+   */
+  agent?: string;
+
+  /**
+   * Pi provider id. Ignored by ACP profiles.
+   */
+  provider?: string;
 
   /**
    * Model ID to use when this profile is active.
    *
    * @example "gpt-5.4"
    */
-  selectedModelId?: string;
+  model?: string;
+
+  systemPrompt?: string;
+  appendSystemPrompt?: string;
+  cwd?: string;
+  tools?: string[];
+  disableExtensions?: boolean;
+  disableSkills?: boolean;
+  disablePromptTemplates?: boolean;
+  hideCwdInPrompt?: boolean;
+  thinking?: string;
+  extensionPolicy?: string;
+  sessionDir?: string;
+  noSession?: boolean;
+  sessionDurability?: string;
 
   /**
    * ACP agent ID to use when this profile is active.
@@ -1278,6 +1309,16 @@ export interface AiPreferences {
   selectedAcpAgentId?: string;
 
   /**
+   * Last-selected Agent Chat profile id.
+   */
+  selectedProfileId?: string;
+
+  /**
+   * Last-selected Agent Chat backend.
+   */
+  selectedBackend?: AgentChatBackend;
+
+  /**
    * Named AI configuration profiles available for quick switching.
    *
    * @default undefined (no named profiles)
@@ -1285,12 +1326,12 @@ export interface AiPreferences {
   profiles?: AiProfile[];
 
   /**
-   * Active profile identifier from `profiles`.
+   * Legacy active profile name from `profiles`.
    *
    * @default undefined (use top-level AI preferences)
-   * @example "writing"
+   * @example "Code Review"
    */
-  activeProfileId?: string;
+  selectedProfileName?: string;
 }
 
 // =============================================================================
