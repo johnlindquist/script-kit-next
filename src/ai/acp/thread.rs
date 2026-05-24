@@ -1056,6 +1056,7 @@ impl AcpThread {
         let entity = cx.entity().downgrade();
         let generation = self.transcript_generation;
         self.stream_task = Some(cx.spawn(async move |_this, cx| {
+            let mut terminal_event_seen = false;
             while let Ok(event) = rx.recv().await {
                 let should_stop = matches!(
                     event,
@@ -1086,8 +1087,25 @@ impl AcpThread {
                 });
 
                 if should_stop {
+                    terminal_event_seen = true;
                     break;
                 }
+            }
+
+            if !terminal_event_seen {
+                let entity_ref = entity.clone();
+                cx.update(|cx| {
+                    if let Some(entity) = entity_ref.upgrade() {
+                        entity.update(cx, |this, cx| {
+                            if this.transcript_generation != generation {
+                                return;
+                            }
+                            if this.finish_stream_closed_without_terminal() {
+                                cx.notify();
+                            }
+                        });
+                    }
+                });
             }
         }));
     }
@@ -1326,6 +1344,55 @@ impl AcpThread {
         if changed {
             cx.notify();
         }
+    }
+
+    fn finish_stream_closed_without_terminal(&mut self) -> bool {
+        if !matches!(
+            self.status,
+            AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
+        ) {
+            return false;
+        }
+
+        let had_pending_permission = self.pending_permission.take().is_some();
+        let assistant = self.latest_message_with_role(AcpThreadMessageRole::Assistant);
+        let assistant_id = assistant.map(|message| message.id);
+        let assistant_text = assistant
+            .map(|message| message.body.to_string())
+            .unwrap_or_default();
+        let had_assistant_text = !assistant_text.trim().is_empty();
+
+        tracing::warn!(
+            target: "script_kit::tab_ai",
+            event = "acp_stream_closed_without_terminal_event",
+            ui_thread = %self.ui_thread_id,
+            had_pending_permission,
+            had_assistant_text,
+            message_count = self.messages.len(),
+        );
+
+        if had_assistant_text {
+            self.status = AcpThreadStatus::Idle;
+            if let Some(message_id) = assistant_id {
+                crate::ai::subscriptions::publish_stream_complete(
+                    &self.ui_thread_id,
+                    message_id.to_string(),
+                    assistant_text.clone(),
+                    None,
+                );
+                self.publish_sdk_new_message(
+                    message_id,
+                    AcpThreadMessageRole::Assistant,
+                    assistant_text,
+                );
+            }
+        } else {
+            let message = "Agent stream ended before sending a completion event.".to_string();
+            self.push_message(AcpThreadMessageRole::Error, message);
+            self.status = AcpThreadStatus::Error;
+        }
+
+        true
     }
 
     /// Set the thread status, returning `true` if it actually changed.
@@ -2984,6 +3051,40 @@ mod tests {
             "turn finished should not produce a message"
         );
         assert_eq!(thread.status, AcpThreadStatus::Idle);
+    }
+
+    #[test]
+    fn closed_stream_without_terminal_unlocks_after_assistant_text() {
+        let mut thread = test_thread(Vec::new(), true);
+
+        apply_event_test(&mut thread, AcpEvent::AgentMessageDelta("done".into()));
+        assert_eq!(thread.status, AcpThreadStatus::Streaming);
+
+        assert!(thread.finish_stream_closed_without_terminal());
+
+        assert_eq!(
+            thread.status,
+            AcpThreadStatus::Idle,
+            "missing terminal event must not leave composer blocked"
+        );
+        assert_eq!(thread.messages.len(), 1);
+        assert_eq!(thread.messages[0].role, AcpThreadMessageRole::Assistant);
+    }
+
+    #[test]
+    fn closed_stream_without_terminal_errors_without_assistant_text() {
+        let mut thread = test_thread(Vec::new(), true);
+        thread.status = AcpThreadStatus::Streaming;
+
+        assert!(thread.finish_stream_closed_without_terminal());
+
+        assert_eq!(
+            thread.status,
+            AcpThreadStatus::Error,
+            "missing terminal event without content should still unlock follow-up"
+        );
+        assert_eq!(thread.messages.len(), 1);
+        assert_eq!(thread.messages[0].role, AcpThreadMessageRole::Error);
     }
 
     #[test]
