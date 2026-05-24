@@ -25,6 +25,7 @@
 #![allow(dead_code)]
 
 pub(crate) mod acp;
+pub mod agent_chat;
 pub(crate) mod config;
 pub(crate) mod context_contract;
 #[cfg(test)]

@@ -19,6 +19,9 @@ use agent_client_protocol::{
 };
 use serde_json::json;
 
+use crate::ai::agent_chat::events::AgentChatEventRx;
+use crate::ai::agent_chat::runtime::{AgentChatConnection, AgentChatTurnRequest};
+
 use super::config::{AcpAgentConfig, CODEX_ACP_AGENT_ID, CODEX_ACP_NPX_PACKAGE};
 use super::events::{AcpCancelCommand, AcpCommand, AcpEvent, AcpEventRx, AcpPromptTurnRequest};
 use super::handlers::{ApprovalFn, ScriptKitAcpClient};
@@ -158,6 +161,31 @@ impl AcpRuntime {
         reply_rx
             .recv_blocking()
             .context("ACP worker reply channel closed")?
+    }
+}
+
+impl From<AgentChatTurnRequest> for AcpPromptTurnRequest {
+    fn from(request: AgentChatTurnRequest) -> Self {
+        Self {
+            ui_thread_id: request.ui_thread_id,
+            cwd: request.cwd,
+            blocks: request.blocks,
+            model_id: request.model_id,
+        }
+    }
+}
+
+impl AgentChatConnection for AcpRuntime {
+    fn start_turn(&self, request: AgentChatTurnRequest) -> Result<AgentChatEventRx> {
+        AcpRuntime::start_turn(self, request.into())
+    }
+
+    fn cancel_turn(&self, ui_thread_id: String) -> Result<()> {
+        AcpRuntime::cancel_turn(self, ui_thread_id)
+    }
+
+    fn prepare_session(&self, ui_thread_id: String, cwd: PathBuf) -> Result<AgentChatEventRx> {
+        AcpRuntime::prepare_session(self, ui_thread_id, cwd)
     }
 }
 
@@ -986,6 +1014,84 @@ mod tests {
             result.is_ok() || result.is_err(),
             "start_turn should return a result"
         );
+    }
+
+    #[test]
+    fn acp_runtime_implements_agent_chat_connection_trait() {
+        fn assert_impl<T: crate::ai::agent_chat::runtime::AgentChatConnection>() {}
+        assert_impl::<AcpRuntime>();
+    }
+
+    #[test]
+    fn agent_chat_trait_start_turn_enqueues_acp_start_turn_command() {
+        let (tx, rx) = async_channel::bounded::<AcpCommand>(1);
+        let runtime: Arc<dyn crate::ai::agent_chat::runtime::AgentChatConnection> =
+            Arc::new(AcpRuntime::from_sender(tx));
+
+        let event_rx = runtime
+            .start_turn(crate::ai::agent_chat::runtime::AgentChatTurnRequest {
+                ui_thread_id: "thread-42".to_string(),
+                cwd: PathBuf::from("/tmp/project"),
+                blocks: Vec::new(),
+                model_id: Some("model-1".to_string()),
+            })
+            .expect("start_turn should enqueue");
+        assert!(
+            !event_rx.is_closed(),
+            "event receiver should remain open until the worker drops the sender"
+        );
+
+        let cmd = rx.try_recv().expect("StartTurn should have been sent");
+        match cmd {
+            AcpCommand::StartTurn { request, event_tx } => {
+                assert_eq!(request.ui_thread_id, "thread-42");
+                assert_eq!(request.cwd, PathBuf::from("/tmp/project"));
+                assert_eq!(request.model_id.as_deref(), Some("model-1"));
+                assert!(
+                    !event_tx.is_closed(),
+                    "the event sender shipped with the command must be writable"
+                );
+            }
+            other => panic!(
+                "expected StartTurn, got {:?}",
+                std::mem::discriminant(&other)
+            ),
+        }
+    }
+
+    #[test]
+    fn agent_chat_trait_prepare_session_enqueues_acp_prepare_session_command() {
+        let (tx, rx) = async_channel::bounded::<AcpCommand>(1);
+        let runtime: Arc<dyn crate::ai::agent_chat::runtime::AgentChatConnection> =
+            Arc::new(AcpRuntime::from_sender(tx));
+
+        let event_rx = runtime
+            .prepare_session("thread-42".to_string(), PathBuf::from("/tmp/project"))
+            .expect("prepare_session should enqueue");
+        assert!(
+            !event_rx.is_closed(),
+            "event receiver should be open until the worker drops the sender"
+        );
+
+        let cmd = rx.try_recv().expect("PrepareSession should have been sent");
+        match cmd {
+            AcpCommand::PrepareSession {
+                ui_thread_id,
+                cwd,
+                event_tx,
+            } => {
+                assert_eq!(ui_thread_id, "thread-42");
+                assert_eq!(cwd, PathBuf::from("/tmp/project"));
+                assert!(
+                    !event_tx.is_closed(),
+                    "the event sender shipped with the command must be writable"
+                );
+            }
+            other => panic!(
+                "expected PrepareSession, got {:?}",
+                std::mem::discriminant(&other)
+            ),
+        }
     }
 
     #[test]

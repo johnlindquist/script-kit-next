@@ -6427,6 +6427,18 @@ impl AcpChatView {
 
         let should_auto_retry = resolution.is_ready() && persist_result.is_ok();
 
+        if let AcpChatSession::Live(thread) = &self.session {
+            thread.update(cx, |thread, cx| {
+                thread.replace_selected_agent(Some(agent.clone()), cx);
+            });
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_setup_agent_confirmed_for_runtime_recovery",
+                agent_id = %agent.id,
+                auto_retry = should_auto_retry,
+            );
+        }
+
         self.replace_active_setup_state(next_setup, cx);
 
         if should_auto_retry {

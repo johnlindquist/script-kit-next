@@ -18,10 +18,9 @@ use gpui::{Context, SharedString, Task};
 use crate::components::text_input::TextInputState;
 use crate::protocol::AiMessageInfo;
 
-use super::{
-    build_tab_ai_acp_context_blocks, AcpApprovalRequest, AcpConnection, AcpEvent, AcpEventRx,
-    AcpPromptTurnRequest,
-};
+use crate::ai::agent_chat::runtime::{AgentChatConnection, AgentChatTurnRequest};
+
+use super::{build_tab_ai_acp_context_blocks, AcpApprovalRequest, AcpEvent, AcpEventRx};
 
 /// Bootstrap state for deferred context capture.
 ///
@@ -196,7 +195,7 @@ pub(crate) struct SkillContextIdentity {
 /// first submit), composer input, streaming status, and pending permission
 /// requests. Binds stream and permission listeners via `cx.spawn(...)`.
 pub(crate) struct AcpThread {
-    connection: Arc<AcpConnection>,
+    connection: Arc<dyn AgentChatConnection>,
     permission_rx: async_channel::Receiver<AcpApprovalRequest>,
 
     ui_thread_id: String,
@@ -299,7 +298,7 @@ impl AcpThread {
     /// Immediately binds the permission listener. Does NOT send an ACP turn —
     /// context is staged and only consumed on the first `submit_input()`.
     pub(crate) fn new(
-        connection: Arc<AcpConnection>,
+        connection: Arc<dyn AgentChatConnection>,
         permission_rx: async_channel::Receiver<AcpApprovalRequest>,
         init: AcpThreadInit,
         cx: &mut Context<Self>,
@@ -599,7 +598,7 @@ impl AcpThread {
 
         let rx = self
             .connection
-            .start_turn(AcpPromptTurnRequest {
+            .start_turn(AgentChatTurnRequest {
                 ui_thread_id: self.ui_thread_id.clone(),
                 cwd: self.cwd.clone(),
                 blocks,
@@ -2340,7 +2339,8 @@ impl AcpThread {
     ) -> Self {
         let (_perm_tx, perm_rx) = async_channel::bounded(1);
         let (conn_tx, _conn_rx) = async_channel::bounded::<super::AcpCommand>(1);
-        let dummy_connection = Arc::new(AcpConnection::from_sender(conn_tx));
+        let dummy_connection: Arc<dyn AgentChatConnection> =
+            Arc::new(super::AcpConnection::from_sender(conn_tx));
 
         Self {
             connection: dummy_connection,
@@ -2567,7 +2567,8 @@ mod tests {
         // We create a dummy connection channel — tests that call prepare_turn_blocks
         // and append_chunk don't need a live connection.
         let (conn_tx, _conn_rx) = async_channel::bounded::<super::super::AcpCommand>(1);
-        let dummy_connection = Arc::new(AcpConnection::from_sender(conn_tx));
+        let dummy_connection: Arc<dyn AgentChatConnection> =
+            Arc::new(super::super::AcpConnection::from_sender(conn_tx));
 
         AcpThread {
             connection: dummy_connection,
