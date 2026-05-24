@@ -32,6 +32,8 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::FooterGallery => "Footer Gallery".to_string(),
         #[cfg(feature = "storybook")]
         builtins::BuiltInFeature::DesignExplorer => "Design Explorer".to_string(),
+        #[cfg(feature = "storybook")]
+        builtins::BuiltInFeature::DesignNonListStates => "Non-List States".to_string(),
         builtins::BuiltInFeature::AiChat => "Agent Chat".to_string(),
         builtins::BuiltInFeature::Notes => "Notes & Scratchpad".to_string(),
         builtins::BuiltInFeature::EmojiPicker => "Emoji Picker".to_string(),
