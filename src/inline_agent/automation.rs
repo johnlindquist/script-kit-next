@@ -1,0 +1,16 @@
+pub const INLINE_AGENT_COMPACT_ID: &str = "inline-agent-compact";
+pub const INLINE_AGENT_HEADER_ID: &str = "inline-agent-header";
+pub const INLINE_AGENT_APP_BADGE_ID: &str = "inline-agent-app-badge";
+pub const INLINE_AGENT_METRICS_ID: &str = "inline-agent-metrics";
+pub const INLINE_AGENT_INPUT_ID: &str = "inline-agent-input";
+pub const INLINE_AGENT_THINKING_BAR_ID: &str = "inline-agent-thinking-bar";
+pub const INLINE_AGENT_THINKING_LABEL_ID: &str = "inline-agent-thinking-label";
+pub const INLINE_AGENT_OUTPUT_PREVIEW_ID: &str = "inline-agent-output-preview";
+pub const INLINE_AGENT_ACTION_REPLACE_ID: &str = "inline-agent-action-replace";
+pub const INLINE_AGENT_ACTION_APPEND_ID: &str = "inline-agent-action-append";
+pub const INLINE_AGENT_ACTION_COPY_ID: &str = "inline-agent-action-copy";
+pub const INLINE_AGENT_ACTION_CHAT_ID: &str = "inline-agent-action-chat";
+pub const INLINE_AGENT_EXPANDED_ID: &str = "inline-agent-expanded";
+pub const INLINE_AGENT_TURN_LIST_ID: &str = "inline-agent-turn-list";
+pub const INLINE_AGENT_EXPANDED_COMPOSER_ID: &str = "inline-agent-expanded-composer";
+pub const INLINE_AGENT_COLLAPSE_ID: &str = "inline-agent-collapse";

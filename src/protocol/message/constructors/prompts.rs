@@ -132,10 +132,16 @@ impl Message {
             // Selected text operations
             Message::GetSelectedText { request_id, .. }
             | Message::SetSelectedText { request_id, .. }
+            | Message::CaptureFocusedText { request_id, .. }
+            | Message::ReplaceFocusedText { request_id, .. }
+            | Message::AppendFocusedText { request_id, .. }
+            | Message::CopyInlineAgentOutput { request_id, .. }
             | Message::CheckAccessibility { request_id, .. }
             | Message::RequestAccessibility { request_id, .. }
             | Message::SelectedText { request_id, .. }
             | Message::TextSet { request_id, .. }
+            | Message::FocusedTextSnapshot { request_id, .. }
+            | Message::FocusedTextMutation { request_id, .. }
             | Message::AccessibilityStatus { request_id, .. }
             // Window information
             | Message::GetWindowBounds { request_id, .. }

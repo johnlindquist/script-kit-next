@@ -35,6 +35,7 @@ pub(crate) mod context_picker_row;
 pub(crate) mod current_app_automation_memory;
 pub(crate) mod explicit_target_handoff;
 pub(crate) mod harness;
+pub mod inline_agent;
 pub mod message_parts;
 pub(crate) mod model;
 pub mod preflight_audit;

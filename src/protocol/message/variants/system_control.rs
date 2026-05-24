@@ -119,6 +119,41 @@ macro_rules! protocol_message_variants_system_control {
         request_id: String,
     },
 
+    /// Capture the whole currently focused text field for inline-agent editing.
+    #[serde(rename = "captureFocusedText")]
+    CaptureFocusedText {
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    /// Replace the focused text session with inline-agent output.
+    #[serde(rename = "replaceFocusedText")]
+    ReplaceFocusedText {
+        #[serde(rename = "sessionId")]
+        session_id: String,
+        text: String,
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    /// Append inline-agent output to the focused text session.
+    #[serde(rename = "appendFocusedText")]
+    AppendFocusedText {
+        #[serde(rename = "sessionId")]
+        session_id: String,
+        text: String,
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    /// Copy inline-agent output without mutating the focused text session.
+    #[serde(rename = "copyInlineAgentOutput")]
+    CopyInlineAgentOutput {
+        text: String,
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
     /// Check if accessibility permissions are granted
     #[serde(rename = "checkAccessibility")]
     CheckAccessibility {
@@ -169,6 +204,29 @@ macro_rules! protocol_message_variants_system_control {
     #[serde(rename = "textSet")]
     TextSet {
         success: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    /// Response carrying a whole-field focused text snapshot.
+    #[serde(rename = "focusedTextSnapshot")]
+    FocusedTextSnapshot {
+        success: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        snapshot: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    /// Response after focused text mutation or copy.
+    #[serde(rename = "focusedTextMutation")]
+    FocusedTextMutation {
+        success: bool,
+        action: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
         #[serde(rename = "requestId")]

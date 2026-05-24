@@ -233,6 +233,24 @@ mod timestamp_formatting_contract;
 #[path = "source_audits/theme_chooser_single_select_controls.rs"]
 mod theme_chooser_single_select_controls;
 
+#[path = "source_audits/inline_agent_overlay.rs"]
+mod inline_agent_overlay;
+
+#[path = "source_audits/focused_text_capture_ax_wired.rs"]
+mod focused_text_capture_ax_wired;
+
+#[path = "source_audits/focused_text_geometry_ax_wired.rs"]
+mod focused_text_geometry_ax_wired;
+
+#[path = "source_audits/focused_text_mutation_wired.rs"]
+mod focused_text_mutation_wired;
+
+#[path = "source_audits/inline_ai_double_command_trigger_wired.rs"]
+mod inline_ai_double_command_trigger_wired;
+
+#[path = "source_audits/stdin_focused_text_protocol_wired.rs"]
+mod stdin_focused_text_protocol_wired;
+
 /// Regression guard: fails if the deleted monolithic `handle_action.rs` file
 /// reappears or if any `.rs` file under `src/` or `tests/` references the old
 /// monolith path. This prevents accidental resurrection of the pre-split handler.

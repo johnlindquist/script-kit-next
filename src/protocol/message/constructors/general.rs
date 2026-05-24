@@ -428,6 +428,34 @@ impl Message {
         Message::SetSelectedText { text, request_id }
     }
 
+    /// Create a whole-field focused text capture request.
+    pub fn capture_focused_text(request_id: String) -> Self {
+        Message::CaptureFocusedText { request_id }
+    }
+
+    /// Create a focused text replace request.
+    pub fn replace_focused_text(session_id: String, text: String, request_id: String) -> Self {
+        Message::ReplaceFocusedText {
+            session_id,
+            text,
+            request_id,
+        }
+    }
+
+    /// Create a focused text append request.
+    pub fn append_focused_text(session_id: String, text: String, request_id: String) -> Self {
+        Message::AppendFocusedText {
+            session_id,
+            text,
+            request_id,
+        }
+    }
+
+    /// Create a copy-only inline-agent output request.
+    pub fn copy_inline_agent_output(text: String, request_id: String) -> Self {
+        Message::CopyInlineAgentOutput { text, request_id }
+    }
+
     /// Create a check accessibility request
     pub fn check_accessibility(request_id: String) -> Self {
         Message::CheckAccessibility { request_id }
@@ -456,6 +484,46 @@ impl Message {
     pub fn text_set_error(error: String, request_id: String) -> Self {
         Message::TextSet {
             success: false,
+            error: Some(error),
+            request_id,
+        }
+    }
+
+    /// Create a focused text snapshot response.
+    pub fn focused_text_snapshot_response(snapshot: serde_json::Value, request_id: String) -> Self {
+        Message::FocusedTextSnapshot {
+            success: true,
+            snapshot: Some(snapshot),
+            error: None,
+            request_id,
+        }
+    }
+
+    /// Create a focused text snapshot error response.
+    pub fn focused_text_snapshot_error(error: String, request_id: String) -> Self {
+        Message::FocusedTextSnapshot {
+            success: false,
+            snapshot: None,
+            error: Some(error),
+            request_id,
+        }
+    }
+
+    /// Create a focused text mutation response.
+    pub fn focused_text_mutation_response(action: String, request_id: String) -> Self {
+        Message::FocusedTextMutation {
+            success: true,
+            action,
+            error: None,
+            request_id,
+        }
+    }
+
+    /// Create a focused text mutation error response.
+    pub fn focused_text_mutation_error(action: String, error: String, request_id: String) -> Self {
+        Message::FocusedTextMutation {
+            success: false,
+            action,
             error: Some(error),
             request_id,
         }

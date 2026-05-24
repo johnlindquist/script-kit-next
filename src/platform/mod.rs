@@ -15,6 +15,7 @@
 //! On non-macOS platforms, these functions are no-ops, allowing cross-platform code
 //! to call them without conditional compilation at the call site.
 
+pub mod accessibility;
 mod display;
 pub(crate) mod gpui_event_simulator;
 pub mod permiso;
