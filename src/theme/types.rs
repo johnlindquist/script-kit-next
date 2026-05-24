@@ -1947,6 +1947,21 @@ pub fn reload_theme_cache() -> Theme {
     theme
 }
 
+#[allow(dead_code)]
+pub(crate) fn set_cached_theme_for_preview(theme: &Theme) {
+    let cache = &*THEME_CACHE;
+    let mut guard = cache.lock().unwrap_or_else(|error| {
+        warn!(
+            operation = "set_cached_theme_for_preview_lock",
+            error = ?error,
+            "Theme cache mutex poisoned; recovering cache for theme preview"
+        );
+        error.into_inner()
+    });
+    guard.theme = theme.clone();
+    debug!("Theme cache updated from preview");
+}
+
 /// Initialize the theme cache on startup
 ///
 /// Call this during app initialization to ensure the theme is loaded

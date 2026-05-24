@@ -444,6 +444,7 @@ fn acp_state_result_round_trips() {
         schema_version: crate::protocol::ACP_STATE_SCHEMA_VERSION,
         resolved_target: None,
         status: "idle".to_string(),
+        ui_variant: "standard".to_string(),
         input_text: "test".to_string(),
         cursor_index: 4,
         has_selection: false,

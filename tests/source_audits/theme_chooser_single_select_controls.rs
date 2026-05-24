@@ -588,6 +588,7 @@ fn theme_chooser_slider_drag_preview_does_not_resync_native_vibrancy() {
     let chooser = read_source("src/render_builtins/theme_chooser.rs");
     let gpui_integration = read_source("src/theme/gpui_integration.rs");
     let theme_service = read_source("src/theme/service.rs");
+    let theme_types = read_source("src/theme/types.rs");
     let slider_change = chooser
         .split("fn apply_theme_chooser_slider_change(")
         .nth(1)
@@ -685,6 +686,46 @@ fn theme_chooser_slider_drag_preview_does_not_resync_native_vibrancy() {
         gpui_integration.contains("sync_native_window: bool")
             && gpui_integration.contains("if sync_native_window {\n        sync_native_window_theme_for_theme(sk_theme, source);"),
         "gpui theme integration must allow high-frequency previews to skip native window reconfiguration"
+    );
+    assert!(
+        theme_types.contains("fn set_cached_theme_for_preview(")
+            && preview_helper
+                .contains("crate::theme::types::set_cached_theme_for_preview(self.theme.as_ref());")
+            && source_between(
+                &chooser,
+                "fn restore_theme_chooser_theme(",
+                "fn preview_theme_chooser_preset("
+            )
+            .contains("crate::theme::types::set_cached_theme_for_preview(self.theme.as_ref());"),
+        "Theme Designer previews should update the in-memory theme cache so native footer chrome follows before persistence"
+    );
+}
+
+#[test]
+fn theme_chooser_native_footer_apply_label_routes_like_enter() {
+    let ui_window = read_source("src/app_impl/ui_window.rs");
+    let primary_label = source_between(
+        &ui_window,
+        "pub(crate) fn main_window_primary_action_label(&self) -> String {",
+        "pub(crate) fn dispatch_main_window_footer_action(",
+    );
+    let run_branch = source_between(
+        &ui_window,
+        "crate::footer_popup::FooterAction::Run => {",
+        "crate::footer_popup::FooterAction::Actions => {",
+    );
+
+    assert!(
+        primary_label.contains("AppView::ThemeChooserView { .. }")
+            && primary_label.contains("return \"Apply\".to_string();"),
+        "Theme Designer native footer primary label should say Apply"
+    );
+    assert!(
+        run_branch.contains("AppView::ThemeChooserView { .. }")
+            && run_branch.contains("self.submit_theme_chooser_from_input_enter(window, cx);")
+            && run_branch.find("submit_theme_chooser_from_input_enter")
+                < run_branch.find("execute_selected(cx)"),
+        "Theme Designer native footer Apply should commit through the Enter path before generic Run fallback"
     );
 }
 

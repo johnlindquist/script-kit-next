@@ -27,6 +27,9 @@ const FOOTER_HINT_SIDE_INSET: f64 = crate::window_resize::mini_layout::HINT_STRI
 const FOOTER_HINT_PADDING_X: f64 =
     crate::components::footer_chrome::FOOTER_ACTION_CONTENT_PADDING_X_PX as f64;
 #[cfg(target_os = "macos")]
+const FOOTER_RUN_HINT_PADDING_X: f64 =
+    crate::components::footer_chrome::FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX as f64;
+#[cfg(target_os = "macos")]
 const FOOTER_HINT_RADIUS: f64 =
     crate::components::footer_chrome::FOOTER_ACTION_BUTTON_RADIUS_PX as f64;
 #[cfg(target_os = "macos")]
@@ -55,7 +58,10 @@ const FOOTER_RUN_SLOT_MIN_WIDTH: f64 =
 #[cfg(target_os = "macos")]
 const FOOTER_RUN_SLOT_MAX_WIDTH: f64 =
     crate::components::footer_chrome::FOOTER_RUN_SLOT_MAX_WIDTH_PX as f64;
-const FOOTER_RUN_LABEL_WIDTH_SAFETY_PX: f32 = 8.0;
+const FOOTER_RUN_ANCHORED_PADDING_DELTA_PX: f32 =
+    (crate::components::footer_chrome::FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX
+        - crate::components::footer_chrome::FOOTER_ACTION_CONTENT_PADDING_X_PX)
+        * 2.0;
 #[cfg(target_os = "macos")]
 const FOOTER_ACTIONS_SLOT_WIDTH: f64 =
     crate::components::footer_chrome::FOOTER_ACTIONS_SLOT_WIDTH_PX as f64;
@@ -221,6 +227,11 @@ static FOOTER_ACTION_CHANNEL: std::sync::LazyLock<(
 )> = std::sync::LazyLock::new(|| async_channel::bounded(32));
 
 static DICTATION_FOOTER_ACTION_CHANNEL: std::sync::LazyLock<(
+    async_channel::Sender<FooterAction>,
+    async_channel::Receiver<FooterAction>,
+)> = std::sync::LazyLock::new(|| async_channel::bounded(32));
+
+static ACP_FOOTER_ACTION_CHANNEL: std::sync::LazyLock<(
     async_channel::Sender<FooterAction>,
     async_channel::Receiver<FooterAction>,
 )> = std::sync::LazyLock::new(|| async_channel::bounded(32));
@@ -542,7 +553,7 @@ fn footer_overlay_button_full_width_px(button: &FooterButtonConfig) -> f32 {
         crate::components::footer_chrome::FooterHintKeyMode::Shortcut,
     );
     let width = if matches!(button.action, FooterAction::Run) && !button.label.trim().is_empty() {
-        width + FOOTER_RUN_LABEL_WIDTH_SAFETY_PX
+        width + FOOTER_RUN_ANCHORED_PADDING_DELTA_PX
     } else {
         width
     };
@@ -703,6 +714,13 @@ pub(crate) fn dictation_footer_action_channel() -> &'static (
     async_channel::Receiver<FooterAction>,
 ) {
     &DICTATION_FOOTER_ACTION_CHANNEL
+}
+
+pub(crate) fn acp_footer_action_channel() -> &'static (
+    async_channel::Sender<FooterAction>,
+    async_channel::Receiver<FooterAction>,
+) {
+    &ACP_FOOTER_ACTION_CHANNEL
 }
 
 pub(crate) fn sync_main_footer_popup(
@@ -1784,7 +1802,7 @@ fn footer_hint_content_layout(
     let content_width = label_width + gap_width + key_width;
 
     if matches!(action, FooterAction::Run) {
-        let key_x = (item_width - FOOTER_HINT_PADDING_X - key_width).round();
+        let key_x = (item_width - FOOTER_RUN_HINT_PADDING_X - key_width).round();
         let label_x = (key_x - gap_width - label_width).max(0.0).round();
         return (label_x, key_x, content_width);
     }
@@ -1845,9 +1863,10 @@ fn footer_hint_label_widths(
     label_chip_height: f64,
     max_item_width: Option<f64>,
     keys_view_width: f64,
+    edge_padding_x: f64,
 ) -> (f64, f64) {
     let max_label_chip_width = max_item_width.map(|max_width| {
-        (max_width - (FOOTER_HINT_PADDING_X * 2.0) - FOOTER_HINT_KEY_LABEL_GAP - keys_view_width)
+        (max_width - (edge_padding_x * 2.0) - FOOTER_HINT_KEY_LABEL_GAP - keys_view_width)
             .max(label_chip_height)
     });
     let label_chip_width = (natural_label_width + label_padding_x * 2.0)
@@ -1954,6 +1973,11 @@ unsafe fn make_footer_hint_item(
     }
 
     let chrome = crate::theme::AppChromeColors::from_theme(theme);
+    let edge_padding_x = if matches!(button_cfg.action, FooterAction::Run) {
+        FOOTER_RUN_HINT_PADDING_X
+    } else {
+        FOOTER_HINT_PADDING_X
+    };
     let keycap_border_color = ns_color_from_hex_with_alpha(
         theme.colors.text.primary,
         crate::components::footer_chrome::footer_keycap_border_alpha(theme, button_cfg.selected)
@@ -1961,7 +1985,8 @@ unsafe fn make_footer_hint_item(
     );
     let labelcap_border_color = ns_color_from_hex_with_alpha(
         theme.colors.text.primary,
-        crate::theme::opacity::OPACITY_HIDDEN as f64,
+        crate::components::footer_chrome::footer_keycap_border_alpha(theme, button_cfg.selected)
+            as f64,
     );
     let key_font: id = font;
 
@@ -2099,6 +2124,7 @@ unsafe fn make_footer_hint_item(
             label_chip_height,
             max_item_width,
             keys_view_width,
+            edge_padding_x,
         );
         let label_view: id = msg_send![class!(NSView), alloc];
         let label_view: id = msg_send![
@@ -2144,10 +2170,18 @@ unsafe fn make_footer_hint_item(
     } else {
         0.0
     };
-    let min_content_width =
-        keys_view_width + label_chip_width + gap_width + (FOOTER_HINT_PADDING_X * 2.0) + 12.0;
+    let legacy_extra_padding = if matches!(button_cfg.action, FooterAction::Run) {
+        0.0
+    } else {
+        12.0
+    };
+    let min_content_width = keys_view_width
+        + label_chip_width
+        + gap_width
+        + (edge_padding_x * 2.0)
+        + legacy_extra_padding;
     let content_width = label_chip_width + gap_width + keys_view_width;
-    let intrinsic_width = content_width + (FOOTER_HINT_PADDING_X * 2.0);
+    let intrinsic_width = content_width + (edge_padding_x * 2.0);
     let mut item_width = footer_hint_slot_width(button_cfg.action)
         .max(min_content_width)
         .max(intrinsic_width);
@@ -2298,7 +2332,8 @@ mod footer_layout_tests {
         footer_active_dot_hex, footer_dot_hex, footer_hint_content_layout,
         footer_hint_label_widths, footer_hint_max_item_width, footer_hint_slot_width,
         footer_overlay_button_full_width_px, footer_selected_background_rgba, FooterAction,
-        FooterButtonConfig, FooterDotStatus,
+        FooterButtonConfig, FooterDotStatus, FOOTER_HINT_KEY_LABEL_GAP, FOOTER_HINT_PADDING_X,
+        FOOTER_RUN_HINT_PADDING_X,
     };
 
     #[test]
@@ -2341,10 +2376,23 @@ mod footer_layout_tests {
         let short = footer_hint_content_layout(FooterAction::Run, 92.0, 20.0, 18.0);
         let long = footer_hint_content_layout(FooterAction::Run, 140.0, 64.0, 18.0);
 
-        assert_eq!(short.1, 72.0);
-        assert_eq!(long.1, 120.0);
-        assert_eq!(92.0 - (short.1 + 18.0), 2.0);
-        assert_eq!(140.0 - (long.1 + 18.0), 2.0);
+        assert_eq!(short.1, 68.0);
+        assert_eq!(long.1, 116.0);
+        assert_eq!(92.0 - (short.1 + 18.0), 6.0);
+        assert_eq!(140.0 - (long.1 + 18.0), 6.0);
+    }
+
+    #[test]
+    fn run_hint_native_layout_can_balance_short_label_padding() {
+        let label_width = 26.0;
+        let key_width = 20.0;
+        let item_width =
+            label_width + FOOTER_HINT_KEY_LABEL_GAP + key_width + FOOTER_RUN_HINT_PADDING_X * 2.0;
+        let (label_x, key_x, _) =
+            footer_hint_content_layout(FooterAction::Run, item_width, label_width, key_width);
+
+        assert_eq!(label_x, FOOTER_RUN_HINT_PADDING_X);
+        assert_eq!(item_width - (key_x + key_width), FOOTER_RUN_HINT_PADDING_X);
     }
 
     #[test]
@@ -2407,7 +2455,7 @@ mod footer_layout_tests {
     #[test]
     fn run_hint_label_text_width_truncates_inside_remaining_slot() {
         let (chip_width, text_width) =
-            footer_hint_label_widths(360.0, 5.0, 18.0, Some(180.0), 20.0);
+            footer_hint_label_widths(360.0, 5.0, 18.0, Some(180.0), 20.0, FOOTER_HINT_PADDING_X);
 
         assert_eq!(chip_width, 154.0);
         assert_eq!(text_width, 144.0);
@@ -2477,25 +2525,44 @@ mod footer_layout_tests {
 }
 
 #[cfg(target_os = "macos")]
-fn send_footer_action_from_sender(sender: id, action: FooterAction) {
-    let is_dictation_footer = unsafe { footer_sender_is_dictation_window(sender) };
-    send_footer_action_to_channel(action, is_dictation_footer);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FooterWindowKind {
+    Main,
+    Dictation,
+    AcpChat,
 }
 
 #[cfg(target_os = "macos")]
-fn send_footer_action_to_channel(action: FooterAction, dictation_footer: bool) {
+fn send_footer_action_from_sender(sender: id, action: FooterAction) {
+    let title = unsafe { footer_sender_window_title(sender) };
+    let window_kind = if let Some(ref t) = title {
+        if t.contains("Script Kit Dictation") {
+            FooterWindowKind::Dictation
+        } else if t.contains("Script Kit Agent Chat") {
+            FooterWindowKind::AcpChat
+        } else {
+            FooterWindowKind::Main
+        }
+    } else {
+        FooterWindowKind::Main
+    };
+    send_footer_action_to_channel_v2(action, window_kind);
+}
+
+#[cfg(target_os = "macos")]
+fn send_footer_action_to_channel_v2(action: FooterAction, window_kind: FooterWindowKind) {
     let action_name = footer_action_key(action);
     tracing::info!(
         target: "script_kit::footer_popup",
         event = "native_footer_action_enqueued",
         action = action_name,
-        dictation_footer,
+        ?window_kind,
         "Enqueued native footer action"
     );
-    let (tx, _) = if dictation_footer {
-        dictation_footer_action_channel()
-    } else {
-        footer_action_channel()
+    let (tx, _) = match window_kind {
+        FooterWindowKind::Dictation => dictation_footer_action_channel(),
+        FooterWindowKind::AcpChat => acp_footer_action_channel(),
+        FooterWindowKind::Main => footer_action_channel(),
     };
     if let Err(error) = tx.try_send(action) {
         tracing::warn!(
@@ -2508,34 +2575,60 @@ fn send_footer_action_to_channel(action: FooterAction, dictation_footer: bool) {
     }
 }
 
+fn send_footer_action_to_channel(action: FooterAction, dictation_footer: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        let window_kind = if dictation_footer {
+            FooterWindowKind::Dictation
+        } else {
+            FooterWindowKind::Main
+        };
+        send_footer_action_to_channel_v2(action, window_kind);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let (tx, _) = if dictation_footer {
+            dictation_footer_action_channel()
+        } else {
+            footer_action_channel()
+        };
+        if let Err(error) = tx.try_send(action) {
+            tracing::warn!(
+                target: "script_kit::footer_popup",
+                event = "native_footer_action_enqueue_failed",
+                action = footer_action_key(action),
+                %error,
+                "Failed to enqueue footer action"
+            );
+        }
+    }
+}
+
 #[cfg(target_os = "macos")]
-unsafe fn footer_sender_is_dictation_window(sender: id) -> bool {
+unsafe fn footer_sender_window_title(sender: id) -> Option<String> {
+    use objc::{msg_send, sel, sel_impl};
     use std::ffi::CStr;
 
-    use objc::{msg_send, sel, sel_impl};
-
     if sender == nil {
-        return false;
+        return None;
     }
 
     let ns_window: id = msg_send![sender, window];
     if ns_window == nil {
-        return false;
+        return None;
     }
 
     let title: id = msg_send![ns_window, title];
     if title == nil {
-        return false;
+        return None;
     }
 
     let utf8: *const std::os::raw::c_char = msg_send![title, UTF8String];
     if utf8.is_null() {
-        return false;
+        return None;
     }
 
-    CStr::from_ptr(utf8)
-        .to_string_lossy()
-        .contains("Script Kit Dictation")
+    Some(CStr::from_ptr(utf8).to_string_lossy().into_owned())
 }
 
 fn footer_action_key(action: FooterAction) -> &'static str {
@@ -2815,6 +2908,42 @@ unsafe fn set_footer_button_text_opacity(view: id, opacity: f64) {
 }
 
 #[cfg(target_os = "macos")]
+unsafe fn set_footer_button_border_alpha(view: id, alpha: f64) {
+    use objc::{msg_send, sel, sel_impl};
+
+    if view == nil {
+        return;
+    }
+
+    let theme = crate::theme::get_cached_theme();
+    let color = ns_color_from_hex_with_alpha(theme.colors.text.primary, alpha);
+    if color == nil {
+        return;
+    }
+
+    let layer: id = msg_send![view, layer];
+    if layer != nil {
+        let border_width: f64 = msg_send![layer, borderWidth];
+        if border_width > 0.0 {
+            let cg_border: id = msg_send![color, CGColor];
+            if cg_border != nil {
+                let _: () = msg_send![layer, setBorderColor: cg_border];
+            }
+        }
+    }
+
+    let subviews: id = msg_send![view, subviews];
+    if subviews == nil {
+        return;
+    }
+    let count: usize = msg_send![subviews, count];
+    for i in 0..count {
+        let child: id = msg_send![subviews, objectAtIndex: i];
+        set_footer_button_border_alpha(child, alpha);
+    }
+}
+
+#[cfg(target_os = "macos")]
 unsafe fn apply_footer_button_background(button: id, rgba_value: Option<u32>) {
     use objc::{msg_send, sel, sel_impl};
 
@@ -2887,6 +3016,10 @@ extern "C" fn footer_button_mouse_down(
         );
         let superview: id = msg_send![button_id, superview];
         set_footer_button_text_opacity(superview, 1.0);
+        set_footer_button_border_alpha(
+            superview,
+            crate::components::footer_chrome::footer_keycap_border_alpha(&theme, true) as f64,
+        );
 
         tracing::debug!(
             target: "script_kit::footer_popup",
@@ -2933,6 +3066,10 @@ extern "C" fn footer_button_mouse_entered(
         let chrome = crate::theme::AppChromeColors::from_theme(&theme);
         apply_footer_button_background(this as *const _ as id, Some(chrome.hover_rgba));
         set_footer_button_text_opacity(superview, 1.0);
+        set_footer_button_border_alpha(
+            superview,
+            crate::components::footer_chrome::footer_keycap_border_hover_alpha(&theme) as f64,
+        );
     }
 }
 
@@ -2969,8 +3106,8 @@ extern "C" fn footer_button_mouse_exited(
             return;
         }
 
+        let theme = crate::theme::get_cached_theme();
         if selected == YES || (is_actions == YES && actions_window_open) {
-            let theme = crate::theme::get_cached_theme();
             let chrome = crate::theme::AppChromeColors::from_theme(&theme);
             apply_footer_button_background(
                 this as *const _ as id,
@@ -2982,6 +3119,13 @@ extern "C" fn footer_button_mouse_exited(
             apply_footer_button_background(this as *const _ as id, None);
         }
         set_footer_button_text_opacity(superview, crate::theme::opacity::OPACITY_TEXT_MUTED as f64);
+        set_footer_button_border_alpha(
+            superview,
+            crate::components::footer_chrome::footer_keycap_border_alpha(
+                &theme,
+                selected == YES || (is_actions == YES && actions_window_open),
+            ) as f64,
+        );
     }
 }
 

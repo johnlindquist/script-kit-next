@@ -72,6 +72,7 @@ impl ScriptListApp {
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_open_begin",
+            acp_chat_ui_variant = request.ui_variant.state_id(),
             auto_submit,
             has_entry_intent = request.entry_intent.is_some(),
             had_harness_session,
@@ -227,6 +228,9 @@ impl ScriptListApp {
 
         let (thread, view_entity, used_prewarmed_acp) =
             if let Some((view_entity, thread)) = prewarmed_acp_chat {
+                view_entity.update(cx, |view, cx| {
+                    view.set_ui_variant(request.ui_variant, cx);
+                });
                 if let Some(initial_input) = acp_initial_input.clone() {
                     thread.update(cx, |thread, cx| {
                         thread.set_input(initial_input, cx);
@@ -237,6 +241,7 @@ impl ScriptListApp {
                     target: "script_kit::tab_ai",
                     event = "acp_open_stage",
                     stage = "acp_hot_prewarm_reused",
+                    acp_chat_ui_variant = request.ui_variant.state_id(),
                     used_prewarmed_acp = true,
                     total_ms = open_started_at.elapsed().as_millis() as u64,
                 );
@@ -306,11 +311,15 @@ impl ScriptListApp {
                 );
 
                 let stage_started_at = std::time::Instant::now();
-                let view_entity = cx.new(|cx| crate::ai::acp::AcpChatView::new(thread.clone(), cx));
+                let view_entity = cx.new(|cx| {
+                    crate::ai::acp::AcpChatView::new(thread.clone(), cx)
+                        .with_ui_variant(request.ui_variant)
+                });
                 tracing::info!(
                     target: "script_kit::tab_ai",
                     event = "acp_open_stage",
                     stage = "acp_chat_view_new",
+                    acp_chat_ui_variant = request.ui_variant.state_id(),
                     used_prewarmed_acp = false,
                     stage_ms = stage_started_at.elapsed().as_millis() as u64,
                     total_ms = open_started_at.elapsed().as_millis() as u64,

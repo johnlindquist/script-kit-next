@@ -9,14 +9,15 @@ use std::time::{Duration, Instant};
 
 use gpui::{
     div, prelude::*, px, rgb, rgba, Animation, AnimationExt, App, Context, ElementId, Entity,
-    FocusHandle, Focusable, FontWeight, IntoElement, ParentElement, Render, SharedString, Task,
-    WeakEntity, Window,
+    FocusHandle, Focusable, FontWeight, IntoElement, ParentElement, Render, Rgba, SharedString,
+    Task, WeakEntity, Window,
 };
 
 use gpui_component::scroll::ScrollableElement;
 
 use crate::components::text_input::{
-    render_text_input_cursor_selection, TextHighlightRange, TextInputRenderConfig,
+    render_text_input_cursor_selection, TextHighlightRange, TextInlinePillRange,
+    TextInputRenderConfig, TextSelection,
 };
 use crate::prompts::markdown::render_markdown_with_scope;
 use crate::theme::{self, AppChromeColors, PromptColors};
@@ -36,6 +37,7 @@ use super::types::{
     AcpDismissedMentionTrigger, AcpFocusedMentionPreview, AcpMentionPopupParentWindow,
     AcpMentionSession, AcpPendingPortalSession,
 };
+use super::ui_variant::{AcpChatUiVariant, AcpComposerPlacement};
 use super::{AcpApprovalOption, AcpApprovalPreview, AcpApprovalPreviewKind, AcpApprovalRequest};
 
 use crate::ai::message_parts::AiContextPart;
@@ -469,6 +471,7 @@ pub(crate) struct AcpChatView {
     setup_card: Option<Entity<AcpSetupCard>>,
     toolbar: Option<Entity<AcpToolbar>>,
     pub(crate) transcript: Option<Entity<AcpTranscript>>,
+    ui_variant: AcpChatUiVariant,
     /// Setup-mode agent selection picker state (managed by AcpChatView until
     /// fully migrated to AcpSetupCard).
     pub(crate) setup_agent_picker: Option<AcpSetupAgentPickerState>,
@@ -513,6 +516,7 @@ pub(crate) struct AcpChatView {
     /// Items for disallowed kinds are filtered from the mention picker and
     /// rejected at the portal-open dispatch as defense-in-depth.
     allowed_portal_kinds: Vec<crate::ai::window::context_picker::types::PortalKind>,
+    _footer_action_task: Option<gpui::Task<()>>,
 }
 
 /// Bounded ring buffer for ACP test probe events.
@@ -551,6 +555,33 @@ impl AcpChatView {
             PortalKind::SkillSearch,
             PortalKind::NotesBrowse,
         ]
+    }
+
+    pub(crate) fn with_ui_variant(mut self, ui_variant: AcpChatUiVariant) -> Self {
+        self.ui_variant = ui_variant;
+        self
+    }
+
+    pub(crate) fn set_ui_variant(&mut self, ui_variant: AcpChatUiVariant, cx: &mut Context<Self>) {
+        if self.ui_variant == ui_variant {
+            return;
+        }
+        self.ui_variant = ui_variant;
+        if let Some(transcript) = &self.transcript {
+            transcript.update(cx, |transcript, cx| {
+                transcript.set_ui_variant(ui_variant, cx);
+            });
+        }
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_chat_ui_variant_changed",
+            acp_chat_ui_variant = ui_variant.state_id(),
+        );
+        cx.notify();
+    }
+
+    pub(crate) fn debug_ui_variant_id(&self) -> &'static str {
+        self.ui_variant.state_id()
     }
 
     fn composer_is_active(
@@ -773,6 +804,60 @@ impl AcpChatView {
             status_text: self.footer_status_text(cx),
             buttons: self.footer_buttons_for_thread(thread),
         }
+    }
+
+    pub(crate) fn acp_detached_native_footer_config(
+        &self,
+        cx: &App,
+    ) -> crate::footer_popup::MainWindowFooterConfig {
+        use crate::footer_popup::{FooterButtonConfig, FooterLeftInfo, MainWindowFooterConfig};
+
+        let snapshot = self.footer_snapshot(cx);
+        let buttons = snapshot
+            .buttons
+            .iter()
+            .map(|btn| {
+                let mut config = FooterButtonConfig::new(btn.action, btn.key, btn.label)
+                    .selected(btn.selected)
+                    .enabled(btn.enabled);
+                if let Some(reason) = btn.disabled_reason {
+                    config = config.disabled_reason(reason);
+                }
+                config
+            })
+            .collect();
+
+        let mut config = MainWindowFooterConfig::new("acp_chat", buttons);
+        config.left_info = Some(FooterLeftInfo {
+            dot_status: snapshot.dot_status,
+            model_name: snapshot.model_status_label(),
+            prefer_accent_for_active_states: true,
+        });
+
+        config
+    }
+
+    fn ensure_native_footer_action_listener(&mut self, window: &Window, cx: &mut Context<Self>) {
+        if self._footer_action_task.is_some() {
+            return;
+        }
+
+        let rx = crate::footer_popup::acp_footer_action_channel().1.clone();
+        self._footer_action_task = Some(cx.spawn_in(window, async move |this, cx| {
+            while let Ok(action) = rx.recv().await {
+                if let Err(error) = this.update_in(cx, |view, window, cx| {
+                    view.dispatch_footer_button(action, window, cx);
+                }) {
+                    tracing::warn!(
+                        target: "script_kit::acp",
+                        event = "acp_native_footer_action_dispatch_failed",
+                        action = ?action,
+                        %error,
+                        "Failed to dispatch native footer action into AcpChatView"
+                    );
+                }
+            }
+        }));
     }
 
     fn footer_buttons_for_thread(&self, thread: &AcpThread) -> Vec<AcpFooterButtonSpec> {
@@ -2581,6 +2666,7 @@ impl AcpChatView {
     ) -> crate::protocol::AcpStateSnapshot {
         let snapshot = crate::protocol::AcpStateSnapshot {
             status: "setup".to_string(),
+            ui_variant: self.ui_variant.state_id().to_string(),
             setup: setup_snapshot,
             ..Default::default()
         };
@@ -2628,6 +2714,7 @@ impl AcpChatView {
         crate::protocol::AcpStateSnapshot {
             schema_version: crate::protocol::ACP_STATE_SCHEMA_VERSION,
             resolved_target: None, // Populated by the caller (prompt handler) based on target resolution.
+            ui_variant: self.ui_variant.state_id().to_string(),
             status: status_str.to_string(),
             input_text,
             cursor_index,
@@ -2859,6 +2946,7 @@ impl AcpChatView {
             setup_card: None,
             toolbar: None,
             transcript: None,
+            ui_variant: AcpChatUiVariant::Standard,
             setup_agent_picker: None,
             opened_via_transient_trigger: None,
 
@@ -2878,6 +2966,7 @@ impl AcpChatView {
             pending_slash_prime: None,
             context_capture_pending: false,
             allowed_portal_kinds: Self::all_portal_kinds(),
+            _footer_action_task: None,
         }
     }
 
@@ -2920,6 +3009,7 @@ impl AcpChatView {
             setup_card: None,
             toolbar: None,
             transcript: None,
+            ui_variant: AcpChatUiVariant::Standard,
             setup_agent_picker: None,
             opened_via_transient_trigger: None,
             last_accepted_item: None,
@@ -2938,6 +3028,7 @@ impl AcpChatView {
             pending_slash_prime: None,
             context_capture_pending: false,
             allowed_portal_kinds: Self::all_portal_kinds(),
+            _footer_action_task: None,
         }
     }
 
@@ -4173,6 +4264,152 @@ impl AcpChatView {
 
     fn prompt_colors() -> PromptColors {
         PromptColors::from_theme(&theme::get_cached_theme())
+    }
+
+    fn render_variant_badge(
+        ui_variant: AcpChatUiVariant,
+        theme: &crate::theme::Theme,
+    ) -> gpui::AnyElement {
+        div()
+            .w_full()
+            .px(px(12.0))
+            .pt(px(6.0))
+            .pb(px(2.0))
+            .flex()
+            .items_center()
+            .gap(px(6.0))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(theme.colors.accent.selected))
+                    .child(ui_variant.menu_name()),
+            )
+            .child(div().text_xs().opacity(0.45).child(ui_variant.state_id()))
+            .into_any_element()
+    }
+
+    fn render_variant_sidecar(
+        ui_variant: AcpChatUiVariant,
+        status_label: &'static str,
+        message_count: usize,
+        context_chip_count: usize,
+        theme: &crate::theme::Theme,
+    ) -> gpui::AnyElement {
+        div()
+            .w(px(168.0))
+            .flex_shrink_0()
+            .h_full()
+            .border_l_1()
+            .border_color(rgba((theme.colors.ui.border << 8) | 0x38))
+            .px(px(10.0))
+            .py(px(8.0))
+            .flex()
+            .flex_col()
+            .gap(px(8.0))
+            .text_xs()
+            .child(
+                div()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(theme.colors.text.primary))
+                    .child("State"),
+            )
+            .child(
+                div()
+                    .opacity(0.58)
+                    .child("variant ")
+                    .child(ui_variant.state_id()),
+            )
+            .child(div().opacity(0.58).child("status ").child(status_label))
+            .child(
+                div()
+                    .opacity(0.58)
+                    .child("messages ")
+                    .child(message_count.to_string()),
+            )
+            .child(
+                div()
+                    .opacity(0.58)
+                    .child("context ")
+                    .child(context_chip_count.to_string()),
+            )
+            .into_any_element()
+    }
+
+    fn render_composer_bar(
+        input_text: &str,
+        input_cursor: usize,
+        input_selection: TextSelection,
+        cursor_visible: bool,
+        is_empty: bool,
+        mention_highlights: &[TextHighlightRange],
+        pasted_text_pills: &[TextInlinePillRange],
+        placeholder_text: Rgba,
+        theme: &crate::theme::Theme,
+    ) -> gpui::AnyElement {
+        div()
+            .w_full()
+            .px(px(12.0))
+            .py(px(10.0))
+            .flex()
+            .flex_row()
+            .items_center()
+            .child(
+                div()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .justify_center()
+                    .min_h(px(22.0))
+                    // Empirical: px(17) here renders identically to px(16) in
+                    // the main menu input. The 1px offset is a GPUI layout quirk.
+                    .text_size(px(Self::ACP_INPUT_FONT_SIZE))
+                    .line_height(px(22.0))
+                    .text_color(if input_text.is_empty() {
+                        placeholder_text
+                    } else {
+                        rgb(theme.colors.text.primary)
+                    })
+                    .child(if input_text.is_empty() {
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .child(
+                                div()
+                                    .w(px(2.0))
+                                    .h(px(18.0))
+                                    .when(cursor_visible, |d| d.bg(rgb(theme.colors.text.primary))),
+                            )
+                            .child(div().ml(px(-2.0)).text_color(placeholder_text).child(
+                                if is_empty {
+                                    "Ask anything\u{2026}"
+                                } else {
+                                    "Follow up\u{2026}"
+                                },
+                            ))
+                            .into_any_element()
+                    } else {
+                        render_text_input_cursor_selection(TextInputRenderConfig {
+                            cursor: input_cursor,
+                            selection: Some(input_selection),
+                            multiline: true,
+                            cursor_visible,
+                            cursor_color: theme.colors.accent.selected,
+                            text_color: theme.colors.text.primary,
+                            selection_color: theme.colors.accent.selected,
+                            selection_text_color: theme.colors.text.primary,
+                            cursor_height: 18.0,
+                            cursor_width: 2.0,
+                            container_height: Some(22.0),
+                            highlight_ranges: mention_highlights,
+                            pill_ranges: pasted_text_pills,
+                            ..TextInputRenderConfig::default_for_prompt(input_text)
+                        })
+                        .into_any_element()
+                    }),
+            )
+            .into_any_element()
     }
 
     /// Render context chips below the composer input, but only for parts
@@ -6114,6 +6351,9 @@ impl AcpChatView {
 
     fn ensure_transcript(&mut self, cx: &mut Context<Self>) -> Entity<AcpTranscript> {
         if let Some(transcript) = &self.transcript {
+            transcript.update(cx, |transcript, cx| {
+                transcript.set_ui_variant(self.ui_variant, cx);
+            });
             return transcript.clone();
         }
 
@@ -6122,7 +6362,8 @@ impl AcpChatView {
             thread_ref.messages.clone()
         };
 
-        let transcript = cx.new(|cx| AcpTranscript::new(messages, cx));
+        let ui_variant = self.ui_variant;
+        let transcript = cx.new(|cx| AcpTranscript::new(messages, cx).with_ui_variant(ui_variant));
 
         cx.subscribe(
             &transcript,
@@ -7672,6 +7913,11 @@ impl Render for AcpChatView {
                     .any(|msg| msg.tool_call_id.as_deref() == Some(tool_call_id))
             });
         let view_entity: WeakEntity<AcpChatView> = cx.entity().downgrade();
+        let ui_variant = self.ui_variant;
+        let variant_config = ui_variant.config();
+        let status_label = Self::acp_thread_status_label(thread.status);
+        let context_chip_count = attached_parts.len();
+        let message_count = messages.len();
 
         div()
             .size_full()
@@ -7709,70 +7955,24 @@ impl Render for AcpChatView {
             .on_any_mouse_down(cx.listener(|this, _event, _window, cx| {
                 this.dismiss_mention_picker(cx);
             }))
-            // ── TOP: Input (exact match with main menu mini layout) ────
-            // Uses same constants: HEADER_PADDING_X=12, HEADER_PADDING_Y=10,
-            // input_height=22 (CURSOR_HEIGHT_LG+2*CURSOR_MARGIN_Y), font_size_lg=16
-            .child(
-                div()
-                    .w_full()
-                    .px(px(12.0))
-                    .py(px(10.0))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .justify_center()
-                            .min_h(px(22.0))
-                            // Empirical: px(17) here renders identically to px(16) in
-                            // the main menu input.  The 1px offset is a GPUI layout quirk —
-                            // both paths target the same visual size (design_typography.font_size_lg).
-                            .text_size(px(Self::ACP_INPUT_FONT_SIZE))
-                            .line_height(px(22.0))
-                            .text_color(if input_text.is_empty() {
-                                placeholder_text
-                            } else {
-                                rgb(theme.colors.text.primary)
-                            })
-                            .child(if input_text.is_empty() {
-                                div()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .child(div().w(px(2.0)).h(px(18.0)).when(cursor_visible, |d| {
-                                        d.bg(rgb(theme.colors.text.primary))
-                                    }))
-                                    .child(div().ml(px(-2.0)).text_color(placeholder_text).child(
-                                        if is_empty {
-                                            "Ask anything\u{2026}"
-                                        } else {
-                                            "Follow up\u{2026}"
-                                        },
-                                    ))
-                                    .into_any_element()
-                            } else {
-                                render_text_input_cursor_selection(TextInputRenderConfig {
-                                    cursor: input_cursor,
-                                    selection: Some(input_selection),
-                                    multiline: true,
-                                    cursor_visible,
-                                    cursor_color: theme.colors.accent.selected,
-                                    text_color: theme.colors.text.primary,
-                                    selection_color: theme.colors.accent.selected,
-                                    selection_text_color: theme.colors.text.primary,
-                                    cursor_height: 18.0,
-                                    cursor_width: 2.0,
-                                    container_height: Some(22.0),
-                                    highlight_ranges: &mention_highlights,
-                                    pill_ranges: &pasted_text_pills,
-                                    ..TextInputRenderConfig::default_for_prompt(&input_text)
-                                })
-                                .into_any_element()
-                            }),
-                    ),
+            .when(variant_config.show_variant_badge, |d| {
+                d.child(Self::render_variant_badge(ui_variant, &theme))
+            })
+            .when(
+                matches!(variant_config.composer, AcpComposerPlacement::Default),
+                |d| {
+                    d.child(Self::render_composer_bar(
+                        &input_text,
+                        input_cursor,
+                        input_selection,
+                        cursor_visible,
+                        is_empty,
+                        &mention_highlights,
+                        &pasted_text_pills,
+                        placeholder_text,
+                        &theme,
+                    ))
+                },
             )
             .when_some(self.focused_inline_mention_preview(cx), |d, preview| {
                 d.child(
@@ -7862,7 +8062,24 @@ impl Render for AcpChatView {
                 )
             })
             // ── Message list (middle, virtualized) ────────────
-            .child(self.ensure_transcript(cx).into_any_element())
+            .child(if variant_config.show_sidecar {
+                div()
+                    .flex_1()
+                    .min_h(px(0.0))
+                    .flex()
+                    .flex_row()
+                    .child(self.ensure_transcript(cx).into_any_element())
+                    .child(Self::render_variant_sidecar(
+                        ui_variant,
+                        status_label,
+                        message_count,
+                        context_chip_count,
+                        &theme,
+                    ))
+                    .into_any_element()
+            } else {
+                self.ensure_transcript(cx).into_any_element()
+            })
             // ── Plan strip ────────────────────────────────────
             .when(!plan_entries.is_empty(), |d| {
                 d.child(
@@ -7889,6 +8106,22 @@ impl Render for AcpChatView {
                     ))
                 },
             )
+            .when(
+                matches!(variant_config.composer, AcpComposerPlacement::BottomDock),
+                |d| {
+                    d.child(Self::render_composer_bar(
+                        &input_text,
+                        input_cursor,
+                        input_selection,
+                        cursor_visible,
+                        is_empty,
+                        &mention_highlights,
+                        &pasted_text_pills,
+                        placeholder_text,
+                        &theme,
+                    ))
+                },
+            )
             // ── Attach menu popup ──────────────────────────
             .when(self.attach_menu_open, |d| {
                 d.child(self.render_attach_menu(cx))
@@ -7911,10 +8144,22 @@ impl Render for AcpChatView {
                         ),
                 )
             })
-            // ── BOTTOM: Toolbar ─────────────────────
             .when(!self.uses_external_footer_host(), |d| {
                 let is_main_window = crate::get_main_window_handle()
                     .is_some_and(|handle| handle == window.window_handle());
+
+                #[cfg(target_os = "macos")]
+                {
+                    if !is_main_window {
+                        self.ensure_native_footer_action_listener(window, cx);
+                        crate::footer_popup::sync_window_footer_popup(
+                            window,
+                            &self.acp_detached_native_footer_config(cx),
+                        );
+                        return d.child(crate::components::prompt_layout_shell::render_native_main_window_footer_spacer());
+                    }
+                }
+
                 let active_surface = crate::footer_popup::active_main_window_footer_surface();
                 let use_native_footer_spacer = is_main_window && active_surface == Some("acp_chat");
 

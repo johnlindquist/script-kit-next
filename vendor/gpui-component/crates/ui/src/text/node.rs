@@ -538,6 +538,99 @@ impl CodeBlock {
         text
     }
 
+    fn agentic_code_styles(&self, cx: &App) -> Vec<(Range<usize>, HighlightStyle)> {
+        let Some(lang) = self.lang.as_ref().map(|lang| lang.to_ascii_lowercase()) else {
+            return self.styles.clone();
+        };
+        let is_js_like = matches!(
+            lang.as_str(),
+            "js" | "jsx" | "javascript" | "ts" | "tsx" | "typescript"
+        );
+        if !is_js_like {
+            return self.styles.clone();
+        }
+
+        let code = self.code();
+        let mut extras = Vec::new();
+        let mut ix = 0;
+        while ix < code.len() {
+            let Some(ch) = code[ix..].chars().next() else {
+                break;
+            };
+            if ch == '"' || ch == '\'' || ch == '`' {
+                let quote = ch;
+                ix += ch.len_utf8();
+                while ix < code.len() {
+                    let Some(next) = code[ix..].chars().next() else {
+                        break;
+                    };
+                    ix += next.len_utf8();
+                    if next == '\\' {
+                        if let Some(escaped) = code[ix..].chars().next() {
+                            ix += escaped.len_utf8();
+                        }
+                        continue;
+                    }
+                    if next == quote {
+                        break;
+                    }
+                }
+                continue;
+            }
+
+            if ch == '_' || ch.is_ascii_alphabetic() {
+                let start = ix;
+                ix += ch.len_utf8();
+                while ix < code.len() {
+                    let Some(next) = code[ix..].chars().next() else {
+                        break;
+                    };
+                    if !(next == '_' || next.is_ascii_alphanumeric()) {
+                        break;
+                    }
+                    ix += next.len_utf8();
+                }
+                let token = &code[start..ix];
+                let mut highlight = HighlightStyle::default();
+                if matches!(
+                    token,
+                    "async"
+                        | "await"
+                        | "class"
+                        | "const"
+                        | "export"
+                        | "function"
+                        | "import"
+                        | "interface"
+                        | "let"
+                        | "return"
+                        | "type"
+                ) {
+                    highlight.color = Some(cx.theme().yellow_light);
+                    highlight.font_weight = Some(FontWeight::SEMIBOLD);
+                } else if matches!(token, "string" | "number" | "boolean" | "unknown" | "void") {
+                    highlight.color = Some(cx.theme().blue_light);
+                } else if matches!(token, "console" | "window" | "document") {
+                    highlight.color = Some(cx.theme().green_light);
+                } else {
+                    let rest = code[ix..].trim_start();
+                    if rest.starts_with('(') {
+                        highlight.color = Some(cx.theme().blue_light);
+                    }
+                }
+
+                if highlight != HighlightStyle::default() {
+                    extras.push((start..ix, highlight));
+                }
+                continue;
+            }
+
+            ix += ch.len_utf8();
+        }
+
+        gpui::combine_highlights(self.styles.clone(), extras).collect()
+    }
+
     fn render(
         &self,
         options: &NodeRenderOptions,
@@ -546,6 +639,7 @@ impl CodeBlock {
         cx: &mut App,
     ) -> AnyElement {
         let style = &node_cx.style;
+        let styles = self.agentic_code_styles(cx);
 
         div()
             .when(!options.is_last, |this| this.pb(style.paragraph_gap))
@@ -563,7 +657,7 @@ impl CodeBlock {
                         "code",
                         self.state.clone(),
                         vec![],
-                        self.styles.clone(),
+                        styles,
                     ))
                     .when_some(node_cx.code_block_actions.clone(), |this, actions| {
                         this.child(
@@ -688,7 +782,8 @@ impl Paragraph {
                         });
                     }
                     if style.code {
-                        highlight.background_color = Some(cx.theme().accent);
+                        highlight.color = Some(cx.theme().accent);
+                        highlight.font_family = Some("JetBrains Mono");
                     }
 
                     if let Some(mut link_mark) = style.link.clone() {

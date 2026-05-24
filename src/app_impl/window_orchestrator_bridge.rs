@@ -59,6 +59,7 @@ impl ScriptListApp {
                     AppView::AcpChatView { .. } => FocusTarget::AcpChat,
                     AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
                     AppView::ConfirmPrompt { .. } => FocusTarget::AppRoot,
+                    AppView::NonListStatesView { .. } => FocusTarget::AppRoot,
                     #[cfg(feature = "storybook")]
                     AppView::DesignExplorerView { .. } => FocusTarget::AppRoot,
                 })

@@ -45,6 +45,7 @@ pub(crate) struct AcpEntryRequest {
     pub(crate) origin: AcpEntryOrigin,
     pub(crate) target: AcpThreadTarget,
     pub(crate) seed_text: Option<String>,
+    pub(crate) ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant,
     pub(crate) seed_policy: AcpSeedPolicy,
     pub(crate) suppress_focused_part: bool,
     pub(crate) context_staging: AcpContextStaging,
@@ -53,15 +54,31 @@ pub(crate) struct AcpEntryRequest {
 
 impl AcpEntryRequest {
     pub(crate) fn main_launcher(seed_text: Option<String>, suppress_focused_part: bool) -> Self {
+        Self::main_launcher_with_variant(
+            seed_text,
+            suppress_focused_part,
+            crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
+        )
+    }
+
+    pub(crate) fn main_launcher_with_variant(
+        seed_text: Option<String>,
+        suppress_focused_part: bool,
+        ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant,
+    ) -> Self {
         Self {
             origin: AcpEntryOrigin::MainLauncher,
             target: AcpThreadTarget::ExistingDetachedOrEmbedded,
-            seed_policy: if seed_text.as_ref().is_some_and(|text| !text.trim().is_empty()) {
+            seed_policy: if seed_text
+                .as_ref()
+                .is_some_and(|text| !text.trim().is_empty())
+            {
                 AcpSeedPolicy::AutoSubmitFirstTurn
             } else {
                 AcpSeedPolicy::ComposerOnly
             },
             seed_text,
+            ui_variant,
             suppress_focused_part,
             context_staging: if suppress_focused_part {
                 AcpContextStaging::SuppressFocused
@@ -88,7 +105,10 @@ impl ScriptListApp {
             return;
         }
 
-        let source_view = req.return_origin.clone().unwrap_or_else(|| self.current_view.clone());
+        let source_view = req
+            .return_origin
+            .clone()
+            .unwrap_or_else(|| self.current_view.clone());
         self.seed_acp_return_origin_for_view(&source_view);
 
         tracing::info!(
@@ -96,6 +116,7 @@ impl ScriptListApp {
             event = "acp_entry_request_open",
             origin = ?req.origin,
             target = ?req.target,
+            acp_chat_ui_variant = req.ui_variant.state_id(),
             seed_policy = ?req.seed_policy,
             suppress_focused_part = req.suppress_focused_part,
             source_view = ?source_view,
@@ -111,7 +132,12 @@ impl ScriptListApp {
                 }
             }
             _ => {
-                self.open_tab_ai_acp_with_options(req.seed_text, req.suppress_focused_part, cx);
+                self.open_tab_ai_acp_with_options(
+                    req.seed_text,
+                    req.suppress_focused_part,
+                    req.ui_variant,
+                    cx,
+                );
             }
         }
     }

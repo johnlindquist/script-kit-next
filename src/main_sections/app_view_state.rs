@@ -148,6 +148,8 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Showing one main-window non-list state design language example
+    NonListStatesView { selected_index: usize },
     /// Showing the in-app storybook compare view for design exploration
     #[cfg(feature = "storybook")]
     DesignExplorerView {
@@ -357,6 +359,7 @@ pub(crate) enum SurfaceKind {
     CurrentAppCommands,
     DesignGallery,
     FooterGallery,
+    NonListStates,
     #[cfg(feature = "storybook")]
     DesignExplorer,
     UtilityChildContent,
@@ -710,6 +713,7 @@ impl AppView {
             AppView::CurrentAppCommandsView { .. } => "CurrentAppCommandsView",
             AppView::DesignGalleryView { .. } => "DesignGalleryView",
             AppView::FooterGalleryView { .. } => "FooterGalleryView",
+            AppView::NonListStatesView { .. } => "NonListStatesView",
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => "DesignExplorerView",
             AppView::ScratchPadView { .. } => "ScratchPadView",
@@ -771,6 +775,7 @@ impl AppView {
             AppView::CurrentAppCommandsView { .. } => SurfaceKind::CurrentAppCommands,
             AppView::DesignGalleryView { .. } => SurfaceKind::DesignGallery,
             AppView::FooterGalleryView { .. } => SurfaceKind::FooterGallery,
+            AppView::NonListStatesView { .. } => SurfaceKind::NonListStates,
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => SurfaceKind::DesignExplorer,
             AppView::ScratchPadView { .. } | AppView::QuickTerminalView { .. } => {
@@ -850,6 +855,7 @@ impl AppView {
             AppView::BrowserTabsView { .. } => Some("browser_tabs"),
             AppView::DesignGalleryView { .. } => Some("design_gallery"),
             AppView::FooterGalleryView { .. } => Some("footer_gallery"),
+            AppView::NonListStatesView { .. } => Some("non_list_states"),
             AppView::ScratchPadView { .. } => Some("scratch_pad"),
             AppView::ThemeChooserView { .. } => Some("theme_chooser"),
             AppView::ProcessManagerView { .. } => Some("process_manager"),
@@ -1171,6 +1177,16 @@ impl SurfaceKind {
                 CompactLauncherVisual,
                 standard,
                 "footerGallery",
+            ),
+            SurfaceKind::NonListStates => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(UtilityWorkspace, ChildView, ContentPane),
+                ChildViewFocus,
+                ChildViewKeyboard,
+                ChildViewActions,
+                ChildViewStateProof,
+                ContentPaneVisual,
+                standard,
+                "nonListStates",
             ),
             #[cfg(feature = "storybook")]
             SurfaceKind::DesignExplorer => LauncherSurfaceContract::new(

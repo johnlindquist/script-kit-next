@@ -278,14 +278,15 @@ pub enum BuiltInFeature {
     /// Design gallery for viewing separator and icon variations
     DesignGallery,
     FooterGallery,
+    /// Main-window non-list state design language showcase
+    DesignNonListStates,
     /// In-app StoryBrowser compare/adopt tool (storybook feature only)
     #[cfg(feature = "storybook")]
     DesignExplorer,
-    /// In-app StoryBrowser focused on non-list information states.
-    #[cfg(feature = "storybook")]
-    DesignNonListStates,
     /// Agent Chat window for conversing with AI assistants
     AiChat,
+    /// Agent Chat presentation experiment backed by the same ACP runtime.
+    AiChatVariant(crate::ai::acp::ui_variant::AcpChatUiVariant),
     /// Notes window for quick notes and scratchpad
     Notes,
     /// Emoji picker for selecting and copying emojis
@@ -458,11 +459,10 @@ impl BuiltInEntry {
             BuiltInFeature::BrowserTabs => "Open Browser Tabs",
             BuiltInFeature::DesignGallery => "Open Gallery",
             BuiltInFeature::FooterGallery => "Open Footer Gallery",
+            BuiltInFeature::DesignNonListStates => "Open Non-List States",
             #[cfg(feature = "storybook")]
             BuiltInFeature::DesignExplorer => "Open Explorer",
-            #[cfg(feature = "storybook")]
-            BuiltInFeature::DesignNonListStates => "Open Non-List States",
-            BuiltInFeature::AiChat => "Open Agent Chat",
+            BuiltInFeature::AiChat | BuiltInFeature::AiChatVariant(_) => "Open Agent Chat",
             BuiltInFeature::Notes => "Open Notes",
             BuiltInFeature::EmojiPicker => "Open Emoji Picker",
             BuiltInFeature::SyncToGithub => "Sync to GitHub",
@@ -591,11 +591,11 @@ impl BuiltInEntry {
             BuiltInFeature::BrowserTabs => "Tabs",
             BuiltInFeature::DesignGallery => "Gallery",
             BuiltInFeature::FooterGallery => "Footer Gallery",
+            BuiltInFeature::DesignNonListStates => "Non-List States",
             #[cfg(feature = "storybook")]
             BuiltInFeature::DesignExplorer => "Explorer",
-            #[cfg(feature = "storybook")]
-            BuiltInFeature::DesignNonListStates => "Non-List States",
             BuiltInFeature::AiChat => "Agent",
+            BuiltInFeature::AiChatVariant(variant) => variant.footer_label(),
             BuiltInFeature::Notes => "Notes",
             BuiltInFeature::EmojiPicker => "Emoji",
             BuiltInFeature::SyncToGithub => "Sync",
@@ -828,6 +828,18 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
         debug!("Added Agent Chat built-in entry");
 
+        for variant in crate::ai::acp::ui_variant::AcpChatUiVariant::EXPERIMENTS {
+            entries.push(BuiltInEntry::new_with_icon(
+                variant.menu_id(),
+                variant.menu_name(),
+                variant.menu_description(),
+                variant.keywords(),
+                BuiltInFeature::AiChatVariant(variant),
+                "bot",
+            ));
+        }
+        debug!("Added Agent Chat UI variation built-in entries");
+
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/acp-history",
             "Agent Chat History",
@@ -982,6 +994,36 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ));
             debug!("Added Footer Gallery built-in entry");
 
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin/design-non-list-states",
+                "Design: Non-List States",
+                "Open the main-window non-list state design language showcase",
+                vec![
+                    "design",
+                    "non-list",
+                    "non list",
+                    "state",
+                    "states",
+                    "language",
+                    "showcase",
+                    "empty",
+                    "help",
+                    "form",
+                    "setup",
+                    "permission",
+                    "recovery",
+                    "about",
+                    "density",
+                    "main",
+                    "window",
+                    "chrome",
+                    "ui",
+                ],
+                BuiltInFeature::DesignNonListStates,
+                "flask-conical",
+            ));
+            debug!("Added Non-List States design built-in entry");
+
             // Test Confirmation entry for testing confirmation UI
             entries.push(BuiltInEntry::new_with_icon(
                 "builtin/test-confirmation",
@@ -1014,36 +1056,6 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "flask-conical",
             ));
             debug!("Added Design Explorer built-in entry");
-
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/design-non-list-states",
-                "Design: Non-List States",
-                "Open the non-list state language showcase in the design explorer",
-                vec![
-                    "design",
-                    "non-list",
-                    "non list",
-                    "state",
-                    "states",
-                    "language",
-                    "storybook",
-                    "showcase",
-                    "empty",
-                    "help",
-                    "form",
-                    "setup",
-                    "permission",
-                    "recovery",
-                    "about",
-                    "density",
-                    "compare",
-                    "variant",
-                    "ui",
-                ],
-                BuiltInFeature::DesignNonListStates,
-                "flask-conical",
-            ));
-            debug!("Added Non-List States design built-in entry");
         }
 
         // =========================================================================
@@ -2505,6 +2517,18 @@ mod tests {
         assert!(ai_chat.keywords.contains(&"harness".to_string()));
         assert!(ai_chat.keywords.contains(&"claude".to_string()));
         assert!(ai_chat.keywords.contains(&"gpt".to_string()));
+
+        for variant in crate::ai::acp::ui_variant::AcpChatUiVariant::EXPERIMENTS {
+            let entry = entries.iter().find(|entry| entry.id == variant.menu_id());
+            assert!(
+                entry.is_some(),
+                "missing Agent Chat UI variant entry {}",
+                variant.menu_id()
+            );
+            let entry = entry.unwrap();
+            assert_eq!(entry.name, variant.menu_name());
+            assert_eq!(entry.feature, BuiltInFeature::AiChatVariant(variant));
+        }
 
         // Check Emoji Picker entry
         let emoji_picker = entries.iter().find(|e| e.id == "builtin/emoji-picker");

@@ -201,7 +201,7 @@ impl Element for TextView {
             state.code_block_actions = self.code_block_actions.clone();
             state.selectable = self.selectable;
             state.scrollable = self.scrollable;
-            state.text_view_style = self.text_view_style.clone();
+            state.set_text_view_style(self.text_view_style.clone(), cx);
 
             if let Some(text) = self.text.clone() {
                 state.set_text(text.as_str(), cx);

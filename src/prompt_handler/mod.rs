@@ -3452,6 +3452,30 @@ impl ScriptListApp {
                             selected_value,
                         )
                     }
+                    AppView::NonListStatesView { selected_index } => (
+                        "nonListStates".to_string(),
+                        Some("non-list-states".to_string()),
+                        None,
+                        String::new(),
+                        8,
+                        8,
+                        *selected_index as i32,
+                        Some(
+                            [
+                                "Empty",
+                                "Help",
+                                "Form",
+                                "Setup",
+                                "Permission",
+                                "Recovery",
+                                "About",
+                                "Density",
+                            ]
+                            .get(*selected_index)
+                            .unwrap_or(&"Empty")
+                            .to_string(),
+                        ),
+                    ),
                     #[cfg(feature = "storybook")]
                     AppView::DesignExplorerView { .. } => (
                         "designExplorer".to_string(),

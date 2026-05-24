@@ -1049,6 +1049,39 @@
                                             );
                                         }
                                     }
+                                    AppView::NonListStatesView { .. } => {
+                                        if crate::ui_foundation::is_key_left(&key_lower) {
+                                            logging::log(
+                                                "STDIN",
+                                                "SimulateKey: Left - previous non-list state",
+                                            );
+                                            view.move_non_list_showcase_selection(-1, ctx);
+                                        } else if crate::ui_foundation::is_key_right(&key_lower) {
+                                            logging::log(
+                                                "STDIN",
+                                                "SimulateKey: Right - next non-list state",
+                                            );
+                                            view.move_non_list_showcase_selection(1, ctx);
+                                        } else if crate::ui_foundation::is_key_escape(&key_lower) {
+                                            logging::log(
+                                                "STDIN",
+                                                "SimulateKey: Escape - return from non-list states to main menu",
+                                            );
+                                            view.reset_to_script_list(ctx);
+                                            view.filter_text.clear();
+                                            view.pending_filter_sync = true;
+                                            view.pending_focus = Some(FocusTarget::MainFilter);
+                                            view.update_window_size_deferred(window, ctx);
+                                        } else {
+                                            logging::log(
+                                                "STDIN",
+                                                &format!(
+                                                    "SimulateKey: Unhandled key '{}' in NonListStatesView",
+                                                    key_lower
+                                                ),
+                                            );
+                                        }
+                                    }
                                     _ => {
                                         // Generic fallback: any view whose current_actions_host()
                                         // resolves (i.e. participates in the shared ActionsDialog)

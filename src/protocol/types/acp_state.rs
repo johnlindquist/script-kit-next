@@ -40,6 +40,10 @@ pub struct AcpStateSnapshot {
     /// Current thread status: "idle", "streaming", "waitingForPermission", "error", "setup".
     pub status: String,
 
+    /// Active ACP chat UI presentation variant.
+    #[serde(default)]
+    pub ui_variant: String,
+
     /// Composer input text (redacted to length only when content logging is off).
     pub input_text: String,
 
@@ -117,6 +121,7 @@ impl Default for AcpStateSnapshot {
             schema_version: ACP_STATE_SCHEMA_VERSION,
             resolved_target: None,
             status: "idle".to_string(),
+            ui_variant: "standard".to_string(),
             input_text: String::new(),
             cursor_index: 0,
             has_selection: false,
@@ -794,6 +799,7 @@ mod tests {
             schema_version: ACP_STATE_SCHEMA_VERSION,
             resolved_target: None,
             status: "streaming".to_string(),
+            ui_variant: "standard".to_string(),
             input_text: "hello @context".to_string(),
             cursor_index: 14,
             has_selection: false,
@@ -828,6 +834,7 @@ mod tests {
         // Verify top-level keys are present
         assert!(parsed["schemaVersion"].is_number());
         assert!(parsed["status"].is_string());
+        assert_eq!(parsed["uiVariant"], "standard");
         assert!(parsed["inputText"].is_string());
         assert!(parsed["cursorIndex"].is_number());
         assert!(parsed["hasSelection"].is_boolean());

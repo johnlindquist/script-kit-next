@@ -170,6 +170,9 @@ pub const fn plan_trigger_builtin_route(id: TriggerBuiltin) -> AppRoute {
         TriggerBuiltin::FooterGallery => {
             AppRoute::ShowFilterableView(FilterableView::FooterGallery)
         }
+        TriggerBuiltin::DesignNonListStates => {
+            AppRoute::ExecuteBuiltin("builtin/design-non-list-states")
+        }
         TriggerBuiltin::ClipboardHistory => {
             AppRoute::ShowFilterableView(FilterableView::ClipboardHistory)
         }

@@ -525,6 +525,7 @@ impl Render for ScriptListApp {
             } => self
                 .render_footer_gallery(filter, selected_index, cx)
                 .into_any_element(),
+            AppView::NonListStatesView { .. } => self.render_non_list_states_showcase(cx),
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { entity } => {
                 gpui::div().size_full().child(entity).into_any_element()

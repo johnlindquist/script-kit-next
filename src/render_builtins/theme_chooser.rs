@@ -1555,6 +1555,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.theme = std::sync::Arc::new(next_theme);
+        crate::theme::types::set_cached_theme_for_preview(self.theme.as_ref());
         self.sync_open_actions_dialog_theme(cx);
         self.sync_open_terminal_theme(cx);
         sync_theme_chooser_preview(cx, &self.theme, reason, sync_native_vibrancy);
@@ -1622,6 +1623,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.theme = original;
+        crate::theme::types::set_cached_theme_for_preview(self.theme.as_ref());
         self.sync_open_actions_dialog_theme(cx);
         self.sync_open_terminal_theme(cx);
         sync_theme_chooser_preview(cx, &self.theme, reason, true);

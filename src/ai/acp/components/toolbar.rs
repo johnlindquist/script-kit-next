@@ -54,7 +54,11 @@ impl Render for AcpToolbar {
             .items_center()
             .justify_between()
             .px(px(12.0))
-            .bg(rgb(theme.colors.background.main))
+            .bg(if theme.is_vibrancy_enabled() {
+                rgba(0x00000000)
+            } else {
+                rgb(theme.colors.background.main)
+            })
             .border_b_1()
             .border_color(rgb(theme.colors.ui.border))
             .child(

@@ -1,12 +1,14 @@
 use gpui::{
-    div, list, prelude::*, px, rgb, rgba, App, Context, Entity, FontWeight, ListAlignment,
-    ListOffset, ListSizingBehavior, ListState, Render, SharedString, Window,
+    div, list, prelude::*, px, rems, rgb, rgba, App, Context, Entity, FontWeight, ListAlignment,
+    ListOffset, ListSizingBehavior, ListState, Render, SharedString, StyleRefinement, Window,
 };
 use gpui_component::scroll::ScrollableElement;
-use gpui_component::text::{TextView, TextViewState};
+use gpui_component::text::{TextView, TextViewState, TextViewStyle};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use super::super::thread::{AcpThread, AcpThreadMessage, AcpThreadMessageRole};
+use super::super::ui_variant::{AcpChatUiVariant, AcpTranscriptPresentation};
 use crate::theme::{self, PromptColors};
 
 pub enum AcpTranscriptEvent {
@@ -21,6 +23,7 @@ pub struct AcpTranscript {
     collapsed_ids: HashSet<u64>,
     message_views: HashMap<u64, gpui::Entity<TextViewState>>,
     message_texts: HashMap<u64, String>,
+    ui_variant: AcpChatUiVariant,
 }
 
 impl AcpTranscript {
@@ -35,6 +38,19 @@ impl AcpTranscript {
             collapsed_ids: HashSet::new(),
             message_views: HashMap::new(),
             message_texts: HashMap::new(),
+            ui_variant: AcpChatUiVariant::Standard,
+        }
+    }
+
+    pub fn with_ui_variant(mut self, ui_variant: AcpChatUiVariant) -> Self {
+        self.ui_variant = ui_variant;
+        self
+    }
+
+    pub fn set_ui_variant(&mut self, ui_variant: AcpChatUiVariant, cx: &mut Context<Self>) {
+        if self.ui_variant != ui_variant {
+            self.ui_variant = ui_variant;
+            cx.notify();
         }
     }
 
@@ -101,20 +117,67 @@ impl AcpTranscript {
         self.list_state.scroll_to_end();
     }
 
+    fn transcript_text_style(_theme: &crate::theme::Theme, colors: &PromptColors) -> TextViewStyle {
+        let code_bg = rgba((colors.code_bg << 8) | 0xA0);
+        let code_border = rgba((colors.quote_border << 8) | 0x40);
+        let mut style = TextViewStyle::default()
+            .paragraph_gap(rems(0.28))
+            .heading_font_size(|level, _base_size| match level {
+                1 => px(15.0),
+                2 => px(14.0),
+                3 => px(13.0),
+                _ => px(12.0),
+            })
+            .code_block(
+                StyleRefinement::default()
+                    .bg(code_bg)
+                    .border_1()
+                    .border_color(code_border)
+                    .rounded(px(5.0))
+                    .px(px(7.0))
+                    .py(px(4.0))
+                    .text_size(px(11.0)),
+            );
+
+        style.highlight_theme = Arc::new(
+            crate::theme::gpui_integration::build_markdown_highlight_theme(
+                _theme,
+                _theme.is_dark_mode(),
+            ),
+        );
+        style.is_dark = _theme.is_dark_mode();
+        style
+    }
+
+    fn selectable_markdown_view(
+        text_view_state: &gpui::Entity<TextViewState>,
+        theme: &crate::theme::Theme,
+        colors: &PromptColors,
+    ) -> TextView {
+        TextView::new(text_view_state)
+            .style(Self::transcript_text_style(theme, colors))
+            .selectable(true)
+            .w_full()
+            .text_xs()
+            .text_color(rgb(colors.text_primary))
+    }
+
     fn render_message(
+        ui_variant: AcpChatUiVariant,
         msg: &AcpThreadMessage,
         colors: &PromptColors,
         is_collapsed: bool,
         text_view_state: &gpui::Entity<TextViewState>,
     ) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
+        let presentation = ui_variant.config().transcript;
 
         match msg.role {
             AcpThreadMessageRole::User => {
-                Self::render_user_message(msg, colors, &theme, text_view_state)
+                Self::render_user_message(msg, colors, &theme, text_view_state, presentation)
             }
             AcpThreadMessageRole::Assistant => {
-                Self::render_assistant_message(msg, colors, &theme, text_view_state)
+                Self::render_assistant_message(msg, colors, &theme, text_view_state, presentation)
             }
             AcpThreadMessageRole::Thought => Self::render_collapsible_block(
                 msg,
@@ -144,15 +207,40 @@ impl AcpTranscript {
         _colors: &PromptColors,
         theme: &crate::theme::Theme,
         text_view_state: &gpui::Entity<TextViewState>,
+        presentation: AcpTranscriptPresentation,
     ) -> gpui::AnyElement {
-        div()
+        let bubble = div()
             .w_full()
             .px(px(12.0))
-            .py(px(8.0))
+            .py(
+                if matches!(presentation, AcpTranscriptPresentation::DenseLog) {
+                    px(3.0)
+                } else {
+                    px(8.0)
+                },
+            )
             .rounded(px(8.0))
             .bg(rgba((theme.colors.text.primary << 8) | 0x06))
-            .child(TextView::new(text_view_state).selectable(true).w_full())
-            .into_any_element()
+            .when(
+                matches!(presentation, AcpTranscriptPresentation::UserBold),
+                |d| d.font_weight(FontWeight::BOLD),
+            )
+            .child(Self::selectable_markdown_view(
+                text_view_state,
+                theme,
+                _colors,
+            ));
+
+        if matches!(presentation, AcpTranscriptPresentation::RoleSplit) {
+            div()
+                .w_full()
+                .flex()
+                .justify_end()
+                .child(div().max_w(px(520.0)).child(bubble))
+                .into_any_element()
+        } else {
+            bubble.into_any_element()
+        }
     }
 
     fn render_assistant_message(
@@ -160,13 +248,34 @@ impl AcpTranscript {
         _colors: &PromptColors,
         _theme: &crate::theme::Theme,
         text_view_state: &gpui::Entity<TextViewState>,
+        presentation: AcpTranscriptPresentation,
     ) -> gpui::AnyElement {
-        div()
+        let message = div()
             .w_full()
             .px(px(12.0))
-            .py(px(4.0))
-            .child(TextView::new(text_view_state).selectable(true).w_full())
-            .into_any_element()
+            .py(
+                if matches!(presentation, AcpTranscriptPresentation::DenseLog) {
+                    px(2.0)
+                } else {
+                    px(4.0)
+                },
+            )
+            .child(Self::selectable_markdown_view(
+                text_view_state,
+                _theme,
+                _colors,
+            ));
+
+        if matches!(presentation, AcpTranscriptPresentation::RoleSplit) {
+            div()
+                .w_full()
+                .flex()
+                .justify_start()
+                .child(div().max_w(px(620.0)).child(message))
+                .into_any_element()
+        } else {
+            message.into_any_element()
+        }
     }
 
     fn render_collapsible_block(
@@ -251,7 +360,11 @@ impl AcpTranscript {
                 .pt(px(4.0))
                 .max_h(px(200.0))
                 .overflow_y_hidden()
-                .child(TextView::new(text_view_state).selectable(true).w_full());
+                .child(Self::selectable_markdown_view(
+                    text_view_state,
+                    theme,
+                    _colors,
+                ));
 
             container = container.child(body);
         }
@@ -287,7 +400,11 @@ impl AcpTranscript {
                             .child("Error"),
                     ),
             )
-            .child(TextView::new(text_view_state).selectable(true).w_full())
+            .child(Self::selectable_markdown_view(
+                text_view_state,
+                &theme::get_cached_theme(),
+                _colors,
+            ))
             .child(
                 div().pt(px(4.0)).text_xs().opacity(0.40).child(
                     "Try sending your message again or use \u{2318}N for a new conversation",
@@ -309,7 +426,11 @@ impl AcpTranscript {
             .opacity(0.60)
             .border_l_2()
             .border_color(rgba((theme.colors.ui.border << 8) | 0x30))
-            .child(TextView::new(text_view_state).selectable(true).w_full())
+            .child(Self::selectable_markdown_view(
+                text_view_state,
+                theme,
+                _colors,
+            ))
             .into_any_element()
     }
 }
@@ -340,6 +461,7 @@ impl Render for AcpTranscript {
         }
 
         let message_views_snapshot = self.message_views.clone();
+        let ui_variant = self.ui_variant;
 
         div()
             .relative()
@@ -378,7 +500,15 @@ impl Render for AcpTranscript {
                                 .border_t_1()
                                 .border_color(rgba((theme.colors.ui.border << 8) | 0x18))
                         })
+                        .when(
+                            matches!(
+                                ui_variant.config().transcript,
+                                AcpTranscriptPresentation::DenseLog
+                            ),
+                            |d| d.pb(px(1.0)),
+                        )
                         .child(Self::render_message(
+                            ui_variant,
                             msg,
                             &colors,
                             is_collapsed,

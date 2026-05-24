@@ -154,7 +154,13 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
                 .contains("pub(crate) const FOOTER_SEMICOLON_GLYPH_NUDGE_Y_PX: f32 = -1.0;")
             && FOOTER_CHROME
                 .contains("pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;")
-            && FOOTER_CHROME.contains("pub(crate) const FOOTER_LABELCAP_BORDER_ALPHA: f32 = 0.0;")
+            && FOOTER_CHROME.contains("pub(crate) const FOOTER_CHIP_BORDER_ALPHA: f32 = 0.18;")
+            && FOOTER_CHROME
+                .contains("pub(crate) const FOOTER_CHIP_BORDER_HOVER_ALPHA: f32 = 0.34;")
+            && FOOTER_CHROME
+                .contains("pub(crate) const FOOTER_LABELCAP_BORDER_ALPHA: f32 = FOOTER_CHIP_BORDER_ALPHA;")
+            && FOOTER_CHROME
+                .contains("pub(crate) const FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX: f32 = 6.0;")
             && FOOTER_CHROME.contains("pub(crate) const FOOTER_MIC_ICON_TOKEN: &str = \"mic\";")
             && FOOTER_CHROME.contains("pub(crate) const FOOTER_MIC_ICON_PATH: &str = concat!(")
             && FOOTER_CHROME.contains("let alpha = footer_keycap_border_alpha(theme, selected);")
@@ -227,6 +233,13 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
         FOOTER_POPUP.contains("isKindOfClass: class!(NSImageView)")
             && FOOTER_POPUP.contains("setContentTintColor: color"),
         "native footer image glyphs must use the same recursive opacity/tint updates as text key glyphs"
+    );
+    assert!(
+        FOOTER_POPUP.contains("fn set_footer_button_border_alpha(")
+            && FOOTER_POPUP.contains("setBorderColor: cg_border")
+            && FOOTER_POPUP.contains("footer_keycap_border_hover_alpha(&theme)")
+            && FOOTER_POPUP.contains("footer_keycap_border_alpha(&theme, true)"),
+        "native footer chip borders must be visible at rest and strengthen on hover/selected states"
     );
     assert!(
         DICTATION_WINDOW.contains("fn open_microphone_picker")

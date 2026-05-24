@@ -340,6 +340,14 @@ const ACP_CHAT_WINDOW_SOURCE: &str = include_str!("chat_window.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("view.rs");
 const ACP_CLIENT_SOURCE: &str = include_str!("client.rs");
 const ACP_THREAD_SOURCE: &str = include_str!("thread.rs");
+const ACP_TRANSCRIPT_SOURCE: &str = include_str!("components/transcript.rs");
+const ACP_UI_VARIANT_SOURCE: &str = include_str!("ui_variant.rs");
+const TEXT_VIEW_SOURCE: &str =
+    include_str!("../../../vendor/gpui-component/crates/ui/src/text/text_view.rs");
+const TEXT_VIEW_STATE_SOURCE: &str =
+    include_str!("../../../vendor/gpui-component/crates/ui/src/text/state.rs");
+const TEXT_VIEW_NODE_SOURCE: &str =
+    include_str!("../../../vendor/gpui-component/crates/ui/src/text/node.rs");
 
 fn acp_source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a str {
     let start = source
@@ -740,7 +748,8 @@ fn acp_model_selector_migration_uses_popup_window_instead_of_inline_layer() {
         "ACP model selector should render through a popup window entity"
     );
     assert!(
-        ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("render_dense_monoline_picker_row_with_accessory(")
+        ACP_MODEL_SELECTOR_POPUP_SOURCE
+            .contains("render_dense_monoline_picker_row_with_accessory(")
             && ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("IconName::Check")
             && ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("super::popup_window::dense_picker_height")
             && ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("InlineDropdown::new(")
@@ -765,8 +774,7 @@ fn acp_history_migration_uses_popup_window_instead_of_inline_layer() {
         ACP_HISTORY_POPUP_SOURCE.contains("AcpHistoryPopupWindow")
             && ACP_HISTORY_POPUP_SOURCE.contains("super::popup_window::popup_window_options")
             && ACP_HISTORY_POPUP_SOURCE.contains("super::popup_window::configure_popup_window")
-            && ACP_HISTORY_POPUP_SOURCE
-                .contains("super::popup_window::set_popup_window_bounds"),
+            && ACP_HISTORY_POPUP_SOURCE.contains("super::popup_window::set_popup_window_bounds"),
         "ACP history picker should render through a popup window entity using shared popup mechanics"
     );
     assert!(
@@ -786,7 +794,8 @@ fn acp_picker_popup_row_rendering_comes_from_shared_inline_dropdown() {
         "ACP slash/@ picker popup should source shared inline-dropdown row rendering directly"
     );
     assert!(
-        ACP_POPUP_WINDOW_SOURCE.contains("crate::components::inline_dropdown::CONTEXT_PICKER_ROW_HEIGHT")
+        ACP_POPUP_WINDOW_SOURCE
+            .contains("crate::components::inline_dropdown::CONTEXT_PICKER_ROW_HEIGHT")
             && !ACP_POPUP_WINDOW_SOURCE
                 .contains("crate::ai::context_picker_row::CONTEXT_PICKER_ROW_HEIGHT"),
         "ACP popup facade should derive dense picker height from the shared inline-dropdown row contract"
@@ -831,7 +840,8 @@ fn acp_footer_actions_hint_uses_shared_clickable_toggle_path() {
     assert!(
         TAB_AI_MODE_SOURCE.contains("wire_embedded_acp_footer_callbacks(&view, cx);")
             && TAB_AI_MODE_SOURCE.contains("app.toggle_actions(cx, window);")
-            && TAB_AI_MODE_SOURCE.contains("app.close_tab_ai_harness_terminal_with_window(window, cx);")
+            && TAB_AI_MODE_SOURCE
+                .contains("app.close_tab_ai_harness_terminal_with_window(window, cx);")
             && TAB_AI_MODE_SOURCE.contains("view.set_on_open_history_command")
             && TAB_AI_MODE_SOURCE.contains("app.open_embedded_acp_history_popup(window, cx);")
             && TAB_AI_MODE_SOURCE.contains("view.set_on_paste_response_requested")
@@ -874,7 +884,8 @@ fn acp_footer_primary_action_tracks_composer_response_and_streaming_state() {
 fn native_acp_footer_uses_child_snapshot_and_explicit_footer_actions() {
     assert!(
         UI_WINDOW_SOURCE.contains("self.acp_footer_snapshot.as_ref()")
-            && UI_WINDOW_SOURCE.contains("FooterButtonConfig::new(button.action, button.key, button.label)")
+            && UI_WINDOW_SOURCE
+                .contains("FooterButtonConfig::new(button.action, button.key, button.label)")
             && UI_WINDOW_SOURCE.contains("FooterAction::Stop")
             && UI_WINDOW_SOURCE.contains("FooterAction::PasteResponse"),
         "native ACP footer must render from the child ACP footer snapshot and dispatch explicit Stop/PasteResponse actions"
@@ -1232,8 +1243,10 @@ fn acp_history_toggle_uses_recent_close_debounce() {
     assert!(
         ACP_VIEW_SOURCE.contains("history_closed_at: Option<Instant>")
             && ACP_VIEW_SOURCE.contains("fn was_history_recently_closed(&self) -> bool")
-            && ACP_VIEW_SOURCE.contains("fn mark_history_popup_closed(&mut self, cx: &mut Context<Self>)")
-            && ACP_VIEW_SOURCE.contains("event = \"acp_history_popup_toggle_suppressed_recent_close\""),
+            && ACP_VIEW_SOURCE
+                .contains("fn mark_history_popup_closed(&mut self, cx: &mut Context<Self>)")
+            && ACP_VIEW_SOURCE
+                .contains("event = \"acp_history_popup_toggle_suppressed_recent_close\""),
         "ACP history popup should track recent closes and suppress immediate reopen races like the shared actions dialog"
     );
     assert!(
@@ -1253,9 +1266,12 @@ fn acp_history_popup_window_observes_focus_loss_and_escape() {
         "ACP history popup window should observe activation changes and close on focus loss"
     );
     assert!(
-        ACP_HISTORY_POPUP_SOURCE.contains(".on_mouse_down_out(cx.listener(|this, _event: &gpui::MouseDownEvent, window, cx| {")
-            && ACP_HISTORY_POPUP_SOURCE.contains("this.request_close(window, cx, \"mouse_down_out\");")
-            && ACP_HISTORY_POPUP_SOURCE.contains("view.dismiss_history_popup_from_window(reason, cx);")
+        ACP_HISTORY_POPUP_SOURCE.contains(
+            ".on_mouse_down_out(cx.listener(|this, _event: &gpui::MouseDownEvent, window, cx| {"
+        ) && ACP_HISTORY_POPUP_SOURCE
+            .contains("this.request_close(window, cx, \"mouse_down_out\");")
+            && ACP_HISTORY_POPUP_SOURCE
+                .contains("view.dismiss_history_popup_from_window(reason, cx);")
             && ACP_HISTORY_POPUP_SOURCE.contains("this.request_close(window, cx, \"escape\");"),
         "ACP history popup window should close on outside clicks and sync dismissals back into ACP state"
     );
@@ -1379,11 +1395,14 @@ fn acp_picker_portals_require_host_callbacks_before_staging() {
 #[test]
 fn detached_acp_limits_portals_to_history() {
     assert!(
-        ACP_CHAT_WINDOW_SOURCE.contains("view.set_allowed_portal_kinds(vec![PortalKind::AcpHistory]);")
-            && ACP_CHAT_WINDOW_SOURCE.contains("view.set_on_open_portal(move |kind, cx| match kind {")
+        ACP_CHAT_WINDOW_SOURCE
+            .contains("view.set_allowed_portal_kinds(vec![PortalKind::AcpHistory]);")
+            && ACP_CHAT_WINDOW_SOURCE
+                .contains("view.set_on_open_portal(move |kind, cx| match kind {")
             && ACP_CHAT_WINDOW_SOURCE.contains("PortalKind::AcpHistory => {")
             && ACP_CHAT_WINDOW_SOURCE.contains("open_history_portal_in_detached_chat_window(cx)")
-            && ACP_CHAT_WINDOW_SOURCE.contains("cancel_portal_session_in_detached_chat_window(kind, cx)")
+            && ACP_CHAT_WINDOW_SOURCE
+                .contains("cancel_portal_session_in_detached_chat_window(kind, cx)")
             && ACP_CHAT_WINDOW_SOURCE.contains("reason = \"unsupported_in_detached_host\""),
         "detached ACP should expose only the locally supported history portal, clear staged portal state on open failure, and log rejected portal requests"
     );
@@ -1400,9 +1419,12 @@ fn acp_history_popup_attach_consumes_pending_history_portal_session() {
     assert!(
         ACP_VIEW_SOURCE.contains("fn has_pending_history_portal_session(&self) -> bool")
             && ACP_VIEW_SOURCE.contains("fn build_history_attachment_part(")
-            && ACP_VIEW_SOURCE.contains("event = \"acp_history_portal_selection_attached_via_contract\"")
+            && ACP_VIEW_SOURCE
+                .contains("event = \"acp_history_portal_selection_attached_via_contract\"")
             && ACP_VIEW_SOURCE.contains("self.attach_portal_part(part, cx);")
-            && ACP_VIEW_SOURCE.contains("let had_pending_history_portal = self.has_pending_history_portal_session();")
+            && ACP_VIEW_SOURCE.contains(
+                "let had_pending_history_portal = self.has_pending_history_portal_session();"
+            )
             && popup_select_fn.contains("if had_pending_history_portal {")
             && popup_select_fn.contains("event = \"acp_history_popup_attach_failed\"")
             && popup_select_fn.contains("self.cancel_pending_portal_session(")
@@ -2786,6 +2808,28 @@ fn acp_slash_and_main_menu_skill_launch_share_prompt_contract() {
 }
 
 #[test]
+fn acp_ui_variant_launch_suppresses_selected_launcher_row_context_contract() {
+    let body = acp_source_between(
+        TAB_AI_MODE_SOURCE,
+        "pub(crate) fn open_tab_ai_acp_with_entry_intent_variant(",
+        "    /// Entry point for direct prompt handoffs",
+    );
+
+    assert!(
+        body.contains(
+            "let suppress_focused_part =\n            ui_variant != crate::ai::acp::ui_variant::AcpChatUiVariant::Standard;"
+        ),
+        "non-standard ACP UI variants are menu presets, not context sources"
+    );
+    assert!(
+        body.contains(
+            "acp_entry::AcpEntryRequest::main_launcher_with_variant(\n                entry_intent,\n                suppress_focused_part,\n                ui_variant,"
+        ),
+        "variant launches must pass the suppress flag into ACP entry staging"
+    );
+}
+
+#[test]
 fn acp_main_menu_skill_stage_matches_slash_selection_without_submit() {
     let body = acp_source_between(
         ACP_VIEW_SOURCE,
@@ -2834,10 +2878,10 @@ fn at_inline_portal_window_cannot_outlive_owner() {
         "fn clear_composer_picker",
     );
     assert!(
-        composer_body.contains("let next_picker_open = matches!(&state, AcpComposerPickerState::Open(_));")
-            && composer_body.contains(
-                "crate::ai::acp::picker_popup::close_mention_popup_window(cx);",
-            ),
+        composer_body
+            .contains("let next_picker_open = matches!(&state, AcpComposerPickerState::Open(_));")
+            && composer_body
+                .contains("crate::ai::acp::picker_popup::close_mention_popup_window(cx);",),
         "apply_composer_picker_transition must unconditionally close the detached @ popup whenever the picker state is not Open"
     );
 
@@ -2845,8 +2889,7 @@ fn at_inline_portal_window_cannot_outlive_owner() {
     //    owner is dropped or no longer carries a live `@` session.
     assert!(
         ACP_PICKER_POPUP_SOURCE.contains("fn owner_is_live(&self, cx: &App) -> bool")
-            && ACP_PICKER_POPUP_SOURCE
-                .contains("view.read(cx).has_active_mention_session()")
+            && ACP_PICKER_POPUP_SOURCE.contains("view.read(cx).has_active_mention_session()")
             && ACP_PICKER_POPUP_SOURCE.contains("if !self.owner_is_live(cx)"),
         "AcpMentionPopupWindow::render must self-prune when its owner ACP view is gone or has no live mention session"
     );
@@ -2881,9 +2924,8 @@ fn at_inline_portal_window_cannot_outlive_owner() {
         );
     }
     assert!(
-        REGISTRIES_STATE_SOURCE.contains(
-            "self.close_floating_popups_for_owner_loss(\"reset_to_script_list\", cx);",
-        ),
+        REGISTRIES_STATE_SOURCE
+            .contains("self.close_floating_popups_for_owner_loss(\"reset_to_script_list\", cx);",),
         "reset_to_script_list must close detached popup windows so they cannot survive a return to the main script list"
     );
 }
@@ -2920,5 +2962,85 @@ fn acp_transient_trigger_exit_on_empty_composer() {
     assert!(
         tab_ai_mode_source.contains("chat.opened_via_transient_trigger = trigger;"),
         "ACP reuse path must set opened_via_transient_trigger"
+    );
+}
+
+#[test]
+fn acp_transcript_keeps_selectable_markdown_with_chat_scaled_typography() {
+    assert!(
+        ACP_TRANSCRIPT_SOURCE.contains("fn selectable_markdown_view(")
+            && ACP_TRANSCRIPT_SOURCE.contains(".selectable(true)")
+            && ACP_TRANSCRIPT_SOURCE.contains(".text_xs()"),
+        "ACP transcript messages must stay selectable without reverting to oversized document typography"
+    );
+
+    assert!(
+        ACP_TRANSCRIPT_SOURCE.contains("fn transcript_text_style(")
+            && ACP_TRANSCRIPT_SOURCE.contains(".paragraph_gap(rems(0.28))")
+            && ACP_TRANSCRIPT_SOURCE.contains("1 => px(15.0)")
+            && ACP_TRANSCRIPT_SOURCE.contains("StyleRefinement::default()")
+            && ACP_TRANSCRIPT_SOURCE.contains(".code_block(")
+            && ACP_TRANSCRIPT_SOURCE.contains("build_markdown_highlight_theme"),
+        "ACP transcript must apply compact assistant-chat markdown styling for headings and code blocks"
+    );
+
+    assert!(
+        TEXT_VIEW_SOURCE.contains("state.set_text_view_style(self.text_view_style.clone(), cx);")
+            && TEXT_VIEW_STATE_SOURCE.contains("text_view_style: self.text_view_style.clone()")
+            && TEXT_VIEW_STATE_SOURCE.contains("style: options.text_view_style.clone()")
+            && TEXT_VIEW_STATE_SOURCE.contains("content.node_cx = node_cx;"),
+        "gpui-component TextView must persist TextViewStyle into parsed NodeContext so selectable markdown uses the requested chat styles"
+    );
+
+    assert!(
+        TEXT_VIEW_NODE_SOURCE.contains("highlight.font_family = Some(\"JetBrains Mono\");")
+            && TEXT_VIEW_NODE_SOURCE.contains("highlight.color = Some(cx.theme().accent);")
+            && !TEXT_VIEW_NODE_SOURCE
+                .contains("highlight.background_color = Some(cx.theme().accent);"),
+        "TextView inline code must render as selectable monospace accent text, not as an accent background chip"
+    );
+}
+
+#[test]
+fn acp_chat_ui_variants_are_menu_addressable_and_protocol_visible() {
+    assert!(
+        ACP_UI_VARIANT_SOURCE.contains("pub(crate) const EXPERIMENTS: [Self; 5]")
+            && ACP_UI_VARIANT_SOURCE.contains("\"builtin/ai-chat/user-bold\"")
+            && ACP_UI_VARIANT_SOURCE.contains("\"builtin/ai-chat/role-split\"")
+            && ACP_UI_VARIANT_SOURCE.contains("\"builtin/ai-chat/bottom-dock\"")
+            && ACP_UI_VARIANT_SOURCE.contains("\"builtin/ai-chat/dense-log\"")
+            && ACP_UI_VARIANT_SOURCE.contains("\"builtin/ai-chat/sidecar\""),
+        "ACP chat experiments must have stable main-menu command ids"
+    );
+
+    assert!(
+        ACP_VIEW_SOURCE.contains("ui_variant: AcpChatUiVariant")
+            && ACP_VIEW_SOURCE.contains("pub(crate) fn set_ui_variant")
+            && ACP_VIEW_SOURCE.contains("ui_variant: self.ui_variant.state_id().to_string()"),
+        "ACP view must carry the active UI variant into reusable views and protocol state"
+    );
+
+    assert!(
+        ACP_VIEW_SOURCE.contains("fn render_composer_bar(")
+            && ACP_VIEW_SOURCE
+                .contains("matches!(variant_config.composer, AcpComposerPlacement::Default)")
+            && ACP_VIEW_SOURCE
+                .contains("matches!(variant_config.composer, AcpComposerPlacement::BottomDock)"),
+        "ACP renderer must place the shared composer at the top or bottom based on the active variant"
+    );
+
+    assert!(
+        ACP_VIEW_SOURCE.contains("fn render_variant_badge(")
+            && ACP_VIEW_SOURCE.contains("fn render_variant_sidecar(")
+            && ACP_VIEW_SOURCE.contains("variant_config.show_variant_badge")
+            && ACP_VIEW_SOURCE.contains("variant_config.show_sidecar"),
+        "ACP renderer must expose visible variant badge and sidecar affordances for experiment review"
+    );
+
+    assert!(
+        ACP_TRANSCRIPT_SOURCE.contains("AcpTranscriptPresentation::UserBold")
+            && ACP_TRANSCRIPT_SOURCE.contains("AcpTranscriptPresentation::RoleSplit")
+            && ACP_TRANSCRIPT_SOURCE.contains("AcpTranscriptPresentation::DenseLog"),
+        "ACP transcript must render variant-specific presentation modes through the selectable markdown path"
     );
 }

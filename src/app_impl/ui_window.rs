@@ -141,6 +141,9 @@ impl ScriptListApp {
                     "Run".to_string()
                 };
             }
+            AppView::ThemeChooserView { .. } => {
+                return "Apply".to_string();
+            }
             AppView::ScriptList => {}
             _ => return "Run".to_string(),
         }
@@ -234,6 +237,9 @@ impl ScriptListApp {
                 } else if self.dispatch_footer_gallery_select_footer_action(cx) {
                     return;
                 } else if self.dispatch_kit_store_primary_footer_action(cx) {
+                    return;
+                } else if matches!(self.current_view, AppView::ThemeChooserView { .. }) {
+                    self.submit_theme_chooser_from_input_enter(window, cx);
                     return;
                 } else if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
@@ -1201,6 +1207,7 @@ impl ScriptListApp {
                 ViewType::MiniMainWindow,
                 crate::footer_gallery_filtered_len(filter),
             )),
+            AppView::NonListStatesView { .. } => Some((ViewType::DivPrompt, 0)),
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::ProcessManagerView { filter, .. } => {

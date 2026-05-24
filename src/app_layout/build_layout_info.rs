@@ -52,6 +52,7 @@ impl ScriptListApp {
             AppView::BrowserTabsView { .. } => "browserTabs",
             AppView::DesignGalleryView { .. } => "designGallery",
             AppView::FooterGalleryView { .. } => "footerGallery",
+            AppView::NonListStatesView { .. } => "nonListStates",
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => "designExplorer",
             AppView::ScratchPadView { .. } => "scratchPad",

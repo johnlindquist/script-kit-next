@@ -1032,7 +1032,8 @@ enum SurfaceOpenBuiltinAction {
     AppLauncher,
     DesignGallery,
     FooterGallery,
-    AiChat,
+    NonListStates,
+    AiChat(crate::ai::acp::ui_variant::AcpChatUiVariant),
     EmojiPicker,
     Webcam,
     FileSearch,
@@ -1052,7 +1053,11 @@ impl SurfaceOpenBuiltinAction {
             builtins::BuiltInFeature::AppLauncher => Some(Self::AppLauncher),
             builtins::BuiltInFeature::DesignGallery => Some(Self::DesignGallery),
             builtins::BuiltInFeature::FooterGallery => Some(Self::FooterGallery),
-            builtins::BuiltInFeature::AiChat => Some(Self::AiChat),
+            builtins::BuiltInFeature::DesignNonListStates => Some(Self::NonListStates),
+            builtins::BuiltInFeature::AiChat => Some(Self::AiChat(
+                crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
+            )),
+            builtins::BuiltInFeature::AiChatVariant(variant) => Some(Self::AiChat(*variant)),
             builtins::BuiltInFeature::EmojiPicker => Some(Self::EmojiPicker),
             builtins::BuiltInFeature::Webcam => Some(Self::Webcam),
             builtins::BuiltInFeature::FileSearch => Some(Self::FileSearch),
@@ -1073,7 +1078,11 @@ impl SurfaceOpenBuiltinAction {
             Self::AppLauncher => "open_app_launcher",
             Self::DesignGallery => "open_design_gallery",
             Self::FooterGallery => "open_footer_gallery",
-            Self::AiChat => "open_ai_harness_dispatched",
+            Self::NonListStates => "open_non_list_states",
+            Self::AiChat(crate::ai::acp::ui_variant::AcpChatUiVariant::Standard) => {
+                "open_ai_harness_dispatched"
+            }
+            Self::AiChat(_) => "open_ai_harness_variant_dispatched",
             Self::EmojiPicker => "open_emoji_picker",
             Self::Webcam => "open_webcam",
             Self::FileSearch => "open_file_search",
@@ -1093,7 +1102,8 @@ impl SurfaceOpenBuiltinAction {
             Self::AppLauncher => "Opening App Launcher",
             Self::DesignGallery => "Opening Design Gallery",
             Self::FooterGallery => "Opening Footer Gallery",
-            Self::AiChat => "Opening Agent Chat",
+            Self::NonListStates => "Opening Non-List States",
+            Self::AiChat(_) => "Opening Agent Chat",
             Self::EmojiPicker => "Opening Emoji Picker",
             Self::Webcam => "Opening Webcam",
             Self::FileSearch => "Opening File Search",
@@ -1343,7 +1353,6 @@ impl SyncToGithubBuiltinAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DesignExplorerBuiltinAction {
     Open,
-    OpenNonListStates,
 }
 
 #[cfg(feature = "storybook")]
@@ -1351,7 +1360,6 @@ impl DesignExplorerBuiltinAction {
     fn from_feature(feature: &builtins::BuiltInFeature) -> Option<Self> {
         match feature {
             builtins::BuiltInFeature::DesignExplorer => Some(Self::Open),
-            builtins::BuiltInFeature::DesignNonListStates => Some(Self::OpenNonListStates),
             _ => None,
         }
     }
@@ -1359,7 +1367,6 @@ impl DesignExplorerBuiltinAction {
     fn success_detail(self) -> &'static str {
         match self {
             Self::Open => "open_design_explorer",
-            Self::OpenNonListStates => "open_design_non_list_states",
         }
     }
 }
@@ -4159,14 +4166,18 @@ impl ScriptListApp {
                     .expect("surface open arm should only receive FooterGallery");
                 self.execute_surface_open_builtin(open_action, dctx, cx)
             }
+            builtins::BuiltInFeature::DesignNonListStates => {
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive DesignNonListStates");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
+            }
             #[cfg(feature = "storybook")]
-            builtins::BuiltInFeature::DesignExplorer
-            | builtins::BuiltInFeature::DesignNonListStates => {
+            builtins::BuiltInFeature::DesignExplorer => {
                 let design_action = DesignExplorerBuiltinAction::from_feature(&entry.feature)
                     .expect("design explorer arm should only receive design explorer features");
                 self.execute_design_explorer_builtin(design_action, dctx, cx)
             }
-            builtins::BuiltInFeature::AiChat => {
+            builtins::BuiltInFeature::AiChat | builtins::BuiltInFeature::AiChatVariant(_) => {
                 let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
                     .expect("surface open arm should only receive AiChat");
                 self.execute_surface_open_builtin(open_action, dctx, cx)
@@ -4557,14 +4568,28 @@ impl ScriptListApp {
                     cx,
                 );
             }
-            SurfaceOpenBuiltinAction::AiChat => {
+            SurfaceOpenBuiltinAction::NonListStates => {
                 tracing::info!(
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
                     "{}",
                     action.log_message()
                 );
-                self.open_tab_ai_acp_with_entry_intent(None, cx);
+
+                self.current_view = AppView::NonListStatesView { selected_index: 0 };
+                self.filter_text.clear();
+                self.pending_focus = Some(FocusTarget::AppRoot);
+                cx.notify();
+            }
+            SurfaceOpenBuiltinAction::AiChat(variant) => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    acp_chat_ui_variant = variant.state_id(),
+                    "{}",
+                    action.log_message()
+                );
+                self.open_tab_ai_acp_with_entry_intent_variant(None, variant, cx);
             }
             SurfaceOpenBuiltinAction::EmojiPicker => {
                 tracing::info!(
@@ -4943,22 +4968,15 @@ impl ScriptListApp {
                     browser.open_compare_mode();
                     let _ = browser.select_variant_id("current-main-menu");
                 }
-                DesignExplorerBuiltinAction::OpenNonListStates => {
-                    browser.configure_for_design_explorer(Some(
-                        script_kit_gpui::storybook::StorySurface::NonListState,
-                    ));
-                }
             }
             tracing::info!(
                 event = "design_explorer_opened",
                 surface = match action {
                     DesignExplorerBuiltinAction::Open => "main-menu",
-                    DesignExplorerBuiltinAction::OpenNonListStates => "non-list-states",
                 },
                 preview_mode = "compare",
                 variant_id = match action {
                     DesignExplorerBuiltinAction::Open => Some("current-main-menu"),
-                    DesignExplorerBuiltinAction::OpenNonListStates => None,
                 },
                 "Opened in-app design explorer"
             );

@@ -27,6 +27,7 @@ use std::sync::OnceLock;
 pub enum TriggerBuiltin {
     DesignGallery,
     FooterGallery,
+    DesignNonListStates,
     ClipboardHistory,
     AppLauncher,
     FileSearch,
@@ -55,6 +56,7 @@ impl TriggerBuiltin {
     pub const ALL: &'static [TriggerBuiltin] = &[
         TriggerBuiltin::DesignGallery,
         TriggerBuiltin::FooterGallery,
+        TriggerBuiltin::DesignNonListStates,
         TriggerBuiltin::ClipboardHistory,
         TriggerBuiltin::AppLauncher,
         TriggerBuiltin::FileSearch,
@@ -83,6 +85,7 @@ impl TriggerBuiltin {
         match self {
             TriggerBuiltin::DesignGallery => "builtin/design-gallery",
             TriggerBuiltin::FooterGallery => "builtin/footer-gallery",
+            TriggerBuiltin::DesignNonListStates => "builtin/design-non-list-states",
             TriggerBuiltin::ClipboardHistory => "builtin/clipboard-history",
             TriggerBuiltin::AppLauncher => "builtin/app-launcher",
             TriggerBuiltin::FileSearch => "builtin/file-search",
@@ -145,6 +148,12 @@ impl TriggerBuiltin {
         match self {
             TriggerBuiltin::DesignGallery => &["design-gallery", "designgallery", "design gallery"],
             TriggerBuiltin::FooterGallery => &["footer-gallery", "footergallery", "footer gallery"],
+            TriggerBuiltin::DesignNonListStates => &[
+                "design-non-list-states",
+                "non-list-states",
+                "nonliststates",
+                "non-list-state-language",
+            ],
             TriggerBuiltin::ClipboardHistory => {
                 &["clipboard", "clipboard-history", "clipboardhistory"]
             }

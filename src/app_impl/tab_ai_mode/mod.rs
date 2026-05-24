@@ -222,8 +222,27 @@ impl ScriptListApp {
         entry_intent: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        self.open_tab_ai_acp_with_entry_intent_variant(
+            entry_intent,
+            crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
+            cx,
+        );
+    }
+
+    pub(crate) fn open_tab_ai_acp_with_entry_intent_variant(
+        &mut self,
+        entry_intent: Option<String>,
+        ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant,
+        cx: &mut Context<Self>,
+    ) {
+        let suppress_focused_part =
+            ui_variant != crate::ai::acp::ui_variant::AcpChatUiVariant::Standard;
         self.open_acp_chat_from_entry_request(
-            acp_entry::AcpEntryRequest::main_launcher(entry_intent, false),
+            acp_entry::AcpEntryRequest::main_launcher_with_variant(
+                entry_intent,
+                suppress_focused_part,
+                ui_variant,
+            ),
             cx,
         );
     }
@@ -250,7 +269,11 @@ impl ScriptListApp {
     /// pending parts, and identity survive the round trip. Only when the
     /// cache is missing do we fall back to a fresh launch.
     pub(crate) fn reattach_embedded_acp_from_detached(&mut self, cx: &mut Context<Self>) {
-        if self.try_reuse_embedded_acp_view(None, cx) {
+        if self.try_reuse_embedded_acp_view(
+            None,
+            crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
+            cx,
+        ) {
             tracing::info!(
                 target: "script_kit::tab_ai",
                 event = "acp_reattach_embedded_reused",
@@ -303,6 +326,7 @@ impl ScriptListApp {
                 origin: acp_entry::AcpEntryOrigin::MainLauncher,
                 target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
                 seed_text: entry_intent,
+                ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
                 seed_policy: acp_entry::AcpSeedPolicy::AutoSubmitFirstTurn,
                 suppress_focused_part,
                 context_staging: if suppress_focused_part {
@@ -329,6 +353,7 @@ impl ScriptListApp {
         &mut self,
         entry_intent: Option<String>,
         suppress_focused_part: bool,
+        ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant,
         cx: &mut Context<Self>,
     ) {
         if self.tab_ai_save_offer_state.is_some() {
@@ -375,7 +400,7 @@ impl ScriptListApp {
         if Self::should_reuse_embedded_acp_view_for_open(
             normalized_entry_intent.as_deref(),
             has_cached_retry_request,
-        ) && self.try_reuse_embedded_acp_view(entry_intent.clone(), cx)
+        ) && self.try_reuse_embedded_acp_view(entry_intent.clone(), ui_variant, cx)
         {
             return;
         }
@@ -386,6 +411,7 @@ impl ScriptListApp {
             None,
             crate::ai::TabAiCaptureKind::DefaultContext,
             true,
+            ui_variant,
             cx,
         );
     }
@@ -443,6 +469,7 @@ impl ScriptListApp {
         let request = TabAiLaunchRequest {
             source_view: self.current_view.clone(),
             entry_intent: None,
+            ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
             suppress_focused_part: false,
             quick_submit_plan: None,
             ui_snapshot,
@@ -487,6 +514,7 @@ impl ScriptListApp {
                 origin: acp_entry::AcpEntryOrigin::ActionsDialog,
                 target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
                 seed_text: None,
+                ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
                 seed_policy: acp_entry::AcpSeedPolicy::ComposerOnly,
                 suppress_focused_part: true,
                 context_staging: acp_entry::AcpContextStaging::ActionsPayload { target },
@@ -548,6 +576,7 @@ impl ScriptListApp {
         let request = TabAiLaunchRequest {
             source_view: self.current_view.clone(),
             entry_intent: None,
+            ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
             suppress_focused_part: false,
             quick_submit_plan: None,
             ui_snapshot,
@@ -689,6 +718,7 @@ impl ScriptListApp {
                 },
                 target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
                 seed_text: None,
+                ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
                 seed_policy: acp_entry::AcpSeedPolicy::ComposerOnly,
                 suppress_focused_part: true,
                 context_staging: acp_entry::AcpContextStaging::SuppressFocused,
@@ -811,6 +841,7 @@ impl ScriptListApp {
     fn try_reuse_embedded_acp_view(
         &mut self,
         entry_intent: Option<String>,
+        ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant,
         cx: &mut Context<Self>,
     ) -> bool {
         let Some(entity) = self.embedded_acp_chat.as_ref().cloned() else {
@@ -828,8 +859,9 @@ impl ScriptListApp {
         let source_view = self.current_view.clone();
 
         let trigger = self.tab_ai_harness_script_list_trigger;
-        entity.update(cx, |chat, _cx| {
+        entity.update(cx, |chat, cx| {
             chat.opened_via_transient_trigger = trigger;
+            chat.set_ui_variant(ui_variant, cx);
         });
 
         self.tab_ai_harness_return_view = Some(source_view.clone());
@@ -848,6 +880,7 @@ impl ScriptListApp {
             source_view = ?source_view,
             auto_submit = normalized_intent.is_some(),
             is_setup_mode,
+            acp_chat_ui_variant = ui_variant.state_id(),
         );
         cx.notify();
         true
@@ -964,6 +997,7 @@ impl ScriptListApp {
             None,
             capture_kind,
             false,
+            crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
             cx,
         );
     }
@@ -982,7 +1016,15 @@ impl ScriptListApp {
         }
         let capture_kind = plan.capture_kind_enum();
         let intent = Some(plan.submission_intent().to_string());
-        self.begin_tab_ai_harness_entry(intent, false, Some(plan), capture_kind, false, cx);
+        self.begin_tab_ai_harness_entry(
+            intent,
+            false,
+            Some(plan),
+            capture_kind,
+            false,
+            crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
+            cx,
+        );
     }
 
     /// Route raw text (from Auto Submit fallback or dictation) through the
@@ -1089,6 +1131,7 @@ impl ScriptListApp {
                 Some(plan),
                 capture_kind,
                 false,
+                crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
                 cx,
             );
             return;
@@ -1160,6 +1203,7 @@ impl ScriptListApp {
         let request = TabAiLaunchRequest {
             source_view,
             entry_intent: Some(entry_intent),
+            ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
             suppress_focused_part: false,
             quick_submit_plan: Some(plan),
             ui_snapshot,
@@ -1395,6 +1439,7 @@ impl ScriptListApp {
                 origin: acp_entry::AcpEntryOrigin::LauncherTab,
                 target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
                 seed_text: entry_intent,
+                ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
                 seed_policy: acp_entry::AcpSeedPolicy::AutoSubmitFirstTurn,
                 suppress_focused_part: true,
                 context_staging: acp_entry::AcpContextStaging::SuppressFocused,
@@ -1439,7 +1484,7 @@ impl ScriptListApp {
     /// and triggers a snapshot rebuild. Returns `true` when the chord was
     /// consumed so the legacy ACP route doesn't also fire.
     pub(crate) fn try_route_cmd_enter_to_menu_syntax_ai(&mut self, cx: &mut Context<Self>) -> bool {
-        use crate::menu_syntax::{builtin_schema, MenuSyntaxActionState};
+        use crate::menu_syntax::{MenuSyntaxActionState, builtin_schema};
         let raw = self.filter_text().to_string();
         let mode = &self.menu_syntax_mode;
         let pending = if let Some(invocation) = mode.capture_for(&raw) {
@@ -1589,6 +1634,7 @@ impl ScriptListApp {
                 origin,
                 target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
                 seed_text: None,
+                ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
                 seed_policy: acp_entry::AcpSeedPolicy::ComposerOnly,
                 suppress_focused_part: false,
                 context_staging: if matches!(self.current_view, AppView::FileSearchView { .. }) {
@@ -1652,6 +1698,7 @@ impl ScriptListApp {
         quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,
         capture_kind: crate::ai::TabAiCaptureKind,
         force_acp_surface: bool,
+        ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant,
         cx: &mut Context<Self>,
     ) {
         self.begin_tab_ai_harness_entry_from_source_view(
@@ -1661,6 +1708,7 @@ impl ScriptListApp {
             quick_submit_plan,
             capture_kind,
             force_acp_surface,
+            ui_variant,
             cx,
         );
     }
@@ -1679,6 +1727,7 @@ impl ScriptListApp {
         quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,
         capture_kind: crate::ai::TabAiCaptureKind,
         force_acp_surface: bool,
+        ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant,
         cx: &mut Context<Self>,
     ) {
         let snapshot_started_at = std::time::Instant::now();
@@ -1723,6 +1772,7 @@ impl ScriptListApp {
         let request = TabAiLaunchRequest {
             source_view,
             entry_intent,
+            ui_variant,
             suppress_focused_part,
             quick_submit_plan,
             ui_snapshot,
@@ -3049,6 +3099,7 @@ impl ScriptListApp {
             AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
 
             AppView::ConfirmPrompt { .. } => FocusTarget::AppRoot,
+            AppView::NonListStatesView { .. } => FocusTarget::AppRoot,
 
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => FocusTarget::AppRoot,
@@ -4309,6 +4360,7 @@ impl ScriptListApp {
             AppView::CreationFeedback { .. } => "CreationFeedback".to_string(),
             AppView::DesignGalleryView { .. } => "DesignGallery".to_string(),
             AppView::FooterGalleryView { .. } => "FooterGallery".to_string(),
+            AppView::NonListStatesView { .. } => "NonListStates".to_string(),
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => "DesignExplorer".to_string(),
             AppView::ActionsDialog => "ActionsDialog".to_string(),
@@ -4452,6 +4504,7 @@ impl ScriptListApp {
             | AppView::ScriptIssuesView { .. }
             | AppView::ActionsDialog
             | AppView::InstalledKitsView { .. }
+            | AppView::NonListStatesView { .. }
             | AppView::ConfirmPrompt { .. } => None,
 
             #[cfg(feature = "storybook")]

@@ -180,6 +180,7 @@ fn render_variant(id: TriggerBuiltin) -> &'static str {
     match id {
         TriggerBuiltin::DesignGallery => "DesignGallery",
         TriggerBuiltin::FooterGallery => "FooterGallery",
+        TriggerBuiltin::DesignNonListStates => "DesignNonListStates",
         TriggerBuiltin::ClipboardHistory => "ClipboardHistory",
         TriggerBuiltin::AppLauncher => "AppLauncher",
         TriggerBuiltin::FileSearch => "FileSearch",

@@ -140,7 +140,7 @@ pub(super) fn build_search_mode_results(
         if is_menu_bar_result {
             if !in_menu_bar_run {
                 grouped.push(GroupedListItem::SectionHeader(
-                    "MENU BAR ACTIONS".to_string(),
+                    "Menu Bar Actions".to_string(),
                     None,
                 ));
             }
@@ -270,5 +270,6 @@ mod tests {
             .expect("at least one grouped result");
 
         assert_eq!(first_item.name(), "Reset Window Positions");
+        assert!(grouped.iter().any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Menu Bar Actions")));
     }
 }

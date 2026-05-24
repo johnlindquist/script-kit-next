@@ -154,6 +154,16 @@ impl TextViewState {
         cx.notify();
     }
 
+    pub(super) fn set_text_view_style(&mut self, style: TextViewStyle, cx: &mut Context<Self>) {
+        if self.text_view_style == style {
+            return;
+        }
+
+        self.text_view_style = style;
+        let text = self.text.to_string();
+        self.increment_update(&text, false, cx);
+    }
+
     /// Set the text content.
     pub fn set_text(&mut self, text: &str, cx: &mut Context<Self>) {
         if self.text.as_str() == text {
@@ -193,6 +203,7 @@ impl TextViewState {
             pending_text: text.to_string(),
             highlight_theme: cx.theme().highlight_theme.clone(),
             code_block_actions: code_block_actions.clone(),
+            text_view_style: self.text_view_style.clone(),
         };
 
         // Parse at first time by blocking.
@@ -328,6 +339,7 @@ impl UpdateFuture {
                 content: Default::default(),
                 highlight_theme: cx.theme().highlight_theme.clone(),
                 code_block_actions: None,
+                text_view_style: TextViewStyle::default(),
             },
             timer: Timer::never(),
             rx: Box::pin(rx),
@@ -385,11 +397,13 @@ struct UpdateOptions {
     append: bool,
     highlight_theme: Arc<HighlightTheme>,
     code_block_actions: Option<Arc<CodeBlockActionsFn>>,
+    text_view_style: TextViewStyle,
 }
 
 fn parse_content(format: TextViewFormat, options: &UpdateOptions) -> Result<(), SharedString> {
     let mut node_cx = NodeContext {
         code_block_actions: options.code_block_actions.clone(),
+        style: options.text_view_style.clone(),
         ..NodeContext::default()
     };
 
@@ -421,6 +435,7 @@ fn parse_content(format: TextViewFormat, options: &UpdateOptions) -> Result<(), 
     } else {
         content.document = new_content;
     }
+    content.node_cx = node_cx;
 
     Ok(())
 }

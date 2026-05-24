@@ -4,7 +4,7 @@ use gpui::{
 };
 
 use crate::list_item::FONT_SYSTEM_UI;
-use crate::theme::opacity::{OPACITY_HIDDEN, OPACITY_TEXT_MUTED};
+use crate::theme::opacity::OPACITY_TEXT_MUTED;
 use crate::theme::Theme;
 use crate::ui_foundation::HexColorExt;
 
@@ -21,6 +21,7 @@ pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;
 pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 3.0;
 pub(crate) const FOOTER_ACTION_CONTENT_GAP_PX: f32 = 2.0;
 pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX: f32 = 2.0;
+pub(crate) const FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX: f32 = 6.0;
 pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 4.0;
 pub(crate) const FOOTER_RUN_SLOT_MIN_WIDTH_PX: f32 = 92.0;
 pub(crate) const FOOTER_RUN_SLOT_MAX_WIDTH_PX: f32 = 172.0;
@@ -31,7 +32,10 @@ pub(crate) const FOOTER_CLOSE_SLOT_WIDTH_PX: f32 = 84.0;
 pub(crate) const FOOTER_STOP_SLOT_WIDTH_PX: f32 = 76.0;
 pub(crate) const FOOTER_PASTE_RESPONSE_SLOT_WIDTH_PX: f32 = 140.0;
 
-pub(crate) const FOOTER_LABELCAP_BORDER_ALPHA: f32 = 0.0;
+pub(crate) const FOOTER_CHIP_BORDER_ALPHA: f32 = 0.18;
+pub(crate) const FOOTER_CHIP_BORDER_HOVER_ALPHA: f32 = 0.34;
+pub(crate) const FOOTER_CHIP_BORDER_SELECTED_ALPHA: f32 = 0.40;
+pub(crate) const FOOTER_LABELCAP_BORDER_ALPHA: f32 = FOOTER_CHIP_BORDER_ALPHA;
 pub(crate) const FOOTER_MIC_ICON_TOKEN: &str = "mic";
 pub(crate) const FOOTER_MIC_ICON_PATH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -109,10 +113,17 @@ fn normalize_footer_key_token(token: &str) -> String {
 pub(crate) fn footer_keycap_border_alpha(theme: &Theme, selected: bool) -> f32 {
     let opacity = theme.get_opacity();
     if selected {
-        opacity.selected
+        opacity.selected.max(FOOTER_CHIP_BORDER_SELECTED_ALPHA)
     } else {
-        opacity.hover
+        opacity.hover.max(FOOTER_CHIP_BORDER_ALPHA)
     }
+}
+
+pub(crate) fn footer_keycap_border_hover_alpha(theme: &Theme) -> f32 {
+    theme
+        .get_opacity()
+        .hover
+        .max(FOOTER_CHIP_BORDER_HOVER_ALPHA)
 }
 
 pub(crate) fn footer_hint_text_color(theme: &Theme) -> gpui::Rgba {
@@ -133,12 +144,20 @@ pub(crate) fn footer_keycap_border_color(theme: &Theme) -> gpui::Hsla {
     footer_keycap_border_color_for_state(theme, false)
 }
 
+pub(crate) fn footer_keycap_border_hover_color(theme: &Theme) -> gpui::Hsla {
+    theme
+        .colors
+        .text
+        .primary
+        .with_opacity(footer_keycap_border_hover_alpha(theme))
+}
+
 pub(crate) fn footer_labelcap_border_color(theme: &Theme) -> gpui::Hsla {
     theme
         .colors
         .text
         .primary
-        .with_opacity(FOOTER_LABELCAP_BORDER_ALPHA.max(OPACITY_HIDDEN))
+        .with_opacity(FOOTER_LABELCAP_BORDER_ALPHA)
 }
 
 pub(crate) fn split_footer_shortcut(shortcut: &str) -> Vec<String> {
@@ -277,8 +296,18 @@ fn render_footer_hint_content_impl(
     let key_width_px = match mode {
         FooterHintKeyMode::Shortcut => footer_shortcut_keycaps_width_px(key.as_ref()),
     };
-    let label_max_width_px =
-        slot_width_px.map(|slot| footer_labelcap_max_width_for_slot(slot, key_width_px));
+    let edge_padding_x = if matches!(justify, FooterHintContentJustify::KeyAnchored) {
+        FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX
+    } else {
+        FOOTER_ACTION_CONTENT_PADDING_X_PX
+    };
+    let label_max_width_px = slot_width_px.map(|slot| {
+        if matches!(justify, FooterHintContentJustify::KeyAnchored) {
+            footer_labelcap_max_width_for_slot_with_padding(slot, key_width_px, edge_padding_x)
+        } else {
+            footer_labelcap_max_width_for_slot(slot, key_width_px)
+        }
+    });
     let labelcap = if let Some(max_width_px) = label_max_width_px {
         render_footer_labelcap_constrained(
             label,
@@ -296,7 +325,8 @@ fn render_footer_hint_content_impl(
     };
 
     let mut row = div()
-        .px(px(FOOTER_ACTION_CONTENT_PADDING_X_PX))
+        .pl(px(edge_padding_x))
+        .pr(px(edge_padding_x))
         .py(px(2.0))
         .rounded(px(FOOTER_ACTION_BUTTON_RADIUS_PX))
         .flex()
@@ -395,13 +425,24 @@ fn footer_keycap_estimated_width_px(token: &str) -> f32 {
 }
 
 pub(crate) fn footer_labelcap_max_width_for_slot(slot_width_px: f32, key_width_px: f32) -> f32 {
+    footer_labelcap_max_width_for_slot_with_padding(
+        slot_width_px,
+        key_width_px,
+        FOOTER_ACTION_CONTENT_PADDING_X_PX,
+    )
+}
+
+pub(crate) fn footer_labelcap_max_width_for_slot_with_padding(
+    slot_width_px: f32,
+    key_width_px: f32,
+    edge_padding_x: f32,
+) -> f32 {
     let key_gap = if key_width_px > 0.0 {
         FOOTER_ACTION_CONTENT_GAP_PX
     } else {
         0.0
     };
-    (slot_width_px - (FOOTER_ACTION_CONTENT_PADDING_X_PX * 2.0) - key_gap - key_width_px)
-        .max(FOOTER_KEYCAP_HEIGHT_PX)
+    (slot_width_px - (edge_padding_x * 2.0) - key_gap - key_width_px).max(FOOTER_KEYCAP_HEIGHT_PX)
 }
 
 fn render_footer_labelcap(
@@ -421,6 +462,7 @@ fn render_footer_labelcap_constrained(
     max_width_px: Option<f32>,
     force_width: bool,
 ) -> AnyElement {
+    let hover_border = footer_keycap_border_hover_color(theme);
     let mut cap = div()
         .flex_none()
         .min_w(px(FOOTER_KEYCAP_HEIGHT_PX))
@@ -438,7 +480,9 @@ fn render_footer_labelcap_constrained(
         .font_weight(FOOTER_HINT_FONT_WEIGHT_GPUI)
         .text_size(px(FOOTER_HINT_FONT_SIZE_PX))
         .text_color(footer_text)
-        .group_hover("footer-action-button", move |s| s.text_color(full_text));
+        .group_hover("footer-action-button", move |s| {
+            s.text_color(full_text).border_color(hover_border)
+        });
 
     if let Some(max_width_px) = max_width_px {
         cap = cap.max_w(px(max_width_px)).overflow_hidden();
@@ -476,6 +520,7 @@ fn render_footer_shortcut_keycaps(shortcut: String, theme: &Theme) -> AnyElement
 fn render_footer_keycap(token: String, max_width_px: Option<f32>, theme: &Theme) -> AnyElement {
     let footer_text = footer_hint_text_color(theme);
     let full_text = theme.colors.text.primary.to_rgb();
+    let hover_border = footer_keycap_border_hover_color(theme);
     let token_child: AnyElement = if token == FOOTER_MIC_ICON_TOKEN {
         svg()
             .external_path(FOOTER_MIC_ICON_PATH)
@@ -510,7 +555,9 @@ fn render_footer_keycap(token: String, max_width_px: Option<f32>, theme: &Theme)
         .font_weight(FOOTER_HINT_FONT_WEIGHT_GPUI)
         .text_size(px(FOOTER_HINT_FONT_SIZE_PX))
         .text_color(footer_text)
-        .group_hover("footer-action-button", move |s| s.text_color(full_text))
+        .group_hover("footer-action-button", move |s| {
+            s.text_color(full_text).border_color(hover_border)
+        })
         .child(token_child);
 
     if let Some(max_width_px) = max_width_px {
@@ -569,6 +616,27 @@ mod tests {
     }
 
     #[test]
+    fn key_anchored_footer_content_keeps_symmetric_outer_padding() {
+        let key_width = footer_shortcut_keycaps_width_px("↵");
+        let label_max = footer_labelcap_max_width_for_slot_with_padding(
+            FOOTER_RUN_SLOT_MIN_WIDTH_PX,
+            key_width,
+            FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX,
+        );
+
+        assert_eq!(FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX, 6.0);
+        assert!(
+            (label_max
+                + key_width
+                + FOOTER_ACTION_CONTENT_GAP_PX
+                + FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX * 2.0
+                - FOOTER_RUN_SLOT_MIN_WIDTH_PX)
+                .abs()
+                <= f32::EPSILON
+        );
+    }
+
+    #[test]
     fn footer_key_glyph_nudges_match_footer_contract() {
         assert!(is_footer_return_key_glyph("↵"));
         assert!(!is_footer_return_key_glyph("Enter"));
@@ -601,8 +669,8 @@ mod tests {
 
         let mut theme = Theme::dark_default();
         let mut opacity = theme.get_opacity();
-        opacity.hover = 0.21;
-        opacity.selected = 0.47;
+        opacity.hover = 0.12;
+        opacity.selected = 0.31;
         theme.opacity = Some(opacity);
 
         let chrome = crate::theme::AppChromeColors::from_theme(&theme);
@@ -623,29 +691,32 @@ mod tests {
     }
 
     #[test]
-    fn footer_keycap_border_alpha_tracks_list_row_state_opacity() {
+    fn footer_keycap_border_alpha_is_visible_and_stronger_on_hover() {
         let mut theme = Theme::dark_default();
         let mut opacity = theme.get_opacity();
-        opacity.hover = 0.21;
-        opacity.selected = 0.47;
+        opacity.hover = 0.12;
+        opacity.selected = 0.31;
         theme.opacity = Some(opacity);
-        let list_colors = crate::list_item::ListItemColors::from_theme(&theme);
 
         assert_eq!(
             footer_keycap_border_alpha(&theme, false),
-            list_colors.hover_opacity
+            FOOTER_CHIP_BORDER_ALPHA
         );
         assert_eq!(
             footer_keycap_border_alpha(&theme, true),
-            list_colors.selected_opacity
+            FOOTER_CHIP_BORDER_SELECTED_ALPHA
         );
         assert_eq!(
-            footer_keycap_border_color(&theme).a,
-            ((list_colors.hover_opacity * 255.0) as u8) as f32 / 255.0
+            footer_keycap_border_hover_alpha(&theme),
+            FOOTER_CHIP_BORDER_HOVER_ALPHA
         );
-        assert_eq!(
-            footer_keycap_border_color_for_state(&theme, true).a,
-            ((list_colors.selected_opacity * 255.0) as u8) as f32 / 255.0
+        assert!(footer_keycap_border_color(&theme).a >= FOOTER_CHIP_BORDER_ALPHA - 0.01);
+        assert!(
+            footer_keycap_border_hover_color(&theme).a >= FOOTER_CHIP_BORDER_HOVER_ALPHA - 0.01
+        );
+        assert!(
+            footer_keycap_border_color_for_state(&theme, true).a
+                >= FOOTER_CHIP_BORDER_SELECTED_ALPHA - 0.01
         );
     }
 }

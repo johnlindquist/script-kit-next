@@ -472,6 +472,9 @@ impl TextStyle {
         if let Some(style) = style.font_style {
             self.font_style = style;
         }
+        if let Some(family) = style.font_family {
+            self.font_family = family.into();
+        }
 
         if let Some(color) = style.color {
             self.color = self.color.blend(color);
@@ -544,6 +547,9 @@ pub struct HighlightStyle {
     /// The font style, e.g. italic
     pub font_style: Option<FontStyle>,
 
+    /// The font family to use
+    pub font_family: Option<&'static str>,
+
     /// The background color of the text
     pub background_color: Option<Hsla>,
 
@@ -564,6 +570,7 @@ impl Hash for HighlightStyle {
         self.color.hash(state);
         self.font_weight.hash(state);
         self.font_style.hash(state);
+        self.font_family.hash(state);
         self.background_color.hash(state);
         self.underline.hash(state);
         self.strikethrough.hash(state);
@@ -913,6 +920,7 @@ impl From<&TextStyle> for HighlightStyle {
             color: Some(other.color),
             font_weight: Some(other.font_weight),
             font_style: Some(other.font_style),
+            font_family: None,
             background_color: other.background_color,
             underline: other.underline,
             strikethrough: other.strikethrough,
@@ -946,6 +954,7 @@ impl HighlightStyle {
                 .or(self.color),
             font_weight: other.font_weight.or(self.font_weight),
             font_style: other.font_style.or(self.font_style),
+            font_family: other.font_family.or(self.font_family),
             background_color: other.background_color.or(self.background_color),
             underline: other.underline.or(self.underline),
             strikethrough: other.strikethrough.or(self.strikethrough),
@@ -1367,6 +1376,7 @@ mod tests {
             fade_out: Some(0.),
             font_style: Some(FontStyle::Italic),
             font_weight: Some(FontWeight(300.)),
+            font_family: None,
             background_color: Some(yellow()),
             underline: Some(UnderlineStyle {
                 thickness: px(2.),
@@ -1399,6 +1409,7 @@ mod tests {
             fade_out: Some(0.),
             font_style: Some(FontStyle::Oblique),
             font_weight: Some(FontWeight(800.)),
+            font_family: None,
             background_color: Some(green()),
             underline: Some(UnderlineStyle {
                 thickness: px(4.),
@@ -1417,6 +1428,7 @@ mod tests {
             fade_out: Some(0.),
             font_style: Some(FontStyle::Oblique),
             font_weight: Some(FontWeight(800.)),
+            font_family: None,
             background_color: Some(green()),
             underline: Some(UnderlineStyle {
                 thickness: px(4.),

@@ -3,6 +3,11 @@ const ABOUT_RENDER: &str = include_str!("../../src/about/render.rs");
 const AI_WELCOME_RENDER: &str = include_str!("../../src/ai/window/render_welcome.rs");
 const BUILTIN_EXECUTION: &str = include_str!("../../src/app_execute/builtin_execution.rs");
 const BUILTINS_MOD: &str = include_str!("../../src/builtins/mod.rs");
+const TRIGGER_REGISTRY: &str = include_str!("../../src/builtins/trigger_registry.rs");
+const APP_VIEW_STATE: &str = include_str!("../../src/main_sections/app_view_state.rs");
+const RENDER_IMPL: &str = include_str!("../../src/main_sections/render_impl.rs");
+const RENDER_BUILTINS_MOD: &str = include_str!("../../src/render_builtins/mod.rs");
+const NON_LIST_MAIN_RENDER: &str = include_str!("../../src/render_builtins/non_list_states.rs");
 const NON_LIST_STATE: &str = include_str!("../../src/components/non_list_state.rs");
 const STORYBOOK_MOD: &str = include_str!("../../src/storybook/mod.rs");
 const STORYBOOK_SHOWCASE: &str = include_str!("../../src/storybook/non_list_state_showcase.rs");
@@ -119,13 +124,46 @@ fn non_list_state_design_command_routes_to_showcase_surface() {
         "builtins command should use a dedicated non-list design feature"
     );
     assert!(
-        BUILTIN_EXECUTION.contains("OpenNonListStates"),
-        "execution should define the non-list design explorer action"
+        BUILTINS_MOD.contains("Open the main-window non-list state design language showcase"),
+        "builtins should describe this as a main-window showcase, not a Storybook route"
     );
     assert!(
-        BUILTIN_EXECUTION
-            .contains("configure_for_design_explorer(Some(\n                        script_kit_gpui::storybook::StorySurface::NonListState"),
-        "non-list design command should route directly to the NonListState surface"
+        BUILTIN_EXECUTION.contains("SurfaceOpenBuiltinAction::NonListStates")
+            && BUILTIN_EXECUTION.contains("AppView::NonListStatesView { selected_index: 0 }")
+            && BUILTIN_EXECUTION.contains("open_non_list_states"),
+        "execution should route the command to a first-class main-window surface"
+    );
+    assert!(
+        TRIGGER_REGISTRY.contains("DesignNonListStates")
+            && TRIGGER_REGISTRY.contains("\"builtin/design-non-list-states\""),
+        "triggerBuiltin should resolve the non-list showcase command id for DevTools proof"
+    );
+    assert!(
+        APP_VIEW_STATE.contains("NonListStatesView")
+            && APP_VIEW_STATE.contains("SurfaceKind::NonListStates")
+            && APP_VIEW_STATE.contains("Some(\"non_list_states\")"),
+        "AppView should expose a dedicated non-list state surface contract"
+    );
+    assert!(
+        RENDER_IMPL.contains(
+            "AppView::NonListStatesView { .. } => self.render_non_list_states_showcase(cx)"
+        ),
+        "main render dispatch should render the non-list showcase view"
+    );
+    assert!(
+        RENDER_BUILTINS_MOD.contains("include!(\"non_list_states.rs\");"),
+        "render builtins should include the non-list main-window renderer"
+    );
+    assert!(
+        NON_LIST_MAIN_RENDER.contains("render_non_list_states_showcase")
+            && NON_LIST_MAIN_RENDER.contains("non-list-states-main-window")
+            && NON_LIST_MAIN_RENDER.contains("non_list_palette(&self.theme)")
+            && NON_LIST_MAIN_RENDER.contains("NON_LIST_SHOWCASE_STATES")
+            && NON_LIST_MAIN_RENDER.contains("is_key_left(key)")
+            && NON_LIST_MAIN_RENDER.contains("is_key_right(key)")
+            && NON_LIST_MAIN_RENDER.contains("reset_to_script_list(cx)")
+            && NON_LIST_MAIN_RENDER.contains("NonListDensity::Comfortable"),
+        "non-list showcase should render one navigable state under real app chrome"
     );
     assert!(
         BUILTIN_EXECUTION.contains("configure_for_design_explorer(Some(\n                        script_kit_gpui::storybook::StorySurface::MainMenu")

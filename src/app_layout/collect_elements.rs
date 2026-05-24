@@ -264,6 +264,65 @@ impl ScriptListApp {
                 .into()
             }
 
+            AppView::NonListStatesView { selected_index } => {
+                let rows = [
+                    ("empty", "Empty"),
+                    ("help", "Help"),
+                    ("form", "Form"),
+                    ("setup", "Setup"),
+                    ("permission", "Permission"),
+                    ("recovery", "Recovery"),
+                    ("about", "About"),
+                    ("density", "Density"),
+                ];
+                let mut elements = vec![protocol::ElementInfo {
+                    semantic_id: "non-list-states:surface".to_string(),
+                    element_type: protocol::ElementType::Panel,
+                    text: rows
+                        .get(*selected_index)
+                        .map(|(_, label)| (*label).to_string())
+                        .or_else(|| Some("Non-list state language".to_string())),
+                    value: Some("main-window-showcase".to_string()),
+                    selected: None,
+                    focused: Some(true),
+                    index: None,
+                    role: Some("region".to_string()),
+                    kind: Some("designLanguageShowcase".to_string()),
+                    source: Some("nonListStates".to_string()),
+                    source_name: Some("Non-List States".to_string()),
+                    selectable: Some(false),
+                    status_kind: None,
+                    action_disabled: None,
+                }];
+
+                for (index, (value, label)) in rows.iter().enumerate() {
+                    if !Self::push_limited_element(
+                        &mut elements,
+                        limit,
+                        protocol::ElementInfo {
+                            semantic_id: format!("non-list-states:{value}"),
+                            element_type: protocol::ElementType::Panel,
+                            text: Some((*label).to_string()),
+                            value: Some((*value).to_string()),
+                            selected: Some(index == *selected_index),
+                            focused: None,
+                            index: Some(index),
+                            role: Some("example".to_string()),
+                            kind: Some("nonListState".to_string()),
+                            source: Some("nonListStates".to_string()),
+                            source_name: Some("Non-List States".to_string()),
+                            selectable: Some(false),
+                            status_kind: None,
+                            action_disabled: None,
+                        },
+                    ) {
+                        break;
+                    }
+                }
+
+                ElementCollectionOutcome::new(elements, rows.len() + 1)
+            }
+
             AppView::AcpHistoryView {
                 filter,
                 selected_index,
