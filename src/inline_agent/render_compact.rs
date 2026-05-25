@@ -15,6 +15,8 @@ pub struct InlineAgentCompactViewModel {
     pub thinking_label: Option<&'static str>,
     pub output_preview: Option<String>,
     pub actions: Vec<InlineAgentActionViewModel>,
+    pub stop_enabled: bool,
+    pub retry_enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,6 +67,8 @@ pub fn compact_view_model(
             enabled: is_action_enabled_for_snapshot(action, state, snapshot),
         })
         .collect(),
+        stop_enabled: is_stop_enabled(state),
+        retry_enabled: is_retry_enabled(state),
     }
 }
 
@@ -86,4 +90,21 @@ fn latest_output_preview(state: &InlineAgentRunState) -> Option<String> {
         }
         _ => state.latest_complete_output().map(ToOwned::to_owned),
     }
+}
+
+pub fn is_stop_enabled(state: &InlineAgentRunState) -> bool {
+    matches!(
+        state,
+        InlineAgentRunState::Thinking { .. } | InlineAgentRunState::Streaming { .. }
+    )
+}
+
+pub fn is_retry_enabled(state: &InlineAgentRunState) -> bool {
+    matches!(
+        state,
+        InlineAgentRunState::Error {
+            retryable: true,
+            ..
+        }
+    )
 }

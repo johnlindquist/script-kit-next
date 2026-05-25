@@ -2,6 +2,10 @@ use script_kit_gpui::inline_agent::render_actions::{
     apply_latest_output_action, is_action_enabled, is_action_enabled_for_snapshot,
     latest_output_mutation_for_action,
 };
+use script_kit_gpui::inline_agent::window::{
+    inline_agent_automation_state, register_inline_agent_automation_window,
+    remove_inline_agent_automation_window,
+};
 use script_kit_gpui::inline_agent::{InlineAgentAnchor, InlineAgentSnapshot};
 use script_kit_gpui::inline_agent::{
     InlineAgentMutationReceipt, InlineAgentOutputAction, InlineAgentPlatformBridge,
@@ -32,6 +36,8 @@ impl InlineAgentPlatformBridge for RecordingBridge {
         Ok(self.receipt.clone().unwrap_or(InlineAgentMutationReceipt {
             action,
             success: true,
+            changed_text: action != InlineAgentOutputAction::Copy,
+            copied_to_clipboard: action == InlineAgentOutputAction::Copy,
             message: None,
         }))
     }
@@ -84,6 +90,13 @@ fn applied_and_error_states_preserve_latest_output_for_actions() {
     let applied = InlineAgentRunState::Applied {
         action: InlineAgentOutputAction::Replace,
         output: "rewritten text".to_string(),
+        receipt: InlineAgentMutationReceipt {
+            action: InlineAgentOutputAction::Replace,
+            success: true,
+            changed_text: true,
+            copied_to_clipboard: false,
+            message: None,
+        },
     };
 
     assert_eq!(applied.latest_complete_output(), Some("rewritten text"));
@@ -208,4 +221,63 @@ fn apply_latest_output_action_routes_mutations_through_platform_bridge() {
 
     assert_eq!(receipt.action, InlineAgentOutputAction::Replace);
     assert!(receipt.success);
+    assert!(receipt.changed_text);
+    assert!(!receipt.copied_to_clipboard);
+}
+
+#[test]
+fn copy_action_receipt_is_redacted_and_clipboard_scoped() {
+    let snapshot = inline_snapshot_for_tests("hello");
+    let state = InlineAgentRunState::Completed {
+        output: "done".to_string(),
+    };
+    let bridge = RecordingBridge::default();
+
+    let receipt =
+        apply_latest_output_action(&bridge, InlineAgentOutputAction::Copy, &state, &snapshot)
+            .expect("bridge apply should succeed")
+            .expect("copy should produce a receipt");
+
+    assert_eq!(receipt.action, InlineAgentOutputAction::Copy);
+    assert!(receipt.success);
+    assert!(!receipt.changed_text);
+    assert!(receipt.copied_to_clipboard);
+    assert_eq!(receipt.message, None);
+}
+
+#[test]
+fn automation_state_reports_capability_aware_actions_and_redacted_last_mutation() {
+    let mut snapshot = inline_snapshot_for_tests("hello");
+    snapshot.capabilities.can_replace = false;
+    snapshot.capabilities.can_append = true;
+    snapshot.capabilities.can_copy = true;
+    let mut plan = script_kit_gpui::inline_agent::plan_open_inline_agent_overlay(
+        &snapshot,
+        script_kit_gpui::inline_agent::InlineOverlayAttachment::Standalone,
+    );
+    plan.run_state = InlineAgentRunState::Applied {
+        action: InlineAgentOutputAction::Copy,
+        output: "done".to_string(),
+        receipt: InlineAgentMutationReceipt {
+            action: InlineAgentOutputAction::Copy,
+            success: true,
+            changed_text: false,
+            copied_to_clipboard: true,
+            message: None,
+        },
+    };
+
+    register_inline_agent_automation_window(&plan);
+    let state = inline_agent_automation_state().expect("inline agent state should be registered");
+    remove_inline_agent_automation_window();
+
+    assert_eq!(state["actions"]["replaceEnabled"], false);
+    assert_eq!(state["actions"]["appendEnabled"], true);
+    assert_eq!(state["actions"]["copyEnabled"], true);
+    assert_eq!(state["lastMutation"]["schemaVersion"], 1);
+    assert_eq!(state["lastMutation"]["action"], "copy");
+    assert_eq!(state["lastMutation"]["success"], true);
+    assert_eq!(state["lastMutation"]["changedText"], false);
+    assert_eq!(state["lastMutation"]["copiedToClipboard"], true);
+    assert_eq!(state["lastMutation"]["safeLog"], true);
 }

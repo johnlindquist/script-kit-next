@@ -54,6 +54,8 @@ fn mutation_result_to_receipt(result: TextMutationResult) -> InlineAgentMutation
             TextMutationAction::Copy => super::types::InlineAgentOutputAction::Copy,
         },
         success: result.changed_text || result.copied_to_clipboard,
+        changed_text: result.changed_text,
+        copied_to_clipboard: result.copied_to_clipboard,
         message: None,
     }
 }

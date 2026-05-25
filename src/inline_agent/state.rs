@@ -1,4 +1,4 @@
-use super::types::InlineAgentOutputAction;
+use super::types::{InlineAgentMutationReceipt, InlineAgentOutputAction};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InlineAgentMode {
@@ -32,6 +32,7 @@ pub enum InlineAgentRunState {
     Applied {
         action: InlineAgentOutputAction,
         output: String,
+        receipt: InlineAgentMutationReceipt,
     },
 }
 

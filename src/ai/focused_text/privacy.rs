@@ -1,10 +1,10 @@
-use super::types::InlineAgentEditSemantics;
+use super::types::FocusedTextEditSemantics;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InlineAgentPromptAudit {
+pub struct FocusedTextPromptAudit {
     pub session_id: String,
     pub app_bundle_id: Option<String>,
-    pub semantics: InlineAgentEditSemantics,
+    pub semantics: FocusedTextEditSemantics,
     pub turn_count: usize,
     pub capture_char_count: usize,
     pub prompt_capture_char_count: usize,

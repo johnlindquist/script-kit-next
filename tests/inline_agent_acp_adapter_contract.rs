@@ -1,40 +1,45 @@
-const ACP_ADAPTER: &str = include_str!("../src/ai/inline_agent/acp_adapter.rs");
+use std::path::Path;
+
+const INLINE_AGENT_MOD: &str = include_str!("../src/ai/inline_agent/mod.rs");
+const INLINE_AGENT_WINDOW: &str = include_str!("../src/inline_agent/window.rs");
+const AGENT_CHAT_ADAPTER: &str = include_str!("../src/ai/inline_agent/agent_chat_adapter.rs");
 
 #[test]
-fn acp_adapter_uses_event_driven_start_turn_not_legacy_stream_prompt() {
-    assert!(ACP_ADAPTER.contains("AcpInlineAgentExecutor"));
-    assert!(ACP_ADAPTER.contains("impl InlineAgentExecutor for AcpInlineAgentExecutor"));
-    assert!(ACP_ADAPTER.contains("spawn_default_acp_inline_agent_executor"));
-    assert!(ACP_ADAPTER.contains("resolve_acp_launch_with_requirements"));
-    assert!(ACP_ADAPTER.contains("AcpConnection::spawn_with_approval"));
-    assert!(ACP_ADAPTER.contains(".start_turn(crate::ai::acp::AcpPromptTurnRequest"));
-    assert!(ACP_ADAPTER.contains("ContentBlock::Text(TextContent::new(request.prompt))"));
-    assert!(!ACP_ADAPTER.contains("stream_prompt"));
+fn inline_agent_no_longer_declares_or_ships_acp_adapter() {
+    assert!(!INLINE_AGENT_MOD.contains("mod acp_adapter"));
+    assert!(!Path::new("src/ai/inline_agent/acp_adapter.rs").exists());
 }
 
 #[test]
-fn acp_adapter_maps_streaming_events_to_inline_agent_events() {
-    for event_mapping in [
-        "AcpEvent::AgentMessageDelta(text)",
-        "InlineAgentProviderEvent::AgentMessageDelta { text }",
-        "AcpEvent::AgentThoughtDelta(text)",
-        "InlineAgentProviderEvent::AgentThoughtDelta { text }",
-        "AcpEvent::UsageUpdated",
-        "InlineAgentProviderEvent::UsageUpdated",
-        "AcpEvent::TurnFinished",
-        "InlineAgentProviderEvent::TurnFinished",
-        "AcpEvent::Failed { error }",
-        "InlineAgentProviderEvent::Failed { message: error }",
+fn inline_agent_window_uses_agent_chat_pi_executor_without_acp_fallback() {
+    assert!(INLINE_AGENT_WINDOW.contains("spawn_default_agent_chat_inline_agent_executor"));
+    for forbidden in [
+        "spawn_default_acp_inline_agent_executor",
+        "AcpInlineAgentExecutor",
+        "AcpConnection::spawn_with_approval",
+        "AcpPromptTurnRequest",
     ] {
         assert!(
-            ACP_ADAPTER.contains(event_mapping),
-            "ACP adapter missing mapping: {event_mapping}"
+            !INLINE_AGENT_WINDOW.contains(forbidden),
+            "inline agent window must not fallback to ACP symbol {forbidden}"
         );
     }
 }
 
 #[test]
-fn acp_adapter_cancels_by_inline_session_thread_id() {
-    assert!(ACP_ADAPTER.contains("fn cancel_turn("));
-    assert!(ACP_ADAPTER.contains("self.connection.cancel_turn(session_id.0)"));
+fn agent_chat_adapter_is_the_only_inline_agent_runtime_adapter_contract() {
+    assert!(AGENT_CHAT_ADAPTER.contains("AgentChatInlineAgentExecutor"));
+    assert!(AGENT_CHAT_ADAPTER.contains("resolve_focused_text_pi_launch"));
+    assert!(AGENT_CHAT_ADAPTER.contains("warm_session_manager"));
+    for forbidden in [
+        "AcpConnection::spawn_with_approval",
+        "AcpPromptTurnRequest",
+        "load_acp_agent_catalog_entries",
+        "resolve_acp_launch_with_requirements",
+    ] {
+        assert!(
+            !AGENT_CHAT_ADAPTER.contains(forbidden),
+            "Agent Chat inline adapter must not route through ACP symbol {forbidden}"
+        );
+    }
 }

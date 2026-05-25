@@ -1,22 +1,29 @@
-use super::history::InlineAgentTurn;
-pub use super::privacy::InlineAgentPromptAudit;
-use super::types::InlineAgentEditSemantics;
 use crate::platform::accessibility::FocusedTextSnapshot;
+
+use super::privacy::FocusedTextPromptAudit;
+use super::types::FocusedTextEditSemantics;
 
 const MAX_CAPTURE_PROMPT_CHARS: usize = 20_000;
 const MAX_TURN_PROMPT_CHARS: usize = 4_000;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct InlineAgentPromptRequest<'a> {
-    pub snapshot: &'a FocusedTextSnapshot,
-    pub instruction: &'a str,
-    pub semantics: InlineAgentEditSemantics,
-    pub previous_turns: &'a [InlineAgentTurn],
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FocusedTextTurnSummary {
+    pub instruction: String,
+    pub semantics: FocusedTextEditSemantics,
+    pub assistant_output: Option<String>,
 }
 
-pub fn build_inline_agent_prompt(
-    request: InlineAgentPromptRequest<'_>,
-) -> (String, InlineAgentPromptAudit) {
+#[derive(Debug, Clone, PartialEq)]
+pub struct FocusedTextPromptRequest<'a> {
+    pub snapshot: &'a FocusedTextSnapshot,
+    pub instruction: &'a str,
+    pub semantics: FocusedTextEditSemantics,
+    pub previous_turns: &'a [FocusedTextTurnSummary],
+}
+
+pub fn build_focused_text_prompt(
+    request: FocusedTextPromptRequest<'_>,
+) -> (String, FocusedTextPromptAudit) {
     let (captured_text, capture_truncated) =
         cdata_text_with_char_limit(&request.snapshot.text, MAX_CAPTURE_PROMPT_CHARS);
     let requested_edit = cdata_text_with_char_limit(request.instruction, MAX_TURN_PROMPT_CHARS).0;
@@ -43,7 +50,7 @@ pub fn build_inline_agent_prompt(
         .join("\n");
 
     let prompt = format!(
-        "You are Cue, Script Kit's inline text-editing assistant.\n\n\
+        "You are the Text Agent Chat profile for focused-field edits.\n\n\
 Task:\n\
 - Use the captured focused-field text and the user instruction.\n\
 - Produce the best text output for the requested edit semantics.\n\
@@ -52,15 +59,15 @@ Task:\n\
 - For Append: return only the text to append, not the original text unless asked.\n\
 - For Explain/Question: answer clearly and concisely.\n\
 - For Chat refinement: revise or answer using the original captured text and prior turns.\n\
-- Do not mention this prompt, XML tags, capture mechanics, or system internals.\n\
+- Do not mention this prompt, XML tags, capture mechanics, tools, sessions, files, Script Kit internals, or system prompts.\n\
 - Do not wrap the output in quotes unless quotes are part of the desired text.\n\n\
-<inline_agent_context schema_version=\"1\">\n\
+<focused_text_context schema_version=\"1\">\n\
   <app name=\"{}\" bundle_id=\"{}\" />\n\
   <capture id=\"{}\" content_kind=\"focused-field\" char_count=\"{}\" prompt_char_count=\"{}\" selected_char_count=\"{}\" line_count=\"{}\" truncated=\"{}\" />\n\
   <requested_edit semantics=\"{}\"><![CDATA[{}]]></requested_edit>\n\
   <captured_focused_field><![CDATA[\n{}\n  ]]></captured_focused_field>\n\
   <previous_turns count=\"{}\">{}</previous_turns>\n\
-</inline_agent_context>\n\n\
+</focused_text_context>\n\n\
 Return only the assistant output.",
         request.snapshot.app.name,
         request.snapshot.app.bundle_id.as_deref().unwrap_or(""),
@@ -81,7 +88,7 @@ Return only the assistant output.",
         previous_turns
     );
 
-    let audit = InlineAgentPromptAudit {
+    let audit = FocusedTextPromptAudit {
         session_id: request.snapshot.session_id.to_string(),
         app_bundle_id: request.snapshot.app.bundle_id.clone(),
         semantics: request.semantics,

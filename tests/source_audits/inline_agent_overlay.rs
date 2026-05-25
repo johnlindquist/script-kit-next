@@ -45,6 +45,8 @@ fn overlay_pins_stable_automation_ids() {
         "inline-agent-action-append",
         "inline-agent-action-copy",
         "inline-agent-action-chat",
+        "inline-agent-action-stop",
+        "inline-agent-action-retry",
         "inline-agent-expanded",
         "inline-agent-turn-list",
         "inline-agent-expanded-composer",
@@ -146,6 +148,77 @@ fn expanded_collapse_returns_to_compact_same_window() {
 }
 
 #[test]
+fn expanded_composer_reuses_input_text_and_submits_chat_semantics() {
+    assert!(INLINE_AGENT_WINDOW.contains("view.instruction_text = self.instruction_text.clone()"));
+    assert!(INLINE_AGENT_WINDOW.contains("submit_semantics_for_mode"));
+    assert!(INLINE_AGENT_WINDOW
+        .contains("InlineAgentMode::Compact => InlineAgentEditSemantics::Replace"));
+    assert!(
+        INLINE_AGENT_WINDOW.contains("InlineAgentMode::Expanded => InlineAgentEditSemantics::Chat")
+    );
+    assert!(INLINE_AGENT_WINDOW.contains("let semantics = self.submit_semantics_for_mode();"));
+    assert!(INLINE_AGENT_WINDOW.contains("begin_turn(instruction, semantics, executor)"));
+    assert!(INLINE_AGENT_WINDOW.contains("INLINE_AGENT_EXPANDED_COMPOSER_ID"));
+    assert!(INLINE_AGENT_WINDOW.contains("view.instruction_text.is_empty()"));
+}
+
+#[test]
+fn expanded_view_renders_latest_output_actions_without_reopening_chat() {
+    let expanded = include_str!("../../src/inline_agent/render_expanded.rs");
+    assert!(expanded.contains("actions: Vec<InlineAgentActionViewModel>"));
+    assert!(expanded.contains("InlineAgentOutputAction::Replace"));
+    assert!(expanded.contains("InlineAgentOutputAction::Append"));
+    assert!(expanded.contains("InlineAgentOutputAction::Copy"));
+    assert!(!expanded.contains("InlineAgentOutputAction::Chat,"));
+    assert!(expanded.contains("action_state_with_latest_output"));
+    assert!(INLINE_AGENT_WINDOW
+        .contains("let mut action_strip = div().flex().flex_row().gap(px(6.0));"));
+    assert!(INLINE_AGENT_WINDOW.contains("for action in view.actions"));
+    assert!(INLINE_AGENT_WINDOW.contains("this.handle_output_action(output_action, window, cx);"));
+    assert!(INLINE_AGENT_WINDOW.contains("action_run_state_with_latest_output"));
+    assert!(INLINE_AGENT_WINDOW.contains("previous_run_state.latest_output_owned().or_else"));
+    assert!(INLINE_AGENT_WINDOW.contains(".latest_complete_output()"));
+    assert!(INLINE_AGENT_WINDOW.contains(".map(ToOwned::to_owned)"));
+}
+
+#[test]
+fn stop_and_retry_controls_route_through_session_commands() {
+    let compact = include_str!("../../src/inline_agent/render_compact.rs");
+    let expanded = include_str!("../../src/inline_agent/render_expanded.rs");
+
+    assert!(compact.contains("stop_enabled: bool"));
+    assert!(compact.contains("retry_enabled: bool"));
+    assert!(compact.contains("is_stop_enabled"));
+    assert!(compact.contains("is_retry_enabled"));
+    assert!(expanded.contains("stop_enabled: bool"));
+    assert!(expanded.contains("retry_enabled: bool"));
+    assert!(INLINE_AGENT_WINDOW.contains("INLINE_AGENT_ACTION_STOP_ID"));
+    assert!(INLINE_AGENT_WINDOW.contains("INLINE_AGENT_ACTION_RETRY_ID"));
+    assert!(INLINE_AGENT_WINDOW.contains("stop_active_turn_from_user"));
+    assert!(INLINE_AGENT_WINDOW.contains("self.cancel_active_turn_for_lifecycle(\"stop_button\")"));
+    assert!(INLINE_AGENT_WINDOW.contains("retry_last_turn"));
+    assert!(INLINE_AGENT_WINDOW.contains("self.ai_session.last_retry_request().cloned()"));
+    assert!(INLINE_AGENT_WINDOW
+        .contains("submit_inline_agent_turn(request.instruction, request.semantics"));
+}
+
+#[test]
+fn close_reset_and_escape_cancel_active_inline_turn_before_removing_window() {
+    assert!(INLINE_AGENT_WINDOW.contains("cancel_active_turn_for_lifecycle"));
+    assert!(INLINE_AGENT_WINDOW.contains("overlay.cancel_active_turn_for_lifecycle(\"close\")"));
+    assert!(
+        INLINE_AGENT_WINDOW.contains("self.cancel_active_turn_for_lifecycle(\"reset_snapshot\")")
+    );
+    assert!(INLINE_AGENT_WINDOW.contains("self.close_from_overlay_window(window)"));
+    assert!(INLINE_AGENT_WINDOW.contains("self.cancel_active_turn_for_lifecycle(\"escape_close\")"));
+    assert!(INLINE_AGENT_WINDOW.contains("self.ai_session.cancel_active_turn(executor.as_ref())"));
+    assert!(INLINE_AGENT_WINDOW.contains("clear_inline_agent_overlay_storage"));
+    assert!(INLINE_AGENT_WINDOW.contains("remove_inline_agent_automation_window"));
+    assert!(INLINE_AGENT_WINDOW.contains("window.remove_window()"));
+    assert!(INLINE_AGENT_WINDOW.contains("inline_agent_turn_cancelled_for_lifecycle"));
+}
+
+#[test]
 fn compact_prompt_input_accepts_keyboard_and_submit_updates_output_state() {
     assert!(INLINE_AGENT_WINDOW.contains("instruction_text: String"));
     assert!(INLINE_AGENT_WINDOW.contains("ai_session: InlineAgentSession"));
@@ -154,12 +227,21 @@ fn compact_prompt_input_accepts_keyboard_and_submit_updates_output_state() {
     assert!(INLINE_AGENT_WINDOW.contains("submit_instruction"));
     assert!(INLINE_AGENT_WINDOW.contains("is_key_enter(key)"));
     assert!(INLINE_AGENT_WINDOW.contains("event.keystroke.key_char"));
-    assert!(
-        INLINE_AGENT_WINDOW.contains("begin_turn(instruction, InlineAgentEditSemantics::Replace")
-    );
-    assert!(INLINE_AGENT_WINDOW.contains("spawn_default_acp_inline_agent_executor"));
+    assert!(INLINE_AGENT_WINDOW.contains("begin_turn(instruction, semantics, executor)"));
+    assert!(INLINE_AGENT_WINDOW.contains("spawn_default_agent_chat_inline_agent_executor"));
     assert!(INLINE_AGENT_WINDOW.contains("active_executor: Option<Box<dyn InlineAgentExecutor>>"));
-    assert!(!INLINE_AGENT_WINDOW.contains("MockInlineAgentExecutor"));
+    let agent_chat_branch_start = INLINE_AGENT_WINDOW
+        .find("InlineAgentExecutorMode::AgentChatPi =>")
+        .expect("default Inline Agent executor branch must be explicit");
+    let mock_branch_offset = INLINE_AGENT_WINDOW[agent_chat_branch_start..]
+        .find("InlineAgentExecutorMode::MockFixture =>")
+        .expect("mock fixture branch must stay separate from default Agent Chat branch");
+    let agent_chat_branch =
+        &INLINE_AGENT_WINDOW[agent_chat_branch_start..agent_chat_branch_start + mock_branch_offset];
+    assert!(
+        !agent_chat_branch.contains("MockInlineAgentExecutor"),
+        "default Inline Agent submit path must not use the mock fixture executor"
+    );
     assert!(INLINE_AGENT_WINDOW.contains("bind_provider_stream(events, request_id"));
     assert!(INLINE_AGENT_WINDOW.contains("sync_run_state_from_ai_session"));
     assert!(INLINE_AGENT_WINDOW.contains("stream_generation"));

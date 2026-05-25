@@ -30,6 +30,18 @@ fn mocked_turn_records_latest_complete_output_and_history() {
     assert_eq!(session.history.len(), 1);
     assert_eq!(session.history[0].instruction, "Translate to French");
     assert_eq!(
+        session
+            .last_retry_request()
+            .map(|request| request.instruction.as_str()),
+        Some("Translate to French")
+    );
+    assert_eq!(
+        session
+            .last_retry_request()
+            .map(|request| request.semantics),
+        Some(InlineAgentEditSemantics::Replace)
+    );
+    assert_eq!(
         session.history[0].semantics,
         InlineAgentEditSemantics::Replace
     );

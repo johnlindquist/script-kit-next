@@ -245,11 +245,20 @@ mod focused_text_geometry_ax_wired;
 #[path = "source_audits/focused_text_mutation_wired.rs"]
 mod focused_text_mutation_wired;
 
+#[path = "source_audits/focused_text_agent_chat_entry.rs"]
+mod focused_text_agent_chat_entry;
+
 #[path = "source_audits/inline_ai_double_command_trigger_wired.rs"]
 mod inline_ai_double_command_trigger_wired;
 
 #[path = "source_audits/inline_agent_trigger_wired.rs"]
 mod inline_agent_trigger_wired;
+
+#[path = "source_audits/inline_agent_provider_ownership.rs"]
+mod inline_agent_provider_ownership;
+
+#[path = "source_audits/inline_agent_provider_privacy.rs"]
+mod inline_agent_provider_privacy;
 
 #[path = "source_audits/stdin_focused_text_protocol_wired.rs"]
 mod stdin_focused_text_protocol_wired;

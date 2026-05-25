@@ -4,6 +4,7 @@ mod acp_context_staging;
 mod acp_entry;
 mod acp_launch;
 mod acp_setup;
+mod focused_text_entry;
 mod source_classification;
 mod types;
 use source_classification::{
@@ -168,13 +169,9 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         let view_weak = view_entity.downgrade();
-        let generation = ACP_OBSERVED_STATE_SYNC_GENERATION
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-            + 1;
+        let generation = ACP_OBSERVED_STATE_SYNC_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
         cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(std::time::Duration::from_millis(50))
-                .await;
+            cx.background_executor().timer(std::time::Duration::from_millis(50)).await;
 
             let _ = cx.update(|cx| {
                 if ACP_OBSERVED_STATE_SYNC_GENERATION.load(std::sync::atomic::Ordering::Relaxed)

@@ -30,6 +30,7 @@ pub use types::{
 pub use window::{
     close_inline_agent_overlay_window, compact_root_automation_id, inline_agent_automation_info,
     inline_agent_window_options, launch_inline_agent_from_focused_text,
+    open_inline_agent_mock_fixture, open_inline_agent_pi_fixture,
     plan_compact_inline_agent_overlay, plan_expanded_inline_agent_overlay,
     plan_open_inline_agent_overlay, register_inline_agent_automation_window,
     remove_inline_agent_automation_window, sync_inline_agent_overlay_window,

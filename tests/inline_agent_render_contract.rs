@@ -5,7 +5,8 @@ use script_kit_gpui::inline_agent::render_compact::{
 };
 use script_kit_gpui::inline_agent::render_expanded::{expanded_header_label, expanded_view_model};
 use script_kit_gpui::inline_agent::{
-    InlineAgentOutputAction, InlineAgentRunState, INLINE_AGENT_INPUT_PLACEHOLDER,
+    InlineAgentMutationReceipt, InlineAgentOutputAction, InlineAgentRunState,
+    INLINE_AGENT_INPUT_PLACEHOLDER,
 };
 use script_kit_gpui::platform::accessibility::focused_text::focused_text_snapshot_for_tests;
 
@@ -64,6 +65,8 @@ fn compact_view_model_shows_thinking_state_without_output_preview() {
     assert!(view.thinking_visible);
     assert_eq!(view.thinking_label, Some(THINKING_LABEL));
     assert_eq!(view.output_preview, None);
+    assert!(view.stop_enabled);
+    assert!(!view.retry_enabled);
 }
 
 #[test]
@@ -74,6 +77,13 @@ fn compact_view_model_preserves_output_preview_after_apply_or_error() {
         &InlineAgentRunState::Applied {
             action: InlineAgentOutputAction::Replace,
             output: "done".to_string(),
+            receipt: InlineAgentMutationReceipt {
+                action: InlineAgentOutputAction::Replace,
+                success: true,
+                changed_text: true,
+                copied_to_clipboard: false,
+                message: None,
+            },
         },
     );
 
@@ -93,6 +103,8 @@ fn compact_view_model_preserves_output_preview_after_apply_or_error() {
     );
 
     assert_eq!(error.output_preview.as_deref(), Some("done"));
+    assert!(!error.stop_enabled);
+    assert!(error.retry_enabled);
     assert!(error
         .actions
         .iter()
@@ -129,6 +141,25 @@ fn expanded_view_model_projects_turns_and_latest_output() {
     assert_eq!(view.header_label, "Cue - 1 turn");
     assert_eq!(view.session_id, snapshot.session_id.to_string());
     assert_eq!(view.input_placeholder, INLINE_AGENT_INPUT_PLACEHOLDER);
+    assert_eq!(view.instruction_text, "");
     assert_eq!(view.turns[0].user_instruction, "make it shorter");
     assert_eq!(view.latest_output.as_deref(), Some("short"));
+    assert!(!view.stop_enabled);
+    assert!(!view.retry_enabled);
+    assert!(view
+        .actions
+        .iter()
+        .any(|action| action.action == InlineAgentOutputAction::Replace && action.enabled));
+    assert!(view
+        .actions
+        .iter()
+        .any(|action| action.action == InlineAgentOutputAction::Append && action.enabled));
+    assert!(view
+        .actions
+        .iter()
+        .any(|action| action.action == InlineAgentOutputAction::Copy && action.enabled));
+    assert!(!view
+        .actions
+        .iter()
+        .any(|action| action.action == InlineAgentOutputAction::Chat));
 }

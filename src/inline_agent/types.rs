@@ -62,5 +62,7 @@ pub enum InlineAgentTextMutation {
 pub struct InlineAgentMutationReceipt {
     pub action: InlineAgentOutputAction,
     pub success: bool,
+    pub changed_text: bool,
+    pub copied_to_clipboard: bool,
     pub message: Option<String>,
 }

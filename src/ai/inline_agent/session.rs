@@ -16,6 +16,12 @@ struct PendingInlineAgentTurn {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineAgentRetryRequest {
+    pub instruction: String,
+    pub semantics: InlineAgentEditSemantics,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InlineAgentSessionCommand {
     Submit {
         instruction: String,
@@ -108,6 +114,7 @@ pub struct InlineAgentSession {
     pub stream: InlineAgentStreamState,
     pub history: Vec<InlineAgentTurn>,
     active_turn: Option<PendingInlineAgentTurn>,
+    last_retry_request: Option<InlineAgentRetryRequest>,
     next_turn_index: usize,
 }
 
@@ -118,6 +125,7 @@ impl InlineAgentSession {
             stream: InlineAgentStreamState::default(),
             history: Vec::new(),
             active_turn: None,
+            last_retry_request: None,
             next_turn_index: 1,
         }
     }
@@ -154,6 +162,10 @@ impl InlineAgentSession {
 
         self.active_turn = Some(PendingInlineAgentTurn {
             turn_id,
+            instruction: instruction.clone(),
+            semantics,
+        });
+        self.last_retry_request = Some(InlineAgentRetryRequest {
             instruction,
             semantics,
         });
@@ -210,5 +222,9 @@ impl InlineAgentSession {
 
     pub fn latest_complete_output(&self) -> Option<&str> {
         self.stream.latest_complete_output.as_deref()
+    }
+
+    pub fn last_retry_request(&self) -> Option<&InlineAgentRetryRequest> {
+        self.last_retry_request.as_ref()
     }
 }

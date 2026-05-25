@@ -45,3 +45,46 @@ fn prompt_audit_excludes_sensitive_text() {
     assert!(!audit_debug.contains("rewrite this secret"));
     assert_eq!(audit.completion_status, "prompt_built");
 }
+
+#[test]
+fn prompt_escapes_cdata_terminators_in_user_controlled_text() {
+    let snapshot = focused_text_snapshot_for_tests("field ]]> text");
+    let previous_turns = vec![InlineAgentTurn {
+        instruction: "previous ]]> instruction".to_string(),
+        semantics: InlineAgentEditSemantics::Replace,
+        assistant_output: Some("assistant ]]> output".to_string()),
+    }];
+
+    let (prompt, _audit) = build_inline_agent_prompt(InlineAgentPromptRequest {
+        snapshot: &snapshot,
+        instruction: "rewrite ]]> now",
+        semantics: InlineAgentEditSemantics::Chat,
+        previous_turns: &previous_turns,
+    });
+
+    assert!(prompt.contains("field ]]]]><![CDATA[> text"));
+    assert!(prompt.contains("rewrite ]]]]><![CDATA[> now"));
+    assert!(prompt.contains("previous ]]]]><![CDATA[> instruction"));
+    assert!(prompt.contains("assistant ]]]]><![CDATA[> output"));
+    assert!(!prompt.contains("field ]]> text"));
+}
+
+#[test]
+fn prompt_caps_large_focused_field_and_records_redacted_truncation_metadata() {
+    let large_text = "x".repeat(20_050);
+    let snapshot = focused_text_snapshot_for_tests(&large_text);
+
+    let (prompt, audit) = build_inline_agent_prompt(InlineAgentPromptRequest {
+        snapshot: &snapshot,
+        instruction: "summarize",
+        semantics: InlineAgentEditSemantics::Replace,
+        previous_turns: &[],
+    });
+
+    assert!(prompt.contains("truncated=\"true\""));
+    assert!(prompt.contains("prompt_char_count=\"20000\""));
+    assert_eq!(audit.capture_char_count, 20_050);
+    assert_eq!(audit.prompt_capture_char_count, 20_000);
+    assert!(audit.capture_truncated);
+    assert!(!format!("{audit:?}").contains(&large_text));
+}
