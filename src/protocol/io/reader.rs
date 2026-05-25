@@ -181,12 +181,14 @@ impl<R: Read> JsonlReader<R> {
                         ParseResult::Ok(msg) => {
                             // Set correlation ID for this protocol message
                             // Use message ID or generate a unique one
-                            let msg_id = msg
+                            let message_id = msg
                                 .id()
                                 .map(|s| s.to_string())
                                 .unwrap_or_else(|| format!("msg:{}", Uuid::new_v4()));
-                            let _guard =
-                                crate::logging::set_correlation_id(format!("protocol:{}", msg_id));
+                            let _guard = crate::logging::set_correlation_id(format!(
+                                "protocol:{}",
+                                message_id
+                            ));
 
                             debug!(message_id = ?msg.id(), "Successfully parsed message");
                             return Ok(Some(msg));

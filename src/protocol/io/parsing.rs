@@ -242,7 +242,7 @@ fn parse_message_graceful(line: &str) -> ParseResult {
                 }
             };
 
-            let msg_type: String = match type_value.as_str() {
+            let message_type: String = match type_value.as_str() {
                 Some(t) => t.to_string(),
                 None => {
                     return ParseResult::InvalidTypeField {
@@ -256,14 +256,14 @@ fn parse_message_graceful(line: &str) -> ParseResult {
             };
 
             let error_str = message_err.to_string();
-            if is_unknown_message_type_error(&error_str, &msg_type) {
+            if is_unknown_message_type_error(&error_str, &message_type) {
                 ParseResult::UnknownType {
-                    message_type: msg_type,
+                    message_type,
                     raw: preview.to_string(),
                 }
             } else {
                 ParseResult::InvalidPayload {
-                    message_type: msg_type,
+                    message_type,
                     error: error_str,
                     raw: preview.to_string(),
                 }
@@ -279,6 +279,6 @@ fn parse_message_graceful(line: &str) -> ParseResult {
 ///
 /// # Returns
 /// * `Result<String, serde_json::Error>` - JSON string (without newline)
-pub fn serialize_message(msg: &Message) -> Result<String, serde_json::Error> {
-    serde_json::to_string(msg)
+pub fn serialize_message(message: &Message) -> Result<String, serde_json::Error> {
+    serde_json::to_string(message)
 }
