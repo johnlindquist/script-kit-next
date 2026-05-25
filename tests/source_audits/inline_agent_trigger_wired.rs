@@ -78,6 +78,7 @@ fn production_hotkey_path_captures_before_opening_focused_text_agent_chat() {
 #[test]
 fn inline_agent_launch_does_not_use_selected_text_fallback() {
     assert!(!FOCUSED_TEXT.contains("get_selected_text("));
+    assert!(FOCUSED_TEXT.contains("copy_all_plain_text_preserving_clipboard"));
     for source in [APP_RUN_SETUP, RUNTIME_TRAY_HOTKEYS] {
         assert!(!source.contains("get_selected_text("));
     }

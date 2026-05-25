@@ -45,6 +45,7 @@ fn native_capture_uses_focused_ax_element_and_whole_value_fallback() {
     assert!(AX.contains("AXValue"));
     assert!(AX.contains("AXNumberOfCharacters"));
     assert!(AX.contains("AXStringForRange"));
+    assert!(FOCUSED_TEXT.contains("copy_all_plain_text_preserving_clipboard"));
     assert!(
         !AX.contains("get_selected_text("),
         "focused-field AX capture must not call selected-text fallback"

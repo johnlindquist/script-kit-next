@@ -68,6 +68,44 @@ pub fn paste_plain_text_preserving_clipboard(text: &str) -> Result<()> {
     restore_result.context("Failed to restore clipboard after inline-agent paste fallback")
 }
 
+pub fn copy_all_plain_text_preserving_clipboard() -> Result<String> {
+    let snapshot = capture_general_pasteboard_snapshot()
+        .context("Failed to snapshot clipboard before focused-text copy fallback")?;
+
+    #[cfg(target_os = "macos")]
+    {
+        simulate_command_key(KEY_A)
+            .context("Failed to select all text for focused-text fallback")?;
+        std::thread::sleep(std::time::Duration::from_millis(40));
+        simulate_command_key(KEY_C).context("Failed to copy text for focused-text fallback")?;
+        std::thread::sleep(std::time::Duration::from_millis(90));
+
+        let copied_change_count = general_pasteboard_change_count()
+            .context("Failed to read clipboard change count after focused-text copy fallback")?;
+        let text = read_plain_text_from_pasteboard()
+            .context("Failed to read copied focused text from clipboard fallback")?;
+
+        let restore_result = match general_pasteboard_change_count() {
+            Ok(current_change_count) if current_change_count == copied_change_count => {
+                restore_general_pasteboard_snapshot(&snapshot)
+            }
+            Ok(_) => {
+                bail!("Clipboard changed during focused-text copy fallback; skipped restore")
+            }
+            Err(e) => Err(e).context("Failed to read clipboard change count before restore"),
+        };
+        restore_result.context("Failed to restore clipboard after focused-text copy fallback")?;
+
+        return Ok(text);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = snapshot;
+        bail!("focused-text copy fallback requires macOS");
+    }
+}
+
 #[cfg(target_os = "macos")]
 impl PasteboardSnapshot {
     fn capture() -> Result<Self> {
@@ -207,6 +245,42 @@ impl PasteboardSnapshot {
             Ok(())
         }
     }
+}
+
+#[cfg(target_os = "macos")]
+const KEY_A: core_graphics::event::CGKeyCode = 0;
+#[cfg(target_os = "macos")]
+const KEY_C: core_graphics::event::CGKeyCode = 8;
+
+#[cfg(target_os = "macos")]
+fn simulate_command_key(key: core_graphics::event::CGKeyCode) -> Result<()> {
+    use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation};
+    use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+
+    let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
+        .ok()
+        .context("Failed to create CGEventSource")?;
+    let key_down = CGEvent::new_keyboard_event(source.clone(), key, true)
+        .ok()
+        .context("Failed to create command key down event")?;
+    key_down.set_flags(CGEventFlags::CGEventFlagCommand);
+    let key_up = CGEvent::new_keyboard_event(source, key, false)
+        .ok()
+        .context("Failed to create command key up event")?;
+    key_up.set_flags(CGEventFlags::CGEventFlagCommand);
+
+    key_down.post(CGEventTapLocation::HID);
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    key_up.post(CGEventTapLocation::HID);
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn read_plain_text_from_pasteboard() -> Result<String> {
+    arboard::Clipboard::new()
+        .context("Failed to open clipboard after focused-text copy fallback")?
+        .get_text()
+        .context("Clipboard did not contain plain text after focused-text copy fallback")
 }
 
 pub fn write_plain_text_to_pasteboard(text: &str) -> Result<()> {
