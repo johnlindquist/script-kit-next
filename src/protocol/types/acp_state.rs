@@ -152,6 +152,14 @@ impl Default for AcpStateSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct AcpFocusedTextState {
     pub mode: String,
+    #[serde(default)]
+    pub phase: String,
+    #[serde(default)]
+    pub footer_visible: bool,
+    #[serde(default)]
+    pub actions_visible: bool,
+    #[serde(default)]
+    pub can_expand_to_chat: bool,
     pub session_id: String,
     pub app_name: String,
     pub char_count: usize,

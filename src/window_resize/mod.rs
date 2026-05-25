@@ -296,6 +296,9 @@ pub(crate) fn resize_to_mini_file_search_window_sync(result_count: usize) {
 
 /// Width for mini main window (compact launcher)
 const MINI_MAIN_WINDOW_WIDTH: f32 = 480.0;
+const FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT: f32 = 64.0;
+const FOCUSED_TEXT_MINI_STREAMING_HEIGHT: f32 = 128.0;
+const FOCUSED_TEXT_MINI_RESULT_HEIGHT: f32 = 150.0;
 /// Width for full main window (standard launcher)
 const FULL_MAIN_WINDOW_WIDTH: f32 = 750.0;
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -599,6 +602,11 @@ fn height_for_view_with_layout(
             log_mini_window_sizing(MiniResizeReason::FlatFallback, sizing, f32::from(height));
             height
         }
+        ViewType::FocusedTextMini => match item_count {
+            0 => px(FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT),
+            1 => px(FOCUSED_TEXT_MINI_STREAMING_HEIGHT),
+            _ => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT),
+        },
         ViewType::ArgPromptWithChoices => {
             let visible_items = item_count.max(1) as f32;
             let list_height =
@@ -638,6 +646,8 @@ pub enum ViewType {
     MiniPrompt,
     /// Mini inline AI chat rendered in the compact main-window width.
     MiniAiChat,
+    /// Focused-text Mini Agent rendered as a compact input/output overlay.
+    FocusedTextMini,
     /// Arg prompt with choices - dynamic height based on item count
     ArgPromptWithChoices,
     /// Arg prompt without choices (input only) - compact height
@@ -668,9 +678,10 @@ pub fn height_for_view(view_type: ViewType, item_count: usize) -> Pixels {
 /// or `None` when the current width should be preserved.
 pub fn width_for_view(view_type: ViewType) -> Option<f32> {
     match view_type {
-        ViewType::MiniMainWindow | ViewType::MiniPrompt | ViewType::MiniAiChat => {
-            Some(MINI_MAIN_WINDOW_WIDTH)
-        }
+        ViewType::MiniMainWindow
+        | ViewType::MiniPrompt
+        | ViewType::MiniAiChat
+        | ViewType::FocusedTextMini => Some(MINI_MAIN_WINDOW_WIDTH),
         // When leaving mini mode, restore full width
         ViewType::ScriptList | ViewType::ExpandedMainWindow => Some(FULL_MAIN_WINDOW_WIDTH),
         _ => None,
@@ -722,7 +733,10 @@ pub fn resize_to_view_sync(view_type: ViewType, item_count: usize) {
     let target_width = width_for_view(view_type);
     if matches!(
         view_type,
-        ViewType::MiniMainWindow | ViewType::MiniPrompt | ViewType::MiniAiChat
+        ViewType::MiniMainWindow
+            | ViewType::MiniPrompt
+            | ViewType::MiniAiChat
+            | ViewType::FocusedTextMini
     ) {
         let visible_rows = item_count.clamp(4, MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS);
         debug!(

@@ -9078,6 +9078,9 @@ impl ScriptListApp {
         let native_ready = expected_surface.is_some()
             && host.native_host_installed
             && host.installed_surface == expected_surface;
+        let acp_footer_hidden = matches!(self.current_view, AppView::AcpChatView { .. })
+            && expected_surface.is_some()
+            && config.is_none();
 
         let prompt_owned = matches!(
             self.current_view,
@@ -9090,6 +9093,8 @@ impl ScriptListApp {
 
         let owner = if popup_open {
             "popup"
+        } else if acp_footer_hidden {
+            "none"
         } else if native_ready {
             "native"
         } else if expected_surface.is_some() || prompt_owned {

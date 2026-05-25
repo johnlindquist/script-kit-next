@@ -1113,10 +1113,22 @@ impl ScriptListApp {
                     view.close_actions_popup(ActionsDialogHost::AcpChat, window, ctx);
                 } else if key_lower == "escape" {
                     let cancelled_streaming = entity_clone.update(ctx, |chat, cx| {
-                        chat.cancel_streaming_from_escape(cx)
+                        if chat.is_focused_text_mini()
+                            || chat.focused_text_originated_from_quick_prompt()
+                        {
+                            false
+                        } else {
+                            chat.cancel_streaming_from_escape(cx)
+                        }
                     });
                     if cancelled_streaming {
                         logging::log("STDIN", "SimulateKey: Escape - cancel Agent Chat streaming");
+                    } else if {
+                        let chat = entity_clone.read(ctx);
+                        chat.is_focused_text_mini() || chat.focused_text_originated_from_quick_prompt()
+                    } {
+                        logging::log("STDIN", "SimulateKey: Escape - hide focused-text quick prompt Agent Chat");
+                        view.close_acp_chat_main_window_state_first(ctx);
                     } else {
                         logging::log("STDIN", "SimulateKey: Escape - return to main menu from Agent Chat");
                         view.close_tab_ai_harness_terminal_with_window(window, ctx);
@@ -1128,7 +1140,15 @@ impl ScriptListApp {
                 } else if key_lower == "enter" && !has_shift {
                     logging::log("STDIN", "SimulateKey: Enter - submit ACP input");
                     entity_clone.update(ctx, |chat, cx| {
-                        if let Some(thread) = chat.thread() {
+                        if chat.has_focused_text_context() {
+                            if let Err(error) = chat.submit_focused_text_from_enter(cx) {
+                                tracing::warn!(
+                                    target: "script_kit::focused_text",
+                                    event = "focused_text_submit_failed",
+                                    error = %error,
+                                );
+                            }
+                        } else if let Some(thread) = chat.thread() {
                             let _ = thread
                                 .update(cx, |thread, cx| thread.submit_input(cx));
                         }

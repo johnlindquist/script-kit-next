@@ -58,8 +58,9 @@ pub(crate) use script_context::{
     get_acp_agent_picker_route, get_acp_agent_picker_route_for_host, get_acp_chat_root_route,
     get_acp_chat_root_route_for_host, get_acp_model_picker_route,
     get_acp_model_picker_route_for_host, get_agent_chat_profile_picker_route,
-    get_agent_chat_profile_picker_route_for_host, AcpActionsDialogHost, ACP_CHANGE_AGENT_ACTION_ID,
-    ACP_CHANGE_MODEL_ACTION_ID, AGENT_CHAT_CHANGE_PROFILE_ACTION_ID,
+    get_agent_chat_profile_picker_route_for_host, get_focused_text_agent_chat_root_route,
+    AcpActionsDialogHost, ACP_CHANGE_AGENT_ACTION_ID, ACP_CHANGE_MODEL_ACTION_ID,
+    AGENT_CHAT_CHANGE_PROFILE_ACTION_ID,
 };
 pub use scriptlet::get_scriptlet_context_actions_with_custom;
 

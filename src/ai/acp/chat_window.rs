@@ -762,6 +762,8 @@ pub fn toggle_detached_actions(cx: &mut App) {
                 selected_agent_id: selected_agent_id.as_deref(),
                 available_models: &available_models,
                 selected_model_id: selected_model_id.as_deref(),
+                focused_text: false,
+                focused_text_expanded: false,
             },
             theme_arc,
             crate::actions::AcpActionsDialogHost::Detached,

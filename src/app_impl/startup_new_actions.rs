@@ -140,9 +140,25 @@
                             return;
                         }
 
+                        let acp_escape_popup_open = match &this.current_view {
+                            AppView::AcpChatView { entity, .. } => {
+                                entity.read(cx).has_escape_dismissible_popup()
+                            }
+                            _ => false,
+                        };
+                        let acp_escape_focused_text_origin = match &this.current_view {
+                            AppView::AcpChatView { entity, .. } => {
+                                let chat = entity.read(cx);
+                                chat.is_focused_text_mini()
+                                    || chat.focused_text_originated_from_quick_prompt()
+                            }
+                            _ => false,
+                        };
+
                         let acp_escape_cancelled_streaming = if crate::ui_foundation::is_key_escape(key)
                             && !has_cmd
                             && !has_shift
+                            && !acp_escape_focused_text_origin
                         {
                             match &this.current_view {
                                 AppView::AcpChatView { entity, .. } => entity.update(cx, |chat, cx| {
@@ -162,19 +178,22 @@
                             return;
                         }
 
-                        let acp_escape_popup_open = match &this.current_view {
-                            AppView::AcpChatView { entity, .. } => {
-                                entity.read(cx).has_escape_dismissible_popup()
-                            }
-                            _ => false,
-                        };
-
-                        // Handle Escape for AcpChatView (return to main menu)
+                        // Handle Escape for AcpChatView.
                         if crate::ui_foundation::is_key_escape(key) && !has_cmd && !has_shift
                             && !this.show_actions_popup
                             && !acp_escape_popup_open
                             && matches!(this.current_view, AppView::AcpChatView { .. })
                         {
+                            if acp_escape_focused_text_origin {
+                                tracing::info!(
+                                    target: "script_kit::keyboard",
+                                    event = "focused_text_quick_prompt_escape_hide_requested",
+                                );
+                                this.close_acp_chat_main_window_state_first(cx);
+                                logging::log("KEY", "Interceptor: Escape -> hide focused-text quick prompt Agent Chat");
+                                cx.stop_propagation();
+                                return;
+                            }
                             tracing::info!(
                                 target: "script_kit::keyboard",
                                 event = "embedded_acp_escape_return_to_origin",

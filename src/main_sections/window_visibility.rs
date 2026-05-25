@@ -161,7 +161,9 @@ fn show_main_window_helper(
         } else if matches!(view.current_view, AppView::ScriptList) {
             let target = crate::window_resize::MainMenuSizingTarget::Full;
             gpui::size(px(target.width()), target.height())
-        } else if let Some((view_type, item_count)) = view.calculate_window_size_params() {
+        } else if let Some((view_type, item_count)) =
+            view.calculate_window_size_params_with_app(Some(&*ctx))
+        {
             gpui::size(
                 px(crate::window_resize::width_for_view(view_type)
                     .or(current_window_width)
@@ -287,7 +289,13 @@ fn show_main_window_helper(
             // GPUI state changes — no macOS callbacks, safe inside borrow.
             cx.update(move |cx: &mut gpui::App| {
                 app_entity.update(cx, |view, ctx| {
-                    let focus_handle = view.focus_handle(ctx);
+                    let acp_focus_handle = match &view.current_view {
+                        AppView::AcpChatView { entity } => Some(entity.read(ctx).focus_handle(ctx)),
+                        _ => None,
+                    };
+                    let focus_handle = acp_focus_handle
+                        .clone()
+                        .unwrap_or_else(|| view.focus_handle(ctx));
                     let _ = window.update(ctx, |_root, win, _cx| {
                         win.activate_window();
                         win.focus(&focus_handle, _cx);
@@ -297,8 +305,13 @@ fn show_main_window_helper(
                     // reset_to_script_list sets these too, but that runs BEFORE the
                     // window is shown — the render loop needs pending_focus set AFTER
                     // the window is key to actually move focus to the input element.
-                    view.focused_input = FocusedInput::MainFilter;
-                    view.pending_focus = Some(FocusTarget::MainFilter);
+                    if acp_focus_handle.is_some() {
+                        view.focused_input = FocusedInput::None;
+                        view.pending_focus = Some(FocusTarget::AcpChat);
+                    } else {
+                        view.focused_input = FocusedInput::MainFilter;
+                        view.pending_focus = Some(FocusTarget::MainFilter);
+                    }
                     ctx.notify();
                 });
 

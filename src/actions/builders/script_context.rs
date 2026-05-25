@@ -1055,6 +1055,85 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
     ]
 }
 
+pub(crate) fn get_focused_text_agent_chat_actions(expanded: bool) -> Vec<Action> {
+    let expand_id = if expanded {
+        "focused-text-action-collapse"
+    } else {
+        "focused-text-action-expand"
+    };
+    let expand_label = if expanded { "Collapse" } else { "Chat" };
+    let expand_description = if expanded {
+        "Return to the compact focused-text editor"
+    } else {
+        "Expand into the full Agent Chat conversation"
+    };
+
+    vec![
+        Action::new(
+            "focused-text-action-replace",
+            "Replace Selected Text",
+            Some("Replace the captured focused field with the latest response".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}\u{21b5}")
+        .with_icon(IconName::ArrowRight)
+        .with_section("Focused Text"),
+        Action::new(
+            "focused-text-action-append",
+            "Append to Selected Text",
+            Some("Append the latest response to the captured focused field".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Plus)
+        .with_section("Focused Text"),
+        Action::new(
+            "focused-text-action-copy",
+            "Copy Response",
+            Some("Copy the latest response without changing the focused field".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Copy)
+        .with_section("Focused Text"),
+        Action::new(
+            expand_id,
+            expand_label,
+            Some(expand_description.to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::MessageCircle)
+        .with_section("Focused Text"),
+        Action::new(
+            "focused-text-action-retry",
+            "Retry",
+            Some("Retry the last focused-text turn".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Refresh)
+        .with_section("Focused Text"),
+        Action::new(
+            "focused-text-action-stop",
+            "Stop",
+            Some("Stop the current focused-text response".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("Esc")
+        .with_icon(IconName::Close)
+        .with_section("Focused Text"),
+    ]
+}
+
+pub(crate) fn get_focused_text_agent_chat_root_route(
+    expanded: bool,
+) -> crate::actions::ActionsDialogRoute {
+    crate::actions::ActionsDialogRoute {
+        id: ACP_ROOT_ROUTE_ID.to_string(),
+        actions: get_focused_text_agent_chat_actions(expanded),
+        context_title: Some("Focused Text".to_string()),
+        search_placeholder: Some("Search focused text actions...".to_string()),
+        initial_selected_action_id: Some("focused-text-action-replace".to_string()),
+    }
+}
+
 #[allow(dead_code)] // Used by the binary ACP actions surface.
 pub(crate) fn get_acp_chat_actions_with_agents(
     catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],

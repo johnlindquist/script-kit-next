@@ -505,6 +505,8 @@ pub struct AcpActionsDialogContext<'a> {
     pub(crate) selected_agent_id: Option<&'a str>,
     pub(crate) available_models: &'a [crate::ai::acp::config::AcpModelEntry],
     pub(crate) selected_model_id: Option<&'a str>,
+    pub(crate) focused_text: bool,
+    pub(crate) focused_text_expanded: bool,
 }
 
 /// ActionsDialog - Compact overlay popup for quick actions
@@ -1454,13 +1456,17 @@ impl ActionsDialog {
         theme: Arc<theme::Theme>,
         host: super::builders::AcpActionsDialogHost,
     ) -> Self {
-        let root_route = super::builders::get_acp_chat_root_route_for_host(
-            context.catalog_entries,
-            context.selected_agent_id,
-            context.available_models,
-            context.selected_model_id,
-            host,
-        );
+        let root_route = if context.focused_text {
+            super::builders::get_focused_text_agent_chat_root_route(context.focused_text_expanded)
+        } else {
+            super::builders::get_acp_chat_root_route_for_host(
+                context.catalog_entries,
+                context.selected_agent_id,
+                context.available_models,
+                context.selected_model_id,
+                host,
+            )
+        };
         let config = Self::acp_chat_dialog_config();
 
         let mut dialog = Self::from_actions_with_context(

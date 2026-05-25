@@ -729,8 +729,17 @@ impl ScriptListApp {
                     thread.update(cx, |thread, cx| thread.refresh_models(cx));
                 }
 
-                let (selected_agent_id, catalog_entries, selected_model_id, available_models) = {
+                let (
+                    selected_agent_id,
+                    catalog_entries,
+                    selected_model_id,
+                    available_models,
+                    focused_text,
+                    focused_text_expanded,
+                ) = {
                     let view = entity.read(cx);
+                    let focused_text = view.has_focused_text_context();
+                    let focused_text_expanded = view.focused_text_actions_expanded();
                     match &view.session {
                         crate::ai::acp::AcpChatSession::Setup(state) => (
                             state
@@ -742,6 +751,8 @@ impl ScriptListApp {
                             ),
                             None,
                             Vec::new(),
+                            focused_text,
+                            focused_text_expanded,
                         ),
                         crate::ai::acp::AcpChatSession::Live(thread) => {
                             let thread = thread.read(cx);
@@ -752,6 +763,8 @@ impl ScriptListApp {
                                 ),
                                 thread.selected_model_id().map(str::to_string),
                                 thread.available_models().to_vec(),
+                                focused_text,
+                                focused_text_expanded,
                             )
                         }
                     }
@@ -764,6 +777,7 @@ impl ScriptListApp {
                     catalog_count = catalog_entries.len(),
                     selected_model_id = ?selected_model_id,
                     model_count = available_models.len(),
+                    focused_text,
                 );
 
                 Some((
@@ -771,6 +785,8 @@ impl ScriptListApp {
                     catalog_entries,
                     selected_model_id,
                     available_models,
+                    focused_text,
+                    focused_text_expanded,
                 ))
             } else {
                 None
@@ -844,6 +860,8 @@ impl ScriptListApp {
                     ref catalog_entries,
                     ref selected_model_id,
                     ref available_models,
+                    focused_text,
+                    focused_text_expanded,
                 )) = acp_context
                 {
                     // ACP chat view: use route-based dialog with drill-down agent/model pickers
@@ -855,6 +873,8 @@ impl ScriptListApp {
                             selected_agent_id: selected_agent_id.as_deref(),
                             available_models,
                             selected_model_id: selected_model_id.as_deref(),
+                            focused_text,
+                            focused_text_expanded,
                         },
                         std::sync::Arc::clone(&theme_arc),
                     )

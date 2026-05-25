@@ -904,6 +904,9 @@ impl ScriptListApp {
         let enabled = !footer_disabled;
 
         if let Some(snapshot) = self.acp_footer_snapshot.as_ref() {
+            if !snapshot.visible {
+                return Vec::new();
+            }
             return snapshot
                 .buttons
                 .iter()
@@ -940,6 +943,20 @@ impl ScriptListApp {
     ) -> Option<crate::footer_popup::MainWindowFooterConfig> {
         use crate::footer_popup::MainWindowFooterConfig;
 
+        if let AppView::AcpChatView { entity } = &self.current_view {
+            let hidden_by_live_view = cx
+                .map(|cx| !entity.read(cx).main_window_footer_visible(cx))
+                .unwrap_or(false);
+            let hidden_by_cached_snapshot = cx.is_none()
+                && self
+                    .acp_footer_snapshot
+                    .as_ref()
+                    .is_some_and(|snapshot| !snapshot.visible);
+            if hidden_by_live_view || hidden_by_cached_snapshot {
+                return None;
+            }
+        }
+
         let surface = self.main_window_footer_surface()?;
         let buttons = self.main_window_footer_buttons_for_current_view(cx);
 
@@ -971,6 +988,14 @@ impl ScriptListApp {
         &self,
         gpui_footer: gpui::AnyElement,
     ) -> Option<gpui::AnyElement> {
+        if matches!(self.current_view, AppView::AcpChatView { .. })
+            && self
+                .acp_footer_snapshot
+                .as_ref()
+                .is_some_and(|snapshot| !snapshot.visible)
+        {
+            return None;
+        }
         if self.main_window_uses_native_footer() {
             Some(crate::components::prompt_layout_shell::render_native_main_window_footer_spacer())
         } else {
@@ -994,7 +1019,11 @@ impl ScriptListApp {
             "Dispatching main-window footer action"
         );
 
-        if self.main_window_footer_config().is_none() || !crate::is_main_window_visible() {
+        if self
+            .main_window_footer_config_with_cx(Some(&*cx))
+            .is_none()
+            || !crate::is_main_window_visible()
+        {
             tracing::info!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_action_ignored_inactive_surface",
@@ -1120,6 +1149,13 @@ impl ScriptListApp {
     /// Calculate view type and item count for window sizing.
     /// Extracted from update_window_size for reuse.
     pub(crate) fn calculate_window_size_params(&mut self) -> Option<(ViewType, usize)> {
+        self.calculate_window_size_params_with_app(None)
+    }
+
+    pub(crate) fn calculate_window_size_params_with_app(
+        &mut self,
+        cx: Option<&gpui::App>,
+    ) -> Option<(ViewType, usize)> {
         match &self.current_view {
             AppView::ScriptList => {
                 // Get grouped results which includes section headers (cached)
@@ -1384,7 +1420,12 @@ impl ScriptListApp {
                         .unwrap_or(0)
                 },
             )),
-            AppView::AcpChatView { .. } => {
+            AppView::AcpChatView { entity } => {
+                if let Some(cx) = cx {
+                    if let Some(item_count) = entity.read(cx).focused_text_mini_sizing_count(cx) {
+                        return Some((ViewType::FocusedTextMini, item_count));
+                    }
+                }
                 Some((compact_ai_view_type_for_mode(self.main_window_mode), 0))
             }
             AppView::ConfirmPrompt { .. } => Some((ViewType::DivPrompt, 0)),

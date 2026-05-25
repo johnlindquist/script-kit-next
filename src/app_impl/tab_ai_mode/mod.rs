@@ -98,6 +98,11 @@ impl ScriptListApp {
                         cx,
                         "focused_text_expand_agent_chat",
                     );
+                    crate::window_resize::resize_to_view_sync(
+                        crate::window_resize::ViewType::DivPrompt,
+                        0,
+                    );
+                    cx.notify();
                 });
             });
 
@@ -2994,6 +2999,14 @@ impl ScriptListApp {
         // saved return view while the main panel is visible. `close_and_reset_window`
         // sets windowVisible=false before prompt cancellation/reset can produce
         // a hidden ScriptList state.
+        self.close_tab_ai_harness_terminal_impl(
+            None,
+            TabAiHarnessCloseDisposition::CloseMainWindowStateFirst,
+            cx,
+        );
+    }
+
+    pub(crate) fn close_acp_chat_main_window_state_first(&mut self, cx: &mut Context<Self>) {
         self.close_tab_ai_harness_terminal_impl(
             None,
             TabAiHarnessCloseDisposition::CloseMainWindowStateFirst,

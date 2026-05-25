@@ -2128,7 +2128,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         px(crate::window_resize::width_for_view(ViewType::MiniMainWindow).unwrap_or(750.0)),
                                         crate::window_resize::height_for_mini_main_window(sizing),
                                     )
-                                } else if let Some((view_type, item_count)) = view.calculate_window_size_params() {
+                                } else if let Some((view_type, item_count)) = view.calculate_window_size_params_with_app(Some(&*ctx)) {
                                     gpui::size(
                                         px(crate::window_resize::width_for_view(view_type)
                                             .or(current_window_width)
