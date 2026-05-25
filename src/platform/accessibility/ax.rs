@@ -250,8 +250,10 @@ pub(crate) fn replace_registered_focused_text(
     now_ms: u128,
 ) -> Result<super::mutation::TextMutationResult, super::FocusedTextError> {
     let target = registered_target(session_id, options, now_ms)?;
+    let mut used_paste_fallback = false;
     if set_whole_text_direct(target.element, text).is_err() {
         paste_replace_fallback(&target, text)?;
+        used_paste_fallback = true;
     }
     let _ = set_selected_text_range(
         target.element,
@@ -260,7 +262,11 @@ pub(crate) fn replace_registered_focused_text(
             length: 0,
         },
     );
-    verify_whole_text(target.element, text)?;
+    if used_paste_fallback {
+        verify_whole_text_or_clipboard_fallback(&target, text)?;
+    } else {
+        verify_whole_text(target.element, text)?;
+    }
     Ok(super::mutation::TextMutationResult {
         action: super::mutation::TextMutationAction::Replace,
         changed_text: true,
@@ -276,8 +282,24 @@ pub(crate) fn append_registered_focused_text(
     now_ms: u128,
 ) -> Result<super::mutation::TextMutationResult, super::FocusedTextError> {
     let target = registered_target(session_id, options, now_ms)?;
-    let current = whole_text(target.element)
-        .map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
+    let current = match whole_text(target.element) {
+        Ok(current) => current,
+        Err(err) => {
+            tracing::warn!(
+                target: "script_kit::focused_text",
+                event = "focused_text_append_whole_text_failed_pasting_at_caret",
+                error = %err,
+            );
+            refocus_registered_target_for_paste(&target)?;
+            super::clipboard::paste_plain_text_preserving_clipboard(text)
+                .map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
+            return Ok(super::mutation::TextMutationResult {
+                action: super::mutation::TextMutationAction::Append,
+                changed_text: true,
+                copied_to_clipboard: false,
+            });
+        }
+    };
     let appended = format!("{current}{text}");
     if set_whole_text_direct(target.element, &appended).is_err() {
         paste_append_fallback(&target, &current, text, &appended)?;
@@ -479,20 +501,58 @@ fn verify_whole_text(
 }
 
 #[cfg(target_os = "macos")]
+fn verify_whole_text_or_clipboard_fallback(
+    target: &RegisteredFocusedTextTarget,
+    expected: &str,
+) -> Result<(), super::FocusedTextError> {
+    match verify_whole_text(target.element, expected) {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            tracing::warn!(
+                target: "script_kit::focused_text",
+                event = "focused_text_verify_whole_text_failed_trying_clipboard_fallback",
+                error = %err,
+            );
+            refocus_registered_target_for_paste(target)?;
+            let actual = super::clipboard::copy_all_plain_text_preserving_clipboard()
+                .map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
+            if actual == expected {
+                Ok(())
+            } else {
+                Err(super::FocusedTextError::Platform(
+                    "focused text mutation clipboard verification failed".to_string(),
+                ))
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn paste_replace_fallback(
     target: &RegisteredFocusedTextTarget,
     text: &str,
 ) -> Result<(), super::FocusedTextError> {
     refocus_registered_target_for_paste(target)?;
-    let current = whole_text(target.element)
-        .map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
-    set_selected_text_range(
-        target.element,
-        super::TextRangeUtf16 {
-            location: 0,
-            length: current.encode_utf16().count(),
-        },
-    )?;
+    match whole_text(target.element) {
+        Ok(current) => {
+            set_selected_text_range(
+                target.element,
+                super::TextRangeUtf16 {
+                    location: 0,
+                    length: current.encode_utf16().count(),
+                },
+            )?;
+        }
+        Err(err) => {
+            tracing::warn!(
+                target: "script_kit::focused_text",
+                event = "focused_text_replace_whole_text_failed_using_select_all_fallback",
+                error = %err,
+            );
+            super::clipboard::select_all_text_for_focused_text_fallback()
+                .map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
+        }
+    }
     super::clipboard::paste_plain_text_preserving_clipboard(text)
         .map_err(|err| super::FocusedTextError::Platform(err.to_string()))
 }

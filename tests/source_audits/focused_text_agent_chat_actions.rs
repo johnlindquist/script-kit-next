@@ -135,7 +135,7 @@ fn focused_text_mini_result_footer_is_replace_only() {
         "fn focused_text_visible_footer_buttons",
         "fn focused_text_semantic_actions",
     );
-    assert!(footer_fn.contains("FocusedTextMiniPhase::InputOnly"));
+    assert!(footer_fn.contains("focused_text_mini_result_ready_for_thread"));
     assert!(footer_fn.contains("return Vec::new()"));
 
     let mini_branch = source_between(
@@ -145,7 +145,7 @@ fn focused_text_mini_result_footer_is_replace_only() {
     );
 
     assert!(mini_branch.contains("FooterAction::Replace"));
-    assert!(mini_branch.contains("FooterAction::Stop"));
+    assert!(!mini_branch.contains("FooterAction::Stop"));
     assert!(!mini_branch.contains("FooterAction::Actions"));
     assert!(!mini_branch.contains("FooterAction::Append"));
     assert!(!mini_branch.contains("FooterAction::Copy"));
@@ -186,7 +186,8 @@ fn focused_text_mini_loading_has_no_body_thinking_text() {
     assert!(render_fn.contains("Self::render_composer_input_text"));
     assert!(render_fn.contains("crate::panel::PROMPT_INPUT_FIELD_HEIGHT"));
     assert!(render_fn.contains("crate::panel::HEADER_PADDING_X"));
-    assert!(render_fn.contains("active_no_output"));
+    assert!(render_fn.contains("active_pending"));
+    assert!(render_fn.contains("render_focused_text_loading_profile_icon"));
     assert!(render_fn.contains("focused-text-mini-close"));
     assert!(render_fn.contains("on_click"));
     assert!(render_fn.contains("trigger_close_window_requested"));
