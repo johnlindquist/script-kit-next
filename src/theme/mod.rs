@@ -24,6 +24,7 @@ pub mod hex_color;
 pub mod opacity;
 pub mod prelude;
 pub mod presets;
+pub(crate) mod scrollbar;
 pub mod service;
 pub(crate) mod types;
 pub mod user_themes;

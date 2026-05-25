@@ -290,14 +290,16 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     theme_color.info = hex_to_hsla(colors.ui.info);
     theme_color.info_foreground = hex_to_hsla(status_foreground(colors.ui.info));
 
-    // Scrollbar - track is transparent; thumb uses the accent color
-    // but maintains the scrollbar's opacity so it's not too distracting.
-    theme_color.scrollbar = hsla(0.0, 0.0, 0.0, 0.0);
-    theme_color.scrollbar_thumb = subtle_overlay(colors.accent.selected, opacity.selected);
-    theme_color.scrollbar_thumb_hover = subtle_overlay(
+    let scrollbar = crate::theme::scrollbar::scrollbar_theme_from_tokens(
+        sk_theme.is_dark_mode(),
+        colors.ui.border,
         colors.accent.selected,
-        (opacity.selected + 0.12).clamp(0.0, 1.0),
+        opacity.selected,
     );
+    theme_color.scrollbar = subtle_overlay(scrollbar.track, scrollbar.track_opacity);
+    theme_color.scrollbar_thumb = subtle_overlay(scrollbar.thumb, scrollbar.thumb_opacity);
+    theme_color.scrollbar_thumb_hover =
+        subtle_overlay(scrollbar.thumb_hover, scrollbar.thumb_hover_opacity);
 
     // Caret (cursor) - prefer explicit focused cursor override when configured
     let has_focused_cursor_override = sk_theme

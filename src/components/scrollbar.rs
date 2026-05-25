@@ -77,21 +77,14 @@ impl ScrollbarColors {
     /// Uses muted/border colors for a subtle, native appearance.
     /// Opacity values are theme-aware: light mode uses higher opacity for visibility.
     pub fn from_theme(theme: &crate::theme::Theme) -> Self {
-        let is_dark = theme.is_dark_mode();
-        let opacity = theme.get_opacity();
-        let (track_opacity, thumb_opacity, thumb_hover_opacity) = if is_dark {
-            (0.1, opacity.selected, (opacity.selected + 0.12).min(1.0))
-        } else {
-            (0.15, opacity.selected, (opacity.selected + 0.12).min(1.0))
-        };
-
+        let scrollbar = crate::theme::scrollbar::scrollbar_theme(theme);
         Self {
-            track: theme.colors.ui.border,
-            track_opacity,
-            thumb: theme.colors.accent.selected,
-            thumb_opacity,
-            thumb_hover: theme.colors.accent.selected,
-            thumb_hover_opacity,
+            track: scrollbar.track,
+            track_opacity: scrollbar.track_opacity,
+            thumb: scrollbar.thumb,
+            thumb_opacity: scrollbar.thumb_opacity,
+            thumb_hover: scrollbar.thumb_hover,
+            thumb_hover_opacity: scrollbar.thumb_hover_opacity,
         }
     }
 
@@ -117,19 +110,20 @@ impl ScrollbarColors {
         colors: &crate::designs::DesignColors,
         is_dark: bool,
     ) -> Self {
-        let (track_opacity, thumb_opacity, thumb_hover_opacity) = if is_dark {
-            (0.1, 0.4, 0.6) // Dark mode: lower opacity works well
-        } else {
-            (0.15, 0.5, 0.7) // Light mode: higher opacity for visibility
-        };
-
+        let selected_opacity = if is_dark { 0.4 } else { 0.5 };
+        let scrollbar = crate::theme::scrollbar::scrollbar_theme_from_tokens(
+            is_dark,
+            colors.border,
+            colors.accent,
+            selected_opacity,
+        );
         Self {
-            track: colors.border,
-            track_opacity,
-            thumb: colors.accent,
-            thumb_opacity,
-            thumb_hover: colors.accent,
-            thumb_hover_opacity,
+            track: scrollbar.track,
+            track_opacity: scrollbar.track_opacity,
+            thumb: scrollbar.thumb,
+            thumb_opacity: scrollbar.thumb_opacity,
+            thumb_hover: scrollbar.thumb_hover,
+            thumb_hover_opacity: scrollbar.thumb_hover_opacity,
         }
     }
 }
