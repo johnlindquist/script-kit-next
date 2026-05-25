@@ -75,3 +75,31 @@ fn chat_and_acp_sizing_branch_on_main_window_mode() {
         "AppView::AcpChatView must branch on main_window_mode"
     );
 }
+
+#[test]
+fn file_search_sizing_branches_on_presentation() {
+    let calculate = source_between(
+        UI_WINDOW,
+        "pub(crate) fn calculate_window_size_params",
+        "pub(crate) fn calculate_window_size_params_if_current_view",
+    );
+    let file_search_arm = source_between(
+        calculate,
+        "AppView::FileSearchView",
+        "AppView::ThemeChooserView",
+    );
+    assert!(
+        file_search_arm.contains("presentation"),
+        "FileSearchView sizing must inspect FileSearchPresentation"
+    );
+    assert!(
+        file_search_arm.contains("FileSearchPresentation::Mini")
+            && file_search_arm.contains("ViewType::MiniMainWindow"),
+        "mini file search must size as MiniMainWindow"
+    );
+    assert!(
+        file_search_arm.contains("FileSearchPresentation::Full")
+            && file_search_arm.contains("ViewType::ExpandedMainWindow"),
+        "full file search must size as ExpandedMainWindow"
+    );
+}

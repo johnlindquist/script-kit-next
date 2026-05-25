@@ -1271,7 +1271,11 @@ impl ScriptListApp {
             AppView::ScratchPadView { .. } => Some((ViewType::EditorPrompt, 0)),
             AppView::QuickTerminalView { .. } => Some((ViewType::TermPrompt, 0)),
             AppView::WebcamView { .. } => Some((ViewType::DivPrompt, 0)),
-            AppView::FileSearchView { ref query, .. } => {
+            AppView::FileSearchView {
+                ref query,
+                presentation,
+                ..
+            } => {
                 let results = &self.cached_file_results;
                 let filtered_count = if query.is_empty() {
                     results.len()
@@ -1282,7 +1286,11 @@ impl ScriptListApp {
                         .filter(|r| r.name.to_lowercase().contains(&query_lower))
                         .count()
                 };
-                Some((ViewType::ExpandedMainWindow, filtered_count))
+                let view_type = match presentation {
+                    FileSearchPresentation::Mini => ViewType::MiniMainWindow,
+                    FileSearchPresentation::Full => ViewType::ExpandedMainWindow,
+                };
+                Some((view_type, filtered_count))
             }
             AppView::ThemeChooserView { ref filter, .. } => {
                 let presets = theme::presets::presets_cached();
