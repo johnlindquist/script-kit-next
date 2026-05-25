@@ -215,11 +215,11 @@ fn set_via_clipboard_fallback(text: &str) -> Result<()> {
         item_count = snapshot_summary.item_count,
         type_count = snapshot_summary.type_count,
         total_bytes = snapshot_summary.total_bytes,
-        has_text = snapshot_summary.has_text,
-        has_rich_text = snapshot_summary.has_rich_text,
-        has_image = snapshot_summary.has_image,
-        has_file_url = snapshot_summary.has_file_url,
-        has_other = snapshot_summary.has_other,
+        has_text = snapshot_summary.content_types.has_text(),
+        has_rich_text = snapshot_summary.content_types.has_rich_text(),
+        has_image = snapshot_summary.content_types.has_image(),
+        has_file_url = snapshot_summary.content_types.has_file_url(),
+        has_other = snapshot_summary.content_types.has_other(),
         "Saved original clipboard snapshot"
     );
 
@@ -251,11 +251,11 @@ fn set_via_clipboard_fallback(text: &str) -> Result<()> {
             item_count = snapshot_summary.item_count,
             type_count = snapshot_summary.type_count,
             total_bytes = snapshot_summary.total_bytes,
-            has_text = snapshot_summary.has_text,
-            has_rich_text = snapshot_summary.has_rich_text,
-            has_image = snapshot_summary.has_image,
-            has_file_url = snapshot_summary.has_file_url,
-            has_other = snapshot_summary.has_other,
+            has_text = snapshot_summary.content_types.has_text(),
+            has_rich_text = snapshot_summary.content_types.has_rich_text(),
+            has_image = snapshot_summary.content_types.has_image(),
+            has_file_url = snapshot_summary.content_types.has_file_url(),
+            has_other = snapshot_summary.content_types.has_other(),
             "Failed to restore original clipboard snapshot"
         );
     } else {
@@ -263,11 +263,11 @@ fn set_via_clipboard_fallback(text: &str) -> Result<()> {
             item_count = snapshot_summary.item_count,
             type_count = snapshot_summary.type_count,
             total_bytes = snapshot_summary.total_bytes,
-            has_text = snapshot_summary.has_text,
-            has_rich_text = snapshot_summary.has_rich_text,
-            has_image = snapshot_summary.has_image,
-            has_file_url = snapshot_summary.has_file_url,
-            has_other = snapshot_summary.has_other,
+            has_text = snapshot_summary.content_types.has_text(),
+            has_rich_text = snapshot_summary.content_types.has_rich_text(),
+            has_image = snapshot_summary.content_types.has_image(),
+            has_file_url = snapshot_summary.content_types.has_file_url(),
+            has_other = snapshot_summary.content_types.has_other(),
             "Restored original clipboard snapshot"
         );
     }
@@ -300,16 +300,49 @@ struct PasteboardRepresentation {
 }
 
 #[cfg(target_os = "macos")]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct PasteboardContentTypes(u8);
+
+#[cfg(target_os = "macos")]
+impl PasteboardContentTypes {
+    const TEXT: Self = Self(1 << 0);
+    const RICH_TEXT: Self = Self(1 << 1);
+    const IMAGE: Self = Self(1 << 2);
+    const FILE_URL: Self = Self(1 << 3);
+    const OTHER: Self = Self(1 << 4);
+
+    fn insert(&mut self, other: Self) {
+        self.0 |= other.0;
+    }
+
+    fn has_text(self) -> bool {
+        self.0 & Self::TEXT.0 != 0
+    }
+
+    fn has_rich_text(self) -> bool {
+        self.0 & Self::RICH_TEXT.0 != 0
+    }
+
+    fn has_image(self) -> bool {
+        self.0 & Self::IMAGE.0 != 0
+    }
+
+    fn has_file_url(self) -> bool {
+        self.0 & Self::FILE_URL.0 != 0
+    }
+
+    fn has_other(self) -> bool {
+        self.0 & Self::OTHER.0 != 0
+    }
+}
+
+#[cfg(target_os = "macos")]
 #[derive(Debug, Clone, Copy, Default)]
 struct PasteboardSnapshotSummary {
     item_count: usize,
     type_count: usize,
     total_bytes: usize,
-    has_text: bool,
-    has_rich_text: bool,
-    has_image: bool,
-    has_file_url: bool,
-    has_other: bool,
+    content_types: PasteboardContentTypes,
 }
 
 #[cfg(target_os = "macos")]
@@ -549,22 +582,26 @@ fn classify_pasteboard_type(type_name: &str, summary: &mut PasteboardSnapshotSum
         || normalized.contains("public.text")
         || normalized.contains("string")
     {
-        summary.has_text = true;
+        summary.content_types.insert(PasteboardContentTypes::TEXT);
     } else if normalized.contains("rtf") || normalized.contains("html") {
-        summary.has_rich_text = true;
+        summary
+            .content_types
+            .insert(PasteboardContentTypes::RICH_TEXT);
     } else if normalized.contains("image")
         || normalized.contains("png")
         || normalized.contains("jpeg")
         || normalized.contains("tiff")
     {
-        summary.has_image = true;
+        summary.content_types.insert(PasteboardContentTypes::IMAGE);
     } else if normalized.contains("file-url")
         || normalized.contains("fileurl")
         || normalized.contains("filename")
     {
-        summary.has_file_url = true;
+        summary
+            .content_types
+            .insert(PasteboardContentTypes::FILE_URL);
     } else {
-        summary.has_other = true;
+        summary.content_types.insert(PasteboardContentTypes::OTHER);
     }
 }
 
