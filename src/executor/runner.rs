@@ -40,7 +40,7 @@ mod unix_process {
                 libc::ESRCH => Err("No such process group"),
                 libc::EPERM => Err("Permission denied"),
                 libc::EINVAL => Err("Invalid signal"),
-                _ => Err("Unknown error"),
+                _ => Err("Could not stop script process group; stop it manually"),
             }
         }
     }

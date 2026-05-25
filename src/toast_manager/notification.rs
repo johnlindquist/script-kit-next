@@ -39,7 +39,7 @@ pub fn pending_toast_to_notification(toast: &PendingToast) -> Notification {
 
     match toast.variant {
         ToastVariant::Error => {
-            notification = notification.title("Error");
+            notification = notification.title("Couldn't complete action");
         }
         ToastVariant::Warning => {
             notification = notification.title("Warning");

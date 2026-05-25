@@ -227,7 +227,7 @@ impl AiApp {
         let err_msg = self
             .streaming_error
             .clone()
-            .unwrap_or_else(|| "Unknown error".to_string());
+            .unwrap_or_else(|| "AI response failed. Check provider settings or retry.".to_string());
         let danger = cx.theme().danger;
 
         // Classify error and provide contextual help
