@@ -19,7 +19,6 @@ use crate::components::text_input::{
     render_text_input_cursor_selection, TextHighlightRange, TextInlinePillRange,
     TextInputRenderConfig, TextSelection,
 };
-use crate::prompts::markdown::render_markdown_with_scope;
 use crate::theme::{self, AppChromeColors, PromptColors};
 
 use super::composer_state::{
@@ -6005,12 +6004,11 @@ impl AcpChatView {
 
     fn render_focused_text_loading_profile_icon(
         &self,
-        thread: &AcpThread,
+        profile_icon_name: Option<&str>,
         theme: &crate::theme::Theme,
     ) -> gpui::AnyElement {
         let icon_path = crate::components::footer_chrome::footer_icon_path_or_profile(
-            thread
-                .profile_icon_name()
+            profile_icon_name
                 .unwrap_or(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN),
         );
         div()
@@ -6083,7 +6081,10 @@ impl AcpChatView {
     fn render_focused_text_mini(
         &self,
         weak_view: WeakEntity<AcpChatView>,
-        thread: &AcpThread,
+        active_pending: bool,
+        show_transcript: bool,
+        profile_icon_name: Option<&str>,
+        transcript: Option<gpui::AnyElement>,
         input_text: &str,
         input_cursor: usize,
         input_selection: TextSelection,
@@ -6091,18 +6092,7 @@ impl AcpChatView {
         placeholder_text: Rgba,
         theme: &crate::theme::Theme,
     ) -> gpui::AnyElement {
-        let colors = PromptColors::from_theme(theme);
         let chrome = AppChromeColors::from_theme(theme);
-        let phase = self
-            .focused_text_mini_phase_for_thread(thread)
-            .unwrap_or(FocusedTextMiniPhase::InputOnly);
-        let output = Self::latest_assistant_response_text(thread);
-        let streaming = matches!(phase, FocusedTextMiniPhase::Streaming);
-        let active_pending = matches!(
-            thread.status,
-            AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
-        ) && !self.focused_text_mini_result_ready_for_thread(thread);
-        let show_body = output.is_some() && self.focused_text_mini_result_ready_for_thread(thread);
 
         let input_row = div()
             .id("focused-text-mini-input-row")
@@ -6112,11 +6102,11 @@ impl AcpChatView {
             .flex()
             .items_center()
             .gap(px(8.0))
-            .when(show_body, |d| {
+            .when(show_transcript, |d| {
                 d.border_b_1().border_color(rgba(chrome.divider_rgba))
             })
             .when(active_pending, |d| {
-                d.child(self.render_focused_text_loading_profile_icon(thread, theme))
+                d.child(self.render_focused_text_loading_profile_icon(profile_icon_name, theme))
             })
             .child(div().id("focused-text-input").min_w_0().flex_1().child(
                 Self::render_composer_input_text(
@@ -6172,40 +6162,16 @@ impl AcpChatView {
             .overflow_hidden()
             .child(input_row);
 
-        if show_body {
-            let output = output.unwrap_or_default();
+        if let Some(transcript) = transcript {
             root = root.child(
                 div()
                     .id("focused-text-preview")
-                    .min_h(px(58.0))
-                    .max_h(px(92.0))
-                    .px(px(14.0))
-                    .py(px(10.0))
-                    .overflow_y_scroll()
+                    .flex_1()
+                    .min_h(px(0.0))
+                    .overflow_hidden()
                     .border_b_1()
                     .border_color(rgba(chrome.divider_rgba))
-                    .child(
-                        div()
-                            .when(streaming, |d| {
-                                d.child(
-                                    div()
-                                        .w(px(7.0))
-                                        .h(px(7.0))
-                                        .rounded_full()
-                                        .bg(rgb(theme.colors.accent.selected))
-                                        .mb(px(6.0)),
-                                )
-                            })
-                            .child(
-                                render_markdown_with_scope(
-                                    &output,
-                                    &colors,
-                                    Some("focused-text-preview"),
-                                )
-                                .text_sm()
-                                .text_color(rgb(theme.colors.text.primary)),
-                            ),
-                    ),
+                    .child(transcript),
             );
         }
 
@@ -9877,6 +9843,20 @@ impl Render for AcpChatView {
         let message_count = messages.len();
 
         if self.ui_variant == AcpChatUiVariant::FocusedTextMini {
+            let active_pending = matches!(
+                thread.status,
+                AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
+            ) && !self.focused_text_mini_result_ready_for_thread(thread);
+            let show_transcript = self.focused_text_mini_result_ready_for_thread(thread);
+            let profile_icon_name = thread.profile_icon_name().map(str::to_string);
+            let _ = thread;
+
+            let transcript = if show_transcript {
+                Some(self.ensure_transcript(cx).into_any_element())
+            } else {
+                None
+            };
+
             return div()
                 .size_full()
                 .relative()
@@ -9890,7 +9870,10 @@ impl Render for AcpChatView {
                 }))
                 .child(self.render_focused_text_mini(
                     view_entity.clone(),
-                    thread,
+                    active_pending,
+                    show_transcript,
+                    profile_icon_name.as_deref(),
+                    transcript,
                     &input_text,
                     input_cursor,
                     input_selection,

@@ -3,6 +3,7 @@ const RUNTIME_TRAY_HOTKEYS: &str = include_str!("../../src/main_entry/runtime_tr
 const FOCUSED_TEXT_ENTRY: &str =
     include_str!("../../src/app_impl/tab_ai_mode/focused_text_entry.rs");
 const ACP_VIEW: &str = include_str!("../../src/ai/acp/view.rs");
+const ACP_TRANSCRIPT: &str = include_str!("../../src/ai/acp/components/transcript.rs");
 const ACP_UI_VARIANT: &str = include_str!("../../src/ai/acp/ui_variant.rs");
 const ACP_LAUNCH: &str = include_str!("../../src/app_impl/tab_ai_mode/acp_launch.rs");
 const FOOTER_POPUP: &str = include_str!("../../src/footer_popup.rs");
@@ -239,6 +240,60 @@ fn focused_text_mini_has_three_sizing_phases() {
             "const FOCUSED_TEXT_MINI_STREAMING_HEIGHT: f32 = FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT;"
         ),
         "streaming focused-text mini height must remain compact until the final result is ready"
+    );
+    assert!(
+        WINDOW_RESIZE.contains(
+            "const FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT: f32 = crate::panel::PROMPT_INPUT_FIELD_HEIGHT;"
+        ),
+        "input-only focused-text mini must match the shared prompt input height"
+    );
+}
+
+#[test]
+fn focused_text_mini_result_uses_shared_acp_transcript_component() {
+    let render_fn = source_between(
+        ACP_VIEW,
+        "fn render_focused_text_mini",
+        "fn render_pending_context_chips",
+    );
+    let mini_branch = source_between(
+        ACP_VIEW,
+        "if self.ui_variant == AcpChatUiVariant::FocusedTextMini {\n            let active_pending",
+        "div()\n            .size_full()",
+    );
+
+    assert!(
+        mini_branch.contains("Some(self.ensure_transcript(cx).into_any_element())"),
+        "focused-text mini result must render the shared ACP transcript entity"
+    );
+    assert!(
+        render_fn.contains("transcript: Option<gpui::AnyElement>"),
+        "focused-text mini render should receive the transcript element instead of building custom markdown"
+    );
+    assert!(
+        !render_fn.contains("render_markdown_with_scope"),
+        "focused-text mini result must not use a bespoke markdown preview"
+    );
+    assert!(
+        ACP_TRANSCRIPT.contains("AcpTranscriptPresentation::FocusedTextPreview"),
+        "AcpTranscript must own the focused-text preview presentation"
+    );
+    assert!(
+        ACP_TRANSCRIPT.contains("let messages_snapshot = self.messages.clone();"),
+        "focused-text preview must keep the shared transcript message model intact"
+    );
+    assert!(
+        !ACP_TRANSCRIPT.contains(".filter(|message|"),
+        "focused-text preview must hide rows at render time, not build a filtered message model"
+    );
+    assert!(
+        ACP_TRANSCRIPT.contains("if focused_text_preview")
+            && ACP_TRANSCRIPT.contains("return div().into_any();"),
+        "focused-text preview should suppress non-assistant/empty rows in the render path"
+    );
+    assert!(
+        render_fn.contains("\"focused-text-preview\""),
+        "focused-text transcript wrapper should preserve the stable DevTools preview id"
     );
 }
 

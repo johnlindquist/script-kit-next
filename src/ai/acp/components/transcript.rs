@@ -440,8 +440,17 @@ impl Render for AcpTranscript {
         let theme = theme::get_cached_theme();
         let colors = PromptColors::from_theme(&theme);
 
+        let focused_text_preview = matches!(
+            self.ui_variant.config().transcript,
+            AcpTranscriptPresentation::FocusedTextPreview
+        );
         let messages_snapshot = self.messages.clone();
         let collapsed_ids = self.collapsed_ids.clone();
+
+        if self.list_state.item_count() != messages_snapshot.len() {
+            self.list_state.reset(messages_snapshot.len());
+            self.list_state.set_follow_tail(true);
+        }
 
         // Reconcile/sync TextViewState entities for each message
         for msg in &messages_snapshot {
@@ -471,6 +480,14 @@ impl Render for AcpTranscript {
             .child(
                 list(self.list_state.clone(), move |ix, _window, _cx| {
                     let msg = &messages_snapshot[ix];
+                    if focused_text_preview {
+                        if !matches!(msg.role, AcpThreadMessageRole::Assistant)
+                            || msg.body.trim().is_empty()
+                        {
+                            return div().into_any();
+                        }
+                    }
+
                     let is_collapsible = matches!(
                         msg.role,
                         AcpThreadMessageRole::Thought | AcpThreadMessageRole::Tool
