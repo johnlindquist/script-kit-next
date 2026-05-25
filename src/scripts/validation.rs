@@ -317,13 +317,13 @@ mod tests {
     use super::*;
     use crate::metadata_parser::TypedMetadata;
 
-    fn make_script(name: &str, path: &str) -> Arc<Script> {
-        Arc::new(Script {
+    fn make_script(name: &str, path: &str) -> Script {
+        Script {
             name: name.to_string(),
             path: PathBuf::from(path),
             extension: "ts".to_string(),
             ..Script::default()
-        })
+        }
     }
 
     fn with_shortcut(mut script: Script, shortcut: &str) -> Script {
@@ -362,7 +362,7 @@ mod tests {
     #[test]
     fn single_script_with_bindings_passes() {
         let s = arc(with_shortcut(
-            (*make_script("solo", "/tmp/solo.ts")).clone(),
+            make_script("solo", "/tmp/solo.ts"),
             "cmd shift k",
         ));
         let report = validate_script_catalog(vec![s]);
@@ -373,14 +373,8 @@ mod tests {
 
     #[test]
     fn duplicate_shortcut_excludes_both_scripts() {
-        let a = arc(with_shortcut(
-            (*make_script("a", "/tmp/a.ts")).clone(),
-            "cmd shift k",
-        ));
-        let b = arc(with_shortcut(
-            (*make_script("b", "/tmp/b.ts")).clone(),
-            "Cmd Shift K",
-        ));
+        let a = arc(with_shortcut(make_script("a", "/tmp/a.ts"), "cmd shift k"));
+        let b = arc(with_shortcut(make_script("b", "/tmp/b.ts"), "Cmd Shift K"));
         let report = validate_script_catalog(vec![a, b]);
         assert_eq!(report.validation.total_candidates, 2);
         assert_eq!(report.validation.valid_count, 0);
@@ -401,8 +395,8 @@ mod tests {
 
     #[test]
     fn duplicate_alias_normalizes_case() {
-        let a = arc(with_alias((*make_script("a", "/tmp/a.ts")).clone(), "GC"));
-        let b = arc(with_alias((*make_script("b", "/tmp/b.ts")).clone(), "gc"));
+        let a = arc(with_alias(make_script("a", "/tmp/a.ts"), "GC"));
+        let b = arc(with_alias(make_script("b", "/tmp/b.ts"), "gc"));
         let report = validate_script_catalog(vec![a, b]);
         assert_eq!(report.validation.fatal_count, 2);
         assert!(report
@@ -420,30 +414,18 @@ mod tests {
 
     #[test]
     fn duplicate_keyword_from_typed_metadata_collides() {
-        let a = arc(with_keyword(
-            (*make_script("a", "/tmp/a.ts")).clone(),
-            "!note",
-        ));
-        let b = arc(with_keyword(
-            (*make_script("b", "/tmp/b.ts")).clone(),
-            "!note",
-        ));
+        let a = arc(with_keyword(make_script("a", "/tmp/a.ts"), "!note"));
+        let b = arc(with_keyword(make_script("b", "/tmp/b.ts"), "!note"));
         let report = validate_script_catalog(vec![a, b]);
         assert_eq!(report.validation.fatal_count, 2);
     }
 
     #[test]
     fn unique_bindings_across_kinds_do_not_collide() {
-        let a = arc(with_shortcut(
-            (*make_script("a", "/tmp/a.ts")).clone(),
-            "cmd shift k",
-        ));
+        let a = arc(with_shortcut(make_script("a", "/tmp/a.ts"), "cmd shift k"));
         // Alias "cmd shift k" should NOT collide with shortcut "cmd shift k"
         // because the (kind, value) bucket is kind-scoped.
-        let b = arc(with_alias(
-            (*make_script("b", "/tmp/b.ts")).clone(),
-            "cmd shift k",
-        ));
+        let b = arc(with_alias(make_script("b", "/tmp/b.ts"), "cmd shift k"));
         let report = validate_script_catalog(vec![a, b]);
         assert_eq!(report.validation.valid_count, 2);
         assert_eq!(report.validation.fatal_count, 0);
@@ -451,11 +433,8 @@ mod tests {
 
     #[test]
     fn empty_binding_values_are_skipped() {
-        let a = arc(with_shortcut(
-            (*make_script("a", "/tmp/a.ts")).clone(),
-            "   ",
-        ));
-        let b = arc(with_shortcut((*make_script("b", "/tmp/b.ts")).clone(), ""));
+        let a = arc(with_shortcut(make_script("a", "/tmp/a.ts"), "   "));
+        let b = arc(with_shortcut(make_script("b", "/tmp/b.ts"), ""));
         // Both shortcuts normalize to None — no collision, both kept.
         let report = validate_script_catalog(vec![a, b]);
         assert_eq!(report.validation.valid_count, 2);
@@ -464,7 +443,7 @@ mod tests {
 
     #[test]
     fn trigger_collision_from_extra_field() {
-        let mut a = (*make_script("a", "/tmp/a.ts")).clone();
+        let mut a = make_script("a", "/tmp/a.ts");
         let mut extra_a = std::collections::HashMap::new();
         extra_a.insert(
             "trigger".to_string(),
@@ -475,7 +454,7 @@ mod tests {
             ..TypedMetadata::default()
         });
 
-        let mut b = (*make_script("b", "/tmp/b.ts")).clone();
+        let mut b = make_script("b", "/tmp/b.ts");
         let mut extra_b = std::collections::HashMap::new();
         extra_b.insert(
             "trigger".to_string(),
@@ -503,18 +482,9 @@ mod tests {
 
     #[test]
     fn three_way_shortcut_collision_lists_all_peers() {
-        let a = arc(with_shortcut(
-            (*make_script("a", "/tmp/a.ts")).clone(),
-            "cmd k",
-        ));
-        let b = arc(with_shortcut(
-            (*make_script("b", "/tmp/b.ts")).clone(),
-            "cmd k",
-        ));
-        let c = arc(with_shortcut(
-            (*make_script("c", "/tmp/c.ts")).clone(),
-            "cmd k",
-        ));
+        let a = arc(with_shortcut(make_script("a", "/tmp/a.ts"), "cmd k"));
+        let b = arc(with_shortcut(make_script("b", "/tmp/b.ts"), "cmd k"));
+        let c = arc(with_shortcut(make_script("c", "/tmp/c.ts"), "cmd k"));
         let report = validate_script_catalog(vec![a, b, c]);
         assert_eq!(report.validation.fatal_count, 3);
         for failed in report.validation.failed_scripts.iter() {
@@ -528,14 +498,8 @@ mod tests {
 
     #[test]
     fn report_is_serializable() {
-        let a = arc(with_shortcut(
-            (*make_script("a", "/tmp/a.ts")).clone(),
-            "cmd k",
-        ));
-        let b = arc(with_shortcut(
-            (*make_script("b", "/tmp/b.ts")).clone(),
-            "cmd k",
-        ));
+        let a = arc(with_shortcut(make_script("a", "/tmp/a.ts"), "cmd k"));
+        let b = arc(with_shortcut(make_script("b", "/tmp/b.ts"), "cmd k"));
         let report = validate_script_catalog(vec![a, b]);
         let json = serde_json::to_string(&*report.validation)
             .expect("validation report must serialize cleanly");
