@@ -8,9 +8,13 @@ const ACP_LAUNCH: &str = include_str!("../../src/app_impl/tab_ai_mode/acp_launch
 const FOOTER_POPUP: &str = include_str!("../../src/footer_popup.rs");
 const STDIN_COMMANDS: &str = include_str!("../../src/stdin_commands/mod.rs");
 const RUNTIME_STDIN: &str = include_str!("../../src/main_entry/runtime_stdin.rs");
+const STARTUP: &str = include_str!("../../src/app_impl/startup.rs");
+const STARTUP_NEW_ACTIONS: &str = include_str!("../../src/app_impl/startup_new_actions.rs");
+const SIMULATE_KEY_DISPATCH: &str = include_str!("../../src/app_impl/simulate_key_dispatch.rs");
 const APP_LAYOUT_COLLECT_ELEMENTS: &str = include_str!("../../src/app_layout/collect_elements.rs");
 const ACP_STATE_TYPES: &str = include_str!("../../src/protocol/types/acp_state.rs");
 const INLINE_AGENT_MOD: &str = include_str!("../../src/inline_agent/mod.rs");
+const PROMPT_HANDLER: &str = include_str!("../../src/prompt_handler/mod.rs");
 
 #[test]
 fn inline_ai_hotkeys_capture_before_opening_focused_text_agent_chat() {
@@ -113,7 +117,8 @@ fn focused_text_footer_actions_are_explicit_and_dispatch_apply_back() {
     }
 
     for required in [
-        "focused_text_footer_buttons",
+        "focused_text_visible_footer_buttons",
+        "focused_text_semantic_actions",
         "apply_focused_text_output",
         "FocusedTextMutation::Replace",
         "FocusedTextMutation::Append",
@@ -148,6 +153,59 @@ fn focused_text_mini_variant_is_protocol_visible() {
         assert!(
             ACP_UI_VARIANT.contains(required),
             "missing focused-text mini variant contract: {required}"
+        );
+    }
+}
+
+#[test]
+fn focused_text_mini_initial_state_is_input_only_without_native_footer() {
+    for required in [
+        "enum FocusedTextMiniPhase",
+        "FocusedTextMiniPhase::InputOnly",
+        "focused_text_mini_phase_for_thread",
+        "focused_text_mini_footer_visible_for_thread",
+        "main_window_footer_visible",
+        "main_window_footer_slot",
+        "acp_footer_hidden",
+        "visible: bool",
+        "FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY",
+        "ViewType::FocusedTextMini, 0",
+    ] {
+        assert!(
+            ACP_VIEW.contains(required)
+                || FOCUSED_TEXT_ENTRY.contains(required)
+                || include_str!("../../src/app_impl/ui_window.rs").contains(required)
+                || PROMPT_HANDLER.contains(required),
+            "missing focused-text input-only footer contract: {required}"
+        );
+    }
+}
+
+#[test]
+fn focused_text_mini_has_three_sizing_phases() {
+    let resize = include_str!("../../src/window_resize/mod.rs");
+    for required in [
+        "FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY",
+        "FOCUSED_TEXT_MINI_SIZE_STREAMING",
+        "FOCUSED_TEXT_MINI_SIZE_RESULT",
+        "FocusedTextMiniPhase::InputOnly",
+        "FocusedTextMiniPhase::Streaming",
+        "FocusedTextMiniPhase::Result",
+    ] {
+        assert!(
+            ACP_VIEW.contains(required),
+            "missing focused-text mini sizing phase: {required}"
+        );
+    }
+    for required in [
+        "FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT",
+        "FOCUSED_TEXT_MINI_STREAMING_HEIGHT",
+        "FOCUSED_TEXT_MINI_RESULT_HEIGHT",
+        "ViewType::FocusedTextMini",
+    ] {
+        assert!(
+            resize.contains(required),
+            "missing focused-text mini resize constant: {required}"
         );
     }
 }
@@ -226,8 +284,10 @@ fn focused_text_mini_has_redacted_acp_state_and_semantic_elements() {
         "\"focused-text-action-append\"",
         "\"focused-text-action-copy\"",
         "\"focused-text-action-expand\"",
+        "\"focused-text-action-collapse\"",
         "\"focused-text-action-stop\"",
         "\"focused-text-action-retry\"",
+        "source_name: Some(\"Cmd+K\"",
     ] {
         assert!(
             ACP_VIEW.contains(required),
@@ -237,4 +297,57 @@ fn focused_text_mini_has_redacted_acp_state_and_semantic_elements() {
 
     assert!(APP_LAYOUT_COLLECT_ELEMENTS.contains("AppView::AcpChatView { entity }"));
     assert!(APP_LAYOUT_COLLECT_ELEMENTS.contains("collect_focused_text_mini_elements"));
+}
+
+#[test]
+fn focused_text_mini_escape_hides_instead_of_returning_to_main_menu() {
+    assert!(
+        ACP_VIEW.contains("pub(crate) fn is_focused_text_mini")
+            && ACP_VIEW.contains("focused_text_originated_from_quick_prompt")
+            && ACP_VIEW.contains("focused_text_quick_prompt_escape_hide_requested")
+            && ACP_VIEW.contains("self.trigger_close_window_requested(window, cx);"),
+        "focused-text quick-prompt Escape must request a state-first window close/hide"
+    );
+    assert!(
+        STARTUP.contains("acp_escape_focused_text_origin")
+            && STARTUP.contains("focused_text_originated_from_quick_prompt")
+            && STARTUP.contains("this.close_acp_chat_main_window_state_first(cx);")
+            && STARTUP.contains("Interceptor: Escape -> hide focused-text quick prompt Agent Chat"),
+        "physical Escape from focused-text quick prompt origin must hide the main panel instead of restoring the launcher"
+    );
+    assert!(
+        STARTUP_NEW_ACTIONS.contains("acp_escape_focused_text_origin")
+            && STARTUP_NEW_ACTIONS.contains("focused_text_originated_from_quick_prompt")
+            && STARTUP_NEW_ACTIONS.contains("this.close_acp_chat_main_window_state_first(cx);")
+            && STARTUP_NEW_ACTIONS
+                .contains("Interceptor: Escape -> hide focused-text quick prompt Agent Chat"),
+        "startup_new_actions Escape interceptor must preserve the same focused-text quick prompt hide path"
+    );
+    assert!(
+        SIMULATE_KEY_DISPATCH.contains("chat.is_focused_text_mini()")
+            && SIMULATE_KEY_DISPATCH.contains("chat.focused_text_originated_from_quick_prompt()")
+            && SIMULATE_KEY_DISPATCH
+                .contains("SimulateKey: Escape - hide focused-text quick prompt Agent Chat")
+            && SIMULATE_KEY_DISPATCH.contains("view.close_acp_chat_main_window_state_first(ctx);"),
+        "simulateKey Escape must match physical Escape for focused-text quick prompt origin"
+    );
+}
+
+#[test]
+fn focused_text_quick_prompt_origin_survives_expansion_for_escape_hide() {
+    for required in [
+        "originated_from_quick_prompt",
+        "mark_focused_text_originated_from_quick_prompt",
+        "focused_text_originated_from_quick_prompt",
+    ] {
+        assert!(
+            ACP_VIEW.contains(required) || FOCUSED_TEXT_ENTRY.contains(required),
+            "missing focused-text quick-prompt origin marker: {required}"
+        );
+    }
+
+    assert!(
+        FOCUSED_TEXT_ENTRY.contains("mark_focused_text_originated_from_quick_prompt"),
+        "focused-text entry must mark quick-prompt origin after staging"
+    );
 }

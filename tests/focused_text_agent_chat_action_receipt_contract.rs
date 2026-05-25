@@ -43,6 +43,10 @@ fn focused_text_action_receipt_serializes_only_redacted_fields() {
 fn focused_text_state_carries_redacted_context_identity_and_last_action() {
     let state = AcpFocusedTextState {
         mode: "mini".to_string(),
+        phase: "result".to_string(),
+        footer_visible: true,
+        actions_visible: true,
+        can_expand_to_chat: true,
         session_id: "focused-text-session-for-tests".to_string(),
         app_name: "TextEdit".to_string(),
         char_count: 11,
@@ -67,6 +71,10 @@ fn focused_text_state_carries_redacted_context_identity_and_last_action() {
 
     let json = serde_json::to_value(&state).expect("serialize focused-text state");
     assert_eq!(json["mode"], "mini");
+    assert_eq!(json["phase"], "result");
+    assert_eq!(json["footerVisible"], true);
+    assert_eq!(json["actionsVisible"], true);
+    assert_eq!(json["canExpandToChat"], true);
     assert_eq!(json["charCount"], 11);
     assert_eq!(json["contextPresent"], true);
     assert_eq!(json["contextFingerprint"], "fnv1a64:0123456789abcdef");

@@ -437,7 +437,7 @@ fn acp_escape_defers_to_actions_dialog_before_unwinding_chat() {
         ("startup_new_actions.rs", STARTUP_NEW_ACTIONS_SOURCE),
     ] {
         let escape_block_start = source
-            .find("// Handle Escape for AcpChatView (return to main menu)")
+            .find("// Handle Escape for AcpChatView.")
             .unwrap_or_else(|| panic!("ACP escape block not found in {name}"));
         let escape_block_end = (escape_block_start + 900).min(source.len());
         let escape_block = &source[escape_block_start..escape_block_end];

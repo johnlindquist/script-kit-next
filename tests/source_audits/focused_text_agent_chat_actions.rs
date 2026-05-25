@@ -1,6 +1,20 @@
 const ACP_VIEW: &str = include_str!("../../src/ai/acp/view.rs");
+const ACTIONS_BUILDERS: &str = include_str!("../../src/actions/builders/script_context.rs");
+const ACTIONS_TOGGLE: &str = include_str!("../../src/app_impl/actions_toggle.rs");
+const ACTIONS_DIALOG_IMPL: &str = include_str!("../../src/actions/dialog.rs");
 const ACTIONS_DIALOG: &str = include_str!("../../src/app_impl/actions_dialog.rs");
 const HANDLE_ACTION: &str = include_str!("../../src/app_actions/handle_action/mod.rs");
+
+fn source_between<'a>(source: &'a str, start_marker: &str, end_marker: &str) -> &'a str {
+    let start = source
+        .find(start_marker)
+        .unwrap_or_else(|| panic!("missing start marker: {start_marker}"));
+    let rest = &source[start..];
+    let end = rest
+        .find(end_marker)
+        .unwrap_or_else(|| panic!("missing end marker: {end_marker}"));
+    &rest[..end]
+}
 
 #[test]
 fn focused_text_action_ids_route_through_acp_view_dispatcher() {
@@ -75,20 +89,164 @@ fn focused_text_action_receipts_are_redacted_protocol_state() {
 }
 
 #[test]
-fn focused_text_footer_persists_actions_after_expand_and_can_collapse() {
+fn focused_text_expanded_uses_standard_agent_chat_footer_not_focused_mini_footer() {
+    let footer_fn = source_between(
+        ACP_VIEW,
+        "fn footer_buttons_for_thread",
+        "fn focused_text_visible_footer_buttons",
+    );
+
+    assert!(
+        footer_fn.contains(
+            "self.focused_text.is_some() && self.ui_variant == AcpChatUiVariant::FocusedTextMini"
+        ),
+        "focused-text footer override must only apply while FocusedTextMini is active"
+    );
+    assert!(
+        !footer_fn.contains(
+            "if self.focused_text.is_some() {\n            return self.focused_text_visible_footer_buttons(thread);"
+        ),
+        "expanded focused-text Agent Chat must fall through to standard Run/Actions footer"
+    );
+}
+
+#[test]
+fn focused_text_expanded_actions_do_not_offer_collapse() {
+    let semantic_fn = source_between(
+        ACP_VIEW,
+        "fn focused_text_semantic_actions",
+        "fn has_pastable_assistant_response",
+    );
+
+    assert!(
+        semantic_fn.contains("if !expanded"),
+        "Chat/expand action should be mini-only"
+    );
+    assert!(
+        !semantic_fn.contains("\"focused-text-action-collapse\""),
+        "expanded-from-mini should not expose a custom Collapse action"
+    );
+}
+
+#[test]
+fn focused_text_mini_result_footer_is_replace_only() {
+    let footer_fn = source_between(
+        ACP_VIEW,
+        "fn focused_text_visible_footer_buttons",
+        "fn focused_text_semantic_actions",
+    );
+    assert!(footer_fn.contains("FocusedTextMiniPhase::InputOnly"));
+    assert!(footer_fn.contains("return Vec::new()"));
+
+    let mini_branch = source_between(
+        footer_fn,
+        "if self.ui_variant == AcpChatUiVariant::FocusedTextMini",
+        "match thread.status",
+    );
+
+    assert!(mini_branch.contains("FooterAction::Replace"));
+    assert!(mini_branch.contains("FooterAction::Stop"));
+    assert!(!mini_branch.contains("FooterAction::Actions"));
+    assert!(!mini_branch.contains("FooterAction::Append"));
+    assert!(!mini_branch.contains("FooterAction::Copy"));
+    assert!(!mini_branch.contains("FooterAction::Expand"));
+    assert!(!mini_branch.contains("FooterAction::Retry"));
+}
+
+#[test]
+fn focused_text_input_only_omits_semantic_actions_and_preview() {
     for required in [
-        "if self.focused_text.is_some()",
-        "return self.focused_text_footer_buttons(thread)",
-        "label: if self.ui_variant == AcpChatUiVariant::FocusedTextMini",
-        "\"Collapse\"",
-        "\"focused-text-action-collapse\"",
-        "set_on_focused_text_collapse_requested",
-        "focused_text_collapse_agent_chat",
+        "FocusedTextMiniPhase::InputOnly",
+        "collect_focused_text_mini_elements",
+        "\"focused-text-context-badge\"",
+        "\"focused-text-mini-close\"",
+        "\"inputOnly\"",
+        "if !input_only",
     ] {
         assert!(
-            ACP_VIEW.contains(required)
-                || include_str!("../../src/app_impl/tab_ai_mode/mod.rs").contains(required),
-            "missing focused-text expanded/collapse footer contract: {required}"
+            ACP_VIEW.contains(required),
+            "missing input-only automation contract: {required}"
+        );
+    }
+}
+
+#[test]
+fn focused_text_mini_loading_has_no_body_thinking_text() {
+    let render_fn = source_between(
+        ACP_VIEW,
+        "fn render_focused_text_mini",
+        "fn render_pending_context_chips",
+    );
+
+    assert!(!render_fn.contains("\"Thinking"));
+    assert!(!render_fn.contains("focused-text-thinking"));
+    assert!(!render_fn.contains(".child(\"✦\")"));
+    assert!(!render_fn.contains("Edit, refine, ask"));
+    assert!(ACP_VIEW.contains("FOCUSED_TEXT_MINI_PLACEHOLDER"));
+    assert!(render_fn.contains("Self::render_composer_input_text"));
+    assert!(render_fn.contains("crate::panel::PROMPT_INPUT_FIELD_HEIGHT"));
+    assert!(render_fn.contains("crate::panel::HEADER_PADDING_X"));
+    assert!(render_fn.contains("active_no_output"));
+    assert!(render_fn.contains("focused-text-mini-close"));
+    assert!(render_fn.contains("on_click"));
+    assert!(render_fn.contains("trigger_close_window_requested"));
+}
+
+#[test]
+fn focused_text_secondary_actions_remain_semantic_cmd_k_actions() {
+    for required in [
+        "focused_text_semantic_actions",
+        "struct FocusedTextSemanticActionSpec",
+        "\"focused-text-action-append\"",
+        "\"focused-text-action-copy\"",
+        "\"focused-text-action-expand\"",
+        "source_name: Some(\"Cmd+K\"",
+    ] {
+        assert!(
+            ACP_VIEW.contains(required),
+            "missing focused-text semantic Cmd+K action contract: {required}"
+        );
+    }
+}
+
+#[test]
+fn focused_text_cmd_k_uses_focused_text_action_route_not_generic_acp_actions() {
+    for required in [
+        "pub(crate) fn get_focused_text_agent_chat_actions",
+        "pub(crate) fn get_focused_text_agent_chat_root_route",
+        "\"Focused Text\"",
+        "\"Replace Selected Text\"",
+        "\"Append to Selected Text\"",
+        "\"Copy Response\"",
+        "\"focused-text-action-replace\"",
+        "initial_selected_action_id: Some(\"focused-text-action-replace\"",
+    ] {
+        assert!(
+            ACTIONS_BUILDERS.contains(required),
+            "missing focused-text Cmd+K action builder contract: {required}"
+        );
+    }
+
+    for required in [
+        "focused_text: bool",
+        "focused_text_expanded: bool",
+        "get_focused_text_agent_chat_root_route(context.focused_text_expanded)",
+    ] {
+        assert!(
+            ACTIONS_DIALOG_IMPL.contains(required),
+            "missing focused-text Cmd+K dialog routing contract: {required}"
+        );
+    }
+
+    for required in [
+        "view.has_focused_text_context()",
+        "view.focused_text_actions_expanded()",
+        "focused_text,",
+        "focused_text_expanded,",
+    ] {
+        assert!(
+            ACTIONS_TOGGLE.contains(required),
+            "missing focused-text Cmd+K host context contract: {required}"
         );
     }
 }
