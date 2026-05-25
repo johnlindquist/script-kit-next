@@ -16,10 +16,10 @@ use super::window::{get_active_chat_id, get_streaming_snapshot};
 /// Convert a Chat from storage to AiChatInfo for protocol
 fn chat_to_info(chat: &Chat, message_count: usize) -> AiChatInfo {
     AiChatInfo {
-        id: chat.id.as_str(),
-        title: chat.title.clone(),
-        model_id: chat.model_id.clone(),
-        provider: chat.provider.clone(),
+        id: chat.id.as_str().into(),
+        title: chat.title.clone().into(),
+        model_id: chat.model_id.clone().into(),
+        provider: chat.provider.clone().into(),
         created_at: chat.created_at.to_rfc3339(),
         updated_at: chat.updated_at.to_rfc3339(),
         is_deleted: chat.deleted_at.is_some(),
@@ -31,9 +31,9 @@ fn chat_to_info(chat: &Chat, message_count: usize) -> AiChatInfo {
 /// Convert a Message from storage to AiMessageInfo for protocol
 fn message_to_info(msg: &AiMessage) -> AiMessageInfo {
     AiMessageInfo {
-        id: msg.id.to_string(),
-        role: msg.role.as_str().to_string(),
-        content: msg.content.clone(),
+        id: msg.id.to_string().into(),
+        role: msg.role.as_str().into(),
+        content: msg.content.clone().into(),
         created_at: msg.created_at.to_rfc3339(),
         tokens_used: msg.tokens_used,
     }

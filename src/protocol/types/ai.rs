@@ -1,3 +1,4 @@
+use gpui::SharedString;
 use serde::{Deserialize, Serialize};
 
 // ============================================================
@@ -27,13 +28,13 @@ pub enum AiContextPartInput {
 #[serde(rename_all = "camelCase")]
 pub struct AiChatInfo {
     /// Unique chat identifier (UUID)
-    pub id: String,
+    pub id: SharedString,
     /// Chat title (auto-generated or user-set)
-    pub title: String,
+    pub title: SharedString,
     /// Model ID used for this chat (e.g., "claude-3-5-sonnet-20241022")
-    pub model_id: String,
+    pub model_id: SharedString,
     /// AI provider (e.g., "anthropic", "openai")
-    pub provider: String,
+    pub provider: SharedString,
     /// When the chat was created (ISO 8601)
     pub created_at: String,
     /// When the chat was last updated (ISO 8601)
@@ -49,13 +50,18 @@ pub struct AiChatInfo {
 
 impl AiChatInfo {
     /// Create a new AiChatInfo with required fields
-    pub fn new(id: String, title: String, model_id: String, provider: String) -> Self {
+    pub fn new(
+        id: impl Into<SharedString>,
+        title: impl Into<SharedString>,
+        model_id: impl Into<SharedString>,
+        provider: impl Into<SharedString>,
+    ) -> Self {
         let now = chrono::Utc::now().to_rfc3339();
         AiChatInfo {
-            id,
-            title,
-            model_id,
-            provider,
+            id: id.into(),
+            title: title.into(),
+            model_id: model_id.into(),
+            provider: provider.into(),
             created_at: now.clone(),
             updated_at: now,
             is_deleted: false,
@@ -98,11 +104,11 @@ impl AiChatInfo {
 #[serde(rename_all = "camelCase")]
 pub struct AiMessageInfo {
     /// Unique message identifier (UUID)
-    pub id: String,
+    pub id: SharedString,
     /// Message role: "user", "assistant", or "system"
-    pub role: String,
+    pub role: SharedString,
     /// Full message content
-    pub content: String,
+    pub content: SharedString,
     /// When the message was created (ISO 8601)
     pub created_at: String,
     /// Number of tokens used (for assistant messages)
@@ -112,29 +118,33 @@ pub struct AiMessageInfo {
 
 impl AiMessageInfo {
     /// Create a new AiMessageInfo
-    pub fn new(id: String, role: String, content: String) -> Self {
+    pub fn new(
+        id: impl Into<SharedString>,
+        role: impl Into<SharedString>,
+        content: impl Into<SharedString>,
+    ) -> Self {
         AiMessageInfo {
-            id,
-            role,
-            content,
+            id: id.into(),
+            role: role.into(),
+            content: content.into(),
             created_at: chrono::Utc::now().to_rfc3339(),
             tokens_used: None,
         }
     }
 
     /// Create a user message
-    pub fn user(id: String, content: String) -> Self {
-        Self::new(id, "user".to_string(), content)
+    pub fn user(id: impl Into<SharedString>, content: impl Into<SharedString>) -> Self {
+        Self::new(id, "user", content)
     }
 
     /// Create an assistant message
-    pub fn assistant(id: String, content: String) -> Self {
-        Self::new(id, "assistant".to_string(), content)
+    pub fn assistant(id: impl Into<SharedString>, content: impl Into<SharedString>) -> Self {
+        Self::new(id, "assistant", content)
     }
 
     /// Create a system message
-    pub fn system(id: String, content: String) -> Self {
-        Self::new(id, "system".to_string(), content)
+    pub fn system(id: impl Into<SharedString>, content: impl Into<SharedString>) -> Self {
+        Self::new(id, "system", content)
     }
 
     /// Set the timestamp
