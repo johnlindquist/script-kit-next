@@ -1,6 +1,15 @@
 use super::*;
 
 impl ScriptListApp {
+    #[inline]
+    fn filter_change_can_affect_window_size(&self) -> bool {
+        // Mini ScriptList height depends on grouped results.
+        // Non-ScriptList views may also size from filtered item counts.
+        // Full ScriptList uses the normal fixed launcher size, so typing
+        // should not recalculate/defer resize every keystroke.
+        !matches!(self.current_view, AppView::ScriptList) || self.main_window_mode == MainWindowMode::Mini
+    }
+
     pub(crate) fn cancel_history_filter_render_pending_if_obsolete(&mut self, next_filter: &str) {
         if self
             .history_filter_render_pending
@@ -57,6 +66,14 @@ impl ScriptListApp {
     }
 
     pub(crate) fn queue_filter_compute(&mut self, value: String, cx: &mut Context<Self>) {
+        if self.computed_filter_text == value {
+            tracing::debug!(
+                target: "script_kit::filter",
+                event = "queue_filter_compute_exact_query_noop",
+                filter_len = value.len(),
+            );
+            return;
+        }
         if logging::filter_perf_trace_enabled() {
             logging::log(
                 "FILTER_PERF",
@@ -83,7 +100,9 @@ impl ScriptListApp {
                 }
             }
             self.rebuild_main_window_preflight_if_needed();
-            self.update_window_size();
+            if self.filter_change_can_affect_window_size() {
+                self.update_window_size();
+            }
             let update_elapsed = update_start.elapsed();
             if logging::filter_perf_trace_enabled()
                 || update_elapsed >= std::time::Duration::from_millis(8)
@@ -124,6 +143,23 @@ impl ScriptListApp {
         // it doesn't survive a filter change (otherwise the proposal would
         // appear stale against an unrelated input).
         self.pending_menu_syntax_ai_proposal = None;
+
+        let input_already_matches = self.gpui_input_state.read(cx).value().to_string() == text;
+        if matches!(self.current_view, AppView::ScriptList)
+            && self.filter_text == text
+            && self.computed_filter_text == text
+            && input_already_matches
+            && !self.pending_filter_sync
+        {
+            self.pending_programmatic_filter_echo = None;
+            tracing::debug!(
+                target: "script_kit::filter",
+                event = "set_filter_text_immediate_exact_query_noop",
+                filter_len = text.len(),
+            );
+            return;
+        }
+
         self.suppress_filter_events = true;
         self.filter_text = text.clone();
         self.pending_programmatic_filter_echo = Some(text.clone());
@@ -261,7 +297,9 @@ impl ScriptListApp {
         }
 
         self.rebuild_main_window_preflight_if_needed();
-        self.update_window_size_deferred(window, cx);
+        if self.filter_change_can_affect_window_size() {
+            self.update_window_size_deferred(window, cx);
+        }
         cx.notify();
     }
 

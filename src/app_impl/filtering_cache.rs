@@ -928,6 +928,8 @@ impl ScriptListApp {
     pub(crate) fn invalidate_filter_cache(&mut self) {
         logging::log_debug("CACHE", "Filter cache INVALIDATED");
         self.main_menu_result_caches.invalidate_filtered_results();
+        self.main_menu_render_diagnostics.last_input_highlight_text.clear();
+        self.main_menu_render_diagnostics.last_input_highlight_ranges.clear();
     }
 
     fn active_script_list_attachment_portal_kind(

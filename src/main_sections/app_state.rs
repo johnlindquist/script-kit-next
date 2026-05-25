@@ -17,6 +17,9 @@ struct MainMenuRenderDiagnosticsState {
     log_this_render: bool,
     /// Start time for the current input-to-grouped-results performance sample.
     filter_perf_start: Option<std::time::Instant>,
+    /// Cache fields for highlighting
+    last_input_highlight_text: String,
+    last_input_highlight_ranges: Vec<(std::ops::Range<usize>, gpui::Color, String)>,
 }
 
 #[derive(Clone, Debug)]
@@ -46,6 +49,8 @@ impl Default for MainMenuRenderDiagnosticsState {
             last_render_log_item_count: usize::MAX,
             log_this_render: true,
             filter_perf_start: None,
+            last_input_highlight_text: String::new(),
+            last_input_highlight_ranges: Vec::new(),
         }
     }
 }

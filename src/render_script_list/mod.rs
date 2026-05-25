@@ -1544,25 +1544,34 @@ impl ScriptListApp {
         let font_family = self.theme_font_family();
 
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
-        let capture_targets =
-            crate::menu_syntax::registered_capture_targets_from_scripts(&self.scripts);
-        let input_highlight_ranges = crate::menu_syntax::input_spans_for_input_with_targets(
-            &filter_text_for_render,
-            &capture_targets,
-        )
-        .into_iter()
-        .filter(|span| span.role != crate::menu_syntax::MenuSyntaxFragmentRole::Subject)
-        .map(|span| {
-            (
-                span.range,
-                rgb(menu_syntax_input_span_color(&self.theme, span.role)).into(),
-                menu_syntax_input_span_role_name(span.role).to_string(),
+        let highlight_text = filter_text_for_render.clone();
+        if self.main_menu_render_diagnostics.last_input_highlight_text != highlight_text {
+            let capture_targets =
+                crate::menu_syntax::registered_capture_targets_from_scripts(&self.scripts);
+            let next_highlight_ranges = crate::menu_syntax::input_spans_for_input_with_targets(
+                &highlight_text,
+                &capture_targets,
             )
-        })
-        .collect();
-        self.gpui_input_state.update(cx, |state, _cx| {
-            state.set_highlight_ranges_with_roles(input_highlight_ranges);
-        });
+            .into_iter()
+            .filter(|span| span.role != crate::menu_syntax::MenuSyntaxFragmentRole::Subject)
+            .map(|span| {
+                (
+                    span.range,
+                    rgb(menu_syntax_input_span_color(&self.theme, span.role)).into(),
+                    menu_syntax_input_span_role_name(span.role).to_string(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+            if self.main_menu_render_diagnostics.last_input_highlight_ranges != next_highlight_ranges {
+                let ranges_for_input = next_highlight_ranges.clone();
+                self.gpui_input_state.update(cx, |state, _cx| {
+                    state.set_highlight_ranges_with_roles(ranges_for_input);
+                });
+                self.main_menu_render_diagnostics.last_input_highlight_ranges = next_highlight_ranges;
+            }
+            self.main_menu_render_diagnostics.last_input_highlight_text = highlight_text;
+        }
 
         // NOTE: No .bg() here - Root provides vibrancy background for ALL content
         // This ensures main menu, AI chat, and all prompts have consistent styling
