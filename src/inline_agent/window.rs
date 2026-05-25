@@ -350,7 +350,11 @@ impl InlineAgentOverlayWindow {
         }
 
         let previous_run_state = self.plan.run_state.clone();
-        self.plan.run_state = InlineAgentRunState::Applying { action };
+        let latest_output = previous_run_state.latest_output_owned();
+        self.plan.run_state = InlineAgentRunState::Applying {
+            action,
+            latest_output: latest_output.clone(),
+        };
         cx.notify();
 
         match apply_latest_output_action(
@@ -360,9 +364,14 @@ impl InlineAgentOverlayWindow {
             &self.snapshot,
         ) {
             Ok(Some(receipt)) if receipt.success => {
-                self.plan.run_state = InlineAgentRunState::Applied {
-                    action: receipt.action,
-                };
+                if let Some(output) = latest_output {
+                    self.plan.run_state = InlineAgentRunState::Applied {
+                        action: receipt.action,
+                        output,
+                    };
+                } else {
+                    self.plan.run_state = previous_run_state;
+                }
             }
             Ok(Some(receipt)) => {
                 self.plan.run_state = InlineAgentRunState::Error {
@@ -370,6 +379,7 @@ impl InlineAgentOverlayWindow {
                         .message
                         .unwrap_or_else(|| "Inline agent action failed".to_string()),
                     retryable: true,
+                    latest_output,
                 };
             }
             Ok(None) => {
@@ -379,6 +389,7 @@ impl InlineAgentOverlayWindow {
                 self.plan.run_state = InlineAgentRunState::Error {
                     message: error.to_string(),
                     retryable: true,
+                    latest_output,
                 };
             }
         }
@@ -466,6 +477,10 @@ impl InlineAgentOverlayWindow {
                 self.plan.run_state = InlineAgentRunState::Error {
                     message: error,
                     retryable: true,
+                    latest_output: self
+                        .ai_session
+                        .latest_complete_output()
+                        .map(ToOwned::to_owned),
                 };
                 self.instruction_text.clear();
                 self.apply_current_plan_bounds(window, cx);
@@ -479,6 +494,10 @@ impl InlineAgentOverlayWindow {
             self.plan.run_state = InlineAgentRunState::Error {
                 message: "Inline agent executor was not installed".to_string(),
                 retryable: true,
+                latest_output: self
+                    .ai_session
+                    .latest_complete_output()
+                    .map(ToOwned::to_owned),
             };
             self.instruction_text.clear();
             self.apply_current_plan_bounds(window, cx);
@@ -497,6 +516,10 @@ impl InlineAgentOverlayWindow {
                 self.plan.run_state = InlineAgentRunState::Error {
                     message: error.to_string(),
                     retryable: true,
+                    latest_output: self
+                        .ai_session
+                        .latest_complete_output()
+                        .map(ToOwned::to_owned),
                 };
                 self.active_executor = None;
                 self.instruction_text.clear();
@@ -580,6 +603,10 @@ impl InlineAgentOverlayWindow {
                     .clone()
                     .unwrap_or_else(|| "Inline agent turn failed".to_string()),
                 retryable: true,
+                latest_output: self
+                    .ai_session
+                    .latest_complete_output()
+                    .map(ToOwned::to_owned),
             },
         };
     }
@@ -822,13 +849,19 @@ fn compact_height_for_run_state(
         InlineAgentRunState::Thinking { .. } | InlineAgentRunState::Streaming { .. } => {
             defaults.compact_thinking_height
         }
-        InlineAgentRunState::Completed { .. } | InlineAgentRunState::Applied { .. } => {
-            defaults.compact_completed_height
+        InlineAgentRunState::Completed { .. }
+        | InlineAgentRunState::Applied { .. }
+        | InlineAgentRunState::Applying {
+            latest_output: Some(_),
+            ..
         }
-        InlineAgentRunState::Error { .. } => defaults.compact_completed_height,
-        InlineAgentRunState::Idle | InlineAgentRunState::Applying { .. } => {
-            defaults.compact_idle_height
-        }
+        | InlineAgentRunState::Error {
+            latest_output: Some(_),
+            ..
+        } => defaults.compact_completed_height,
+        InlineAgentRunState::Error { .. }
+        | InlineAgentRunState::Idle
+        | InlineAgentRunState::Applying { .. } => defaults.compact_idle_height,
     }
 }
 

@@ -67,6 +67,54 @@ fn compact_view_model_shows_thinking_state_without_output_preview() {
 }
 
 #[test]
+fn compact_view_model_preserves_output_preview_after_apply_or_error() {
+    let snapshot = snapshot_for_tests();
+    let applied = compact_view_model(
+        &snapshot,
+        &InlineAgentRunState::Applied {
+            action: InlineAgentOutputAction::Replace,
+            output: "done".to_string(),
+        },
+    );
+
+    assert_eq!(applied.output_preview.as_deref(), Some("done"));
+    assert!(applied
+        .actions
+        .iter()
+        .any(|action| action.action == InlineAgentOutputAction::Copy && action.enabled));
+
+    let error = compact_view_model(
+        &snapshot,
+        &InlineAgentRunState::Error {
+            message: "target disappeared".to_string(),
+            retryable: true,
+            latest_output: Some("done".to_string()),
+        },
+    );
+
+    assert_eq!(error.output_preview.as_deref(), Some("done"));
+    assert!(error
+        .actions
+        .iter()
+        .any(|action| action.action == InlineAgentOutputAction::Copy && action.enabled));
+}
+
+#[test]
+fn compact_view_model_keeps_applying_preview_but_disables_actions() {
+    let snapshot = snapshot_for_tests();
+    let view = compact_view_model(
+        &snapshot,
+        &InlineAgentRunState::Applying {
+            action: InlineAgentOutputAction::Copy,
+            latest_output: Some("done".to_string()),
+        },
+    );
+
+    assert_eq!(view.output_preview.as_deref(), Some("done"));
+    assert!(view.actions.iter().all(|action| !action.enabled));
+}
+
+#[test]
 fn expanded_view_model_projects_turns_and_latest_output() {
     let snapshot = snapshot_for_tests();
     let turns = vec![InlineAgentTurn {

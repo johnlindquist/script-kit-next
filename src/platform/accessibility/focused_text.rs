@@ -135,6 +135,7 @@ fn capture_focused_text_field_platform(
         element.as_ptr(),
         captured_at_ms,
         text.clone(),
+        app.process_id,
     )
     .map_err(|err| FocusedTextError::Platform(err.to_string()))?;
 

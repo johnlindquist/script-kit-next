@@ -72,8 +72,64 @@ fn output_actions_require_latest_complete_output_except_chat() {
     assert!(!is_action_enabled(
         InlineAgentOutputAction::Chat,
         &InlineAgentRunState::Applying {
-            action: InlineAgentOutputAction::Replace
+            action: InlineAgentOutputAction::Replace,
+            latest_output: Some("done".to_string())
         }
+    ));
+}
+
+#[test]
+fn applied_and_error_states_preserve_latest_output_for_actions() {
+    let snapshot = inline_snapshot_for_tests("hello");
+    let applied = InlineAgentRunState::Applied {
+        action: InlineAgentOutputAction::Replace,
+        output: "rewritten text".to_string(),
+    };
+
+    assert_eq!(applied.latest_complete_output(), Some("rewritten text"));
+    assert!(is_action_enabled_for_snapshot(
+        InlineAgentOutputAction::Replace,
+        &applied,
+        &snapshot
+    ));
+    assert!(is_action_enabled_for_snapshot(
+        InlineAgentOutputAction::Copy,
+        &applied,
+        &snapshot
+    ));
+
+    let error = InlineAgentRunState::Error {
+        message: "target disappeared".to_string(),
+        retryable: true,
+        latest_output: Some("rewritten text".to_string()),
+    };
+
+    assert_eq!(error.latest_complete_output(), Some("rewritten text"));
+    assert!(is_action_enabled_for_snapshot(
+        InlineAgentOutputAction::Copy,
+        &error,
+        &snapshot
+    ));
+}
+
+#[test]
+fn applying_preserves_preview_output_but_disables_actions() {
+    let snapshot = inline_snapshot_for_tests("hello");
+    let applying = InlineAgentRunState::Applying {
+        action: InlineAgentOutputAction::Append,
+        latest_output: Some("rewritten text".to_string()),
+    };
+
+    assert_eq!(applying.latest_complete_output(), Some("rewritten text"));
+    assert!(!is_action_enabled_for_snapshot(
+        InlineAgentOutputAction::Copy,
+        &applying,
+        &snapshot
+    ));
+    assert!(!is_action_enabled_for_snapshot(
+        InlineAgentOutputAction::Chat,
+        &applying,
+        &snapshot
     ));
 }
 

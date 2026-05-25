@@ -184,6 +184,7 @@ struct StoredFocusedTextSession {
     element: usize,
     captured_at_ms: u128,
     captured_text: String,
+    app_process_id: Option<i32>,
 }
 
 #[cfg(target_os = "macos")]
@@ -215,6 +216,7 @@ pub(crate) fn register_focused_text_session(
     element: AXUIElementRef,
     captured_at_ms: u128,
     captured_text: String,
+    app_process_id: Option<i32>,
 ) -> Result<()> {
     if element.is_null() {
         bail!("cannot register null focused text element");
@@ -233,6 +235,7 @@ pub(crate) fn register_focused_text_session(
             element: retained as usize,
             captured_at_ms,
             captured_text,
+            app_process_id,
         },
     );
     prune_stale_sessions_locked(&mut sessions, captured_at_ms);
@@ -246,18 +249,18 @@ pub(crate) fn replace_registered_focused_text(
     options: super::mutation::TextMutationOptions,
     now_ms: u128,
 ) -> Result<super::mutation::TextMutationResult, super::FocusedTextError> {
-    let element = registered_element(session_id, options, now_ms)?;
-    if set_whole_text_direct(element, text).is_err() {
-        paste_replace_fallback(element, text)?;
+    let target = registered_target(session_id, options, now_ms)?;
+    if set_whole_text_direct(target.element, text).is_err() {
+        paste_replace_fallback(&target, text)?;
     }
     let _ = set_selected_text_range(
-        element,
+        target.element,
         super::TextRangeUtf16 {
             location: text.encode_utf16().count(),
             length: 0,
         },
     );
-    verify_whole_text(element, text)?;
+    verify_whole_text(target.element, text)?;
     Ok(super::mutation::TextMutationResult {
         action: super::mutation::TextMutationAction::Replace,
         changed_text: true,
@@ -272,21 +275,21 @@ pub(crate) fn append_registered_focused_text(
     options: super::mutation::TextMutationOptions,
     now_ms: u128,
 ) -> Result<super::mutation::TextMutationResult, super::FocusedTextError> {
-    let element = registered_element(session_id, options, now_ms)?;
-    let current =
-        whole_text(element).map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
+    let target = registered_target(session_id, options, now_ms)?;
+    let current = whole_text(target.element)
+        .map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
     let appended = format!("{current}{text}");
-    if set_whole_text_direct(element, &appended).is_err() {
-        paste_append_fallback(element, &current, text, &appended)?;
+    if set_whole_text_direct(target.element, &appended).is_err() {
+        paste_append_fallback(&target, &current, text, &appended)?;
     }
     let _ = set_selected_text_range(
-        element,
+        target.element,
         super::TextRangeUtf16 {
             location: appended.encode_utf16().count(),
             length: 0,
         },
     );
-    verify_whole_text(element, &appended)?;
+    verify_whole_text(target.element, &appended)?;
     Ok(super::mutation::TextMutationResult {
         action: super::mutation::TextMutationAction::Append,
         changed_text: true,
@@ -295,17 +298,28 @@ pub(crate) fn append_registered_focused_text(
 }
 
 #[cfg(target_os = "macos")]
-fn registered_element(
+#[derive(Debug, Clone, Copy)]
+struct RegisteredFocusedTextTarget {
+    element: AXUIElementRef,
+    app_process_id: Option<i32>,
+}
+
+#[cfg(target_os = "macos")]
+fn registered_target(
     session_id: &super::FocusedTextSessionId,
     options: super::mutation::TextMutationOptions,
     now_ms: u128,
-) -> Result<AXUIElementRef, super::FocusedTextError> {
+) -> Result<RegisteredFocusedTextTarget, super::FocusedTextError> {
     let mut sessions = focused_text_sessions().lock().map_err(|_| {
         super::FocusedTextError::Platform("focused text session registry poisoned".to_string())
     })?;
     prune_stale_sessions_locked(&mut sessions, now_ms);
     let Some(session) = sessions.get(&session_id.to_string()) else {
         return Err(super::FocusedTextError::StaleSession);
+    };
+    let target = RegisteredFocusedTextTarget {
+        element: session.element(),
+        app_process_id: session.app_process_id,
     };
     let mutation_session = super::mutation::FocusedTextMutationSession {
         session_id: session_id.clone(),
@@ -314,7 +328,7 @@ fn registered_element(
         ttl_ms: FOCUSED_TEXT_SESSION_TTL_MS,
     };
     super::mutation::validate_mutation_session(&mutation_session, options, now_ms)?;
-    Ok(session.element())
+    Ok(target)
 }
 
 #[cfg(target_os = "macos")]
@@ -466,13 +480,14 @@ fn verify_whole_text(
 
 #[cfg(target_os = "macos")]
 fn paste_replace_fallback(
-    element: AXUIElementRef,
+    target: &RegisteredFocusedTextTarget,
     text: &str,
 ) -> Result<(), super::FocusedTextError> {
-    let current =
-        whole_text(element).map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
+    refocus_registered_target_for_paste(target)?;
+    let current = whole_text(target.element)
+        .map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
     set_selected_text_range(
-        element,
+        target.element,
         super::TextRangeUtf16 {
             location: 0,
             length: current.encode_utf16().count(),
@@ -484,15 +499,16 @@ fn paste_replace_fallback(
 
 #[cfg(target_os = "macos")]
 fn paste_append_fallback(
-    element: AXUIElementRef,
+    target: &RegisteredFocusedTextTarget,
     current: &str,
     output: &str,
     appended: &str,
 ) -> Result<(), super::FocusedTextError> {
+    refocus_registered_target_for_paste(target)?;
     match super::mutation::plan_append_mutation(Some(current), output, false, true) {
         super::mutation::AppendMutationPlan::PasteOutputAtEnd { output, .. } => {
             let caret_result = set_selected_text_range(
-                element,
+                target.element,
                 super::TextRangeUtf16 {
                     location: current.encode_utf16().count(),
                     length: 0,
@@ -508,7 +524,7 @@ fn paste_append_fallback(
     }
 
     set_selected_text_range(
-        element,
+        target.element,
         super::TextRangeUtf16 {
             location: 0,
             length: current.encode_utf16().count(),
@@ -516,6 +532,93 @@ fn paste_append_fallback(
     )?;
     super::clipboard::paste_plain_text_preserving_clipboard(appended)
         .map_err(|err| super::FocusedTextError::Platform(err.to_string()))
+}
+
+#[cfg(target_os = "macos")]
+fn refocus_registered_target_for_paste(
+    target: &RegisteredFocusedTextTarget,
+) -> Result<(), super::FocusedTextError> {
+    let Some(pid) = target.app_process_id else {
+        return Err(super::FocusedTextError::Platform(
+            "inline-agent paste fallback refused without captured target app pid".to_string(),
+        ));
+    };
+
+    activate_application_for_pid(pid)?;
+    set_focused_ui_element_for_app(pid, target.element)?;
+    std::thread::sleep(std::time::Duration::from_millis(40));
+    verify_registered_target_is_focused_for_paste(pid, target.element)
+}
+
+#[cfg(target_os = "macos")]
+fn activate_application_for_pid(pid: i32) -> Result<(), super::FocusedTextError> {
+    use objc::runtime::{Class, Object};
+    use objc::{msg_send, sel, sel_impl};
+
+    const NS_APPLICATION_ACTIVATE_IGNORING_OTHER_APPS: u64 = 1 << 1;
+
+    unsafe {
+        let Some(app_class) = Class::get("NSRunningApplication") else {
+            return Err(super::FocusedTextError::Platform(
+                "NSRunningApplication class was unavailable".to_string(),
+            ));
+        };
+        let app: *mut Object = msg_send![app_class, runningApplicationWithProcessIdentifier: pid];
+        if app.is_null() {
+            return Err(super::FocusedTextError::StaleSession);
+        }
+        let activated: bool =
+            msg_send![app, activateWithOptions: NS_APPLICATION_ACTIVATE_IGNORING_OTHER_APPS];
+        if !activated {
+            return Err(super::FocusedTextError::Platform(
+                "failed to activate captured target app before paste fallback".to_string(),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn set_focused_ui_element_for_app(
+    pid: i32,
+    element: AXUIElementRef,
+) -> Result<(), super::FocusedTextError> {
+    let app = unsafe { AXUIElementCreateApplication(pid) };
+    let app = OwnedAxElement::from_create_rule(app)
+        .map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
+    let attr = create_cf_string(AX_FOCUSED_UI_ELEMENT)
+        .map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
+    let result = unsafe { AXUIElementSetAttributeValue(app.as_ptr(), attr, element as CFTypeRef) };
+    cf_release(attr);
+    if result != K_AX_ERROR_SUCCESS {
+        return Err(super::FocusedTextError::Platform(
+            "failed to focus captured AX element before paste fallback".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn verify_registered_target_is_focused_for_paste(
+    pid: i32,
+    element: AXUIElementRef,
+) -> Result<(), super::FocusedTextError> {
+    let focused = focused_ui_element_for_app(Some(pid))
+        .map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
+    let target_text =
+        whole_text(element).map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
+    let focused_text = whole_text(focused.as_ptr())
+        .map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
+
+    if target_text == focused_text {
+        Ok(())
+    } else {
+        Err(super::FocusedTextError::Platform(
+            "inline-agent paste fallback refused because captured target is not focused"
+                .to_string(),
+        ))
+    }
 }
 
 #[cfg(target_os = "macos")]

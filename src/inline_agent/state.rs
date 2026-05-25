@@ -23,12 +23,15 @@ pub enum InlineAgentRunState {
     Error {
         message: String,
         retryable: bool,
+        latest_output: Option<String>,
     },
     Applying {
         action: InlineAgentOutputAction,
+        latest_output: Option<String>,
     },
     Applied {
         action: InlineAgentOutputAction,
+        output: String,
     },
 }
 
@@ -36,8 +39,21 @@ impl InlineAgentRunState {
     pub fn latest_complete_output(&self) -> Option<&str> {
         match self {
             Self::Completed { output } => Some(output),
+            Self::Applied { output, .. } => Some(output),
+            Self::Applying {
+                latest_output: Some(output),
+                ..
+            } => Some(output),
+            Self::Error {
+                latest_output: Some(output),
+                ..
+            } => Some(output),
             _ => None,
         }
+    }
+
+    pub fn latest_output_owned(&self) -> Option<String> {
+        self.latest_complete_output().map(ToOwned::to_owned)
     }
 }
 

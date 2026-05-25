@@ -39,7 +39,9 @@ fn capture_registers_short_lived_ax_session_for_later_mutation() {
     assert!(AX.contains("FOCUSED_TEXT_SESSION_TTL_MS"));
     assert!(AX.contains("CFRetain"));
     assert!(AX.contains("prune_stale_sessions_locked"));
+    assert!(AX.contains("app_process_id"));
     assert!(FOCUSED_TEXT.contains("register_focused_text_session("));
+    assert!(FOCUSED_TEXT.contains("app.process_id"));
     assert!(
         !FOCUSED_TEXT.contains("AXUIElementRef"),
         "focused_text DTO layer must not expose raw AX handles"
@@ -61,8 +63,12 @@ fn replace_and_append_use_registered_ax_value_mutation_with_verification() {
 fn replace_and_append_have_clipboard_safe_fallback_after_direct_ax_fails() {
     assert!(AX.contains("paste_replace_fallback"));
     assert!(AX.contains("paste_append_fallback"));
-    assert!(AX.contains("set_whole_text_direct(element, text).is_err()"));
-    assert!(AX.contains("set_whole_text_direct(element, &appended).is_err()"));
+    assert!(AX.contains("refocus_registered_target_for_paste(target)?"));
+    assert!(AX.contains("activate_application_for_pid"));
+    assert!(AX.contains("set_focused_ui_element_for_app"));
+    assert!(AX.contains("verify_registered_target_is_focused_for_paste"));
+    assert!(AX.contains("set_whole_text_direct(target.element, text).is_err()"));
+    assert!(AX.contains("set_whole_text_direct(target.element, &appended).is_err()"));
     assert!(AX.contains("paste_plain_text_preserving_clipboard(text)"));
     assert!(AX.contains("paste_plain_text_preserving_clipboard(&output)"));
     assert!(AX.contains("paste_plain_text_preserving_clipboard(appended)"));
@@ -75,8 +81,8 @@ fn replace_and_append_have_clipboard_safe_fallback_after_direct_ax_fails() {
 #[test]
 fn mutation_paths_reject_missing_or_stale_sessions_before_writing() {
     let registry_lookup = AX
-        .find("fn registered_element")
-        .expect("registered_element helper must exist");
+        .find("fn registered_target")
+        .expect("registered_target helper must exist");
     let write_call = AX
         .find("fn set_whole_text_direct")
         .expect("set_whole_text_direct helper must exist");

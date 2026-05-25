@@ -81,10 +81,9 @@ fn support_chip(snapshot: &InlineAgentSnapshot) -> InlineAgentSupportChip {
 
 fn latest_output_preview(state: &InlineAgentRunState) -> Option<String> {
     match state {
-        InlineAgentRunState::Completed { output } => Some(output.clone()),
         InlineAgentRunState::Streaming { partial_output, .. } if !partial_output.is_empty() => {
             Some(partial_output.clone())
         }
-        _ => None,
+        _ => state.latest_complete_output().map(ToOwned::to_owned),
     }
 }
