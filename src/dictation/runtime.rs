@@ -71,7 +71,7 @@ pub enum BeginStopCapture {
     Started {
         request_id: u64,
         target: DictationTarget,
-        job: DictationStopJob,
+        job: Box<DictationStopJob>,
     },
     AlreadyStopping {
         request_id: u64,
@@ -228,7 +228,7 @@ pub fn begin_stop_capture(reason: DictationStopReason) -> Result<BeginStopCaptur
     Ok(BeginStopCapture::Started {
         request_id,
         target,
-        job: DictationStopJob { session },
+        job: Box::new(DictationStopJob { session }),
     })
 }
 

@@ -302,6 +302,13 @@ pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str,
 ///
 /// The title is intentionally stable so appearance refresh can find the overlay
 /// without treating it as a main-window footer surface.
+///
+/// # Safety
+///
+/// - `window` must be a valid, non-null NSWindow pointer obtained from GPUI
+///   window creation. The pointer is checked for null at entry.
+/// - Must be called on the main thread because AppKit property setters are not
+///   thread-safe.
 #[cfg(target_os = "macos")]
 pub unsafe fn configure_dictation_overlay_window(window: id, is_dark: bool) {
     if window.is_null() {

@@ -109,12 +109,7 @@ pub fn replace_focused_text(
 ) -> Result<TextMutationResult, FocusedTextError> {
     #[cfg(target_os = "macos")]
     {
-        return super::ax::replace_registered_focused_text(
-            &session_id,
-            text,
-            options,
-            current_time_ms(),
-        );
+        super::ax::replace_registered_focused_text(&session_id, text, options, current_time_ms())
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -128,12 +123,7 @@ pub fn append_focused_text(
 ) -> Result<TextMutationResult, FocusedTextError> {
     #[cfg(target_os = "macos")]
     {
-        return super::ax::append_registered_focused_text(
-            &session_id,
-            text,
-            options,
-            current_time_ms(),
-        );
+        super::ax::append_registered_focused_text(&session_id, text, options, current_time_ms())
     }
 
     #[cfg(not(target_os = "macos"))]

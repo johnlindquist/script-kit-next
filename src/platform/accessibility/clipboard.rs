@@ -295,7 +295,7 @@ pub fn general_pasteboard_change_count() -> Result<i64> {
                 bail!("NSPasteboard.generalPasteboard returned nil");
             }
 
-            return Ok(msg_send![pasteboard, changeCount]);
+            Ok(msg_send![pasteboard, changeCount])
         }
     }
 

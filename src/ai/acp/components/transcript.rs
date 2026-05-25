@@ -485,9 +485,9 @@ impl Render for AcpTranscript {
                         && matches!(msg.role, AcpThreadMessageRole::User)
                         && !matches!(messages_snapshot[ix - 1].role, AcpThreadMessageRole::User);
 
-                    let text_view_state = message_views_snapshot
-                        .get(&msg.id)
-                        .expect("TextViewState must be synced");
+                    let Some(text_view_state) = message_views_snapshot.get(&msg.id) else {
+                        return div().into_any();
+                    };
 
                     div()
                         .w_full()
