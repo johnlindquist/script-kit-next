@@ -1040,6 +1040,20 @@ impl ScriptListApp {
         self.dispatch_main_window_footer_action(action, window, cx, "native_footer");
     }
 
+    pub(crate) fn sync_main_window_resize_lock(
+        &self,
+        window: &mut gpui::Window,
+        cx: &Context<Self>,
+    ) {
+        let should_lock = match &self.current_view {
+            AppView::AcpChatView { entity } => {
+                entity.read_with(cx, |view, _cx| view.locks_main_window_resize())
+            }
+            _ => false,
+        };
+        crate::platform::set_window_resizable(window, !should_lock);
+    }
+
     pub(crate) fn sync_main_footer_popup(&self, window: &mut gpui::Window, cx: &mut Context<Self>) {
         self.ensure_main_footer_action_listener(window, cx);
 

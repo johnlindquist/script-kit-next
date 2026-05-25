@@ -282,6 +282,8 @@ impl Render for ScriptListApp {
         // Focus is applied exactly once when pending_focus is set, then cleared.
         self.apply_pending_focus(window, cx);
 
+        self.sync_main_window_resize_lock(window, cx);
+
         // Sync filter input if needed (views that use shared input)
         if matches!(
             self.current_view,

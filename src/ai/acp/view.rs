@@ -719,6 +719,10 @@ impl AcpChatView {
         self.focused_text.is_some() && self.ui_variant == AcpChatUiVariant::FocusedTextMini
     }
 
+    pub(crate) fn locks_main_window_resize(&self) -> bool {
+        matches!(self.ui_variant, AcpChatUiVariant::FocusedTextMini)
+    }
+
     pub(crate) fn mark_focused_text_originated_from_quick_prompt(&mut self) {
         if let Some(state) = self.focused_text.as_mut() {
             state.originated_from_quick_prompt = true;
