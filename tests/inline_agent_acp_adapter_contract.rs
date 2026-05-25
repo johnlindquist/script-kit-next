@@ -12,6 +12,7 @@ fn inline_agent_no_longer_declares_or_ships_acp_adapter() {
 
 #[test]
 fn inline_agent_window_uses_agent_chat_pi_executor_without_acp_fallback() {
+    assert!(INLINE_AGENT_MOD.contains("Legacy AI execution boundary"));
     assert!(INLINE_AGENT_WINDOW.contains("spawn_default_agent_chat_inline_agent_executor"));
     for forbidden in [
         "spawn_default_acp_inline_agent_executor",
@@ -25,7 +26,8 @@ fn inline_agent_window_uses_agent_chat_pi_executor_without_acp_fallback() {
 }
 
 #[test]
-fn agent_chat_adapter_is_the_only_inline_agent_runtime_adapter_contract() {
+fn legacy_agent_chat_adapter_remains_pi_only_without_acp_fallback() {
+    assert!(AGENT_CHAT_ADAPTER.contains("Legacy compatibility adapter"));
     assert!(AGENT_CHAT_ADAPTER.contains("AgentChatInlineAgentExecutor"));
     assert!(AGENT_CHAT_ADAPTER.contains("resolve_focused_text_pi_launch"));
     assert!(AGENT_CHAT_ADAPTER.contains("warm_session_manager"));

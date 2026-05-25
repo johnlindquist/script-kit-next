@@ -4,8 +4,6 @@ const CONFIG_LOADER: &str = include_str!("../../src/config/loader.rs");
 const CONFIG_SCHEMA: &str = include_str!("../../scripts/config-schema.ts");
 const APP_RUN_SETUP: &str = include_str!("../../src/main_entry/app_run_setup.rs");
 const RUNTIME_TRAY_HOTKEYS: &str = include_str!("../../src/main_entry/runtime_tray_hotkeys.rs");
-const INLINE_AGENT_WINDOW: &str = include_str!("../../src/inline_agent/window.rs");
-const INLINE_AGENT_TYPES: &str = include_str!("../../src/inline_agent/types.rs");
 const AUTOMATION_SURFACE_COLLECTOR: &str =
     include_str!("../../src/windows/automation_surface_collector.rs");
 const PROMPT_HANDLER: &str = include_str!("../../src/prompt_handler/mod.rs");
@@ -49,82 +47,40 @@ fn app_hotkey_listeners_launch_inline_agent_from_channel() {
         assert!(source.contains("capture_focused_text_field"));
         assert!(source.contains("open_focused_text_agent_chat_from_snapshot"));
         assert!(!source.contains("crate::inline_agent::launch_inline_agent_from_focused_text"));
+        assert!(!source.contains("sync_inline_agent_overlay_window"));
     }
 }
 
 #[test]
-fn launch_path_captures_focused_text_before_opening_overlay() {
-    let launch_body = INLINE_AGENT_WINDOW
-        .split("pub fn launch_inline_agent_from_focused_text")
-        .nth(1)
-        .expect("launch function should exist");
-    let capture_index = launch_body
-        .find("capture_focused_text_field")
-        .expect("launch path should call focused text capture");
-    let sync_index = launch_body
-        .find("sync_inline_agent_overlay_window(cx, focused_snapshot, plan, None)")
-        .expect("launch path should open overlay after planning");
+fn production_hotkey_path_captures_before_opening_focused_text_agent_chat() {
+    for source in [APP_RUN_SETUP, RUNTIME_TRAY_HOTKEYS] {
+        let channel = source
+            .find("inline_ai_hotkey_channel().1.recv().await")
+            .expect("inline AI listener must exist");
+        let capture_index = source[channel..]
+            .find("capture_focused_text_field")
+            .expect("inline AI listener should capture focused text")
+            + channel;
+        let open_index = source[channel..]
+            .find("open_focused_text_agent_chat_from_snapshot")
+            .expect("inline AI listener should open focused-text Agent Chat")
+            + channel;
 
-    assert!(
-        capture_index < sync_index,
-        "inline agent launch must capture focused text before opening the overlay"
-    );
-    assert!(INLINE_AGENT_TYPES.contains("impl From<FocusedTextSnapshot> for InlineAgentSnapshot"));
-}
-
-#[test]
-fn launch_path_has_capture_before_overlay_runtime_trace_points() {
-    for event in [
-        "inline_agent_capture_start",
-        "inline_agent_capture_complete_before_overlay",
-        "inline_agent_overlay_sync_start",
-    ] {
         assert!(
-            INLINE_AGENT_WINDOW.contains(event),
-            "missing launch trace event {event}"
+            capture_index < open_index,
+            "focused text capture must happen before Agent Chat opens"
         );
+        assert!(source.contains("focused_text_capture_complete_before_agent_chat"));
+        assert!(source.contains("\"inline_ai_hotkey\""));
     }
-
-    let capture_complete = INLINE_AGENT_WINDOW
-        .find("inline_agent_capture_complete_before_overlay")
-        .expect("capture completion trace should exist");
-    let overlay_sync = INLINE_AGENT_WINDOW
-        .find("inline_agent_overlay_sync_start")
-        .expect("overlay sync trace should exist");
-    assert!(
-        capture_complete < overlay_sync,
-        "capture completion trace must precede overlay sync trace"
-    );
-}
-
-#[test]
-fn launch_path_resets_existing_overlay_before_recapturing() {
-    assert!(INLINE_AGENT_WINDOW.contains("is_inline_agent_overlay_window_open"));
-    assert!(INLINE_AGENT_WINDOW.contains("inline_agent_launch_reset_existing_overlay"));
-
-    let launch_body = INLINE_AGENT_WINDOW
-        .split("pub fn launch_inline_agent_from_focused_text")
-        .nth(1)
-        .expect("launch function should exist");
-    let guard_index = launch_body
-        .find("if is_inline_agent_overlay_window_open()")
-        .expect("launch path should check for an existing inline overlay");
-    let close_index = launch_body
-        .find("close_inline_agent_overlay_window(cx)")
-        .expect("launch path should close the existing overlay before recapture");
-    let capture_index = launch_body
-        .find("capture_focused_text_field")
-        .expect("launch path should call focused text capture");
-    assert!(
-        guard_index < close_index && close_index < capture_index,
-        "existing overlay reset must run before focused text capture"
-    );
 }
 
 #[test]
 fn inline_agent_launch_does_not_use_selected_text_fallback() {
-    assert!(!INLINE_AGENT_WINDOW.contains("get_selected_text("));
     assert!(!FOCUSED_TEXT.contains("get_selected_text("));
+    for source in [APP_RUN_SETUP, RUNTIME_TRAY_HOTKEYS] {
+        assert!(!source.contains("get_selected_text("));
+    }
 }
 
 #[test]
@@ -218,35 +174,7 @@ fn get_state_routes_inline_agent_target_to_redacted_state_envelope() {
     assert!(PROMPT_HANDLER.contains("\"inlineAgent\".to_string()"));
     assert!(PROMPT_HANDLER.contains("Some(state)"));
 
-    for redacted_field in [
-        "\"phase\"",
-        "\"mode\"",
-        "\"output\"",
-        "\"latestCompleteChars\"",
-        "\"streamingPartialChars\"",
-        "\"actions\"",
-        "\"replaceEnabled\"",
-        "\"stopEnabled\"",
-        "\"retryEnabled\"",
-    ] {
-        assert!(
-            INLINE_AGENT_WINDOW.contains(redacted_field),
-            "inline-agent getState envelope should expose redacted field {redacted_field}"
-        );
-    }
-
-    for forbidden in [
-        "\"capturedText\"",
-        "\"instruction\"",
-        "\"prompt\"",
-        "\"assistantOutput\"",
-        "\"clipboard\"",
-    ] {
-        assert!(
-            !INLINE_AGENT_WINDOW.contains(forbidden),
-            "inline-agent getState envelope must not expose sensitive field/pattern {forbidden}"
-        );
-    }
+    assert!(PROMPT_HANDLER.contains("\"inlineAgent\".to_string()"));
 }
 
 #[test]
@@ -271,35 +199,4 @@ fn stdin_exposes_inline_agent_mock_fixture_without_changing_pi_default() {
         assert!(!dispatch.contains("open_inline_agent_mock_fixture"));
         assert!(!dispatch.contains("open_inline_agent_pi_fixture"));
     }
-
-    assert!(INLINE_AGENT_WINDOW.contains("InlineAgentExecutorMode::AgentChatPi"));
-    assert!(INLINE_AGENT_WINDOW.contains("InlineAgentExecutorMode::MockFixture"));
-    assert!(INLINE_AGENT_WINDOW.contains("spawn_default_agent_chat_inline_agent_executor()"));
-    assert!(INLINE_AGENT_WINDOW.contains("MockInlineAgentExecutor"));
-    assert!(INLINE_AGENT_WINDOW.contains("focused_text_snapshot_for_tests"));
-    assert!(INLINE_AGENT_WINDOW.contains("SCRIPT_KIT_INLINE_AGENT_REAL_PI_FIXTURE"));
-    assert!(INLINE_AGENT_WINDOW.contains("open_inline_agent_fixture_with_executor_mode"));
-
-    let default_submit = INLINE_AGENT_WINDOW
-        .split("fn spawn_executor_for_turn")
-        .nth(1)
-        .expect("inline agent should centralize executor selection");
-    assert!(
-        default_submit.contains("InlineAgentExecutorMode::AgentChatPi")
-            && default_submit.contains("spawn_default_agent_chat_inline_agent_executor()"),
-        "default inline-agent submit path must remain warm Pi-backed"
-    );
-
-    let pi_fixture = INLINE_AGENT_WINDOW
-        .split("pub fn open_inline_agent_pi_fixture")
-        .nth(1)
-        .and_then(|source| {
-            source
-                .split("fn open_inline_agent_fixture_with_executor_mode")
-                .next()
-        })
-        .expect("real Pi fixture should be explicit and gated");
-    assert!(pi_fixture.contains("INLINE_AGENT_REAL_PI_FIXTURE_ENV"));
-    assert!(pi_fixture.contains("InlineAgentExecutorMode::AgentChatPi"));
-    assert!(!pi_fixture.contains("MockInlineAgentExecutor"));
 }

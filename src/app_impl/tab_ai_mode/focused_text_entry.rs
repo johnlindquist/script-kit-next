@@ -1,6 +1,31 @@
 use super::*;
 
 impl ScriptListApp {
+    pub(crate) fn dismiss_focused_text_agent_chat_before_recapture(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let AppView::AcpChatView { entity } = self.current_view.clone() else {
+            return false;
+        };
+
+        if !entity.read(cx).has_focused_text_context() {
+            return false;
+        }
+
+        tracing::info!(
+            target: "script_kit::focused_text",
+            event = "focused_text_recapture_dismiss_previous_session",
+        );
+
+        self.close_tab_ai_harness_terminal_impl(
+            None,
+            super::TabAiHarnessCloseDisposition::CloseMainWindowStateFirst,
+            cx,
+        );
+        true
+    }
+
     pub(crate) fn open_focused_text_agent_chat_fixture(
         &mut self,
         text: Option<String>,
@@ -49,8 +74,15 @@ impl ScriptListApp {
             }
         } else if requested_submit {
             entity.update(cx, |chat, cx| {
-                if let Some(thread) = chat.thread() {
-                    let _ = thread.update(cx, |thread, cx| thread.submit_input(cx));
+                if let Err(error) = chat.submit_focused_text_turn(
+                    crate::ai::focused_text::FocusedTextEditSemantics::Replace,
+                    cx,
+                ) {
+                    tracing::warn!(
+                        target: "script_kit::focused_text",
+                        event = "focused_text_fixture_submit_failed",
+                        error = %error,
+                    );
                 }
             });
         }
@@ -78,6 +110,12 @@ impl ScriptListApp {
             source_view = ?source_view,
         );
 
+        self.set_main_window_mode_state_only(
+            MainWindowMode::Mini,
+            cx,
+            "focused_text_agent_chat_open",
+        );
+
         self.begin_tab_ai_harness_entry_from_source_view(
             source_view,
             None,
@@ -103,8 +141,7 @@ impl ScriptListApp {
                 crate::ai::acp::ui_variant::AcpChatUiVariant::FocusedTextMini,
                 cx,
             );
-            if let Err(error) =
-                chat.stage_focused_text_from_host(snapshot, instruction, source, cx)
+            if let Err(error) = chat.stage_focused_text_from_host(snapshot, instruction, source, cx)
             {
                 tracing::warn!(
                     target: "script_kit::focused_text",

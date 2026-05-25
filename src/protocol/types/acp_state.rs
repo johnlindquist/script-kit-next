@@ -155,12 +155,32 @@ pub struct AcpFocusedTextState {
     pub session_id: String,
     pub app_name: String,
     pub char_count: usize,
+    pub context_present: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_fingerprint: Option<String>,
     pub can_replace: bool,
     pub can_append: bool,
     pub can_copy: bool,
     pub has_output: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_apply_action: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_action_receipt: Option<AcpFocusedTextActionReceipt>,
+}
+
+/// Redacted receipt for focused-text mini Agent Chat actions.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpFocusedTextActionReceipt {
+    pub action: String,
+    pub success: bool,
+    pub changed_text: bool,
+    pub copied_to_clipboard: bool,
+    pub before_ui_variant: String,
+    pub after_ui_variant: String,
+    pub output_length: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<String>,
 }
 
 /// State of the inline mention/slash picker overlay.

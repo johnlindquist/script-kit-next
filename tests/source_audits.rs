@@ -245,6 +245,12 @@ mod focused_text_mutation_wired;
 #[path = "source_audits/focused_text_agent_chat_entry.rs"]
 mod focused_text_agent_chat_entry;
 
+#[path = "source_audits/focused_text_agent_chat_actions.rs"]
+mod focused_text_agent_chat_actions;
+
+#[path = "source_audits/focused_text_agent_chat_submission.rs"]
+mod focused_text_agent_chat_submission;
+
 #[path = "source_audits/inline_ai_double_command_trigger_wired.rs"]
 mod inline_ai_double_command_trigger_wired;
 

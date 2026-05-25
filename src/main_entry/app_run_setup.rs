@@ -1184,6 +1184,9 @@ app.run(move |cx: &mut App| {
                     "Inline AI hotkey triggered - capturing focused text field",
                 );
                 let _ = cx.update(|cx: &mut gpui::App| {
+                    app_entity_for_inline_ai.update(cx, |view, cx| {
+                        view.dismiss_focused_text_agent_chat_before_recapture(cx);
+                    });
                     let capture_started = std::time::Instant::now();
                     match crate::platform::accessibility::capture_focused_text_field(
                         crate::platform::accessibility::CaptureFocusedTextOptions::default(),

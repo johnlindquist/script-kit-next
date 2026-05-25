@@ -649,6 +649,69 @@ impl AcpThread {
         Ok(())
     }
 
+    /// Submit an already-built provider prompt while displaying a separate
+    /// user-facing transcript string. Focused-text mini uses this so captured
+    /// field contents stay hidden provider context instead of visible composer
+    /// text.
+    pub(crate) fn submit_blocks(
+        &mut self,
+        blocks: Vec<ContentBlock>,
+        display_user_text: impl Into<String>,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        if matches!(
+            self.status,
+            AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
+        ) {
+            return Ok(());
+        }
+
+        let display_user_text = display_user_text.into();
+        let trimmed_display = display_user_text.trim();
+        if trimmed_display.is_empty() {
+            return Ok(());
+        }
+
+        if matches!(
+            self.context_bootstrap_state,
+            AcpContextBootstrapState::Preparing
+        ) {
+            return Err("context_bootstrap_pending".to_string());
+        }
+
+        self.clear_all_pending_context("submit_blocks");
+
+        let msg_id = self.alloc_id();
+        self.messages.push(AcpThreadMessage::new(
+            msg_id,
+            AcpThreadMessageRole::User,
+            trimmed_display.to_string(),
+        ));
+        self.publish_sdk_new_message(
+            msg_id,
+            AcpThreadMessageRole::User,
+            trimmed_display.to_string(),
+        );
+        self.input.clear();
+        self.stream_started_at = Some(std::time::Instant::now());
+        self.status = AcpThreadStatus::Streaming;
+
+        let rx = self
+            .connection
+            .start_turn(AgentChatTurnRequest {
+                ui_thread_id: self.ui_thread_id.clone(),
+                cwd: self.cwd.clone(),
+                blocks,
+                model_id: self.selected_model_id.clone(),
+            })
+            .map_err(|error| error.to_string())?;
+
+        self.setup_state = None;
+        self.bind_stream(rx, cx);
+        cx.notify();
+        Ok(())
+    }
+
     /// Resolve a pending permission request with the user's selection.
     ///
     /// Pass `None` for cancellation, or `Some(option_id)` for a selection.
@@ -1470,9 +1533,9 @@ impl AcpThread {
         crate::ai::subscriptions::publish_new_message(
             &self.ui_thread_id,
             AiMessageInfo {
-                id: id.to_string(),
-                role: role.to_string(),
-                content,
+                id: id.to_string().into(),
+                role: role.to_string().into(),
+                content: content.into(),
                 created_at: chrono::Utc::now().to_rfc3339(),
                 tokens_used: None,
             },

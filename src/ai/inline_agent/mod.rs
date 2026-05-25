@@ -1,4 +1,8 @@
-//! AI execution boundary for the inline text-editing assistant.
+//! Legacy AI execution boundary for the deprecated inline-agent overlay.
+//!
+//! Production focused-text entry uses the main-window Agent Chat Text profile
+//! path in `app_impl::tab_ai_mode`, while this module remains for compatibility
+//! with the old overlay and its tests.
 
 pub mod actions;
 pub(crate) mod agent_chat_adapter;

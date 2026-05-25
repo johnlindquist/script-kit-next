@@ -69,6 +69,7 @@ type AcpPortalHandler = std::sync::Arc<
     dyn Fn(crate::ai::window::context_picker::types::PortalKind, &mut App) + 'static,
 >;
 type AcpProfileSelectionHandler = std::sync::Arc<dyn Fn(String, &mut App) + 'static>;
+type AcpHostAppHandler = std::sync::Arc<dyn Fn(&mut App) + 'static>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PortalRefusal {
@@ -81,6 +82,65 @@ pub(crate) enum PortalRefusal {
 pub(crate) enum PortalOpenResult {
     Opened,
     Refused(PortalRefusal),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FocusedTextMiniAction {
+    Replace,
+    Append,
+    Copy,
+    Expand,
+    Stop,
+    Retry,
+}
+
+impl FocusedTextMiniAction {
+    pub(crate) fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "focused-text-action-replace" => Some(Self::Replace),
+            "focused-text-action-append" => Some(Self::Append),
+            "focused-text-action-copy" => Some(Self::Copy),
+            "focused-text-action-expand" => Some(Self::Expand),
+            "focused-text-action-collapse" => Some(Self::Expand),
+            "focused-text-action-stop" => Some(Self::Stop),
+            "focused-text-action-retry" => Some(Self::Retry),
+            _ => None,
+        }
+    }
+
+    fn trace_value(self) -> &'static str {
+        match self {
+            Self::Replace => "replace",
+            Self::Append => "append",
+            Self::Copy => "copy",
+            Self::Expand => "expand",
+            Self::Stop => "stop",
+            Self::Retry => "retry",
+        }
+    }
+
+    fn apply_action(self) -> Option<crate::ai::focused_text::FocusedTextApplyAction> {
+        match self {
+            Self::Replace => Some(crate::ai::focused_text::FocusedTextApplyAction::Replace),
+            Self::Append => Some(crate::ai::focused_text::FocusedTextApplyAction::Append),
+            Self::Copy => Some(crate::ai::focused_text::FocusedTextApplyAction::Copy),
+            Self::Expand | Self::Stop | Self::Retry => None,
+        }
+    }
+
+    fn from_footer_action(action: crate::footer_popup::FooterAction) -> Option<Self> {
+        match action {
+            crate::footer_popup::FooterAction::Replace => Some(Self::Replace),
+            crate::footer_popup::FooterAction::Append => Some(Self::Append),
+            crate::footer_popup::FooterAction::Copy | crate::footer_popup::FooterAction::Apply => {
+                Some(Self::Copy)
+            }
+            crate::footer_popup::FooterAction::Expand => Some(Self::Expand),
+            crate::footer_popup::FooterAction::Stop => Some(Self::Stop),
+            crate::footer_popup::FooterAction::Retry => Some(Self::Retry),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -137,6 +197,7 @@ impl AcpFooterSnapshot {
 
 #[derive(Clone, Debug)]
 struct FocusedTextAgentChatState {
+    snapshot: crate::platform::accessibility::FocusedTextSnapshot,
     session_id: crate::platform::accessibility::FocusedTextSessionId,
     app_name: String,
     char_count: usize,
@@ -144,6 +205,7 @@ struct FocusedTextAgentChatState {
     can_append: bool,
     can_copy: bool,
     last_apply_receipt: Option<crate::ai::focused_text::FocusedTextMutationReceipt>,
+    last_action_receipt: Option<crate::protocol::AcpFocusedTextActionReceipt>,
 }
 
 /// Parse the `description` field from YAML frontmatter in a SKILL.md file.
@@ -531,6 +593,10 @@ pub(crate) struct AcpChatView {
     on_open_history_command: Option<AcpFooterActionHandler>,
     /// Host-owned callback for pasting the latest assistant response.
     on_paste_response_requested: Option<AcpFooterActionHandler>,
+    /// Host-owned callback for expanding focused-text mini into full Agent Chat.
+    on_focused_text_expand_requested: Option<AcpHostAppHandler>,
+    /// Host-owned callback for collapsing focused-text Agent Chat back to mini mode.
+    on_focused_text_collapse_requested: Option<AcpHostAppHandler>,
     /// Host-owned callback for opening a full built-in view as an attachment portal.
     on_open_portal: Option<AcpPortalHandler>,
     /// Host-owned callback for persisting an Agent Chat profile and relaunching.
@@ -900,6 +966,20 @@ impl AcpChatView {
         self.on_profile_selected = Some(std::sync::Arc::new(callback));
     }
 
+    pub(crate) fn set_on_focused_text_expand_requested(
+        &mut self,
+        callback: impl Fn(&mut App) + 'static,
+    ) {
+        self.on_focused_text_expand_requested = Some(std::sync::Arc::new(callback));
+    }
+
+    pub(crate) fn set_on_focused_text_collapse_requested(
+        &mut self,
+        callback: impl Fn(&mut App) + 'static,
+    ) {
+        self.on_focused_text_collapse_requested = Some(std::sync::Arc::new(callback));
+    }
+
     pub(crate) fn set_footer_host(&mut self, footer_host: AcpFooterHost) {
         self.footer_host = footer_host;
     }
@@ -982,7 +1062,7 @@ impl AcpChatView {
     fn footer_buttons_for_thread(&self, thread: &AcpThread) -> Vec<AcpFooterButtonSpec> {
         use crate::footer_popup::FooterAction;
 
-        if self.focused_text.is_some() && self.ui_variant == AcpChatUiVariant::FocusedTextMini {
+        if self.focused_text.is_some() {
             return self.focused_text_footer_buttons(thread);
         }
 
@@ -1124,8 +1204,16 @@ impl AcpChatView {
                 },
                 AcpFooterButtonSpec {
                     action: FooterAction::Expand,
-                    key: "⌘↵",
-                    label: "Chat",
+                    key: if self.ui_variant == AcpChatUiVariant::FocusedTextMini {
+                        "⌘↵"
+                    } else {
+                        "⌘⇧M"
+                    },
+                    label: if self.ui_variant == AcpChatUiVariant::FocusedTextMini {
+                        "Chat"
+                    } else {
+                        "Collapse"
+                    },
                     selected: false,
                     enabled: true,
                     disabled_reason: None,
@@ -1165,6 +1253,21 @@ impl AcpChatView {
             .map(|message| message.body.to_string())
     }
 
+    fn focused_text_context_fingerprint(state: &FocusedTextAgentChatState) -> String {
+        let mut hash = 0xcbf29ce484222325u64;
+        for byte in state.session_id.0.as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        for byte in state.app_name.as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        hash ^= state.char_count as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+        format!("fnv1a64:{hash:016x}")
+    }
+
     fn focused_text_state_snapshot(
         &self,
         thread: &AcpThread,
@@ -1179,6 +1282,8 @@ impl AcpChatView {
             session_id: state.session_id.to_string(),
             app_name: state.app_name.clone(),
             char_count: state.char_count,
+            context_present: true,
+            context_fingerprint: Some(Self::focused_text_context_fingerprint(state)),
             can_replace: state.can_replace,
             can_append: state.can_append,
             can_copy: state.can_copy,
@@ -1187,6 +1292,7 @@ impl AcpChatView {
                 .last_apply_receipt
                 .as_ref()
                 .map(|receipt| format!("{:?}", receipt.action).to_lowercase()),
+            last_action_receipt: state.last_action_receipt.clone(),
         })
     }
 
@@ -1266,7 +1372,13 @@ impl AcpChatView {
                 crate::footer_popup::FooterAction::Replace => "focused-text-action-replace",
                 crate::footer_popup::FooterAction::Append => "focused-text-action-append",
                 crate::footer_popup::FooterAction::Copy => "focused-text-action-copy",
-                crate::footer_popup::FooterAction::Expand => "focused-text-action-expand",
+                crate::footer_popup::FooterAction::Expand => {
+                    if self.ui_variant == AcpChatUiVariant::FocusedTextMini {
+                        "focused-text-action-expand"
+                    } else {
+                        "focused-text-action-collapse"
+                    }
+                }
                 crate::footer_popup::FooterAction::Stop => "focused-text-action-stop",
                 crate::footer_popup::FooterAction::Retry => "focused-text-action-retry",
                 crate::footer_popup::FooterAction::Run => "focused-text-action-send",
@@ -1300,22 +1412,50 @@ impl AcpChatView {
         &mut self,
         action: crate::ai::focused_text::FocusedTextApplyAction,
         cx: &mut Context<Self>,
-    ) {
+    ) -> crate::protocol::AcpFocusedTextActionReceipt {
+        let before_ui_variant = self.ui_variant.state_id().to_string();
         let output = {
             let thread = self.live_thread().read(cx);
             Self::latest_assistant_response_text(thread)
         };
+        let output_length = output
+            .as_ref()
+            .map(|value| value.chars().count())
+            .unwrap_or(0);
         let Some(output) = output else {
             tracing::warn!(
                 target: "script_kit::focused_text",
                 event = "focused_text_apply_skipped_no_output",
                 action = ?action,
             );
-            return;
+            let receipt = crate::protocol::AcpFocusedTextActionReceipt {
+                action: format!("{action:?}").to_lowercase(),
+                success: false,
+                changed_text: false,
+                copied_to_clipboard: false,
+                before_ui_variant: before_ui_variant.clone(),
+                after_ui_variant: before_ui_variant,
+                output_length,
+                error_code: Some("no_output".to_string()),
+            };
+            if let Some(state) = self.focused_text.as_mut() {
+                state.last_action_receipt = Some(receipt.clone());
+            }
+            cx.notify();
+            return receipt;
         };
 
         let Some(state) = self.focused_text.as_mut() else {
-            return;
+            return crate::protocol::AcpFocusedTextActionReceipt {
+                action: format!("{action:?}").to_lowercase(),
+                success: false,
+                changed_text: false,
+                copied_to_clipboard: false,
+                before_ui_variant: before_ui_variant.clone(),
+                after_ui_variant: before_ui_variant,
+                output_length,
+                error_code: Some("no_focused_text".to_string()),
+            };
         };
 
         let mutation = match action {
@@ -1341,6 +1481,16 @@ impl AcpChatView {
             &bridge, mutation,
         ) {
             Ok(receipt) => {
+                let action_receipt = crate::protocol::AcpFocusedTextActionReceipt {
+                    action: format!("{:?}", receipt.action).to_lowercase(),
+                    success: receipt.success,
+                    changed_text: receipt.changed_text,
+                    copied_to_clipboard: receipt.copied_to_clipboard,
+                    before_ui_variant: before_ui_variant.clone(),
+                    after_ui_variant: self.ui_variant.state_id().to_string(),
+                    output_length,
+                    error_code: None,
+                };
                 tracing::info!(
                     target: "script_kit::focused_text",
                     event = "focused_text_apply_complete",
@@ -1352,8 +1502,21 @@ impl AcpChatView {
                     chars = state.char_count,
                 );
                 state.last_apply_receipt = Some(receipt);
+                state.last_action_receipt = Some(action_receipt.clone());
+                cx.notify();
+                action_receipt
             }
             Err(error) => {
+                let action_receipt = crate::protocol::AcpFocusedTextActionReceipt {
+                    action: format!("{action:?}").to_lowercase(),
+                    success: false,
+                    changed_text: false,
+                    copied_to_clipboard: false,
+                    before_ui_variant: before_ui_variant.clone(),
+                    after_ui_variant: self.ui_variant.state_id().to_string(),
+                    output_length,
+                    error_code: Some("mutation_failed".to_string()),
+                };
                 tracing::warn!(
                     target: "script_kit::focused_text",
                     event = "focused_text_apply_failed",
@@ -1362,10 +1525,102 @@ impl AcpChatView {
                     chars = state.char_count,
                     error = %error,
                 );
+                state.last_action_receipt = Some(action_receipt.clone());
+                cx.notify();
+                action_receipt
             }
         }
+    }
+
+    pub(crate) fn perform_focused_text_mini_action(
+        &mut self,
+        action: FocusedTextMiniAction,
+        cx: &mut Context<Self>,
+    ) -> crate::protocol::AcpFocusedTextActionReceipt {
+        if let Some(apply_action) = action.apply_action() {
+            return self.apply_focused_text_output(apply_action, cx);
+        }
+
+        let before_ui_variant = self.ui_variant.state_id().to_string();
+        let output_length = {
+            let thread = self.live_thread().read(cx);
+            Self::latest_assistant_response_text(thread)
+                .map(|value| value.chars().count())
+                .unwrap_or(0)
+        };
+
+        let mut success = self.focused_text.is_some();
+        let mut error_code = None;
+
+        match action {
+            FocusedTextMiniAction::Expand => {
+                if success {
+                    if self.ui_variant == AcpChatUiVariant::FocusedTextMini {
+                        self.set_ui_variant(AcpChatUiVariant::Standard, cx);
+                        if let Some(callback) = self.on_focused_text_expand_requested.clone() {
+                            Self::spawn_host_app_callback(callback, cx);
+                        }
+                    } else {
+                        self.set_ui_variant(AcpChatUiVariant::FocusedTextMini, cx);
+                        if let Some(callback) = self.on_focused_text_collapse_requested.clone() {
+                            Self::spawn_host_app_callback(callback, cx);
+                        }
+                    }
+                }
+            }
+            FocusedTextMiniAction::Stop => {
+                success = self.cancel_streaming_from_escape(cx);
+                if !success {
+                    error_code = Some("not_streaming".to_string());
+                }
+            }
+            FocusedTextMiniAction::Retry => {
+                if self.has_retry_request() {
+                    self.queue_setup_retry_request(cx);
+                } else {
+                    success = false;
+                    error_code = Some("not_retryable".to_string());
+                }
+            }
+            FocusedTextMiniAction::Replace
+            | FocusedTextMiniAction::Append
+            | FocusedTextMiniAction::Copy => {}
+        }
+
+        if self.focused_text.is_none() && error_code.is_none() {
+            error_code = Some("no_focused_text".to_string());
+        }
+
+        let receipt = crate::protocol::AcpFocusedTextActionReceipt {
+            action: action.trace_value().to_string(),
+            success,
+            changed_text: false,
+            copied_to_clipboard: false,
+            before_ui_variant,
+            after_ui_variant: self.ui_variant.state_id().to_string(),
+            output_length,
+            error_code,
+        };
+
+        if let Some(state) = self.focused_text.as_mut() {
+            state.last_action_receipt = Some(receipt.clone());
+        }
+
+        tracing::info!(
+            target: "script_kit::focused_text",
+            event = "focused_text_mini_action_complete",
+            action = action.trace_value(),
+            success = receipt.success,
+            changed_text = receipt.changed_text,
+            copied_to_clipboard = receipt.copied_to_clipboard,
+            before_ui_variant = %receipt.before_ui_variant,
+            after_ui_variant = %receipt.after_ui_variant,
+            output_length = receipt.output_length,
+            error_code = ?receipt.error_code,
+        );
 
         cx.notify();
+        receipt
     }
 
     fn footer_hint_label(button: &AcpFooterButtonSpec) -> &'static str {
@@ -1381,6 +1636,7 @@ impl AcpChatView {
             FooterAction::Replace => "⌘R Replace",
             FooterAction::Append => "⌘A Append",
             FooterAction::Copy => "⌘C Copy",
+            FooterAction::Expand if button.label == "Collapse" => "⌘⇧M Collapse",
             FooterAction::Expand => "⌘↵ Chat",
             FooterAction::Retry => "⌘⇧R Retry",
             FooterAction::Close => "⌘W Close",
@@ -1396,37 +1652,22 @@ impl AcpChatView {
         use crate::footer_popup::FooterAction;
 
         if self.focused_text.is_some() {
-            match action {
-                FooterAction::Replace => {
-                    self.apply_focused_text_output(
-                        crate::ai::focused_text::FocusedTextApplyAction::Replace,
-                        cx,
+            if matches!(action, FooterAction::Run) {
+                if let Err(error) = self.submit_focused_text_turn(
+                    crate::ai::focused_text::FocusedTextEditSemantics::Replace,
+                    cx,
+                ) {
+                    tracing::warn!(
+                        target: "script_kit::focused_text",
+                        event = "focused_text_submit_failed",
+                        error = %error,
                     );
-                    return;
                 }
-                FooterAction::Append => {
-                    self.apply_focused_text_output(
-                        crate::ai::focused_text::FocusedTextApplyAction::Append,
-                        cx,
-                    );
-                    return;
-                }
-                FooterAction::Copy | FooterAction::Apply => {
-                    self.apply_focused_text_output(
-                        crate::ai::focused_text::FocusedTextApplyAction::Copy,
-                        cx,
-                    );
-                    return;
-                }
-                FooterAction::Expand => {
-                    self.set_ui_variant(AcpChatUiVariant::Standard, cx);
-                    return;
-                }
-                FooterAction::Retry => {
-                    self.queue_setup_retry_request(cx);
-                    return;
-                }
-                _ => {}
+                return;
+            }
+            if let Some(action) = FocusedTextMiniAction::from_footer_action(action) {
+                self.perform_focused_text_mini_action(action, cx);
+                return;
             }
         }
 
@@ -1491,14 +1732,15 @@ impl AcpChatView {
         let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
 
         let mut hints = Vec::new();
-        for button in snapshot.buttons.iter().cloned() {
+        for button in &snapshot.buttons {
+            let action = button.action;
             let button_view = weak_view.clone();
             hints.push(crate::components::ClickableHint::new(
-                Self::footer_hint_label(&button),
+                Self::footer_hint_label(button),
                 move |_, window, cx| {
                     if let Some(entity) = button_view.upgrade() {
                         entity.update(cx, |chat, cx| {
-                            chat.dispatch_footer_button(button.action, window, cx);
+                            chat.dispatch_footer_button(action, window, cx);
                         });
                     }
                 },
@@ -1567,20 +1809,21 @@ impl AcpChatView {
         let hints = snapshot
             .buttons
             .iter()
-            .cloned()
             .map(|button| {
+                let action = button.action;
+                let selected = button.selected;
                 let button_view = weak_view.clone();
                 crate::components::SelectableHint::new(
-                    Self::footer_hint_label(&button),
+                    Self::footer_hint_label(button),
                     move |_, window, cx| {
                         if let Some(entity) = button_view.upgrade() {
                             entity.update(cx, |chat, cx| {
-                                chat.dispatch_footer_button(button.action, window, cx);
+                                chat.dispatch_footer_button(action, window, cx);
                             });
                         }
                     },
                 )
-                .selected(button.selected)
+                .selected(selected)
             })
             .collect::<Vec<_>>();
 
@@ -2044,6 +2287,18 @@ impl AcpChatView {
         .detach();
     }
 
+    fn spawn_host_app_callback(callback: AcpHostAppHandler, cx: &mut Context<Self>) {
+        cx.spawn(async move |_this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(1))
+                .await;
+            let _ = cx.update(|cx| {
+                callback(cx);
+            });
+        })
+        .detach();
+    }
+
     fn trigger_toggle_actions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(callback) = self.on_toggle_actions.clone() {
             // toggle_actions needs entity.read(cx) on AcpChatView, which panics
@@ -2211,6 +2466,10 @@ impl AcpChatView {
                 "Cmd+P history command request dropped — no host callback installed"
             );
         }
+    }
+
+    pub(crate) fn has_focused_text_context(&self) -> bool {
+        self.focused_text.is_some()
     }
 
     fn trigger_paste_response_requested(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -3620,6 +3879,8 @@ impl AcpChatView {
             on_close_window_requested: None,
             on_open_history_command: None,
             on_paste_response_requested: None,
+            on_focused_text_expand_requested: None,
+            on_focused_text_collapse_requested: None,
             on_open_portal: None,
             on_profile_selected: None,
             pending_portal_session: None,
@@ -3686,6 +3947,8 @@ impl AcpChatView {
             on_close_window_requested: None,
             on_open_history_command: None,
             on_paste_response_requested: None,
+            on_focused_text_expand_requested: None,
+            on_focused_text_collapse_requested: None,
             on_open_portal: None,
             on_profile_selected: None,
             pending_portal_session: None,
@@ -4594,6 +4857,107 @@ impl AcpChatView {
         })
     }
 
+    fn focused_text_previous_turns(
+        thread: &AcpThread,
+    ) -> Vec<crate::ai::focused_text::FocusedTextTurnSummary> {
+        let mut turns = Vec::new();
+        let mut pending_instruction: Option<String> = None;
+
+        for message in &thread.messages {
+            match message.role {
+                AcpThreadMessageRole::User => {
+                    if let Some(instruction) = pending_instruction.take() {
+                        turns.push(crate::ai::focused_text::FocusedTextTurnSummary {
+                            instruction,
+                            semantics: crate::ai::focused_text::FocusedTextEditSemantics::Chat,
+                            assistant_output: None,
+                        });
+                    }
+                    pending_instruction = Some(message.body.to_string());
+                }
+                AcpThreadMessageRole::Assistant => {
+                    if let Some(instruction) = pending_instruction.take() {
+                        turns.push(crate::ai::focused_text::FocusedTextTurnSummary {
+                            instruction,
+                            semantics: crate::ai::focused_text::FocusedTextEditSemantics::Chat,
+                            assistant_output: Some(message.body.to_string()),
+                        });
+                    }
+                }
+                AcpThreadMessageRole::Thought
+                | AcpThreadMessageRole::Tool
+                | AcpThreadMessageRole::System
+                | AcpThreadMessageRole::Error => {}
+            }
+        }
+
+        if let Some(instruction) = pending_instruction {
+            turns.push(crate::ai::focused_text::FocusedTextTurnSummary {
+                instruction,
+                semantics: crate::ai::focused_text::FocusedTextEditSemantics::Chat,
+                assistant_output: None,
+            });
+        }
+
+        turns
+    }
+
+    pub(crate) fn submit_focused_text_turn(
+        &mut self,
+        semantics: crate::ai::focused_text::FocusedTextEditSemantics,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let Some(state) = self.focused_text.as_ref() else {
+            return Err("no_focused_text".to_string());
+        };
+        let snapshot = state.snapshot.clone();
+
+        let Some(thread_entity) = self.thread() else {
+            return Err("Agent Chat view is not active".to_string());
+        };
+
+        let instruction = {
+            let thread = thread_entity.read(cx);
+            thread.input.text().trim().to_string()
+        };
+        if instruction.is_empty() {
+            return Ok(());
+        }
+
+        let previous_turns = {
+            let thread = thread_entity.read(cx);
+            Self::focused_text_previous_turns(thread)
+        };
+        let (prompt, audit) = crate::ai::focused_text::build_focused_text_prompt(
+            crate::ai::focused_text::FocusedTextPromptRequest {
+                snapshot: &snapshot,
+                instruction: &instruction,
+                semantics,
+                previous_turns: &previous_turns,
+            },
+        );
+
+        tracing::info!(
+            target: "script_kit::focused_text",
+            event = "focused_text_prompt_built",
+            session_id = %audit.session_id,
+            app_bundle_id = %audit.app_bundle_id.as_deref().unwrap_or(""),
+            semantics = %audit.semantics,
+            turn_count = audit.turn_count,
+            capture_char_count = audit.capture_char_count,
+            prompt_capture_char_count = audit.prompt_capture_char_count,
+            capture_truncated = audit.capture_truncated,
+            completion_status = %audit.completion_status,
+        );
+
+        let blocks = vec![agent_client_protocol::ContentBlock::Text(
+            agent_client_protocol::TextContent::new(prompt),
+        )];
+        thread_entity.update(cx, |thread, cx| {
+            thread.submit_blocks(blocks, instruction, cx)
+        })
+    }
+
     pub(crate) fn stage_inline_context_parts_from_host(
         &mut self,
         parts: Vec<crate::ai::message_parts::AiContextPart>,
@@ -4675,7 +5039,7 @@ impl AcpChatView {
         let part = crate::ai::message_parts::AiContextPart::TextBlock {
             label: format!("Focused Text · {app_name} · {char_count} chars"),
             source: source_uri,
-            text: snapshot.text,
+            text: snapshot.text.clone(),
             mime_type: Some("text/plain".to_string()),
         };
 
@@ -4691,6 +5055,7 @@ impl AcpChatView {
         self.pasted_image_tokens.clear();
         self.pending_portal_session = None;
         self.focused_text = Some(FocusedTextAgentChatState {
+            snapshot,
             session_id,
             app_name: app_name.clone(),
             char_count,
@@ -4698,6 +5063,7 @@ impl AcpChatView {
             can_append: capabilities.can_append,
             can_copy: capabilities.can_copy,
             last_apply_receipt: None,
+            last_action_receipt: None,
         });
 
         self.live_thread().update(cx, move |thread, cx| {
@@ -5080,6 +5446,7 @@ impl AcpChatView {
             .into_any_element()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_composer_bar(
         input_text: &str,
         input_cursor: usize,
@@ -7074,7 +7441,7 @@ impl AcpChatView {
                 this.open_setup_agent_picker(cx);
             }
             AcpSetupCardEvent::Retry => {
-                // TODO: Wire up retry_setup_preflight (needs Window context).
+                // KNOWN: Needs Window context unavailable in subscription handlers.
             }
         })
         .detach();
@@ -7118,7 +7485,7 @@ impl AcpChatView {
                 cx.notify();
             }
             AcpToolbarEvent::ExportThread => {
-                // TODO: Wire up export thread action (needs Window context).
+                // KNOWN: Needs Window context unavailable in subscription handlers.
             }
             AcpToolbarEvent::ClearThread => {
                 this.live_thread().update(cx, |thread, cx| {
@@ -7130,10 +7497,10 @@ impl AcpChatView {
                 cx.notify();
             }
             AcpToolbarEvent::OpenHistory => {
-                // TODO: Wire up open history action (needs Window context).
+                // KNOWN: Needs Window context unavailable in subscription handlers.
             }
             AcpToolbarEvent::CloseChat => {
-                // TODO: Wire up close chat action (needs Window context).
+                // KNOWN: Needs Window context unavailable in subscription handlers.
             }
         })
         .detach();

@@ -24,7 +24,8 @@ fn inline_agent_provider_logs_do_not_emit_sensitive_prompt_or_output_fields() {
             "?text",
             "%output",
             "?output",
-            "clipboard",
+            "clipboard_text",
+            "clipboardText",
         ] {
             assert!(
                 !source.contains(forbidden),

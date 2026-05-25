@@ -10,6 +10,7 @@ const STDIN_COMMANDS: &str = include_str!("../../src/stdin_commands/mod.rs");
 const RUNTIME_STDIN: &str = include_str!("../../src/main_entry/runtime_stdin.rs");
 const APP_LAYOUT_COLLECT_ELEMENTS: &str = include_str!("../../src/app_layout/collect_elements.rs");
 const ACP_STATE_TYPES: &str = include_str!("../../src/protocol/types/acp_state.rs");
+const INLINE_AGENT_MOD: &str = include_str!("../../src/inline_agent/mod.rs");
 
 #[test]
 fn inline_ai_hotkeys_capture_before_opening_focused_text_agent_chat() {
@@ -21,11 +22,19 @@ fn inline_ai_hotkeys_capture_before_opening_focused_text_agent_chat() {
             .find("capture_focused_text_field")
             .expect("inline AI listener must capture focused text")
             + channel;
+        let dismiss = source[channel..]
+            .find("dismiss_focused_text_agent_chat_before_recapture")
+            .expect("inline AI listener must dismiss prior focused-text Agent Chat before capture")
+            + channel;
         let open = source[channel..]
             .find("open_focused_text_agent_chat_from_snapshot")
             .expect("inline AI listener must open focused-text Agent Chat")
             + channel;
 
+        assert!(
+            dismiss < capture,
+            "prior focused-text Agent Chat must be dismissed before recapturing external text"
+        );
         assert!(
             capture < open,
             "focused text must be captured before opening Agent Chat"
@@ -38,11 +47,17 @@ fn inline_ai_hotkeys_capture_before_opening_focused_text_agent_chat() {
 fn focused_text_entry_forces_embedded_mini_agent_chat_surface() {
     for required in [
         "open_focused_text_agent_chat_from_snapshot",
+        "dismiss_focused_text_agent_chat_before_recapture",
+        "has_focused_text_context",
+        "focused_text_recapture_dismiss_previous_session",
+        "CloseMainWindowStateFirst",
         "AcpChatUiVariant::FocusedTextMini",
         "begin_tab_ai_harness_entry_from_source_view",
         "force_acp_surface",
         "stage_focused_text_from_host",
         "focused_text_agent_chat_open",
+        "set_main_window_mode_state_only",
+        "MainWindowMode::Mini",
     ] {
         assert!(
             FOCUSED_TEXT_ENTRY.contains(required),
@@ -105,9 +120,17 @@ fn focused_text_footer_actions_are_explicit_and_dispatch_apply_back() {
         "FocusedTextMutation::Copy",
         "SystemFocusedTextPlatformBridge",
         "set_ui_variant(AcpChatUiVariant::Standard",
+        "set_ui_variant(AcpChatUiVariant::FocusedTextMini",
+        "set_on_focused_text_expand_requested",
+        "set_on_focused_text_collapse_requested",
+        "MainWindowMode::Full",
+        "MainWindowMode::Mini",
+        "focused_text_expand_agent_chat",
+        "focused_text_collapse_agent_chat",
     ] {
         assert!(
-            ACP_VIEW.contains(required),
+            ACP_VIEW.contains(required)
+                || include_str!("../../src/app_impl/tab_ai_mode/mod.rs").contains(required),
             "missing focused-text footer dispatch contract: {required}"
         );
     }
@@ -161,6 +184,21 @@ fn focused_text_agent_chat_stdin_verbs_alias_old_inline_fixture_verbs() {
     }
     assert!(!RUNTIME_STDIN.contains("open_inline_agent_mock_fixture"));
     assert!(!RUNTIME_STDIN.contains("open_inline_agent_pi_fixture"));
+}
+
+#[test]
+fn legacy_inline_agent_window_launch_is_not_public_product_api() {
+    for forbidden in [
+        "launch_inline_agent_from_focused_text",
+        "sync_inline_agent_overlay_window",
+        "open_inline_agent_mock_fixture",
+        "open_inline_agent_pi_fixture",
+    ] {
+        assert!(
+            !INLINE_AGENT_MOD.contains(forbidden),
+            "legacy inline-agent window function must not be re-exported as product API: {forbidden}"
+        );
+    }
 }
 
 #[test]
