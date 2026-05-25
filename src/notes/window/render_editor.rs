@@ -37,6 +37,7 @@ impl NotesApp {
         let in_focus_mode = self.focus_mode;
         let window_hovered = self.window_hovered || self.force_hovered;
         let title = self.selected_note_title(is_trash);
+        let metrics = style::adopted_metrics();
 
         let titlebar = self.render_editor_titlebar(
             title,
@@ -67,7 +68,13 @@ impl NotesApp {
                 !is_trash && has_selection && show_toolbar && !in_focus_mode,
                 |d| d.child(self.render_toolbar(cx)),
             )
-            .child(div().flex_1().px_4().py_3().child(editor_body))
+            .child(
+                div()
+                    .flex_1()
+                    .px(px(metrics.editor_padding_x))
+                    .py(px(metrics.editor_padding_y))
+                    .child(editor_body),
+            )
             .when(has_selection, |d| d.child(footer))
     }
 }

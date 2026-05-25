@@ -24,6 +24,34 @@ pub struct NotesWindowStyle {
     pub chrome_opacity: f32,
 }
 
+/// Resolved layout metrics consumed by render, autosize, and automation receipts.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct NotesLayoutMetrics {
+    pub titlebar_height: f32,
+    pub footer_height: f32,
+    pub editor_padding_x: f32,
+    pub editor_padding_y: f32,
+    pub auto_resize_padding: f32,
+    pub auto_resize_line_height: f32,
+    pub auto_resize_max_height: f32,
+    pub auto_resize_threshold: f32,
+}
+
+impl NotesLayoutMetrics {
+    pub(crate) const fn from_style(style: NotesWindowStyle) -> Self {
+        Self {
+            titlebar_height: style.titlebar_height,
+            footer_height: style.footer_height,
+            editor_padding_x: style.editor_padding_x,
+            editor_padding_y: style.editor_padding_y,
+            auto_resize_padding: style.editor_padding_y * 2.0,
+            auto_resize_line_height: 20.0,
+            auto_resize_max_height: 600.0,
+            auto_resize_threshold: 5.0,
+        }
+    }
+}
+
 impl NotesWindowStyle {
     /// The current production defaults — matches the inline constants in `window.rs`.
     pub const fn current() -> Self {
@@ -71,6 +99,10 @@ pub(crate) fn adopted_style() -> NotesWindowStyle {
     NotesWindowStyle::current()
 }
 
+pub(crate) fn adopted_metrics() -> NotesLayoutMetrics {
+    NotesLayoutMetrics::from_style(adopted_style())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -83,6 +115,19 @@ mod tests {
         assert_eq!(style.editor_padding_x, 16.0);
         assert_eq!(style.editor_padding_y, 12.0);
         assert_eq!(style.chrome_opacity, 1.0);
+    }
+
+    #[test]
+    fn layout_metrics_derive_from_current_style() {
+        let metrics = NotesLayoutMetrics::from_style(NotesWindowStyle::current());
+        assert_eq!(metrics.titlebar_height, 36.0);
+        assert_eq!(metrics.footer_height, 28.0);
+        assert_eq!(metrics.editor_padding_x, 16.0);
+        assert_eq!(metrics.editor_padding_y, 12.0);
+        assert_eq!(metrics.auto_resize_padding, 24.0);
+        assert_eq!(metrics.auto_resize_line_height, 20.0);
+        assert_eq!(metrics.auto_resize_max_height, 600.0);
+        assert_eq!(metrics.auto_resize_threshold, 5.0);
     }
 
     #[test]

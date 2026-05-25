@@ -33,6 +33,7 @@ impl NotesApp {
             NotesSortMode::Alphabetical => "A→Z",
         };
         let auto_sizing_off = !self.auto_sizing_enabled;
+        let metrics = style::adopted_metrics();
         let action_feedback = self
             .get_action_feedback()
             .map(|(msg, accent)| (msg.to_string(), accent));
@@ -84,7 +85,7 @@ impl NotesApp {
             .flex()
             .items_center()
             .gap_2()
-            .h(px(FOOTER_HEIGHT))
+            .h(px(metrics.footer_height))
             .px_3()
             .border_t_1()
             .border_color(cx.theme().border.opacity(OPACITY_SECTION_BORDER))

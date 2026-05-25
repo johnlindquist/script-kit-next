@@ -174,6 +174,7 @@ impl NotesApp {
         } else {
             muted_color.opacity(OPACITY_MUTED)
         };
+        let metrics = style::adopted_metrics();
 
         let titlebar_icons = self.render_titlebar_icons(
             window_hovered,
@@ -191,7 +192,7 @@ impl NotesApp {
             .id("notes-titlebar")
             .flex()
             .items_center()
-            .h(px(TITLEBAR_HEIGHT))
+            .h(px(metrics.titlebar_height))
             .px_3()
             .when(is_trash, |d| {
                 d.border_b_1()

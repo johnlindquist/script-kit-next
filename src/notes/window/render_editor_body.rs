@@ -98,6 +98,7 @@ impl NotesApp {
 
         if is_preview {
             let content = self.editor_state.read(cx).value().to_string();
+            let metrics = style::adopted_metrics();
             return div()
                 .id("notes-markdown-preview")
                 .flex_1()
@@ -105,8 +106,8 @@ impl NotesApp {
                 .track_scroll(&self.preview_scroll_handle)
                 .overflow_y_scroll()
                 .vertical_scrollbar(&self.preview_scroll_handle)
-                .px_4()
-                .py_3()
+                .px(px(metrics.editor_padding_x))
+                .py(px(metrics.editor_padding_y))
                 .child(markdown::render_markdown_preview(&content, cx.theme()))
                 .into_any_element();
         }

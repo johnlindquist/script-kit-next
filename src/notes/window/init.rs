@@ -385,11 +385,18 @@ impl NotesApp {
         // Use initial_height as minimum - never shrink below starting size
         let min_height = self.initial_height;
 
-        // Calculate desired height
-        let content_height = (line_count as f32) * AUTO_RESIZE_LINE_HEIGHT;
-        let total_height = TITLEBAR_HEIGHT + content_height + FOOTER_HEIGHT + AUTO_RESIZE_PADDING;
-        let clamped_height =
-            Self::resolve_auto_resize_height(total_height, min_height, AUTO_RESIZE_MAX_HEIGHT);
+        // Calculate desired height from the same metrics used by render/layout receipts.
+        let metrics = style::adopted_metrics();
+        let content_height = (line_count as f32) * metrics.auto_resize_line_height;
+        let total_height = metrics.titlebar_height
+            + content_height
+            + metrics.footer_height
+            + metrics.auto_resize_padding;
+        let clamped_height = Self::resolve_auto_resize_height(
+            total_height,
+            min_height,
+            metrics.auto_resize_max_height,
+        );
 
         // Get current bounds and update height
         let current_bounds = window.bounds();
@@ -403,7 +410,7 @@ impl NotesApp {
         // Skip if auto-sizing is disabled (user manually resized)
         if !self.auto_sizing_enabled {
             skipped_reason = Some("disabled");
-        } else if (clamped_height - old_height).abs() <= AUTO_RESIZE_THRESHOLD {
+        } else if (clamped_height - old_height).abs() <= metrics.auto_resize_threshold {
             skipped_reason = Some("below-threshold");
         } else {
             let new_size = size(current_bounds.size.width, px(clamped_height));

@@ -309,12 +309,16 @@ impl NotesApp {
             )
         });
         let search_text = self.search_state.read(cx).value().to_string();
-        let content_height = (self.last_line_count as f32) * AUTO_RESIZE_LINE_HEIGHT;
-        let desired_height = TITLEBAR_HEIGHT + content_height + FOOTER_HEIGHT + AUTO_RESIZE_PADDING;
+        let metrics = style::adopted_metrics();
+        let content_height = (self.last_line_count as f32) * metrics.auto_resize_line_height;
+        let desired_height = metrics.titlebar_height
+            + content_height
+            + metrics.footer_height
+            + metrics.auto_resize_padding;
         let clamped_height = Self::resolve_auto_resize_height(
             desired_height,
             self.initial_height,
-            AUTO_RESIZE_MAX_HEIGHT,
+            metrics.auto_resize_max_height,
         );
         let last_autosize_transition = self.last_autosize_transition.as_ref().map(|entry| {
             serde_json::json!({
@@ -406,11 +410,11 @@ impl NotesApp {
                 "lastWindowHeight": self.last_window_height,
                 "initialHeight": self.initial_height,
                 "minHeight": self.initial_height,
-                "maxHeight": AUTO_RESIZE_MAX_HEIGHT,
+                "maxHeight": metrics.auto_resize_max_height,
                 "lineCount": self.last_line_count,
                 "desiredHeight": desired_height,
                 "clampedHeight": clamped_height,
-                "threshold": AUTO_RESIZE_THRESHOLD,
+                "threshold": metrics.auto_resize_threshold,
                 "lastCause": last_autosize_transition
                     .as_ref()
                     .and_then(|entry| entry.get("cause"))
@@ -471,8 +475,9 @@ impl NotesApp {
             .as_ref()
             .map(|bounds| (bounds.width as f32, bounds.height as f32))
             .unwrap_or((728.0, self.last_window_height.max(self.initial_height)));
-        let titlebar_height = super::TITLEBAR_HEIGHT;
-        let footer_height = super::FOOTER_HEIGHT;
+        let metrics = style::adopted_metrics();
+        let titlebar_height = metrics.titlebar_height;
+        let footer_height = metrics.footer_height;
         let search_height = if self.show_search { 40.0 } else { 0.0 };
         let toolbar_height = if self.show_format_toolbar { 36.0 } else { 0.0 };
         let content_top = titlebar_height + search_height + toolbar_height;

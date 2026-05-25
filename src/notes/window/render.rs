@@ -7,12 +7,13 @@ impl NotesApp {
         let muted_color = cx.theme().muted_foreground;
         let accent_color = cx.theme().accent;
         let window_hovered = self.window_hovered || self.force_hovered;
+        let metrics = style::adopted_metrics();
 
         let titlebar = div()
             .id("notes-acp-titlebar")
             .flex()
             .items_center()
-            .h(px(TITLEBAR_HEIGHT))
+            .h(px(metrics.titlebar_height))
             .px_3()
             // Traffic light padding on the left.
             .child(div().w(px(TITLEBAR_TRAFFIC_LIGHT_W)).flex_shrink_0())

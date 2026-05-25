@@ -74,12 +74,6 @@ static NOTES_CLOSE_BEHAVIOR: std::sync::OnceLock<std::sync::Mutex<NotesCloseBeha
 // Layout constants — all on the 4 px micro-grid / 8 px base grid
 // =============================================================================
 
-/// Titlebar height — 36 px gives comfortable room for macOS traffic lights.
-const TITLEBAR_HEIGHT: f32 = 36.0;
-
-/// Footer / status-bar height — 28 px keeps it compact while readable.
-const FOOTER_HEIGHT: f32 = 28.0;
-
 /// Browse-panel inline fallback width.
 const BROWSE_PANEL_WIDTH: f32 = 500.0;
 
@@ -136,18 +130,6 @@ const FOOTER_SEP: &str = " · ";
 // =============================================================================
 // Auto-resize constants — govern how the window grows / shrinks with content.
 // =============================================================================
-
-/// Combined top + bottom padding in the editor area (px).
-const AUTO_RESIZE_PADDING: f32 = 24.0;
-
-/// Approximate per-line height used by the text layout (px).
-const AUTO_RESIZE_LINE_HEIGHT: f32 = 20.0;
-
-/// Absolute ceiling — the window will never auto-grow beyond this (px).
-const AUTO_RESIZE_MAX_HEIGHT: f32 = 600.0;
-
-/// Minimum delta before we bother resizing (avoids 1-px jitter).
-const AUTO_RESIZE_THRESHOLD: f32 = 5.0;
 
 /// Delta beyond which we assume the user grabbed the edge to resize manually.
 const MANUAL_RESIZE_THRESHOLD: f32 = 10.0;
