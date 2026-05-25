@@ -572,3 +572,251 @@ pub fn list_directory_filtered(
     results.truncate(limit);
     results
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parsed(directory: &str, filter: Option<&str>, show_hidden: bool) -> Option<ParsedDirPath> {
+        Some(ParsedDirPath {
+            directory: directory.to_string(),
+            filter: filter.map(|value| value.to_string()),
+            show_hidden,
+        })
+    }
+
+    #[test]
+    fn ensure_trailing_slash_turns_empty_input_into_root() {
+        assert_eq!(ensure_trailing_slash(""), "/");
+    }
+
+    #[test]
+    fn ensure_trailing_slash_preserves_existing_slashes() {
+        assert_eq!(ensure_trailing_slash("/"), "/");
+        assert_eq!(ensure_trailing_slash("/foo/bar/"), "/foo/bar/");
+        assert_eq!(ensure_trailing_slash("~/dev/"), "~/dev/");
+    }
+
+    #[test]
+    fn ensure_trailing_slash_appends_missing_slash() {
+        assert_eq!(ensure_trailing_slash("/foo/bar"), "/foo/bar/");
+        assert_eq!(ensure_trailing_slash("~/dev"), "~/dev/");
+        assert_eq!(ensure_trailing_slash("~"), "~/");
+        assert_eq!(ensure_trailing_slash("."), "./");
+        assert_eq!(ensure_trailing_slash(".."), "../");
+    }
+
+    #[test]
+    fn parent_dir_display_returns_none_for_display_roots() {
+        assert_eq!(parent_dir_display(""), None);
+        assert_eq!(parent_dir_display("/"), None);
+        assert_eq!(parent_dir_display("~"), None);
+        assert_eq!(parent_dir_display("~/"), None);
+    }
+
+    #[test]
+    fn parent_dir_display_handles_absolute_paths() {
+        assert_eq!(parent_dir_display("/foo/"), Some("/".to_string()));
+        assert_eq!(parent_dir_display("/foo/bar/"), Some("/foo/".to_string()));
+        assert_eq!(parent_dir_display("/foo/bar"), Some("/foo/".to_string()));
+    }
+
+    #[test]
+    fn parent_dir_display_handles_tilde_paths() {
+        assert_eq!(parent_dir_display("~/dev/"), Some("~/".to_string()));
+        assert_eq!(parent_dir_display("~/dev"), Some("~/".to_string()));
+        assert_eq!(
+            parent_dir_display("~/dev/script-kit/"),
+            Some("~/dev/".to_string())
+        );
+    }
+
+    #[test]
+    fn parent_dir_display_handles_relative_paths() {
+        assert_eq!(parent_dir_display("./"), Some("../".to_string()));
+        assert_eq!(parent_dir_display("../"), Some("../../".to_string()));
+        assert_eq!(parent_dir_display("../../"), Some("../../../".to_string()));
+    }
+
+    #[test]
+    fn shorten_home_prefix_handles_empty_home() {
+        assert_eq!(
+            shorten_home_prefix_for_display_with_home("/Users/alice/dev", ""),
+            "/Users/alice/dev"
+        );
+    }
+
+    #[test]
+    fn shorten_home_prefix_handles_exact_home() {
+        assert_eq!(
+            shorten_home_prefix_for_display_with_home("/Users/alice", "/Users/alice"),
+            "~"
+        );
+    }
+
+    #[test]
+    fn shorten_home_prefix_shortens_nested_paths() {
+        assert_eq!(
+            shorten_home_prefix_for_display_with_home(
+                "/Users/alice/dev/script-kit-gpui",
+                "/Users/alice"
+            ),
+            "~/dev/script-kit-gpui"
+        );
+        assert_eq!(
+            shorten_home_prefix_for_display_with_home("/Users/alice/dev", "/Users/alice/"),
+            "~/dev"
+        );
+    }
+
+    #[test]
+    fn shorten_home_prefix_respects_path_boundaries() {
+        assert_eq!(
+            shorten_home_prefix_for_display_with_home("/Users/alice-dev/file.txt", "/Users/alice"),
+            "/Users/alice-dev/file.txt"
+        );
+        assert_eq!(
+            shorten_home_prefix_for_display_with_home("/Users/alice2/dev", "/Users/alice"),
+            "/Users/alice2/dev"
+        );
+        assert_eq!(
+            shorten_home_prefix_for_display_with_home("", "/Users/alice"),
+            ""
+        );
+    }
+
+    #[test]
+    fn expand_path_rejects_empty_and_unrecognized_inputs() {
+        assert_eq!(expand_path(""), None);
+        assert_eq!(expand_path(" "), None);
+        assert_eq!(expand_path("notes"), None);
+        assert_eq!(expand_path("notes/search"), None);
+        assert_eq!(expand_path("~other"), None);
+    }
+
+    #[test]
+    fn expand_path_returns_trimmed_absolute_paths() {
+        assert_eq!(expand_path("/"), Some("/".to_string()));
+        assert_eq!(expand_path("/usr/local"), Some("/usr/local".to_string()));
+        assert_eq!(
+            expand_path(" /Users/alice "),
+            Some("/Users/alice".to_string())
+        );
+    }
+
+    #[test]
+    fn expand_path_expands_home_prefix_when_available() {
+        match dirs::home_dir() {
+            Some(home) => {
+                let Some(home_str) = home.to_str() else {
+                    return;
+                };
+                assert_eq!(expand_path("~"), Some(home_str.to_string()));
+            }
+            None => {
+                assert_eq!(expand_path("~"), None);
+            }
+        }
+    }
+
+    #[test]
+    fn expand_path_resolves_current_relative_paths() {
+        let Some(cwd) = std::env::current_dir().ok() else {
+            return;
+        };
+        let Some(cwd_str) = cwd.to_str() else {
+            return;
+        };
+        assert_eq!(expand_path("."), Some(cwd_str.to_string()));
+        let expected_src = cwd.join("src").to_str().map(|value| value.to_string());
+        assert_eq!(expand_path("./src"), expected_src);
+    }
+
+    #[test]
+    fn expand_path_resolves_parent_relative_paths() {
+        let Some(cwd) = std::env::current_dir().ok() else {
+            return;
+        };
+        let Some(parent) = cwd.parent() else {
+            return;
+        };
+        let Some(parent_str) = parent.to_str() else {
+            return;
+        };
+        assert_eq!(expand_path(".."), Some(parent_str.to_string()));
+        let expected_src = parent.join("src").to_str().map(|value| value.to_string());
+        assert_eq!(expand_path("../src"), expected_src);
+    }
+
+    #[test]
+    fn parse_directory_path_rejects_empty_and_plain_search_terms() {
+        assert_eq!(parse_directory_path(""), None);
+        assert_eq!(parse_directory_path(" "), None);
+        assert_eq!(parse_directory_path("notes"), None);
+        assert_eq!(parse_directory_path("plain search"), None);
+    }
+
+    #[test]
+    fn parse_directory_path_normalizes_home_root() {
+        assert_eq!(parse_directory_path("~"), parsed("~/", None, false));
+        assert_eq!(parse_directory_path("~/"), parsed("~/", None, false));
+        assert_eq!(parse_directory_path(" ~/ "), parsed("~/", None, false));
+    }
+
+    #[test]
+    fn parse_directory_path_parses_home_filters_when_home_exists() {
+        if dirs::home_dir().filter(|path| path.is_dir()).is_some() {
+            assert_eq!(
+                parse_directory_path("~/Documents"),
+                parsed("~/", Some("Documents"), false)
+            );
+        }
+    }
+
+    #[test]
+    fn parse_directory_path_parses_relative_directory_and_filters() {
+        assert_eq!(parse_directory_path("./"), parsed("./", None, false));
+        assert_eq!(
+            parse_directory_path("./src"),
+            parsed("./", Some("src"), false)
+        );
+        assert_eq!(
+            parse_directory_path(" ./src "),
+            parsed("./", Some("src"), false)
+        );
+    }
+
+    #[test]
+    fn parse_directory_path_parses_absolute_filters_with_root_parent() {
+        assert_eq!(
+            parse_directory_path("/script-kit-filter"),
+            parsed("/", Some("script-kit-filter"), false)
+        );
+    }
+
+    #[test]
+    fn parse_directory_path_marks_hidden_filters_as_show_hidden() {
+        assert_eq!(
+            parse_directory_path("./.env"),
+            parsed("./", Some(".env"), true)
+        );
+        assert_eq!(
+            parse_directory_path("/.script-kit-hidden-filter"),
+            parsed("/", Some(".script-kit-hidden-filter"), true)
+        );
+        if dirs::home_dir().filter(|path| path.is_dir()).is_some() {
+            assert_eq!(
+                parse_directory_path("~/.config"),
+                parsed("~/", Some(".config"), true)
+            );
+        }
+    }
+
+    #[test]
+    fn parse_directory_path_returns_none_for_missing_complete_directory() {
+        assert_eq!(
+            parse_directory_path("/script-kit-gpui-definitely-missing-directory-zzzz/"),
+            None
+        );
+    }
+}
