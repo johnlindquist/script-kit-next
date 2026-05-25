@@ -182,8 +182,15 @@ impl ScriptListApp {
             backend = ?profile.backend,
         );
 
-        self.close_tab_ai_harness_terminal(cx);
-        self.embedded_acp_chat = None;
+        if let AppView::AcpChatView { entity } = &self.current_view {
+            let entity = entity.clone();
+            entity.update(cx, |view, cx| {
+                view.set_profile_display(profile.name.clone(), profile.icon_name.clone(), cx);
+            });
+            cx.notify();
+            return;
+        }
+
         self.open_tab_ai_acp_with_entry_intent(None, cx);
     }
 
@@ -902,6 +909,13 @@ impl ScriptListApp {
             current_view = ?self.current_view,
         );
         self.open_tab_ai_acp_with_entry_intent(None, cx);
+        self.filter_text.clear();
+        self.computed_filter_text.clear();
+        self.pending_programmatic_filter_echo = Some(String::new());
+        self.gpui_input_state.update(cx, |state, cx| {
+            state.set_value(String::new(), window, cx);
+            state.set_selection(0, 0, window, cx);
+        });
 
         let detached_opened = crate::ai::acp::chat_window::open_detached_profile_picker(cx);
         tracing::info!(

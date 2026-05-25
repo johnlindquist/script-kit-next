@@ -480,6 +480,11 @@ function isPromptEntityTargetReceipt(receipt: JsonObject) {
     || resolved?.appViewVariant === "ArgPrompt";
 }
 
+function isPromptPopupTargetReceipt(receipt: JsonObject) {
+  const resolved = targetInfo(receipt);
+  return resolved?.targetKind === "PromptPopup";
+}
+
 function shouldUseLauncherSetFilter(args: Args, targetReceipt: JsonObject) {
   return args.actionKind === "set-input" && isScriptListTargetReceipt(targetReceipt);
 }
@@ -529,6 +534,16 @@ function isNonDestructiveActionsDialogSubmit(actionId: string | null, parentSubj
   });
 }
 
+function requestedActivationSemanticId(args: Args, before: JsonObject) {
+  if (args.actionKind === "select" && args.semanticId) return args.semanticId;
+  return typeof before.selectedSemanticId === "string" ? before.selectedSemanticId : null;
+}
+
+function isNonDestructivePromptPopupProfileActivation(semanticId: string | null) {
+  if (!semanticId) return false;
+  return /^choice:\d+:(agent-chat-profile:)?(general|text|script-kit|acp)$/.test(semanticId);
+}
+
 function isNonDestructiveSubmit(preflight: SubmitLifecycleState) {
   return preflight.state === "dispatched"
     && (isNonDestructiveLauncherSubmit(preflight.actionId ?? null)
@@ -539,9 +554,15 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
   if (!isSubmitLike(args)) {
     return { state: "not-submit", reason: "action is not submit-like" };
   }
-  const selectedSemanticId = before.selectedSemanticId ?? null;
+  const selectedSemanticId = requestedActivationSemanticId(args, before);
   const actionId = selectedActionIdFromSemanticId(selectedSemanticId);
   if (!isActionsDialogTargetReceipt(targetReceipt)) {
+    if (
+      isPromptPopupTargetReceipt(targetReceipt)
+      && isNonDestructivePromptPopupProfileActivation(selectedSemanticId)
+    ) {
+      return { state: "dispatched", actionId: selectedSemanticId };
+    }
     if (isPromptEntityTargetReceipt(targetReceipt)) {
       return {
         state: "dispatched",
@@ -650,11 +671,12 @@ function resolvePostActionLifecycle(
   submitLifecycle: SubmitLifecycleState,
   sourceAfter: JsonObject,
   parentAfter: JsonObject | null,
+  lifecycleSensitiveAction = false,
 ): PostActionLifecycleState {
   if (isSubmitLike(args)) {
     return submitLifecycle;
   }
-  if (!isDismissLike(args)) {
+  if (!isDismissLike(args) && !lifecycleSensitiveAction) {
     return { state: "not-lifecycle-sensitive", reason: "action keeps source target inspectable" };
   }
   if (sourceAfter.classification === "ok") {
@@ -679,6 +701,13 @@ function resolvePostActionLifecycle(
     sourceAfter,
     parentAfter,
   };
+}
+
+function isSuccessfulPromptPopupSelect(args: Args, targetReceipt: JsonObject, actionReceipt: JsonObject) {
+  return args.actionKind === "select"
+    && isPromptPopupTargetReceipt(targetReceipt)
+    && actionReceipt.type === "batchResult"
+    && actionReceipt.success === true;
 }
 
 function classify(
@@ -767,9 +796,18 @@ async function main() {
   const endedAt = new Date().toISOString();
   const actionReceipt = responseOf(actionEnvelope);
   const parentAfterSubmit = isSubmitLike(args) ? await inspectParentAfterSubmit(args, targetReceipt) : null;
-  const parentAfterAction = isDismissLike(args) ? await inspectParentAfterAction(args, targetReceipt) : parentAfterSubmit;
+  const parentAfterAction = isDismissLike(args) || isSuccessfulPromptPopupSelect(args, targetReceipt, actionReceipt)
+    ? await inspectParentAfterAction(args, targetReceipt)
+    : parentAfterSubmit;
   const submitLifecycle = resolveSubmitLifecycleAfterAction(preflight, after, parentAfterSubmit);
-  const postActionLifecycle = resolvePostActionLifecycle(args, submitLifecycle, after, parentAfterAction);
+  const promptPopupSelectClosedSource = isSuccessfulPromptPopupSelect(args, targetReceipt, actionReceipt);
+  const postActionLifecycle = resolvePostActionLifecycle(
+    args,
+    submitLifecycle,
+    after,
+    parentAfterAction,
+    promptPopupSelectClosedSource,
+  );
   const classification = classify(args, targetReceipt, guardWithPreflight, actionReceipt, after, submitLifecycle, postActionLifecycle);
 
   console.log(JSON.stringify({

@@ -1834,6 +1834,17 @@ impl AcpThread {
         self.profile_icon_name.as_deref()
     }
 
+    pub(crate) fn set_profile_display(
+        &mut self,
+        profile_display_name: SharedString,
+        profile_icon_name: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.profile_display_name = Some(profile_display_name);
+        self.profile_icon_name = profile_icon_name;
+        cx.notify();
+    }
+
     /// Short display name for the currently selected model, or the agent name if none selected.
     pub(crate) fn selected_model_display(&self) -> &str {
         self.selected_model_display_name

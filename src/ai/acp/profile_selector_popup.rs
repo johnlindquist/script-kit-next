@@ -112,18 +112,20 @@ pub(crate) fn get_profile_selector_popup_snapshot(
 ///
 /// Returns `Some(profile_id)` if found and selected, `None` otherwise.
 pub(crate) fn batch_select_profile_by_value(value: &str, cx: &mut App) -> Option<String> {
-    let storage = AGENT_CHAT_PROFILE_SELECTOR_POPUP_WINDOW.get()?;
-    let guard = storage.lock().ok()?;
-    let slot = guard.as_ref()?;
-    let snap = slot
-        .handle
-        .read_with(cx, |popup, _cx| popup.snapshot.clone())
-        .ok()?;
-    // Verify the profile exists in the snapshot
-    if !snap.entries.iter().any(|entry| entry.id == value) {
-        return None;
-    }
-    let _ = slot.handle.update(cx, |popup, _window, cx| {
+    let handle = {
+        let storage = AGENT_CHAT_PROFILE_SELECTOR_POPUP_WINDOW.get()?;
+        let guard = storage.lock().ok()?;
+        let slot = guard.as_ref()?;
+        let snap = slot
+            .handle
+            .read_with(cx, |popup, _cx| popup.snapshot.clone())
+            .ok()?;
+        if !snap.entries.iter().any(|entry| entry.id == value) {
+            return None;
+        }
+        slot.handle.clone()
+    };
+    let _ = handle.update(cx, |popup, _window, cx| {
         popup.select_profile(value, cx);
     });
     Some(value.to_string())

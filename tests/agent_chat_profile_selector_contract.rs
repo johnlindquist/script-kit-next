@@ -19,6 +19,7 @@ const DETACHED_TRANSACTION_PROVIDER_SOURCE: &str =
     include_str!("../src/windows/automation_transaction_provider.rs");
 const FOOTER_CHROME_SOURCE: &str = include_str!("../src/components/footer_chrome.rs");
 const FOOTER_POPUP_SOURCE: &str = include_str!("../src/footer_popup.rs");
+const DEVTOOLS_ACT_SOURCE: &str = include_str!("../scripts/devtools/act.ts");
 
 fn fn_body<'a>(source: &'a str, signature: &str) -> &'a str {
     let start = source.find(signature).expect("signature must exist");
@@ -65,13 +66,13 @@ fn profile_selection_persistence_preserves_acp_fallback_and_stable_ids() {
 }
 
 #[test]
-fn profile_selection_relaunches_fresh_in_shared_agent_chat_host() {
+fn profile_selection_updates_live_agent_chat_footer_without_relaunch() {
     assert!(ACTION_HANDLER_SOURCE.contains("agent_chat_switch_profile_id_from_action"));
     assert!(ACTION_HANDLER_SOURCE.contains("persist_agent_chat_profile_selection"));
-    assert!(ACTION_HANDLER_SOURCE.contains("self.close_tab_ai_harness_terminal(cx);"));
-    assert!(ACTION_HANDLER_SOURCE.contains("self.embedded_acp_chat = None;"));
-    assert!(ACTION_HANDLER_SOURCE.contains("self.open_tab_ai_acp_with_entry_intent(None, cx);"));
     assert!(ACP_VIEW_SOURCE.contains("set_on_profile_selected"));
+    assert!(ACP_THREAD_SOURCE.contains("pub(crate) fn set_profile_display("));
+    assert!(ACP_VIEW_SOURCE.contains("pub(crate) fn set_profile_display("));
+    assert!(TAB_AI_MODE_SOURCE.contains("view.set_profile_display("));
     assert!(TAB_AI_MODE_SOURCE.contains("select_agent_chat_profile_and_relaunch"));
 }
 
@@ -151,6 +152,7 @@ fn profile_selector_batch_routing_precedes_mention_picker() {
     );
 
     assert!(PROMPT_HANDLER_SOURCE.contains("batch_select_profile_by_semantic_id"));
+    assert!(PROMPT_HANDLER_SOURCE.contains("is_profile_selector_popup_window_open"));
     assert!(AUTOMATION_COLLECTOR_SOURCE.contains("collect_profile_selector_snapshot"));
     assert!(AUTOMATION_COLLECTOR_SOURCE.contains("panel:profile-selector"));
     assert!(DETACHED_TRANSACTION_PROVIDER_SOURCE
@@ -195,6 +197,15 @@ fn pipe_trigger_selects_agent_chat_profiles_without_context_attachment() {
     assert!(refresh_body.contains("ContextPickerTrigger::Profile"));
     assert!(refresh_body.contains("self.build_profile_picker_items(&query)"));
     assert!(ACP_VIEW_SOURCE.contains("self.select_profile_from_popup(&profile_id, cx);"));
+    let open_profile_body = fn_body(ACP_VIEW_SOURCE, "pub(crate) fn open_profile_picker(");
+    assert!(
+        open_profile_body.contains("self.profile_selector_open = true;"),
+        "main-menu pipe launch should open the dedicated Agent Chat profile selector"
+    );
+    assert!(
+        !open_profile_body.contains("self.open_picker_trigger(PROFILE_TRIGGER_STR"),
+        "main-menu pipe launch must not seed | into the ACP composer"
+    );
     let accept_body = fn_body(ACP_VIEW_SOURCE, "fn accept_mention_selection_impl(");
     assert!(accept_body.contains("ContextPickerTrigger::Profile"));
     assert!(accept_body.contains("ContextPickerItemKind::AgentChatProfile"));
@@ -208,7 +219,26 @@ fn pipe_trigger_routes_from_main_menu_to_profile_picker() {
     assert!(TAB_AI_MODE_SOURCE.contains("open_tab_ai_acp_with_profile_picker"));
     assert!(TAB_AI_MODE_SOURCE.contains("view.open_profile_picker_in_window(window, cx)"));
     assert!(ACP_VIEW_SOURCE.contains("pub(crate) fn open_profile_picker_in_window("));
-    assert!(ACP_LAUNCH_IMPL_SOURCE.contains("Some(trigger @ ('/' | '@' | '|'))"));
+    let initial_input_body = fn_body(
+        ACP_LAUNCH_IMPL_SOURCE,
+        "pub(super) fn tab_ai_acp_initial_input_for_launch(",
+    );
+    assert!(initial_input_body.contains("Some(trigger @ ('/' | '@'))"));
+    assert!(
+        !initial_input_body.contains("'|'"),
+        "pipe profile selection must keep the Agent Chat composer empty"
+    );
+}
+
+#[test]
+fn devtools_profile_popup_select_is_lifecycle_sensitive() {
+    assert!(DEVTOOLS_ACT_SOURCE.contains("function isPromptPopupTargetReceipt("));
+    assert!(DEVTOOLS_ACT_SOURCE.contains("targetInfo(receipt)"));
+    assert!(DEVTOOLS_ACT_SOURCE.contains("function isSuccessfulPromptPopupSelect("));
+    assert!(DEVTOOLS_ACT_SOURCE.contains("isPromptPopupTargetReceipt(targetReceipt)"));
+    assert!(DEVTOOLS_ACT_SOURCE.contains("promptPopupSelectClosedSource"));
+    assert!(DEVTOOLS_ACT_SOURCE.contains("resolvePostActionLifecycle("));
+    assert!(DEVTOOLS_ACT_SOURCE.contains("(agent-chat-profile:)?(general|text|script-kit|acp)"));
 }
 
 #[test]

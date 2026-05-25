@@ -966,6 +966,18 @@ impl AcpChatView {
         self.on_profile_selected = Some(std::sync::Arc::new(callback));
     }
 
+    pub(crate) fn set_profile_display(
+        &mut self,
+        profile_display_name: String,
+        profile_icon_name: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.live_thread().update(cx, |thread, cx| {
+            thread.set_profile_display(profile_display_name.into(), profile_icon_name, cx);
+        });
+        cx.notify();
+    }
+
     pub(crate) fn set_on_focused_text_expand_requested(
         &mut self,
         callback: impl Fn(&mut App) + 'static,
@@ -5343,7 +5355,15 @@ impl AcpChatView {
     }
 
     pub(crate) fn open_profile_picker(&mut self, cx: &mut Context<Self>) {
-        self.open_picker_trigger(PROFILE_TRIGGER_STR, cx);
+        self.attach_menu_open = false;
+        self.model_selector_open = false;
+        self.history_menu = None;
+        self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
+        self.profile_selector_open = true;
+        let entries = self.profile_selector_entries();
+        self.profile_selector_selected_index = self.selected_profile_popup_index(&entries);
+        self.sync_acp_popup_windows_from_cached_parent(cx);
+        cx.notify();
     }
 
     pub(crate) fn open_slash_picker_in_window(

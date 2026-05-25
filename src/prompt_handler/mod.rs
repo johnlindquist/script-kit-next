@@ -688,6 +688,7 @@ fn resolve_automation_read_target(
             // We verify at least one popup is open. The specific sub-type is detected at
             // batch-execution time since the popup could change between resolution and use.
             let any_open = crate::ai::acp::picker_popup::is_mention_popup_window_open()
+                || crate::ai::acp::profile_selector_popup::is_profile_selector_popup_window_open()
                 || crate::ai::acp::model_selector_popup::is_model_selector_popup_window_open()
                 || crate::ai::acp::history_popup::is_history_popup_window_open()
                 || crate::confirm::is_confirm_popup_window_open()
