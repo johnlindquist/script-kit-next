@@ -73,9 +73,7 @@ pub fn start_snap_runtime(cx: &mut App) -> Result<()> {
     );
 
     {
-        let mut guard = ACTIVE_SNAP_RUNTIME
-            .lock()
-            .map_err(|e| anyhow::anyhow!("snap runtime lock poisoned: {e}"))?;
+        let mut guard = super::snap_lock(&ACTIVE_SNAP_RUNTIME, "runtime")?;
         *guard = Some(ActiveSnapRuntime { session });
     }
 
@@ -96,9 +94,7 @@ pub fn start_snap_runtime(cx: &mut App) -> Result<()> {
 /// Advance the runtime by one tick. Returns `false` only when the runtime
 /// is no longer active (for example the tracked window disappeared).
 pub fn tick_snap_runtime(cx: &mut App) -> Result<bool> {
-    let mut guard = ACTIVE_SNAP_RUNTIME
-        .lock()
-        .map_err(|e| anyhow::anyhow!("snap runtime lock poisoned: {e}"))?;
+    let mut guard = super::snap_lock(&ACTIVE_SNAP_RUNTIME, "runtime")?;
 
     let Some(runtime) = guard.as_mut() else {
         return Ok(false);
@@ -144,9 +140,7 @@ pub fn tick_snap_runtime(cx: &mut App) -> Result<bool> {
 /// Finish the snap runtime on mouse-up. Commits when there is an active match,
 /// otherwise cancels cleanly.
 pub fn finish_snap_runtime(cx: &mut App) -> Result<()> {
-    let mut guard = ACTIVE_SNAP_RUNTIME
-        .lock()
-        .map_err(|e| anyhow::anyhow!("snap runtime lock poisoned: {e}"))?;
+    let mut guard = super::snap_lock(&ACTIVE_SNAP_RUNTIME, "runtime")?;
 
     let Some(runtime) = guard.take() else {
         return Ok(());
@@ -168,9 +162,7 @@ pub fn finish_snap_runtime(cx: &mut App) -> Result<()> {
 
 /// Cancel the snap runtime without applying changes.
 pub fn cancel_snap_runtime(cx: &mut App) -> Result<()> {
-    let mut guard = ACTIVE_SNAP_RUNTIME
-        .lock()
-        .map_err(|e| anyhow::anyhow!("snap runtime lock poisoned: {e}"))?;
+    let mut guard = super::snap_lock(&ACTIVE_SNAP_RUNTIME, "runtime")?;
 
     if let Some(runtime) = guard.take() {
         let outcome = cancel_snap_session(&runtime.session);
@@ -192,9 +184,7 @@ pub fn cancel_snap_runtime(cx: &mut App) -> Result<()> {
 /// Refresh the active runtime after a snap-mode change without losing the
 /// currently tracked window or overlay lifecycle.
 pub fn refresh_snap_runtime_for_mode(cx: &mut App) -> Result<()> {
-    let mut guard = ACTIVE_SNAP_RUNTIME
-        .lock()
-        .map_err(|e| anyhow::anyhow!("snap runtime lock poisoned: {e}"))?;
+    let mut guard = super::snap_lock(&ACTIVE_SNAP_RUNTIME, "runtime")?;
 
     let Some(runtime) = guard.as_mut() else {
         return Ok(());

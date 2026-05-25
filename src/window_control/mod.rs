@@ -37,6 +37,14 @@ mod types;
 
 use ffi::AXUIElementRef;
 
+fn snap_lock<'a, T>(
+    lock: &'a std::sync::Mutex<T>,
+    domain: &'static str,
+) -> anyhow::Result<std::sync::MutexGuard<'a, T>> {
+    lock.lock()
+        .map_err(|error| anyhow::anyhow!("snap {domain} lock poisoned: {error}"))
+}
+
 pub use actions::{
     close_window, focus_window, maximize_window, minimize_window, move_to_next_display,
     move_to_previous_display, move_window, resize_window, tile_window,

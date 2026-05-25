@@ -84,18 +84,14 @@ fn handle_snap_monitor_event(event: SnapMonitorEvent, cx: &mut App) -> Result<()
             let armed = get_frontmost_window_of_previous_app()?
                 .as_ref()
                 .map(arm_state_for_window);
-            *DRAG_ARM_STATE
-                .lock()
-                .map_err(|e| anyhow!("snap monitor arm lock poisoned: {e}"))? = armed;
+            *super::snap_lock(&DRAG_ARM_STATE, "monitor arm")? = armed;
         }
         SnapMonitorEvent::Dragged => {
             if is_snap_runtime_active() {
                 return Ok(());
             }
 
-            let armed = *DRAG_ARM_STATE
-                .lock()
-                .map_err(|e| anyhow!("snap monitor arm lock poisoned: {e}"))?;
+            let armed = *super::snap_lock(&DRAG_ARM_STATE, "monitor arm")?;
             let Some(armed) = armed else {
                 return Ok(());
             };
@@ -103,9 +99,7 @@ fn handle_snap_monitor_event(event: SnapMonitorEvent, cx: &mut App) -> Result<()
             let current_bounds = poll_armed_window_bounds(armed.window_id);
 
             if should_start_runtime(armed, current_bounds) {
-                *DRAG_ARM_STATE
-                    .lock()
-                    .map_err(|e| anyhow!("snap monitor arm lock poisoned: {e}"))? = None;
+                *super::snap_lock(&DRAG_ARM_STATE, "monitor arm")? = None;
                 tracing::info!(
                     target: "script_kit::snap_monitor",
                     event = "snap_drag_started",
@@ -114,15 +108,11 @@ fn handle_snap_monitor_event(event: SnapMonitorEvent, cx: &mut App) -> Result<()
                 );
                 start_snap_runtime(cx)?;
             } else if current_bounds.is_none() {
-                *DRAG_ARM_STATE
-                    .lock()
-                    .map_err(|e| anyhow!("snap monitor arm lock poisoned: {e}"))? = None;
+                *super::snap_lock(&DRAG_ARM_STATE, "monitor arm")? = None;
             }
         }
         SnapMonitorEvent::Released => {
-            *DRAG_ARM_STATE
-                .lock()
-                .map_err(|e| anyhow!("snap monitor arm lock poisoned: {e}"))? = None;
+            *super::snap_lock(&DRAG_ARM_STATE, "monitor arm")? = None;
 
             if is_snap_runtime_active() {
                 tracing::info!(

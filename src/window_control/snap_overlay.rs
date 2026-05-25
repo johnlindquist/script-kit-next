@@ -232,9 +232,7 @@ impl Render for SnapOverlayView {
 ///
 /// Idempotent — returns immediately if windows are already open.
 pub fn ensure_snap_overlay_windows(cx: &mut App) -> Result<()> {
-    let mut guard = SNAP_OVERLAY_WINDOWS
-        .lock()
-        .map_err(|e| anyhow::anyhow!("snap overlay lock poisoned: {e}"))?;
+    let mut guard = super::snap_lock(&SNAP_OVERLAY_WINDOWS, "overlay")?;
 
     let native_displays = get_native_display_descriptors()
         .context("failed to query native display descriptors for snap overlay")?;
@@ -354,9 +352,7 @@ pub fn ensure_snap_overlay_windows(cx: &mut App) -> Result<()> {
         });
     }
 
-    let mut guard = SNAP_OVERLAY_WINDOWS
-        .lock()
-        .map_err(|e| anyhow::anyhow!("snap overlay lock poisoned: {e}"))?;
+    let mut guard = super::snap_lock(&SNAP_OVERLAY_WINDOWS, "overlay")?;
     *guard = overlay_windows;
 
     tracing::info!(
@@ -376,9 +372,7 @@ pub fn ensure_snap_overlay_windows(cx: &mut App) -> Result<()> {
 pub fn show_snap_overlay(scene: SnapOverlayScene, cx: &mut App) -> Result<()> {
     ensure_snap_overlay_windows(cx)?;
 
-    let guard = SNAP_OVERLAY_WINDOWS
-        .lock()
-        .map_err(|e| anyhow::anyhow!("snap overlay lock poisoned: {e}"))?;
+    let guard = super::snap_lock(&SNAP_OVERLAY_WINDOWS, "overlay")?;
 
     for overlay in guard.iter() {
         let model_for_window = scene
@@ -405,9 +399,7 @@ pub fn show_snap_overlay(scene: SnapOverlayScene, cx: &mut App) -> Result<()> {
 
 /// Hide the snap overlay on all displays.
 pub fn hide_snap_overlay(cx: &mut App) -> Result<()> {
-    let guard = SNAP_OVERLAY_WINDOWS
-        .lock()
-        .map_err(|e| anyhow::anyhow!("snap overlay lock poisoned: {e}"))?;
+    let guard = super::snap_lock(&SNAP_OVERLAY_WINDOWS, "overlay")?;
 
     for overlay in guard.iter() {
         let _ = overlay.handle.update(cx, |view, _window, cx| {
