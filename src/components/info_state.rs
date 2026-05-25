@@ -221,6 +221,21 @@ impl InfoSection {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct InfoShortcutNote {
+    pub shortcut: &'static str,
+    pub text: SharedString,
+}
+
+impl InfoShortcutNote {
+    pub(crate) fn new(shortcut: &'static str, text: impl Into<SharedString>) -> Self {
+        Self {
+            shortcut,
+            text: text.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct InfoStateSpec {
     pub id: &'static str,
     pub layout: InfoStateLayout,
@@ -231,6 +246,7 @@ pub(crate) struct InfoStateSpec {
     pub body: Option<SharedString>,
     pub sections: Vec<InfoSection>,
     pub footer_note: Option<SharedString>,
+    pub footer_shortcut_note: Option<InfoShortcutNote>,
 }
 
 impl InfoStateSpec {
@@ -245,6 +261,7 @@ impl InfoStateSpec {
             body: None,
             sections: Vec::new(),
             footer_note: None,
+            footer_shortcut_note: None,
         }
     }
 
@@ -285,6 +302,17 @@ impl InfoStateSpec {
 
     pub(crate) fn footer_note(mut self, note: impl Into<SharedString>) -> Self {
         self.footer_note = Some(note.into());
+        self.footer_shortcut_note = None;
+        self
+    }
+
+    pub(crate) fn footer_shortcut_note(
+        mut self,
+        shortcut: &'static str,
+        text: impl Into<SharedString>,
+    ) -> Self {
+        self.footer_shortcut_note = Some(InfoShortcutNote::new(shortcut, text));
+        self.footer_note = None;
         self
     }
 }
@@ -302,7 +330,7 @@ pub(crate) fn acp_empty_guidance_spec() -> InfoStateSpec {
             InfoGuidanceItem::new(Some("⇧↵"), "Add a newline"),
             InfoGuidanceItem::new(Some("⌘P"), "Open previous chats"),
         ]))
-        .footer_note("⌘K shows every chat action.")
+        .footer_shortcut_note("⌘K", "shows every chat action.")
 }
 
 pub(crate) fn render_acp_empty_guidance(theme: &theme::Theme) -> AnyElement {
@@ -540,17 +568,44 @@ fn render_info_content(
         ));
     }
 
-    if let Some(note) = spec.footer_note.clone() {
-        stack = stack.child(
-            div()
-                .text_size(px(INFO_TYPE_SCALE.caption.size))
-                .line_height(px(INFO_TYPE_SCALE.caption.line))
-                .text_color(palette.hint)
-                .child(note),
-        );
+    if let Some(note) = spec.footer_shortcut_note.clone() {
+        stack = stack.child(render_info_shortcut_note(note, theme, palette));
+    } else if let Some(note) = spec.footer_note.clone() {
+        stack = stack.child(render_info_plain_footer_note(note, palette));
     }
 
     stack
+}
+
+fn render_info_plain_footer_note(note: SharedString, palette: InfoPalette) -> AnyElement {
+    div()
+        .text_size(px(INFO_TYPE_SCALE.caption.size))
+        .line_height(px(INFO_TYPE_SCALE.caption.line))
+        .text_color(palette.hint)
+        .child(note)
+        .into_any_element()
+}
+
+fn render_info_shortcut_note(
+    note: InfoShortcutNote,
+    theme: &theme::Theme,
+    palette: InfoPalette,
+) -> AnyElement {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(INFO_SPACING.xs * 0.5))
+        .text_size(px(INFO_TYPE_SCALE.caption.size))
+        .line_height(px(INFO_TYPE_SCALE.caption.line))
+        .text_color(palette.hint)
+        .child(
+            crate::components::footer_chrome::render_footer_shortcut_keycaps(
+                note.shortcut.to_string(),
+                theme,
+            ),
+        )
+        .child(note.text)
+        .into_any_element()
 }
 
 fn render_info_section(

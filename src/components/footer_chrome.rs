@@ -31,6 +31,8 @@ pub(crate) const FOOTER_APPLY_SLOT_WIDTH_PX: f32 = 84.0;
 pub(crate) const FOOTER_CLOSE_SLOT_WIDTH_PX: f32 = 84.0;
 pub(crate) const FOOTER_STOP_SLOT_WIDTH_PX: f32 = 76.0;
 pub(crate) const FOOTER_PASTE_RESPONSE_SLOT_WIDTH_PX: f32 = 140.0;
+pub(crate) const FOOTER_SHORTCUT_LAYOUT_MEASUREMENT_SOURCE: &str =
+    "runtime.footerChrome.shortcutKeycapLayoutModel";
 
 pub(crate) const FOOTER_CHIP_BORDER_ALPHA: f32 = 0.18;
 pub(crate) const FOOTER_CHIP_BORDER_HOVER_ALPHA: f32 = 0.34;
@@ -371,6 +373,13 @@ fn render_footer_hint_content_impl(
 
 pub(crate) fn footer_shortcut_keycaps_width_px(shortcut: &str) -> f32 {
     let tokens = split_footer_shortcut(shortcut);
+    footer_shortcut_keycaps_width_px_from_tokens(tokens.iter().map(String::as_str))
+}
+
+pub(crate) fn footer_shortcut_keycaps_width_px_from_tokens<'a>(
+    tokens: impl IntoIterator<Item = &'a str>,
+) -> f32 {
+    let tokens = tokens.into_iter().collect::<Vec<_>>();
     if tokens.is_empty() {
         return 0.0;
     }
@@ -549,6 +558,27 @@ fn render_footer_labelcap_constrained(
 }
 
 pub(crate) fn render_footer_shortcut_keycaps(shortcut: String, theme: &Theme) -> AnyElement {
+    let tokens = split_footer_shortcut(&shortcut);
+    render_footer_shortcut_keycaps_from_tokens(tokens.iter().map(String::as_str), theme)
+}
+
+pub(crate) fn render_footer_row_shortcut_keycaps_from_tokens<'a>(
+    tokens: impl IntoIterator<Item = &'a str>,
+    theme: &Theme,
+) -> AnyElement {
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .group("footer-action-button")
+        .child(render_footer_shortcut_keycaps_from_tokens(tokens, theme))
+        .into_any_element()
+}
+
+pub(crate) fn render_footer_shortcut_keycaps_from_tokens<'a>(
+    tokens: impl IntoIterator<Item = &'a str>,
+    theme: &Theme,
+) -> AnyElement {
     div()
         .flex()
         .flex_none()
@@ -556,11 +586,70 @@ pub(crate) fn render_footer_shortcut_keycaps(shortcut: String, theme: &Theme) ->
         .items_center()
         .gap(px(FOOTER_ACTION_CONTENT_GAP_PX))
         .children(
-            split_footer_shortcut(&shortcut)
+            tokens
                 .into_iter()
-                .map(|token| render_footer_keycap(token, None, theme)),
+                .map(|token| render_footer_keycap(token.to_string(), None, theme)),
         )
         .into_any_element()
+}
+
+pub(crate) fn footer_shortcut_keycap_layout_model<'a>(
+    tokens: impl IntoIterator<Item = &'a str>,
+    origin_x: f32,
+    origin_y: f32,
+) -> serde_json::Value {
+    let tokens = tokens.into_iter().collect::<Vec<_>>();
+    let mut x = origin_x;
+    let mut token_values = Vec::new();
+    let mut token_bounds = Vec::new();
+
+    for token in tokens {
+        let width = footer_keycap_estimated_width_px(token);
+        token_values.push(token.to_string());
+        token_bounds.push(serde_json::json!({
+            "token": token,
+            "kind": if is_footer_icon_token(token) { "iconKeycap" } else { "keycap" },
+            "bounds": {
+                "x": x,
+                "y": origin_y,
+                "width": width,
+                "height": FOOTER_KEYCAP_HEIGHT_PX,
+            },
+            "widthExact": false,
+            "widthSource": "footer-keycap-estimate",
+            "heightSource": "footer-keycap-constant",
+            "glyphNudgeY": footer_key_glyph_nudge_y(token),
+            "borderWidth": 1.0,
+            "radius": FOOTER_KEYCAP_RADIUS_PX,
+            "paddingX": FOOTER_KEYCAP_PADDING_X_PX,
+            "fontSize": FOOTER_HINT_FONT_SIZE_PX,
+        }));
+        x += width + FOOTER_ACTION_CONTENT_GAP_PX;
+    }
+
+    if !token_bounds.is_empty() {
+        x -= FOOTER_ACTION_CONTENT_GAP_PX;
+    }
+
+    serde_json::json!({
+        "tokens": token_values,
+        "tokenBounds": token_bounds,
+        "bounds": {
+            "x": origin_x,
+            "y": origin_y,
+            "width": (x - origin_x).max(0.0),
+            "height": if token_bounds.is_empty() { 0.0 } else { FOOTER_KEYCAP_HEIGHT_PX },
+        },
+        "boundsAvailable": true,
+        "coordinateSpace": "providedOriginLogicalPx",
+        "units": "logicalPx",
+        "gap": FOOTER_ACTION_CONTENT_GAP_PX,
+        "heightSource": "footer-keycap-constant",
+        "widthSource": "footer-keycap-token-model",
+        "exactTokenBounds": false,
+        "measurementSource": FOOTER_SHORTCUT_LAYOUT_MEASUREMENT_SOURCE,
+        "stopReason": "text glyph widths use the footer keycap font estimate until GPUI exposes measured text layout",
+    })
 }
 
 fn render_footer_keycap(token: String, max_width_px: Option<f32>, theme: &Theme) -> AnyElement {

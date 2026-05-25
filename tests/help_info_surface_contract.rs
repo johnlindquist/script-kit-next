@@ -43,7 +43,7 @@ fn info_state_keeps_context_first_acp_copy() {
     assert!(source.contains("Ask with context"));
     assert!(source.contains("Use / for skills or @ to attach context"));
     assert!(source.contains("Attach files, scripts, clipboard, or history"));
-    assert!(source.contains("⌘K shows every chat action."));
+    assert!(source.contains(".footer_shortcut_note(\"⌘K\", \"shows every chat action.\")"));
     assert!(!source.contains("⌘N new"));
     assert!(!source.contains("⌘W close"));
 }
@@ -77,6 +77,33 @@ fn info_guidance_shortcuts_use_footer_keycaps_not_hint_strip() {
 }
 
 #[test]
+fn info_footer_shortcut_notes_use_footer_keycaps_not_raw_text() {
+    let info = fs::read_to_string("src/components/info_state.rs")
+        .expect("failed to read src/components/info_state.rs");
+    let note_renderer = section_between(
+        &info,
+        "fn render_info_shortcut_note",
+        "\nfn render_info_section",
+    );
+
+    assert!(
+        info.contains("InfoShortcutNote")
+            && info.contains(".footer_shortcut_note(\"⌘K\", \"shows every chat action.\")"),
+        "shortcut-bearing help notes should be modeled as shortcut plus text, not one raw string"
+    );
+    assert!(
+        note_renderer.contains("crate::components::footer_chrome::render_footer_shortcut_keycaps"),
+        "InfoState footer shortcut notes must render through footer keycaps"
+    );
+    assert!(
+        !note_renderer.contains(".child(note.shortcut)")
+            && !note_renderer.contains(".child(note.shortcut.to_string())")
+            && !info.contains(".footer_note(\"⌘K shows every chat action.\")"),
+        "InfoState footer shortcut notes must not regress to raw shortcut text"
+    );
+}
+
+#[test]
 fn footer_chrome_exposes_only_shared_shortcut_keycap_row_for_help_surfaces() {
     let footer = fs::read_to_string("src/components/footer_chrome.rs")
         .expect("failed to read src/components/footer_chrome.rs");
@@ -88,8 +115,12 @@ fn footer_chrome_exposes_only_shared_shortcut_keycap_row_for_help_surfaces() {
 
     assert!(
         shortcut_renderer.contains("split_footer_shortcut(&shortcut)")
-            && shortcut_renderer.contains("render_footer_keycap(token, None, theme)"),
-        "shared footer shortcut keycap renderer must keep using the footer parser and keycap primitive"
+            && shortcut_renderer.contains("render_footer_shortcut_keycaps_from_tokens"),
+        "shared footer shortcut keycap renderer must keep using the footer parser and token helper"
+    );
+    assert!(
+        footer.contains("render_footer_keycap(token.to_string(), None, theme)"),
+        "shared footer shortcut token helper must keep using the footer keycap primitive"
     );
     assert!(
         footer.contains("fn render_footer_keycap("),

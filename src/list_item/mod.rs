@@ -1654,37 +1654,27 @@ impl RenderOnce for ListItem {
             self.shortcut.as_deref(),
             self.shortcut_tokens.as_deref(),
         );
-        let shortcut_element: AnyElement =
-            if let Some(shortcut_tokens) = resolved_shortcut_tokens.as_ref() {
-                let show_shortcut =
-                    should_show_search_shortcut(is_filtering, self.selected, hover_visible);
-                if show_shortcut {
-                    crate::components::hint_strip::emit_shortcut_chrome_audit(
-                        "list_item",
-                        "compact-inline-whisper-all-rows",
-                    );
-                    let glyph_color = if is_filtering {
-                        rgba((colors.text_dimmed << 8) | ALPHA_HINT)
-                    } else if self.selected {
-                        rgba((colors.text_muted << 8) | colors.alpha_strong)
-                    } else {
-                        rgba((colors.text_muted << 8) | colors.alpha_icon)
-                    };
-                    let chrome_color = rgba((colors.text_dimmed << 8) | colors.alpha_icon);
-                    crate::components::hint_strip::render_inline_shortcut_keys(
-                        shortcut_tokens.iter().map(String::as_str),
-                        crate::components::hint_strip::whisper_inline_shortcut_colors(
-                            glyph_color.into(),
-                            chrome_color.into(),
-                            !is_filtering,
-                        ),
-                    )
-                } else {
-                    div().into_any_element()
-                }
+        let shortcut_element: AnyElement = if let Some(shortcut_tokens) =
+            resolved_shortcut_tokens.as_ref()
+        {
+            let show_shortcut =
+                should_show_search_shortcut(is_filtering, self.selected, hover_visible);
+            if show_shortcut {
+                crate::components::hint_strip::emit_shortcut_chrome_audit(
+                    "list_item",
+                    "footer-keycap-selected-only",
+                );
+                let theme = crate::theme::get_cached_theme();
+                crate::components::footer_chrome::render_footer_row_shortcut_keycaps_from_tokens(
+                    shortcut_tokens.iter().map(String::as_str),
+                    &theme,
+                )
             } else {
                 div().into_any_element()
-            };
+            }
+        } else {
+            div().into_any_element()
+        };
 
         // Determine background color based on selection/hover state
         // Priority: selected (full focus styling) > hovered (subtle feedback) > transparent

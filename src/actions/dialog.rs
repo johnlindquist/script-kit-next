@@ -1735,7 +1735,7 @@ impl ActionsDialog {
                 Self::devtools_rect(0.0, viewport_y, POPUP_WIDTH, height)
             };
             let shortcut_layout = if kind == "action" && !shortcut_tokens.is_empty() {
-                let probe = crate::components::hint_strip::inline_shortcut_layout_model(
+                let probe = crate::components::footer_chrome::footer_shortcut_keycap_layout_model(
                     shortcut_tokens.iter().map(String::as_str),
                     0.0,
                     0.0,
@@ -1755,7 +1755,7 @@ impl ActionsDialog {
                 let inner_height = (height - 4.0).max(0.0);
                 let shortcut_x = inner_x + (inner_width - shortcut_width).max(0.0);
                 let shortcut_y = inner_y + ((inner_height - shortcut_height).max(0.0) / 2.0);
-                let layout = crate::components::hint_strip::inline_shortcut_layout_model(
+                let layout = crate::components::footer_chrome::footer_shortcut_keycap_layout_model(
                     shortcut_tokens.iter().map(String::as_str),
                     shortcut_x,
                     shortcut_y,
@@ -1894,7 +1894,7 @@ impl ActionsDialog {
                 "rowCount": shortcut_layout_rows.len(),
                 "rows": shortcut_layout_rows,
                 "stopReason": null,
-                "measurementSource": "runtime.hintStrip.inlineShortcutLayoutModel",
+                "measurementSource": crate::components::footer_chrome::FOOTER_SHORTCUT_LAYOUT_MEASUREMENT_SOURCE,
             },
             "disabledReasonLayout": {
                 "status": "no-visible-disabled-reasons",
@@ -3635,15 +3635,6 @@ impl Render for ActionsDialog {
                                         } else {
                                             strong_text
                                         };
-                                        // Shortcut chrome stays whisper-muted even on destructive rows.
-                                        // The destructive signal belongs on the action label/icon, not the shortcut.
-                                        let shortcut_glyph_color = if is_selected {
-                                            muted_text
-                                        } else {
-                                            hint_text
-                                        };
-                                        let shortcut_chrome_color = hint_text;
-
                                         let title_color = if is_destructive {
                                             destructive_text
                                         } else {
@@ -3817,13 +3808,9 @@ impl Render for ActionsDialog {
                                         if style.shortcut_visible && show_shortcut {
                                             if let Some(shortcut_tokens) = action_shortcut_tokens_for_render(action) {
                                                 content = content.child(
-                                                    crate::components::hint_strip::render_inline_shortcut_keys(
+                                                    crate::components::footer_chrome::render_footer_row_shortcut_keycaps_from_tokens(
                                                         shortcut_tokens.iter().map(String::as_str),
-                                                        crate::components::hint_strip::whisper_inline_shortcut_colors(
-                                                            shortcut_glyph_color.into(),
-                                                            shortcut_chrome_color.into(),
-                                                            true,
-                                                        ),
+                                                        this.theme.as_ref(),
                                                     ),
                                                 );
                                             }
