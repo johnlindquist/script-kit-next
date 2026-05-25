@@ -1039,6 +1039,37 @@ impl ScriptListApp {
             .detach();
         }
 
+        let app_entity_for_cmd_w = cx.entity().downgrade();
+        let cmd_w_interceptor = cx.intercept_keystrokes({
+            let app_entity = app_entity_for_cmd_w;
+            move |event, window, cx| {
+                if !is_plain_platform_cmd_w(event) {
+                    return;
+                }
+
+                let is_notes = crate::notes::is_notes_window(window);
+                let is_ai = crate::ai::is_ai_window(window);
+                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
+                let is_actions = crate::actions::is_actions_window(window);
+
+                if is_notes || is_ai || is_detached_acp {
+                    return;
+                }
+
+                if !script_kit_gpui::is_main_window_visible() && !is_actions {
+                    return;
+                }
+
+                if let Some(app) = app_entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.close_main_window_from_top_level_cmd_w(window, cx);
+                        cx.stop_propagation();
+                    });
+                }
+            }
+        });
+        app.gpui_input_subscriptions.push(cmd_w_interceptor);
+
         // Add Tab key interceptor for "Ask AI" feature and file search directory navigation
         // This fires BEFORE normal key handling, allowing us to intercept Tab
         // even when the Input component has focus

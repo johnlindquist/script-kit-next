@@ -5,6 +5,17 @@ use crate::ui_foundation::{
 };
 
 #[inline]
+fn is_plain_platform_cmd_w(event: &KeyDownEvent) -> bool {
+    let key = event.keystroke.key.as_str();
+    let modifiers = &event.keystroke.modifiers;
+    modifiers.platform
+        && !modifiers.shift
+        && !modifiers.alt
+        && !modifiers.control
+        && key.eq_ignore_ascii_case("w")
+}
+
+#[inline]
 fn is_key_left_bracket(key: &str) -> bool {
     key == "[" || key.eq_ignore_ascii_case("bracketleft")
 }
@@ -15,6 +26,41 @@ fn is_key_right_bracket(key: &str) -> bool {
 }
 
 impl NotesApp {
+    fn close_notes_window_from_top_level_cmd_w(
+        &mut self,
+        reason: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::info!(
+            target: "script_kit::keyboard",
+            event = "top_level_cmd_w_close_notes_window",
+            reason,
+            focus_surface = ?self.current_focus_surface(),
+            surface_mode = ?self.surface_mode,
+            show_search = self.show_search,
+            focus_mode = self.focus_mode,
+            has_active_dialog = window.has_active_dialog(cx),
+        );
+
+        self.save_current_note();
+
+        if self.surface_mode == NotesSurfaceMode::Acp {
+            self.prepare_embedded_acp_for_window_close(reason, cx);
+        }
+
+        self.command_bar.close_app(cx);
+        self.note_switcher.close_app(cx);
+
+        let wb = window.window_bounds();
+        crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Notes, wb);
+
+        window.close_all_dialogs(cx);
+        window.remove_window();
+        super::window_ops::restore_launcher_after_notes_close_if_needed(cx);
+        cx.stop_propagation();
+    }
+
     /// Handle Cmd+Shift+Backspace / Cmd+Shift+Delete shortcut to delete the selected note.
     ///
     /// Returns `true` if the shortcut was handled (caller should stop propagation).
@@ -64,6 +110,11 @@ impl NotesApp {
         cx: &mut Context<Self>,
     ) {
         self.hide_mouse_cursor(cx);
+
+        if is_plain_platform_cmd_w(event) {
+            self.close_notes_window_from_top_level_cmd_w("notes_top_level_cmd_w", window, cx);
+            return;
+        }
 
         let key = event.keystroke.key.as_str();
         let modifiers = &event.keystroke.modifiers;
