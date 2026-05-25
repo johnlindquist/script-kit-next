@@ -103,6 +103,10 @@ pub struct AcpStateSnapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_layout: Option<AcpInputLayoutMetrics>,
 
+    /// Redacted focused-text capture/apply state for the mini Agent Chat mode.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focused_text: Option<AcpFocusedTextState>,
+
     /// Structured setup card state, present when `status == "setup"`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub setup: Option<AcpSetupSnapshot>,
@@ -136,10 +140,27 @@ impl Default for AcpStateSnapshot {
             context_ready: true,
             has_pending_permission: false,
             input_layout: None,
+            focused_text: None,
             setup: None,
             warnings: Vec::new(),
         }
     }
+}
+
+/// Redacted focused-text mini Agent Chat state.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpFocusedTextState {
+    pub mode: String,
+    pub session_id: String,
+    pub app_name: String,
+    pub char_count: usize,
+    pub can_replace: bool,
+    pub can_append: bool,
+    pub can_copy: bool,
+    pub has_output: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_apply_action: Option<String>,
 }
 
 /// State of the inline mention/slash picker overlay.
@@ -824,6 +845,7 @@ mod tests {
                 visible_end: 14,
                 cursor_in_window: 14,
             }),
+            focused_text: None,
             setup: None,
             warnings: Vec::new(),
         };

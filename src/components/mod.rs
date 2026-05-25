@@ -36,6 +36,7 @@ pub mod form_fields;
 #[cfg(test)]
 mod form_fields_tests;
 pub mod hint_strip;
+pub(crate) mod info_state;
 pub(crate) mod inline_dropdown;
 pub mod inline_picker;
 pub mod inline_popup_window;
@@ -73,6 +74,13 @@ pub use form_fields::{
 pub use hint_strip::{
     render_hint_icons, render_hint_icons_clickable, render_hint_icons_hsla,
     render_selectable_hint_icons, ClickableHint, HintStrip, SelectableHint,
+};
+#[allow(unused_imports)]
+pub(crate) use info_state::{
+    acp_empty_guidance_spec, info_metrics, info_palette, render_acp_empty_guidance,
+    render_info_state, InfoGuidanceItem, InfoMetrics, InfoSection, InfoStateDensity,
+    InfoStateLayout, InfoStateSpec, InfoStateTone, InfoTextMetric, InfoTypeScale, INFO_SPACING,
+    INFO_TYPE_SCALE,
 };
 #[allow(unused_imports)]
 pub(crate) use inline_dropdown::{

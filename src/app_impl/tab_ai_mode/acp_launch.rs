@@ -82,7 +82,7 @@ impl ScriptListApp {
 
         // --- Permission broker + ACP connection ---
         let stage_started_at = std::time::Instant::now();
-        let (broker, permission_rx) = crate::ai::acp::AcpPermissionBroker::new();
+        let (_broker, permission_rx) = crate::ai::acp::AcpPermissionBroker::new();
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_open_stage",
@@ -93,13 +93,22 @@ impl ScriptListApp {
 
         let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
         let ai_preferences = crate::config::load_user_preferences().ai;
-        let effective_profile = crate::ai::agent_chat::profiles::resolve_effective_profile(
-            &ai_preferences,
-            &profile_ctx,
-        );
-        match crate::ai::agent_chat::launch::PiAgentChatLaunch::from_profile(
-            effective_profile.clone(),
-        ) {
+        let effective_profile =
+            crate::ai::agent_chat::profiles::resolve_effective_profile(&ai_preferences, &profile_ctx);
+        let focused_text_mini =
+            request.ui_variant == crate::ai::acp::ui_variant::AcpChatUiVariant::FocusedTextMini;
+        let pi_launch_result = if focused_text_mini {
+            crate::ai::agent_chat::launch::resolve_focused_text_pi_launch(
+                &ai_preferences,
+                &profile_ctx,
+            )
+            .map(Some)
+        } else {
+            crate::ai::agent_chat::launch::PiAgentChatLaunch::from_profile(
+                effective_profile.clone(),
+            )
+        };
+        match pi_launch_result {
             Ok(Some(pi_launch)) => {
                 self.open_tab_ai_pi_view_from_launch(
                     pi_launch,
@@ -120,376 +129,34 @@ impl ScriptListApp {
                 );
                 return;
             }
-            Ok(None) => {}
+            Ok(None) => {
+                self.show_pi_agent_chat_unavailable_setup_view(
+                    source_view,
+                    "Pi Agent Chat is unavailable for the selected profile".to_string(),
+                    cx,
+                );
+                return;
+            }
             Err(error) => {
                 tracing::warn!(
                     target: "script_kit::tab_ai",
                     event = "pi_agent_chat_launch_resolution_failed",
                     error = %error,
-                    "Falling back to ACP Agent Chat launch"
+                    focused_text_mini,
                 );
-            }
-        }
-
-        // --- ACP agent catalog + preflight resolution ---
-        let stage_started_at = std::time::Instant::now();
-        let catalog = match crate::ai::acp::load_acp_agent_catalog_entries() {
-            Ok(entries) => entries,
-            Err(error) => {
-                self.show_acp_catalog_load_failed_setup_view(source_view, error.to_string(), cx);
+                if focused_text_mini {
+                    self.toast_manager.push(
+                        crate::components::toast::Toast::error(
+                            "Pi Text profile is unavailable",
+                            &self.theme,
+                        )
+                        .duration_ms(Some(TOAST_ERROR_MS)),
+                    );
+                }
+                self.show_pi_agent_chat_unavailable_setup_view(source_view, error.to_string(), cx);
                 return;
             }
-        };
-
-        // Check for an explicit retry payload from a setup card before
-        // falling back to persisted preference and entry-path derivation.
-        let retry_request = self.take_acp_retry_request_for_open(cx);
-        let retry_draft_state = retry_request
-            .as_ref()
-            .and_then(|request| request.draft_state.clone());
-
-        let focused_part = if retry_draft_state.is_some() {
-            None
-        } else {
-            focused_part
-        };
-
-        let use_ask_anything_fallback = if retry_draft_state.is_some() {
-            false
-        } else {
-            use_ask_anything_fallback
-        };
-
-        let profile_preferred_agent_id = (effective_profile.backend
-            == crate::config::AgentChatBackend::Acp)
-            .then(|| effective_profile.agent.clone())
-            .flatten();
-        let preferred_agent_id = retry_request
-            .as_ref()
-            .and_then(|req| req.preferred_agent_id.clone())
-            .or(profile_preferred_agent_id)
-            .or_else(crate::ai::acp::load_preferred_acp_agent_id);
-
-        let requirements = retry_request
-            .as_ref()
-            .map(|req| req.launch_requirements)
-            .unwrap_or_else(|| {
-                let has_context_parts = focused_part.is_some();
-                let needs_image = focused_part
-                    .as_ref()
-                    .map(|part| part.source().contains("screenshot=1"))
-                    .unwrap_or(false);
-                crate::ai::acp::AcpLaunchRequirements {
-                    needs_embedded_context: has_context_parts,
-                    needs_image,
-                }
-            });
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_open_retry_request_consumed",
-            had_retry_request = retry_request.is_some(),
-            had_retry_draft_state = retry_draft_state.is_some(),
-            preferred_agent_id = ?preferred_agent_id,
-            needs_embedded_context = requirements.needs_embedded_context,
-            needs_image = requirements.needs_image,
-        );
-
-        let acp_launch_resolution = if retry_request.is_some() {
-            crate::ai::acp::resolve_explicit_acp_launch_with_requirements(
-                &catalog,
-                preferred_agent_id.as_deref(),
-                requirements,
-            )
-        } else {
-            crate::ai::acp::resolve_acp_launch_with_requirements(
-                &catalog,
-                preferred_agent_id.as_deref(),
-                requirements,
-            )
-        };
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_launch_resolution",
-            preferred_agent_id = ?preferred_agent_id,
-            selected_agent_id = ?acp_launch_resolution.selected_agent_id(),
-            blocker = ?acp_launch_resolution.blocker,
-            stage_ms = stage_started_at.elapsed().as_millis() as u64,
-            total_ms = open_started_at.elapsed().as_millis() as u64,
-        );
-
-        if !acp_launch_resolution.is_ready() {
-            self.show_acp_launch_blocked_setup_view(
-                source_view,
-                &acp_launch_resolution,
-                requirements,
-                cx,
-            );
-            return;
         }
-
-        let agent = match acp_launch_resolution
-            .selected_agent
-            .as_ref()
-            .and_then(|entry| entry.config.clone())
-        {
-            Some(config) => config,
-            None => {
-                tracing::error!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_resolution_missing_config",
-                );
-                cx.notify();
-                return;
-            }
-        };
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_open_stage",
-            stage = "acp_agent_resolved",
-            agent_id = %agent.id,
-            stage_ms = stage_started_at.elapsed().as_millis() as u64,
-            total_ms = open_started_at.elapsed().as_millis() as u64,
-        );
-
-        let agent_display_name = agent.display_name().to_string();
-        // Extract model info before `agent` is moved into spawn_with_approval.
-        let agent_models = agent.models.clone();
-        // Use the config-backed preferred model, falling back to the first model.
-        let profile_model_id = (effective_profile.backend == crate::config::AgentChatBackend::Acp)
-            .then(|| effective_profile.model.clone())
-            .flatten();
-        let persisted_model = profile_model_id.or(ai_preferences.selected_model_id.clone());
-        let default_model_id = persisted_model
-            .filter(|id| agent_models.iter().any(|m| m.id == *id))
-            .or_else(|| agent_models.first().map(|m| m.id.clone()));
-
-        let selected_agent_id_for_prewarm = acp_launch_resolution
-            .selected_agent_id()
-            .map(str::to_string);
-        let prewarmed_acp_chat = self.take_prewarmed_acp_chat_for_launch(
-            selected_agent_id_for_prewarm.as_deref(),
-            requirements,
-            retry_request.is_some(),
-            cx,
-        );
-
-        let (thread, view_entity, used_prewarmed_acp) =
-            if let Some((view_entity, thread)) = prewarmed_acp_chat {
-                view_entity.update(cx, |view, cx| {
-                    view.set_ui_variant(request.ui_variant, cx);
-                });
-                if let Some(initial_input) = acp_initial_input.clone() {
-                    thread.update(cx, |thread, cx| {
-                        thread.set_input(initial_input, cx);
-                    });
-                }
-
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_open_stage",
-                    stage = "acp_hot_prewarm_reused",
-                    acp_chat_ui_variant = request.ui_variant.state_id(),
-                    used_prewarmed_acp = true,
-                    total_ms = open_started_at.elapsed().as_millis() as u64,
-                );
-                (thread, view_entity, true)
-            } else {
-                let stage_started_at = std::time::Instant::now();
-                let connection = match crate::ai::acp::AcpConnection::spawn_with_approval(
-                    agent,
-                    Some(broker.approval_fn()),
-                ) {
-                    Ok(conn) => std::sync::Arc::new(conn),
-                    Err(error) => {
-                        tracing::error!(
-                            event = "tab_ai_acp_spawn_failed",
-                            error = %error,
-                        );
-                        self.toast_manager.push(
-                            crate::components::toast::Toast::error(
-                                format!("Failed to start ACP connection: {error}"),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_ERROR_MS)),
-                        );
-                        cx.notify();
-                        return;
-                    }
-                };
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_open_stage",
-                    stage = "acp_connection_spawn_with_approval",
-                    used_prewarmed_acp = false,
-                    stage_ms = stage_started_at.elapsed().as_millis() as u64,
-                    total_ms = open_started_at.elapsed().as_millis() as u64,
-                );
-
-                // Use ~/.scriptkit as cwd so Claude Code discovers CLAUDE.md and skills/.
-                let cwd = crate::setup::get_kit_path();
-
-                let stage_started_at = std::time::Instant::now();
-                let thread = cx.new(|cx| {
-                    crate::ai::acp::AcpThread::new(
-                        connection,
-                        permission_rx,
-                        crate::ai::acp::AcpThreadInit {
-                            ui_thread_id: uuid::Uuid::new_v4().to_string(),
-                            cwd,
-                            initial_input: acp_initial_input.clone(),
-                            initial_context_parts: Vec::new(),
-                            display_name: agent_display_name.into(),
-                            profile_display_name: Some(effective_profile.name.clone().into()),
-                            selected_agent: acp_launch_resolution.selected_agent.clone(),
-                            available_agents: acp_launch_resolution.catalog_entries.clone(),
-                            launch_requirements: requirements,
-                            available_models: agent_models,
-                            selected_model_id: default_model_id,
-                        },
-                        cx,
-                    )
-                });
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_open_stage",
-                    stage = "acp_thread_new",
-                    used_prewarmed_acp = false,
-                    stage_ms = stage_started_at.elapsed().as_millis() as u64,
-                    total_ms = open_started_at.elapsed().as_millis() as u64,
-                );
-
-                let stage_started_at = std::time::Instant::now();
-                let view_entity = cx.new(|cx| {
-                    crate::ai::acp::AcpChatView::new(thread.clone(), cx)
-                        .with_ui_variant(request.ui_variant)
-                });
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_open_stage",
-                    stage = "acp_chat_view_new",
-                    acp_chat_ui_variant = request.ui_variant.state_id(),
-                    used_prewarmed_acp = false,
-                    stage_ms = stage_started_at.elapsed().as_millis() as u64,
-                    total_ms = open_started_at.elapsed().as_millis() as u64,
-                );
-
-                (thread, view_entity, false)
-            };
-
-        // Only persist the selected agent when the launch is explicit (retry
-        // request / first-run) or already aligned with the saved preference.
-        // Automatic capability fallback should not silently rewrite the user's
-        // preferred agent.
-        let selected_agent_id = acp_launch_resolution
-            .selected_agent_id()
-            .map(str::to_string);
-        let implicit_codex_default_active = retry_request.is_none()
-            && preferred_agent_id.is_none()
-            && selected_agent_id.as_deref() == Some(crate::ai::acp::config::CODEX_ACP_AGENT_ID)
-            && crate::ai::acp::config::codex_acp_default_probe_state()
-                .should_be_implicit_codex_default;
-        let should_persist_selected_agent = retry_request.is_some()
-            || (preferred_agent_id.is_none() && !implicit_codex_default_active)
-            || preferred_agent_id.as_deref() == selected_agent_id.as_deref();
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_preferred_agent_post_launch_persist_decision",
-            had_retry_request = retry_request.is_some(),
-            preferred_agent_id = ?preferred_agent_id,
-            selected_agent_id = ?selected_agent_id,
-            implicit_codex_default_active,
-            blocker = ?acp_launch_resolution.blocker,
-            should_persist_selected_agent,
-            needs_embedded_context = requirements.needs_embedded_context,
-            needs_image = requirements.needs_image,
-        );
-
-        if should_persist_selected_agent {
-            crate::ai::acp::persist_preferred_acp_agent_id(selected_agent_id);
-        } else {
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_preferred_agent_preserved_during_fallback_launch",
-                preferred_agent_id = ?preferred_agent_id,
-                selected_agent_id = ?acp_launch_resolution.selected_agent_id(),
-            );
-        }
-
-        self.wire_embedded_acp_footer_callbacks(&view_entity, cx);
-        self.embedded_acp_chat = Some(view_entity.clone());
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_open_stage",
-            stage = "acp_chat_view_ready",
-            used_prewarmed_acp,
-            total_ms = open_started_at.elapsed().as_millis() as u64,
-        );
-
-        // Save originating surface for close/restore
-        self.tab_ai_harness_return_view = Some(source_view.clone());
-        self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
-
-        // Seed apply-back route synchronously so focused-chip ACP sessions
-        // retain the concrete target metadata even though they skip deferred
-        // context capture.
-        self.seed_tab_ai_apply_back_route(
-            &request.source_view,
-            &request.ui_snapshot,
-            focused_part.as_ref(),
-        );
-
-        // --- View switch FIRST: user sees the ACP chat surface immediately ---
-        let view_entity_for_staging = view_entity.clone();
-        view_entity_for_staging.update(cx, |view, _cx| {
-            view.opened_via_transient_trigger = pending_script_list_trigger;
-        });
-        self.enter_embedded_acp_chat_surface(view_entity, cx);
-        cx.notify();
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_open_view_switched",
-            elapsed_ms = open_started_at.elapsed().as_millis() as u64,
-        );
-
-        let needs_deferred = self.stage_acp_initial_context_parts(
-            retry_draft_state,
-            &view_entity_for_staging,
-            &thread,
-            focused_part,
-            use_ask_anything_fallback,
-            explicit_ambient_chip_label.clone(),
-            auto_submit,
-            pending_script_list_trigger,
-            request.suppress_focused_part,
-            &source_view,
-            cx,
-        );
-
-        self.schedule_acp_post_paint_harness_teardown(had_harness_session, open_started_at, cx);
-
-        if !needs_deferred {
-            return;
-        }
-
-        // --- Ask Anything fallback: spawn deferred context injection task ---
-        // Mark capture as pending so the footer loading dot activates.
-        view_entity_for_staging.update(cx, |view, _cx| {
-            view.set_context_capture_pending(true);
-        });
-
-        self.spawn_acp_deferred_context_staging(
-            view_entity_for_staging,
-            thread,
-            request,
-            capture_rx,
-            effective_intent,
-            auto_submit,
-            open_started_at,
-            cx,
-        );
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -575,6 +242,7 @@ impl ScriptListApp {
                     initial_context_parts: Vec::new(),
                     display_name: pi_launch.profile.name.clone().into(),
                     profile_display_name: Some(pi_launch.profile.name.clone().into()),
+                    profile_icon_name: pi_launch.profile.icon_name.clone(),
                     selected_agent: None,
                     available_agents: Vec::new(),
                     launch_requirements: requirements,
@@ -708,7 +376,7 @@ impl ScriptListApp {
 
     /// Build the ACP composer text for the first render of a new launch.
     ///
-    /// ScriptList-triggered `@` and `/` routes prefill the raw trigger so the
+    /// ScriptList-triggered `@`, `/`, and `|` routes prefill the raw trigger so the
     /// ACP handoff never paints an empty composer before the picker opens.
     pub(super) fn tab_ai_acp_initial_input_for_launch(
         prompt_type: &str,
@@ -728,7 +396,7 @@ impl ScriptListApp {
         }
 
         match (prompt_type, pending_script_list_trigger) {
-            ("ScriptList", Some(trigger @ ('/' | '@'))) => Some(trigger.to_string()),
+            ("ScriptList", Some(trigger @ ('/' | '@' | '|'))) => Some(trigger.to_string()),
             _ => None,
         }
     }

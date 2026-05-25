@@ -11,6 +11,9 @@ use std::sync::{
 
 use anyhow::Context;
 
+pub(crate) type ApprovalFn =
+    Arc<dyn Fn(AcpApprovalRequestInput) -> anyhow::Result<Option<String>> + Send + Sync + 'static>;
+
 /// Semantic category for a tool call approval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum AcpApprovalPreviewKind {
@@ -301,7 +304,7 @@ impl AcpPermissionBroker {
     /// This is the bridge between the old `ApprovalFn` signature and
     /// the new broker-based flow. The returned function captures the
     /// broker and forwards all permission options.
-    pub(crate) fn approval_fn(&self) -> super::handlers::ApprovalFn {
+    pub(crate) fn approval_fn(&self) -> ApprovalFn {
         let broker = self.clone();
         Arc::new(move |input: AcpApprovalRequestInput| broker.request(input))
     }

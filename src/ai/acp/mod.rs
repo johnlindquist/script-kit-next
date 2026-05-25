@@ -1,25 +1,20 @@
 //! Agent Client Protocol (ACP) integration.
 //!
-//! Provides a generic transport layer for communicating with ACP-compatible
-//! AI coding agents (Claude Code, AGY, Codex, OpenCode, etc.).
+//! Provides the Agent Chat UI surface and ACP-named compatibility contracts.
 //!
 //! # Module Layout
 //!
 //! - `catalog` — Schema-versioned agent catalog file and readiness types.
 //! - `config` — `AcpAgentConfig` for agent discovery and command configuration.
 //! - `preflight` — Launch readiness resolution (blockers before thread spawn).
-//! - `events` — Typed ACP turn/event primitives (`AcpEvent`, `AcpCommand`).
+//! - `events` — Typed Agent Chat turn/event primitives (`AcpEvent`).
 //! - `permission_broker` — Full-option-set permission forwarding to the UI.
-//! - `types` — Bridging types between ACP and Script Kit internals.
-//! - `handlers` — Client-side handler implementing the ACP `Client` trait.
-//! - `client` — ACP runtime: subprocess lifecycle, initialize, session/prompt loop.
+//! - `types` — Bridging types between Agent Chat and Script Kit internals.
 
 use gpui::AppContext as _;
 
-pub(crate) mod agy_adapter;
 pub(crate) mod catalog;
 pub(crate) mod chat_window;
-pub(crate) mod client;
 pub(crate) mod components;
 pub(crate) mod composer_state;
 pub(crate) mod config;
@@ -27,7 +22,6 @@ pub(crate) mod context;
 pub(crate) mod conversation_export;
 pub(crate) mod events;
 pub(crate) mod export;
-pub(crate) mod handlers;
 pub(crate) mod history;
 pub(crate) mod history_attachment;
 pub(crate) mod history_popup;
@@ -41,7 +35,6 @@ pub(crate) mod popup_window;
 pub(crate) mod portal_contract;
 pub(crate) mod preflight;
 pub(crate) mod profile_selector_popup;
-pub(crate) mod provider;
 pub(crate) mod setup_state;
 pub(crate) mod surface_state;
 pub(crate) mod thread;
@@ -56,7 +49,6 @@ pub(crate) use catalog::{
     default_acp_agents_path, AcpAgentAuthState, AcpAgentCatalogEntry, AcpAgentCatalogFile,
     AcpAgentConfigState, AcpAgentInstallState, AcpAgentSource,
 };
-pub(crate) use client::{AcpConnection, AcpRuntime};
 pub(crate) use config::{
     claude_code_agent_config_cached, ensure_acp_agents_catalog_seeded,
     load_acp_agent_catalog_entries, load_acp_agent_configs, load_acp_agent_runtime_states,
@@ -71,7 +63,7 @@ pub(crate) use context::{
     build_tab_ai_acp_context_blocks, build_tab_ai_acp_guidance_blocks,
     build_tab_ai_acp_guidance_blocks_for_prompt,
 };
-pub(crate) use events::{AcpCommand, AcpEvent, AcpEventRx, AcpPromptTurnRequest};
+pub(crate) use events::{AcpEvent, AcpEventRx};
 pub(crate) use permission_broker::{
     approval_request_input, AcpApprovalOption, AcpApprovalPreview, AcpApprovalPreviewKind,
     AcpApprovalRequest, AcpApprovalRequestInput, AcpPermissionBroker,
@@ -81,7 +73,6 @@ pub(crate) use preflight::{
     resolve_explicit_acp_launch_with_requirements, setup_title_for_resolution, AcpLaunchBlocker,
     AcpLaunchRequirements, AcpLaunchResolution,
 };
-pub(crate) use provider::AcpProvider;
 pub(crate) use setup_state::{AcpInlineSetupState, AcpSetupAction};
 pub(crate) use thread::{
     AcpContextBootstrapState, AcpThread, AcpThreadInit, AcpThreadMessage, AcpThreadStatus,
@@ -114,50 +105,39 @@ pub(crate) fn open_or_focus_chat_with_input(
         chat_window::close_chat_window(cx);
     }
 
-    let catalog = load_acp_agent_catalog_entries()
-        .map_err(|error| format!("Failed to load ACP catalog: {error}"))?;
-    let preferred_agent_id = load_preferred_acp_agent_id();
-    let requirements = AcpLaunchRequirements::default();
-    let launch_resolution =
-        resolve_acp_launch_with_requirements(&catalog, preferred_agent_id.as_deref(), requirements);
+    let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+    let ai_preferences = crate::config::load_user_preferences().ai;
+    let pi_launch =
+        crate::ai::agent_chat::launch::resolve_selected_pi_launch(&ai_preferences, &profile_ctx)
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "Pi Agent Chat is unavailable for the selected profile".to_string())?;
+    let warm_spec = pi_launch.warm_spec();
+    let manager = crate::ai::agent_chat::launch::warm_session_manager();
+    manager
+        .prepare_warm(warm_spec)
+        .map_err(|error| format!("Failed to prepare Pi Agent Chat warm session: {error}"))?;
+    let lease = manager
+        .acquire_warm(&pi_launch.warm_key)
+        .ok_or_else(|| "Failed to start Pi Agent Chat warm session".to_string())?;
 
-    if !launch_resolution.is_ready() {
-        return Err(setup_title_for_resolution(&launch_resolution).to_string());
-    }
-
-    let agent = launch_resolution
-        .selected_agent
-        .as_ref()
-        .and_then(|entry| entry.config.clone())
-        .ok_or_else(|| "Resolved agent is missing configuration".to_string())?;
-    let agent_display_name = agent.display_name().to_string();
-    let agent_models = agent.models.clone();
-    let persisted_model = crate::config::load_user_preferences().ai.selected_model_id;
-    let default_model_id = persisted_model
-        .filter(|id| agent_models.iter().any(|model| model.id == *id))
-        .or_else(|| agent_models.first().map(|model| model.id.clone()));
-
-    let (broker, permission_rx) = AcpPermissionBroker::new();
-    let connection = AcpConnection::spawn_with_approval(agent, Some(broker.approval_fn()))
-        .map_err(|error| format!("Failed to start ACP connection: {error}"))?;
-    let cwd = crate::setup::get_kit_path();
-
+    let (_broker, permission_rx) = AcpPermissionBroker::new();
     let thread = cx.new(|cx| {
         AcpThread::new(
-            std::sync::Arc::new(connection),
+            lease.connection.clone(),
             permission_rx,
             AcpThreadInit {
-                ui_thread_id: uuid::Uuid::new_v4().to_string(),
-                cwd,
+                ui_thread_id: lease.ui_thread_id.clone(),
+                cwd: lease.cwd.clone(),
                 initial_input: Some(input),
                 initial_context_parts: Vec::new(),
-                display_name: agent_display_name.into(),
-                profile_display_name: None,
-                selected_agent: launch_resolution.selected_agent.clone(),
-                available_agents: launch_resolution.catalog_entries.clone(),
-                launch_requirements: requirements,
-                available_models: agent_models,
-                selected_model_id: default_model_id,
+                display_name: pi_launch.profile.name.clone().into(),
+                profile_display_name: Some(pi_launch.profile.name.clone().into()),
+                profile_icon_name: pi_launch.profile.icon_name.clone(),
+                selected_agent: None,
+                available_agents: Vec::new(),
+                launch_requirements: AcpLaunchRequirements::default(),
+                available_models: pi_launch.available_models.clone(),
+                selected_model_id: pi_launch.selected_model_id.clone(),
             },
             cx,
         )

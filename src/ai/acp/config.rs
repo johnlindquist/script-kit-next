@@ -12,8 +12,6 @@ use crate::ai::ModelInfo;
 static CACHED_AGENT_CONFIG: OnceLock<AcpAgentConfig> = OnceLock::new();
 
 const CLAUDE_MCP_SYNC_SCHEMA_VERSION: u32 = 1;
-pub(crate) const AGY_ACP_AGENT_ID: &str = "agy-acp";
-const AGY_ACP_ADAPTER_ARG: &str = "--agy-acp-adapter";
 pub(crate) const CODEX_ACP_AGENT_ID: &str = "codex-acp";
 
 /// Configuration for a generic ACP-compatible AI agent.
@@ -25,7 +23,7 @@ pub(crate) const CODEX_ACP_AGENT_ID: &str = "codex-acp";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AcpAgentConfig {
-    /// Unique identifier for this agent (e.g., "claude-code", "agy-acp").
+    /// Unique identifier for this agent (e.g., "claude-code", "codex-acp").
     pub id: String,
 
     /// Human-readable display name shown in the provider selector.
@@ -249,21 +247,6 @@ fn resolved_codex_acp_adapter() -> CodexAcpAdapterResolution {
 
 fn resolved_codex_acp_adapter_path() -> Option<PathBuf> {
     resolved_codex_acp_adapter().path
-}
-
-fn resolved_agy_acp_adapter_command() -> Option<String> {
-    if let Some(command) = std::env::var_os("SCRIPT_KIT_AGY_ACP_ADAPTER_COMMAND") {
-        let command = command.to_string_lossy().trim().to_string();
-        if !command.is_empty() {
-            return Some(command);
-        }
-    }
-
-    std::env::current_exe()
-        .ok()
-        .and_then(existing_executable_file)
-        .map(|path| path.to_string_lossy().to_string())
-        .or_else(|| Some("script-kit-gpui".to_string()))
 }
 
 pub(crate) fn codex_acp_default_probe_state() -> CodexAcpDefaultProbeState {
@@ -745,17 +728,6 @@ fn looks_like_codex_acp_adapter_command(command: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn looks_like_agy_acp_adapter_command(command: &str, args: &[String]) -> bool {
-    if args.iter().any(|arg| arg == AGY_ACP_ADAPTER_ARG) {
-        return true;
-    }
-    Path::new(command)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(|name| name.contains("agy-acp-adapter") || name == AGY_ACP_AGENT_ID)
-        .unwrap_or(false)
-}
-
 fn is_legacy_codex_acp_npx_config(agent: &AcpAgentConfig) -> bool {
     agent.command == "npx" && agent.args.iter().any(|arg| arg == CODEX_ACP_NPX_PACKAGE)
 }
@@ -795,40 +767,9 @@ fn normalize_codex_acp_agent_config_with_path(
 fn normalize_well_known_agent_config(agent: AcpAgentConfig) -> AcpAgentConfig {
     if agent.id == CODEX_ACP_AGENT_ID {
         normalize_codex_acp_agent_config_with_path(agent, resolved_codex_acp_adapter_path())
-    } else if agent.id == AGY_ACP_AGENT_ID {
-        normalize_agy_acp_agent_config(agent)
     } else {
         agent
     }
-}
-
-fn normalize_agy_acp_agent_config(mut agent: AcpAgentConfig) -> AcpAgentConfig {
-    if agent.id != AGY_ACP_AGENT_ID {
-        return agent;
-    }
-
-    let is_node_prototype = agent.command == "node"
-        && agent
-            .args
-            .iter()
-            .any(|arg| arg.contains("agy-acp-adapter.js"));
-    if is_node_prototype || looks_like_agy_acp_adapter_command(&agent.command, &agent.args) {
-        if let Some(command) = resolved_agy_acp_adapter_command() {
-            agent.command = command;
-        }
-        agent.args = vec![AGY_ACP_ADAPTER_ARG.to_string()];
-    }
-
-    if agent.models.is_empty() {
-        agent.models = default_agy_models();
-    }
-    if agent.install.is_none() {
-        agent.install = Some(agy_install_spec());
-    }
-    if agent.auth.is_none() {
-        agent.auth = Some(agy_auth_hint());
-    }
-    agent
 }
 
 fn install_state_from_probe(
@@ -836,14 +777,12 @@ fn install_state_from_probe(
     command_ready: bool,
     adapter_ready: bool,
     codex_cli_ready: bool,
-    agy_cli_ready: bool,
+    _agy_cli_ready: bool,
 ) -> super::catalog::AcpAgentInstallState {
     use super::catalog::AcpAgentInstallState;
 
     let ready = if agent.id == CODEX_ACP_AGENT_ID {
         adapter_ready && codex_cli_ready
-    } else if agent.id == AGY_ACP_AGENT_ID {
-        adapter_ready && agy_cli_ready
     } else {
         command_ready
     };
@@ -859,41 +798,17 @@ fn install_state_from_probe(
 
 fn install_state_for_agent(agent: &AcpAgentConfig) -> super::catalog::AcpAgentInstallState {
     let is_codex_acp = agent.id == CODEX_ACP_AGENT_ID;
-    let is_agy_acp = agent.id == AGY_ACP_AGENT_ID;
     install_state_from_probe(
         agent,
         command_exists(&agent.command),
         if is_codex_acp {
             resolved_codex_acp_adapter_path().is_some()
-        } else if is_agy_acp {
-            command_exists(&agent.command)
         } else {
             false
         },
         !is_codex_acp || command_exists("codex"),
-        !is_agy_acp || command_exists("agy"),
+        true,
     )
-}
-
-fn agy_install_spec() -> AcpAgentInstallSpec {
-    AcpAgentInstallSpec {
-        command: "agy".to_string(),
-        args: vec!["install".to_string()],
-    }
-}
-
-fn agy_auth_hint() -> AcpAgentAuthHint {
-    AcpAgentAuthHint {
-        summary: "Uses your local Antigravity CLI Google sign-in and subscription; no separate Google AI API key is required.".to_string(),
-    }
-}
-
-fn default_agy_models() -> Vec<AcpModelEntry> {
-    vec![AcpModelEntry {
-        id: "default".to_string(),
-        display_name: Some("Antigravity CLI Default".to_string()),
-        context_window: Some(1_048_576),
-    }]
 }
 
 fn opencode_agent_config() -> AcpAgentConfig {
@@ -931,26 +846,8 @@ fn codex_acp_agent_config() -> AcpAgentConfig {
     }
 }
 
-fn agy_acp_agent_config() -> AcpAgentConfig {
-    AcpAgentConfig {
-        id: AGY_ACP_AGENT_ID.to_string(),
-        display_name: "Antigravity CLI".to_string(),
-        command: resolved_agy_acp_adapter_command()
-            .unwrap_or_else(|| "script-kit-gpui".to_string()),
-        args: vec![AGY_ACP_ADAPTER_ARG.to_string()],
-        env: HashMap::new(),
-        models: default_agy_models(),
-        install: Some(agy_install_spec()),
-        auth: Some(agy_auth_hint()),
-    }
-}
-
 fn starter_acp_agent_configs() -> Vec<AcpAgentConfig> {
-    vec![
-        opencode_agent_config(),
-        codex_acp_agent_config(),
-        agy_acp_agent_config(),
-    ]
+    vec![opencode_agent_config(), codex_acp_agent_config()]
 }
 
 fn merge_catalog_with_starter_agents(file: &mut super::catalog::AcpAgentCatalogFile) -> usize {
@@ -1123,9 +1020,6 @@ pub(crate) fn load_acp_agent_configs() -> anyhow::Result<Vec<AcpAgentConfig>> {
     {
         agents.push(codex_acp_agent_config());
     }
-    if command_exists("agy") && !agents.iter().any(|a| a.id == AGY_ACP_AGENT_ID) {
-        agents.push(agy_acp_agent_config());
-    }
     tracing::info!(
         target: "script_kit::tab_ai",
         event = "acp_codex_default_probe",
@@ -1292,7 +1186,7 @@ pub(crate) fn refresh_acp_agent_catalog_entries_with_snapshot(
 fn classify_agent_source(agent_id: &str) -> super::catalog::AcpAgentSource {
     match agent_id {
         "claude-code" => super::catalog::AcpAgentSource::LegacyClaudeCode,
-        "opencode" | "codex-acp" | "agy-acp" => super::catalog::AcpAgentSource::BuiltIn,
+        "opencode" | "codex-acp" => super::catalog::AcpAgentSource::BuiltIn,
         _ => super::catalog::AcpAgentSource::ScriptKitCatalog,
     }
 }
@@ -1583,15 +1477,15 @@ mod tests {
     #[test]
     fn round_trip_minimal_config() {
         let json = r#"{
-            "id": "agy-acp",
-            "displayName": "Antigravity CLI",
-            "command": "script-kit-gpui"
+            "id": "test-agent",
+            "displayName": "Test Agent",
+            "command": "test-agent"
         }"#;
         let config: AcpAgentConfig =
             serde_json::from_str(json).expect("minimal config should parse");
-        assert_eq!(config.id, "agy-acp");
-        assert_eq!(config.display_name, "Antigravity CLI");
-        assert_eq!(config.command, "script-kit-gpui");
+        assert_eq!(config.id, "test-agent");
+        assert_eq!(config.display_name, "Test Agent");
+        assert_eq!(config.command, "test-agent");
         assert!(config.args.is_empty());
         assert!(config.env.is_empty());
         assert!(config.models.is_empty());
@@ -1661,7 +1555,7 @@ mod tests {
             .iter()
             .map(|agent| agent.id.as_str())
             .collect::<Vec<_>>();
-        assert_eq!(ids, vec!["opencode", "codex-acp", "agy-acp"]);
+        assert_eq!(ids, vec!["opencode", "codex-acp"]);
     }
 
     #[test]
@@ -1683,37 +1577,12 @@ mod tests {
     }
 
     #[test]
-    fn agy_starter_uses_bundled_adapter_mode() {
-        let agy = starter_acp_agent_configs()
-            .into_iter()
-            .find(|agent| agent.id == AGY_ACP_AGENT_ID)
-            .expect("agy-acp starter");
-
-        assert_eq!(agy.display_name, "Antigravity CLI");
-        assert_eq!(agy.args, vec![AGY_ACP_ADAPTER_ARG]);
-        assert_eq!(agy.models[0].id, "default");
-        assert_eq!(agy.models[0].context_window, Some(1_048_576));
-        assert_eq!(
-            agy.install.expect("agy install").args,
-            vec!["install".to_string()]
-        );
-        assert!(agy
-            .auth
-            .expect("agy auth hint")
-            .summary
-            .contains("Google sign-in"));
-    }
-
-    #[test]
     fn acp_catalog_refresh_merge_keeps_fresh_codex_and_snapshot_selection() {
         let fresh = vec![
             catalog_entry("opencode", "OpenCode"),
             catalog_entry("codex-acp", "Codex"),
         ];
-        let snapshot = vec![
-            catalog_entry("agy-acp", "Antigravity CLI"),
-            catalog_entry("opencode", "Stale OpenCode"),
-        ];
+        let snapshot = vec![catalog_entry("opencode", "Stale OpenCode")];
 
         let merged = merge_acp_agent_catalog_entries_with_snapshot(fresh, &snapshot);
         let ids = merged
@@ -1721,7 +1590,7 @@ mod tests {
             .map(|entry| entry.id.as_ref())
             .collect::<Vec<_>>();
 
-        assert_eq!(ids, vec!["opencode", "codex-acp", "agy-acp"]);
+        assert_eq!(ids, vec!["opencode", "codex-acp"]);
         assert_eq!(merged[0].display_name.as_ref(), "OpenCode");
     }
 
@@ -1785,27 +1654,6 @@ mod tests {
     }
 
     #[test]
-    fn legacy_agy_node_catalog_entry_normalizes_to_bundled_adapter_mode() {
-        let agy = AcpAgentConfig {
-            id: AGY_ACP_AGENT_ID.into(),
-            display_name: "Antigravity CLI".into(),
-            command: "node".into(),
-            args: vec!["/Users/me/.scriptkit/acp/agy-acp-adapter.js".into()],
-            env: HashMap::new(),
-            models: Vec::new(),
-            install: None,
-            auth: None,
-        };
-
-        let normalized = normalize_agy_acp_agent_config(agy);
-        assert_eq!(normalized.args, vec![AGY_ACP_ADAPTER_ARG]);
-        assert!(!normalized.command.contains("node"));
-        assert_eq!(normalized.models[0].id, "default");
-        assert!(normalized.install.is_some());
-        assert!(normalized.auth.is_some());
-    }
-
-    #[test]
     fn codex_acp_install_state_accepts_direct_adapter_only() {
         let codex = codex_acp_agent_config();
 
@@ -1829,23 +1677,6 @@ mod tests {
             install_state_from_probe(&legacy, false, true, false, true),
             crate::ai::acp::catalog::AcpAgentInstallState::Unsupported,
             "Codex ACP adapter alone is not usable without the installed codex CLI"
-        );
-    }
-
-    #[test]
-    fn agy_acp_install_state_requires_adapter_and_agy_cli() {
-        let agy = agy_acp_agent_config();
-        assert_eq!(
-            install_state_from_probe(&agy, true, true, true, true),
-            crate::ai::acp::catalog::AcpAgentInstallState::Ready
-        );
-        assert_eq!(
-            install_state_from_probe(&agy, true, true, true, false),
-            crate::ai::acp::catalog::AcpAgentInstallState::NeedsInstall
-        );
-        assert_eq!(
-            install_state_from_probe(&agy, false, false, true, true),
-            crate::ai::acp::catalog::AcpAgentInstallState::NeedsInstall
         );
     }
 
@@ -1926,10 +1757,9 @@ mod tests {
         };
 
         let added = merge_catalog_with_starter_agents(&mut file);
-        assert_eq!(added, 2);
+        assert_eq!(added, 1);
         assert_eq!(file.agents[0].id, "opencode");
         assert!(file.agents.iter().any(|agent| agent.id == "codex-acp"));
-        assert!(file.agents.iter().any(|agent| agent.id == "agy-acp"));
     }
 
     #[test]
@@ -1937,34 +1767,8 @@ mod tests {
         let deprecated_id = ["gemini", "cli"].join("-");
         let mut file = crate::ai::acp::catalog::AcpAgentCatalogFile {
             schema_version: crate::ai::acp::catalog::ACP_AGENT_CATALOG_SCHEMA_VERSION,
-            agents: vec![
-                AcpAgentConfig {
-                    id: deprecated_id,
-                    display_name: "Deprecated Google CLI".into(),
-                    command: "gemini".into(),
-                    args: vec!["--acp".into()],
-                    env: HashMap::new(),
-                    models: vec![],
-                    install: None,
-                    auth: None,
-                },
-                agy_acp_agent_config(),
-            ],
-        };
-
-        let pruned = prune_deprecated_google_cli_agents(&mut file);
-        assert_eq!(pruned, 1);
-        assert_eq!(file.agents.len(), 1);
-        assert_eq!(file.agents[0].id, AGY_ACP_AGENT_ID);
-    }
-
-    #[test]
-    fn starters_after_deprecated_google_prune_keep_agy_google_slot() {
-        let deprecated_id = ["gemini", "cli"].join("-");
-        let mut file = crate::ai::acp::catalog::AcpAgentCatalogFile {
-            schema_version: crate::ai::acp::catalog::ACP_AGENT_CATALOG_SCHEMA_VERSION,
             agents: vec![AcpAgentConfig {
-                id: deprecated_id.clone(),
+                id: deprecated_id,
                 display_name: "Deprecated Google CLI".into(),
                 command: "gemini".into(),
                 args: vec!["--acp".into()],
@@ -1975,10 +1779,10 @@ mod tests {
             }],
         };
 
-        assert_eq!(prune_deprecated_google_cli_agents(&mut file), 1);
-        assert_eq!(merge_catalog_with_starter_agents(&mut file), 3);
-        assert!(!file.agents.iter().any(|agent| agent.id == deprecated_id));
-        assert!(file.agents.iter().any(|agent| agent.id == AGY_ACP_AGENT_ID));
+        let pruned = prune_deprecated_google_cli_agents(&mut file);
+        assert_eq!(pruned, 1);
+        assert!(file.agents.is_empty());
+        assert!(file.agents.is_empty());
     }
 
     #[test]
@@ -2009,30 +1813,22 @@ mod tests {
     #[test]
     fn model_infos_explicit_values() {
         let config = AcpAgentConfig {
-            id: "agy-acp".into(),
-            display_name: "Antigravity CLI".into(),
-            command: "script-kit-gpui".into(),
+            id: "test-agent".into(),
+            display_name: "Test Agent".into(),
+            command: "test-agent".into(),
             args: vec![],
             env: HashMap::new(),
             models: vec![AcpModelEntry {
                 id: "default".into(),
-                display_name: Some("Antigravity CLI Default".into()),
+                display_name: Some("Test Agent Default".into()),
                 context_window: Some(1_000_000),
             }],
             install: None,
             auth: None,
         };
         let infos = config.model_infos();
-        assert_eq!(infos[0].display_name, "Antigravity CLI Default");
+        assert_eq!(infos[0].display_name, "Test Agent Default");
         assert_eq!(infos[0].context_window, 1_000_000);
-    }
-
-    #[test]
-    fn classify_agent_source_marks_agy_as_builtin() {
-        assert_eq!(
-            classify_agent_source("agy-acp"),
-            crate::ai::acp::catalog::AcpAgentSource::BuiltIn
-        );
     }
 
     #[test]
@@ -2052,7 +1848,7 @@ mod tests {
         let file: AcpAgentRuntimeStateFile =
             serde_json::from_str(json).expect("runtime state should parse");
         assert_eq!(file.schema_version, 1);
-        assert_eq!(file.agents.len(), 1);
+        assert!(file.agents.is_empty());
         let codex = file.agents.get("codex-acp").expect("codex-acp entry");
         assert_eq!(
             codex.auth_state,

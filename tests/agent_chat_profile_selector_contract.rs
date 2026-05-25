@@ -11,6 +11,8 @@ const PROFILE_POPUP_SOURCE: &str = include_str!("../src/ai/acp/profile_selector_
 const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
 const CONTEXT_PICKER_TYPES_SOURCE: &str = include_str!("../src/ai/window/context_picker/types.rs");
 const CONTEXT_PICKER_SOURCE: &str = include_str!("../src/ai/window/context_picker/mod.rs");
+const CONFIG_TYPES_SOURCE: &str = include_str!("../src/config/types.rs");
+const ACP_LAUNCH_IMPL_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
 const AUTOMATION_COLLECTOR_SOURCE: &str =
     include_str!("../src/windows/automation_surface_collector.rs");
 const DETACHED_TRANSACTION_PROVIDER_SOURCE: &str =
@@ -136,23 +138,38 @@ fn profile_selector_batch_routing_precedes_mention_picker() {
 }
 
 #[test]
-fn footer_profile_affordance_is_merged_with_left_status_marker() {
+fn footer_profile_affordance_is_merged_into_left_status_marker() {
     assert!(FOOTER_CHROME_SOURCE.contains("FOOTER_PROFILE_ICON_TOKEN"));
     assert!(FOOTER_CHROME_SOURCE.contains("FOOTER_PROFILE_ICON_PATH"));
-    assert!(ACP_VIEW_SOURCE.contains("FOOTER_PROFILE_ICON_TOKEN"));
+
+    let footer_buttons = fn_body(ACP_VIEW_SOURCE, "fn footer_buttons_for_thread");
+    assert!(
+        !footer_buttons.contains("FooterAction::Ai"),
+        "ACP must not add profile as a standalone footer rail button"
+    );
+    assert!(
+        !footer_buttons.contains("FOOTER_PROFILE_ICON_TOKEN"),
+        "profile icon token must not be used by ACP footer button specs"
+    );
+
+    assert!(ACP_VIEW_SOURCE.contains("profile_selector_open: self.profile_selector_open"));
+    assert!(ACP_VIEW_SOURCE.contains("profile_left_info"));
     assert!(ACP_VIEW_SOURCE.contains("render_profile_status_marker_from_snapshot"));
     assert!(ACP_VIEW_SOURCE.contains("FooterAction::Ai => self.toggle_profile_selector_popup"));
-    assert!(!fn_body(ACP_VIEW_SOURCE, "fn footer_buttons_for_thread(")
-        .contains("FOOTER_PROFILE_ICON_TOKEN"));
-    assert!(!fn_body(ACP_VIEW_SOURCE, "fn footer_buttons_for_thread(").contains("FooterAction::Ai"));
-    assert!(FOOTER_POPUP_SOURCE.contains("dispatch_acp_footer_action(action);"));
+
+    assert!(FOOTER_POPUP_SOURCE.contains("pub action: Option<FooterAction>"));
+    assert!(FOOTER_POPUP_SOURCE.contains("pub icon_token: Option<String>"));
+    assert!(FOOTER_POPUP_SOURCE.contains("dispatch_acp_footer_action"));
 }
 
 #[test]
-fn quote_trigger_selects_agent_chat_profiles_without_context_attachment() {
+fn pipe_trigger_selects_agent_chat_profiles_without_context_attachment() {
     assert!(CONTEXT_PICKER_TYPES_SOURCE.contains("Profile"));
+    assert!(CONTEXT_PICKER_TYPES_SOURCE.contains("PROFILE_TRIGGER_CHAR: char = '|'"));
     assert!(CONTEXT_PICKER_TYPES_SOURCE.contains("AgentChatProfile"));
-    assert!(CONTEXT_PICKER_SOURCE.contains("b'\\'' => ContextPickerTrigger::Profile"));
+    assert!(CONTEXT_PICKER_SOURCE.contains("b'|' => ContextPickerTrigger::Profile"));
+    assert!(!CONTEXT_PICKER_SOURCE.contains("b'\\'' => ContextPickerTrigger::Profile"));
+    assert!(CONTEXT_PICKER_SOURCE.contains("display: \"|general\""));
     let refresh_body = fn_body(ACP_VIEW_SOURCE, "fn refresh_mention_session(");
     assert!(refresh_body.contains("ContextPickerTrigger::Profile"));
     assert!(refresh_body.contains("self.build_profile_picker_items(&query)"));
@@ -163,4 +180,25 @@ fn quote_trigger_selects_agent_chat_profiles_without_context_attachment() {
     assert!(accept_body.contains("Self::replace_text_in_char_range("));
     assert!(accept_body.contains("session.trigger_range.clone()"));
     assert!(accept_body.contains("thread.input.set_text(next_text)"));
+}
+
+#[test]
+fn pipe_trigger_routes_from_main_menu_to_profile_picker() {
+    assert!(TAB_AI_MODE_SOURCE.contains("open_tab_ai_acp_with_profile_picker"));
+    assert!(TAB_AI_MODE_SOURCE.contains("view.open_profile_picker_in_window(window, cx)"));
+    assert!(ACP_VIEW_SOURCE.contains("pub(crate) fn open_profile_picker_in_window("));
+    assert!(ACP_LAUNCH_IMPL_SOURCE.contains("Some(trigger @ ('/' | '@' | '|'))"));
+}
+
+#[test]
+fn config_profile_icon_name_flows_to_footer_marker() {
+    assert!(CONFIG_TYPES_SOURCE.contains("pub icon_name: Option<String>"));
+    assert!(PROFILES_SOURCE.contains("pub icon_name: Option<String>"));
+    assert!(PROFILES_SOURCE.contains("icon_name: profile.icon_name"));
+    assert!(ACP_THREAD_SOURCE.contains("profile_icon_name: Option<String>"));
+    assert!(ACP_THREAD_SOURCE.contains("pub(crate) fn profile_icon_name(&self)"));
+    assert!(ACP_VIEW_SOURCE
+        .contains("profile_icon_name: thread.profile_icon_name().map(str::to_string)"));
+    assert!(ACP_VIEW_SOURCE.contains("footer_icon_path_or_profile"));
+    assert!(FOOTER_POPUP_SOURCE.contains("pub icon_token: Option<String>"));
 }

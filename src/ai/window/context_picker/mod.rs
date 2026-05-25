@@ -17,6 +17,7 @@ use crate::ai::message_parts::AiContextPart;
 use types::{
     ContextPickerItem, ContextPickerItemKind, ContextPickerState, ContextPickerTrigger,
     InlinePortalAttachment, InlinePortalResultPayload, PortalKind, PortalPrefixPayload,
+    PROFILE_TRIGGER_CHAR,
 };
 
 use std::sync::{Arc, OnceLock};
@@ -62,13 +63,13 @@ pub(crate) fn extract_context_picker_query_before_cursor(
     let cursor_byte = char_to_byte_offset(input, cursor);
     let before_cursor = &input[..cursor_byte];
 
-    let trigger_pos = before_cursor.rfind(['@', '/', '\''])?;
+    let trigger_pos = before_cursor.rfind(['@', '/', PROFILE_TRIGGER_CHAR])?;
     let trigger_byte = before_cursor.as_bytes().get(trigger_pos).copied()?;
 
     let trigger = match trigger_byte {
         b'@' => ContextPickerTrigger::Mention,
         b'/' => ContextPickerTrigger::Slash,
-        b'\'' => ContextPickerTrigger::Profile,
+        b'|' => ContextPickerTrigger::Profile,
         _ => return None,
     };
 
@@ -80,8 +81,8 @@ pub(crate) fn extract_context_picker_query_before_cursor(
             b'@' if prev.is_ascii_alphanumeric() || prev == b'_' => return None,
             // `/` requires whitespace before it (reject `foo/bar`)
             b'/' if prev != b' ' && prev != b'\n' && prev != b'\t' => return None,
-            // `'` mirrors slash-command behavior and only opens at a token boundary.
-            b'\'' if prev != b' ' && prev != b'\n' && prev != b'\t' => return None,
+            // `|` mirrors slash-command behavior and only opens at a token boundary.
+            b'|' if prev != b' ' && prev != b'\n' && prev != b'\t' => return None,
             _ => {}
         }
     }
@@ -97,7 +98,7 @@ pub(crate) fn extract_context_picker_query_before_cursor(
     let trigger_char = match trigger {
         ContextPickerTrigger::Mention => '@',
         ContextPickerTrigger::Slash => '/',
-        ContextPickerTrigger::Profile => '\'',
+        ContextPickerTrigger::Profile => PROFILE_TRIGGER_CHAR,
     };
     if query.contains(trigger_char) || query.chars().any(char::is_whitespace) {
         return None;
@@ -240,12 +241,12 @@ pub(crate) fn empty_state_hints(
     ];
     static PROFILE_HINTS: &[ContextPickerEmptyStateHint] = &[
         ContextPickerEmptyStateHint {
-            display: "'general",
-            insertion: "'general",
+            display: "|general",
+            insertion: "|general",
         },
         ContextPickerEmptyStateHint {
-            display: "'script-kit",
-            insertion: "'script-kit",
+            display: "|script-kit",
+            insertion: "|script-kit",
         },
     ];
     let base = match trigger {
@@ -805,7 +806,7 @@ impl AiApp {
         let needle = match trigger {
             ContextPickerTrigger::Mention => '@',
             ContextPickerTrigger::Slash => '/',
-            ContextPickerTrigger::Profile => '\'',
+            ContextPickerTrigger::Profile => PROFILE_TRIGGER_CHAR,
         };
         let current_value = self.input_state.read(cx).value().to_string();
         if let Some(pos) = current_value.rfind(needle) {

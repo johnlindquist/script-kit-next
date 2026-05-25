@@ -26,13 +26,7 @@ fn inline_agent_adapter_depends_on_agent_chat_connection_not_pi_runtime() {
     assert!(AGENT_CHAT_ADAPTER.contains("wait_for_prepared_warm_session"));
     assert!(AGENT_CHAT_ADAPTER.contains("AgentChatWarmSessionState::Preparing"));
 
-    for forbidden in [
-        "PiRpcRuntime",
-        "PiLaunchSpec::",
-        "Command::new",
-        "AcpConnection::spawn_with_approval",
-        "AcpPromptTurnRequest",
-    ] {
+    for forbidden in ["PiRpcRuntime", "PiLaunchSpec::", "Command::new"] {
         assert!(
             !AGENT_CHAT_ADAPTER.contains(forbidden),
             "inline Agent Chat adapter must not directly own {forbidden}"

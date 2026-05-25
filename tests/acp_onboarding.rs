@@ -9,7 +9,6 @@ const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 const ACP_SETUP_CARD_SOURCE: &str = include_str!("../src/ai/acp/components/setup_card.rs");
 const SETUP_RENDER_SOURCE: &str = include_str!("../src/ai/window/render_setup.rs");
 const SETUP_SOURCE: &str = include_str!("../src/ai/window/setup.rs");
-const CLIENT_SOURCE: &str = include_str!("../src/ai/acp/client.rs");
 const ACP_CONFIG_SOURCE: &str = include_str!("../src/ai/acp/config.rs");
 const CONFIG_TYPES_SOURCE: &str = include_str!("../src/config/types.rs");
 const SETUP_MOD_SOURCE: &str = include_str!("../src/setup/mod.rs");
@@ -19,14 +18,14 @@ const VERIFY_MACOS_BUNDLE_SOURCE: &str = include_str!("../scripts/verify-macos-b
 // ── Launch path uses catalog, not Claude-only loader ───────────────────
 
 #[test]
-fn tab_ai_mode_uses_catalog_loader_not_claude_only_loader() {
+fn tab_ai_mode_uses_pi_agent_chat_launch_not_legacy_catalog_loader() {
     assert!(
-        TAB_AI_MODE_SOURCE.contains("load_acp_agent_catalog_entries"),
-        "tab_ai_mode must use the multi-agent catalog loader"
+        ACP_LAUNCH_SOURCE.contains("open_tab_ai_pi_view_from_launch"),
+        "tab_ai_mode must route Agent Chat through Pi warm launch"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("resolve_acp_launch_with_requirements"),
-        "tab_ai_mode must use capability-aware preflight resolution"
+        !ACP_LAUNCH_SOURCE.contains("load_acp_agent_catalog_entries"),
+        "tab_ai_mode must not use the legacy ACP catalog runtime launch"
     );
 }
 
@@ -279,10 +278,9 @@ fn classify_agent_source_distinguishes_legacy_from_builtin() {
         "claude-code must be classified as LegacyClaudeCode"
     );
     assert!(
-        ACP_CONFIG_SOURCE.contains(
-            r#""opencode" | "codex-acp" | "agy-acp" => super::catalog::AcpAgentSource::BuiltIn"#
-        ),
-        "opencode, codex-acp, and agy-acp must be classified as BuiltIn"
+        ACP_CONFIG_SOURCE
+            .contains(r#""opencode" | "codex-acp" => super::catalog::AcpAgentSource::BuiltIn"#),
+        "opencode and codex-acp must be classified as BuiltIn"
     );
 }
 

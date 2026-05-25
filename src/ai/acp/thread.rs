@@ -22,6 +22,31 @@ use crate::ai::agent_chat::runtime::{AgentChatConnection, AgentChatTurnRequest};
 
 use super::{build_tab_ai_acp_context_blocks, AcpApprovalRequest, AcpEvent, AcpEventRx};
 
+#[cfg(test)]
+struct TestAgentChatConnection;
+
+#[cfg(test)]
+impl AgentChatConnection for TestAgentChatConnection {
+    fn start_turn(
+        &self,
+        _request: AgentChatTurnRequest,
+    ) -> anyhow::Result<crate::ai::agent_chat::events::AgentChatEventRx> {
+        anyhow::bail!("test connection does not start turns")
+    }
+
+    fn cancel_turn(&self, _ui_thread_id: String) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn prepare_session(
+        &self,
+        _ui_thread_id: String,
+        _cwd: PathBuf,
+    ) -> anyhow::Result<crate::ai::agent_chat::events::AgentChatEventRx> {
+        anyhow::bail!("test connection does not prepare sessions")
+    }
+}
+
 /// Bootstrap state for deferred context capture.
 ///
 /// Tracks whether the Tab AI context has been assembled and staged on the
@@ -136,6 +161,8 @@ pub(crate) struct AcpThreadInit {
     pub display_name: SharedString,
     /// Display name for the selected Agent Chat profile (shown beside model).
     pub profile_display_name: Option<SharedString>,
+    /// Icon name for the selected Agent Chat profile.
+    pub profile_icon_name: Option<String>,
     /// Available models for this agent.
     pub available_models: Vec<super::config::AcpModelEntry>,
     /// Initially selected model ID (e.g. "claude-sonnet-4-6").
@@ -294,6 +321,8 @@ pub(crate) struct AcpThread {
     selected_model_display_name: Option<SharedString>,
     /// Display name for the selected Agent Chat profile.
     profile_display_name: Option<SharedString>,
+    /// Icon name for the selected Agent Chat profile.
+    profile_icon_name: Option<String>,
 }
 
 impl AcpThread {
@@ -336,6 +365,7 @@ impl AcpThread {
             available_agents: init.available_agents,
             launch_requirements: init.launch_requirements,
             profile_display_name: init.profile_display_name,
+            profile_icon_name: init.profile_icon_name,
             setup_state: None,
             usage_tokens: None,
             usage_cost_usd: None,
@@ -1737,6 +1767,10 @@ impl AcpThread {
             .unwrap_or(&self.display_name)
     }
 
+    pub(crate) fn profile_icon_name(&self) -> Option<&str> {
+        self.profile_icon_name.as_deref()
+    }
+
     /// Short display name for the currently selected model, or the agent name if none selected.
     pub(crate) fn selected_model_display(&self) -> &str {
         self.selected_model_display_name
@@ -2350,9 +2384,7 @@ impl AcpThread {
         initial_input: Option<String>,
     ) -> Self {
         let (_perm_tx, perm_rx) = async_channel::bounded(1);
-        let (conn_tx, _conn_rx) = async_channel::bounded::<super::AcpCommand>(1);
-        let dummy_connection: Arc<dyn AgentChatConnection> =
-            Arc::new(super::AcpConnection::from_sender(conn_tx));
+        let dummy_connection: Arc<dyn AgentChatConnection> = Arc::new(TestAgentChatConnection);
 
         Self {
             connection: dummy_connection,
@@ -2394,6 +2426,7 @@ impl AcpThread {
             selected_model_id: None,
             selected_model_display_name: None,
             profile_display_name: None,
+            profile_icon_name: None,
         }
     }
 
@@ -2579,9 +2612,8 @@ mod tests {
         let (_perm_tx, perm_rx) = async_channel::bounded(1);
         // We create a dummy connection channel — tests that call prepare_turn_blocks
         // and append_chunk don't need a live connection.
-        let (conn_tx, _conn_rx) = async_channel::bounded::<super::super::AcpCommand>(1);
         let dummy_connection: Arc<dyn AgentChatConnection> =
-            Arc::new(super::super::AcpConnection::from_sender(conn_tx));
+            Arc::new(super::TestAgentChatConnection);
 
         AcpThread {
             connection: dummy_connection,
@@ -2620,6 +2652,7 @@ mod tests {
             selected_model_id: None,
             selected_model_display_name: None,
             profile_display_name: None,
+            profile_icon_name: None,
         }
     }
 

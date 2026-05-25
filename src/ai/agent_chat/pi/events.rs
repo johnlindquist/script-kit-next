@@ -262,6 +262,15 @@ mod tests {
     }
 
     #[test]
+    fn pi_rpc_text_delta_splits_preserve_indentation_trailing_spaces_and_blank_lines() {
+        let delta = "  - first item  \n\n    indented next  ";
+        let chunks = split_text_delta_for_reveal(delta);
+
+        assert_eq!(chunks.concat(), delta);
+        assert!(chunks.iter().all(|chunk| !chunk.is_empty()));
+    }
+
+    #[test]
     fn pi_rpc_thinking_delta_maps_to_agent_thought_delta() {
         let events = map_rpc_event_to_events(&json!({
             "type": "message_update",

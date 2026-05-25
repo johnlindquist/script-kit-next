@@ -77,6 +77,7 @@ pub struct ResolvedAgentChatProfile {
     pub source: AgentChatProfileSource,
     pub id: String,
     pub name: String,
+    pub icon_name: Option<String>,
     pub backend: AgentChatBackend,
     pub pi_binary: Option<PathBuf>,
     pub agent: Option<String>,
@@ -104,6 +105,7 @@ pub struct ResolvedAgentChatProfile {
 pub struct AgentChatProfilePickerEntry {
     pub id: String,
     pub name: String,
+    pub icon_name: Option<String>,
     pub backend: AgentChatBackend,
     pub source: AgentChatProfileSource,
 }
@@ -113,6 +115,7 @@ impl AgentChatProfilePickerEntry {
         Self {
             id: profile.id,
             name: profile.name,
+            icon_name: profile.icon_name,
             backend: profile.backend,
             source: profile.source,
         }
@@ -124,6 +127,7 @@ pub fn built_in_general_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentC
         source: AgentChatProfileSource::BuiltIn,
         id: BUILTIN_GENERAL_PROFILE_ID.to_string(),
         name: "General".to_string(),
+        icon_name: Some("sparkles".to_string()),
         backend: AgentChatBackend::Pi,
         pi_binary: None,
         agent: None,
@@ -169,6 +173,7 @@ pub fn built_in_script_kit_profile(ctx: &AgentChatProfileContext) -> ResolvedAge
         source: AgentChatProfileSource::BuiltIn,
         id: BUILTIN_SCRIPT_KIT_PROFILE_ID.to_string(),
         name: "Script Kit".to_string(),
+        icon_name: Some("code".to_string()),
         backend: AgentChatBackend::Pi,
         pi_binary: None,
         agent: None,
@@ -214,6 +219,7 @@ pub fn built_in_text_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentChat
         source: AgentChatProfileSource::BuiltIn,
         id: BUILTIN_TEXT_PROFILE_ID.to_string(),
         name: "Text".to_string(),
+        icon_name: Some("file-text".to_string()),
         backend: AgentChatBackend::Pi,
         pi_binary: None,
         agent: None,
@@ -257,6 +263,7 @@ pub fn default_acp_runtime_profile() -> ResolvedAgentChatProfile {
         source: AgentChatProfileSource::BuiltIn,
         id: BUILTIN_ACP_FALLBACK_PROFILE_ID.to_string(),
         name: "Agent".to_string(),
+        icon_name: Some(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN.to_string()),
         backend: AgentChatBackend::Acp,
         pi_binary: None,
         agent: None,
@@ -400,6 +407,7 @@ pub fn resolve_user_profile(profile: &AcpProfile) -> ResolvedAgentChatProfile {
             .map(str::to_string)
             .unwrap_or_else(|| generated_legacy_profile_id(&profile.name)),
         name: profile.name.trim().to_string(),
+        icon_name: clean_opt(profile.icon_name.as_deref()).map(str::to_string),
         backend,
         pi_binary: clean_opt(profile.pi_binary.as_deref())
             .map(crate::ai::agent_chat::pi::binary::expand_tilde_path),

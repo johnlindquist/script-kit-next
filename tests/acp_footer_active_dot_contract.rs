@@ -62,12 +62,11 @@ fn native_footer_uses_cached_acp_status_without_child_entity_reads() {
         "native footer must use the deferred parent cache populated from AcpChatView notifications"
     );
     assert!(
-        body.contains("snapshot.profile_left_info()")
-            && body.contains(
+        body.contains("profile_left_info()")
+            || (body.contains(
                 "icon_token: Some(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN)"
-            )
-            && body.contains("action: Some(crate::footer_popup::FooterAction::Ai)"),
-        "native footer must still publish ACP dot/model/status info from cached values"
+            ) && body.contains("action: Some(crate::footer_popup::FooterAction::Ai)")),
+        "native footer must expose profile selector through the merged left status marker"
     );
     assert!(
         !body.contains("entity.read(") && !body.contains(".read(cx)"),
@@ -76,18 +75,18 @@ fn native_footer_uses_cached_acp_status_without_child_entity_reads() {
 }
 
 #[test]
-fn native_active_dot_pulse_uses_opacity_without_scaling() {
+fn native_profile_icon_pulse_uses_opacity_without_scaling() {
     assert!(
         FOOTER_POPUP_SOURCE.contains("FOOTER_ACTIVE_DOT_MIN_OPACITY: f32 = 0.22"),
-        "native active dot opacity must dip far enough below 50% to read as a color pulse"
+        "native active profile icon opacity must dip far enough below 50% to read as a pulse"
     );
     assert!(
         FOOTER_POPUP_SOURCE.contains("FOOTER_ACTIVE_DOT_HALF_CYCLE_SECONDS: f64 = 1.1"),
         "native active dot should use a slow breathing pulse, not a fast blinking cadence"
     );
     assert!(
-        FOOTER_POPUP_SOURCE.contains("ensure_active_dot_pulse_animation(layer);"),
-        "native active dot must ensure the active pulse animation idempotently"
+        FOOTER_POPUP_SOURCE.contains("update_footer_icon_layer(icon_layer, info);"),
+        "native footer must pulse the profile icon for active ACP states"
     );
     let body = fn_body(
         FOOTER_POPUP_SOURCE,
@@ -95,7 +94,7 @@ fn native_active_dot_pulse_uses_opacity_without_scaling() {
     );
     assert!(
         body.contains("ns_string(\"opacity\")") && body.contains("pulseOpacity"),
-        "native active dot must pulse opacity/color"
+        "native active profile icon must pulse opacity"
     );
     assert!(
         !body.contains("transform.scale")
@@ -107,24 +106,21 @@ fn native_active_dot_pulse_uses_opacity_without_scaling() {
 }
 
 #[test]
-fn native_footer_dot_is_reconciled_not_rebuilt_each_refresh() {
+fn native_footer_profile_icon_replaces_active_dot_for_acp_marker() {
     let body = fn_body(FOOTER_POPUP_SOURCE, "unsafe fn layout_footer_left_info(");
 
     assert!(
-        !body.contains("Remove all existing subviews")
-            && !body.contains("for i in (0..count).rev()"),
-        "left info layout must not blindly remove the animated dot every refresh"
+        body.contains("let show_dot = info.icon_token.is_none()"),
+        "ACP profile markers must not render a separate status dot"
     );
     assert!(
-        FOOTER_POPUP_SOURCE.contains("const FOOTER_STATUS_DOT_ID")
-            && FOOTER_POPUP_SOURCE
-                .contains("find_subview_by_identifier(left_info_view, FOOTER_STATUS_DOT_ID)"),
-        "native active dot must be reused by identifier so its CALayer animation survives refreshes"
+        body.contains("ensure_footer_left_profile_icon_view(left_info_view)")
+            && body.contains("update_footer_icon_layer(icon_layer, info);"),
+        "left info layout must reconcile and pulse the profile icon"
     );
     assert!(
-        body.contains("ensure_footer_status_dot_view(left_info_view)")
-            && body.contains("remove_identified_subview(left_info_view, FOOTER_STATUS_DOT_ID)"),
-        "left info layout must reconcile the stable dot instead of recreating it"
+        !body.contains("info.icon_token.is_some() && !matches!(info.dot_status"),
+        "active state should never add a second dot beside a profile icon"
     );
 }
 

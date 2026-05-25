@@ -135,24 +135,18 @@ fn codex_acp_kill_switch_is_manual_not_dev_default() {
 }
 
 #[test]
-fn acp_open_consumes_prewarm_before_spawning_fresh_runtime() {
+fn acp_open_uses_pi_warm_session_without_fresh_acp_runtime() {
     let acp_launch = fs::read_to_string("src/app_impl/tab_ai_mode/acp_launch.rs")
         .expect("read ACP launch source");
     let body = fn_body(&acp_launch, "fn open_tab_ai_acp_view_from_request_impl(");
 
-    let consume_idx = body
-        .find("self.take_prewarmed_acp_chat_for_launch(")
-        .expect("open path must try to consume hot ACP prewarm");
-    let spawn_idx = body
-        .find("crate::ai::acp::AcpConnection::spawn_with_approval(")
-        .expect("fresh ACP spawn path must still exist");
     assert!(
-        consume_idx < spawn_idx,
-        "the hot prewarm must be attempted before spawning a fresh ACP runtime"
+        body.contains("open_tab_ai_pi_view_from_launch"),
+        "open path must route through Pi warm Agent Chat launch"
     );
     assert!(
-        body.contains("used_prewarmed_acp"),
-        "open path should log/track whether it reused the hot ACP connection"
+        !body.contains("spawn_with_approval"),
+        "open path must not spawn a fresh ACP runtime"
     );
 }
 

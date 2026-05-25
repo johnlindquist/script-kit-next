@@ -370,6 +370,6 @@ impl ScriptListApp {
             && !has_focused_part
             && !use_ask_anything_fallback
             && !suppress_focused_part
-            && !matches!(pending_script_list_trigger, Some('/' | '@'))
+            && !matches!(pending_script_list_trigger, Some('/' | '@' | '|'))
     }
 }

@@ -2,7 +2,7 @@
 //! and Tab AI routing contracts.
 //!
 //! These complement the per-module unit tests in `thread.rs`,
-//! `permission_broker.rs`, `events.rs`, and `client.rs` with
+//! `permission_broker.rs`, and `events.rs` with
 //! cross-cutting integration-style assertions.
 
 use agent_client_protocol::{ContentBlock, TextContent};
@@ -338,7 +338,6 @@ const ACP_PICKER_POPUP_SOURCE: &str = include_str!("picker_popup.rs");
 const ACP_POPUP_WINDOW_SOURCE: &str = include_str!("popup_window.rs");
 const ACP_CHAT_WINDOW_SOURCE: &str = include_str!("chat_window.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("view.rs");
-const ACP_CLIENT_SOURCE: &str = include_str!("client.rs");
 const ACP_THREAD_SOURCE: &str = include_str!("thread.rs");
 const ACP_TRANSCRIPT_SOURCE: &str = include_str!("components/transcript.rs");
 const ACP_UI_VARIANT_SOURCE: &str = include_str!("ui_variant.rs");
@@ -382,7 +381,8 @@ fn tab_ai_mode_creates_acp_chat_view_for_tab() {
 #[test]
 fn tab_ai_mode_creates_acp_thread_with_connection() {
     assert!(TAB_AI_MODE_SOURCE.contains("AcpThread::new"));
-    assert!(TAB_AI_MODE_SOURCE.contains("AcpConnection::spawn_with_approval"));
+    assert!(TAB_AI_MODE_SOURCE.contains("open_tab_ai_pi_view_from_launch"));
+    assert!(TAB_AI_MODE_SOURCE.contains("warm_session_manager"));
     assert!(TAB_AI_MODE_SOURCE.contains("AcpPermissionBroker::new"));
 }
 
@@ -556,11 +556,8 @@ fn acp_cancel_streaming_sends_session_cancel_to_agent() {
         "AcpThread::cancel_streaming must enqueue an ACP cancel request"
     );
     assert!(
-        ACP_CLIENT_SOURCE.contains("AcpCancelCommand::CancelTurn")
-            && ACP_CLIENT_SOURCE.contains("CancelNotification::new")
-            && ACP_CLIENT_SOURCE.contains(".cancel(CancelNotification::new")
-            && ACP_CLIENT_SOURCE.contains("event = \"acp_session_cancel_requested\""),
-        "ACP runtime must translate UI cancellation into a session/cancel notification"
+        ACP_THREAD_SOURCE.contains("self.connection.cancel_turn(self.ui_thread_id.clone())"),
+        "Agent Chat runtime seam must translate UI cancellation through the active backend"
     );
 }
 

@@ -4,26 +4,9 @@
 //! event stream that the `AcpThread` entity can consume for durable
 //! per-thread history, pending tool state, and permission UX.
 
-use std::path::PathBuf;
-
-use agent_client_protocol::ContentBlock;
-
 /// Channel types for ACP event streaming.
-pub(crate) type AcpEventRx = async_channel::Receiver<AcpEvent>;
 pub(crate) type AcpEventTx = async_channel::Sender<AcpEvent>;
-
-/// A request to start a new ACP turn on a specific thread.
-#[derive(Debug, Clone)]
-pub(crate) struct AcpPromptTurnRequest {
-    /// Script Kit UI thread identifier (maps to ACP session).
-    pub ui_thread_id: String,
-    /// Working directory for the ACP session.
-    pub cwd: PathBuf,
-    /// Content blocks to send as the prompt.
-    pub blocks: Vec<ContentBlock>,
-    /// Optional model ID to set on the session before prompting.
-    pub model_id: Option<String>,
-}
+pub(crate) type AcpEventRx = async_channel::Receiver<AcpEvent>;
 
 /// Typed events emitted by the ACP worker for a single turn.
 ///
@@ -80,41 +63,6 @@ pub(crate) enum AcpEvent {
     Failed { error: String },
 }
 
-/// Commands sent from the GPUI thread to the ACP worker for event-driven turns.
-pub(crate) enum AcpCommand {
-    /// Start a new turn and stream events back through `event_tx`.
-    StartTurn {
-        request: AcpPromptTurnRequest,
-        event_tx: AcpEventTx,
-    },
-    /// Eagerly create (or reuse) the ACP session for `ui_thread_id` without
-    /// sending a prompt. Emits `ModelsAvailable` (or `SetupRequired`) through
-    /// `event_tx` and then drops the sender so the listener exits.
-    ///
-    /// Used by `AcpThread::new` so the model picker can replace the hardcoded
-    /// fallback with the agent's live list before the user submits anything.
-    PrepareSession {
-        ui_thread_id: String,
-        cwd: PathBuf,
-        event_tx: AcpEventTx,
-    },
-    /// Legacy: stream prompt with a callback (used by AiProvider path).
-    StreamPrompt {
-        ui_session_id: String,
-        cwd: PathBuf,
-        messages: Vec<crate::ai::providers::ProviderMessage>,
-        on_chunk: crate::ai::providers::StreamCallback,
-        reply_tx: async_channel::Sender<anyhow::Result<()>>,
-    },
-}
-
-/// Out-of-band commands that must reach an active prompt turn while the main
-/// ACP command loop is awaiting `session/prompt`.
-pub(crate) enum AcpCancelCommand {
-    /// Cancel the active prompt turn for the given Script Kit UI thread.
-    CancelTurn { ui_thread_id: String },
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,32 +71,5 @@ mod tests {
     fn acp_event_variants_are_clone() {
         let event = AcpEvent::AgentMessageDelta("hello".to_string());
         let _cloned = event.clone();
-    }
-
-    #[test]
-    fn acp_prompt_turn_request_is_debug() {
-        let request = AcpPromptTurnRequest {
-            ui_thread_id: "thread-1".to_string(),
-            cwd: PathBuf::from("/tmp"),
-            blocks: vec![],
-            model_id: None,
-        };
-        let debug = format!("{:?}", request);
-        assert!(debug.contains("thread-1"));
-    }
-
-    #[test]
-    fn acp_command_start_turn_holds_channel() {
-        let (tx, _rx) = async_channel::bounded::<AcpEvent>(1);
-        let _cmd = AcpCommand::StartTurn {
-            request: AcpPromptTurnRequest {
-                ui_thread_id: "t1".to_string(),
-                cwd: PathBuf::from("."),
-                blocks: vec![],
-                model_id: None,
-            },
-            event_tx: tx,
-        };
-        // Verify the command variant can be constructed and holds a valid channel
     }
 }

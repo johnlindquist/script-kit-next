@@ -16,8 +16,6 @@ fn inline_agent_window_uses_agent_chat_pi_executor_without_acp_fallback() {
     for forbidden in [
         "spawn_default_acp_inline_agent_executor",
         "AcpInlineAgentExecutor",
-        "AcpConnection::spawn_with_approval",
-        "AcpPromptTurnRequest",
     ] {
         assert!(
             !INLINE_AGENT_WINDOW.contains(forbidden),
@@ -32,8 +30,6 @@ fn agent_chat_adapter_is_the_only_inline_agent_runtime_adapter_contract() {
     assert!(AGENT_CHAT_ADAPTER.contains("resolve_focused_text_pi_launch"));
     assert!(AGENT_CHAT_ADAPTER.contains("warm_session_manager"));
     for forbidden in [
-        "AcpConnection::spawn_with_approval",
-        "AcpPromptTurnRequest",
         "load_acp_agent_catalog_entries",
         "resolve_acp_launch_with_requirements",
     ] {

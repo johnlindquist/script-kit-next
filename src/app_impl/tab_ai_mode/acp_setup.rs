@@ -43,6 +43,30 @@ impl ScriptListApp {
         self.show_embedded_acp_setup_view(source_view, setup, cx);
     }
 
+    pub(super) fn show_pi_agent_chat_unavailable_setup_view(
+        &mut self,
+        source_view: AppView,
+        error: String,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::error!(
+            target: "script_kit::tab_ai",
+            event = "pi_agent_chat_unavailable",
+            error = %error,
+        );
+        let setup = crate::ai::acp::AcpInlineSetupState {
+            reason_code: "piAgentChatUnavailable",
+            title: "Pi Agent Chat is unavailable".into(),
+            body: error.into(),
+            primary_action: crate::ai::acp::AcpSetupAction::Retry,
+            secondary_action: None,
+            selected_agent: None,
+            catalog_entries: Vec::new(),
+            launch_requirements: crate::ai::acp::AcpLaunchRequirements::default(),
+        };
+        self.show_embedded_acp_setup_view(source_view, setup, cx);
+    }
+
     /// Show a setup card when ACP launch is blocked (missing key, model
     /// capability, etc.).
     pub(super) fn show_acp_launch_blocked_setup_view(

@@ -44,10 +44,6 @@ test = false
 required-features = ["menu-syntax-doctor"]
 
 [[test]]
-name = "agy_acp_adapter_harness"
-path = "tests/agy_acp_adapter_harness.rs"
-
-[[test]]
 name = "menu_syntax_doctor_cli"
 path = "tests/menu_syntax_doctor_cli.rs"
 required-features = ["menu-syntax-doctor"]

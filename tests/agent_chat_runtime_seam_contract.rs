@@ -2,7 +2,6 @@ const AGENT_CHAT_MOD_SOURCE: &str = include_str!("../src/ai/agent_chat/mod.rs");
 const AGENT_CHAT_EVENTS_SOURCE: &str = include_str!("../src/ai/agent_chat/events.rs");
 const AGENT_CHAT_RUNTIME_SOURCE: &str = include_str!("../src/ai/agent_chat/runtime.rs");
 const AGENT_CHAT_LAUNCH_SOURCE: &str = include_str!("../src/ai/agent_chat/launch.rs");
-const ACP_CLIENT_SOURCE: &str = include_str!("../src/ai/acp/client.rs");
 const ACP_THREAD_SOURCE: &str = include_str!("../src/ai/acp/thread.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 const APP_STATE_SOURCE: &str = include_str!("../src/main_sections/app_state.rs");
@@ -45,27 +44,14 @@ fn phase_two_event_boundary_aliases_current_acp_stream() {
 }
 
 #[test]
-fn acp_runtime_implements_neutral_runtime_seam() {
-    assert!(
-        ACP_CLIENT_SOURCE.contains("impl AgentChatConnection for AcpRuntime")
-            || ACP_CLIENT_SOURCE.contains(
-                "impl crate::ai::agent_chat::runtime::AgentChatConnection for AcpRuntime",
-            )
-    );
-    assert!(ACP_CLIENT_SOURCE.contains("AcpRuntime::start_turn(self"));
-    assert!(ACP_CLIENT_SOURCE.contains("AcpRuntime::prepare_session(self"));
-    assert!(ACP_CLIENT_SOURCE.contains("AcpRuntime::cancel_turn(self"));
-}
-
-#[test]
 fn acp_thread_depends_on_trait_object_not_concrete_acp_runtime() {
     assert!(
         ACP_THREAD_SOURCE.contains("Arc<dyn AgentChatConnection>"),
         "AcpThread should store the neutral runtime seam"
     );
     assert!(
-        !ACP_THREAD_SOURCE.contains("connection: Arc<AcpConnection>"),
-        "AcpThread must not store the concrete ACP connection after Phase 2"
+        ACP_THREAD_SOURCE.contains("connection: Arc<dyn AgentChatConnection>"),
+        "AcpThread must store the neutral Agent Chat runtime seam"
     );
 }
 
@@ -99,7 +85,6 @@ fn pi_routing_is_owned_by_agent_chat_launch_and_tab_entry_only() {
 
     for (name, source) in [
         ("agent_chat_runtime", AGENT_CHAT_RUNTIME_SOURCE),
-        ("acp_client", ACP_CLIENT_SOURCE),
         ("acp_thread", ACP_THREAD_SOURCE),
     ] {
         assert!(
@@ -116,11 +101,10 @@ fn pi_routing_is_owned_by_agent_chat_launch_and_tab_entry_only() {
 }
 
 #[test]
-fn tab_launch_preserves_acp_runtime_path_and_adds_pi_warm_path() {
+fn tab_launch_uses_pi_warm_path_without_acp_runtime_fallback() {
     assert!(
-        ACP_LAUNCH_SOURCE.contains("AcpConnection::spawn_with_approval")
-            || ACP_LAUNCH_SOURCE.contains("AcpRuntime::spawn_with_approval"),
-        "ACP profiles should still instantiate the ACP runtime"
+        !ACP_LAUNCH_SOURCE.contains("spawn_with_approval"),
+        "Agent Chat launch must not instantiate the legacy ACP runtime"
     );
     assert!(
         ACP_LAUNCH_SOURCE.contains("PiRpcRuntime")

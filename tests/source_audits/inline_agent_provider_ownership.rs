@@ -23,8 +23,6 @@ fn inline_agent_ui_and_ai_boundary_do_not_own_pi_or_acp_runtime_launch() {
         for forbidden in [
             "PiRpcRuntime",
             "PiLaunchSpec",
-            "AcpConnection::spawn_with_approval",
-            "AcpPromptTurnRequest",
             "spawn_default_acp_inline_agent_executor",
             "mod acp_adapter",
         ] {

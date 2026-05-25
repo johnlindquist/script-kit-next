@@ -39,6 +39,7 @@ use super::types::{
 };
 use super::ui_variant::{AcpChatUiVariant, AcpComposerPlacement};
 use super::{AcpApprovalOption, AcpApprovalPreview, AcpApprovalPreviewKind, AcpApprovalRequest};
+use crate::ai::window::context_picker::types::PROFILE_TRIGGER_STR;
 
 use crate::ai::message_parts::AiContextPart;
 use crate::ai::window::context_picker::types::{
@@ -102,6 +103,7 @@ pub(crate) struct AcpFooterButtonSpec {
 pub(crate) struct AcpFooterSnapshot {
     pub(crate) dot_status: crate::footer_popup::FooterDotStatus,
     pub(crate) profile_display: String,
+    pub(crate) profile_icon_name: Option<String>,
     pub(crate) model_display: String,
     pub(crate) status_text: Option<&'static str>,
     pub(crate) profile_selector_open: bool,
@@ -124,11 +126,24 @@ impl AcpFooterSnapshot {
             model_name: self.model_status_label(),
             prefer_accent_for_active_states: true,
             profile_name: Some(self.profile_display.clone()),
-            icon_token: Some(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN),
+            icon_token: Some(self.profile_icon_name.clone().unwrap_or_else(|| {
+                crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN.to_string()
+            })),
             action: Some(crate::footer_popup::FooterAction::Ai),
             selected: self.profile_selector_open,
         }
     }
+}
+
+#[derive(Clone, Debug)]
+struct FocusedTextAgentChatState {
+    session_id: crate::platform::accessibility::FocusedTextSessionId,
+    app_name: String,
+    char_count: usize,
+    can_replace: bool,
+    can_append: bool,
+    can_copy: bool,
+    last_apply_receipt: Option<crate::ai::focused_text::FocusedTextMutationReceipt>,
 }
 
 /// Parse the `description` field from YAML frontmatter in a SKILL.md file.
@@ -491,6 +506,7 @@ pub(crate) struct AcpChatView {
     toolbar: Option<Entity<AcpToolbar>>,
     pub(crate) transcript: Option<Entity<AcpTranscript>>,
     ui_variant: AcpChatUiVariant,
+    focused_text: Option<FocusedTextAgentChatState>,
     /// Setup-mode agent selection picker state (managed by AcpChatView until
     /// fully migrated to AcpSetupCard).
     pub(crate) setup_agent_picker: Option<AcpSetupAgentPickerState>,
@@ -905,6 +921,7 @@ impl AcpChatView {
         AcpFooterSnapshot {
             dot_status: self.footer_dot_status(cx),
             profile_display: thread.profile_display().to_string(),
+            profile_icon_name: thread.profile_icon_name().map(str::to_string),
             model_display: thread.selected_model_display().to_string(),
             status_text: self.footer_status_text(cx),
             profile_selector_open: self.profile_selector_open,
@@ -965,6 +982,10 @@ impl AcpChatView {
     fn footer_buttons_for_thread(&self, thread: &AcpThread) -> Vec<AcpFooterButtonSpec> {
         use crate::footer_popup::FooterAction;
 
+        if self.focused_text.is_some() && self.ui_variant == AcpChatUiVariant::FocusedTextMini {
+            return self.focused_text_footer_buttons(thread);
+        }
+
         let actions_selected = crate::actions::is_actions_window_open();
         let mut buttons = Vec::new();
 
@@ -1024,11 +1045,327 @@ impl AcpChatView {
         buttons
     }
 
+    fn focused_text_footer_buttons(&self, thread: &AcpThread) -> Vec<AcpFooterButtonSpec> {
+        use crate::footer_popup::FooterAction;
+
+        let Some(state) = self.focused_text.as_ref() else {
+            return Vec::new();
+        };
+
+        let has_output = Self::latest_assistant_response_text(thread).is_some();
+        let action_disabled_reason = if has_output {
+            None
+        } else {
+            Some("assistant_output_required")
+        };
+        let streaming = matches!(thread.status, AcpThreadStatus::Streaming);
+
+        match thread.status {
+            AcpThreadStatus::Streaming => vec![AcpFooterButtonSpec {
+                action: FooterAction::Stop,
+                key: "Esc",
+                label: "Stop",
+                selected: false,
+                enabled: true,
+                disabled_reason: None,
+            }],
+            AcpThreadStatus::WaitingForPermission => Vec::new(),
+            AcpThreadStatus::Idle | AcpThreadStatus::Error => vec![
+                AcpFooterButtonSpec {
+                    action: FooterAction::Run,
+                    key: "↵",
+                    label: "Send",
+                    selected: false,
+                    enabled: !thread.input.text().trim().is_empty()
+                        && !self.context_capture_pending,
+                    disabled_reason: if thread.input.text().trim().is_empty() {
+                        Some("type_message_first")
+                    } else if self.context_capture_pending {
+                        Some("context_capture_pending")
+                    } else {
+                        None
+                    },
+                },
+                AcpFooterButtonSpec {
+                    action: FooterAction::Replace,
+                    key: "⌘R",
+                    label: "Replace",
+                    selected: false,
+                    enabled: !streaming && state.can_replace && has_output,
+                    disabled_reason: if !state.can_replace {
+                        Some("replace_unavailable")
+                    } else {
+                        action_disabled_reason
+                    },
+                },
+                AcpFooterButtonSpec {
+                    action: FooterAction::Append,
+                    key: "⌘A",
+                    label: "Append",
+                    selected: false,
+                    enabled: !streaming && state.can_append && has_output,
+                    disabled_reason: if !state.can_append {
+                        Some("append_unavailable")
+                    } else {
+                        action_disabled_reason
+                    },
+                },
+                AcpFooterButtonSpec {
+                    action: FooterAction::Copy,
+                    key: "⌘C",
+                    label: "Copy",
+                    selected: false,
+                    enabled: !streaming && state.can_copy && has_output,
+                    disabled_reason: if !state.can_copy {
+                        Some("copy_unavailable")
+                    } else {
+                        action_disabled_reason
+                    },
+                },
+                AcpFooterButtonSpec {
+                    action: FooterAction::Expand,
+                    key: "⌘↵",
+                    label: "Chat",
+                    selected: false,
+                    enabled: true,
+                    disabled_reason: None,
+                },
+                AcpFooterButtonSpec {
+                    action: FooterAction::Retry,
+                    key: "⌘⇧R",
+                    label: "Retry",
+                    selected: false,
+                    enabled: self.has_retry_request(),
+                    disabled_reason: if self.has_retry_request() {
+                        None
+                    } else {
+                        Some("not_retryable")
+                    },
+                },
+            ],
+        }
+    }
+
     fn has_pastable_assistant_response(thread: &AcpThread) -> bool {
         thread.messages.iter().rev().any(|message| {
             matches!(message.role, AcpThreadMessageRole::Assistant)
                 && !message.body.trim().is_empty()
         })
+    }
+
+    fn latest_assistant_response_text(thread: &AcpThread) -> Option<String> {
+        thread
+            .messages
+            .iter()
+            .rev()
+            .find(|message| {
+                matches!(message.role, AcpThreadMessageRole::Assistant)
+                    && !message.body.trim().is_empty()
+            })
+            .map(|message| message.body.to_string())
+    }
+
+    fn focused_text_state_snapshot(
+        &self,
+        thread: &AcpThread,
+    ) -> Option<crate::protocol::AcpFocusedTextState> {
+        let state = self.focused_text.as_ref()?;
+        Some(crate::protocol::AcpFocusedTextState {
+            mode: if self.ui_variant == AcpChatUiVariant::FocusedTextMini {
+                "mini".to_string()
+            } else {
+                "expanded".to_string()
+            },
+            session_id: state.session_id.to_string(),
+            app_name: state.app_name.clone(),
+            char_count: state.char_count,
+            can_replace: state.can_replace,
+            can_append: state.can_append,
+            can_copy: state.can_copy,
+            has_output: Self::latest_assistant_response_text(thread).is_some(),
+            last_apply_action: state
+                .last_apply_receipt
+                .as_ref()
+                .map(|receipt| format!("{:?}", receipt.action).to_lowercase()),
+        })
+    }
+
+    pub(crate) fn collect_focused_text_mini_elements(
+        &self,
+        limit: usize,
+        cx: &App,
+    ) -> Vec<crate::protocol::ElementInfo> {
+        let thread = self.live_thread().read(cx);
+        let Some(focused_text) = self.focused_text_state_snapshot(thread) else {
+            return Vec::new();
+        };
+
+        let mut elements = vec![
+            crate::protocol::ElementInfo {
+                semantic_id: "focused-text-mini-root".to_string(),
+                element_type: crate::protocol::ElementType::Panel,
+                text: Some(format!(
+                    "{} · {} chars",
+                    focused_text.app_name, focused_text.char_count
+                )),
+                value: Some(self.ui_variant.state_id().to_string()),
+                selected: None,
+                focused: None,
+                index: None,
+                role: Some("focused-text-mini".to_string()),
+                kind: Some(focused_text.mode),
+                source: Some("focusedText".to_string()),
+                source_name: Some(focused_text.app_name),
+                selectable: Some(false),
+                status_kind: Some(Self::acp_thread_status_label(thread.status).to_string()),
+                action_disabled: None,
+            },
+            crate::protocol::ElementInfo {
+                semantic_id: "focused-text-input".to_string(),
+                element_type: crate::protocol::ElementType::Input,
+                text: Some("Instruction".to_string()),
+                value: Some(thread.input.text().to_string()),
+                selected: None,
+                focused: Some(true),
+                index: None,
+                role: Some("composer".to_string()),
+                kind: Some("focused-text-instruction".to_string()),
+                source: Some("focusedText".to_string()),
+                source_name: None,
+                selectable: Some(true),
+                status_kind: None,
+                action_disabled: None,
+            },
+            crate::protocol::ElementInfo {
+                semantic_id: "focused-text-preview".to_string(),
+                element_type: crate::protocol::ElementType::Panel,
+                text: Some(format!(
+                    "{} assistant output",
+                    if focused_text.has_output { "has" } else { "no" }
+                )),
+                value: None,
+                selected: None,
+                focused: None,
+                index: None,
+                role: Some("preview".to_string()),
+                kind: Some("redacted-output".to_string()),
+                source: Some("focusedText".to_string()),
+                source_name: None,
+                selectable: Some(false),
+                status_kind: Some(if focused_text.has_output {
+                    "output_ready".to_string()
+                } else {
+                    "output_empty".to_string()
+                }),
+                action_disabled: None,
+            },
+        ];
+
+        for button in self.focused_text_footer_buttons(thread) {
+            let id = match button.action {
+                crate::footer_popup::FooterAction::Replace => "focused-text-action-replace",
+                crate::footer_popup::FooterAction::Append => "focused-text-action-append",
+                crate::footer_popup::FooterAction::Copy => "focused-text-action-copy",
+                crate::footer_popup::FooterAction::Expand => "focused-text-action-expand",
+                crate::footer_popup::FooterAction::Stop => "focused-text-action-stop",
+                crate::footer_popup::FooterAction::Retry => "focused-text-action-retry",
+                crate::footer_popup::FooterAction::Run => "focused-text-action-send",
+                _ => continue,
+            };
+            elements.push(crate::protocol::ElementInfo {
+                semantic_id: id.to_string(),
+                element_type: crate::protocol::ElementType::Button,
+                text: Some(button.label.to_string()),
+                value: Some(format!("{:?}", button.action).to_lowercase()),
+                selected: Some(button.selected),
+                focused: None,
+                index: None,
+                role: Some("focused-text-action".to_string()),
+                kind: Some(button.key.to_string()),
+                source: Some("focusedText".to_string()),
+                source_name: None,
+                selectable: Some(button.enabled),
+                status_kind: None,
+                action_disabled: button.disabled_reason.map(str::to_string),
+            });
+        }
+
+        if elements.len() > limit {
+            elements.truncate(limit);
+        }
+        elements
+    }
+
+    fn apply_focused_text_output(
+        &mut self,
+        action: crate::ai::focused_text::FocusedTextApplyAction,
+        cx: &mut Context<Self>,
+    ) {
+        let output = {
+            let thread = self.live_thread().read(cx);
+            Self::latest_assistant_response_text(thread)
+        };
+        let Some(output) = output else {
+            tracing::warn!(
+                target: "script_kit::focused_text",
+                event = "focused_text_apply_skipped_no_output",
+                action = ?action,
+            );
+            return;
+        };
+
+        let Some(state) = self.focused_text.as_mut() else {
+            return;
+        };
+
+        let mutation = match action {
+            crate::ai::focused_text::FocusedTextApplyAction::Replace => {
+                crate::ai::focused_text::FocusedTextMutation::Replace {
+                    session_id: state.session_id.clone(),
+                    text: output,
+                }
+            }
+            crate::ai::focused_text::FocusedTextApplyAction::Append => {
+                crate::ai::focused_text::FocusedTextMutation::Append {
+                    session_id: state.session_id.clone(),
+                    text: output,
+                }
+            }
+            crate::ai::focused_text::FocusedTextApplyAction::Copy => {
+                crate::ai::focused_text::FocusedTextMutation::Copy { text: output }
+            }
+        };
+
+        let bridge = crate::ai::focused_text::SystemFocusedTextPlatformBridge;
+        match crate::ai::focused_text::FocusedTextPlatformBridge::apply_text_mutation(
+            &bridge, mutation,
+        ) {
+            Ok(receipt) => {
+                tracing::info!(
+                    target: "script_kit::focused_text",
+                    event = "focused_text_apply_complete",
+                    action = ?receipt.action,
+                    success = receipt.success,
+                    changed_text = receipt.changed_text,
+                    copied_to_clipboard = receipt.copied_to_clipboard,
+                    app_name = %state.app_name,
+                    chars = state.char_count,
+                );
+                state.last_apply_receipt = Some(receipt);
+            }
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::focused_text",
+                    event = "focused_text_apply_failed",
+                    action = ?action,
+                    app_name = %state.app_name,
+                    chars = state.char_count,
+                    error = %error,
+                );
+            }
+        }
+
+        cx.notify();
     }
 
     fn footer_hint_label(button: &AcpFooterButtonSpec) -> &'static str {
@@ -1041,17 +1378,57 @@ impl AcpChatView {
             FooterAction::Actions => "⌘K Actions",
             FooterAction::Ai => "⌘↵ Agent Chat",
             FooterAction::Apply => "⌘↩ Apply",
+            FooterAction::Replace => "⌘R Replace",
+            FooterAction::Append => "⌘A Append",
+            FooterAction::Copy => "⌘C Copy",
+            FooterAction::Expand => "⌘↵ Chat",
+            FooterAction::Retry => "⌘⇧R Retry",
             FooterAction::Close => "⌘W Close",
         }
     }
 
-    fn dispatch_footer_button(
+    pub(crate) fn dispatch_footer_button(
         &mut self,
         action: crate::footer_popup::FooterAction,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         use crate::footer_popup::FooterAction;
+
+        if self.focused_text.is_some() {
+            match action {
+                FooterAction::Replace => {
+                    self.apply_focused_text_output(
+                        crate::ai::focused_text::FocusedTextApplyAction::Replace,
+                        cx,
+                    );
+                    return;
+                }
+                FooterAction::Append => {
+                    self.apply_focused_text_output(
+                        crate::ai::focused_text::FocusedTextApplyAction::Append,
+                        cx,
+                    );
+                    return;
+                }
+                FooterAction::Copy | FooterAction::Apply => {
+                    self.apply_focused_text_output(
+                        crate::ai::focused_text::FocusedTextApplyAction::Copy,
+                        cx,
+                    );
+                    return;
+                }
+                FooterAction::Expand => {
+                    self.set_ui_variant(AcpChatUiVariant::Standard, cx);
+                    return;
+                }
+                FooterAction::Retry => {
+                    self.queue_setup_retry_request(cx);
+                    return;
+                }
+                _ => {}
+            }
+        }
 
         match action {
             FooterAction::Run => self.submit_with_expanded_tokens(cx),
@@ -1063,6 +1440,11 @@ impl AcpChatView {
             FooterAction::Close => self.trigger_close_requested(window, cx),
             FooterAction::Ai => self.toggle_profile_selector_popup(window, cx),
             FooterAction::Apply => {}
+            FooterAction::Replace
+            | FooterAction::Append
+            | FooterAction::Copy
+            | FooterAction::Expand
+            | FooterAction::Retry => {}
         }
     }
 
@@ -1232,27 +1614,31 @@ impl AcpChatView {
     ) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
 
-        let robot_icon = gpui::svg()
-            .external_path(crate::components::footer_chrome::FOOTER_PROFILE_ICON_PATH)
-            .size(px(13.0));
+        let profile_icon_path = crate::components::footer_chrome::footer_icon_path_or_profile(
+            snapshot
+                .profile_icon_name
+                .as_deref()
+                .unwrap_or(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN),
+        );
+        let profile_icon = gpui::svg().external_path(profile_icon_path).size(px(13.0));
 
-        let robot_element = match snapshot.dot_status {
+        let profile_icon_element = match snapshot.dot_status {
             crate::footer_popup::FooterDotStatus::Hidden
-            | crate::footer_popup::FooterDotStatus::Idle => robot_icon
+            | crate::footer_popup::FooterDotStatus::Idle => profile_icon
                 .text_color(rgba(hint_text_rgba))
                 .into_any_element(),
             crate::footer_popup::FooterDotStatus::Error => {
                 let error_color = theme.colors.ui.error;
-                robot_icon.text_color(rgb(error_color)).into_any_element()
+                profile_icon.text_color(rgb(error_color)).into_any_element()
             }
             crate::footer_popup::FooterDotStatus::Streaming
             | crate::footer_popup::FooterDotStatus::WaitingForPermission => {
                 let accent_color = theme.colors.accent.selected;
                 let pulse_duration = Duration::from_millis(1200);
                 div()
-                    .child(robot_icon.text_color(rgb(accent_color)))
+                    .child(profile_icon.text_color(rgb(accent_color)))
                     .with_animation(
-                        "acp-footer-robot-pulse",
+                        "acp-footer-profile-icon-pulse",
                         Animation::new(pulse_duration).repeat(),
                         move |el, delta| {
                             let sine = (delta * std::f32::consts::PI * 2.0).sin();
@@ -1289,7 +1675,7 @@ impl AcpChatView {
                     }
                 }
             })
-            .child(robot_element)
+            .child(profile_icon_element)
             .child(
                 div()
                     .id("acp-model-display")
@@ -1749,7 +2135,7 @@ impl AcpChatView {
         if let Some(card) = &self.setup_card {
             card.update(cx, |view, cx| view.set_agent_picker(None, cx));
         }
-        // Clear a bare `@` / `/` trigger left over from a launcher-initiated
+        // Clear a bare `@` / `/` / `|` trigger left over from a launcher-initiated
         // transient entry. Without this, the thread-change observer
         // registered at `Self::new` can re-fire on a later notify (agent
         // preflight, model discovery, etc.), see the lingering trigger
@@ -1757,7 +2143,7 @@ impl AcpChatView {
         // picker back open on top of the now-visible main menu.
         if let AcpChatSession::Live(thread) = &self.session {
             let text = thread.read(cx).input.text().to_string();
-            if text == "@" || text == "/" {
+            if text == "@" || text == "/" || text == PROFILE_TRIGGER_STR {
                 thread.update(cx, |thread, cx| {
                     thread.input.set_text(String::new());
                     thread.input.set_cursor(0);
@@ -2998,6 +3384,7 @@ impl AcpChatView {
             context_ready,
             has_pending_permission: thread.pending_permission.is_some(),
             input_layout: Some(input_layout),
+            focused_text: self.focused_text_state_snapshot(thread),
             setup: Self::build_acp_live_setup_snapshot(thread, setup_snapshot),
             warnings: Vec::new(),
         }
@@ -3012,7 +3399,7 @@ impl AcpChatView {
             let trigger = match session.trigger {
                 ContextPickerTrigger::Mention => "@",
                 ContextPickerTrigger::Slash => "/",
-                ContextPickerTrigger::Profile => "'",
+                ContextPickerTrigger::Profile => PROFILE_TRIGGER_STR,
             };
             crate::protocol::AcpPickerState {
                 open: true,
@@ -3220,6 +3607,7 @@ impl AcpChatView {
             toolbar: None,
             transcript: None,
             ui_variant: AcpChatUiVariant::Standard,
+            focused_text: None,
             setup_agent_picker: None,
             opened_via_transient_trigger: None,
 
@@ -3286,6 +3674,7 @@ impl AcpChatView {
             toolbar: None,
             transcript: None,
             ui_variant: AcpChatUiVariant::Standard,
+            focused_text: None,
             setup_agent_picker: None,
             opened_via_transient_trigger: None,
             last_accepted_item: None,
@@ -3498,7 +3887,9 @@ impl AcpChatView {
             let trigger_str = match session.trigger {
                 crate::ai::window::context_picker::types::ContextPickerTrigger::Mention => "@",
                 crate::ai::window::context_picker::types::ContextPickerTrigger::Slash => "/",
-                crate::ai::window::context_picker::types::ContextPickerTrigger::Profile => "'",
+                crate::ai::window::context_picker::types::ContextPickerTrigger::Profile => {
+                    PROFILE_TRIGGER_STR
+                }
             };
             (
                 trigger_str.to_string(),
@@ -4276,8 +4667,10 @@ impl AcpChatView {
             return Err("Agent Chat is in setup mode".to_string());
         }
 
+        let session_id = snapshot.session_id.clone();
         let char_count = snapshot.metrics.chars;
         let app_name = snapshot.app.name.clone();
+        let capabilities = snapshot.capabilities;
         let source_uri = format!("focused-text://{}", snapshot.session_id);
         let part = crate::ai::message_parts::AiContextPart::TextBlock {
             label: format!("Focused Text · {app_name} · {char_count} chars"),
@@ -4297,6 +4690,15 @@ impl AcpChatView {
         self.pasted_text_tokens.clear();
         self.pasted_image_tokens.clear();
         self.pending_portal_session = None;
+        self.focused_text = Some(FocusedTextAgentChatState {
+            session_id,
+            app_name: app_name.clone(),
+            char_count,
+            can_replace: capabilities.can_replace,
+            can_append: capabilities.can_append,
+            can_copy: capabilities.can_copy,
+            last_apply_receipt: None,
+        });
 
         self.live_thread().update(cx, move |thread, cx| {
             thread.replace_pending_context_parts(vec![part], source, cx);
@@ -4571,6 +4973,10 @@ impl AcpChatView {
         self.open_picker_trigger("@", cx);
     }
 
+    pub(crate) fn open_profile_picker(&mut self, cx: &mut Context<Self>) {
+        self.open_picker_trigger(PROFILE_TRIGGER_STR, cx);
+    }
+
     pub(crate) fn open_slash_picker_in_window(
         &mut self,
         window: &mut Window,
@@ -4587,6 +4993,15 @@ impl AcpChatView {
     ) {
         self.cache_popup_parent_window(window, cx);
         self.open_mention_picker(cx);
+    }
+
+    pub(crate) fn open_profile_picker_in_window(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.cache_popup_parent_window(window, cx);
+        self.open_profile_picker(cx);
     }
 
     // ── Rendering helpers ─────────────────────────────────────────
@@ -5949,7 +6364,7 @@ impl AcpChatView {
         let trigger_str = match session.trigger {
             ContextPickerTrigger::Mention => "@",
             ContextPickerTrigger::Slash => "/",
-            ContextPickerTrigger::Profile => "'",
+            ContextPickerTrigger::Profile => PROFILE_TRIGGER_STR,
         };
 
         tracing::info!(
@@ -6585,7 +7000,7 @@ impl AcpChatView {
         let trigger_text = match session.trigger {
             ContextPickerTrigger::Mention => "@",
             ContextPickerTrigger::Slash => "/",
-            ContextPickerTrigger::Profile => "'",
+            ContextPickerTrigger::Profile => PROFILE_TRIGGER_STR,
         };
         let trigger_width = Self::measure_acp_input_prefix_width(trigger_text);
         let (after_trigger_x, after_trigger_y) = Self::measure_acp_input_cursor_position(
@@ -8457,21 +8872,9 @@ impl Render for AcpChatView {
                         .flex_grow()
                         .min_h(px(0.))
                         .flex()
-                        .flex_col()
                         .items_center()
                         .justify_center()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(6.0))
-                                .opacity(0.30)
-                                .text_xs()
-                                .child("Type / for skills")
-                                .child("\u{21E7}\u{21A9} for newlines")
-                                .child("\u{2318}P history \u{00b7} \u{2318}K actions")
-                                .child("\u{2318}N new \u{00b7} \u{2318}W close"),
-                        ),
+                        .child(crate::components::render_acp_empty_guidance(&theme)),
                 )
             })
             // ── Message list (middle, virtualized) ────────────

@@ -1,6 +1,63 @@
 use super::*;
 
 impl ScriptListApp {
+    pub(crate) fn open_focused_text_agent_chat_fixture(
+        &mut self,
+        text: Option<String>,
+        instruction: Option<String>,
+        provider: &'static str,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let text = text.unwrap_or_else(|| "Hello world".to_string());
+        let requested_submit = instruction
+            .as_ref()
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false);
+        let snapshot =
+            crate::platform::accessibility::focused_text::focused_text_snapshot_for_tests(text);
+
+        self.open_focused_text_agent_chat_from_snapshot(
+            snapshot,
+            instruction.clone(),
+            provider,
+            cx,
+        );
+
+        let AppView::AcpChatView { entity } = self.current_view.clone() else {
+            return Err("focused text fixture did not open Agent Chat".to_string());
+        };
+
+        if provider == "focused_text_mock_fixture" && requested_submit {
+            let user_text = instruction
+                .as_ref()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty());
+            let mut fixture_error = None;
+            entity.update(cx, |chat, cx| {
+                let result = chat.apply_test_fixture(
+                    "idle",
+                    user_text,
+                    Some("Fixture focused text output.".to_string()),
+                    cx,
+                );
+                if let Err(error) = result {
+                    fixture_error = Some(error);
+                }
+            });
+            if let Some(error) = fixture_error {
+                return Err(error);
+            }
+        } else if requested_submit {
+            entity.update(cx, |chat, cx| {
+                if let Some(thread) = chat.thread() {
+                    let _ = thread.update(cx, |thread, cx| thread.submit_input(cx));
+                }
+            });
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn open_focused_text_agent_chat_from_snapshot(
         &mut self,
         snapshot: crate::platform::accessibility::FocusedTextSnapshot,

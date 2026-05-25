@@ -865,6 +865,41 @@ impl ScriptListApp {
         }
     }
 
+    pub(crate) fn open_tab_ai_acp_with_profile_picker(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.tab_ai_harness_script_list_trigger = Some('|');
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_open_from_script_list_trigger",
+            trigger = "|",
+            current_view = ?self.current_view,
+        );
+        self.open_tab_ai_acp_with_entry_intent(None, cx);
+
+        let detached_opened = crate::ai::acp::chat_window::open_detached_profile_picker(cx);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_trigger_picker_open_attempt",
+            trigger = "|",
+            detached_opened,
+        );
+        if detached_opened {
+            return;
+        }
+
+        if let AppView::AcpChatView { entity } = &self.current_view {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_trigger_picker_open_embedded_deferred",
+                trigger = "|",
+            );
+            self.schedule_embedded_acp_picker_open(window.window_handle(), entity.clone(), '|', cx);
+        }
+    }
+
     fn schedule_embedded_acp_picker_open(
         &self,
         window_handle: gpui::AnyWindowHandle,
@@ -883,6 +918,7 @@ impl ScriptListApp {
                 entity.update(cx, |view, cx| match trigger {
                     '/' => view.open_slash_picker_in_window(window, cx),
                     '@' => view.open_mention_picker_in_window(window, cx),
+                    '|' => view.open_profile_picker_in_window(window, cx),
                     _ => {}
                 });
             });
@@ -2074,7 +2110,7 @@ impl ScriptListApp {
             return true;
         }
 
-        !matches!(pending_script_list_trigger, Some('/' | '@'))
+        !matches!(pending_script_list_trigger, Some('/' | '@' | '|'))
     }
 
     /// Extract a `TabAiTargetContext` from an `AiContextPart::FocusedTarget`,
@@ -2488,41 +2524,6 @@ impl ScriptListApp {
                 tracing::warn!(
                     target: "script_kit::tab_ai",
                     event = "pi_agent_chat_warm_resolution_failed",
-                    error = %error,
-                    "Falling back to ACP hot prewarm"
-                );
-            }
-        }
-
-        if self.prewarmed_acp_chat.is_some() || self.embedded_acp_chat.is_some() {
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_hot_prewarm_skipped",
-                correlation_id = "acp_hot_prewarm",
-                has_prewarmed_acp = self.prewarmed_acp_chat.is_some(),
-                has_embedded_acp = self.embedded_acp_chat.is_some(),
-            );
-            return;
-        }
-
-        let requirements = crate::ai::acp::AcpLaunchRequirements::default();
-        match crate::ai::acp::hosted::spawn_hosted_view(None, requirements, cx) {
-            Ok(view) => {
-                self.wire_embedded_acp_footer_callbacks(&view, cx);
-                self.prewarmed_acp_chat = Some(view);
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_hot_prewarm_started",
-                    correlation_id = "acp_hot_prewarm",
-                    needs_embedded_context = requirements.needs_embedded_context,
-                    needs_image = requirements.needs_image,
-                );
-            }
-            Err(error) => {
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_hot_prewarm_unavailable",
-                    correlation_id = "acp_hot_prewarm",
                     error = %error,
                 );
             }
@@ -5705,6 +5706,16 @@ mod tests {
             .as_deref(),
             Some("/")
         );
+        assert_eq!(
+            ScriptListApp::tab_ai_acp_initial_input_for_launch(
+                "ScriptList",
+                None,
+                Some('|'),
+                false,
+            )
+            .as_deref(),
+            Some("|")
+        );
     }
 
     #[test]
@@ -5825,6 +5836,10 @@ mod tests {
                 "pub(crate) fn open_tab_ai_acp_with_mention_picker(",
                 "Some('@')",
             ),
+            (
+                "pub(crate) fn open_tab_ai_acp_with_profile_picker(",
+                "Some('|')",
+            ),
         ] {
             let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(source, signature));
             let trigger_idx = body
@@ -5850,6 +5865,7 @@ mod tests {
         for signature in [
             "pub(crate) fn open_tab_ai_acp_with_slash_picker(",
             "pub(crate) fn open_tab_ai_acp_with_mention_picker(",
+            "pub(crate) fn open_tab_ai_acp_with_profile_picker(",
         ] {
             let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(source, signature));
             assert!(

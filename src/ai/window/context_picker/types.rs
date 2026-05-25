@@ -1,6 +1,9 @@
 use gpui::SharedString;
 
-/// Whether the picker was triggered by `@` (mention) or `/` (slash command).
+pub(crate) const PROFILE_TRIGGER_CHAR: char = '|';
+pub(crate) const PROFILE_TRIGGER_STR: &str = "|";
+
+/// Whether the picker was triggered by `@` (mention), `/` (slash command), or `|` (profile).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ContextPickerTrigger {

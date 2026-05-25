@@ -3553,8 +3553,8 @@ fn tab_ai_mode_creates_acp_thread_with_permission_broker() {
         "tab_ai_mode must create a permission broker for tool approval"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("spawn_with_approval"),
-        "AcpConnection must be spawned with approval wiring"
+        TAB_AI_MODE_SOURCE.contains("warm_session_manager"),
+        "Agent Chat must acquire a Pi warm session"
     );
 }
 
@@ -3753,7 +3753,7 @@ fn acp_mod_exports_required_types() {
     assert!(ACP_MOD_SOURCE.contains("AcpChatView"));
     assert!(ACP_MOD_SOURCE.contains("AcpThread"));
     assert!(ACP_MOD_SOURCE.contains("AcpPermissionBroker"));
-    assert!(ACP_MOD_SOURCE.contains("AcpRuntime"));
+    assert!(!ACP_MOD_SOURCE.contains(concat!("Acp", "Runtime")));
 }
 
 // =========================================================================
