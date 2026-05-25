@@ -40,6 +40,12 @@ struct ClipboardImageError {
     message: &'static str,
 }
 
+impl std::fmt::Display for ClipboardImageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.code, self.message)
+    }
+}
+
 impl ClipboardImageError {
     fn access() -> Self {
         Self {

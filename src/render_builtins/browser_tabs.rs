@@ -103,7 +103,7 @@ impl ScriptListApp {
 
         let text_primary = self.theme.colors.text.primary;
         let text_dimmed = self.theme.colors.text.dimmed;
-        let text_muted = self.theme.colors.text.muted;
+        let _text_muted = self.theme.colors.text.muted;
 
         let filtered_tabs =
             crate::browser_tabs::fuzzy_search_browser_tabs(&self.cached_browser_tabs, &filter);

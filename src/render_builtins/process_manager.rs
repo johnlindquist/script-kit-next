@@ -260,7 +260,7 @@ impl ScriptListApp {
         let tokens = get_tokens(self.current_design);
         let _design_colors = tokens.colors();
         let design_spacing = tokens.spacing();
-        let design_typography = tokens.typography();
+        let _design_typography = tokens.typography();
         let design_visual = tokens.visual();
         let color_resolver =
             crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);

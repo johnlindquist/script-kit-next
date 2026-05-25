@@ -116,7 +116,7 @@ impl ScriptListApp {
         // Use design tokens for spacing/typography/visual, theme for colors
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
-        let design_typography = tokens.typography();
+        let _design_typography = tokens.typography();
         let design_visual = tokens.visual();
 
         // Use design tokens for global theming

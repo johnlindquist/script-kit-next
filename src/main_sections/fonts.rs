@@ -96,7 +96,7 @@ unsafe fn register_font_process_wide(font_data: &'static [u8]) -> bool {
 
     #[link(name = "CoreFoundation", kind = "framework")]
     extern "C" {
-        fn CFRelease(cf: *mut c_void);
+        fn CFRelease(cf: *const c_void);
     }
 
     let provider = CGDataProviderCreateWithData(

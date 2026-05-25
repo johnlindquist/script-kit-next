@@ -415,7 +415,7 @@ impl ScriptListApp {
         self.refresh_scripts(cx);
     }
 
-    fn kit_store_refresh_installed_view(&mut self, cx: &mut Context<Self>) {
+    fn kit_store_refresh_installed_view(&mut self, _cx: &mut Context<Self>) {
         if let AppView::InstalledKitsView {
             selected_index,
             kits,

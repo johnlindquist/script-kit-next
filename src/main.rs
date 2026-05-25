@@ -253,10 +253,8 @@ use components::{FormFieldColors, PromptFooterColors, PromptFooterConfig};
 use designs::{get_tokens, render_design_item, DesignVariant};
 use frecency::FrecencyStore;
 use list_item::{
-    render_section_header, GroupedListItem, ListItem, ListItemColors, ALPHA_EMPTY_HINT,
-    ALPHA_EMPTY_ICON, ALPHA_EMPTY_MESSAGE, ALPHA_EMPTY_TIPS, DIVIDER_BORDER_WIDTH_DEFAULT,
-    DIVIDER_MARGIN_DEFAULT, EMPTY_STATE_GAP, EMPTY_STATE_ICON_SIZE, EMPTY_STATE_MESSAGE_FONT_SIZE,
-    EMPTY_STATE_TIPS_MARGIN_TOP, FONT_MONO, LIST_ITEM_HEIGHT, LOG_PANEL_MAX_HEIGHT,
+    render_section_header, GroupedListItem, ListItem, ListItemColors, DIVIDER_BORDER_WIDTH_DEFAULT,
+    DIVIDER_MARGIN_DEFAULT, FONT_MONO, LIST_ITEM_HEIGHT, LOG_PANEL_MAX_HEIGHT,
 };
 // strip_html_tags removed - DivPrompt now renders HTML properly
 
@@ -280,7 +278,7 @@ type PromptChannel = (mpsc::Sender<PromptMessage>, mpsc::Receiver<PromptMessage>
 // Import utilities from modules
 use stdin_commands::{
     create_stdout_response_sender, start_stdin_listener, validate_capture_window_output_path,
-    ExternalCommand, KeyModifier, StdinCommand, StdinCommandEnvelope,
+    ExternalCommand, StdinCommand, StdinCommandEnvelope,
 };
 use utils::render_path_with_highlights;
 

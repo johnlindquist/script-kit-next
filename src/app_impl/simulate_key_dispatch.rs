@@ -1,7 +1,7 @@
 use super::*;
 use crate::stdin_commands::KeyModifier;
 use crate::protocol::AutomationWindowTarget;
-use gpui::{Context, Window, ScrollStrategy, FocusHandle};
+use gpui::{Context, Window, ScrollStrategy};
 
 pub(crate) struct SimulatedKeyInput<'a> {
     pub key: &'a str,
