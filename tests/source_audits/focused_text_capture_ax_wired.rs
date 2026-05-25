@@ -1,6 +1,7 @@
 const ACCESSIBILITY_MOD: &str = include_str!("../../src/platform/accessibility/mod.rs");
 const FOCUSED_TEXT: &str = include_str!("../../src/platform/accessibility/focused_text.rs");
 const AX: &str = include_str!("../../src/platform/accessibility/ax.rs");
+const CLIPBOARD: &str = include_str!("../../src/platform/accessibility/clipboard.rs");
 const APP_IDENTITY: &str = include_str!("../../src/platform/accessibility/app_identity.rs");
 
 #[test]
@@ -46,10 +47,39 @@ fn native_capture_uses_focused_ax_element_and_whole_value_fallback() {
     assert!(AX.contains("AXNumberOfCharacters"));
     assert!(AX.contains("AXStringForRange"));
     assert!(FOCUSED_TEXT.contains("copy_all_plain_text_preserving_clipboard"));
+    assert!(FOCUSED_TEXT.contains("used_clipboard_fallback"));
+    assert!(FOCUSED_TEXT.contains("|| used_clipboard_fallback"));
     assert!(
         !AX.contains("get_selected_text("),
         "focused-field AX capture must not call selected-text fallback"
     );
+}
+
+#[test]
+fn google_docs_style_targets_can_fallback_to_clipboard_for_capture_and_replace() {
+    for required in [
+        "copy_all_plain_text_preserving_clipboard",
+        "select_all_text_for_focused_text_fallback",
+        "simulate_command_key(KEY_A)",
+    ] {
+        assert!(
+            CLIPBOARD.contains(required),
+            "clipboard fallback must support focused-text whole-field capture/apply: {required}"
+        );
+    }
+
+    for required in [
+        "paste_replace_fallback",
+        "focused_text_replace_whole_text_failed_using_select_all_fallback",
+        "select_all_text_for_focused_text_fallback",
+        "verify_whole_text_or_clipboard_fallback",
+        "focused_text_verify_whole_text_failed_trying_clipboard_fallback",
+    ] {
+        assert!(
+            AX.contains(required),
+            "AX mutation must support clipboard fallback verification for contenteditable targets: {required}"
+        );
+    }
 }
 
 #[test]

@@ -17,6 +17,8 @@ const STARTUP_NEW_ACTIONS: &str = include_str!("../../src/app_impl/startup_new_a
 const SIMULATE_KEY_DISPATCH: &str = include_str!("../../src/app_impl/simulate_key_dispatch.rs");
 const APP_LAYOUT_COLLECT_ELEMENTS: &str = include_str!("../../src/app_layout/collect_elements.rs");
 const ACP_STATE_TYPES: &str = include_str!("../../src/protocol/types/acp_state.rs");
+const APP_LAUNCHER_DB_CACHE: &str = include_str!("../../src/app_launcher/db_cache.rs");
+const WINDOW_RESIZE: &str = include_str!("../../src/window_resize/mod.rs");
 const PROTOCOL_SYSTEM_CONTROL: &str =
     include_str!("../../src/protocol/message/variants/system_control.rs");
 const PROTOCOL_GENERAL_CONSTRUCTORS: &str =
@@ -193,10 +195,8 @@ fn focused_text_mini_initial_state_is_input_only_without_native_footer() {
 
 #[test]
 fn focused_text_mini_has_three_sizing_phases() {
-    let resize = include_str!("../../src/window_resize/mod.rs");
     for required in [
         "FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY",
-        "FOCUSED_TEXT_MINI_SIZE_STREAMING",
         "FOCUSED_TEXT_MINI_SIZE_RESULT",
         "FocusedTextMiniPhase::InputOnly",
         "FocusedTextMiniPhase::Streaming",
@@ -207,6 +207,11 @@ fn focused_text_mini_has_three_sizing_phases() {
             "missing focused-text mini sizing phase: {required}"
         );
     }
+    assert!(
+        ACP_VIEW
+            .contains("FocusedTextMiniPhase::Streaming => Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY)"),
+        "streaming focused-text mini should keep the compact input-only size until final output"
+    );
     for required in [
         "FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT",
         "FOCUSED_TEXT_MINI_STREAMING_HEIGHT",
@@ -214,8 +219,47 @@ fn focused_text_mini_has_three_sizing_phases() {
         "ViewType::FocusedTextMini",
     ] {
         assert!(
-            resize.contains(required),
+            WINDOW_RESIZE.contains(required),
             "missing focused-text mini resize constant: {required}"
+        );
+    }
+}
+
+#[test]
+fn focused_text_mini_reuses_app_icon_cache_and_focuses_composer_on_open() {
+    assert!(
+        APP_LAUNCHER_DB_CACHE.contains("pub fn cached_app_icon_for_bundle"),
+        "main-menu app icon cache helper must exist"
+    );
+    for required in [
+        "app_bundle_id: Option<String>",
+        "snapshot.app.bundle_id.clone()",
+        "crate::app_launcher::cached_app_icon_for_bundle",
+        "crate::icons::render_image",
+        "\"focused-text-context-badge\"",
+    ] {
+        assert!(
+            ACP_VIEW.contains(required),
+            "focused-text badge must reuse the main-menu app icon cache: {required}"
+        );
+    }
+    assert!(
+        FOCUSED_TEXT_ENTRY.contains("self.request_focus(FocusTarget::ChatPrompt, cx);"),
+        "focused-text mini open must request composer focus after entering the ACP surface"
+    );
+}
+
+#[test]
+fn focused_text_mini_uses_targeted_animated_resize_without_global_resize_animation() {
+    for required in [
+        "const WINDOW_RESIZE_ANIMATE: bool = false",
+        "const FOCUSED_TEXT_MINI_RESIZE_ANIMATE: bool = true",
+        "resize_first_window_to_size_with_animation",
+        "matches!(view_type, ViewType::FocusedTextMini)",
+    ] {
+        assert!(
+            WINDOW_RESIZE.contains(required),
+            "focused-text mini resize animation contract missing: {required}"
         );
     }
 }
