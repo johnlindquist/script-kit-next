@@ -25,9 +25,6 @@ use std::sync::OnceLock;
 /// Adding a variant forces all dispatch callers to grow a matching arm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TriggerBuiltin {
-    DesignGallery,
-    FooterGallery,
-    DesignNonListStates,
     ClipboardHistory,
     AppLauncher,
     FileSearch,
@@ -40,13 +37,16 @@ pub enum TriggerBuiltin {
     NewScript,
     SdkReference,
     AiVault,
-    BrowseKitStore,
-    ManageInstalledKits,
     Settings,
     ChooseTheme,
+    DesignGallery,
+    FooterGallery,
+    DesignNonListStates,
+    BrowseKitStore,
+    ManageInstalledKits,
+    ScriptKitSelfie,
     MiniMainWindow,
     QuickTerminal,
-    ScriptKitSelfie,
     Webcam,
 }
 
@@ -54,9 +54,6 @@ impl TriggerBuiltin {
     /// All variants, in a stable order — used by the registry builder and
     /// by uniqueness tests.
     pub const ALL: &'static [TriggerBuiltin] = &[
-        TriggerBuiltin::DesignGallery,
-        TriggerBuiltin::FooterGallery,
-        TriggerBuiltin::DesignNonListStates,
         TriggerBuiltin::ClipboardHistory,
         TriggerBuiltin::AppLauncher,
         TriggerBuiltin::FileSearch,
@@ -69,13 +66,16 @@ impl TriggerBuiltin {
         TriggerBuiltin::NewScript,
         TriggerBuiltin::SdkReference,
         TriggerBuiltin::AiVault,
-        TriggerBuiltin::BrowseKitStore,
-        TriggerBuiltin::ManageInstalledKits,
         TriggerBuiltin::Settings,
         TriggerBuiltin::ChooseTheme,
+        TriggerBuiltin::DesignGallery,
+        TriggerBuiltin::FooterGallery,
+        TriggerBuiltin::DesignNonListStates,
+        TriggerBuiltin::BrowseKitStore,
+        TriggerBuiltin::ManageInstalledKits,
+        TriggerBuiltin::ScriptKitSelfie,
         TriggerBuiltin::MiniMainWindow,
         TriggerBuiltin::QuickTerminal,
-        TriggerBuiltin::ScriptKitSelfie,
         TriggerBuiltin::Webcam,
     ];
 
@@ -83,9 +83,6 @@ impl TriggerBuiltin {
     /// in [`crate::builtins`] and [`crate::config::canonical_builtin_command_id`].
     pub const fn command_id(self) -> &'static str {
         match self {
-            TriggerBuiltin::DesignGallery => "builtin/design-gallery",
-            TriggerBuiltin::FooterGallery => "builtin/footer-gallery",
-            TriggerBuiltin::DesignNonListStates => "builtin/design-non-list-states",
             TriggerBuiltin::ClipboardHistory => "builtin/clipboard-history",
             TriggerBuiltin::AppLauncher => "builtin/app-launcher",
             TriggerBuiltin::FileSearch => "builtin/file-search",
@@ -98,13 +95,16 @@ impl TriggerBuiltin {
             TriggerBuiltin::NewScript => "builtin/new-script",
             TriggerBuiltin::SdkReference => "builtin/sdk-reference",
             TriggerBuiltin::AiVault => "builtin/vault",
-            TriggerBuiltin::BrowseKitStore => "builtin/browse-kit-store",
-            TriggerBuiltin::ManageInstalledKits => "builtin/manage-installed-kits",
             TriggerBuiltin::Settings => "builtin/settings",
             TriggerBuiltin::ChooseTheme => "builtin/choose-theme",
+            TriggerBuiltin::DesignGallery => "builtin/design-gallery",
+            TriggerBuiltin::FooterGallery => "builtin/footer-gallery",
+            TriggerBuiltin::DesignNonListStates => "builtin/design-non-list-states",
+            TriggerBuiltin::BrowseKitStore => "builtin/browse-kit-store",
+            TriggerBuiltin::ManageInstalledKits => "builtin/manage-installed-kits",
+            TriggerBuiltin::ScriptKitSelfie => "builtin/script-kit-selfie",
             TriggerBuiltin::MiniMainWindow => "builtin/mini-main-window",
             TriggerBuiltin::QuickTerminal => "builtin/quick-terminal",
-            TriggerBuiltin::ScriptKitSelfie => "builtin/script-kit-selfie",
             TriggerBuiltin::Webcam => "builtin/webcam",
         }
     }
@@ -146,14 +146,6 @@ impl TriggerBuiltin {
     /// against the incoming `name`.
     pub const fn legacy_aliases(self) -> &'static [&'static str] {
         match self {
-            TriggerBuiltin::DesignGallery => &["design-gallery", "designgallery", "design gallery"],
-            TriggerBuiltin::FooterGallery => &["footer-gallery", "footergallery", "footer gallery"],
-            TriggerBuiltin::DesignNonListStates => &[
-                "design-non-list-states",
-                "non-list-states",
-                "nonliststates",
-                "non-list-state-language",
-            ],
             TriggerBuiltin::ClipboardHistory => {
                 &["clipboard", "clipboard-history", "clipboardhistory"]
             }
@@ -174,20 +166,28 @@ impl TriggerBuiltin {
             TriggerBuiltin::NewScript => &["new-script", "newscript"],
             TriggerBuiltin::SdkReference => &["sdk-reference", "sdkreference", "sdk-docs"],
             TriggerBuiltin::AiVault => &["vault", "ai-vault", "aivault"],
+            TriggerBuiltin::Settings => &["settings", "kit-settings", "script-kit-settings"],
+            TriggerBuiltin::ChooseTheme => &["choose-theme", "theme", "theme-designer"],
+            TriggerBuiltin::DesignGallery => &["design-gallery", "designgallery", "design gallery"],
+            TriggerBuiltin::FooterGallery => &["footer-gallery", "footergallery", "footer gallery"],
+            TriggerBuiltin::DesignNonListStates => &[
+                "design-non-list-states",
+                "designnonliststates",
+                "non-list-states",
+                "nonliststates",
+            ],
             TriggerBuiltin::BrowseKitStore => &["browse-kit-store", "kit-store", "kitstore"],
             TriggerBuiltin::ManageInstalledKits => {
                 &["manage-installed-kits", "installed-kits", "installedkits"]
             }
-            TriggerBuiltin::Settings => &["settings", "kit-settings", "script-kit-settings"],
-            TriggerBuiltin::ChooseTheme => &["choose-theme", "theme", "theme-designer"],
-            TriggerBuiltin::MiniMainWindow => &["mini-main-window", "mini-launcher", "mini"],
-            TriggerBuiltin::QuickTerminal => &["quick-terminal", "quickterminal"],
             TriggerBuiltin::ScriptKitSelfie => &[
                 "script-kit-selfie",
                 "scriptkitselfie",
                 "selfie",
                 "screenshot-selfie",
             ],
+            TriggerBuiltin::MiniMainWindow => &["mini-main-window", "mini-launcher", "mini"],
+            TriggerBuiltin::QuickTerminal => &["quick-terminal", "quickterminal"],
             TriggerBuiltin::Webcam => &["webcam", "camera"],
         }
     }
@@ -268,8 +268,6 @@ impl TriggerBuiltinRegistry {
 /// `trigger_builtin_command_ids_cover_every_variant` below pins this slice
 /// to the exhaustive variant list.
 pub const TRIGGER_BUILTIN_COMMAND_IDS: &[&str] = &[
-    "builtin/design-gallery",
-    "builtin/footer-gallery",
     "builtin/clipboard-history",
     "builtin/app-launcher",
     "builtin/file-search",
@@ -282,13 +280,16 @@ pub const TRIGGER_BUILTIN_COMMAND_IDS: &[&str] = &[
     "builtin/new-script",
     "builtin/sdk-reference",
     "builtin/vault",
-    "builtin/browse-kit-store",
-    "builtin/manage-installed-kits",
     "builtin/settings",
     "builtin/choose-theme",
+    "builtin/design-gallery",
+    "builtin/footer-gallery",
+    "builtin/design-non-list-states",
+    "builtin/browse-kit-store",
+    "builtin/manage-installed-kits",
+    "builtin/script-kit-selfie",
     "builtin/mini-main-window",
     "builtin/quick-terminal",
-    "builtin/script-kit-selfie",
     "builtin/webcam",
 ];
 

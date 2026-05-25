@@ -481,12 +481,7 @@ impl UtilityOpenBuiltinAction {
             builtins::UtilityCommandType::StopAllProcesses
             | builtins::UtilityCommandType::DoInCurrentApp
             | builtins::UtilityCommandType::TurnThisIntoCommand
-            | builtins::UtilityCommandType::CurrentAppCommands
-            | builtins::UtilityCommandType::InspectCurrentContext
-            | builtins::UtilityCommandType::TraceCurrentAppIntent
-            | builtins::UtilityCommandType::VerifyCurrentAppRecipe
-            | builtins::UtilityCommandType::ReplayCurrentAppRecipe
-            | builtins::UtilityCommandType::ScriptKitSelfie => None,
+            | builtins::UtilityCommandType::CurrentAppCommands => None,
         }
     }
 
@@ -579,120 +574,13 @@ impl UtilityProcessBuiltinOutcome {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum UtilityContextBuiltinAction {
-    InspectCurrentContext,
-}
-
-impl UtilityContextBuiltinAction {
-    fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
-        match command {
-            builtins::UtilityCommandType::InspectCurrentContext => {
-                Some(Self::InspectCurrentContext)
-            }
-            _ => None,
-        }
-    }
-
-    fn success_detail(self) -> &'static str {
-        match self {
-            Self::InspectCurrentContext => "inspect_current_context",
-        }
-    }
-
-    fn failure_detail(self) -> &'static str {
-        match self {
-            Self::InspectCurrentContext => "inspect_current_context_failed",
-        }
-    }
-
-    fn copied_log_message(self) -> &'static str {
-        match self {
-            Self::InspectCurrentContext => "Copied current context snapshot to clipboard",
-        }
-    }
-
-    fn serialize_failure_message(self, error: &dyn std::fmt::Display) -> String {
-        match self {
-            Self::InspectCurrentContext => {
-                format!("Failed to serialize context snapshot: {error}")
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum UtilityTraceBuiltinAction {
-    CurrentAppIntent,
-}
-
-impl UtilityTraceBuiltinAction {
-    fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
-        match command {
-            builtins::UtilityCommandType::TraceCurrentAppIntent => Some(Self::CurrentAppIntent),
-            _ => None,
-        }
-    }
-
-    fn success_detail(self) -> &'static str {
-        match self {
-            Self::CurrentAppIntent => "trace_current_app_intent",
-        }
-    }
-
-    fn serialize_failure_detail(self) -> &'static str {
-        match self {
-            Self::CurrentAppIntent => "trace_current_app_intent_serialize_failed",
-        }
-    }
-
-    fn capture_failure_detail(self) -> &'static str {
-        match self {
-            Self::CurrentAppIntent => "trace_current_app_intent_capture_failed",
-        }
-    }
-
-    fn copied_hud(
-        self,
-        action_name: &str,
-        exact_matches: usize,
-        filtered_entries: usize,
-    ) -> String {
-        match self {
-            Self::CurrentAppIntent => format!(
-                "Copied app intent trace: {action_name} ({exact_matches} exact / {filtered_entries} filtered)"
-            ),
-        }
-    }
-
-    fn serialize_failure_message(self, error: &dyn std::fmt::Display) -> String {
-        match self {
-            Self::CurrentAppIntent => {
-                format!("Failed to serialize current app intent trace: {error}")
-            }
-        }
-    }
-
-    fn capture_failure_message(self, error: &dyn std::fmt::Display) -> String {
-        match self {
-            Self::CurrentAppIntent => format!(
-                "Failed to inspect current app intent: {error}. Check Accessibility permission in System Settings → Privacy & Security → Accessibility, then refocus the target app and try again."
-            ),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum UtilityRecipeBuiltinAction {
-    VerifyCurrentApp,
-    ReplayCurrentApp,
     TurnThisIntoCommand,
 }
 
 impl UtilityRecipeBuiltinAction {
     fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
         match command {
-            builtins::UtilityCommandType::VerifyCurrentAppRecipe => Some(Self::VerifyCurrentApp),
-            builtins::UtilityCommandType::ReplayCurrentAppRecipe => Some(Self::ReplayCurrentApp),
             builtins::UtilityCommandType::TurnThisIntoCommand => Some(Self::TurnThisIntoCommand),
             _ => None,
         }
@@ -700,31 +588,25 @@ impl UtilityRecipeBuiltinAction {
 
     fn success_detail(self) -> &'static str {
         match self {
-            Self::VerifyCurrentApp => "verify_current_app_recipe",
-            Self::ReplayCurrentApp => "replay_current_app_recipe",
             Self::TurnThisIntoCommand => "turn_this_into_command",
         }
     }
 
     fn clipboard_failure_detail(self) -> &'static str {
         match self {
-            Self::VerifyCurrentApp => "verify_current_app_recipe_clipboard_failed",
-            Self::ReplayCurrentApp => "replay_current_app_recipe_clipboard_failed",
             Self::TurnThisIntoCommand => "turn_this_into_command_clipboard_failed",
         }
     }
 
     fn serialize_failure_detail(self) -> &'static str {
         match self {
-            Self::VerifyCurrentApp => "verify_current_app_recipe_serialize_failed",
-            Self::ReplayCurrentApp => "replay_current_app_recipe_serialize_failed",
             Self::TurnThisIntoCommand => "turn_this_into_command_serialize_failed",
         }
     }
 
     fn serialize_failure_message(self, error: &dyn std::fmt::Display) -> String {
         match self {
-            Self::VerifyCurrentApp | Self::ReplayCurrentApp | Self::TurnThisIntoCommand => {
+            Self::TurnThisIntoCommand => {
                 format!("Failed to serialize current app command recipe: {error}")
             }
         }
@@ -732,48 +614,36 @@ impl UtilityRecipeBuiltinAction {
 
     fn capture_failure_detail(self) -> &'static str {
         match self {
-            Self::VerifyCurrentApp => "verify_current_app_recipe_capture_failed",
-            Self::ReplayCurrentApp => "replay_current_app_recipe_capture_failed",
             Self::TurnThisIntoCommand => "turn_this_into_command_capture_failed",
         }
     }
 
     fn missing_query_failure_detail(self) -> &'static str {
         match self {
-            Self::VerifyCurrentApp => "verify_current_app_recipe_missing_query",
-            Self::ReplayCurrentApp => "replay_current_app_recipe_missing_query",
             Self::TurnThisIntoCommand => "turn_this_into_command_missing_query",
         }
     }
 
     fn drift_failure_detail(self) -> &'static str {
         match self {
-            Self::VerifyCurrentApp => "verify_current_app_recipe_drift",
-            Self::ReplayCurrentApp => "replay_current_app_recipe_drift",
             Self::TurnThisIntoCommand => "turn_this_into_command_drift",
         }
     }
 
     fn missing_entry_failure_detail(self) -> &'static str {
         match self {
-            Self::VerifyCurrentApp => "verify_current_app_recipe_missing_entry_index",
-            Self::ReplayCurrentApp => "replay_current_app_recipe_missing_entry_index",
             Self::TurnThisIntoCommand => "turn_this_into_command_missing_entry_index",
         }
     }
 
     fn open_palette_success_detail(self) -> &'static str {
         match self {
-            Self::VerifyCurrentApp => "verify_current_app_recipe_open_palette",
-            Self::ReplayCurrentApp => "replay_current_app_recipe_open_palette",
             Self::TurnThisIntoCommand => "turn_this_into_command_open_palette",
         }
     }
 
     fn generate_script_success_detail(self) -> &'static str {
         match self {
-            Self::VerifyCurrentApp => "verify_current_app_recipe_generate_script",
-            Self::ReplayCurrentApp => "replay_current_app_recipe_generate_script",
             Self::TurnThisIntoCommand => "turn_this_into_command_generate_script",
         }
     }
@@ -783,14 +653,11 @@ impl UtilityRecipeBuiltinAction {
             Self::TurnThisIntoCommand => {
                 format!("Automation recipe copied: {suggested_script_name}")
             }
-            Self::VerifyCurrentApp | Self::ReplayCurrentApp => suggested_script_name.to_string(),
         }
     }
 
     fn unknown_action_failure_detail(self) -> &'static str {
         match self {
-            Self::VerifyCurrentApp => "verify_current_app_recipe_unknown_action",
-            Self::ReplayCurrentApp => "replay_current_app_recipe_unknown_action",
             Self::TurnThisIntoCommand => "turn_this_into_command_unknown_action",
         }
     }
@@ -873,59 +740,12 @@ impl UtilityCurrentAppCommandsBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum UtilitySelfieBuiltinAction {
-    Capture,
-}
-
-impl UtilitySelfieBuiltinAction {
-    fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
-        match command {
-            builtins::UtilityCommandType::ScriptKitSelfie => Some(Self::Capture),
-            _ => None,
-        }
-    }
-
-    fn success_detail(self) -> &'static str {
-        match self {
-            Self::Capture => "script_kit_selfie_capture_scheduled",
-        }
-    }
-
-    fn failure_detail(self) -> &'static str {
-        match self {
-            Self::Capture => "script_kit_selfie_capture_failed",
-        }
-    }
-
-    fn starting_hud(self, state: &str) -> String {
-        match self {
-            Self::Capture => format!("Capturing Script Kit Selfie: {state}"),
-        }
-    }
-
-    fn saved_hud(self, receipt: &crate::platform::ScriptKitSelfieReceipt) -> String {
-        match self {
-            Self::Capture => format!("Selfie saved: {}", receipt.png_path),
-        }
-    }
-
-    fn failure_message(self, error: &dyn std::fmt::Display) -> String {
-        match self {
-            Self::Capture => format!("Script Kit Selfie failed: {error}"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum UtilityCommandBuiltinAction {
     Open(UtilityOpenBuiltinAction),
     Process(UtilityProcessBuiltinAction),
-    Context(UtilityContextBuiltinAction),
-    Trace(UtilityTraceBuiltinAction),
     Recipe(UtilityRecipeBuiltinAction),
     DoInCurrentApp(UtilityDoInCurrentAppBuiltinAction),
     CurrentAppCommands(UtilityCurrentAppCommandsBuiltinAction),
-    Selfie(UtilitySelfieBuiltinAction),
 }
 
 impl UtilityCommandBuiltinAction {
@@ -943,17 +763,7 @@ impl UtilityCommandBuiltinAction {
                 UtilityProcessBuiltinAction::from_command(command)
                     .expect("utility process command should map to process action"),
             ),
-            builtins::UtilityCommandType::InspectCurrentContext => Self::Context(
-                UtilityContextBuiltinAction::from_command(command)
-                    .expect("utility context command should map to context action"),
-            ),
-            builtins::UtilityCommandType::TraceCurrentAppIntent => Self::Trace(
-                UtilityTraceBuiltinAction::from_command(command)
-                    .expect("utility trace command should map to trace action"),
-            ),
-            builtins::UtilityCommandType::VerifyCurrentAppRecipe
-            | builtins::UtilityCommandType::ReplayCurrentAppRecipe
-            | builtins::UtilityCommandType::TurnThisIntoCommand => Self::Recipe(
+            builtins::UtilityCommandType::TurnThisIntoCommand => Self::Recipe(
                 UtilityRecipeBuiltinAction::from_command(command)
                     .expect("utility recipe command should map to recipe action"),
             ),
@@ -964,10 +774,6 @@ impl UtilityCommandBuiltinAction {
             builtins::UtilityCommandType::CurrentAppCommands => Self::CurrentAppCommands(
                 UtilityCurrentAppCommandsBuiltinAction::from_command(command)
                     .expect("utility current-app command should map to current-app action"),
-            ),
-            builtins::UtilityCommandType::ScriptKitSelfie => Self::Selfie(
-                UtilitySelfieBuiltinAction::from_command(command)
-                    .expect("utility selfie command should map to selfie action"),
             ),
         }
     }
@@ -1372,67 +1178,6 @@ impl DesignExplorerBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum KitStoreBuiltinAction {
-    BrowseKits,
-    InstalledKits,
-    UpdateAllKits,
-}
-
-impl KitStoreBuiltinAction {
-    fn from_command(command: builtins::KitStoreCommandType) -> Self {
-        match command {
-            builtins::KitStoreCommandType::BrowseKits => Self::BrowseKits,
-            builtins::KitStoreCommandType::InstalledKits => Self::InstalledKits,
-            builtins::KitStoreCommandType::UpdateAllKits => Self::UpdateAllKits,
-        }
-    }
-
-    fn success_detail(self) -> &'static str {
-        match self {
-            Self::BrowseKits => "browse_kits_dispatched",
-            Self::InstalledKits => "installed_kits",
-            Self::UpdateAllKits => "update_all_kits_dispatched",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct KitStoreUpdateAllResult {
-    updated: usize,
-    failed: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum KitStoreUpdateAllOutcome {
-    Complete,
-    PartialFailure,
-}
-
-impl KitStoreUpdateAllResult {
-    fn outcome(self) -> KitStoreUpdateAllOutcome {
-        match self.failed {
-            0 => KitStoreUpdateAllOutcome::Complete,
-            _ => KitStoreUpdateAllOutcome::PartialFailure,
-        }
-    }
-
-    fn message(self) -> String {
-        let updated = self.updated;
-        match self.outcome() {
-            KitStoreUpdateAllOutcome::Complete => format!("Updated {updated} kit(s) successfully"),
-            KitStoreUpdateAllOutcome::PartialFailure => {
-                let failed = self.failed;
-                format!("Updated {updated} kit(s), {failed} failed")
-            }
-        }
-    }
-
-    fn is_failure(self) -> bool {
-        matches!(self.outcome(), KitStoreUpdateAllOutcome::PartialFailure)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NotesCommandBuiltinAction {
     OpenNotes,
     NewNote,
@@ -1585,43 +1330,6 @@ impl SettingsCommandBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AiPresetViewBuiltinAction {
-    Create,
-    Search,
-}
-
-impl AiPresetViewBuiltinAction {
-    fn from_command(command: builtins::AiCommandType) -> Option<Self> {
-        match command {
-            builtins::AiCommandType::CreateAiPreset => Some(Self::Create),
-            builtins::AiCommandType::SearchAiPresets => Some(Self::Search),
-            _ => None,
-        }
-    }
-
-    fn success_detail(self) -> &'static str {
-        match self {
-            Self::Create => "ai_create_preset",
-            Self::Search => "ai_search_presets",
-        }
-    }
-
-    fn log_action(self) -> &'static str {
-        match self {
-            Self::Create => "create_ai_preset",
-            Self::Search => "search_ai_presets",
-        }
-    }
-
-    fn opening_message(self) -> &'static str {
-        match self {
-            Self::Create => "Opening create AI preset form",
-            Self::Search => "Opening AI presets search",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AiCaptureBuiltinAction {
     FullScreen,
     FocusedWindow,
@@ -1734,148 +1442,6 @@ impl AiGenerateBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AiPresetFileBuiltinAction {
-    Import,
-    Export,
-}
-
-impl AiPresetFileBuiltinAction {
-    fn from_command(command: builtins::AiCommandType) -> Option<Self> {
-        match command {
-            builtins::AiCommandType::ImportAiPresets => Some(Self::Import),
-            builtins::AiCommandType::ExportAiPresets => Some(Self::Export),
-            _ => None,
-        }
-    }
-
-    fn success_detail(self) -> &'static str {
-        match self {
-            Self::Import => "ai_import_presets_dispatched",
-            Self::Export => "ai_export_presets_dispatched",
-        }
-    }
-
-    fn log_action(self) -> &'static str {
-        match self {
-            Self::Import => "import_ai_presets",
-            Self::Export => "export_ai_presets",
-        }
-    }
-
-    fn opening_message(self) -> &'static str {
-        match self {
-            Self::Import => "Opening file picker for AI preset import",
-            Self::Export => "Opening save dialog for AI preset export",
-        }
-    }
-
-    fn import_prompt_title(self) -> &'static str {
-        match self {
-            Self::Import => "Select AI presets JSON file",
-            Self::Export => unreachable!("export presets uses a save dialog filename"),
-        }
-    }
-
-    fn export_default_filename(self) -> &'static str {
-        match self {
-            Self::Export => "ai-presets-export.json",
-            Self::Import => unreachable!("import presets uses an open-file prompt"),
-        }
-    }
-
-    fn read_failure_message(self, error: &dyn std::fmt::Display) -> String {
-        match self {
-            Self::Import => format!("Failed to read file: {error}"),
-            Self::Export => unreachable!("export presets does not read an import file"),
-        }
-    }
-
-    fn invalid_file_message(self, error: &dyn std::fmt::Display) -> String {
-        match self {
-            Self::Import => format!("Invalid preset file: {error}"),
-            Self::Export => unreachable!("export presets does not validate an import file"),
-        }
-    }
-
-    fn worker_failure_message(self, error: &dyn std::fmt::Display) -> String {
-        match self {
-            Self::Import => format!("Import failed: {error}"),
-            Self::Export => format!("Export failed: {error}"),
-        }
-    }
-
-    fn success_log_action(self) -> &'static str {
-        match self {
-            Self::Import => "import_presets_success",
-            Self::Export => "export_presets_success",
-        }
-    }
-
-    fn success_log_message(self) -> &'static str {
-        match self {
-            Self::Import => "Imported AI presets via file picker",
-            Self::Export => "Exported AI presets via file picker",
-        }
-    }
-
-    fn success_hud(self, count: usize) -> String {
-        match self {
-            Self::Import => format!("Imported presets ({count} total)"),
-            Self::Export => format!("Exported {count} presets"),
-        }
-    }
-
-    fn failure_log_action(self) -> &'static str {
-        match self {
-            Self::Import => "import_presets_failed",
-            Self::Export => "export_presets_failed",
-        }
-    }
-
-    fn failure_log_message(self) -> &'static str {
-        match self {
-            Self::Import => "Failed to import presets",
-            Self::Export => "Failed to export presets",
-        }
-    }
-
-    fn failure_toast(self, error: &dyn std::fmt::Display) -> String {
-        match self {
-            Self::Import => format!("Failed to import presets: {error}"),
-            Self::Export => format!("Failed to export presets: {error}"),
-        }
-    }
-
-    fn cancelled_log_action(self) -> &'static str {
-        match self {
-            Self::Import => "import_presets_cancelled",
-            Self::Export => "export_presets_cancelled",
-        }
-    }
-
-    fn cancelled_log_message(self) -> &'static str {
-        match self {
-            Self::Import => "User cancelled import file picker",
-            Self::Export => "User cancelled export save dialog",
-        }
-    }
-
-    fn picker_error_message(self) -> &'static str {
-        match self {
-            Self::Import => "Import file picker returned error",
-            Self::Export => "Export save dialog returned error",
-        }
-    }
-
-    fn picker_channel_closed_message(self) -> &'static str {
-        match self {
-            Self::Import => "Import file picker channel closed unexpectedly",
-            Self::Export => "Export save dialog channel closed unexpectedly",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AiUnavailableBuiltinAction {
     ScreenAreaCapture,
 }
@@ -1937,8 +1503,6 @@ enum AiCommandBuiltinAction {
     Generate(AiGenerateBuiltinAction),
     Capture(AiCaptureBuiltinAction),
     Unavailable(AiUnavailableBuiltinAction),
-    PresetView(AiPresetViewBuiltinAction),
-    PresetFile(AiPresetFileBuiltinAction),
     LegacyHarness(AiLegacyHarnessBuiltinAction),
 }
 
@@ -1972,22 +1536,6 @@ impl AiCommandBuiltinAction {
             builtins::AiCommandType::SendScreenAreaToAi => Self::Unavailable(
                 AiUnavailableBuiltinAction::from_command(command)
                     .expect("screen-area command should map to unavailable action"),
-            ),
-            builtins::AiCommandType::CreateAiPreset => Self::PresetView(
-                AiPresetViewBuiltinAction::from_command(command)
-                    .expect("create preset command should map to preset view action"),
-            ),
-            builtins::AiCommandType::SearchAiPresets => Self::PresetView(
-                AiPresetViewBuiltinAction::from_command(command)
-                    .expect("search presets command should map to preset view action"),
-            ),
-            builtins::AiCommandType::ImportAiPresets => Self::PresetFile(
-                AiPresetFileBuiltinAction::from_command(command)
-                    .expect("import presets command should map to preset file action"),
-            ),
-            builtins::AiCommandType::ExportAiPresets => Self::PresetFile(
-                AiPresetFileBuiltinAction::from_command(command)
-                    .expect("export presets command should map to preset file action"),
             ),
             builtins::AiCommandType::OpenAi
             | builtins::AiCommandType::MiniAi
@@ -3215,7 +2763,7 @@ impl ScriptListApp {
 
     /// Shared dispatch for system actions — used by both the normal and confirmed paths.
     /// Maps a `SystemActionType` to its implementation, handles special cases
-    /// (TestConfirmation, QuitScriptKit), and routes the result through
+    /// (QuitScriptKit), and routes the result through
     /// `handle_system_action_result`.
     /// Structured outcome logger for builtin execution paths.
     ///
@@ -3400,17 +2948,6 @@ impl ScriptListApp {
                 SystemActionType::Volume100 => system_actions::set_volume(100),
                 SystemActionType::VolumeMute => system_actions::volume_mute(),
 
-                // Dev/test actions
-                #[cfg(debug_assertions)]
-                SystemActionType::TestConfirmation => {
-                    self.toast_manager.push(
-                        components::toast::Toast::success("Confirmation test passed!", &self.theme)
-                            .duration_ms(Some(TOAST_SUCCESS_MS)),
-                    );
-                    cx.notify();
-                    return Self::builtin_success(dctx, "system_action_test_confirmation");
-                }
-
                 // App control
                 SystemActionType::QuitScriptKit => {
                     Self::prepare_script_kit_shutdown();
@@ -3581,13 +3118,6 @@ impl ScriptListApp {
                 title: "Sync to GitHub".into(),
                 body: "Write safe .gitignore exclusions, commit Script Kit changes, and sync this workspace to GitHub?".into(),
                 confirm_text: "Sync".into(),
-                cancel_text: "Cancel".into(),
-                ..Default::default()
-            },
-            "builtin/test-confirmation" => crate::confirm::ParentConfirmOptions {
-                title: "Test Confirmation".into(),
-                body: "Open the confirmation test action?".into(),
-                confirm_text: "Run Test".into(),
                 cancel_text: "Cancel".into(),
                 ..Default::default()
             },
@@ -4323,21 +3853,6 @@ impl ScriptListApp {
 
                 let utility_action = UtilityCommandBuiltinAction::from_command(*cmd_type);
                 self.execute_utility_command_builtin(utility_action, query_override, dctx, cx)
-            }
-
-            // =========================================================================
-            // Kit Store Commands
-            // =========================================================================
-            builtins::BuiltInFeature::KitStoreCommand(cmd_type) => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    kit_store_command = ?cmd_type,
-                    "Executing kit store command"
-                );
-
-                let kit_action = KitStoreBuiltinAction::from_command(*cmd_type);
-                self.execute_kit_store_builtin(kit_action, dctx, cx)
             }
 
             // =========================================================================
@@ -5094,24 +4609,6 @@ impl ScriptListApp {
             AiCommandBuiltinAction::Unavailable(unavailable_action) => {
                 self.execute_ai_unavailable_builtin(unavailable_action, dctx, cx)
             }
-            AiCommandBuiltinAction::PresetView(preset_action) => {
-                tracing::info!(
-                    action = preset_action.log_action(),
-                    trace_id = %dctx.trace_id,
-                    "{}",
-                    preset_action.opening_message()
-                );
-                self.execute_ai_preset_view_builtin(preset_action, dctx, cx)
-            }
-            AiCommandBuiltinAction::PresetFile(file_action) => {
-                tracing::info!(
-                    action = file_action.log_action(),
-                    trace_id = %dctx.trace_id,
-                    "{}",
-                    file_action.opening_message()
-                );
-                self.execute_ai_preset_file_builtin(file_action, dctx, cx)
-            }
             AiCommandBuiltinAction::LegacyHarness(legacy_action) => {
                 self.execute_ai_legacy_harness_builtin(legacy_action, dctx, cx)
             }
@@ -5132,168 +4629,6 @@ impl ScriptListApp {
             self.open_tab_ai_acp_with_entry_intent(None, cx);
         } else {
             self.open_tab_ai_chat_with_entry_intent(intent, cx);
-        }
-
-        Self::builtin_success(dctx, action.success_detail())
-    }
-
-    fn execute_ai_preset_file_builtin(
-        &mut self,
-        action: AiPresetFileBuiltinAction,
-        dctx: &crate::action_helpers::DispatchContext,
-        cx: &mut Context<Self>,
-    ) -> crate::action_helpers::DispatchOutcome {
-        match action {
-            AiPresetFileBuiltinAction::Import => {
-                let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
-                    files: true,
-                    directories: false,
-                    multiple: false,
-                    prompt: Some(action.import_prompt_title().into()),
-                    allowed_extensions: vec!["json".into()],
-                });
-
-                let action_for_task = action;
-                cx.spawn(async move |this, cx| {
-                    match rx.await {
-                        Ok(Ok(Some(paths))) => {
-                            if let Some(path) = paths.first() {
-                                // Validate file contents before importing
-                                let import_result = cx
-                                    .background_executor()
-                                    .spawn({
-                                        let path = path.clone();
-                                        async move {
-                                            let contents =
-                                                std::fs::read_to_string(&path).map_err(|e| {
-                                                    action_for_task.read_failure_message(&e)
-                                                })?;
-                                            ai::presets::validate_presets_json(&contents).map_err(
-                                                |e| action_for_task.invalid_file_message(&e),
-                                            )?;
-                                            ai::presets::import_presets_from_file(&path)
-                                                .map_err(|e| {
-                                                    action_for_task.worker_failure_message(&e)
-                                                })
-                                        }
-                                    })
-                                    .await;
-
-                                let _ = this.update(cx, |this, cx| {
-                                    match import_result {
-                                        Ok(total) => {
-                                            tracing::info!(
-                                                total = total,
-                                                action = action_for_task.success_log_action(),
-                                                "{}",
-                                                action_for_task.success_log_message()
-                                            );
-                                            this.show_hud(
-                                                action_for_task.success_hud(total),
-                                                Some(HUD_SHORT_MS),
-                                                cx,
-                                            );
-                                            ai::reload_ai_presets(cx);
-                                        }
-                                        Err(e) => {
-                                            tracing::error!(
-                                                error = %e,
-                                                action = action_for_task.failure_log_action(),
-                                                "{}",
-                                                action_for_task.failure_log_message()
-                                            );
-                                            this.show_error_toast(action_for_task.failure_toast(&e), cx);
-                                        }
-                                    }
-                                    cx.notify();
-                                });
-                            }
-                        }
-                        Ok(Ok(None)) => {
-                            tracing::info!(
-                                action = action_for_task.cancelled_log_action(),
-                                "{}",
-                                action_for_task.cancelled_log_message()
-                            );
-                        }
-                        Ok(Err(e)) => {
-                            tracing::warn!(error = %e, "{}", action_for_task.picker_error_message());
-                        }
-                        Err(_) => {
-                            tracing::warn!("{}", action_for_task.picker_channel_closed_message());
-                        }
-                    }
-                })
-                .detach();
-            }
-            AiPresetFileBuiltinAction::Export => {
-                let default_dir = ai::presets::get_presets_path()
-                    .parent()
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or_else(crate::setup::get_kit_path);
-
-                let rx =
-                    cx.prompt_for_new_path(&default_dir, Some(action.export_default_filename()));
-
-                let action_for_task = action;
-                cx.spawn(async move |this, cx| match rx.await {
-                    Ok(Ok(Some(path))) => {
-                        let export_result = cx
-                            .background_executor()
-                            .spawn({
-                                let path = path.clone();
-                                async move {
-                                    ai::presets::export_presets_to_file(&path)
-                                        .map_err(|e| action_for_task.worker_failure_message(&e))
-                                }
-                            })
-                            .await;
-
-                        let _ = this.update(cx, |this, cx| {
-                            match export_result {
-                                Ok(count) => {
-                                    tracing::info!(
-                                        count = count,
-                                        path = %path.display(),
-                                        action = action_for_task.success_log_action(),
-                                        "{}",
-                                        action_for_task.success_log_message()
-                                    );
-                                    this.show_hud(
-                                        action_for_task.success_hud(count),
-                                        Some(HUD_SHORT_MS),
-                                        cx,
-                                    );
-                                }
-                                Err(e) => {
-                                    tracing::error!(
-                                        error = %e,
-                                        action = action_for_task.failure_log_action(),
-                                        "{}",
-                                        action_for_task.failure_log_message()
-                                    );
-                                    this.show_error_toast(action_for_task.failure_toast(&e), cx);
-                                }
-                            }
-                            cx.notify();
-                        });
-                    }
-                    Ok(Ok(None)) => {
-                        tracing::info!(
-                            action = action_for_task.cancelled_log_action(),
-                            "{}",
-                            action_for_task.cancelled_log_message()
-                        );
-                    }
-                    Ok(Err(e)) => {
-                        tracing::warn!(error = %e, "{}", action_for_task.picker_error_message());
-                    }
-                    Err(_) => {
-                        tracing::warn!("{}", action_for_task.picker_channel_closed_message());
-                    }
-                })
-                .detach();
-            }
         }
 
         Self::builtin_success(dctx, action.success_detail())
@@ -5325,35 +4660,6 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> crate::action_helpers::DispatchOutcome {
         self.open_tab_ai_acp_with_entry_intent(None, cx);
-        Self::builtin_success(dctx, action.success_detail())
-    }
-
-    fn execute_ai_preset_view_builtin(
-        &mut self,
-        action: AiPresetViewBuiltinAction,
-        dctx: &crate::action_helpers::DispatchContext,
-        cx: &mut Context<Self>,
-    ) -> crate::action_helpers::DispatchOutcome {
-        match action {
-            AiPresetViewBuiltinAction::Create => {
-                self.current_view = AppView::CreateAiPresetView {
-                    name: String::new(),
-                    system_prompt: String::new(),
-                    model: String::new(),
-                    active_field: 0,
-                };
-                self.pending_focus = Some(FocusTarget::AppRoot);
-            }
-            AiPresetViewBuiltinAction::Search => {
-                self.current_view = AppView::SearchAiPresetsView {
-                    filter: String::new(),
-                    selected_index: 0,
-                };
-                self.pending_focus = Some(FocusTarget::MainFilter);
-            }
-        }
-
-        cx.notify();
         Self::builtin_success(dctx, action.success_detail())
     }
 
@@ -5711,109 +5017,6 @@ impl ScriptListApp {
         }
     }
 
-    fn execute_kit_store_builtin(
-        &mut self,
-        action: KitStoreBuiltinAction,
-        dctx: &crate::action_helpers::DispatchContext,
-        cx: &mut Context<Self>,
-    ) -> crate::action_helpers::DispatchOutcome {
-        self.opened_from_main_menu = true;
-
-        match action {
-            KitStoreBuiltinAction::BrowseKits => {
-                self.current_view = AppView::BrowseKitsView {
-                    query: String::new(),
-                    selected_index: 0,
-                    results: Vec::new(),
-                };
-                self.pending_focus = Some(FocusTarget::AppRoot);
-                cx.notify();
-
-                cx.spawn(async move |this, cx| {
-                    let results = cx
-                        .background_executor()
-                        .spawn(async { Self::kit_store_search_results("") })
-                        .await;
-                    let _ = this.update(cx, |this, cx| {
-                        if let AppView::BrowseKitsView {
-                            results: view_results,
-                            ..
-                        } = &mut this.current_view
-                        {
-                            *view_results = results;
-                            cx.notify();
-                        }
-                    });
-                })
-                .detach();
-            }
-            KitStoreBuiltinAction::InstalledKits => {
-                let kits = Self::kit_store_list_installed();
-                tracing::info!(
-                    trace_id = %dctx.trace_id,
-                    installed_count = kits.len(),
-                    "Loaded installed kits"
-                );
-                self.current_view = AppView::InstalledKitsView {
-                    selected_index: 0,
-                    kits,
-                };
-                self.pending_focus = Some(FocusTarget::AppRoot);
-                cx.notify();
-            }
-            KitStoreBuiltinAction::UpdateAllKits => {
-                cx.spawn(async move |this, cx| {
-                    let result = cx
-                        .background_executor()
-                        .spawn(async {
-                            let kits = script_kit_gpui::kit_store::storage::list_installed_kits()
-                                .unwrap_or_default();
-                            let mut updated = 0usize;
-                            let mut failed = 0usize;
-                            for kit in &kits {
-                                let pull_output = std::process::Command::new("git")
-                                    .arg("-C")
-                                    .arg(&kit.path)
-                                    .arg("pull")
-                                    .arg("--ff-only")
-                                    .output();
-                                match pull_output {
-                                    Ok(output) if output.status.success() => {
-                                        updated += 1;
-                                    }
-                                    _ => {
-                                        failed += 1;
-                                        tracing::warn!(
-                                            kit_name = %kit.name,
-                                            "Kit update-all failed for kit"
-                                        );
-                                    }
-                                }
-                            }
-                            KitStoreUpdateAllResult { updated, failed }
-                        })
-                        .await;
-
-                    let _ = this.update(cx, |this, cx| {
-                        let message = result.message();
-                        if result.is_failure() {
-                            this.toast_manager.push(
-                                components::toast::Toast::error(message, &this.theme)
-                                    .duration_ms(Some(TOAST_ERROR_MS)),
-                            );
-                        } else {
-                            this.show_hud(message, Some(HUD_MEDIUM_MS), cx);
-                        }
-                        cx.notify();
-                    });
-                })
-                .detach();
-            }
-        }
-
-        Self::builtin_success(dctx, action.success_detail())
-    }
-
     fn execute_utility_open_builtin(
         &mut self,
         action: UtilityOpenBuiltinAction,
@@ -5877,81 +5080,19 @@ impl ScriptListApp {
             UtilityCommandBuiltinAction::Process(process_action) => {
                 self.execute_utility_process_builtin(process_action, dctx, cx)
             }
-            UtilityCommandBuiltinAction::Context(context_action) => {
-                self.execute_utility_context_builtin(context_action, dctx, cx)
-            }
-            UtilityCommandBuiltinAction::Trace(trace_action) => {
-                self.execute_utility_trace_builtin(trace_action, query_override, dctx, cx)
-            }
-            UtilityCommandBuiltinAction::Recipe(recipe_action) => match recipe_action {
-                UtilityRecipeBuiltinAction::VerifyCurrentApp => {
-                    self.execute_utility_verify_recipe_builtin(recipe_action, dctx, cx)
-                }
-                UtilityRecipeBuiltinAction::ReplayCurrentApp => {
-                    self.execute_utility_replay_recipe_builtin(recipe_action, dctx, cx)
-                }
-                UtilityRecipeBuiltinAction::TurnThisIntoCommand => self
-                    .execute_utility_turn_this_into_command_builtin(
-                        recipe_action,
-                        query_override,
-                        dctx,
-                        cx,
-                    ),
-            },
+            UtilityCommandBuiltinAction::Recipe(recipe_action) => self
+                .execute_utility_turn_this_into_command_builtin(
+                    recipe_action,
+                    query_override,
+                    dctx,
+                    cx,
+                ),
             UtilityCommandBuiltinAction::DoInCurrentApp(do_in_action) => self
                 .execute_utility_do_in_current_app_builtin(do_in_action, query_override, dctx, cx),
             UtilityCommandBuiltinAction::CurrentAppCommands(current_app_action) => {
                 self.execute_utility_current_app_commands_builtin(current_app_action, dctx, cx)
             }
-            UtilityCommandBuiltinAction::Selfie(selfie_action) => {
-                self.execute_utility_selfie_builtin(selfie_action, dctx, cx)
-            }
         }
-    }
-
-    fn execute_utility_selfie_builtin(
-        &mut self,
-        action: UtilitySelfieBuiltinAction,
-        dctx: &crate::action_helpers::DispatchContext,
-        cx: &mut Context<Self>,
-    ) -> crate::action_helpers::DispatchOutcome {
-        let state = self.app_view_name();
-        let trace_id = dctx.trace_id.clone();
-        self.show_hud(action.starting_hud(&state), Some(HUD_SHORT_MS), cx);
-
-        cx.spawn(async move |this, cx| {
-            let result = cx
-                .background_executor()
-                .spawn(async move { crate::platform::capture_script_kit_selfie(&state) })
-                .await;
-
-            let _ = this.update(cx, |this, cx| match result {
-                Ok(receipt) => {
-                    tracing::info!(
-                        trace_id = %trace_id,
-                        receipt_id = %receipt.receipt_id,
-                        state = %receipt.state,
-                        png_path = %receipt.png_path,
-                        receipt_path = %receipt.receipt_path,
-                        "script_kit_selfie.captured"
-                    );
-                    this.show_hud(action.saved_hud(&receipt), Some(HUD_MEDIUM_MS), cx);
-                }
-                Err(error) => {
-                    let message = action.failure_message(&error);
-                    tracing::error!(
-                        trace_id = %trace_id,
-                        detail = action.failure_detail(),
-                        %error,
-                        "script_kit_selfie.failed"
-                    );
-                    this.show_error_toast(message, cx);
-                }
-            });
-        })
-        .detach();
-
-        Self::builtin_success(dctx, action.success_detail())
     }
 
     fn execute_utility_process_builtin(
@@ -5980,459 +5121,6 @@ impl ScriptListApp {
             self.close_and_reset_window(cx);
         }
         Self::builtin_success(dctx, action.success_detail())
-    }
-
-    fn execute_utility_context_builtin(
-        &mut self,
-        action: UtilityContextBuiltinAction,
-        dctx: &crate::action_helpers::DispatchContext,
-        cx: &mut Context<Self>,
-    ) -> crate::action_helpers::DispatchOutcome {
-        tracing::info!(
-            trace_id = %dctx.trace_id,
-            "context_snapshot.inspect_requested"
-        );
-
-        let started_at = std::time::Instant::now();
-
-        let snapshot = crate::context_snapshot::capture_context_snapshot(
-            &crate::context_snapshot::CaptureContextOptions::default(),
-        );
-
-        match serde_json::to_string_pretty(&snapshot) {
-            Ok(json) => {
-                let receipt =
-                    crate::context_snapshot::build_inspection_receipt(&snapshot, json.len());
-
-                tracing::info!(
-                    category = "CONTEXT",
-                    event = "context_snapshot_copied",
-                    trace_id = %dctx.trace_id,
-                    schema_version = receipt.schema_version,
-                    warning_count = receipt.warning_count,
-                    has_selected_text = receipt.has_selected_text,
-                    has_frontmost_app = receipt.has_frontmost_app,
-                    top_level_menu_count = receipt.top_level_menu_count,
-                    has_browser = receipt.has_browser,
-                    has_focused_window = receipt.has_focused_window,
-                    json_bytes = receipt.json_bytes,
-                    status = %receipt.status,
-                    duration_ms = started_at.elapsed().as_millis() as u64,
-                    "{}",
-                    action.copied_log_message()
-                );
-
-                cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
-                let hud_message = crate::context_snapshot::build_inspection_hud_message(&receipt);
-                self.show_hud(hud_message, Some(HUD_MEDIUM_MS), cx);
-                self.close_and_reset_window(cx);
-
-                Self::builtin_success(dctx, action.success_detail())
-            }
-            Err(e) => {
-                let message = action.serialize_failure_message(&e);
-                tracing::error!(
-                    trace_id = %dctx.trace_id,
-                    error = %e,
-                    "context_snapshot.serialize_failed"
-                );
-                self.show_error_toast(message.clone(), cx);
-                Self::builtin_error(
-                    dctx,
-                    crate::action_helpers::ERROR_ACTION_FAILED,
-                    message,
-                    action.failure_detail(),
-                )
-            }
-        }
-    }
-
-    fn execute_utility_trace_builtin(
-        &mut self,
-        action: UtilityTraceBuiltinAction,
-        query_override: Option<&str>,
-        dctx: &crate::action_helpers::DispatchContext,
-        cx: &mut Context<Self>,
-    ) -> crate::action_helpers::DispatchOutcome {
-        let raw_query_owned = query_override.unwrap_or(&self.filter_text).to_string();
-        let effective_query =
-            crate::menu_bar::current_app_commands::normalize_trace_current_app_intent_request(
-                Some(&raw_query_owned),
-            )
-            .unwrap_or_default();
-
-        tracing::info!(
-            trace_id = %dctx.trace_id,
-            raw_query = %raw_query_owned,
-            effective_query = %effective_query,
-            "current_app_intent_trace.requested"
-        );
-
-        match crate::menu_bar::load_frontmost_menu_snapshot() {
-            Ok(snapshot) => {
-                let trace_receipt =
-                    crate::menu_bar::current_app_commands::build_current_app_intent_trace_receipt(
-                        snapshot,
-                        Some(&raw_query_owned),
-                    );
-
-                match serde_json::to_string_pretty(&trace_receipt) {
-                    Ok(json) => {
-                        tracing::info!(
-                            category = "CURRENT_APP_TRACE",
-                            trace_id = %dctx.trace_id,
-                            app_name = %trace_receipt.app_name,
-                            bundle_id = %trace_receipt.bundle_id,
-                            raw_query = %trace_receipt.raw_query,
-                            effective_query = %trace_receipt.effective_query,
-                            normalized_query = %trace_receipt.normalized_query,
-                            action = %trace_receipt.action,
-                            filtered_entries = trace_receipt.filtered_entries,
-                            exact_matches = trace_receipt.exact_matches,
-                            candidate_count = trace_receipt.candidates.len(),
-                            has_prompt_preview = trace_receipt.prompt_preview.is_some(),
-                            json_bytes = json.len(),
-                            "current_app_intent_trace.copied"
-                        );
-
-                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
-                        self.show_hud(
-                            action.copied_hud(
-                                &trace_receipt.action,
-                                trace_receipt.exact_matches,
-                                trace_receipt.filtered_entries,
-                            ),
-                            Some(HUD_MEDIUM_MS),
-                            cx,
-                        );
-                        self.close_and_reset_window(cx);
-                        Self::builtin_success(dctx, action.success_detail())
-                    }
-                    Err(e) => {
-                        let message = action.serialize_failure_message(&e);
-                        tracing::error!(
-                            trace_id = %dctx.trace_id,
-                            error = %e,
-                            "current_app_intent_trace.serialize_failed"
-                        );
-                        self.show_error_toast(message.clone(), cx);
-                        Self::builtin_error(
-                            dctx,
-                            crate::action_helpers::ERROR_ACTION_FAILED,
-                            message,
-                            action.serialize_failure_detail(),
-                        )
-                    }
-                }
-            }
-            Err(e) => {
-                let message = action.capture_failure_message(&e);
-                tracing::warn!(
-                    trace_id = %dctx.trace_id,
-                    error = %e,
-                    "current_app_intent_trace.capture_failed"
-                );
-                self.show_error_toast(message.clone(), cx);
-                Self::builtin_error(
-                    dctx,
-                    crate::action_helpers::ERROR_ACTION_FAILED,
-                    message,
-                    action.capture_failure_detail(),
-                )
-            }
-        }
-    }
-
-    fn execute_utility_verify_recipe_builtin(
-        &mut self,
-        action: UtilityRecipeBuiltinAction,
-        dctx: &crate::action_helpers::DispatchContext,
-        cx: &mut Context<Self>,
-    ) -> crate::action_helpers::DispatchOutcome {
-        tracing::info!(
-            trace_id = %dctx.trace_id,
-            "verify_current_app_recipe.requested"
-        );
-
-        let stored_recipe =
-            match crate::menu_bar::current_app_commands::load_current_app_command_recipe_from_clipboard() {
-                Ok(recipe) => recipe,
-                Err(error) => {
-                    let message = format!("Verify Current App Recipe failed: {}", error);
-                    self.show_error_toast(message.clone(), cx);
-                    return Self::builtin_error(
-                        dctx,
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        message,
-                        action.clipboard_failure_detail(),
-                    );
-                }
-            };
-
-        match crate::menu_bar::current_app_commands::load_frontmost_menu_snapshot() {
-            Ok(snapshot) => {
-                let selected_text = crate::selected_text::get_selected_text()
-                    .ok()
-                    .filter(|text| !text.trim().is_empty());
-
-                let browser_url = crate::platform::get_focused_browser_tab_url()
-                    .ok()
-                    .filter(|url| !url.trim().is_empty());
-
-                let verification =
-                    crate::menu_bar::current_app_commands::verify_current_app_command_recipe(
-                        &stored_recipe,
-                        snapshot,
-                        selected_text.as_deref(),
-                        browser_url.as_deref(),
-                    );
-
-                match serde_json::to_string_pretty(&verification) {
-                    Ok(json) => {
-                        tracing::info!(
-                            category = "CURRENT_APP_RECIPE_VERIFY",
-                            trace_id = %dctx.trace_id,
-                            expected_bundle_id = %verification.expected_bundle_id,
-                            actual_bundle_id = %verification.actual_bundle_id,
-                            expected_route = %verification.expected_route,
-                            actual_route = %verification.actual_route,
-                            prompt_matches = verification.prompt_matches,
-                            selected_text_expected = verification.selected_text_expected,
-                            selected_text_present = verification.selected_text_present,
-                            browser_url_expected = verification.browser_url_expected,
-                            browser_url_present = verification.browser_url_present,
-                            warning_count = verification.warning_count,
-                            status = %verification.status,
-                            json_bytes = json.len(),
-                            "verify_current_app_recipe.completed"
-                        );
-
-                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
-                        self.show_hud(
-                            crate::menu_bar::current_app_commands::build_current_app_command_verification_hud_message(
-                                &verification,
-                            ),
-                            Some(HUD_MEDIUM_MS),
-                            cx,
-                        );
-                        self.close_and_reset_window(cx);
-
-                        Self::builtin_success(dctx, action.success_detail())
-                    }
-                    Err(error) => {
-                        let message = format!(
-                            "Failed to serialize current app recipe verification: {}",
-                            error
-                        );
-                        self.show_error_toast(message.clone(), cx);
-                        Self::builtin_error(
-                            dctx,
-                            crate::action_helpers::ERROR_ACTION_FAILED,
-                            message,
-                            action.serialize_failure_detail(),
-                        )
-                    }
-                }
-            }
-            Err(error) => {
-                let message = format!(
-                    "Failed to verify current app recipe: {}. Check Accessibility permission in System Settings → Privacy & Security → Accessibility, then refocus the target app and try again.",
-                    error
-                );
-                self.show_error_toast(message.clone(), cx);
-                Self::builtin_error(
-                    dctx,
-                    crate::action_helpers::ERROR_ACTION_FAILED,
-                    message,
-                    action.capture_failure_detail(),
-                )
-            }
-        }
-    }
-
-    fn execute_utility_replay_recipe_builtin(
-        &mut self,
-        action: UtilityRecipeBuiltinAction,
-        dctx: &crate::action_helpers::DispatchContext,
-        cx: &mut Context<Self>,
-    ) -> crate::action_helpers::DispatchOutcome {
-        tracing::info!(
-            trace_id = %dctx.trace_id,
-            "replay_current_app_recipe.requested"
-        );
-
-        let stored_recipe =
-            match crate::menu_bar::current_app_commands::load_current_app_command_recipe_from_clipboard(
-            ) {
-                Ok(recipe) => recipe,
-                Err(error) => {
-                    let message = format!("Replay Current App Recipe failed: {}", error);
-                    self.show_error_toast(message.clone(), cx);
-                    return Self::builtin_error(
-                        dctx,
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        message,
-                        action.clipboard_failure_detail(),
-                    );
-                }
-            };
-
-        match crate::menu_bar::current_app_commands::load_frontmost_menu_snapshot() {
-            Ok(snapshot) => {
-                let snapshot_pid = snapshot.pid;
-                let (entries, snapshot_receipt) = snapshot.clone().into_entries_with_receipt();
-
-                let selected_text = crate::selected_text::get_selected_text()
-                    .ok()
-                    .filter(|text| !text.trim().is_empty());
-
-                let browser_url = crate::platform::get_focused_browser_tab_url()
-                    .ok()
-                    .filter(|url| !url.trim().is_empty());
-
-                let replay_receipt =
-                    crate::menu_bar::current_app_commands::build_replay_current_app_recipe_receipt(
-                        &stored_recipe,
-                        &entries,
-                        snapshot,
-                        selected_text.as_deref(),
-                        browser_url.as_deref(),
-                    );
-
-                tracing::info!(
-                    category = "CURRENT_APP_RECIPE_REPLAY",
-                    trace_id = %dctx.trace_id,
-                    action = %replay_receipt.action,
-                    status = %replay_receipt.verification.status,
-                    warning_count = replay_receipt.verification.warning_count,
-                    expected_bundle_id = %replay_receipt.verification.expected_bundle_id,
-                    actual_bundle_id = %replay_receipt.verification.actual_bundle_id,
-                    expected_route = %replay_receipt.verification.expected_route,
-                    actual_route = %replay_receipt.verification.actual_route,
-                    selected_entry_index = replay_receipt.selected_entry_index,
-                    "replay_current_app_recipe.resolved"
-                );
-
-                if replay_receipt.verification.warning_count > 0 {
-                    let json = match serde_json::to_string_pretty(&replay_receipt) {
-                        Ok(json) => json,
-                        Err(error) => {
-                            let message = format!(
-                                "Failed to serialize replay current app recipe receipt: {}",
-                                error
-                            );
-                            self.show_error_toast(message.clone(), cx);
-                            return Self::builtin_error(
-                                dctx,
-                                crate::action_helpers::ERROR_ACTION_FAILED,
-                                message,
-                                action.serialize_failure_detail(),
-                            );
-                        }
-                    };
-
-                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
-
-                    let message =
-                        crate::menu_bar::current_app_commands::build_replay_current_app_recipe_hud_message(
-                            &replay_receipt,
-                        );
-
-                    self.show_error_toast(
-                        format!("{}. Copied replay report to clipboard.", message),
-                        cx,
-                    );
-
-                    return Self::builtin_error(
-                        dctx,
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        message,
-                        action.drift_failure_detail(),
-                    );
-                }
-
-                match replay_receipt.action.as_str() {
-                    "execute_entry" => {
-                        let Some(entry_index) = replay_receipt.selected_entry_index else {
-                            let message =
-                                "Replay Current App Recipe resolved to execute_entry without an entry index"
-                                    .to_string();
-                            self.show_error_toast(message.clone(), cx);
-                            return Self::builtin_error(
-                                dctx,
-                                crate::action_helpers::ERROR_ACTION_FAILED,
-                                message,
-                                action.missing_entry_failure_detail(),
-                            );
-                        };
-
-                        let entry = entries[entry_index].clone();
-                        self.execute_builtin_inner(
-                            &entry,
-                            Some(
-                                replay_receipt
-                                    .verification
-                                    .live_recipe
-                                    .effective_query
-                                    .as_str(),
-                            ),
-                            dctx,
-                            cx,
-                        )
-                    }
-                    "open_command_palette" => {
-                        let filter = replay_receipt
-                            .verification
-                            .live_recipe
-                            .effective_query
-                            .clone();
-                        self.present_current_app_commands_entries(
-                            entries,
-                            &snapshot_receipt,
-                            snapshot_pid,
-                            &filter,
-                            cx,
-                        );
-
-                        Self::builtin_success(dctx, action.open_palette_success_detail())
-                    }
-                    "generate_script" => {
-                        self.spawn_generate_script_from_recipe_after_hide(
-                            dctx.trace_id.to_string(),
-                            replay_receipt.verification.live_recipe.clone(),
-                            cx,
-                        );
-                        Self::builtin_success(dctx, action.generate_script_success_detail())
-                    }
-                    other => {
-                        let message = format!(
-                            "Replay Current App Recipe resolved to unsupported action: {}",
-                            other
-                        );
-                        self.show_error_toast(message.clone(), cx);
-                        Self::builtin_error(
-                            dctx,
-                            crate::action_helpers::ERROR_ACTION_FAILED,
-                            message,
-                            action.unknown_action_failure_detail(),
-                        )
-                    }
-                }
-            }
-            Err(error) => {
-                let message = format!(
-                    "Failed to replay current app recipe: {}. Check Accessibility permission in System Settings → Privacy & Security → Accessibility, then refocus the target app and try again.",
-                    error
-                );
-                self.show_error_toast(message.clone(), cx);
-                Self::builtin_error(
-                    dctx,
-                    crate::action_helpers::ERROR_ACTION_FAILED,
-                    message,
-                    action.capture_failure_detail(),
-                )
-            }
-        }
     }
 
     fn execute_utility_turn_this_into_command_builtin(
@@ -8893,7 +7581,7 @@ mod builtin_execution_ai_feedback_tests {
     }
 
     #[test]
-    fn ai_command_window_plan_names_harness_visible_and_preset_hide_paths() {
+    fn ai_command_window_plan_names_harness_visible_paths() {
         assert_eq!(
             AiCommandWindowPlan::from_command(&AiCommandType::GenerateScript),
             AiCommandWindowPlan::KeepMainWindowVisible
@@ -8905,10 +7593,6 @@ mod builtin_execution_ai_feedback_tests {
         assert_eq!(
             AiCommandWindowPlan::from_command(&AiCommandType::OpenAi),
             AiCommandWindowPlan::KeepMainWindowVisible
-        );
-        assert_eq!(
-            AiCommandWindowPlan::from_command(&AiCommandType::CreateAiPreset),
-            AiCommandWindowPlan::HideMainWindowDeferred
         );
         assert!(
             !AiCommandWindowPlan::from_command(&AiCommandType::SendBrowserTabToAi)

@@ -97,6 +97,33 @@ impl ScriptListApp {
                 ElementCollectionOutcome::new(elements, total_count)
             }
 
+            AppView::AcpChatView { entity } => {
+                let focused_text_elements =
+                    entity.read(cx).collect_focused_text_mini_elements(limit, cx);
+                if !focused_text_elements.is_empty() {
+                    ElementCollectionOutcome::new(
+                        focused_text_elements.clone(),
+                        focused_text_elements.len(),
+                    )
+                } else {
+                    let state = entity.read(cx).collect_acp_state_snapshot(cx);
+                    let elements = vec![
+                        protocol::ElementInfo::panel("acp-chat"),
+                        protocol::ElementInfo::input(
+                            "acp-composer",
+                            Some(state.input_text.as_str()),
+                            true,
+                        ),
+                        protocol::ElementInfo::list("acp-messages", state.message_count),
+                    ];
+                    let total_count = elements.len();
+                    ElementCollectionOutcome::new(
+                        elements.into_iter().take(limit).collect(),
+                        total_count,
+                    )
+                }
+            }
+
             AppView::ArgPrompt { choices, .. } => self
                 .collect_choice_view_elements(
                     "filter",

@@ -647,6 +647,9 @@ impl ScriptListApp {
                 ScriptListSpecialEntry::AcpMentionPicker => {
                     self.open_tab_ai_acp_with_mention_picker(window, cx);
                 }
+                ScriptListSpecialEntry::AcpProfilePicker => {
+                    self.open_tab_ai_acp_with_profile_picker(window, cx);
+                }
                 ScriptListSpecialEntry::QuickTerminal => {
                     self.open_quick_terminal(None, cx);
                 }

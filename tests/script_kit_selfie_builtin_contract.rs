@@ -6,19 +6,8 @@ const EXECUTION: &str = include_str!("../src/app_execute/builtin_execution.rs");
 const HOTKEYS: &str = include_str!("../src/hotkeys/mod.rs");
 const SELFIE_CAPTURE: &str = include_str!("../src/platform/selfie_capture.rs");
 
-fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
-    let start_idx = source
-        .find(start)
-        .unwrap_or_else(|| panic!("missing source start: {start}"));
-    let tail = &source[start_idx..];
-    let end_idx = tail
-        .find(end)
-        .unwrap_or_else(|| panic!("missing source end after {start}: {end}"));
-    &tail[..end_idx]
-}
-
 #[test]
-fn script_kit_selfie_builtin_is_registered_and_routable() {
+fn script_kit_selfie_builtin_is_pruned_from_registry_and_routes() {
     for required in [
         "ScriptKitSelfie",
         "\"builtin/script-kit-selfie\"",
@@ -28,19 +17,19 @@ fn script_kit_selfie_builtin_is_registered_and_routable() {
         "\"screenshot-selfie\"",
     ] {
         assert!(
-            TRIGGER_REGISTRY.contains(required),
-            "trigger registry should include Script Kit Selfie field: {required}"
+            !TRIGGER_REGISTRY.contains(required),
+            "trigger registry should not include pruned Script Kit Selfie field: {required}"
         );
     }
     assert!(
-        TRIGGER_RESOLVE.contains("TriggerBuiltin::ScriptKitSelfie => \"ScriptKitSelfie\""),
-        "trigger resolver should render ScriptKitSelfie golden outcomes"
+        !TRIGGER_RESOLVE.contains("TriggerBuiltin::ScriptKitSelfie => \"ScriptKitSelfie\""),
+        "trigger resolver should not render pruned ScriptKitSelfie golden outcomes"
     );
     assert!(
-        ROUTES.contains(
+        !ROUTES.contains(
             "TriggerBuiltin::ScriptKitSelfie => AppRoute::ExecuteBuiltin(\"builtin/script-kit-selfie\")"
         ),
-        "trigger route planner should execute the Script Kit Selfie builtin"
+        "trigger route planner should not execute the pruned Script Kit Selfie builtin"
     );
 }
 
@@ -54,8 +43,8 @@ fn script_kit_selfie_builtin_text_matches_capture_receipt_behavior() {
         "UtilityCommandType::ScriptKitSelfie => \"Selfie\"",
     ] {
         assert!(
-            BUILTINS.contains(required),
-            "builtin command text should describe Script Kit Selfie behavior: {required}"
+            !BUILTINS.contains(required),
+            "builtin command text should not expose pruned Script Kit Selfie behavior: {required}"
         );
     }
     assert!(
@@ -67,13 +56,7 @@ fn script_kit_selfie_builtin_text_matches_capture_receipt_behavior() {
 }
 
 #[test]
-fn script_kit_selfie_execution_uses_named_action_copy() {
-    let execute_body = source_between(
-        EXECUTION,
-        "fn execute_utility_selfie_builtin(",
-        "    fn execute_utility_process_builtin(",
-    );
-
+fn script_kit_selfie_execution_path_is_pruned() {
     for required in [
         "enum UtilitySelfieBuiltinAction",
         "ScriptKitSelfie => Self::Selfie",
@@ -84,24 +67,18 @@ fn script_kit_selfie_execution_uses_named_action_copy() {
         "crate::platform::capture_script_kit_selfie(&state)",
     ] {
         assert!(
-            EXECUTION.contains(required),
-            "Script Kit Selfie execution should use named action behavior: {required}"
+            !EXECUTION.contains(required),
+            "Script Kit Selfie execution should not expose pruned action behavior: {required}"
         );
     }
-    assert!(
-        !execute_body.contains("format!(\"Selfie saved:")
-            && !execute_body.contains("format!(\"Script Kit Selfie failed:"),
-        "Script Kit Selfie execution copy should stay on UtilitySelfieBuiltinAction"
-    );
 }
 
 #[test]
-fn script_kit_selfie_has_default_hotkey() {
+fn script_kit_selfie_default_hotkey_is_pruned() {
     assert!(
-        HOTKEYS.contains("SCRIPT_KIT_SELFIE_COMMAND_ID")
-            && HOTKEYS.contains("\"builtin/script-kit-selfie\"")
-            && HOTKEYS.contains("\"cmd+alt+1\"")
-            && HOTKEYS.contains("\"Script Kit Selfie\""),
-        "Script Kit Selfie should register its default cmd+alt+1 launcher shortcut"
+        !HOTKEYS.contains("SCRIPT_KIT_SELFIE_COMMAND_ID")
+            && !HOTKEYS.contains("\"builtin/script-kit-selfie\"")
+            && !HOTKEYS.contains("\"Script Kit Selfie\""),
+        "Script Kit Selfie should not register a default launcher shortcut"
     );
 }

@@ -39,12 +39,7 @@ fn builtin_entry_needs_main_window(entry: &builtins::BuiltInEntry) -> bool {
             | builtins::PermissionCommandType::AllowScreenRecording => false,
         },
         builtins::BuiltInFeature::UtilityCommand(command) => match command {
-            builtins::UtilityCommandType::ScriptKitSelfie
-            | builtins::UtilityCommandType::InspectCurrentContext
-            | builtins::UtilityCommandType::TraceCurrentAppIntent
-            | builtins::UtilityCommandType::VerifyCurrentAppRecipe
-            | builtins::UtilityCommandType::ReplayCurrentAppRecipe
-            | builtins::UtilityCommandType::StopAllProcesses => false,
+            builtins::UtilityCommandType::StopAllProcesses => false,
             builtins::UtilityCommandType::MiniMainWindow
             | builtins::UtilityCommandType::ScratchPad
             | builtins::UtilityCommandType::QuickTerminal
@@ -787,8 +782,6 @@ mod builtin_command_window_visibility_tests {
         let config = crate::config::BuiltInConfig::default();
         for command_id in [
             "builtin/reset-window-positions",
-            "builtin/inspect-current-context",
-            "builtin/script-kit-selfie",
         ] {
             let entry = crate::builtins::resolve_builtin_entry(command_id, &config)
                 .unwrap_or_else(|| panic!("{command_id} should resolve"));

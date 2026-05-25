@@ -164,15 +164,6 @@ pub fn parse_route(rendered: &str) -> Option<AppRoute> {
 /// into a no-op `_` branch.
 pub const fn plan_trigger_builtin_route(id: TriggerBuiltin) -> AppRoute {
     match id {
-        TriggerBuiltin::DesignGallery => {
-            AppRoute::ShowFilterableView(FilterableView::DesignGallery)
-        }
-        TriggerBuiltin::FooterGallery => {
-            AppRoute::ShowFilterableView(FilterableView::FooterGallery)
-        }
-        TriggerBuiltin::DesignNonListStates => {
-            AppRoute::ExecuteBuiltin("builtin/design-non-list-states")
-        }
         TriggerBuiltin::ClipboardHistory => {
             AppRoute::ShowFilterableView(FilterableView::ClipboardHistory)
         }
@@ -191,15 +182,24 @@ pub const fn plan_trigger_builtin_route(id: TriggerBuiltin) -> AppRoute {
         TriggerBuiltin::NewScript => AppRoute::ExecuteBuiltin("builtin/new-script"),
         TriggerBuiltin::SdkReference => AppRoute::ExecuteBuiltin("builtin/sdk-reference"),
         TriggerBuiltin::AiVault => AppRoute::ExecuteBuiltin("builtin/vault"),
+        TriggerBuiltin::Settings => AppRoute::ExecuteBuiltin("builtin/settings"),
+        TriggerBuiltin::ChooseTheme => AppRoute::ExecuteBuiltin("builtin/choose-theme"),
+        TriggerBuiltin::DesignGallery => {
+            AppRoute::ShowFilterableView(FilterableView::DesignGallery)
+        }
+        TriggerBuiltin::FooterGallery => {
+            AppRoute::ShowFilterableView(FilterableView::FooterGallery)
+        }
+        TriggerBuiltin::DesignNonListStates => {
+            AppRoute::ExecuteBuiltin("builtin/design-non-list-states")
+        }
         TriggerBuiltin::BrowseKitStore => AppRoute::ExecuteBuiltin("builtin/browse-kit-store"),
         TriggerBuiltin::ManageInstalledKits => {
             AppRoute::ExecuteBuiltin("builtin/manage-installed-kits")
         }
-        TriggerBuiltin::Settings => AppRoute::ExecuteBuiltin("builtin/settings"),
-        TriggerBuiltin::ChooseTheme => AppRoute::ExecuteBuiltin("builtin/choose-theme"),
+        TriggerBuiltin::ScriptKitSelfie => AppRoute::ExecuteBuiltin("builtin/script-kit-selfie"),
         TriggerBuiltin::MiniMainWindow => AppRoute::ExecuteBuiltin("builtin/mini-main-window"),
         TriggerBuiltin::QuickTerminal => AppRoute::ExecuteBuiltin("builtin/quick-terminal"),
-        TriggerBuiltin::ScriptKitSelfie => AppRoute::ExecuteBuiltin("builtin/script-kit-selfie"),
         TriggerBuiltin::Webcam => AppRoute::ExecuteBuiltin("builtin/webcam"),
     }
 }
@@ -265,6 +265,7 @@ mod tests {
             ("OpenCurrentAppCommands", 1),
             ("builtin/browse-kit-store", 1),
             ("builtin/choose-theme", 1),
+            ("builtin/design-non-list-states", 1),
             ("builtin/manage-installed-kits", 1),
             ("builtin/mini-main-window", 1),
             ("builtin/new-script", 1),

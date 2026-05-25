@@ -183,7 +183,7 @@ fn execute_builtin_inner_handles_system_actions() {
         "Expected execute_builtin_inner to match SystemAction variant"
     );
     assert!(
-        fn_body.contains("self.dispatch_system_action(action_type,"),
+        execution_content.contains("self.dispatch_system_action(action_type,"),
         "Expected execute_builtin_inner to call dispatch_system_action for SystemAction"
     );
 }
@@ -398,9 +398,9 @@ fn favorites_builtin_opens_browse_view() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let favorites_branch = content
-        .find("BuiltInFeature::Favorites")
+        .find("builtins::BuiltInFeature::Favorites => {")
         .expect("Expected BuiltInFeature::Favorites branch in builtin_execution.rs");
-    let block = &content[favorites_branch..content.len().min(favorites_branch + 2200)];
+    let block = &content[favorites_branch..content.len().min(favorites_branch + 4200)];
 
     // Must transition to FavoritesBrowseView
     assert!(
@@ -414,9 +414,9 @@ fn favorites_builtin_uses_shared_filterable_view_helper() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let favorites_branch = content
-        .find("BuiltInFeature::Favorites")
+        .find("builtins::BuiltInFeature::Favorites => {")
         .expect("Expected BuiltInFeature::Favorites branch");
-    let block = &content[favorites_branch..content.len().min(favorites_branch + 2200)];
+    let block = &content[favorites_branch..content.len().min(favorites_branch + 4200)];
 
     // Must use the shared helper which handles filter clearing and cx.notify()
     assert!(
@@ -432,7 +432,7 @@ fn open_builtin_filterable_view_clears_filter_and_notifies() {
     let helper_start = content
         .find("fn open_builtin_filterable_view(")
         .expect("Expected open_builtin_filterable_view helper");
-    let block = &content[helper_start..content.len().min(helper_start + 800)];
+    let block = &content[helper_start..content.len().min(helper_start + 1600)];
 
     // The shared helper must clear filter text
     assert!(

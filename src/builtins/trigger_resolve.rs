@@ -178,9 +178,6 @@ pub fn render_resolution(outcome: &TriggerBuiltinResolution) -> String {
 fn render_variant(id: TriggerBuiltin) -> &'static str {
     // Hand-rolled to avoid relying on `Debug` output formatting.
     match id {
-        TriggerBuiltin::DesignGallery => "DesignGallery",
-        TriggerBuiltin::FooterGallery => "FooterGallery",
-        TriggerBuiltin::DesignNonListStates => "DesignNonListStates",
         TriggerBuiltin::ClipboardHistory => "ClipboardHistory",
         TriggerBuiltin::AppLauncher => "AppLauncher",
         TriggerBuiltin::FileSearch => "FileSearch",
@@ -193,13 +190,16 @@ fn render_variant(id: TriggerBuiltin) -> &'static str {
         TriggerBuiltin::NewScript => "NewScript",
         TriggerBuiltin::SdkReference => "SdkReference",
         TriggerBuiltin::AiVault => "AiVault",
-        TriggerBuiltin::BrowseKitStore => "BrowseKitStore",
-        TriggerBuiltin::ManageInstalledKits => "ManageInstalledKits",
         TriggerBuiltin::Settings => "Settings",
         TriggerBuiltin::ChooseTheme => "ChooseTheme",
+        TriggerBuiltin::DesignGallery => "DesignGallery",
+        TriggerBuiltin::FooterGallery => "FooterGallery",
+        TriggerBuiltin::DesignNonListStates => "DesignNonListStates",
+        TriggerBuiltin::BrowseKitStore => "BrowseKitStore",
+        TriggerBuiltin::ManageInstalledKits => "ManageInstalledKits",
+        TriggerBuiltin::ScriptKitSelfie => "ScriptKitSelfie",
         TriggerBuiltin::MiniMainWindow => "MiniMainWindow",
         TriggerBuiltin::QuickTerminal => "QuickTerminal",
-        TriggerBuiltin::ScriptKitSelfie => "ScriptKitSelfie",
         TriggerBuiltin::Webcam => "Webcam",
     }
 }

@@ -352,10 +352,10 @@ fn filterable_view_builtins_are_silent_on_success() {
 fn app_launch_failure_returns_error_outcome() {
     let content = read("src/app_execute/builtin_execution.rs");
 
-    let app_branch = content
-        .find("builtins::BuiltInFeature::App(app_name)")
-        .expect("Expected App branch");
-    let block = &content[app_branch..content.len().min(app_branch + 1200)];
+    let app_launch = content
+        .find("fn execute_app_launch_builtin(")
+        .expect("Expected execute_app_launch_builtin helper");
+    let block = &content[app_launch..content.len().min(app_launch + 2600)];
 
     // Failed app launches must produce an error outcome
     assert!(

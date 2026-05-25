@@ -275,7 +275,12 @@ impl ScriptListApp {
                 );
             }
             crate::footer_popup::FooterAction::Ai => {
-                if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
+                if let AppView::AcpChatView { entity } = &self.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |chat, cx| {
+                        chat.toggle_profile_selector_popup(window, cx);
+                    });
+                } else if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |prompt, cx| prompt.next_input(cx));
                 } else {
@@ -299,6 +304,18 @@ impl ScriptListApp {
             }
             crate::footer_popup::FooterAction::PasteResponse => {
                 self.paste_latest_acp_response_to_frontmost(cx);
+            }
+            crate::footer_popup::FooterAction::Replace
+            | crate::footer_popup::FooterAction::Append
+            | crate::footer_popup::FooterAction::Copy
+            | crate::footer_popup::FooterAction::Expand
+            | crate::footer_popup::FooterAction::Retry => {
+                if let AppView::AcpChatView { entity } = &self.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |chat, cx| {
+                        chat.dispatch_footer_button(action, window, cx);
+                    });
+                }
             }
             crate::footer_popup::FooterAction::Apply => {
                 if let AppView::ScriptIssuesView { report } = &self.current_view {
@@ -1042,7 +1059,9 @@ impl ScriptListApp {
                 model_name: model_name.clone(),
                 prefer_accent_for_active_states: true,
                 profile_name: None,
-                icon_token: Some(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN),
+                icon_token: Some(
+                    crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN.to_string(),
+                ),
                 action: Some(crate::footer_popup::FooterAction::Ai),
                 selected: false,
             });

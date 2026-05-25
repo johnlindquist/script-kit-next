@@ -60,10 +60,6 @@ pub enum SystemActionType {
     Volume100,
     VolumeMute,
 
-    // Dev/test actions (only available in debug builds)
-    #[cfg(debug_assertions)]
-    TestConfirmation,
-
     // App control
     QuitScriptKit,
 
@@ -140,14 +136,6 @@ pub enum AiCommandType {
     SendBrowserTabToAi,
     /// Send a selected screen area to Agent Chat (interactive selection)
     SendScreenAreaToAi,
-    /// Create a new AI chat preset/template
-    CreateAiPreset,
-    /// Import AI chat presets from file
-    ImportAiPresets,
-    /// Search through saved AI chat presets
-    SearchAiPresets,
-    /// Export AI chat presets to a user-chosen file
-    ExportAiPresets,
 }
 
 impl AiCommandType {
@@ -216,24 +204,6 @@ pub enum UtilityCommandType {
     TurnThisIntoCommand,
     /// Search and run menu bar commands from the frontmost app
     CurrentAppCommands,
-    /// Capture a deterministic JSON snapshot of current desktop context and copy to clipboard
-    InspectCurrentContext,
-    /// Dry-run a free-text request against the frontmost app and copy a JSON routing trace
-    TraceCurrentAppIntent,
-    /// Verify a currentAppCommand recipe from the clipboard against live context
-    VerifyCurrentAppRecipe,
-    /// Replay a verified currentAppCommand recipe from the clipboard
-    ReplayCurrentAppRecipe,
-    /// Capture Script Kit composited over the current desktop background
-    ScriptKitSelfie,
-}
-/// Kit Store command types for browsing and managing kits
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(clippy::enum_variant_names)]
-pub enum KitStoreCommandType {
-    BrowseKits,
-    InstalledKits,
-    UpdateAllKits,
 }
 /// Menu bar action details for executing menu commands
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -314,8 +284,6 @@ pub enum BuiltInFeature {
     SettingsCommand(SettingsCommandType),
     /// Utility commands (scratch pad, quick terminal)
     UtilityCommand(UtilityCommandType),
-    /// Kit Store commands (browse, installed kits, update all)
-    KitStoreCommand(KitStoreCommandType),
     /// File search for navigating directories and finding files
     FileSearch,
     /// Webcam capture
@@ -485,8 +453,6 @@ impl BuiltInEntry {
                 SystemActionType::Volume75 => "Set Volume to 75%",
                 SystemActionType::Volume100 => "Set Volume to 100%",
                 SystemActionType::VolumeMute => "Mute Audio",
-                #[cfg(debug_assertions)]
-                SystemActionType::TestConfirmation => "Open Test Dialog",
                 SystemActionType::QuitScriptKit => "Quit Script Kit",
                 SystemActionType::ToggleDoNotDisturb => "Toggle Do Not Disturb",
                 SystemActionType::StartScreenSaver => "Start Screen Saver",
@@ -518,10 +484,6 @@ impl BuiltInEntry {
                 AiCommandType::SendSelectedTextToAi => "Send Selection to Agent Chat",
                 AiCommandType::SendBrowserTabToAi => "Send Tab to Agent Chat",
                 AiCommandType::SendScreenAreaToAi => "Select Area for Agent Chat",
-                AiCommandType::CreateAiPreset => "Create AI Preset",
-                AiCommandType::ImportAiPresets => "Import AI Presets",
-                AiCommandType::SearchAiPresets => "Search AI Presets",
-                AiCommandType::ExportAiPresets => "Export AI Presets",
             },
             BuiltInFeature::ScriptCommand(action) => match action {
                 ScriptCommandType::NewScript => "Create Script",
@@ -554,16 +516,6 @@ impl BuiltInEntry {
                 UtilityCommandType::DoInCurrentApp => "Do in Current App",
                 UtilityCommandType::TurnThisIntoCommand => "Turn Into Command",
                 UtilityCommandType::CurrentAppCommands => "Open App Commands",
-                UtilityCommandType::InspectCurrentContext => "Copy Current Context",
-                UtilityCommandType::TraceCurrentAppIntent => "Copy App Intent Trace",
-                UtilityCommandType::VerifyCurrentAppRecipe => "Verify App Recipe",
-                UtilityCommandType::ReplayCurrentAppRecipe => "Replay App Recipe",
-                UtilityCommandType::ScriptKitSelfie => "Capture Selfie",
-            },
-            BuiltInFeature::KitStoreCommand(action) => match action {
-                KitStoreCommandType::BrowseKits => "Browse Kit Store",
-                KitStoreCommandType::InstalledKits => "Manage Installed Kits",
-                KitStoreCommandType::UpdateAllKits => "Update All Kits",
             },
             BuiltInFeature::FileSearch => "Search Files",
             BuiltInFeature::Webcam => "Open Webcam",
@@ -618,8 +570,6 @@ impl BuiltInEntry {
                 SystemActionType::Volume75 => "Volume 75%",
                 SystemActionType::Volume100 => "Volume 100%",
                 SystemActionType::VolumeMute => "Mute",
-                #[cfg(debug_assertions)]
-                SystemActionType::TestConfirmation => "Test Dialog",
                 SystemActionType::QuitScriptKit => "Quit",
                 SystemActionType::ToggleDoNotDisturb => "Toggle DND",
                 SystemActionType::StartScreenSaver => "Screen Saver",
@@ -649,10 +599,6 @@ impl BuiltInEntry {
                 AiCommandType::SendSelectedTextToAi => "Send Text",
                 AiCommandType::SendBrowserTabToAi => "Send Tab",
                 AiCommandType::SendScreenAreaToAi => "Select Area",
-                AiCommandType::CreateAiPreset => "New Preset",
-                AiCommandType::ImportAiPresets => "Import",
-                AiCommandType::SearchAiPresets => "Find Presets",
-                AiCommandType::ExportAiPresets => "Export",
             },
             BuiltInFeature::ScriptCommand(action) => match action {
                 ScriptCommandType::NewScript => "New Script",
@@ -685,16 +631,6 @@ impl BuiltInEntry {
                 UtilityCommandType::DoInCurrentApp => "Current App",
                 UtilityCommandType::TurnThisIntoCommand => "Save Command",
                 UtilityCommandType::CurrentAppCommands => "App Commands",
-                UtilityCommandType::InspectCurrentContext => "Copy Context",
-                UtilityCommandType::TraceCurrentAppIntent => "Trace Intent",
-                UtilityCommandType::VerifyCurrentAppRecipe => "Verify Recipe",
-                UtilityCommandType::ReplayCurrentAppRecipe => "Replay Recipe",
-                UtilityCommandType::ScriptKitSelfie => "Selfie",
-            },
-            BuiltInFeature::KitStoreCommand(action) => match action {
-                KitStoreCommandType::BrowseKits => "Browse Kits",
-                KitStoreCommandType::InstalledKits => "Installed Kits",
-                KitStoreCommandType::UpdateAllKits => "Update Kits",
             },
             BuiltInFeature::FileSearch => "Files",
             BuiltInFeature::Webcam => "Webcam",
@@ -954,87 +890,6 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "github",
         ));
         debug!("Added Sync to GitHub built-in entry");
-
-        // Design Gallery is only available in debug builds (developer tool)
-        #[cfg(debug_assertions)]
-        {
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/design-gallery",
-                "Design Gallery",
-                "Open the design gallery to browse separator styles and icon variations",
-                vec![
-                    "design",
-                    "gallery",
-                    "separator",
-                    "icon",
-                    "style",
-                    "theme",
-                    "variations",
-                ],
-                BuiltInFeature::DesignGallery,
-                "palette",
-            ));
-            debug!("Added Design Gallery built-in entry");
-
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/footer-gallery",
-                "Footer Gallery",
-                "Open the footer gallery to browse shortcut glyph and font variations",
-                vec![
-                    "design",
-                    "footer",
-                    "gallery",
-                    "shortcut",
-                    "glyph",
-                    "font",
-                    "variations",
-                ],
-                BuiltInFeature::FooterGallery,
-                "layout",
-            ));
-            debug!("Added Footer Gallery built-in entry");
-
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/design-non-list-states",
-                "Design: Non-List States",
-                "Open the main-window non-list state design language showcase",
-                vec![
-                    "design",
-                    "non-list",
-                    "non list",
-                    "state",
-                    "states",
-                    "language",
-                    "showcase",
-                    "empty",
-                    "help",
-                    "form",
-                    "setup",
-                    "permission",
-                    "recovery",
-                    "about",
-                    "density",
-                    "main",
-                    "window",
-                    "chrome",
-                    "ui",
-                ],
-                BuiltInFeature::DesignNonListStates,
-                "flask-conical",
-            ));
-            debug!("Added Non-List States design built-in entry");
-
-            // Test Confirmation entry for testing confirmation UI
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/test-confirmation",
-                "Test Confirmation",
-                "Open the confirmation dialog test tool (dev only)",
-                vec!["test", "confirmation", "dev", "debug"],
-                BuiltInFeature::SystemAction(SystemActionType::TestConfirmation),
-                "flask-conical",
-            ));
-            debug!("Added Test Confirmation built-in entry");
-        }
 
         // Design Explorer is only available when storybook feature is enabled
         #[cfg(feature = "storybook")]
@@ -1495,48 +1350,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "globe",
         ));
 
-        // Preview AI commands are currently stubs and should only appear in debug builds.
         // NOTE: builtin-send-screen-area-to-ai removed — no real region-context attachment yet.
-        #[cfg(debug_assertions)]
-        {
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/create-ai-preset",
-                "Create AI Preset",
-                "Create a reusable AI preset with name, system prompt, and model",
-                vec!["create", "ai", "preset", "template", "save", "new"],
-                BuiltInFeature::AiCommand(AiCommandType::CreateAiPreset),
-                "flask-conical",
-            ));
-
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/import-ai-presets",
-                "Import AI Presets",
-                "Import AI presets from a JSON file via file picker",
-                vec!["import", "ai", "preset", "template", "file", "load"],
-                BuiltInFeature::AiCommand(AiCommandType::ImportAiPresets),
-                "download",
-            ));
-
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/export-ai-presets",
-                "Export AI Presets",
-                "Export AI presets to a JSON file via file picker",
-                vec![
-                    "export", "ai", "preset", "template", "file", "save", "backup",
-                ],
-                BuiltInFeature::AiCommand(AiCommandType::ExportAiPresets),
-                "upload",
-            ));
-
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/search-ai-presets",
-                "Search AI Presets",
-                "Search and browse saved AI presets to start a new chat",
-                vec!["search", "ai", "preset", "template", "browse", "find"],
-                BuiltInFeature::AiCommand(AiCommandType::SearchAiPresets),
-                "search",
-            ));
-        }
 
         // =========================================================================
         // Script Commands
@@ -1829,24 +1643,6 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin/script-kit-selfie",
-            "Script Kit Selfie",
-            "Capture Script Kit with the current desktop background and save a receipt",
-            vec![
-                "selfie",
-                "screenshot",
-                "screen",
-                "capture",
-                "background",
-                "desktop",
-                "transparency",
-                "receipt",
-            ],
-            BuiltInFeature::UtilityCommand(UtilityCommandType::ScriptKitSelfie),
-            "camera",
-        ));
-
-        entries.push(BuiltInEntry::new_with_icon(
             "builtin/claude-code",
             "Claude Code Terminal",
             "Open Claude Code in the terminal surface used for CLI agent sessions",
@@ -1919,149 +1715,6 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
         // Turn This Into a Command intentionally collapses into Do in Current App
         // in the launcher registry. The execution path remains for compatibility.
-
-        #[cfg(debug_assertions)]
-        {
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/inspect-current-context",
-                "Inspect Current Context",
-                "Capture a deterministic JSON snapshot of what Script Kit can currently see and copy it to the clipboard",
-                vec![
-                    "inspect",
-                    "current",
-                    "context",
-                    "snapshot",
-                    "json",
-                    "diagnostics",
-                    "debug",
-                    "clipboard",
-                    "mcp",
-                    "agent",
-                    "ai",
-                ],
-                BuiltInFeature::UtilityCommand(UtilityCommandType::InspectCurrentContext),
-                "compass",
-            ));
-
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/trace-current-app-intent",
-                "Trace Current App Intent",
-                "Dry-run a current-app request and copy a machine-readable JSON trace showing normalized input, candidate commands, route selection, and script prompt preview without executing anything",
-                vec![
-                    "trace",
-                    "current",
-                    "app",
-                    "intent",
-                    "dry",
-                    "run",
-                    "preview",
-                    "debug",
-                    "diagnostics",
-                    "routing",
-                    "json",
-                    "agent",
-                    "automation",
-                    "menu",
-                    "command",
-                    "shortcut",
-                ],
-                BuiltInFeature::UtilityCommand(UtilityCommandType::TraceCurrentAppIntent),
-                "flask-conical",
-            ));
-
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/verify-current-app-recipe",
-                crate::menu_bar::current_app_commands::VERIFY_CURRENT_APP_RECIPE_LABEL,
-                "Read a currentAppCommand recipe JSON from the clipboard, re-capture the frontmost app, and copy a machine-readable drift report",
-                vec![
-                    "verify",
-                    "current",
-                    "app",
-                    "recipe",
-                    "command",
-                    "json",
-                    "validate",
-                    "drift",
-                    "trace",
-                    "clipboard",
-                    "agent",
-                    "automation",
-                ],
-                BuiltInFeature::UtilityCommand(UtilityCommandType::VerifyCurrentAppRecipe),
-                "microscope",
-            ));
-
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/replay-current-app-recipe",
-                crate::menu_bar::current_app_commands::REPLAY_CURRENT_APP_RECIPE_LABEL,
-                "Read a currentAppCommand recipe JSON from the clipboard, verify it against live context, and replay the resolved action only when it still matches",
-                vec![
-                    "replay",
-                    "run",
-                    "current",
-                    "app",
-                    "recipe",
-                    "command",
-                    "json",
-                    "clipboard",
-                    "verify",
-                    "execute",
-                    "automation",
-                    "drift",
-                ],
-                BuiltInFeature::UtilityCommand(UtilityCommandType::ReplayCurrentAppRecipe),
-                "repeat",
-            ));
-        }
-
-        // =========================================================================
-        // Kit Store Commands (debug-only stubs)
-        // =========================================================================
-
-        #[cfg(debug_assertions)]
-        {
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/browse-kit-store",
-                "Browse Kit Store",
-                "Browse available kits from the Kit Store",
-                vec!["kit", "store", "browse", "search", "discover", "extensions"],
-                BuiltInFeature::KitStoreCommand(KitStoreCommandType::BrowseKits),
-                "search",
-            ));
-
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/manage-installed-kits",
-                "Manage Installed Kits",
-                "View and manage kits already installed from the Kit Store",
-                vec![
-                    "kit",
-                    "store",
-                    "installed",
-                    "manage",
-                    "extensions",
-                    "packages",
-                ],
-                BuiltInFeature::KitStoreCommand(KitStoreCommandType::InstalledKits),
-                "package",
-            ));
-
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/update-all-kits",
-                "Update All Kits",
-                "Update every installed kit to the latest version",
-                vec![
-                    "kit",
-                    "store",
-                    "update",
-                    "upgrade",
-                    "refresh",
-                    "all",
-                    "extensions",
-                ],
-                BuiltInFeature::KitStoreCommand(KitStoreCommandType::UpdateAllKits),
-                "refresh-cw",
-            ));
-        }
 
         // =========================================================================
         // File Search (Directory Navigation)
@@ -2555,7 +2208,6 @@ mod tests {
         assert!(entries.iter().any(|e| e.id == "builtin/paste-sequentially"));
         assert!(entries.iter().any(|e| e.id == "builtin/ai-chat"));
         assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
-        assert!(entries.iter().any(|e| e.id == "builtin/design-gallery"));
 
         // Window switcher should NOT be present
         assert!(!entries.iter().any(|e| e.id == "builtin/window-switcher"));
@@ -2570,10 +2222,9 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         // App launcher no longer creates a built-in entry (apps appear in main search)
-        // But Agent Chat, Notes and Design Gallery are always enabled (plus new command entries)
+        // But Agent Chat and Notes are always enabled (plus new command entries)
         assert!(entries.iter().any(|e| e.id == "builtin/ai-chat"));
         assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
-        assert!(entries.iter().any(|e| e.id == "builtin/design-gallery"));
 
         // Clipboard history should NOT be present
         assert!(!entries.iter().any(|e| e.id == "builtin/clipboard-history"));
@@ -2588,10 +2239,9 @@ mod tests {
         };
         let entries = get_builtin_entries(&config);
 
-        // Agent Chat, Notes, and Design Gallery are always enabled (plus new command entries)
+        // Agent Chat and Notes are always enabled (plus new command entries)
         assert!(entries.iter().any(|e| e.id == "builtin/ai-chat"));
         assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
-        assert!(entries.iter().any(|e| e.id == "builtin/design-gallery"));
 
         // Clipboard history and window switcher should NOT be present
         assert!(!entries.iter().any(|e| e.id == "builtin/clipboard-history"));
@@ -2607,11 +2257,10 @@ mod tests {
         };
         let entries = get_builtin_entries(&config);
 
-        // Window switcher + Agent Chat + Notes + Design Gallery (always enabled, plus new command entries)
+        // Window switcher + Agent Chat + Notes (always enabled, plus new command entries)
         assert!(entries.iter().any(|e| e.id == "builtin/window-switcher"));
         assert!(entries.iter().any(|e| e.id == "builtin/ai-chat"));
         assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
-        assert!(entries.iter().any(|e| e.id == "builtin/design-gallery"));
 
         // Verify window switcher has correct properties
         let window_switcher = entries
@@ -2837,7 +2486,7 @@ mod tests {
         );
     }
     #[test]
-    fn test_get_builtin_entries_gates_stub_commands_to_debug_builds() {
+    fn test_get_builtin_entries_prunes_debug_stub_commands() {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
@@ -2851,24 +2500,11 @@ mod tests {
             "builtin/search-ai-presets",
         ];
 
-        #[cfg(debug_assertions)]
-        {
-            for id in stub_ids {
-                assert!(
-                    entries.iter().any(|e| e.id == id),
-                    "stub command {id} should be visible in debug builds"
-                );
-            }
-        }
-
-        #[cfg(not(debug_assertions))]
-        {
-            for id in stub_ids {
-                assert!(
-                    !entries.iter().any(|e| e.id == id),
-                    "stub command {id} should be hidden in release builds"
-                );
-            }
+        for id in stub_ids {
+            assert!(
+                !entries.iter().any(|e| e.id == id),
+                "stub command {id} should not be registered in the launcher"
+            );
         }
     }
 
@@ -3311,15 +2947,6 @@ mod tests {
         assert_eq!(
             send_browser_tab.default_action_text(),
             "Send Tab to Agent Chat"
-        );
-
-        let inspect_context = entries
-            .iter()
-            .find(|e| e.id == "builtin/inspect-current-context")
-            .unwrap();
-        assert_eq!(
-            inspect_context.default_action_text(),
-            "Copy Current Context"
         );
 
         let webcam = entries.iter().find(|e| e.id == "builtin/webcam").unwrap();

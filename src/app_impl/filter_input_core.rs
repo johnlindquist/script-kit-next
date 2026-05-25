@@ -5,6 +5,7 @@ pub(crate) enum ScriptListSpecialEntry {
     FileSearchMini { query: String },
     AcpSlashPicker,
     AcpMentionPicker,
+    AcpProfilePicker,
     QuickTerminal,
     ActionsHelp,
 }
@@ -13,7 +14,7 @@ impl ScriptListApp {
     /// Transient first-character launch triggers should not persist when the
     /// user returns to the ScriptList surface.
     pub(crate) fn is_transient_script_list_trigger(new_text: &str) -> bool {
-        matches!(new_text, "~" | "/" | "@" | ">" | "?")
+        matches!(new_text, "~" | "/" | "@" | "|" | ">" | "?")
     }
 
     /// Parse `raw` through the menu-syntax classifier and store the result in
@@ -116,6 +117,7 @@ impl ScriptListApp {
         match new_text {
             "/" => Some(ScriptListSpecialEntry::AcpSlashPicker),
             "@" => Some(ScriptListSpecialEntry::AcpMentionPicker),
+            "|" => Some(ScriptListSpecialEntry::AcpProfilePicker),
             ">" => Some(ScriptListSpecialEntry::QuickTerminal),
             "?" => Some(ScriptListSpecialEntry::ActionsHelp),
             _ => None,
@@ -468,7 +470,7 @@ mod tests {
     fn test_is_transient_script_list_trigger() {
         use super::ScriptListApp;
 
-        for trigger in ["~", "/", "@", ">", "?"] {
+        for trigger in ["~", "/", "@", "|", ">", "?"] {
             assert!(
                 ScriptListApp::is_transient_script_list_trigger(trigger),
                 "expected '{trigger}' to be treated as a transient ScriptList trigger"

@@ -141,27 +141,6 @@ const EMBEDDED_ACP_AGENTS_JSON: &str = r#"{
       "auth": {
         "summary": "Authenticate with ChatGPT, CODEX_API_KEY, or OPENAI_API_KEY."
       }
-    },
-    {
-      "id": "agy-acp",
-      "displayName": "Antigravity CLI",
-      "command": "script-kit-gpui",
-      "args": ["--agy-acp-adapter"],
-      "env": {},
-      "models": [
-        {
-          "id": "default",
-          "displayName": "Antigravity CLI Default",
-          "contextWindow": 1048576
-        }
-      ],
-      "install": {
-        "command": "agy",
-        "args": ["install"]
-      },
-      "auth": {
-        "summary": "Uses your local Antigravity CLI Google sign-in and subscription; no separate Google AI API key is required."
-      }
     }
   ]
 }"#;

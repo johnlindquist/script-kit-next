@@ -125,8 +125,8 @@ mod main_menu_history_render_perf;
 #[path = "source_audits/actions_popup_contract.rs"]
 mod actions_popup_contract;
 
-#[path = "source_audits/acp_turn_lifecycle_spans.rs"]
-mod acp_turn_lifecycle_spans;
+#[path = "source_audits/acp_no_legacy_backend.rs"]
+mod acp_no_legacy_backend;
 
 #[path = "source_audits/scriptlist_hide_bounds_reset.rs"]
 mod scriptlist_hide_bounds_reset;
@@ -154,9 +154,6 @@ mod stdin_set_selected_text_wired;
 
 #[path = "source_audits/selected_text_clipboard_restore.rs"]
 mod selected_text_clipboard_restore;
-
-#[path = "source_audits/acp_session_update_span.rs"]
-mod acp_session_update_span;
 
 #[path = "source_audits/root_file_search_contract.rs"]
 mod root_file_search_contract;

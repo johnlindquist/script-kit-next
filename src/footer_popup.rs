@@ -8,6 +8,8 @@ use std::sync::{Mutex, OnceLock};
 
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil, NO, YES};
+#[cfg(target_os = "macos")]
+use objc::{msg_send, sel, sel_impl};
 
 #[cfg(target_os = "macos")]
 const FOOTER_EFFECT_ID: &str = "script-kit-footer-effect";
@@ -92,6 +94,11 @@ pub(crate) enum FooterAction {
     Actions,
     Ai,
     Apply,
+    Replace,
+    Append,
+    Copy,
+    Expand,
+    Retry,
     Close,
     Stop,
     PasteResponse,
@@ -175,7 +182,7 @@ pub(crate) struct FooterLeftInfo {
     /// Human-readable profile name for automation and accessibility snapshots.
     pub profile_name: Option<String>,
     /// Optional compact icon token rendered inside the merged left marker.
-    pub icon_token: Option<&'static str>,
+    pub icon_token: Option<String>,
     /// Optional action dispatched when the merged left marker is clicked.
     pub action: Option<FooterAction>,
     /// Whether the merged left marker should render as selected/open.
@@ -395,7 +402,7 @@ impl GpuiFooterOverlay {
                 .bg(rgba((accent << 8) | 0x18));
         }
 
-        if !matches!(info.dot_status, FooterDotStatus::Hidden) {
+        if info.icon_token.is_none() && !matches!(info.dot_status, FooterDotStatus::Hidden) {
             row = row.child(
                 div()
                     .size(px(FOOTER_STREAMING_DOT_SIZE as f32))
@@ -413,6 +420,7 @@ impl GpuiFooterOverlay {
 
         if let Some(path) = info
             .icon_token
+            .as_deref()
             .and_then(crate::components::footer_chrome::footer_icon_path)
         {
             row = row.child(
@@ -1492,8 +1500,8 @@ unsafe fn layout_footer_left_info(
     let mut x = 0.0_f64;
     let hit_start_x = x;
 
-    // ── Status dot (color + animation depends on thread status) ──
-    let show_dot = !matches!(info.dot_status, FooterDotStatus::Hidden);
+    // ── Status dot (legacy left-info path only; ACP profile markers pulse the icon) ──
+    let show_dot = info.icon_token.is_none() && !matches!(info.dot_status, FooterDotStatus::Hidden);
     if show_dot {
         let dot_y = ((bounds.size.height - FOOTER_STREAMING_DOT_SIZE) / 2.0).round();
         let dot_view = ensure_footer_status_dot_view(left_info_view);
@@ -1516,7 +1524,7 @@ unsafe fn layout_footer_left_info(
     }
 
     // ── Optional merged profile icon ──
-    if let Some(token) = info.icon_token {
+    if let Some(token) = info.icon_token.as_deref() {
         let icon_view = ensure_footer_left_profile_icon_view(left_info_view);
         if icon_view != nil {
             let image = footer_icon_image(token);
@@ -1532,6 +1540,10 @@ unsafe fn layout_footer_left_info(
                 )
             ];
             let _: () = msg_send![icon_view, setHidden: NO];
+            let icon_layer: id = msg_send![icon_view, layer];
+            if icon_layer != nil {
+                update_footer_icon_layer(icon_layer, info);
+            }
             x += FOOTER_LEFT_PROFILE_ICON_SIZE + FOOTER_LEFT_DOT_LABEL_GAP;
         }
     } else {
@@ -1682,6 +1694,7 @@ unsafe fn ensure_footer_left_profile_icon_view(left_info_view: id) -> id {
     if identifier != nil {
         let _: () = msg_send![image_view, setIdentifier: identifier];
     }
+    let _: () = msg_send![image_view, setWantsLayer: YES];
     let _: () = msg_send![left_info_view, addSubview: image_view];
     image_view
 }
@@ -1745,6 +1758,22 @@ unsafe fn update_footer_dot_layer(layer: id, info: &FooterLeftInfo) {
             let _: () = msg_send![layer, setBackgroundColor: cg];
         }
     }
+
+    let should_pulse = matches!(
+        info.dot_status,
+        FooterDotStatus::Streaming | FooterDotStatus::WaitingForPermission
+    );
+    if should_pulse {
+        ensure_active_dot_pulse_animation(layer);
+    } else {
+        remove_active_dot_pulse_animation(layer);
+        let _: () = msg_send![layer, setOpacity: 1.0_f32];
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn update_footer_icon_layer(layer: id, info: &FooterLeftInfo) {
+    use objc::{msg_send, sel, sel_impl};
 
     let should_pulse = matches!(
         info.dot_status,
@@ -2087,6 +2116,11 @@ fn footer_hint_slot_width(action: FooterAction) -> f64 {
         FooterAction::Actions => FOOTER_ACTIONS_SLOT_WIDTH,
         FooterAction::Ai => FOOTER_AI_SLOT_WIDTH,
         FooterAction::Apply => FOOTER_APPLY_SLOT_WIDTH,
+        FooterAction::Replace => FOOTER_APPLY_SLOT_WIDTH,
+        FooterAction::Append => FOOTER_APPLY_SLOT_WIDTH,
+        FooterAction::Copy => FOOTER_APPLY_SLOT_WIDTH,
+        FooterAction::Expand => FOOTER_APPLY_SLOT_WIDTH,
+        FooterAction::Retry => FOOTER_STOP_SLOT_WIDTH,
         FooterAction::Close => FOOTER_CLOSE_SLOT_WIDTH,
         FooterAction::Stop => FOOTER_STOP_SLOT_WIDTH,
         FooterAction::PasteResponse => FOOTER_PASTE_RESPONSE_SLOT_WIDTH,
@@ -2244,10 +2278,21 @@ fn footer_icon_png_data(token: &str) -> Option<&'static [u8]> {
 }
 
 #[cfg(target_os = "macos")]
+fn footer_icon_png_bytes(token: &str) -> Option<Vec<u8>> {
+    if let Some(data) = footer_icon_png_data(token) {
+        return Some(data.to_vec());
+    }
+    let path = crate::components::footer_chrome::footer_icon_path(token)
+        .unwrap_or_else(|| crate::components::footer_chrome::FOOTER_PROFILE_ICON_PATH.to_string());
+    let svg = std::fs::read_to_string(path).ok()?;
+    footer_icon_png_from_svg(&svg)
+}
+
+#[cfg(target_os = "macos")]
 unsafe fn footer_icon_image(token: &str) -> id {
     use objc::{class, msg_send, sel, sel_impl};
 
-    let Some(png_data) = footer_icon_png_data(token) else {
+    let Some(png_data) = footer_icon_png_bytes(token) else {
         return nil;
     };
     let data: id = msg_send![
@@ -2996,6 +3041,11 @@ fn footer_action_key(action: FooterAction) -> &'static str {
         FooterAction::Actions => "actions",
         FooterAction::Ai => "ai",
         FooterAction::Apply => "apply",
+        FooterAction::Replace => "replace",
+        FooterAction::Append => "append",
+        FooterAction::Copy => "copy",
+        FooterAction::Expand => "expand",
+        FooterAction::Retry => "retry",
         FooterAction::Close => "close",
         FooterAction::Stop => "stop",
         FooterAction::PasteResponse => "pasteResponse",
@@ -3804,6 +3854,11 @@ fn footer_action_selector(action: FooterAction) -> objc::runtime::Sel {
         FooterAction::Actions => sel!(actionsFooterAction:),
         FooterAction::Ai => sel!(aiFooterAction:),
         FooterAction::Apply => sel!(applyFooterAction:),
+        FooterAction::Replace => sel!(replaceFooterAction:),
+        FooterAction::Append => sel!(appendFooterAction:),
+        FooterAction::Copy => sel!(copyFooterAction:),
+        FooterAction::Expand => sel!(expandFooterAction:),
+        FooterAction::Retry => sel!(retryFooterAction:),
         FooterAction::Close => sel!(closeFooterAction:),
         FooterAction::Stop => sel!(stopFooterAction:),
         FooterAction::PasteResponse => sel!(pasteResponseFooterAction:),
@@ -3840,6 +3895,26 @@ fn footer_action_target_class() -> *const objc::runtime::Class {
         decl.add_method(
             sel!(applyFooterAction:),
             footer_apply_action as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(replaceFooterAction:),
+            footer_replace_action as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(appendFooterAction:),
+            footer_append_action as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(copyFooterAction:),
+            footer_copy_action as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(expandFooterAction:),
+            footer_expand_action as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(retryFooterAction:),
+            footer_retry_action as extern "C" fn(&Object, Sel, id),
         );
         decl.add_method(
             sel!(closeFooterAction:),
@@ -3883,6 +3958,47 @@ extern "C" fn footer_apply_action(
     sender: id,
 ) {
     send_footer_action_from_sender(sender, FooterAction::Apply);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_replace_action(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    sender: id,
+) {
+    send_footer_action_from_sender(sender, FooterAction::Replace);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_append_action(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    sender: id,
+) {
+    send_footer_action_from_sender(sender, FooterAction::Append);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_copy_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, sender: id) {
+    send_footer_action_from_sender(sender, FooterAction::Copy);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_expand_action(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    sender: id,
+) {
+    send_footer_action_from_sender(sender, FooterAction::Expand);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_retry_action(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    sender: id,
+) {
+    send_footer_action_from_sender(sender, FooterAction::Retry);
 }
 
 #[cfg(target_os = "macos")]

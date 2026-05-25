@@ -1,5 +1,11 @@
 #![allow(dead_code)]
 
+//! Legacy non-list layout helpers.
+//!
+//! New help, empty, setup, permission, recovery, and about-style guidance should
+//! use `components::info_state` so intent, copy, type scale, and theme opacity
+//! are encoded in one shared system.
+
 use gpui::{
     div, prelude::*, px, rgb, rgba, AnyElement, Div, FontWeight, Rgba, SharedString, Stateful,
 };

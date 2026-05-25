@@ -14,7 +14,7 @@ fn system_action_hotkeys_execute_without_opening_main_menu() {
     assert!(
         execution.contains("builtins::BuiltInFeature::UtilityCommand(command) => match command")
     );
-    assert!(execution.contains("builtins::UtilityCommandType::ScriptKitSelfie"));
+    assert!(!execution.contains("builtins::UtilityCommandType::ScriptKitSelfie"));
     assert!(execution.contains("return builtin_entry_needs_main_window(&entry);"));
     assert!(execution.contains("builtin/volume-0"));
     assert!(execution.contains("builtin/reset-window-positions"));

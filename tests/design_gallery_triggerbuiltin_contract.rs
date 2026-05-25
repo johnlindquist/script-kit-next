@@ -13,13 +13,10 @@
 //! This contract pins the structural invariants that keep the arm
 //! reachable:
 //!
-//! - The arm is present in all three triple-embedded dispatchers
-//!   (`runtime_stdin_match_core.rs`, `runtime_stdin.rs`,
-//!   `app_run_setup.rs`) with identical aliasing (`"design-gallery" |
-//!   "designgallery" | "design gallery"`).
-//! - Each arm flips `view.current_view` to `AppView::DesignGalleryView`
-//!   and ends with `update_window_size_deferred` so the panel resizes to
-//!   the design-gallery layout.
+//! - The stdin dispatchers delegate through the shared triggerBuiltin
+//!   resolver/dispatcher.
+//! - The internal route planner still knows how to open
+//!   `AppView::DesignGalleryView` for non-launcher design tooling.
 //! - `AppView::DesignGalleryView` maps to the wire string
 //!   `"designGallery"` inside `semantic_surface_for_main_view`, so
 //!   Pass #19's semantic-surface re-key emits the right tag for this
@@ -113,30 +110,19 @@ fn triggerbuiltin_dispatchers_route_design_gallery_to_appview() {
 
 // doc-anchor-removed: [[removed-docs metadata]]
 #[test]
-fn triggerbuiltin_dispatchers_include_design_gallery_aliases() {
-    // The dispatcher intentionally accepts three aliases so operator
-    // shorthand and UI bindings can both reach the subview. Dropping any
-    // alias would silently break a subset of callers without any other
-    // test failing, so this pins the alias set.
+fn triggerbuiltin_dispatchers_prune_design_gallery_aliases() {
     let alias_arm = body_of(TRIGGER_REGISTRY_SOURCE, "pub const fn legacy_aliases(");
-    let design_start = alias_arm
-        .find("TriggerBuiltin::DesignGallery =>")
-        .expect("DesignGallery legacy aliases must be registered");
-    let design_line = alias_arm[design_start..]
-        .lines()
-        .next()
-        .expect("DesignGallery alias line");
     assert!(
-        design_line.contains("\"design-gallery\""),
-        "DesignGallery aliases must include canonical kebab-case `design-gallery`"
+        !alias_arm.contains("TriggerBuiltin::DesignGallery =>"),
+        "DesignGallery should no longer register triggerBuiltin aliases"
     );
     assert!(
-        design_line.contains("\"designgallery\""),
-        "DesignGallery aliases must include single-word `designgallery`"
+        !alias_arm.contains("\"design-gallery\""),
+        "DesignGallery aliases should not include canonical kebab-case `design-gallery`"
     );
     assert!(
-        design_line.contains("\"design gallery\""),
-        "DesignGallery aliases must include natural-language `design gallery`"
+        !alias_arm.contains("\"designgallery\"") && !alias_arm.contains("\"design gallery\""),
+        "DesignGallery aliases should not include shorthand or natural-language forms"
     );
 }
 

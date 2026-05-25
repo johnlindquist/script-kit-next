@@ -251,6 +251,10 @@ fn get_state_routes_inline_agent_target_to_redacted_state_envelope() {
 
 #[test]
 fn stdin_exposes_inline_agent_mock_fixture_without_changing_pi_default() {
+    assert!(STDIN_COMMANDS.contains("OpenFocusedTextAgentChatWithMockData"));
+    assert!(STDIN_COMMANDS.contains("OpenFocusedTextAgentChatWithPiData"));
+    assert!(STDIN_COMMANDS.contains("\"openFocusedTextAgentChatWithMockData\""));
+    assert!(STDIN_COMMANDS.contains("\"openFocusedTextAgentChatWithPiData\""));
     assert!(STDIN_COMMANDS.contains("OpenInlineAgentWithMockData"));
     assert!(STDIN_COMMANDS.contains("OpenInlineAgentWithPiData"));
     assert!(STDIN_COMMANDS.contains("\"openInlineAgentWithMockData\""));
@@ -259,10 +263,13 @@ fn stdin_exposes_inline_agent_mock_fixture_without_changing_pi_default() {
     assert!(STDIN_COMMANDS.contains("text: Option<String>"));
 
     for dispatch in [RUNTIME_STDIN, APP_RUN_SETUP] {
+        assert!(dispatch.contains("ExternalCommand::OpenFocusedTextAgentChatWithMockData"));
+        assert!(dispatch.contains("ExternalCommand::OpenFocusedTextAgentChatWithPiData"));
         assert!(dispatch.contains("ExternalCommand::OpenInlineAgentWithMockData"));
         assert!(dispatch.contains("ExternalCommand::OpenInlineAgentWithPiData"));
-        assert!(dispatch.contains("open_inline_agent_mock_fixture"));
-        assert!(dispatch.contains("open_inline_agent_pi_fixture"));
+        assert!(dispatch.contains("open_focused_text_agent_chat_fixture"));
+        assert!(!dispatch.contains("open_inline_agent_mock_fixture"));
+        assert!(!dispatch.contains("open_inline_agent_pi_fixture"));
     }
 
     assert!(INLINE_AGENT_WINDOW.contains("InlineAgentExecutorMode::AgentChatPi"));

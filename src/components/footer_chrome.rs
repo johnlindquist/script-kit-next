@@ -54,6 +54,11 @@ pub(crate) enum FooterActionSlot {
     Actions,
     Ai,
     Apply,
+    Replace,
+    Append,
+    Copy,
+    Expand,
+    Retry,
     Close,
     Stop,
     PasteResponse,
@@ -88,6 +93,11 @@ pub(crate) fn footer_action_slot_width(slot: FooterActionSlot) -> f32 {
         FooterActionSlot::Actions => FOOTER_ACTIONS_SLOT_WIDTH_PX,
         FooterActionSlot::Ai => FOOTER_AI_SLOT_WIDTH_PX,
         FooterActionSlot::Apply => FOOTER_APPLY_SLOT_WIDTH_PX,
+        FooterActionSlot::Replace => FOOTER_APPLY_SLOT_WIDTH_PX,
+        FooterActionSlot::Append => FOOTER_APPLY_SLOT_WIDTH_PX,
+        FooterActionSlot::Copy => FOOTER_APPLY_SLOT_WIDTH_PX,
+        FooterActionSlot::Expand => FOOTER_APPLY_SLOT_WIDTH_PX,
+        FooterActionSlot::Retry => FOOTER_STOP_SLOT_WIDTH_PX,
         FooterActionSlot::Close => FOOTER_CLOSE_SLOT_WIDTH_PX,
         FooterActionSlot::Stop => FOOTER_STOP_SLOT_WIDTH_PX,
         FooterActionSlot::PasteResponse => FOOTER_PASTE_RESPONSE_SLOT_WIDTH_PX,
@@ -430,15 +440,34 @@ fn footer_keycap_estimated_width_px(token: &str) -> f32 {
 }
 
 pub(crate) fn is_footer_icon_token(token: &str) -> bool {
-    matches!(token, FOOTER_MIC_ICON_TOKEN | FOOTER_PROFILE_ICON_TOKEN)
+    footer_icon_path(token).is_some()
 }
 
-pub(crate) fn footer_icon_path(token: &str) -> Option<&'static str> {
+pub(crate) fn footer_icon_path(token: &str) -> Option<String> {
     match token {
-        FOOTER_MIC_ICON_TOKEN => Some(FOOTER_MIC_ICON_PATH),
-        FOOTER_PROFILE_ICON_TOKEN => Some(FOOTER_PROFILE_ICON_PATH),
-        _ => None,
+        FOOTER_MIC_ICON_TOKEN => Some(FOOTER_MIC_ICON_PATH.to_string()),
+        FOOTER_PROFILE_ICON_TOKEN => Some(FOOTER_PROFILE_ICON_PATH.to_string()),
+        _ => {
+            let trimmed = token.trim();
+            if trimmed.is_empty()
+                || trimmed.contains('/')
+                || trimmed.contains('\\')
+                || trimmed.contains("..")
+            {
+                return None;
+            }
+            let path = format!(
+                "{}/vendor/gpui-component/crates/assets/assets/icons/{}.svg",
+                env!("CARGO_MANIFEST_DIR"),
+                trimmed
+            );
+            std::path::Path::new(&path).exists().then_some(path)
+        }
     }
+}
+
+pub(crate) fn footer_icon_path_or_profile(token: &str) -> String {
+    footer_icon_path(token).unwrap_or_else(|| FOOTER_PROFILE_ICON_PATH.to_string())
 }
 
 pub(crate) fn footer_labelcap_max_width_for_slot(slot_width_px: f32, key_width_px: f32) -> f32 {
