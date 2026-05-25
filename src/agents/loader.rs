@@ -159,15 +159,12 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
-    /// Create a test directory structure with agent files
-    fn setup_test_agents(temp_dir: &TempDir) -> std::path::PathBuf {
+    fn setup_test_agents(temp_dir: &TempDir) -> std::io::Result<std::path::PathBuf> {
         let kit_root = temp_dir.path().join("scriptkit");
 
-        // Create plugins/main/agents directory (new structure)
         let main_agents = kit_root.join("plugins/main/agents");
-        fs::create_dir_all(&main_agents).unwrap();
+        fs::create_dir_all(&main_agents)?;
 
-        // Create a Claude agent
         fs::write(
             main_agents.join("review.claude.md"),
             r#"---
@@ -177,10 +174,8 @@ model: sonnet
 ---
 Please review the following:
 "#,
-        )
-        .unwrap();
+        )?;
 
-        // Create an interactive AGY agent
         fs::write(
             main_agents.join("chat.i.agy.md"),
             r#"---
@@ -189,14 +184,11 @@ model: default
 ---
 Interactive chat session
 "#,
-        )
-        .unwrap();
+        )?;
 
-        // Create plugins/custom/agents directory.
         let custom_agents = kit_root.join("plugins/custom/agents");
-        fs::create_dir_all(&custom_agents).unwrap();
+        fs::create_dir_all(&custom_agents)?;
 
-        // Create a Codex agent in custom kit
         fs::write(
             custom_agents.join("code.codex.md"),
             r#"---
@@ -204,103 +196,128 @@ _sk_name: "Generate Code"
 ---
 Generate code for:
 "#,
-        )
-        .unwrap();
+        )?;
 
-        kit_root
+        Ok(kit_root)
     }
 
     #[test]
-    fn test_load_agents_from_path() {
-        let temp_dir = TempDir::new().unwrap();
-        let kit_root = setup_test_agents(&temp_dir);
+    fn test_load_agents_from_path() -> std::io::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let kit_root = setup_test_agents(&temp_dir)?;
 
         let agents = load_agents_from_path(&kit_root);
 
         assert_eq!(agents.len(), 3);
 
-        // Should be sorted by name (case-insensitive)
         let names: Vec<&str> = agents.iter().map(|a| a.name.as_str()).collect();
         assert_eq!(names, vec!["Chat", "Generate Code", "Review PR"]);
+        Ok(())
     }
 
     #[test]
-    fn test_agent_kit_extraction() {
-        let temp_dir = TempDir::new().unwrap();
-        let kit_root = setup_test_agents(&temp_dir);
+    fn test_agent_kit_extraction() -> std::io::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let kit_root = setup_test_agents(&temp_dir)?;
 
         let agents = load_agents_from_path(&kit_root);
 
-        // Find the Review PR agent (should be in "main" kit)
-        let review = agents.iter().find(|a| a.name == "Review PR").unwrap();
+        let review = agents
+            .iter()
+            .find(|a| a.name == "Review PR")
+            .ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::NotFound, "Review PR agent not loaded")
+            })?;
         assert_eq!(review.kit, Some("main".to_string()));
 
-        // Find the Generate Code agent (should be in "custom" kit)
-        let code = agents.iter().find(|a| a.name == "Generate Code").unwrap();
+        let code = agents
+            .iter()
+            .find(|a| a.name == "Generate Code")
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Generate Code agent not loaded",
+                )
+            })?;
         assert_eq!(code.kit, Some("custom".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn test_agent_metadata_loaded() {
-        let temp_dir = TempDir::new().unwrap();
-        let kit_root = setup_test_agents(&temp_dir);
+    fn test_agent_metadata_loaded() -> std::io::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let kit_root = setup_test_agents(&temp_dir)?;
 
         let agents = load_agents_from_path(&kit_root);
 
-        // Find the Review PR agent
-        let review = agents.iter().find(|a| a.name == "Review PR").unwrap();
+        let review = agents
+            .iter()
+            .find(|a| a.name == "Review PR")
+            .ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::NotFound, "Review PR agent not loaded")
+            })?;
         assert_eq!(
             review.description,
             Some("Reviews pull requests".to_string())
         );
         assert_eq!(review.backend, crate::agents::AgentBackend::Claude);
         assert!(!review.interactive);
+        Ok(())
     }
 
     #[test]
-    fn test_interactive_agent_detected() {
-        let temp_dir = TempDir::new().unwrap();
-        let kit_root = setup_test_agents(&temp_dir);
+    fn test_interactive_agent_detected() -> std::io::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let kit_root = setup_test_agents(&temp_dir)?;
 
         let agents = load_agents_from_path(&kit_root);
 
-        // Find the Chat agent (interactive)
-        let chat = agents.iter().find(|a| a.name == "Chat").unwrap();
+        let chat = agents.iter().find(|a| a.name == "Chat").ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "Chat agent not loaded")
+        })?;
         assert!(chat.interactive);
         assert_eq!(chat.backend, crate::agents::AgentBackend::Agy);
+        Ok(())
     }
 
     #[test]
-    fn test_load_single_agent() {
-        let temp_dir = TempDir::new().unwrap();
-        let kit_root = setup_test_agents(&temp_dir);
+    fn test_load_single_agent() -> std::io::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let kit_root = setup_test_agents(&temp_dir)?;
 
         let path = kit_root.join("plugins/main/agents/review.claude.md");
-        let agent = load_agent_from_path(&path).unwrap();
+        let agent = load_agent_from_path(&path).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "failed to load Review PR agent",
+            )
+        })?;
 
         assert_eq!(agent.name, "Review PR");
         assert_eq!(agent.backend, crate::agents::AgentBackend::Claude);
+        Ok(())
     }
 
     #[test]
-    fn test_empty_directory() {
-        let temp_dir = TempDir::new().unwrap();
+    fn test_empty_directory() -> std::io::Result<()> {
+        let temp_dir = TempDir::new()?;
         let kit_root = temp_dir.path().join("scriptkit");
 
-        // Create empty agents directory (new structure)
-        fs::create_dir_all(kit_root.join("plugins/main/agents")).unwrap();
+        fs::create_dir_all(kit_root.join("plugins/main/agents"))?;
 
         let agents = load_agents_from_path(&kit_root);
         assert!(agents.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_nonexistent_directory() {
-        let temp_dir = TempDir::new().unwrap();
+    fn test_nonexistent_directory() -> std::io::Result<()> {
+        let temp_dir = TempDir::new()?;
         let kit_root = temp_dir.path().join("nonexistent");
 
         let agents = load_agents_from_path(&kit_root);
         assert!(agents.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -325,46 +342,42 @@ Generate code for:
     }
 
     #[test]
-    fn test_hidden_files_skipped() {
-        let temp_dir = TempDir::new().unwrap();
+    fn test_hidden_files_skipped() -> std::io::Result<()> {
+        let temp_dir = TempDir::new()?;
         let kit_root = temp_dir.path().join("scriptkit");
         let main_agents = kit_root.join("plugins/main/agents");
-        fs::create_dir_all(&main_agents).unwrap();
+        fs::create_dir_all(&main_agents)?;
 
-        // Create a hidden file (should be skipped)
-        fs::write(main_agents.join(".hidden.claude.md"), "---\n---\nHidden").unwrap();
+        fs::write(main_agents.join(".hidden.claude.md"), "---\n---\nHidden")?;
 
-        // Create a normal file
         fs::write(
             main_agents.join("visible.claude.md"),
             "---\n_sk_name: Visible\n---\nVisible",
-        )
-        .unwrap();
+        )?;
 
         let agents = load_agents_from_path(&kit_root);
         assert_eq!(agents.len(), 1);
         assert_eq!(agents[0].name, "Visible");
+        Ok(())
     }
 
     #[test]
-    fn test_non_md_files_skipped() {
-        let temp_dir = TempDir::new().unwrap();
+    fn test_non_md_files_skipped() -> std::io::Result<()> {
+        let temp_dir = TempDir::new()?;
         let kit_root = temp_dir.path().join("scriptkit");
         let main_agents = kit_root.join("plugins/main/agents");
-        fs::create_dir_all(&main_agents).unwrap();
+        fs::create_dir_all(&main_agents)?;
 
-        // Create a .ts file (should be skipped by glob)
-        fs::write(main_agents.join("script.ts"), "export default {}").unwrap();
+        fs::write(main_agents.join("script.ts"), "export default {}")?;
 
-        // Create a .md file
         fs::write(
             main_agents.join("task.claude.md"),
             "---\n_sk_name: Task\n---\nTask",
-        )
-        .unwrap();
+        )?;
 
         let agents = load_agents_from_path(&kit_root);
         assert_eq!(agents.len(), 1);
         assert_eq!(agents[0].name, "Task");
+        Ok(())
     }
 }
