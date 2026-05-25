@@ -2917,6 +2917,7 @@ fn send_footer_action_from_sender(sender: id, action: FooterAction) {
         return;
     }
 
+    // SAFETY: `sender` is a live NSButton passed by AppKit's target/action dispatch.
     let title = unsafe { footer_sender_window_title(sender) };
     let window_kind = if let Some(ref t) = title {
         if t.contains("Script Kit Dictation") {
@@ -2940,6 +2941,7 @@ fn footer_sender_has_identifier(sender: id, expected: &str) -> bool {
         return false;
     }
 
+    // SAFETY: `sender` is a live NSButton from AppKit target/action; identifier is nil-checked.
     unsafe {
         let identifier: id = msg_send![sender, identifier];
         if identifier == nil {
@@ -3112,6 +3114,8 @@ fn footer_passthrough_view_class() -> *const objc::runtime::Class {
 
     static CLASS: OnceLock<usize> = OnceLock::new();
 
+    // SAFETY: ObjC class registration is serialized by `OnceLock`. Superclass
+    // is `NSView`; installed methods match the expected ObjC ABI signatures.
     *CLASS.get_or_init(|| unsafe {
         let superclass = class!(NSView);
         let Some(mut decl) = ClassDecl::new("ScriptKitFooterPassthroughView", superclass) else {
@@ -3549,6 +3553,8 @@ fn footer_effect_view_class() -> *const objc::runtime::Class {
 
     static CLASS: OnceLock<usize> = OnceLock::new();
 
+    // SAFETY: ObjC class registration is serialized by `OnceLock`. Superclass
+    // is `NSVisualEffectView`; installed methods match expected ObjC ABI signatures.
     *CLASS.get_or_init(|| unsafe {
         let superclass = class!(NSVisualEffectView);
         let Some(mut decl) = ClassDecl::new("ScriptKitFooterEffectView", superclass) else {
@@ -3840,6 +3846,8 @@ fn footer_action_target() -> id {
 
     static TARGET: OnceLock<usize> = OnceLock::new();
 
+    // SAFETY: Creates the singleton footer action target via ObjC `new`; stored
+    // for process lifetime in `OnceLock`.
     *TARGET.get_or_init(|| unsafe {
         let target: id = msg_send![footer_action_target_class(), new];
         target as usize
@@ -3876,6 +3884,8 @@ fn footer_action_target_class() -> *const objc::runtime::Class {
 
     static CLASS: OnceLock<usize> = OnceLock::new();
 
+    // SAFETY: ObjC class registration is serialized by `OnceLock`. Superclass
+    // is `NSObject`; installed action methods match AppKit target/action ABI.
     *CLASS.get_or_init(|| unsafe {
         let superclass = class!(NSObject);
         let Some(mut decl) = ClassDecl::new("ScriptKitFooterActionTarget", superclass) else {
