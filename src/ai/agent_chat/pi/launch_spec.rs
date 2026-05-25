@@ -6,6 +6,8 @@ use crate::config::AgentChatBackend;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PiLaunchSpec {
     pub pi_binary: PathBuf,
+    pub profile_id: Option<String>,
+    pub profile_name: Option<String>,
     pub cwd: Option<PathBuf>,
     pub provider: Option<String>,
     pub model: Option<String>,
@@ -13,6 +15,8 @@ pub struct PiLaunchSpec {
     pub system_prompt: Option<String>,
     pub append_system_prompt: Option<String>,
     pub tools: Option<Vec<String>>,
+    pub path_policy_json: Option<String>,
+    pub blocked_action_message: Option<String>,
     pub disable_extensions: bool,
     pub extension_paths: Vec<String>,
     pub extension_policy: Option<String>,
@@ -34,6 +38,8 @@ impl PiLaunchSpec {
 
         Some(Self {
             pi_binary: profile.pi_binary.clone()?,
+            profile_id: Some(profile.id.clone()),
+            profile_name: Some(profile.name.clone()),
             cwd: profile.cwd.clone(),
             provider: profile.provider.clone(),
             model: profile.model.clone(),
@@ -41,6 +47,11 @@ impl PiLaunchSpec {
             system_prompt: profile.system_prompt.clone(),
             append_system_prompt: profile.append_system_prompt.clone(),
             tools: profile.tools.clone(),
+            path_policy_json: profile
+                .path_policy
+                .as_ref()
+                .and_then(|policy| serde_json::to_string(policy).ok()),
+            blocked_action_message: profile.blocked_action_message.clone(),
             disable_extensions: profile.disable_extensions.unwrap_or(false),
             extension_paths: Vec::new(),
             extension_policy: profile.extension_policy.clone(),
@@ -58,6 +69,8 @@ impl PiLaunchSpec {
     pub fn argv(&self) -> Vec<String> {
         let mut argv = vec!["--mode".to_string(), "rpc".to_string()];
 
+        push_arg(&mut argv, "--profile-id", self.profile_id.as_deref());
+        push_arg(&mut argv, "--profile-name", self.profile_name.as_deref());
         push_arg(&mut argv, "--provider", self.provider.as_deref());
         push_arg(&mut argv, "--model", self.model.as_deref());
         push_arg(&mut argv, "--thinking", self.thinking.as_deref());
@@ -76,6 +89,17 @@ impl PiLaunchSpec {
             }
             None => {}
         }
+
+        push_arg(
+            &mut argv,
+            "--path-policy-json",
+            self.path_policy_json.as_deref(),
+        );
+        push_arg(
+            &mut argv,
+            "--blocked-action-message",
+            self.blocked_action_message.as_deref(),
+        );
 
         if self.disable_extensions {
             argv.push("--no-extensions".to_string());

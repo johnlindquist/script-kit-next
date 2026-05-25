@@ -39,11 +39,36 @@ fn pi_rpc_protocol_uses_stdio_json_command_names() {
 }
 
 #[test]
+fn deterministic_mock_pi_rpc_shim_matches_runtime_command_surface() {
+    let shim = read("scripts/agentic/mock-pi-rpc.js");
+
+    for command in [
+        "\"get_available_models\"",
+        "\"set_model\"",
+        "\"prompt\"",
+        "\"abort\"",
+        "\"message_update\"",
+        "\"agent_end\"",
+    ] {
+        assert!(
+            shim.contains(command),
+            "mock Pi RPC shim must support {command}"
+        );
+    }
+    assert!(shim.contains("Bonjour le monde."));
+    assert!(shim.contains("messageChars"));
+    assert!(!shim.contains("process.stderr.write(message"));
+    assert!(!shim.contains("command.message)"));
+}
+
+#[test]
 fn pi_rpc_event_mapper_targets_current_acp_shaped_aliases() {
     let aliases = read("src/ai/agent_chat/events.rs");
     let mapper = read("src/ai/agent_chat/pi/events.rs");
 
     assert!(aliases.contains("type AgentChatEvent = crate::ai::acp::AcpEvent"));
+    assert!(mapper.contains("split_text_delta_for_reveal"));
+    assert!(mapper.contains("chunks.concat()"));
     assert!(mapper.contains("AgentChatEvent::AgentMessageDelta"));
     assert!(mapper.contains("AgentChatEvent::ToolCallStarted"));
     assert!(mapper.contains("AgentChatEvent::ModelsAvailable"));
@@ -77,4 +102,38 @@ fn pi_rpc_scaffolding_does_not_hardcode_pi_process_spawn() {
     assert!(runtime.contains("Command::new(&spec.command)"));
     assert!(!runtime.contains("Command::new(\"pi\")"));
     assert!(!protocol.contains("PathBuf::from(\"pi\")"));
+}
+
+#[test]
+fn pi_rpc_set_model_response_is_gated_before_prompt_dispatch() {
+    let runtime = read("src/ai/agent_chat/pi/runtime.rs");
+
+    assert!(runtime.contains("send_set_model_and_wait"));
+    assert!(runtime.contains("PendingResponse::Rpc"));
+    assert!(runtime.contains("build_set_model_command"));
+    assert!(runtime.contains("Pi RPC set_model timed out"));
+    assert!(runtime.contains("Invalid Pi model selection"));
+
+    let start_turn = runtime
+        .split("PiRpcRuntimeCommand::StartTurn { request, event_tx } =>")
+        .nth(1)
+        .expect("StartTurn branch must exist")
+        .split("PiRpcRuntimeCommand::CancelTurn")
+        .next()
+        .expect("CancelTurn branch must follow StartTurn");
+    let set_model_index = start_turn
+        .find("send_set_model_and_wait")
+        .expect("StartTurn must await set_model");
+    let prompt_index = start_turn
+        .find("build_prompt_payload")
+        .expect("StartTurn must build the prompt");
+
+    assert!(
+        set_model_index < prompt_index,
+        "set_model response must be handled before prompt payload dispatch"
+    );
+    assert!(
+        start_turn.contains("continue;"),
+        "set_model failures must stop the turn before prompt dispatch"
+    );
 }

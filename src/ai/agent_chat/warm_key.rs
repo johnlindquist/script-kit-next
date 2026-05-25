@@ -12,6 +12,14 @@ pub fn pi_warm_key(spec: &PiLaunchSpec) -> String {
 pub fn normalized_material(spec: &PiLaunchSpec) -> String {
     let mut lines = Vec::new();
     lines.push(format!("pi_binary={}", normalize_path(&spec.pi_binary)));
+    lines.push(format!(
+        "profile_id={}",
+        normalize_text_opt(spec.profile_id.as_deref())
+    ));
+    lines.push(format!(
+        "profile_name={}",
+        normalize_text_opt(spec.profile_name.as_deref())
+    ));
     lines.push(format!("cwd={}", normalize_opt_path(spec.cwd.as_deref())));
     lines.push(format!(
         "provider={}",
@@ -36,6 +44,14 @@ pub fn normalized_material(spec: &PiLaunchSpec) -> String {
     lines.push(format!(
         "tools={}",
         normalize_optional_list(spec.tools.as_deref(), true)
+    ));
+    lines.push(format!(
+        "path_policy_json={}",
+        normalize_text_opt(spec.path_policy_json.as_deref())
+    ));
+    lines.push(format!(
+        "blocked_action_message={}",
+        normalize_text_opt(spec.blocked_action_message.as_deref())
     ));
     lines.push(format!("disable_extensions={}", spec.disable_extensions));
     lines.push(format!(

@@ -6,6 +6,8 @@ use script_kit_gpui::ai::agent_chat::warm_key::{normalized_material, pi_warm_key
 fn spec() -> PiLaunchSpec {
     PiLaunchSpec {
         pi_binary: PathBuf::from("pi"),
+        profile_id: Some("script-kit".to_string()),
+        profile_name: Some("Script Kit".to_string()),
         cwd: Some(PathBuf::from("/Users/test/.scriptkit")),
         provider: Some("openai-codex".to_string()),
         model: Some("gpt-5.4".to_string()),
@@ -13,6 +15,8 @@ fn spec() -> PiLaunchSpec {
         system_prompt: None,
         append_system_prompt: Some("base prompt".to_string()),
         tools: Some(vec!["read".to_string(), "write".to_string()]),
+        path_policy_json: None,
+        blocked_action_message: None,
         disable_extensions: true,
         extension_paths: Vec::new(),
         extension_policy: None,

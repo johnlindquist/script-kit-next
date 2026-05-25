@@ -905,6 +905,18 @@ pub struct AcpProfile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<String>>,
 
+    /// Structured Pi tool policy. `allow` supersedes the legacy `tools` array.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_policy: Option<AgentChatToolPolicyConfig>,
+
+    /// Runtime filesystem scope forwarded to Pi for read/write-capable tools.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path_policy: Option<AgentChatPathPolicyConfig>,
+
+    /// Message Pi should return when a blocked capability/path is requested.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocked_action_message: Option<String>,
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub disable_extensions: Option<bool>,
 
@@ -931,6 +943,26 @@ pub struct AcpProfile {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_durability: Option<String>,
+}
+
+/// Tool policy for Pi-backed Agent Chat profiles.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentChatToolPolicyConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow: Option<Vec<String>>,
+}
+
+/// Filesystem policy for Pi-backed Agent Chat profiles.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentChatPathPolicyConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_read: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_write: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deny: Option<Vec<String>>,
 }
 
 /// Window-management preferences loaded from `config.ts`.

@@ -103,12 +103,14 @@ fn map_message_update(event: &Value) -> Vec<AgentChatEvent> {
         .unwrap_or_default();
 
     match get_str(update, "type") {
-        Some("text_delta") if !delta.is_empty() => {
-            vec![AgentChatEvent::AgentMessageDelta(delta.to_string())]
-        }
-        Some("thinking_delta") if !delta.is_empty() => {
-            vec![AgentChatEvent::AgentThoughtDelta(delta.to_string())]
-        }
+        Some("text_delta") if !delta.is_empty() => split_text_delta_for_reveal(delta)
+            .into_iter()
+            .map(AgentChatEvent::AgentMessageDelta)
+            .collect(),
+        Some("thinking_delta") if !delta.is_empty() => split_text_delta_for_reveal(delta)
+            .into_iter()
+            .map(AgentChatEvent::AgentThoughtDelta)
+            .collect(),
         Some("tool_call_delta") if !delta.is_empty() => vec![AgentChatEvent::ToolCallUpdated {
             tool_call_id: tool_call_id(update)
                 .or_else(|| tool_call_id(event))
@@ -119,6 +121,35 @@ fn map_message_update(event: &Value) -> Vec<AgentChatEvent> {
         }],
         _ => Vec::new(),
     }
+}
+
+pub(crate) fn split_text_delta_for_reveal(delta: &str) -> Vec<String> {
+    if delta.is_empty() {
+        return Vec::new();
+    }
+
+    let mut chunks = Vec::new();
+    let mut buf = String::new();
+    let mut chars = delta.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        buf.push(ch);
+        let flush = if ch.is_whitespace() {
+            chars.peek().is_some_and(|next| !next.is_whitespace())
+        } else {
+            chars.peek().is_none()
+        };
+
+        if flush {
+            chunks.push(std::mem::take(&mut buf));
+        }
+    }
+
+    if !buf.is_empty() {
+        chunks.push(buf);
+    }
+
+    chunks
 }
 
 fn models_from_response_data(data: Option<&Value>) -> Vec<AcpModelEntry> {
@@ -219,6 +250,15 @@ mod tests {
             events.as_slice(),
             [AgentChatEvent::AgentMessageDelta(delta)] if delta == "hi"
         ));
+    }
+
+    #[test]
+    fn pi_rpc_text_delta_splits_for_reveal_without_losing_whitespace() {
+        let delta = "Hello world\n\nNext step";
+        let chunks = split_text_delta_for_reveal(delta);
+
+        assert_eq!(chunks, vec!["Hello ", "world\n\n", "Next ", "step"]);
+        assert_eq!(chunks.concat(), delta);
     }
 
     #[test]

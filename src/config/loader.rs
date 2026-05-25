@@ -1036,6 +1036,13 @@ mod tests {
                         "appendSystemPrompt": "append prompt",
                         "cwd": "~/.scriptkit",
                         "tools": ["read", "write"],
+                        "toolPolicy": { "allow": ["read", "create_file"] },
+                        "pathPolicy": {
+                            "allowRead": ["~/.scriptkit/agent-chat/general"],
+                            "allowWrite": ["~/.scriptkit/agent-chat/general"],
+                            "deny": ["~/.scriptkit/scripts"]
+                        },
+                        "blockedActionMessage": "Please switch profiles to modify Script Kit.",
                         "disableExtensions": true,
                         "disableSkills": true,
                         "disablePromptTemplates": true,
@@ -1082,6 +1089,34 @@ mod tests {
         assert_eq!(
             profile.tools.as_ref().map(Vec::as_slice),
             Some(["read".to_string(), "write".to_string()].as_slice())
+        );
+        assert_eq!(
+            profile
+                .tool_policy
+                .as_ref()
+                .and_then(|policy| policy.allow.as_ref())
+                .map(Vec::as_slice),
+            Some(["read".to_string(), "create_file".to_string()].as_slice())
+        );
+        let path_policy = profile
+            .path_policy
+            .as_ref()
+            .expect("path policy should parse");
+        assert_eq!(
+            path_policy.allow_read.as_ref().map(Vec::as_slice),
+            Some(["~/.scriptkit/agent-chat/general".to_string()].as_slice())
+        );
+        assert_eq!(
+            path_policy.allow_write.as_ref().map(Vec::as_slice),
+            Some(["~/.scriptkit/agent-chat/general".to_string()].as_slice())
+        );
+        assert_eq!(
+            path_policy.deny.as_ref().map(Vec::as_slice),
+            Some(["~/.scriptkit/scripts".to_string()].as_slice())
+        );
+        assert_eq!(
+            profile.blocked_action_message.as_deref(),
+            Some("Please switch profiles to modify Script Kit.")
         );
         assert_eq!(profile.disable_extensions, Some(true));
         assert_eq!(profile.disable_skills, Some(true));

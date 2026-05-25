@@ -1,11 +1,16 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use parking_lot::Mutex;
 
+use crate::ai::agent_chat::events::{AgentChatEvent, AgentChatEventRx};
 use crate::ai::agent_chat::runtime::AgentChatConnection;
+
+const DEFAULT_STALE_ACQUIRED_TTL: Duration = Duration::from_secs(60);
+const DEFAULT_PREPARE_READY_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(crate) trait AgentChatWarmRuntimeFactory: Send + Sync + 'static {
     fn spawn_connection(&self) -> Result<Arc<dyn AgentChatConnection>>;
@@ -59,6 +64,7 @@ struct WarmSlot {
     ui_thread_id: Option<String>,
     state: AgentChatWarmSessionState,
     connection: Option<Arc<dyn AgentChatConnection>>,
+    acquired_at: Option<Instant>,
 }
 
 impl WarmSlot {
@@ -111,22 +117,51 @@ impl AgentChatWarmSessionManager {
         &self,
         spec: AgentChatWarmSessionSpec,
     ) -> Result<AgentChatWarmSessionSnapshot> {
-        {
-            let inner = self.inner.lock();
+        self.cleanup_stale_acquired(DEFAULT_STALE_ACQUIRED_TTL);
+        let (generation, ui_thread_id) = {
+            let mut inner = self.inner.lock();
             if let Some(slot) = inner.slots.get(&spec.key) {
                 if slot.state != AgentChatWarmSessionState::Failed {
                     return Ok(slot.snapshot());
                 }
             }
+
+            inner.next_generation += 1;
+            let generation = inner.next_generation;
+            let ui_thread_id = (self.ui_thread_id_source)();
+            inner.slots.insert(
+                spec.key.clone(),
+                WarmSlot {
+                    spec: spec.clone(),
+                    generation,
+                    ui_thread_id: Some(ui_thread_id.clone()),
+                    state: AgentChatWarmSessionState::Preparing,
+                    connection: None,
+                    acquired_at: None,
+                },
+            );
+            (generation, ui_thread_id)
+        };
+
+        let slot = self.prepare_slot_with_generation(spec, generation, ui_thread_id);
+        let mut inner = self.inner.lock();
+        let Some(current) = inner.slots.get(&slot.spec.key) else {
+            let snapshot = slot.snapshot();
+            inner.slots.insert(snapshot.key.clone(), slot);
+            return Ok(snapshot);
+        };
+        if current.generation != generation || current.state != AgentChatWarmSessionState::Preparing
+        {
+            return Ok(current.snapshot());
         }
 
-        let slot = self.prepare_new_slot(spec);
         let snapshot = slot.snapshot();
-        self.inner.lock().slots.insert(snapshot.key.clone(), slot);
+        inner.slots.insert(snapshot.key.clone(), slot);
         Ok(snapshot)
     }
 
     pub(crate) fn acquire_warm(&self, key: &str) -> Option<AgentChatWarmSessionLease> {
+        self.cleanup_stale_acquired(DEFAULT_STALE_ACQUIRED_TTL);
         let mut inner = self.inner.lock();
         let slot = inner.slots.get_mut(key)?;
         if slot.state != AgentChatWarmSessionState::Ready {
@@ -136,6 +171,7 @@ impl AgentChatWarmSessionManager {
         let connection = slot.connection.as_ref()?.clone();
         let ui_thread_id = slot.ui_thread_id.clone()?;
         slot.state = AgentChatWarmSessionState::Acquired;
+        slot.acquired_at = Some(Instant::now());
 
         Some(AgentChatWarmSessionLease {
             key: key.to_string(),
@@ -183,6 +219,53 @@ impl AgentChatWarmSessionManager {
         self.inner.lock().slots.get(key).map(WarmSlot::snapshot)
     }
 
+    pub(crate) fn cleanup_stale_acquired(
+        &self,
+        ttl: Duration,
+    ) -> Vec<AgentChatWarmSessionSnapshot> {
+        let now = Instant::now();
+        let stale = {
+            let inner = self.inner.lock();
+            inner
+                .slots
+                .iter()
+                .filter_map(|(key, slot)| {
+                    if slot.state != AgentChatWarmSessionState::Acquired {
+                        return None;
+                    }
+                    let acquired_at = slot.acquired_at?;
+                    if now.duration_since(acquired_at) < ttl {
+                        return None;
+                    }
+                    let connection = slot.connection.as_ref()?.clone();
+                    let ui_thread_id = slot.ui_thread_id.clone()?;
+                    Some((
+                        key.clone(),
+                        slot.spec.clone(),
+                        AgentChatWarmSessionLease {
+                            key: key.clone(),
+                            generation: slot.generation,
+                            ui_thread_id,
+                            cwd: slot.spec.cwd.clone(),
+                            connection,
+                        },
+                    ))
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let mut snapshots = Vec::new();
+        for (key, spec, lease) in stale {
+            let _ = lease.connection.cancel_turn(lease.ui_thread_id.clone());
+            drop(lease);
+            let slot = self.prepare_new_slot(spec);
+            let snapshot = slot.snapshot();
+            self.inner.lock().slots.insert(key, slot);
+            snapshots.push(snapshot);
+        }
+        snapshots
+    }
+
     fn prepare_new_slot(&self, spec: AgentChatWarmSessionSpec) -> WarmSlot {
         let generation = {
             let mut inner = self.inner.lock();
@@ -191,15 +274,27 @@ impl AgentChatWarmSessionManager {
         };
         let ui_thread_id = (self.ui_thread_id_source)();
 
+        self.prepare_slot_with_generation(spec, generation, ui_thread_id)
+    }
+
+    fn prepare_slot_with_generation(
+        &self,
+        spec: AgentChatWarmSessionSpec,
+        generation: u64,
+        ui_thread_id: String,
+    ) -> WarmSlot {
         match spec.factory.spawn_connection() {
             Ok(connection) => {
-                let state = if connection
-                    .prepare_session(ui_thread_id.clone(), spec.cwd.clone())
-                    .is_ok()
+                let state = match connection.prepare_session(ui_thread_id.clone(), spec.cwd.clone())
                 {
-                    AgentChatWarmSessionState::Ready
-                } else {
-                    AgentChatWarmSessionState::Failed
+                    Ok(events) => {
+                        if wait_for_prepare_ready(events, DEFAULT_PREPARE_READY_TIMEOUT) {
+                            AgentChatWarmSessionState::Ready
+                        } else {
+                            AgentChatWarmSessionState::Failed
+                        }
+                    }
+                    Err(_) => AgentChatWarmSessionState::Failed,
                 };
 
                 WarmSlot {
@@ -208,6 +303,7 @@ impl AgentChatWarmSessionManager {
                     ui_thread_id: Some(ui_thread_id),
                     state,
                     connection: (state == AgentChatWarmSessionState::Ready).then_some(connection),
+                    acquired_at: None,
                 }
             }
             Err(_) => WarmSlot {
@@ -216,7 +312,42 @@ impl AgentChatWarmSessionManager {
                 ui_thread_id: Some(ui_thread_id),
                 state: AgentChatWarmSessionState::Failed,
                 connection: None,
+                acquired_at: None,
             },
+        }
+    }
+
+    #[cfg(test)]
+    fn mark_acquired_as_stale_for_test(&self, key: &str, age: Duration) {
+        let mut inner = self.inner.lock();
+        if let Some(slot) = inner.slots.get_mut(key) {
+            slot.acquired_at = Some(Instant::now() - age);
+        }
+    }
+}
+
+fn wait_for_prepare_ready(events: AgentChatEventRx, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+
+    loop {
+        match events.try_recv() {
+            Ok(AgentChatEvent::ModelsAvailable { .. }) => return true,
+            Ok(AgentChatEvent::Failed { .. } | AgentChatEvent::SetupRequired { .. }) => {
+                return false;
+            }
+            Ok(_) => continue,
+            Err(async_channel::TryRecvError::Empty) => {
+                if Instant::now() >= deadline {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "agent_chat_warm_prepare_ready_timeout",
+                        timeout_ms = timeout.as_millis(),
+                    );
+                    return false;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(async_channel::TryRecvError::Closed) => return false,
         }
     }
 }
@@ -232,12 +363,15 @@ mod tests {
     use crate::ai::agent_chat::runtime::AgentChatTurnRequest;
     use parking_lot::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::mpsc;
+    use std::thread;
 
     #[derive(Default)]
     struct RecordingConnection {
         prepare_calls: Mutex<Vec<(String, PathBuf)>>,
         cancel_calls: Mutex<Vec<String>>,
         fail_prepare: bool,
+        prepare_event: Option<AgentChatEvent>,
     }
 
     impl RecordingConnection {
@@ -266,7 +400,10 @@ mod tests {
             if self.fail_prepare {
                 anyhow::bail!("prepare failed");
             }
-            let (_tx, rx) = async_channel::bounded(1);
+            let (tx, rx) = async_channel::bounded(1);
+            if let Some(event) = self.prepare_event.clone() {
+                tx.send_blocking(event)?;
+            }
             Ok(rx)
         }
     }
@@ -275,6 +412,7 @@ mod tests {
     struct RecordingFactory {
         spawned: Mutex<Vec<Arc<RecordingConnection>>>,
         fail_next_prepare: Mutex<bool>,
+        next_prepare_event: Mutex<Option<AgentChatEvent>>,
     }
 
     impl RecordingFactory {
@@ -285,17 +423,65 @@ mod tests {
         fn fail_next_prepare(&self) {
             *self.fail_next_prepare.lock() = true;
         }
+
+        fn set_next_prepare_event(&self, event: Option<AgentChatEvent>) {
+            *self.next_prepare_event.lock() = event;
+        }
     }
 
     impl AgentChatWarmRuntimeFactory for RecordingFactory {
         fn spawn_connection(&self) -> Result<Arc<dyn AgentChatConnection>> {
             let fail_prepare = std::mem::take(&mut *self.fail_next_prepare.lock());
+            let prepare_event = self.next_prepare_event.lock().take().unwrap_or_else(|| {
+                AgentChatEvent::ModelsAvailable {
+                    current_model_id: None,
+                    models: Vec::new(),
+                }
+            });
             let connection = Arc::new(RecordingConnection {
                 fail_prepare,
+                prepare_event: Some(prepare_event),
                 ..Default::default()
             });
             self.spawned.lock().push(connection.clone());
             Ok(connection)
+        }
+    }
+
+    struct BlockingFactory {
+        spawned: AtomicUsize,
+        started_tx: Mutex<Option<mpsc::Sender<()>>>,
+        release_rx: Mutex<mpsc::Receiver<()>>,
+    }
+
+    impl BlockingFactory {
+        fn new(started_tx: mpsc::Sender<()>, release_rx: mpsc::Receiver<()>) -> Self {
+            Self {
+                spawned: AtomicUsize::new(0),
+                started_tx: Mutex::new(Some(started_tx)),
+                release_rx: Mutex::new(release_rx),
+            }
+        }
+
+        fn spawned_count(&self) -> usize {
+            self.spawned.load(Ordering::SeqCst)
+        }
+    }
+
+    impl AgentChatWarmRuntimeFactory for BlockingFactory {
+        fn spawn_connection(&self) -> Result<Arc<dyn AgentChatConnection>> {
+            self.spawned.fetch_add(1, Ordering::SeqCst);
+            if let Some(started_tx) = self.started_tx.lock().take() {
+                let _ = started_tx.send(());
+            }
+            let _ = self.release_rx.lock().recv();
+            Ok(Arc::new(RecordingConnection {
+                prepare_event: Some(AgentChatEvent::ModelsAvailable {
+                    current_model_id: None,
+                    models: Vec::new(),
+                }),
+                ..Default::default()
+            }))
         }
     }
 
@@ -308,6 +494,16 @@ mod tests {
     }
 
     fn spec(factory: Arc<RecordingFactory>) -> AgentChatWarmSessionSpec {
+        AgentChatWarmSessionSpec {
+            key: "key-a".to_string(),
+            cwd: PathBuf::from("/tmp/a"),
+            factory,
+        }
+    }
+
+    fn spec_with_factory(
+        factory: Arc<dyn AgentChatWarmRuntimeFactory>,
+    ) -> AgentChatWarmSessionSpec {
         AgentChatWarmSessionSpec {
             key: "key-a".to_string(),
             cwd: PathBuf::from("/tmp/a"),
@@ -341,6 +537,42 @@ mod tests {
 
         assert_eq!(first, second);
         assert_eq!(factory.spawned().len(), 1);
+    }
+
+    #[test]
+    fn prepare_warm_reserves_preparing_slot_before_spawning_runtime() {
+        let manager = Arc::new(manager());
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let factory = Arc::new(BlockingFactory::new(started_tx, release_rx));
+
+        let first_manager = manager.clone();
+        let first_factory: Arc<dyn AgentChatWarmRuntimeFactory> = factory.clone();
+        let first_prepare = thread::spawn(move || {
+            first_manager
+                .prepare_warm(spec_with_factory(first_factory))
+                .expect("first prepare")
+        });
+
+        started_rx.recv().expect("first prepare started spawning");
+
+        let second_factory: Arc<dyn AgentChatWarmRuntimeFactory> = factory.clone();
+        let second = manager
+            .prepare_warm(spec_with_factory(second_factory))
+            .expect("second prepare");
+
+        assert_eq!(second.state, AgentChatWarmSessionState::Preparing);
+        assert_eq!(second.ui_thread_id.as_deref(), Some("thread-1"));
+        assert_eq!(factory.spawned_count(), 1);
+
+        release_tx.send(()).expect("release first prepare");
+        let first = first_prepare.join().expect("first prepare thread");
+        assert_eq!(first.state, AgentChatWarmSessionState::Ready);
+        assert_eq!(factory.spawned_count(), 1);
+        assert_eq!(
+            manager.snapshot("key-a").unwrap().state,
+            AgentChatWarmSessionState::Ready
+        );
     }
 
     #[test]
@@ -427,6 +659,47 @@ mod tests {
     }
 
     #[test]
+    fn cleanup_stale_acquired_cancels_and_prepares_replacement() {
+        let manager = manager();
+        let factory = Arc::new(RecordingFactory::default());
+
+        manager.prepare_warm(spec(factory.clone())).unwrap();
+        let lease = manager.acquire_warm("key-a").unwrap();
+        assert_eq!(lease.ui_thread_id, "thread-1");
+        manager.mark_acquired_as_stale_for_test("key-a", Duration::from_secs(120));
+
+        let snapshots = manager.cleanup_stale_acquired(Duration::from_secs(60));
+
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].state, AgentChatWarmSessionState::Ready);
+        assert_eq!(snapshots[0].generation, 2);
+        assert_eq!(factory.spawned()[0].cancel_calls(), vec!["thread-1"]);
+        assert_eq!(
+            factory.spawned()[1].prepare_calls(),
+            vec![("thread-2".to_string(), PathBuf::from("/tmp/a"))]
+        );
+    }
+
+    #[test]
+    fn cleanup_stale_acquired_leaves_recent_acquired_session_alone() {
+        let manager = manager();
+        let factory = Arc::new(RecordingFactory::default());
+
+        manager.prepare_warm(spec(factory.clone())).unwrap();
+        let _lease = manager.acquire_warm("key-a").unwrap();
+
+        let snapshots = manager.cleanup_stale_acquired(Duration::from_secs(60));
+
+        assert!(snapshots.is_empty());
+        assert_eq!(
+            manager.snapshot("key-a").unwrap().state,
+            AgentChatWarmSessionState::Acquired
+        );
+        assert_eq!(factory.spawned().len(), 1);
+        assert!(factory.spawned()[0].cancel_calls().is_empty());
+    }
+
+    #[test]
     fn failed_prepare_marks_failed_and_next_prepare_retries() {
         let manager = manager();
         let factory = Arc::new(RecordingFactory::default());
@@ -439,5 +712,34 @@ mod tests {
         assert_eq!(retry.state, AgentChatWarmSessionState::Ready);
         assert_eq!(retry.generation, 2);
         assert_eq!(factory.spawned().len(), 2);
+    }
+
+    #[test]
+    fn prepare_warm_requires_models_available_readiness_event() {
+        let manager = manager();
+        let factory = Arc::new(RecordingFactory::default());
+        factory.set_next_prepare_event(Some(AgentChatEvent::TurnFinished {
+            stop_reason: "ignored".to_string(),
+        }));
+
+        let snapshot = manager.prepare_warm(spec(factory.clone())).unwrap();
+
+        assert_eq!(snapshot.state, AgentChatWarmSessionState::Failed);
+        assert!(manager.acquire_warm("key-a").is_none());
+    }
+
+    #[test]
+    fn prepare_warm_marks_failed_when_prepare_reports_setup_required() {
+        let manager = manager();
+        let factory = Arc::new(RecordingFactory::default());
+        factory.set_next_prepare_event(Some(AgentChatEvent::SetupRequired {
+            reason: "login required".to_string(),
+            auth_methods: vec!["browser".to_string()],
+        }));
+
+        let snapshot = manager.prepare_warm(spec(factory.clone())).unwrap();
+
+        assert_eq!(snapshot.state, AgentChatWarmSessionState::Failed);
+        assert_eq!(factory.spawned().len(), 1);
     }
 }

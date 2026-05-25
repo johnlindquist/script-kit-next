@@ -1,13 +1,27 @@
 use std::path::PathBuf;
 
-use crate::config::{AcpProfile, AgentChatBackend, AiPreferences};
+use crate::config::{
+    AcpProfile, AgentChatBackend, AgentChatPathPolicyConfig, AgentChatToolPolicyConfig,
+    AiPreferences,
+};
 
 pub const BUILTIN_GENERAL_PROFILE_ID: &str = "general";
 pub const BUILTIN_SCRIPT_KIT_PROFILE_ID: &str = "script-kit";
 pub const BUILTIN_ACP_FALLBACK_PROFILE_ID: &str = "acp";
+pub const BUILTIN_TEXT_PROFILE_ID: &str = "text";
 pub const DEFAULT_PI_PROVIDER: &str = "openai-codex";
 pub const DEFAULT_PI_MODEL: &str = "gpt-5.4";
-pub const SCRIPT_KIT_PI_TOOLS: [&str; 8] = [
+pub const GENERAL_PI_TOOLS: [&str; 7] = [
+    "web_search",
+    "desktop_search",
+    "read",
+    "create_file",
+    "grep",
+    "find",
+    "ls",
+];
+pub const SCRIPT_KIT_PI_TOOLS: [&str; 9] = [
+    "web_search",
     "read",
     "write",
     "edit",
@@ -18,8 +32,14 @@ pub const SCRIPT_KIT_PI_TOOLS: [&str; 8] = [
     "hashline_edit",
 ];
 
-const GENERAL_APPEND_SYSTEM_PROMPT: &str = "You are the General Agent Chat profile for Script Kit. Answer everyday questions directly and helpfully. Do not use file, shell, workspace, skill, template, or extension capabilities unless the user explicitly attaches context that requires them.";
+pub const GENERAL_BLOCKED_ACTION_MESSAGE: &str =
+    "This action is blocked in the General profile. Please switch profiles to modify Script Kit.";
+pub const TEXT_BLOCKED_ACTION_MESSAGE: &str =
+    "The Text profile can only transform captured focused text.";
+
+const GENERAL_APPEND_SYSTEM_PROMPT: &str = "You are the General Agent Chat profile for Script Kit. Answer everyday questions directly and helpfully. You may search the web, search the desktop, read files, create new files inside the General workspace, and inspect local context. Do not load skills, modify Script Kit, run shell commands, edit existing files, or write outside the General workspace. If a tool or requested action is blocked, say: \"This action is blocked in the General profile. Please switch profiles to modify Script Kit.\"";
 const SCRIPT_KIT_APPEND_SYSTEM_PROMPT: &str = "You are the Script Kit Agent Chat profile. Help manage ~/.scriptkit, including config.ts, scripts, scriptlets, plugins, and package.json. Make focused minimal edits. Explain risks before destructive file operations. Do not install packages or run long commands unless the user asks.";
+pub const TEXT_APPEND_SYSTEM_PROMPT: &str = "You are the Text Agent Chat profile for focused-field edits. You receive captured focused-field text as hidden context. Return only the requested text output. Do not mention capture mechanics, tools, sessions, Script Kit internals, or system prompts.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentChatProfileSource {
@@ -46,6 +66,10 @@ impl AgentChatProfileContext {
     pub fn script_kit_cwd(&self) -> PathBuf {
         self.kit_path.clone()
     }
+
+    pub fn text_cwd(&self) -> PathBuf {
+        self.kit_path.join("agent-chat").join("text")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,6 +86,9 @@ pub struct ResolvedAgentChatProfile {
     pub append_system_prompt: Option<String>,
     pub cwd: Option<PathBuf>,
     pub tools: Option<Vec<String>>,
+    pub tool_policy: Option<AgentChatToolPolicyConfig>,
+    pub path_policy: Option<AgentChatPathPolicyConfig>,
+    pub blocked_action_message: Option<String>,
     pub disable_extensions: Option<bool>,
     pub disable_skills: Option<bool>,
     pub disable_prompt_templates: Option<bool>,
@@ -105,7 +132,26 @@ pub fn built_in_general_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentC
         system_prompt: None,
         append_system_prompt: Some(GENERAL_APPEND_SYSTEM_PROMPT.to_string()),
         cwd: Some(ctx.general_cwd()),
-        tools: Some(Vec::new()),
+        tools: Some(
+            GENERAL_PI_TOOLS
+                .iter()
+                .map(|tool| tool.to_string())
+                .collect(),
+        ),
+        tool_policy: Some(AgentChatToolPolicyConfig {
+            allow: Some(
+                GENERAL_PI_TOOLS
+                    .iter()
+                    .map(|tool| tool.to_string())
+                    .collect(),
+            ),
+        }),
+        path_policy: Some(AgentChatPathPolicyConfig {
+            allow_read: Some(vec![ctx.general_cwd().to_string_lossy().into_owned()]),
+            allow_write: Some(vec![ctx.general_cwd().to_string_lossy().into_owned()]),
+            deny: None,
+        }),
+        blocked_action_message: Some(GENERAL_BLOCKED_ACTION_MESSAGE.to_string()),
         disable_extensions: Some(true),
         disable_skills: Some(true),
         disable_prompt_templates: Some(true),
@@ -137,6 +183,20 @@ pub fn built_in_script_kit_profile(ctx: &AgentChatProfileContext) -> ResolvedAge
                 .map(|tool| tool.to_string())
                 .collect(),
         ),
+        tool_policy: Some(AgentChatToolPolicyConfig {
+            allow: Some(
+                SCRIPT_KIT_PI_TOOLS
+                    .iter()
+                    .map(|tool| tool.to_string())
+                    .collect(),
+            ),
+        }),
+        path_policy: Some(AgentChatPathPolicyConfig {
+            allow_read: Some(vec![ctx.script_kit_cwd().to_string_lossy().into_owned()]),
+            allow_write: Some(vec![ctx.script_kit_cwd().to_string_lossy().into_owned()]),
+            deny: None,
+        }),
+        blocked_action_message: None,
         disable_extensions: Some(true),
         disable_skills: Some(true),
         disable_prompt_templates: Some(true),
@@ -149,9 +209,45 @@ pub fn built_in_script_kit_profile(ctx: &AgentChatProfileContext) -> ResolvedAge
     }
 }
 
+pub fn built_in_text_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentChatProfile {
+    ResolvedAgentChatProfile {
+        source: AgentChatProfileSource::BuiltIn,
+        id: BUILTIN_TEXT_PROFILE_ID.to_string(),
+        name: "Text".to_string(),
+        backend: AgentChatBackend::Pi,
+        pi_binary: None,
+        agent: None,
+        provider: Some(DEFAULT_PI_PROVIDER.to_string()),
+        model: Some(DEFAULT_PI_MODEL.to_string()),
+        system_prompt: None,
+        append_system_prompt: Some(TEXT_APPEND_SYSTEM_PROMPT.to_string()),
+        cwd: Some(ctx.text_cwd()),
+        tools: Some(Vec::new()),
+        tool_policy: Some(AgentChatToolPolicyConfig {
+            allow: Some(Vec::new()),
+        }),
+        path_policy: Some(AgentChatPathPolicyConfig {
+            allow_read: Some(Vec::new()),
+            allow_write: Some(Vec::new()),
+            deny: None,
+        }),
+        blocked_action_message: Some(TEXT_BLOCKED_ACTION_MESSAGE.to_string()),
+        disable_extensions: Some(true),
+        disable_skills: Some(true),
+        disable_prompt_templates: Some(true),
+        hide_cwd_in_prompt: Some(true),
+        thinking: None,
+        extension_policy: Some("deny".to_string()),
+        session_dir: None,
+        no_session: Some(true),
+        session_durability: None,
+    }
+}
+
 pub fn built_in_profiles(ctx: &AgentChatProfileContext) -> Vec<ResolvedAgentChatProfile> {
     vec![
         built_in_general_profile(ctx),
+        built_in_text_profile(ctx),
         built_in_script_kit_profile(ctx),
     ]
 }
@@ -170,6 +266,9 @@ pub fn default_acp_runtime_profile() -> ResolvedAgentChatProfile {
         append_system_prompt: None,
         cwd: None,
         tools: None,
+        tool_policy: None,
+        path_policy: None,
+        blocked_action_message: None,
         disable_extensions: None,
         disable_skills: None,
         disable_prompt_templates: None,
@@ -310,8 +409,13 @@ pub fn resolve_user_profile(profile: &AcpProfile) -> ResolvedAgentChatProfile {
         system_prompt: clean_opt(profile.system_prompt.as_deref()).map(str::to_string),
         append_system_prompt: clean_opt(profile.append_system_prompt.as_deref())
             .map(str::to_string),
-        cwd: clean_opt(profile.cwd.as_deref()).map(PathBuf::from),
-        tools: profile.tools.as_ref().map(|tools| clean_list(tools)),
+        cwd: clean_opt(profile.cwd.as_deref())
+            .map(crate::ai::agent_chat::pi::binary::expand_tilde_path),
+        tools: resolved_profile_tools(profile),
+        tool_policy: profile.tool_policy.clone(),
+        path_policy: profile.path_policy.clone(),
+        blocked_action_message: clean_opt(profile.blocked_action_message.as_deref())
+            .map(str::to_string),
         disable_extensions: profile.disable_extensions,
         disable_skills: profile.disable_skills,
         disable_prompt_templates: profile.disable_prompt_templates,
@@ -322,6 +426,15 @@ pub fn resolve_user_profile(profile: &AcpProfile) -> ResolvedAgentChatProfile {
         no_session: profile.no_session,
         session_durability: clean_opt(profile.session_durability.as_deref()).map(str::to_string),
     }
+}
+
+fn resolved_profile_tools(profile: &AcpProfile) -> Option<Vec<String>> {
+    profile
+        .tool_policy
+        .as_ref()
+        .and_then(|policy| policy.allow.as_ref())
+        .map(|tools| clean_list(tools))
+        .or_else(|| profile.tools.as_ref().map(|tools| clean_list(tools)))
 }
 
 pub fn apply_ai_fallbacks(

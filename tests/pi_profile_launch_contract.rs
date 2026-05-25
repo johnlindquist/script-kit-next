@@ -8,7 +8,9 @@ use script_kit_gpui::ai::agent_chat::profiles::{
     agent_chat_profile_picker_entries, persist_agent_chat_profile_selection,
     resolve_effective_profile, selected_agent_chat_profile_picker_id, AgentChatProfileContext,
     AgentChatProfileSource, BUILTIN_ACP_FALLBACK_PROFILE_ID, BUILTIN_GENERAL_PROFILE_ID,
-    BUILTIN_SCRIPT_KIT_PROFILE_ID, DEFAULT_PI_MODEL, DEFAULT_PI_PROVIDER, SCRIPT_KIT_PI_TOOLS,
+    BUILTIN_SCRIPT_KIT_PROFILE_ID, BUILTIN_TEXT_PROFILE_ID, DEFAULT_PI_MODEL, DEFAULT_PI_PROVIDER,
+    GENERAL_BLOCKED_ACTION_MESSAGE, GENERAL_PI_TOOLS, SCRIPT_KIT_PI_TOOLS,
+    TEXT_APPEND_SYSTEM_PROMPT, TEXT_BLOCKED_ACTION_MESSAGE,
 };
 use script_kit_gpui::config::{AcpProfile, AgentChatBackend, AiPreferences};
 
@@ -43,14 +45,39 @@ fn general_builtin_profile_builds_locked_down_pi_rpc_launch_spec() {
     let spec = PiLaunchSpec::from_profile(&profile).expect("general profile should be Pi");
     let argv = spec.argv();
     assert_eq!(spec.pi_binary, PathBuf::from("/tmp/test-pi"));
+    assert_eq!(spec.profile_id.as_deref(), Some(BUILTIN_GENERAL_PROFILE_ID));
+    assert_eq!(spec.profile_name.as_deref(), Some("General"));
     assert_eq!(spec.cwd.as_deref(), profile.cwd.as_deref());
     assert!(argv.starts_with(&["--mode".to_string(), "rpc".to_string()]));
+    assert!(argv.contains(&"--profile-id".to_string()));
+    assert!(argv.contains(&BUILTIN_GENERAL_PROFILE_ID.to_string()));
+    assert!(argv.contains(&"--profile-name".to_string()));
+    assert!(argv.contains(&"General".to_string()));
     assert!(argv.contains(&"--provider".to_string()));
     assert!(argv.contains(&DEFAULT_PI_PROVIDER.to_string()));
     assert!(argv.contains(&"--model".to_string()));
     assert!(argv.contains(&DEFAULT_PI_MODEL.to_string()));
     assert!(argv.contains(&"--append-system-prompt".to_string()));
-    assert!(argv.contains(&"--no-tools".to_string()));
+    assert_eq!(
+        profile.tools.as_deref(),
+        Some(
+            GENERAL_PI_TOOLS
+                .iter()
+                .map(|tool| tool.to_string())
+                .collect::<Vec<_>>()
+                .as_slice()
+        )
+    );
+    assert!(argv.contains(&"--tools".to_string()));
+    assert!(argv.contains(&GENERAL_PI_TOOLS.join(",")));
+    assert!(argv.contains(&"--path-policy-json".to_string()));
+    assert!(spec
+        .path_policy_json
+        .as_deref()
+        .is_some_and(|json| { json.contains("allowRead") && json.contains("allowWrite") }));
+    assert!(argv.contains(&"--blocked-action-message".to_string()));
+    assert!(argv.contains(&GENERAL_BLOCKED_ACTION_MESSAGE.to_string()));
+    assert!(!argv.contains(&"--no-tools".to_string()));
     assert!(argv.contains(&"--no-extensions".to_string()));
     assert!(argv.contains(&"--no-skills".to_string()));
     assert!(argv.contains(&"--no-prompt-templates".to_string()));
@@ -92,6 +119,64 @@ fn script_kit_builtin_profile_builds_workspace_pi_rpc_launch_spec() {
     assert!(argv.contains(&SCRIPT_KIT_PI_TOOLS.join(",")));
     assert!(!argv.contains(&"--no-tools".to_string()));
     assert!(!argv.contains(&"--hide-cwd-in-prompt".to_string()));
+}
+
+#[test]
+fn text_builtin_profile_builds_focused_text_only_pi_rpc_launch_spec() {
+    let ctx = context();
+    let mut ai = ai_with_pi_binary("/tmp/test-pi");
+    ai.selected_profile_id = Some(BUILTIN_TEXT_PROFILE_ID.to_string());
+
+    let profile = resolve_effective_profile(&ai, &ctx);
+    assert_eq!(profile.source, AgentChatProfileSource::BuiltIn);
+    assert_eq!(profile.id, BUILTIN_TEXT_PROFILE_ID);
+    assert_eq!(profile.name, "Text");
+    assert_eq!(profile.backend, AgentChatBackend::Pi);
+    assert_eq!(profile.provider.as_deref(), Some(DEFAULT_PI_PROVIDER));
+    assert_eq!(profile.model.as_deref(), Some(DEFAULT_PI_MODEL));
+    assert_eq!(profile.system_prompt, None);
+    assert_eq!(
+        profile.append_system_prompt.as_deref(),
+        Some(TEXT_APPEND_SYSTEM_PROMPT)
+    );
+    assert_eq!(
+        profile.cwd.as_deref(),
+        Some(Path::new("/Users/test/.scriptkit/agent-chat/text"))
+    );
+    assert!(profile.tools.as_ref().is_some_and(|tools| tools.is_empty()));
+    assert_eq!(
+        profile.blocked_action_message.as_deref(),
+        Some(TEXT_BLOCKED_ACTION_MESSAGE)
+    );
+    assert_eq!(profile.disable_extensions, Some(true));
+    assert_eq!(profile.disable_skills, Some(true));
+    assert_eq!(profile.disable_prompt_templates, Some(true));
+    assert_eq!(profile.hide_cwd_in_prompt, Some(true));
+    assert_eq!(profile.extension_policy.as_deref(), Some("deny"));
+    assert_eq!(profile.session_dir, None);
+    assert_eq!(profile.no_session, Some(true));
+
+    let spec = PiLaunchSpec::from_profile(&profile).expect("text profile should be Pi");
+    let argv = spec.argv();
+    assert_eq!(spec.pi_binary, PathBuf::from("/tmp/test-pi"));
+    assert_eq!(spec.profile_id.as_deref(), Some(BUILTIN_TEXT_PROFILE_ID));
+    assert_eq!(spec.profile_name.as_deref(), Some("Text"));
+    assert_eq!(spec.cwd.as_deref(), profile.cwd.as_deref());
+    assert!(argv.contains(&"--no-tools".to_string()));
+    assert!(argv.contains(&"--no-extensions".to_string()));
+    assert!(argv.contains(&"--extension-policy".to_string()));
+    assert!(argv.contains(&"deny".to_string()));
+    assert!(argv.contains(&"--no-skills".to_string()));
+    assert!(argv.contains(&"--no-prompt-templates".to_string()));
+    assert!(argv.contains(&"--hide-cwd-in-prompt".to_string()));
+    assert!(argv.contains(&"--no-session".to_string()));
+    assert!(argv.contains(&"--append-system-prompt".to_string()));
+    assert!(argv.contains(&TEXT_APPEND_SYSTEM_PROMPT.to_string()));
+    assert!(argv.contains(&"--blocked-action-message".to_string()));
+    assert!(argv.contains(&TEXT_BLOCKED_ACTION_MESSAGE.to_string()));
+    assert!(!argv.contains(&"--tools".to_string()));
+    assert!(!argv.contains(&"--agent".to_string()));
+    assert!(!argv.contains(&"--system-prompt".to_string()));
 }
 
 #[test]
@@ -263,6 +348,7 @@ fn profile_picker_lists_general_script_kit_acp_and_custom_profiles() {
         .map(|entry| entry.id.as_str())
         .collect::<Vec<_>>();
     assert!(ids.contains(&BUILTIN_GENERAL_PROFILE_ID));
+    assert!(ids.contains(&BUILTIN_TEXT_PROFILE_ID));
     assert!(ids.contains(&BUILTIN_SCRIPT_KIT_PROFILE_ID));
     assert!(ids.contains(&BUILTIN_ACP_FALLBACK_PROFILE_ID));
     assert!(ids.contains(&"ops"));
