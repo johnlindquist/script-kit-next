@@ -1,5 +1,15 @@
 use std::fs;
 
+fn section_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+    let start_idx = source.find(start).expect("section start must exist");
+    let tail = &source[start_idx..];
+    let end_idx = tail
+        .find(end)
+        .map(|idx| start_idx + idx)
+        .unwrap_or(source.len());
+    &source[start_idx..end_idx]
+}
+
 #[test]
 fn acp_empty_guidance_uses_shared_info_state() {
     let source =
@@ -36,6 +46,55 @@ fn info_state_keeps_context_first_acp_copy() {
     assert!(source.contains("⌘K shows every chat action."));
     assert!(!source.contains("⌘N new"));
     assert!(!source.contains("⌘W close"));
+}
+
+#[test]
+fn info_guidance_shortcuts_use_footer_keycaps_not_hint_strip() {
+    let info = fs::read_to_string("src/components/info_state.rs")
+        .expect("failed to read src/components/info_state.rs");
+    let guidance_row = section_between(&info, "fn render_guidance_row", "\n\n#[cfg(test)]");
+
+    assert!(
+        guidance_row.contains("crate::components::footer_chrome::render_footer_shortcut_keycaps"),
+        "InfoState guidance shortcuts must render through footer keycaps"
+    );
+    assert!(
+        info.contains("crate::components::footer_chrome::footer_shortcut_keycaps_width_px"),
+        "InfoState guidance shortcut column must size from footer keycap widths"
+    );
+    assert!(
+        !guidance_row.contains("crate::components::hint_strip::render_inline_shortcut_keys")
+            && !guidance_row.contains("shortcut_tokens_from_hint")
+            && !guidance_row.contains("whisper_inline_shortcut_colors"),
+        "InfoState guidance shortcuts must not regress to hint_strip inline shortcut styling"
+    );
+    assert!(
+        !guidance_row.contains(".child(shortcut)")
+            && !guidance_row.contains("child(shortcut.to_string())")
+            && !guidance_row.contains("SharedString::from(shortcut)"),
+        "InfoState guidance shortcuts must not regress to raw shortcut text"
+    );
+}
+
+#[test]
+fn footer_chrome_exposes_only_shared_shortcut_keycap_row_for_help_surfaces() {
+    let footer = fs::read_to_string("src/components/footer_chrome.rs")
+        .expect("failed to read src/components/footer_chrome.rs");
+    let shortcut_renderer = section_between(
+        &footer,
+        "pub(crate) fn render_footer_shortcut_keycaps",
+        "fn render_footer_keycap",
+    );
+
+    assert!(
+        shortcut_renderer.contains("split_footer_shortcut(&shortcut)")
+            && shortcut_renderer.contains("render_footer_keycap(token, None, theme)"),
+        "shared footer shortcut keycap renderer must keep using the footer parser and keycap primitive"
+    );
+    assert!(
+        footer.contains("fn render_footer_keycap("),
+        "low-level footer keycap primitive should remain private; expose the row renderer only"
+    );
 }
 
 #[test]

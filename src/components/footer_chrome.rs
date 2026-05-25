@@ -548,7 +548,7 @@ fn render_footer_labelcap_constrained(
     .into_any_element()
 }
 
-fn render_footer_shortcut_keycaps(shortcut: String, theme: &Theme) -> AnyElement {
+pub(crate) fn render_footer_shortcut_keycaps(shortcut: String, theme: &Theme) -> AnyElement {
     div()
         .flex()
         .flex_none()
@@ -634,6 +634,16 @@ mod tests {
         assert_eq!(split_footer_shortcut("⌘F1"), vec!["⌘", "F1"]);
         assert_eq!(split_footer_shortcut("⌥⌘I"), vec!["⌥", "⌘", "I"]);
         assert_eq!(split_footer_shortcut("click"), vec!["click"]);
+    }
+
+    #[test]
+    fn split_footer_shortcut_covers_help_guidance_tokens() {
+        assert_eq!(split_footer_shortcut("/"), vec!["/"]);
+        assert_eq!(split_footer_shortcut("@"), vec!["@"]);
+        assert_eq!(split_footer_shortcut("⇧↵"), vec!["⇧", "↵"]);
+        assert_eq!(split_footer_shortcut("⌘P"), vec!["⌘", "P"]);
+        assert_eq!(split_footer_shortcut(";todo"), vec![";", "todo"]);
+        assert_eq!(split_footer_shortcut(":tag:"), vec![":", "tag", ":"]);
     }
 
     #[test]

@@ -2498,7 +2498,7 @@ impl ScriptListApp {
     }
 
     /// Startup prewarm: respects `warmOnStartup=false`.
-    pub(crate) fn warm_acp_chat_on_startup(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn warm_acp_chat_on_startup(&mut self, _cx: &mut Context<Self>) {
         if std::env::var("SCRIPT_KIT_DISABLE_ACP_HOT_PREWARM")
             .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
             .unwrap_or(false)
@@ -2519,7 +2519,7 @@ impl ScriptListApp {
         ) {
             Ok(Some(pi_launch)) => {
                 match crate::ai::agent_chat::launch::warm_session_manager()
-                    .prepare_warm(pi_launch.warm_spec())
+                    .prepare_warm_background(pi_launch.warm_spec())
                 {
                     Ok(snapshot) => {
                         tracing::info!(
@@ -2854,6 +2854,7 @@ impl ScriptListApp {
         if closing_quick_terminal {
             self.terminate_tab_ai_harness_session(cx);
         }
+        let mut pending_warm_lease = None;
         if closing_acp_chat {
             if let AppView::AcpChatView { entity } = &self.current_view {
                 self.embedded_acp_chat = Some(entity.clone());
@@ -2861,7 +2862,7 @@ impl ScriptListApp {
                     view.prepare_for_host_hide(cx);
                 });
             }
-            self.dismiss_active_agent_chat_warm_lease();
+            pending_warm_lease = self.active_agent_chat_warm_lease.take();
             if closing_pi_agent_chat {
                 self.embedded_acp_chat = None;
             }
@@ -2902,6 +2903,9 @@ impl ScriptListApp {
             }
 
             self.close_and_reset_window(cx);
+            if let Some(lease) = pending_warm_lease {
+                self.dismiss_agent_chat_warm_lease_background(lease);
+            }
             cx.notify();
             return;
         }
@@ -2935,6 +2939,9 @@ impl ScriptListApp {
         // Keep prewarm only for the actual PTY-backed quick terminal path.
         if closing_quick_terminal {
             self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);
+        }
+        if let Some(lease) = pending_warm_lease {
+            self.dismiss_agent_chat_warm_lease_background(lease);
         }
         cx.notify();
     }
@@ -3009,7 +3016,7 @@ impl ScriptListApp {
                 view.prepare_for_host_hide(cx);
             });
         }
-        self.dismiss_active_agent_chat_warm_lease();
+        let pending_warm_lease = self.active_agent_chat_warm_lease.take();
 
         // A hotkey detach is a deliberate mode switch back to the launcher,
         // not a normal "return to the originating surface" close.
@@ -3052,35 +3059,33 @@ impl ScriptListApp {
             capture_generation = self.tab_ai_harness_capture_generation,
             focus_main_filter,
         );
+        if let Some(lease) = pending_warm_lease {
+            self.dismiss_agent_chat_warm_lease_background(lease);
+        }
         cx.notify();
     }
 
-    fn dismiss_active_agent_chat_warm_lease(&mut self) {
-        let Some(lease) = self.active_agent_chat_warm_lease.take() else {
-            return;
-        };
+    fn dismiss_agent_chat_warm_lease_background(
+        &mut self,
+        lease: crate::ai::agent_chat::warm_session::AgentChatWarmSessionLease,
+    ) {
         let key = lease.key.clone();
         let generation = lease.generation;
-        match crate::ai::agent_chat::launch::warm_session_manager().dismiss_reset(lease) {
-            Ok(snapshot) => {
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "pi_agent_chat_warm_dismiss_reset",
-                    warm_key = %key,
-                    generation,
-                    replacement_generation = snapshot.generation,
-                    replacement_state = ?snapshot.state,
-                );
-            }
-            Err(error) => {
-                tracing::warn!(
-                    target: "script_kit::tab_ai",
-                    event = "pi_agent_chat_warm_dismiss_reset_failed",
-                    warm_key = %key,
-                    generation,
-                    error = %error,
-                );
-            }
+        let snapshot =
+            crate::ai::agent_chat::launch::warm_session_manager().dismiss_reset_background(lease);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "pi_agent_chat_warm_dismiss_reset_background",
+            warm_key = %key,
+            generation,
+            replacement_generation = snapshot.generation,
+            replacement_state = ?snapshot.state,
+        );
+    }
+
+    fn dismiss_active_agent_chat_warm_lease(&mut self) {
+        if let Some(lease) = self.active_agent_chat_warm_lease.take() {
+            self.dismiss_agent_chat_warm_lease_background(lease);
         }
     }
 

@@ -428,7 +428,7 @@ fn launcher_filter_display(filter_text: &str) -> String {
 pub(crate) fn render_info_state(spec: InfoStateSpec, theme: &theme::Theme) -> AnyElement {
     let palette = info_palette(theme);
     let metrics = info_metrics(spec.density);
-    let content = render_info_content(&spec, palette, metrics);
+    let content = render_info_content(&spec, theme, palette, metrics);
 
     match spec.layout {
         InfoStateLayout::Centered | InfoStateLayout::ComposerEmpty => div()
@@ -470,7 +470,12 @@ pub(crate) fn render_info_state(spec: InfoStateSpec, theme: &theme::Theme) -> An
     }
 }
 
-fn render_info_content(spec: &InfoStateSpec, palette: InfoPalette, metrics: InfoMetrics) -> Div {
+fn render_info_content(
+    spec: &InfoStateSpec,
+    theme: &theme::Theme,
+    palette: InfoPalette,
+    metrics: InfoMetrics,
+) -> Div {
     let title_metric = match spec.density {
         InfoStateDensity::Compact => INFO_TYPE_SCALE.subhead,
         InfoStateDensity::Comfortable => INFO_TYPE_SCALE.title,
@@ -529,6 +534,7 @@ fn render_info_content(spec: &InfoStateSpec, palette: InfoPalette, metrics: Info
             section,
             format!("{}-section-{index}", spec.id),
             spec.density,
+            theme,
             palette,
             metrics,
         ));
@@ -551,6 +557,7 @@ fn render_info_section(
     section: &InfoSection,
     id: String,
     density: InfoStateDensity,
+    theme: &theme::Theme,
     palette: InfoPalette,
     metrics: InfoMetrics,
 ) -> AnyElement {
@@ -577,6 +584,7 @@ fn render_info_section(
             "info-guidance-items",
             &section.items,
             density,
+            theme,
             palette,
         ))
         .into_any_element()
@@ -586,24 +594,47 @@ pub(crate) fn render_info_guidance_items(
     id: &'static str,
     items: &[InfoGuidanceItem],
     density: InfoStateDensity,
+    theme: &theme::Theme,
     palette: InfoPalette,
 ) -> AnyElement {
     let metrics = info_metrics(density);
+    let shortcut_slot_width_px = info_guidance_shortcut_slot_width_px(items);
     div()
         .id(id)
         .w_full()
         .flex()
         .flex_col()
         .gap(px(INFO_SPACING.xs * 0.5))
-        .children(
-            items
-                .iter()
-                .map(|item| render_guidance_row(item, metrics, palette).into_any_element()),
-        )
+        .children(items.iter().map(|item| {
+            render_guidance_row(item, metrics, theme, palette, shortcut_slot_width_px)
+                .into_any_element()
+        }))
         .into_any_element()
 }
 
-fn render_guidance_row(item: &InfoGuidanceItem, metrics: InfoMetrics, palette: InfoPalette) -> Div {
+fn info_guidance_shortcut_slot_width_px(items: &[InfoGuidanceItem]) -> f32 {
+    let min_shortcut_width = crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX * 2.0
+        + crate::components::footer_chrome::FOOTER_ACTION_CONTENT_GAP_PX;
+    let max_width = items
+        .iter()
+        .filter_map(|item| item.shortcut)
+        .map(crate::components::footer_chrome::footer_shortcut_keycaps_width_px)
+        .fold(0.0, f32::max);
+
+    if max_width > 0.0 {
+        max_width.max(min_shortcut_width)
+    } else {
+        0.0
+    }
+}
+
+fn render_guidance_row(
+    item: &InfoGuidanceItem,
+    metrics: InfoMetrics,
+    theme: &theme::Theme,
+    palette: InfoPalette,
+    shortcut_slot_width_px: f32,
+) -> Div {
     let mut row = div()
         .w_full()
         .min_h(px(metrics.row_min_h))
@@ -612,17 +643,19 @@ fn render_guidance_row(item: &InfoGuidanceItem, metrics: InfoMetrics, palette: I
         .gap(px(INFO_SPACING.sm));
 
     if let Some(shortcut) = item.shortcut {
-        let tokens = crate::components::hint_strip::shortcut_tokens_from_hint(shortcut);
-        row = row.child(div().w(px(42.0)).flex().items_center().child(
-            crate::components::hint_strip::render_inline_shortcut_keys(
-                tokens.iter().map(String::as_str),
-                crate::components::hint_strip::whisper_inline_shortcut_colors(
-                    palette.strong.into(),
-                    palette.title.into(),
-                    true,
+        row = row.child(
+            div()
+                .w(px(shortcut_slot_width_px))
+                .flex_none()
+                .flex()
+                .items_center()
+                .child(
+                    crate::components::footer_chrome::render_footer_shortcut_keycaps(
+                        shortcut.to_string(),
+                        theme,
+                    ),
                 ),
-            ),
-        ));
+        );
     }
 
     let mut text = div()
@@ -720,6 +753,22 @@ mod tests {
         assert!(!copy.contains("Type / for skills"));
         assert!(!copy.contains(&format!("{} new", "⌘N")));
         assert!(!copy.contains(&format!("{} close", "⌘W")));
+    }
+
+    #[test]
+    fn guidance_shortcut_slot_width_tracks_footer_keycap_widths() {
+        let items = vec![
+            InfoGuidanceItem::new(Some("⌘P"), "Open previous chats"),
+            InfoGuidanceItem::new(Some(":tag:"), "Filter by tag name"),
+            InfoGuidanceItem::new(Some(";todo"), "Capture instead"),
+        ];
+        let width = info_guidance_shortcut_slot_width_px(&items);
+
+        assert_eq!(
+            width,
+            crate::components::footer_chrome::footer_shortcut_keycaps_width_px(":tag:")
+        );
+        assert!(width > crate::components::footer_chrome::footer_shortcut_keycaps_width_px("⌘P"));
     }
 
     #[test]

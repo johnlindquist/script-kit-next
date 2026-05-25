@@ -79,8 +79,17 @@ impl WarmSlot {
 }
 
 pub(crate) struct AgentChatWarmSessionManager {
-    inner: Mutex<WarmSessionInner>,
+    inner: Arc<Mutex<WarmSessionInner>>,
     ui_thread_id_source: Arc<dyn Fn() -> String + Send + Sync>,
+}
+
+impl Clone for AgentChatWarmSessionManager {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            ui_thread_id_source: self.ui_thread_id_source.clone(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -98,7 +107,7 @@ impl Default for AgentChatWarmSessionManager {
 impl AgentChatWarmSessionManager {
     pub(crate) fn new() -> Self {
         Self {
-            inner: Mutex::new(WarmSessionInner::default()),
+            inner: Arc::new(Mutex::new(WarmSessionInner::default())),
             ui_thread_id_source: Arc::new(default_warm_ui_thread_id),
         }
     }
@@ -108,7 +117,7 @@ impl AgentChatWarmSessionManager {
         ui_thread_id_source: Arc<dyn Fn() -> String + Send + Sync>,
     ) -> Self {
         Self {
-            inner: Mutex::new(WarmSessionInner::default()),
+            inner: Arc::new(Mutex::new(WarmSessionInner::default())),
             ui_thread_id_source,
         }
     }
@@ -162,6 +171,48 @@ impl AgentChatWarmSessionManager {
 
     pub(crate) fn acquire_warm(&self, key: &str) -> Option<AgentChatWarmSessionLease> {
         self.cleanup_stale_acquired(DEFAULT_STALE_ACQUIRED_TTL);
+        self.acquire_warm_ready(key)
+    }
+
+    pub(crate) fn prepare_warm_background(
+        &self,
+        spec: AgentChatWarmSessionSpec,
+    ) -> Result<AgentChatWarmSessionSnapshot> {
+        let (snapshot, should_spawn) = {
+            let mut inner = self.inner.lock();
+            if let Some(slot) = inner.slots.get(&spec.key) {
+                if slot.state != AgentChatWarmSessionState::Failed {
+                    return Ok(slot.snapshot());
+                }
+            }
+
+            inner.next_generation += 1;
+            let generation = inner.next_generation;
+            let ui_thread_id = (self.ui_thread_id_source)();
+            let slot = WarmSlot {
+                spec: spec.clone(),
+                generation,
+                ui_thread_id: Some(ui_thread_id.clone()),
+                state: AgentChatWarmSessionState::Preparing,
+                connection: None,
+                acquired_at: None,
+            };
+            let snapshot = slot.snapshot();
+            inner.slots.insert(spec.key.clone(), slot);
+            (snapshot, (spec, generation, ui_thread_id))
+        };
+
+        let manager = self.clone();
+        std::thread::spawn(move || {
+            let (spec, generation, ui_thread_id) = should_spawn;
+            let slot = manager.prepare_slot_with_generation(spec, generation, ui_thread_id);
+            manager.insert_prepared_slot_if_current(slot, generation);
+        });
+
+        Ok(snapshot)
+    }
+
+    pub(crate) fn acquire_warm_ready(&self, key: &str) -> Option<AgentChatWarmSessionLease> {
         let mut inner = self.inner.lock();
         let slot = inner.slots.get_mut(key)?;
         if slot.state != AgentChatWarmSessionState::Ready {
@@ -180,6 +231,67 @@ impl AgentChatWarmSessionManager {
             cwd: slot.spec.cwd.clone(),
             connection,
         })
+    }
+
+    pub(crate) fn dismiss_reset_background(
+        &self,
+        lease: AgentChatWarmSessionLease,
+    ) -> AgentChatWarmSessionSnapshot {
+        let key = lease.key.clone();
+        let generation = lease.generation;
+        let old_ui_thread_id = lease.ui_thread_id.clone();
+        let old_connection = lease.connection.clone();
+
+        let (snapshot, spec, replacement_generation, replacement_ui_thread_id) = {
+            let mut inner = self.inner.lock();
+            let Some(slot) = inner.slots.get(&key) else {
+                return AgentChatWarmSessionSnapshot {
+                    key,
+                    generation,
+                    ui_thread_id: None,
+                    state: AgentChatWarmSessionState::Empty,
+                };
+            };
+
+            if slot.generation != generation || slot.state != AgentChatWarmSessionState::Acquired {
+                return slot.snapshot();
+            }
+
+            let spec = slot.spec.clone();
+            inner.next_generation += 1;
+            let replacement_generation = inner.next_generation;
+            let replacement_ui_thread_id = (self.ui_thread_id_source)();
+            let replacement = WarmSlot {
+                spec: spec.clone(),
+                generation: replacement_generation,
+                ui_thread_id: Some(replacement_ui_thread_id.clone()),
+                state: AgentChatWarmSessionState::Preparing,
+                connection: None,
+                acquired_at: None,
+            };
+            let snapshot = replacement.snapshot();
+            inner.slots.insert(key.clone(), replacement);
+            (
+                snapshot,
+                spec,
+                replacement_generation,
+                replacement_ui_thread_id,
+            )
+        };
+
+        let manager = self.clone();
+        std::thread::spawn(move || {
+            let _ = old_connection.cancel_turn(old_ui_thread_id);
+            drop(lease);
+            let slot = manager.prepare_slot_with_generation(
+                spec,
+                replacement_generation,
+                replacement_ui_thread_id,
+            );
+            manager.insert_prepared_slot_if_current(slot, replacement_generation);
+        });
+
+        snapshot
     }
 
     pub(crate) fn dismiss_reset(
@@ -275,6 +387,21 @@ impl AgentChatWarmSessionManager {
         let ui_thread_id = (self.ui_thread_id_source)();
 
         self.prepare_slot_with_generation(spec, generation, ui_thread_id)
+    }
+
+    fn insert_prepared_slot_if_current(&self, slot: WarmSlot, generation: u64) {
+        let mut inner = self.inner.lock();
+        let Some(current) = inner.slots.get(&slot.spec.key) else {
+            let snapshot = slot.snapshot();
+            inner.slots.insert(snapshot.key.clone(), slot);
+            return;
+        };
+        if current.generation != generation || current.state != AgentChatWarmSessionState::Preparing
+        {
+            return;
+        }
+
+        inner.slots.insert(slot.spec.key.clone(), slot);
     }
 
     fn prepare_slot_with_generation(
@@ -573,6 +700,60 @@ mod tests {
             manager.snapshot("key-a").unwrap().state,
             AgentChatWarmSessionState::Ready
         );
+    }
+
+    #[test]
+    fn prepare_warm_background_returns_preparing_without_waiting_for_runtime() {
+        let manager = manager();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let factory = Arc::new(BlockingFactory::new(started_tx, release_rx));
+
+        let snapshot = manager
+            .prepare_warm_background(spec_with_factory(factory.clone()))
+            .expect("background prepare");
+
+        assert_eq!(snapshot.state, AgentChatWarmSessionState::Preparing);
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("background prepare started spawning");
+        assert_eq!(factory.spawned_count(), 1);
+        assert_eq!(
+            manager.snapshot("key-a").unwrap().state,
+            AgentChatWarmSessionState::Preparing
+        );
+
+        release_tx.send(()).expect("release background prepare");
+        for _ in 0..100 {
+            if manager.snapshot("key-a").unwrap().state == AgentChatWarmSessionState::Ready {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!("background prepare did not mark slot ready");
+    }
+
+    #[test]
+    fn prepare_warm_background_is_idempotent_while_preparing() {
+        let manager = manager();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let factory = Arc::new(BlockingFactory::new(started_tx, release_rx));
+
+        let first = manager
+            .prepare_warm_background(spec_with_factory(factory.clone()))
+            .expect("first background prepare");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("background prepare started spawning");
+        let second = manager
+            .prepare_warm_background(spec_with_factory(factory.clone()))
+            .expect("second background prepare");
+
+        assert_eq!(first, second);
+        assert_eq!(factory.spawned_count(), 1);
+
+        release_tx.send(()).expect("release background prepare");
     }
 
     #[test]

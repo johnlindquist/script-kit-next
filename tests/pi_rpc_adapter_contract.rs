@@ -76,6 +76,20 @@ fn pi_rpc_event_mapper_targets_current_acp_shaped_aliases() {
 }
 
 #[test]
+fn pi_rpc_text_reveal_has_markdown_and_long_word_guards() {
+    let mapper = read("src/ai/agent_chat/pi/events.rs");
+    let runtime = read("src/ai/agent_chat/pi/runtime.rs");
+
+    assert!(mapper.contains("REVEAL_MAX_UNBROKEN_CHARS"));
+    assert!(mapper.contains("is_markdown_fence_line"));
+    assert!(mapper.contains("is_markdown_table_line"));
+    assert!(mapper.contains("markdown_structural_prefix_len"));
+    assert!(mapper.contains("chunks.concat()"));
+    assert!(runtime.contains("PI_REVEAL_CHUNK_DELAY_MS"));
+    assert!(runtime.contains("reveal_count"));
+}
+
+#[test]
 fn pi_rpc_adapter_is_routed_through_agent_chat_launch_helper() {
     let launch = read("src/ai/agent_chat/launch.rs");
     let tab_launch = read("src/app_impl/tab_ai_mode/acp_launch.rs");

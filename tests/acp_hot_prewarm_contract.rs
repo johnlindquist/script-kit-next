@@ -79,7 +79,7 @@ fn startup_schedules_acp_connection_prewarm() {
 }
 
 #[test]
-fn acp_hot_prewarm_helper_creates_hidden_hosted_view() {
+fn acp_hot_prewarm_helper_uses_pi_warm_session() {
     let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
     let body = fn_body(&tab_ai, "pub(crate) fn warm_acp_chat_on_startup(");
 
@@ -88,20 +88,20 @@ fn acp_hot_prewarm_helper_creates_hidden_hosted_view() {
         "warm_acp_chat_on_startup must honor the dev opt-out before spawning an ACP runtime"
     );
     assert!(
-        body.contains("crate::ai::acp::hosted::spawn_hosted_view("),
-        "warm_acp_chat_on_startup must use the host-neutral ACP bootstrap"
+        body.contains("resolve_selected_pi_launch"),
+        "warm_acp_chat_on_startup must resolve the selected Pi Agent Chat profile"
     );
     assert!(
-        body.contains("crate::ai::acp::AcpLaunchRequirements::default()"),
-        "startup prewarm should only create a default-requirements session"
+        body.contains("warm_session_manager()"),
+        "warm_acp_chat_on_startup must route through the shared Pi warm-session manager"
     );
     assert!(
-        body.contains("self.wire_embedded_acp_footer_callbacks(&view, cx);"),
-        "prewarmed views must be fully wired before they are shown later"
+        body.contains("prepare_warm_background"),
+        "startup prewarm must not block the UI update path"
     );
     assert!(
-        body.contains("self.prewarmed_acp_chat = Some(view);"),
-        "the hidden view must be retained for later launch consumption"
+        !body.contains("crate::ai::acp::hosted::spawn_hosted_view("),
+        "startup prewarm must not create a hidden hosted ACP view on the UI thread"
     );
 }
 
@@ -147,6 +147,50 @@ fn acp_open_uses_pi_warm_session_without_fresh_acp_runtime() {
     assert!(
         !body.contains("spawn_with_approval"),
         "open path must not spawn a fresh ACP runtime"
+    );
+}
+
+#[test]
+fn pi_tab_open_does_not_prepare_warm_synchronously_before_view_switch() {
+    let acp_launch = fs::read_to_string("src/app_impl/tab_ai_mode/acp_launch.rs")
+        .expect("read ACP launch source");
+    let body = fn_body(&acp_launch, "fn open_tab_ai_pi_view_from_launch(");
+
+    assert!(
+        body.contains("acquire_warm_ready"),
+        "Pi Tab open must first try the ready warm-session fast path"
+    );
+    assert!(
+        body.contains("prepare_warm_background"),
+        "Pi Tab open must prepare missing warm sessions in the background"
+    );
+    assert!(
+        !body.contains(".prepare_warm("),
+        "Pi Tab open must not synchronously prepare warm sessions before switching views"
+    );
+}
+
+#[test]
+fn startup_acp_prewarm_uses_background_prepare() {
+    let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
+    let body = fn_body(&tab_ai, "pub(crate) fn warm_acp_chat_on_startup(");
+
+    assert!(body.contains("prepare_warm_background"));
+    assert!(
+        !body.contains(".prepare_warm("),
+        "startup Pi prewarm must not synchronously prepare on the UI update path"
+    );
+}
+
+#[test]
+fn pi_agent_chat_escape_reset_uses_background_dismiss() {
+    let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
+    let body = fn_body(&tab_ai, "fn dismiss_agent_chat_warm_lease_background(");
+
+    assert!(body.contains("dismiss_reset_background"));
+    assert!(
+        !body.contains(".dismiss_reset("),
+        "embedded ACP close must not synchronously prepare replacement warm sessions"
     );
 }
 

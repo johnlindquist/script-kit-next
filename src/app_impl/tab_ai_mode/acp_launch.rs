@@ -93,8 +93,10 @@ impl ScriptListApp {
 
         let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
         let ai_preferences = crate::config::load_user_preferences().ai;
-        let effective_profile =
-            crate::ai::agent_chat::profiles::resolve_effective_profile(&ai_preferences, &profile_ctx);
+        let effective_profile = crate::ai::agent_chat::profiles::resolve_effective_profile(
+            &ai_preferences,
+            &profile_ctx,
+        );
         let focused_text_mini =
             request.ui_variant == crate::ai::acp::ui_variant::AcpChatUiVariant::FocusedTextMini;
         let pi_launch_result = if focused_text_mini {
@@ -187,26 +189,31 @@ impl ScriptListApp {
         };
         let warm_spec = pi_launch.warm_spec();
         let manager = crate::ai::agent_chat::launch::warm_session_manager();
-        if let Err(error) = manager.prepare_warm(warm_spec) {
-            tracing::warn!(
-                target: "script_kit::tab_ai",
-                event = "pi_agent_chat_warm_prepare_failed",
-                profile_id = %pi_launch.profile.id,
-                warm_key = %pi_launch.warm_key,
-                error = %error,
-            );
-        }
-
-        let Some(lease) = manager.acquire_warm(&pi_launch.warm_key) else {
-            tracing::error!(
-                target: "script_kit::tab_ai",
-                event = "pi_agent_chat_warm_acquire_failed",
-                profile_id = %pi_launch.profile.id,
-                warm_key = %pi_launch.warm_key,
-            );
+        let Some(lease) = manager.acquire_warm_ready(&pi_launch.warm_key) else {
+            match manager.prepare_warm_background(warm_spec) {
+                Ok(snapshot) => {
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "pi_agent_chat_warm_prepare_background",
+                        profile_id = %pi_launch.profile.id,
+                        warm_key = %pi_launch.warm_key,
+                        generation = snapshot.generation,
+                        state = ?snapshot.state,
+                    );
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "pi_agent_chat_warm_prepare_failed",
+                        profile_id = %pi_launch.profile.id,
+                        warm_key = %pi_launch.warm_key,
+                        error = %error,
+                    );
+                }
+            }
             self.toast_manager.push(
-                crate::components::toast::Toast::error(
-                    "Failed to start Pi Agent Chat warm session",
+                crate::components::toast::Toast::info(
+                    "Starting Pi Agent Chat. Try again in a moment.",
                     &self.theme,
                 )
                 .duration_ms(Some(TOAST_ERROR_MS)),

@@ -2852,7 +2852,10 @@ impl AcpChatView {
         self.profile_selector_open = false;
         self.sync_profile_selector_popup_window_from_cached_parent(cx);
         if let Some(callback) = self.on_profile_selected.clone() {
-            callback(profile_id.to_string(), cx);
+            let selected_profile_id = profile_id.to_string();
+            cx.defer(move |cx| {
+                callback(selected_profile_id.clone(), cx);
+            });
         }
         cx.notify();
     }

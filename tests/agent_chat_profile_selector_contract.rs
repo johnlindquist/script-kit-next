@@ -76,12 +76,33 @@ fn profile_selection_relaunches_fresh_in_shared_agent_chat_host() {
 }
 
 #[test]
+fn profile_picker_selection_defers_host_relaunch_out_of_acp_update() {
+    let body = fn_body(ACP_VIEW_SOURCE, "pub(crate) fn select_profile_from_popup(");
+    assert!(
+        body.contains("let selected_profile_id = profile_id.to_string();"),
+        "profile selection must own the selected profile id before deferring the host callback"
+    );
+    let defer_pos = body
+        .find("cx.defer(move |cx|")
+        .expect("profile selection must defer host callback out of the ACP update lease");
+    let callback_pos = body
+        .find("callback(selected_profile_id.clone(), cx);")
+        .expect("deferred profile callback must still invoke the host profile switch");
+    assert!(
+        defer_pos < callback_pos,
+        "host profile relaunch callback must run inside cx.defer"
+    );
+    assert!(
+        !body.contains("callback(profile_id.to_string(), cx);"),
+        "profile selection must not synchronously invoke the host relaunch callback"
+    );
+}
+
+#[test]
 fn acp_launch_uses_effective_profile_for_acp_agent_and_model() {
     assert!(ACP_LAUNCH_SOURCE.contains("resolve_effective_profile"));
     assert!(ACP_LAUNCH_SOURCE.contains("PiAgentChatLaunch::from_profile"));
-    assert!(ACP_LAUNCH_SOURCE.contains("effective_profile.agent.clone()"));
-    assert!(ACP_LAUNCH_SOURCE.contains("effective_profile.model.clone()"));
-    assert!(ACP_LAUNCH_SOURCE.contains("load_preferred_acp_agent_id"));
+    assert!(ACP_LAUNCH_SOURCE.contains("effective_profile.clone()"));
 }
 
 #[test]

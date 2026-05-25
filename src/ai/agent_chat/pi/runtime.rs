@@ -22,6 +22,8 @@ use super::protocol::{
 type PendingResponses = Arc<Mutex<HashMap<String, PendingResponse>>>;
 type ActiveTurn = Arc<Mutex<Option<ActiveTurnState>>>;
 
+const PI_REVEAL_CHUNK_DELAY_MS: u64 = 6;
+
 enum PendingResponse {
     Events(AcpEventTx),
     Rpc(oneshot::Sender<PiRpcResponse>),
@@ -389,15 +391,28 @@ where
 }
 
 async fn send_events(event_tx: &AcpEventTx, events: Vec<AgentChatEvent>) {
-    let event_count = events.len();
+    let reveal_count = events
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                AgentChatEvent::AgentMessageDelta(_) | AgentChatEvent::AgentThoughtDelta(_)
+            )
+        })
+        .count();
+    let mut reveal_index = 0usize;
     for event in events {
         let reveal_chunk = matches!(
             event,
             AgentChatEvent::AgentMessageDelta(_) | AgentChatEvent::AgentThoughtDelta(_)
         );
+        let sleep_after = reveal_chunk && {
+            reveal_index += 1;
+            reveal_index < reveal_count
+        };
         let _ = event_tx.send(event).await;
-        if reveal_chunk && event_count > 1 {
-            tokio::time::sleep(std::time::Duration::from_millis(16)).await;
+        if sleep_after {
+            tokio::time::sleep(std::time::Duration::from_millis(PI_REVEAL_CHUNK_DELAY_MS)).await;
         }
     }
 }
@@ -562,6 +577,14 @@ mod tests {
         assert!(source.contains("line_bytes = line.len()"));
         assert!(!source.contains(&format!("{}{}", "line = %", "line")));
         assert!(!source.contains(&format!("{}{}", "line = ?", "line")));
+    }
+
+    #[test]
+    fn pi_rpc_reveal_delay_is_few_ms() {
+        assert!(
+            PI_REVEAL_CHUNK_DELAY_MS <= 8,
+            "Pi reveal delay should stay in the few-ms range"
+        );
     }
 
     #[test]
