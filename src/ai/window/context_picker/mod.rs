@@ -62,12 +62,13 @@ pub(crate) fn extract_context_picker_query_before_cursor(
     let cursor_byte = char_to_byte_offset(input, cursor);
     let before_cursor = &input[..cursor_byte];
 
-    let trigger_pos = before_cursor.rfind(['@', '/'])?;
+    let trigger_pos = before_cursor.rfind(['@', '/', '\''])?;
     let trigger_byte = before_cursor.as_bytes().get(trigger_pos).copied()?;
 
     let trigger = match trigger_byte {
         b'@' => ContextPickerTrigger::Mention,
         b'/' => ContextPickerTrigger::Slash,
+        b'\'' => ContextPickerTrigger::Profile,
         _ => return None,
     };
 
@@ -79,6 +80,8 @@ pub(crate) fn extract_context_picker_query_before_cursor(
             b'@' if prev.is_ascii_alphanumeric() || prev == b'_' => return None,
             // `/` requires whitespace before it (reject `foo/bar`)
             b'/' if prev != b' ' && prev != b'\n' && prev != b'\t' => return None,
+            // `'` mirrors slash-command behavior and only opens at a token boundary.
+            b'\'' if prev != b' ' && prev != b'\n' && prev != b'\t' => return None,
             _ => {}
         }
     }
@@ -94,6 +97,7 @@ pub(crate) fn extract_context_picker_query_before_cursor(
     let trigger_char = match trigger {
         ContextPickerTrigger::Mention => '@',
         ContextPickerTrigger::Slash => '/',
+        ContextPickerTrigger::Profile => '\'',
     };
     if query.contains(trigger_char) || query.chars().any(char::is_whitespace) {
         return None;
@@ -234,9 +238,20 @@ pub(crate) fn empty_state_hints(
             insertion: "/help ",
         },
     ];
+    static PROFILE_HINTS: &[ContextPickerEmptyStateHint] = &[
+        ContextPickerEmptyStateHint {
+            display: "'general",
+            insertion: "'general",
+        },
+        ContextPickerEmptyStateHint {
+            display: "'script-kit",
+            insertion: "'script-kit",
+        },
+    ];
     let base = match trigger {
         ContextPickerTrigger::Mention => MENTION_HINTS,
         ContextPickerTrigger::Slash => SLASH_HINTS,
+        ContextPickerTrigger::Profile => PROFILE_HINTS,
     };
 
     if trigger != ContextPickerTrigger::Mention {
@@ -437,6 +452,7 @@ fn score_builtin_seed(
             seed.slash_meta_lower.trim_start_matches(['@', '/']),
             seed.mention_meta_lower.trim_start_matches(['@', '/']),
         ),
+        ContextPickerTrigger::Profile => ("", "", ""),
     };
 
     let mut best_score = 0u32;
@@ -628,6 +644,7 @@ impl AiApp {
                     label: item.label.to_string(),
                 },
                 ContextPickerItemKind::SlashCommand(_)
+                | ContextPickerItemKind::AgentChatProfile { .. }
                 | ContextPickerItemKind::Portal(_)
                 | ContextPickerItemKind::PortalPrefix(_)
                 | ContextPickerItemKind::PortalResult(_)
@@ -788,6 +805,7 @@ impl AiApp {
         let needle = match trigger {
             ContextPickerTrigger::Mention => '@',
             ContextPickerTrigger::Slash => '/',
+            ContextPickerTrigger::Profile => '\'',
         };
         let current_value = self.input_state.read(cx).value().to_string();
         if let Some(pos) = current_value.rfind(needle) {
@@ -810,6 +828,10 @@ fn extend_builtin_picker_items(
     query_lower: &str,
     items: &mut Vec<ContextPickerItem>,
 ) {
+    if trigger == ContextPickerTrigger::Profile {
+        return;
+    }
+
     for seed in builtin_picker_seeds() {
         if trigger == ContextPickerTrigger::Slash && !seed.has_slash_command {
             continue;
@@ -835,6 +857,7 @@ fn extend_builtin_picker_items(
         let meta = match trigger {
             ContextPickerTrigger::Mention => seed.mention_meta,
             ContextPickerTrigger::Slash => seed.slash_meta,
+            ContextPickerTrigger::Profile => "",
         };
 
         items.push(ContextPickerItem {
@@ -1790,6 +1813,7 @@ fn section_priority(kind: &ContextPickerItemKind) -> u8 {
     match kind {
         ContextPickerItemKind::BuiltIn(_) => 0,
         ContextPickerItemKind::SlashCommand(_) => 1,
+        ContextPickerItemKind::AgentChatProfile { .. } => 1,
         ContextPickerItemKind::File(_) => 2,
         ContextPickerItemKind::Folder(_) => 3,
         ContextPickerItemKind::Portal(_)

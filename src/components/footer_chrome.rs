@@ -41,6 +41,11 @@ pub(crate) const FOOTER_MIC_ICON_PATH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/vendor/gpui-component/crates/assets/assets/icons/mic.svg"
 );
+pub(crate) const FOOTER_PROFILE_ICON_TOKEN: &str = "bot";
+pub(crate) const FOOTER_PROFILE_ICON_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/vendor/gpui-component/crates/assets/assets/icons/bot.svg"
+);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -405,7 +410,7 @@ fn footer_labelcap_estimated_width_px(label: &str) -> f32 {
 }
 
 fn footer_keycap_estimated_width_px(token: &str) -> f32 {
-    if token == FOOTER_MIC_ICON_TOKEN {
+    if is_footer_icon_token(token) {
         return FOOTER_KEYCAP_HEIGHT_PX;
     }
 
@@ -422,6 +427,18 @@ fn footer_keycap_estimated_width_px(token: &str) -> f32 {
     (estimated_text_width + FOOTER_KEYCAP_PADDING_X_PX * 2.0)
         .max(FOOTER_KEYCAP_HEIGHT_PX)
         .ceil()
+}
+
+pub(crate) fn is_footer_icon_token(token: &str) -> bool {
+    matches!(token, FOOTER_MIC_ICON_TOKEN | FOOTER_PROFILE_ICON_TOKEN)
+}
+
+pub(crate) fn footer_icon_path(token: &str) -> Option<&'static str> {
+    match token {
+        FOOTER_MIC_ICON_TOKEN => Some(FOOTER_MIC_ICON_PATH),
+        FOOTER_PROFILE_ICON_TOKEN => Some(FOOTER_PROFILE_ICON_PATH),
+        _ => None,
+    }
 }
 
 pub(crate) fn footer_labelcap_max_width_for_slot(slot_width_px: f32, key_width_px: f32) -> f32 {
@@ -521,9 +538,9 @@ fn render_footer_keycap(token: String, max_width_px: Option<f32>, theme: &Theme)
     let footer_text = footer_hint_text_color(theme);
     let full_text = theme.colors.text.primary.to_rgb();
     let hover_border = footer_keycap_border_hover_color(theme);
-    let token_child: AnyElement = if token == FOOTER_MIC_ICON_TOKEN {
+    let token_child: AnyElement = if let Some(path) = footer_icon_path(&token) {
         svg()
-            .external_path(FOOTER_MIC_ICON_PATH)
+            .external_path(path)
             .size(px(13.0))
             .flex_shrink_0()
             .text_color(footer_text)

@@ -81,6 +81,7 @@ impl AiApp {
                 message: SharedString::from(match state.trigger {
                     super::types::ContextPickerTrigger::Slash => "No matching commands",
                     super::types::ContextPickerTrigger::Mention => "No matching context",
+                    super::types::ContextPickerTrigger::Profile => "No matching profiles",
                 }),
                 hints: chips,
             }

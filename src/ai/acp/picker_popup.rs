@@ -805,10 +805,10 @@ impl AcpMentionPopupWindow {
             colors,
         )
         .empty_state(InlineDropdownEmptyState {
-            message: SharedString::from(if self.snapshot.trigger == ContextPickerTrigger::Slash {
-                "No matching commands"
-            } else {
-                "No matching context"
+            message: SharedString::from(match self.snapshot.trigger {
+                ContextPickerTrigger::Slash => "No matching commands",
+                ContextPickerTrigger::Profile => "No matching profiles",
+                ContextPickerTrigger::Mention => "No matching context",
             }),
             hints: chips,
         })

@@ -1026,11 +1026,7 @@ impl ScriptListApp {
     ) {
         if matches!(self.current_view, AppView::AcpChatView { .. }) {
             if let Some(snapshot) = self.acp_footer_snapshot.as_ref() {
-                config.left_info = Some(crate::footer_popup::FooterLeftInfo {
-                    dot_status: snapshot.dot_status,
-                    model_name: snapshot.model_status_label(),
-                    prefer_accent_for_active_states: true,
-                });
+                config.left_info = Some(snapshot.profile_left_info());
                 return;
             }
 
@@ -1045,6 +1041,10 @@ impl ScriptListApp {
                 dot_status,
                 model_name: model_name.clone(),
                 prefer_accent_for_active_states: true,
+                profile_name: None,
+                icon_token: Some(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN),
+                action: Some(crate::footer_popup::FooterAction::Ai),
+                selected: false,
             });
         }
     }

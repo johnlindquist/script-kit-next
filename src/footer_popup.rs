@@ -1,6 +1,6 @@
 use gpui::{
-    div, prelude::FluentBuilder, px, rgba, AnyElement, AnyWindowHandle, App, AppContext, Bounds,
-    Context, DisplayId, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
+    div, prelude::FluentBuilder, px, rgba, svg, AnyElement, AnyWindowHandle, App, AppContext,
+    Bounds, Context, DisplayId, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
     ParentElement, Pixels, Render, SharedString, StatefulInteractiveElement, Styled, Window,
     WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
@@ -44,6 +44,12 @@ const FOOTER_LEFT_INFO_ID: &str = "script-kit-footer-left-info";
 const FOOTER_STATUS_DOT_ID: &str = "script-kit-footer-status-dot";
 #[cfg(target_os = "macos")]
 const FOOTER_MODEL_LABEL_ID: &str = "script-kit-footer-model-label";
+#[cfg(target_os = "macos")]
+const FOOTER_LEFT_PROFILE_ICON_ID: &str = "script-kit-footer-left-profile-icon";
+#[cfg(target_os = "macos")]
+const FOOTER_LEFT_INFO_HIT_TARGET_ID: &str = "script-kit-footer-left-info-hit-target";
+#[cfg(target_os = "macos")]
+const FOOTER_LEFT_PROFILE_ICON_SIZE: f64 = 13.0;
 #[cfg(target_os = "macos")]
 const FOOTER_STREAMING_DOT_SIZE: f64 = 6.0;
 #[cfg(target_os = "macos")]
@@ -166,6 +172,14 @@ pub(crate) struct FooterLeftInfo {
     /// When true, active ACP states should use the accent token instead of the
     /// generic high-contrast fallback so the footer clearly reads as AI-active.
     pub prefer_accent_for_active_states: bool,
+    /// Human-readable profile name for automation and accessibility snapshots.
+    pub profile_name: Option<String>,
+    /// Optional compact icon token rendered inside the merged left marker.
+    pub icon_token: Option<&'static str>,
+    /// Optional action dispatched when the merged left marker is clicked.
+    pub action: Option<FooterAction>,
+    /// Whether the merged left marker should render as selected/open.
+    pub selected: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -348,13 +362,38 @@ impl GpuiFooterOverlay {
             return div().into_any_element();
         };
 
+        let row_id = if info.action.is_some() {
+            "agent-chat-profile-display"
+        } else {
+            "footer-left-info"
+        };
         let mut row = div()
+            .id(row_id)
             .flex()
             .flex_1()
             .items_center()
             .gap(px(FOOTER_LEFT_DOT_LABEL_GAP as f32))
             .min_w(px(0.0))
             .overflow_hidden();
+
+        if let Some(action) = info.action {
+            row = row.cursor_pointer().on_mouse_down(
+                MouseButton::Left,
+                move |_event: &MouseDownEvent, _window, cx| {
+                    cx.stop_propagation();
+                    dispatch_acp_footer_action(action);
+                },
+            );
+        }
+
+        if info.selected {
+            let accent = theme.colors.accent.selected;
+            row = row
+                .rounded(px(4.0))
+                .px(px(4.0))
+                .py(px(1.0))
+                .bg(rgba((accent << 8) | 0x18));
+        }
 
         if !matches!(info.dot_status, FooterDotStatus::Hidden) {
             row = row.child(
@@ -372,9 +411,25 @@ impl GpuiFooterOverlay {
             );
         }
 
+        if let Some(path) = info
+            .icon_token
+            .and_then(crate::components::footer_chrome::footer_icon_path)
+        {
+            row = row.child(
+                svg()
+                    .external_path(path)
+                    .size(px(13.0))
+                    .flex_shrink_0()
+                    .text_color(crate::components::footer_chrome::footer_hint_text_color(
+                        theme,
+                    )),
+            );
+        }
+
         if !info.model_name.trim().is_empty() {
             row = row.child(
                 div()
+                    .id("acp-model-display")
                     .min_w(px(0.0))
                     .font_family(crate::list_item::FONT_SYSTEM_UI)
                     .font_weight(crate::components::footer_chrome::FOOTER_HINT_FONT_WEIGHT_GPUI)
@@ -721,6 +776,18 @@ pub(crate) fn acp_footer_action_channel() -> &'static (
     async_channel::Receiver<FooterAction>,
 ) {
     &ACP_FOOTER_ACTION_CHANNEL
+}
+
+pub(crate) fn dispatch_acp_footer_action(action: FooterAction) {
+    if let Err(error) = acp_footer_action_channel().0.try_send(action) {
+        tracing::warn!(
+            target: "script_kit::footer_popup",
+            event = "acp_footer_left_info_action_send_failed",
+            action = footer_action_key(action),
+            %error,
+            "Failed to enqueue ACP footer left-info action"
+        );
+    }
 }
 
 pub(crate) fn sync_main_footer_popup(
@@ -1416,11 +1483,14 @@ unsafe fn layout_footer_left_info(
     let Some(info) = left_info else {
         remove_identified_subview(left_info_view, FOOTER_STATUS_DOT_ID);
         remove_identified_subview(left_info_view, FOOTER_MODEL_LABEL_ID);
+        remove_identified_subview(left_info_view, FOOTER_LEFT_PROFILE_ICON_ID);
+        remove_identified_subview(left_info_view, FOOTER_LEFT_INFO_HIT_TARGET_ID);
         return;
     };
 
     let bounds: NSRect = msg_send![left_info_view, bounds];
     let mut x = 0.0_f64;
+    let hit_start_x = x;
 
     // ── Status dot (color + animation depends on thread status) ──
     let show_dot = !matches!(info.dot_status, FooterDotStatus::Hidden);
@@ -1445,6 +1515,29 @@ unsafe fn layout_footer_left_info(
         remove_identified_subview(left_info_view, FOOTER_STATUS_DOT_ID);
     }
 
+    // ── Optional merged profile icon ──
+    if let Some(token) = info.icon_token {
+        let icon_view = ensure_footer_left_profile_icon_view(left_info_view);
+        if icon_view != nil {
+            let image = footer_icon_image(token);
+            if image != nil {
+                let _: () = msg_send![icon_view, setImage: image];
+            }
+            let icon_y = ((bounds.size.height - FOOTER_LEFT_PROFILE_ICON_SIZE) / 2.0).round();
+            let _: () = msg_send![
+                icon_view,
+                setFrame: NSRect::new(
+                    NSPoint::new(x, icon_y),
+                    NSSize::new(FOOTER_LEFT_PROFILE_ICON_SIZE, FOOTER_LEFT_PROFILE_ICON_SIZE),
+                )
+            ];
+            let _: () = msg_send![icon_view, setHidden: NO];
+            x += FOOTER_LEFT_PROFILE_ICON_SIZE + FOOTER_LEFT_DOT_LABEL_GAP;
+        }
+    } else {
+        remove_identified_subview(left_info_view, FOOTER_LEFT_PROFILE_ICON_ID);
+    }
+
     // ── Model name label ──
     if info.model_name.is_empty() {
         remove_identified_subview(left_info_view, FOOTER_MODEL_LABEL_ID);
@@ -1460,8 +1553,18 @@ unsafe fn layout_footer_left_info(
                     NSSize::new(label_size.width, label_size.height),
                 )
             ];
+            x += label_size.width;
         }
     }
+
+    layout_footer_left_info_hit_target(
+        left_info_view,
+        info.action,
+        NSRect::new(
+            NSPoint::new(hit_start_x, 0.0),
+            NSSize::new((x - hit_start_x).max(0.0), bounds.size.height),
+        ),
+    );
 }
 
 #[cfg(target_os = "macos")]
@@ -1552,6 +1655,75 @@ unsafe fn ensure_footer_model_label(left_info_view: id, text: &str, text_color: 
         let _: () = msg_send![left_info_view, addSubview: label];
     }
     label
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn ensure_footer_left_profile_icon_view(left_info_view: id) -> id {
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let existing = find_subview_by_identifier(left_info_view, FOOTER_LEFT_PROFILE_ICON_ID);
+    if existing != nil {
+        return existing;
+    }
+
+    let image_view: id = msg_send![class!(NSImageView), alloc];
+    let image_view: id = msg_send![
+        image_view,
+        initWithFrame: NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(FOOTER_LEFT_PROFILE_ICON_SIZE, FOOTER_LEFT_PROFILE_ICON_SIZE),
+        )
+    ];
+    if image_view == nil {
+        return nil;
+    }
+    let identifier = ns_string(FOOTER_LEFT_PROFILE_ICON_ID);
+    if identifier != nil {
+        let _: () = msg_send![image_view, setIdentifier: identifier];
+    }
+    let _: () = msg_send![left_info_view, addSubview: image_view];
+    image_view
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn layout_footer_left_info_hit_target(
+    left_info_view: id,
+    action: Option<FooterAction>,
+    frame: cocoa::foundation::NSRect,
+) {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let Some(action) = action else {
+        remove_identified_subview(left_info_view, FOOTER_LEFT_INFO_HIT_TARGET_ID);
+        return;
+    };
+    if frame.size.width <= 0.0 || frame.size.height <= 0.0 {
+        remove_identified_subview(left_info_view, FOOTER_LEFT_INFO_HIT_TARGET_ID);
+        return;
+    }
+
+    let mut button = find_subview_by_identifier(left_info_view, FOOTER_LEFT_INFO_HIT_TARGET_ID);
+    if button == nil {
+        button = msg_send![class!(NSButton), alloc];
+        button = msg_send![button, initWithFrame: frame];
+        if button == nil {
+            return;
+        }
+        let identifier = ns_string(FOOTER_LEFT_INFO_HIT_TARGET_ID);
+        if identifier != nil {
+            let _: () = msg_send![button, setIdentifier: identifier];
+        }
+        let _: () = msg_send![button, setBordered: NO];
+        let _: () = msg_send![button, setBezelStyle: 0usize];
+        let _: () = msg_send![button, setButtonType: 0usize];
+        let _: () = msg_send![button, setTransparent: YES];
+        let _: () = msg_send![left_info_view, addSubview: button];
+    }
+    let _: () = msg_send![button, setFrame: frame];
+    let _: () = msg_send![button, setEnabled: YES];
+    let _: () = msg_send![button, setTarget: footer_action_target()];
+    let _: () = msg_send![button, setAction: footer_action_selector(action)];
 }
 
 #[cfg(target_os = "macos")]
@@ -2014,43 +2186,68 @@ fn footer_hint_label_widths(
 #[cfg(target_os = "macos")]
 const FOOTER_MIC_ICON_SVG: &str =
     include_str!("../vendor/gpui-component/crates/assets/assets/icons/mic.svg");
+#[cfg(target_os = "macos")]
+const FOOTER_PROFILE_ICON_SVG: &str =
+    include_str!("../vendor/gpui-component/crates/assets/assets/icons/bot.svg");
+
+#[cfg(target_os = "macos")]
+fn footer_icon_png_from_svg(svg: &str) -> Option<Vec<u8>> {
+    let svg = svg.replace("currentColor", "white");
+    let opts = usvg::Options::default();
+    let tree = usvg::Tree::from_str(&svg, &opts).ok()?;
+    let size = 32_u32;
+    let mut pixmap = tiny_skia::Pixmap::new(size, size)?;
+    let svg_size = tree.size();
+    let scale = (size as f32 / svg_size.width()).min(size as f32 / svg_size.height());
+    resvg::render(
+        &tree,
+        tiny_skia::Transform::from_scale(scale, scale),
+        &mut pixmap.as_mut(),
+    );
+    let rgba = pixmap.take();
+    if !rgba.chunks_exact(4).any(|pixel| pixel[3] != 0) {
+        return None;
+    }
+    let image = image::RgbaImage::from_raw(size, size, rgba)?;
+    let mut cursor = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(image)
+        .write_to(&mut cursor, image::ImageFormat::Png)
+        .ok()?;
+    Some(cursor.into_inner())
+}
 
 #[cfg(target_os = "macos")]
 fn footer_mic_icon_png_data() -> Option<&'static [u8]> {
     static PNG_DATA: std::sync::OnceLock<Option<Vec<u8>>> = std::sync::OnceLock::new();
     PNG_DATA
-        .get_or_init(|| {
-            let svg = FOOTER_MIC_ICON_SVG.replace("currentColor", "white");
-            let opts = usvg::Options::default();
-            let tree = usvg::Tree::from_str(&svg, &opts).ok()?;
-            let size = 32_u32;
-            let mut pixmap = tiny_skia::Pixmap::new(size, size)?;
-            let svg_size = tree.size();
-            let scale = (size as f32 / svg_size.width()).min(size as f32 / svg_size.height());
-            resvg::render(
-                &tree,
-                tiny_skia::Transform::from_scale(scale, scale),
-                &mut pixmap.as_mut(),
-            );
-            let rgba = pixmap.take();
-            if !rgba.chunks_exact(4).any(|pixel| pixel[3] != 0) {
-                return None;
-            }
-            let image = image::RgbaImage::from_raw(size, size, rgba)?;
-            let mut cursor = std::io::Cursor::new(Vec::new());
-            image::DynamicImage::ImageRgba8(image)
-                .write_to(&mut cursor, image::ImageFormat::Png)
-                .ok()?;
-            Some(cursor.into_inner())
-        })
+        .get_or_init(|| footer_icon_png_from_svg(FOOTER_MIC_ICON_SVG))
         .as_deref()
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn footer_mic_icon_image() -> id {
+fn footer_profile_icon_png_data() -> Option<&'static [u8]> {
+    static PNG_DATA: std::sync::OnceLock<Option<Vec<u8>>> = std::sync::OnceLock::new();
+    PNG_DATA
+        .get_or_init(|| footer_icon_png_from_svg(FOOTER_PROFILE_ICON_SVG))
+        .as_deref()
+}
+
+#[cfg(target_os = "macos")]
+fn footer_icon_png_data(token: &str) -> Option<&'static [u8]> {
+    match token {
+        crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN => footer_mic_icon_png_data(),
+        crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN => {
+            footer_profile_icon_png_data()
+        }
+        _ => None,
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn footer_icon_image(token: &str) -> id {
     use objc::{class, msg_send, sel, sel_impl};
 
-    let Some(png_data) = footer_mic_icon_png_data() else {
+    let Some(png_data) = footer_icon_png_data(token) else {
         return nil;
     };
     let data: id = msg_send![
@@ -2167,11 +2364,11 @@ unsafe fn make_footer_hint_item(
             }
         }
 
-        let is_mic_icon = key_str == crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN;
+        let is_icon = crate::components::footer_chrome::is_footer_icon_token(key_str);
         let chip_padding_x = crate::components::footer_chrome::FOOTER_KEYCAP_PADDING_X_PX as f64;
         let chip_height = crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX as f64;
-        let (glyph_view, glyph_size) = if is_mic_icon {
-            let image = footer_mic_icon_image();
+        let (glyph_view, glyph_size) = if is_icon {
+            let image = footer_icon_image(key_str);
             if image == nil {
                 continue;
             }
@@ -2669,6 +2866,11 @@ enum FooterWindowKind {
 
 #[cfg(target_os = "macos")]
 fn send_footer_action_from_sender(sender: id, action: FooterAction) {
+    if footer_sender_has_identifier(sender, FOOTER_LEFT_INFO_HIT_TARGET_ID) {
+        dispatch_acp_footer_action(action);
+        return;
+    }
+
     let title = unsafe { footer_sender_window_title(sender) };
     let window_kind = if let Some(ref t) = title {
         if t.contains("Script Kit Dictation") {
@@ -2682,6 +2884,28 @@ fn send_footer_action_from_sender(sender: id, action: FooterAction) {
         FooterWindowKind::Main
     };
     send_footer_action_to_channel_v2(action, window_kind);
+}
+
+#[cfg(target_os = "macos")]
+fn footer_sender_has_identifier(sender: id, expected: &str) -> bool {
+    use objc::{msg_send, sel, sel_impl};
+
+    if sender == nil {
+        return false;
+    }
+
+    unsafe {
+        let identifier: id = msg_send![sender, identifier];
+        if identifier == nil {
+            return false;
+        }
+        let expected = ns_string(expected);
+        if expected == nil {
+            return false;
+        }
+        let matches: cocoa::base::BOOL = msg_send![identifier, isEqualToString: expected];
+        matches == YES
+    }
 }
 
 #[cfg(target_os = "macos")]

@@ -104,6 +104,7 @@ pub(crate) struct AcpFooterSnapshot {
     pub(crate) profile_display: String,
     pub(crate) model_display: String,
     pub(crate) status_text: Option<&'static str>,
+    pub(crate) profile_selector_open: bool,
     pub(crate) buttons: Vec<AcpFooterButtonSpec>,
 }
 
@@ -114,6 +115,18 @@ impl AcpFooterSnapshot {
                 format!("{} · {}", self.model_display, status)
             }
             _ => self.model_display.clone(),
+        }
+    }
+
+    pub(crate) fn profile_left_info(&self) -> crate::footer_popup::FooterLeftInfo {
+        crate::footer_popup::FooterLeftInfo {
+            dot_status: self.dot_status,
+            model_name: self.model_status_label(),
+            prefer_accent_for_active_states: true,
+            profile_name: Some(self.profile_display.clone()),
+            icon_token: Some(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN),
+            action: Some(crate::footer_popup::FooterAction::Ai),
+            selected: self.profile_selector_open,
         }
     }
 }
@@ -672,9 +685,9 @@ impl AcpChatView {
 
     fn telemetry_item_id(item: &ContextPickerItem) -> String {
         match &item.kind {
-            ContextPickerItemKind::BuiltIn(_) | ContextPickerItemKind::SlashCommand(_) => {
-                item.id.to_string()
-            }
+            ContextPickerItemKind::BuiltIn(_)
+            | ContextPickerItemKind::SlashCommand(_)
+            | ContextPickerItemKind::AgentChatProfile { .. } => item.id.to_string(),
             ContextPickerItemKind::File(_) => format!("file:{}", item.label),
             ContextPickerItemKind::Folder(_) => format!("folder:{}", item.label),
             ContextPickerItemKind::Portal(_)
@@ -724,6 +737,55 @@ impl AcpChatView {
         let prefs = crate::config::load_user_preferences();
         let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
         crate::ai::agent_chat::profiles::agent_chat_profile_picker_entries(&prefs.ai, &ctx)
+    }
+
+    fn build_profile_picker_items(&self, query: &str) -> Vec<ContextPickerItem> {
+        let query_lower = query.trim().to_ascii_lowercase();
+        let mut items = self
+            .profile_selector_entries()
+            .into_iter()
+            .filter_map(|entry| {
+                let haystack = format!("{} {}", entry.name, entry.id).to_ascii_lowercase();
+                if !query_lower.is_empty() && !haystack.contains(&query_lower) {
+                    return None;
+                }
+                let source = match entry.source {
+                    crate::ai::agent_chat::profiles::AgentChatProfileSource::BuiltIn => "Built-in",
+                    crate::ai::agent_chat::profiles::AgentChatProfileSource::User => "Custom",
+                };
+                let backend = match entry.backend {
+                    crate::config::AgentChatBackend::Pi => "Pi",
+                    crate::config::AgentChatBackend::Acp => "ACP",
+                };
+                let score = if query_lower.is_empty() {
+                    100
+                } else if entry.name.to_ascii_lowercase().starts_with(&query_lower) {
+                    200
+                } else if entry.id.to_ascii_lowercase().starts_with(&query_lower) {
+                    175
+                } else {
+                    125
+                };
+                Some(ContextPickerItem {
+                    id: SharedString::from(format!("agent-chat-profile:{}", entry.id)),
+                    label: SharedString::from(entry.name),
+                    description: SharedString::from(format!("{source} Agent Chat profile")),
+                    meta: SharedString::from(format!("'{} · {backend}", entry.id)),
+                    kind: ContextPickerItemKind::AgentChatProfile {
+                        profile_id: entry.id,
+                    },
+                    score,
+                    label_highlight_indices: Vec::new(),
+                    meta_highlight_indices: Vec::new(),
+                })
+            })
+            .collect::<Vec<_>>();
+        items.sort_by(|a, b| {
+            b.score
+                .cmp(&a.score)
+                .then_with(|| a.label.to_string().cmp(&b.label.to_string()))
+        });
+        items
     }
 
     fn selected_profile_popup_index(
@@ -845,6 +907,7 @@ impl AcpChatView {
             profile_display: thread.profile_display().to_string(),
             model_display: thread.selected_model_display().to_string(),
             status_text: self.footer_status_text(cx),
+            profile_selector_open: self.profile_selector_open,
             buttons: self.footer_buttons_for_thread(thread),
         }
     }
@@ -853,7 +916,7 @@ impl AcpChatView {
         &self,
         cx: &App,
     ) -> crate::footer_popup::MainWindowFooterConfig {
-        use crate::footer_popup::{FooterButtonConfig, FooterLeftInfo, MainWindowFooterConfig};
+        use crate::footer_popup::{FooterButtonConfig, MainWindowFooterConfig};
 
         let snapshot = self.footer_snapshot(cx);
         let buttons = snapshot
@@ -871,11 +934,7 @@ impl AcpChatView {
             .collect();
 
         let mut config = MainWindowFooterConfig::new("acp_chat", buttons);
-        config.left_info = Some(FooterLeftInfo {
-            dot_status: snapshot.dot_status,
-            model_name: snapshot.model_status_label(),
-            prefer_accent_for_active_states: true,
-        });
+        config.left_info = Some(snapshot.profile_left_info());
 
         config
     }
@@ -1002,7 +1061,8 @@ impl AcpChatView {
             }
             FooterAction::Actions => self.trigger_toggle_actions(window, cx),
             FooterAction::Close => self.trigger_close_requested(window, cx),
-            FooterAction::Ai | FooterAction::Apply => {}
+            FooterAction::Ai => self.toggle_profile_selector_popup(window, cx),
+            FooterAction::Apply => {}
         }
     }
 
@@ -1094,7 +1154,6 @@ impl AcpChatView {
         let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
 
         let mut hints = Vec::new();
-        let status_text = snapshot.status_text;
         for button in snapshot.buttons.iter().cloned() {
             let button_view = weak_view.clone();
             hints.push(crate::components::ClickableHint::new(
@@ -1148,68 +1207,11 @@ impl AcpChatView {
             .justify_between()
             .border_t(px(1.0))
             .border_color(rgba((theme.colors.text.primary << 8) | 0x10))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.0))
-                    .when_some(Self::footer_dot_element(snapshot.dot_status), |d, dot| {
-                        d.child(dot)
-                    })
-                    .child(
-                        div()
-                            .id("agent-chat-profile-display")
-                            .flex()
-                            .items_center()
-                            .text_xs()
-                            .text_color(rgba(hint_text_rgba))
-                            .cursor_pointer()
-                            .on_click({
-                                let profile_view = weak_view.clone();
-                                move |_event, window, cx| {
-                                    if let Some(entity) = profile_view.upgrade() {
-                                        entity.update(cx, |chat, cx| {
-                                            chat.toggle_profile_selector_popup(window, cx);
-                                        });
-                                    }
-                                }
-                            })
-                            .child(snapshot.profile_display.clone()),
-                    )
-                    .child(div().text_xs().text_color(rgba(hint_text_rgba)).child("·"))
-                    .child(
-                        div()
-                            .id("acp-model-display")
-                            .flex()
-                            .items_center()
-                            .text_xs()
-                            .text_color(rgba(hint_text_rgba))
-                            .cursor_pointer()
-                            .on_click({
-                                let model_view = weak_view.clone();
-                                move |_event, window, cx| {
-                                    if let Some(entity) = model_view.upgrade() {
-                                        entity.update(cx, |chat, cx| {
-                                            chat.cache_popup_parent_window(window, cx);
-                                            chat.model_selector_open = !chat.model_selector_open;
-                                            chat.sync_model_selector_popup_window_from_cached_parent(cx);
-                                            cx.notify();
-                                        });
-                                    }
-                                }
-                            })
-                            .child(snapshot.model_display),
-                    )
-                    .when_some(status_text, |d, status| {
-                        d.child(div().text_xs().text_color(rgba(hint_text_rgba)).child("·"))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgba(hint_text_rgba))
-                                    .child(status),
-                            )
-                    }),
-            )
+            .child(Self::render_profile_status_marker_from_snapshot(
+                &snapshot,
+                weak_view.clone(),
+                hint_text_rgba,
+            ))
             .child(crate::components::render_hint_icons_clickable(
                 hints,
                 hint_text_rgba,
@@ -1225,10 +1227,10 @@ impl AcpChatView {
         let hint_text_hex = theme.colors.text.primary;
         let hint_opacity_byte = (crate::theme::opacity::OPACITY_TEXT_MUTED * 255.0).round() as u32;
         let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
-        let status_text = snapshot.status_text;
         let hints = snapshot
             .buttons
-            .into_iter()
+            .iter()
+            .cloned()
             .map(|button| {
                 let button_view = weak_view.clone();
                 crate::components::SelectableHint::new(
@@ -1256,72 +1258,77 @@ impl AcpChatView {
             .justify_between()
             .border_t(px(1.0))
             .border_color(rgba((theme.colors.text.primary << 8) | 0x10))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.0))
-                    .when_some(Self::footer_dot_element(snapshot.dot_status), |d, dot| {
-                        d.child(dot)
-                    })
-                    .child(
-                        div()
-                            .id("agent-chat-profile-display")
-                            .flex()
-                            .items_center()
-                            .text_xs()
-                            .text_color(rgba(hint_text_rgba))
-                            .cursor_pointer()
-                            .on_click({
-                                let profile_view = weak_view.clone();
-                                move |_event, window, cx| {
-                                    if let Some(entity) = profile_view.upgrade() {
-                                        entity.update(cx, |chat, cx| {
-                                            chat.toggle_profile_selector_popup(window, cx);
-                                        });
-                                    }
-                                }
-                            })
-                            .child(snapshot.profile_display.clone()),
-                    )
-                    .child(div().text_xs().text_color(rgba(hint_text_rgba)).child("·"))
-                    .child(
-                        div()
-                            .id("acp-model-display")
-                            .flex()
-                            .items_center()
-                            .text_xs()
-                            .text_color(rgba(hint_text_rgba))
-                            .cursor_pointer()
-                            .on_click({
-                                let model_view = weak_view.clone();
-                                move |_event, window, cx| {
-                                    if let Some(entity) = model_view.upgrade() {
-                                        entity.update(cx, |chat, cx| {
-                                            chat.cache_popup_parent_window(window, cx);
-                                            chat.model_selector_open = !chat.model_selector_open;
-                                            chat.sync_model_selector_popup_window_from_cached_parent(cx);
-                                            cx.notify();
-                                        });
-                                    }
-                                }
-                            })
-                            .child(snapshot.model_display),
-                    )
-                    .when_some(status_text, |d, status| {
-                        d.child(div().text_xs().text_color(rgba(hint_text_rgba)).child("·"))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgba(hint_text_rgba))
-                                    .child(status),
-                            )
-                    }),
-            )
+            .child(Self::render_profile_status_marker_from_snapshot(
+                &snapshot,
+                weak_view.clone(),
+                hint_text_rgba,
+            ))
             .child(crate::components::render_selectable_hint_icons(
                 hints,
                 hint_text_rgba,
             ))
+            .into_any_element()
+    }
+
+    fn render_profile_status_marker_from_snapshot(
+        snapshot: &AcpFooterSnapshot,
+        weak_view: WeakEntity<AcpChatView>,
+        hint_text_rgba: u32,
+    ) -> gpui::AnyElement {
+        div()
+            .id("agent-chat-profile-display")
+            .flex()
+            .items_center()
+            .gap(px(6.0))
+            .min_w(px(0.0))
+            .overflow_hidden()
+            .cursor_pointer()
+            .when(snapshot.profile_selector_open, |d| {
+                let accent = theme::get_cached_theme().colors.accent.selected;
+                d.bg(rgba((accent << 8) | 0x18))
+                    .rounded(px(4.0))
+                    .px(px(4.0))
+                    .py(px(1.0))
+            })
+            .on_click({
+                let profile_view = weak_view.clone();
+                move |_event, window, cx| {
+                    if let Some(entity) = profile_view.upgrade() {
+                        entity.update(cx, |chat, cx| {
+                            chat.toggle_profile_selector_popup(window, cx);
+                        });
+                    }
+                }
+            })
+            .when_some(Self::footer_dot_element(snapshot.dot_status), |d, dot| {
+                d.child(dot)
+            })
+            .child(
+                gpui::svg()
+                    .external_path(crate::components::footer_chrome::FOOTER_PROFILE_ICON_PATH)
+                    .size(px(13.0))
+                    .text_color(rgba(hint_text_rgba)),
+            )
+            .child(
+                div()
+                    .id("acp-model-display")
+                    .flex()
+                    .items_center()
+                    .min_w(px(0.0))
+                    .text_xs()
+                    .text_color(rgba(hint_text_rgba))
+                    .overflow_hidden()
+                    .child(snapshot.model_display.clone()),
+            )
+            .when_some(snapshot.status_text, |d, status| {
+                d.child(div().text_xs().text_color(rgba(hint_text_rgba)).child("·"))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgba(hint_text_rgba))
+                            .child(status),
+                    )
+            })
             .into_any_element()
     }
 
@@ -2199,6 +2206,9 @@ impl AcpChatView {
         self.profile_selector_open = !self.profile_selector_open;
         if self.profile_selector_open {
             self.model_selector_open = false;
+            self.attach_menu_open = false;
+            self.history_menu = None;
+            self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
             let entries = self.profile_selector_entries();
             self.profile_selector_selected_index = self.selected_profile_popup_index(&entries);
         }
@@ -3021,6 +3031,7 @@ impl AcpChatView {
             let trigger = match session.trigger {
                 ContextPickerTrigger::Mention => "@",
                 ContextPickerTrigger::Slash => "/",
+                ContextPickerTrigger::Profile => "'",
             };
             crate::protocol::AcpPickerState {
                 open: true,
@@ -3506,6 +3517,7 @@ impl AcpChatView {
             let trigger_str = match session.trigger {
                 crate::ai::window::context_picker::types::ContextPickerTrigger::Mention => "@",
                 crate::ai::window::context_picker::types::ContextPickerTrigger::Slash => "/",
+                crate::ai::window::context_picker::types::ContextPickerTrigger::Profile => "'",
             };
             (
                 trigger_str.to_string(),
@@ -4267,6 +4279,57 @@ impl AcpChatView {
             event = "acp_host_inline_context_staged",
             source,
             token_count = self.inline_owned_context_tokens.len(),
+        );
+        cx.notify();
+        Ok(())
+    }
+
+    pub(crate) fn stage_focused_text_from_host(
+        &mut self,
+        snapshot: crate::platform::accessibility::FocusedTextSnapshot,
+        instruction: Option<String>,
+        source: &'static str,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        if self.is_setup_mode() {
+            return Err("Agent Chat is in setup mode".to_string());
+        }
+
+        let char_count = snapshot.metrics.chars;
+        let app_name = snapshot.app.name.clone();
+        let source_uri = format!("focused-text://{}", snapshot.session_id);
+        let part = crate::ai::message_parts::AiContextPart::TextBlock {
+            label: format!("Focused Text · {app_name} · {char_count} chars"),
+            source: source_uri,
+            text: snapshot.text,
+            mime_type: Some("text/plain".to_string()),
+        };
+
+        let input = instruction
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_default();
+        let cursor = input.chars().count();
+
+        self.typed_mention_aliases.clear();
+        self.inline_owned_context_tokens.clear();
+        self.pasted_text_tokens.clear();
+        self.pasted_image_tokens.clear();
+        self.pending_portal_session = None;
+
+        self.live_thread().update(cx, move |thread, cx| {
+            thread.replace_pending_context_parts(vec![part], source, cx);
+            thread.input.set_text(input);
+            thread.input.set_cursor(cursor);
+            cx.notify();
+        });
+
+        tracing::info!(
+            target: "script_kit::focused_text",
+            event = "focused_text_context_staged",
+            source,
+            app_name = %app_name,
+            chars = char_count,
         );
         cx.notify();
         Ok(())
@@ -5619,6 +5682,9 @@ impl AcpChatView {
                                     }
                                 }
                             }
+                            ContextPickerTrigger::Profile => {
+                                self.build_profile_picker_items(&query)
+                            }
                         };
 
                         // Filter out portal items the host does not support.
@@ -5902,6 +5968,7 @@ impl AcpChatView {
         let trigger_str = match session.trigger {
             ContextPickerTrigger::Mention => "@",
             ContextPickerTrigger::Slash => "/",
+            ContextPickerTrigger::Profile => "'",
         };
 
         tracing::info!(
@@ -6044,6 +6111,30 @@ impl AcpChatView {
             }
         }
 
+        if session.trigger == ContextPickerTrigger::Profile {
+            if let ContextPickerItemKind::AgentChatProfile { profile_id } = item.kind {
+                let current_text = self.live_thread().read(cx).input.text().to_string();
+                let next_text = Self::replace_text_in_char_range(
+                    &current_text,
+                    session.trigger_range.clone(),
+                    "",
+                );
+                let next_cursor = session.trigger_range.start;
+                if let Some(ref mut accepted) = self.last_accepted_item {
+                    accepted.cursor_after = next_cursor;
+                }
+                self.live_thread().update(cx, |thread, cx| {
+                    thread.input.set_text(next_text);
+                    thread.input.set_cursor(next_cursor);
+                    cx.notify();
+                });
+                self.select_profile_from_popup(&profile_id, cx);
+                self.sync_mention_popup_window_from_cached_parent(cx);
+                cx.notify();
+                return;
+            }
+        }
+
         // ── Build context part; decide if inline-mention sync applies ──
         let (part, inline_text, allow_inline_sync) = match &item.kind {
             ContextPickerItemKind::PortalPrefix(payload) => {
@@ -6117,7 +6208,9 @@ impl AcpChatView {
                     session.trigger == ContextPickerTrigger::Mention,
                 )
             }
-            ContextPickerItemKind::SlashCommand(_) | ContextPickerItemKind::Inert => return,
+            ContextPickerItemKind::SlashCommand(_)
+            | ContextPickerItemKind::AgentChatProfile { .. }
+            | ContextPickerItemKind::Inert => return,
             ContextPickerItemKind::PortalResult(payload) => {
                 let part = match &payload.attachment {
                     crate::ai::window::context_picker::types::InlinePortalAttachment::ResourceUri {
@@ -6511,6 +6604,7 @@ impl AcpChatView {
         let trigger_text = match session.trigger {
             ContextPickerTrigger::Mention => "@",
             ContextPickerTrigger::Slash => "/",
+            ContextPickerTrigger::Profile => "'",
         };
         let trigger_width = Self::measure_acp_input_prefix_width(trigger_text);
         let (after_trigger_x, after_trigger_y) = Self::measure_acp_input_cursor_position(

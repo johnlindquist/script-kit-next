@@ -6,6 +6,7 @@ use gpui::SharedString;
 pub enum ContextPickerTrigger {
     Mention,
     Slash,
+    Profile,
 }
 
 /// Which full built-in view a portal item opens for rich browsing.
@@ -156,6 +157,8 @@ pub enum ContextPickerItemKind {
     /// A slash command with source-aware identity. Default commands insert
     /// literal `/command` text; plugin and Claude skills stage local content.
     SlashCommand(SlashCommandPayload),
+    /// Agent Chat profile row shown from the `'` trigger.
+    AgentChatProfile { profile_id: String },
     /// Opens a full built-in view as a portal for rich browsing.
     /// Selection in the portal attaches the result back to the ACP chat.
     Portal(PortalKind),
@@ -239,6 +242,7 @@ impl ContextPickerState {
                         ContextPickerItemKind::File(_) => "file",
                         ContextPickerItemKind::Folder(_) => "folder",
                         ContextPickerItemKind::SlashCommand(_) => "slash_command",
+                        ContextPickerItemKind::AgentChatProfile { .. } => "agent_chat_profile",
                         ContextPickerItemKind::Portal(_) => "portal",
                         ContextPickerItemKind::PortalPrefix(_) => "portal_prefix",
                         ContextPickerItemKind::PortalResult(_) => "portal_result",

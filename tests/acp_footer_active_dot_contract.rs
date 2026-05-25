@@ -62,9 +62,11 @@ fn native_footer_uses_cached_acp_status_without_child_entity_reads() {
         "native footer must use the deferred parent cache populated from AcpChatView notifications"
     );
     assert!(
-        body.contains("FooterLeftInfo")
-            && body.contains("dot_status,")
-            && body.contains("model_name: snapshot.model_status_label()"),
+        body.contains("snapshot.profile_left_info()")
+            && body.contains(
+                "icon_token: Some(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN)"
+            )
+            && body.contains("action: Some(crate::footer_popup::FooterAction::Ai)"),
         "native footer must still publish ACP dot/model/status info from cached values"
     );
     assert!(
@@ -214,7 +216,9 @@ fn get_state_active_footer_exposes_acp_model_status_text() {
         PROTOCOL_SURFACE_SOURCE.contains("pub left_info: Option<ActiveFooterLeftInfoSnapshot>")
             && PROTOCOL_SURFACE_SOURCE.contains("pub struct ActiveFooterLeftInfoSnapshot")
             && PROTOCOL_SURFACE_SOURCE.contains("pub dot_status: String")
-            && PROTOCOL_SURFACE_SOURCE.contains("pub model_name: String"),
+            && PROTOCOL_SURFACE_SOURCE.contains("pub model_name: String")
+            && PROTOCOL_SURFACE_SOURCE.contains("pub profile_name: Option<String>")
+            && PROTOCOL_SURFACE_SOURCE.contains("pub action: Option<String>"),
         "getState.activeFooter must expose the footer model/status label for ACP proof"
     );
 
@@ -226,7 +230,9 @@ fn get_state_active_footer_exposes_acp_model_status_text() {
         body.contains("self.enrich_footer_config_with_acp_info(cfg);")
             && body.contains("left_info = config.as_ref().and_then")
             && body.contains("dot_status: Self::active_footer_dot_status_name")
-            && body.contains("model_name: info.model_name.clone()"),
+            && body.contains("model_name: info.model_name.clone()")
+            && body.contains("profile_name: info.profile_name.clone()")
+            && body.contains("action: info.action.map(Self::footer_action_name)"),
         "active footer snapshots must include ACP-enriched left info, including status text"
     );
 }
