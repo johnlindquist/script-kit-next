@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "defaultMode": "dontAsk",
+    "allow": [
+      "Bash(bash scripts/agentic/disk-space-cargo-emergency-clean.sh *)",
+      "Bash(./scripts/agentic/prune-cargo-targets.sh --apply)",
+      "Bash(df *)",
+      "Bash(du *)",
+      "Bash(ps *)",
+      "Bash(pgrep *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(ls *)",
+      "Bash(pwd)"
+    ],
+    "deny": [
+      "Bash(sudo *)",
+      "Bash(rm -rf / *)",
+      "Bash(rm -rf ~ *)",
+      "Bash(git *)",
+      "Edit",
+      "Write",
+      "NotebookEdit",
+      "WebFetch",
+      "WebSearch",
+      "Agent",
+      "Skill",
+      "Monitor"
+    ]
+  }
+}
