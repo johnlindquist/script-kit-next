@@ -457,6 +457,7 @@ pub fn update_chat_title(chat_id: &ChatId, title: &str) -> Result<()> {
 }
 
 /// Get a chat by ID
+#[must_use = "query result should be checked"]
 pub fn get_chat(id: &ChatId) -> Result<Option<Chat>> {
     let db = get_db()?;
     let conn = db
@@ -482,6 +483,7 @@ pub fn get_chat(id: &ChatId) -> Result<Option<Chat>> {
 }
 
 /// Get all active chats (not deleted), sorted by updated_at desc
+#[must_use = "query result should be checked"]
 pub fn get_all_chats() -> Result<Vec<Chat>> {
     let db = get_db()?;
     let conn = db
@@ -510,6 +512,7 @@ pub fn get_all_chats() -> Result<Vec<Chat>> {
 }
 
 /// Get chats in trash (soft-deleted)
+#[must_use = "query result should be checked"]
 pub fn get_deleted_chats() -> Result<Vec<Chat>> {
     let db = get_db()?;
     let conn = db
@@ -611,6 +614,7 @@ fn sanitize_fts_query(query: &str) -> String {
 ///
 /// Searches both chat titles and message content using FTS5 when possible,
 /// with a fallback to LIKE queries for robustness.
+#[must_use = "query result should be checked"]
 pub fn search_chats(query: &str) -> Result<Vec<Chat>> {
     if query.trim().is_empty() {
         return get_all_chats();
@@ -698,6 +702,7 @@ pub struct ChatSearchResult {
 ///
 /// Returns `ChatSearchResult` with snippet excerpts showing where the match occurred.
 /// Used by the sidebar to display contextual search results.
+#[must_use = "query result should be checked"]
 pub fn search_chats_with_snippets(query: &str) -> Result<Vec<ChatSearchResult>> {
     if query.trim().is_empty() {
         let chats = get_all_chats()?;
@@ -986,6 +991,7 @@ pub fn delete_messages_batch(message_ids: &[String]) -> Result<()> {
 }
 
 /// Get all messages for a chat, ordered by creation time
+#[must_use = "query result should be checked"]
 pub fn get_chat_messages(chat_id: &ChatId) -> Result<Vec<Message>> {
     let db = get_db()?;
     let conn = db
@@ -1017,6 +1023,7 @@ pub fn get_chat_messages(chat_id: &ChatId) -> Result<Vec<Message>> {
 }
 
 /// Get the last N messages for a chat
+#[must_use = "query result should be checked"]
 pub fn get_recent_messages(chat_id: &ChatId, limit: usize) -> Result<Vec<Message>> {
     let db = get_db()?;
     let conn = db

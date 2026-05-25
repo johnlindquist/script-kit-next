@@ -149,6 +149,7 @@ pub fn toggle_dark_mode() -> Result<(), String> {
 /// Check if Dark Mode is enabled
 ///
 /// Returns true if dark mode is currently active.
+#[must_use = "the dark mode query result should be checked"]
 #[allow(dead_code)]
 pub fn is_dark_mode() -> Result<bool, String> {
     let output = run_applescript_with_output(
