@@ -109,24 +109,28 @@ fn capture_focused_text_field_platform(
         return Err(FocusedTextError::SecureField);
     }
 
-    let text = super::ax::whole_text(element.as_ptr()).or_else(|err| {
-        tracing::warn!(
-            target: "script_kit::focused_text",
-            event = "focused_text_ax_whole_text_failed_trying_clipboard_fallback",
-            error = %err,
-            role = ?role,
-            subrole = ?subrole,
-        );
-        super::clipboard::copy_all_plain_text_preserving_clipboard().map_err(|fallback_err| {
-            if content_kind == FocusedTextContentKind::Unsupported {
-                FocusedTextError::UnsupportedTarget
-            } else {
-                FocusedTextError::Platform(format!(
-                    "{err}; focused-text clipboard fallback failed: {fallback_err}"
-                ))
-            }
-        })
-    })?;
+    let mut used_clipboard_fallback = false;
+    let text = match super::ax::whole_text(element.as_ptr()) {
+        Ok(text) => text,
+        Err(err) => {
+            tracing::warn!(
+                target: "script_kit::focused_text",
+                event = "focused_text_ax_whole_text_failed_trying_clipboard_fallback",
+                error = %err,
+                role = ?role,
+                subrole = ?subrole,
+            );
+            let text = super::clipboard::copy_all_plain_text_preserving_clipboard().map_err(
+                |fallback_err| {
+                    FocusedTextError::Platform(format!(
+                        "{err}; focused-text clipboard fallback failed: {fallback_err}"
+                    ))
+                },
+            )?;
+            used_clipboard_fallback = true;
+            text
+        }
+    };
     let selected_range_utf16 = super::ax::selected_text_range(element.as_ptr());
     let caret_range_utf16 = selected_range_utf16.map(|range| TextRangeUtf16 {
         location: range.location + range.length,
@@ -134,10 +138,8 @@ fn capture_focused_text_field_platform(
     });
     let geometry = super::ax::focused_geometry(element.as_ptr(), selected_range_utf16);
     let can_edit = super::ax::is_enabled(element.as_ptr()).unwrap_or(true)
-        && !matches!(
-            content_kind,
-            FocusedTextContentKind::Secure | FocusedTextContentKind::Unsupported
-        );
+        && content_kind != FocusedTextContentKind::Secure
+        && (content_kind != FocusedTextContentKind::Unsupported || used_clipboard_fallback);
     let captured_at_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis())
