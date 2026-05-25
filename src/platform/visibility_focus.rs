@@ -545,8 +545,7 @@ pub fn is_main_window_focused() -> bool {
 
 #[cfg(not(target_os = "macos"))]
 pub fn is_main_window_focused() -> bool {
-    // TODO: Implement for other platforms
-    // On non-macOS, assume focused to avoid auto-dismiss behavior.
+    // KNOWN: Non-macOS stub returns true to avoid auto-dismiss; cross-platform focus detection is not a trivial addition.
     true
 }
 

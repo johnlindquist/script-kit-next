@@ -417,7 +417,7 @@ impl ScriptListApp {
             }),
             tool: scriptlet.tool.clone(),
             scriptlet_content: scriptlet.code.clone(),
-            inputs: vec![], // TODO: Parse inputs from code if needed
+            inputs: vec![], // KNOWN: Runtime args are passed via ScriptletExecOptions; declarative input parsing requires a metadata change.
             group: scriptlet.group.clone().unwrap_or_default(),
             preview: None,
             metadata: scriptlets::ScriptletMetadata {

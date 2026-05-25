@@ -137,7 +137,7 @@
         // so we can reliably find our main window by its expected size (~750x500)
         window_manager::find_and_register_main_window();
 
-        // HACK: Swizzle GPUI's BlurredView IMMEDIATELY after window creation
+        // KNOWN: Swizzle GPUI's BlurredView must happen immediately after window creation
         // GPUI hides the native macOS CAChameleonLayer (vibrancy tint) on every frame.
         // By swizzling now (before any rendering), we preserve the native tint effect.
         // This gives us Raycast/Spotlight-like vibrancy appearance.

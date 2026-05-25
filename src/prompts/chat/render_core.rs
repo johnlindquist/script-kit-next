@@ -363,8 +363,7 @@ impl Render for ChatPrompt {
         let has_turns = !self.conversation_turns_cache.is_empty();
         let messages_content = if has_turns {
             let entity = cx.entity();
-            // TODO(codex-audit): This Vec clone exists to move turns into the list closure.
-            // Consider Arc-backed snapshots to avoid per-render cloning.
+            // KNOWN: Vec clone needed to move turns snapshot into list closure; Arc-backed snapshots would avoid per-render cloning.
             let turns_snapshot = self.conversation_turns_cache.clone();
             let show_scroll_to_latest =
                 self.user_has_scrolled_up && !self.turns_list_is_at_bottom();

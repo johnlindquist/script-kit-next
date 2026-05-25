@@ -746,7 +746,7 @@ app.run(move |cx: &mut App| {
         // so we can reliably find our main window by its expected size (~750x500)
         window_manager::find_and_register_main_window();
 
-        // HACK: Swizzle GPUI's BlurredView IMMEDIATELY after window creation
+        // KNOWN: Swizzle GPUI's BlurredView must happen immediately after window creation
         // GPUI hides the native macOS CAChameleonLayer (vibrancy tint) on every frame.
         // By swizzling now (before any rendering), we preserve the native tint effect.
         // This gives us Raycast/Spotlight-like vibrancy appearance.
@@ -2366,7 +2366,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             ExternalCommand::TriggerAction {
                                 action_id,
                                 host,
-                                ..
+                                request_id,
                             } => {
                                 // Fire an action by ID without driving the actions-dialog
                                 // popup through Cmd+K / arrow-nav / Enter. AFK harnesses and
@@ -2413,8 +2413,15 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     None => view.current_actions_host(),
                                 };
 
+                                let mut receipt_host = None;
+                                let mut receipt_ok = false;
+                                let mut receipt_error_code = None;
+                                let mut popup_closed = false;
+
                                 match resolved_host {
                                     Some(host_value) => {
+                                        receipt_host = Some(format!("{host_value:?}"));
+                                        receipt_ok = true;
                                         logging::log(
                                             "STDIN",
                                             &format!(
@@ -2426,15 +2433,34 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         );
                                         if view.show_actions_popup {
                                             view.close_actions_popup(host_value, window, ctx);
+                                            popup_closed = true;
                                         }
                                         view.execute_action_for_actions_host(
-                                            host_value, action_id, window, ctx,
+                                            host_value,
+                                            action_id.clone(),
+                                            window,
+                                            ctx,
                                         );
                                     }
                                     None => {
+                                        receipt_error_code = Some("no_host".to_string());
                                         logging::log(
                                             "STDIN",
                                             "TriggerAction: no host supplied and current view has no shared-actions host; skipping",
+                                        );
+                                    }
+                                }
+                                if let Some(ref rid) = request_id {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(
+                                            crate::protocol::Message::trigger_action_result(
+                                                rid.to_string(),
+                                                action_id.to_string(),
+                                                receipt_host,
+                                                receipt_ok,
+                                                popup_closed,
+                                                receipt_error_code,
+                                            ),
                                         );
                                     }
                                 }

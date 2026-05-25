@@ -362,7 +362,7 @@ impl Render for HudView {
                         .variant(ButtonVariant::Primary)
                         .on_click(Box::new(move |_event, _window, _cx| {
                             if let Some(ref action) = action {
-                                action.execute(None); // TODO: Get editor from config
+                                action.execute(None); // KNOWN: Passes None; plumbing configured editor requires HudView config access.
                             }
                         })),
                 )

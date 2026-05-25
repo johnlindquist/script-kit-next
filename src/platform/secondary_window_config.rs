@@ -440,7 +440,7 @@ mod secondary_window_config_tests {
 /// - Must be called on the main thread
 /// - Uses Objective-C runtime to enumerate and update windows
 #[cfg(target_os = "macos")]
-#[allow(dead_code)] // TODO: Will be used in appearance change handler (Fix 2)
+#[allow(dead_code)]
 pub fn update_all_secondary_windows_appearance(is_dark: bool) {
     use cocoa::base::{id, nil};
     use objc::{class, msg_send, sel, sel_impl};

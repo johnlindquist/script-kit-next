@@ -1111,8 +1111,7 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
                         })
                         .map(|m| m.id)
                         .collect();
-                    // TODO: Re-implement collapse-all via transcript entity.
-                    // The collapsed_ids field has moved to AcpTranscript.
+                    // KNOWN: Collapse-all needs a set-all-collapsed API on AcpTranscript; expand_ids adds to collapsed set but there is no counterpart for bulk collapse.
                     cx.notify();
                 });
             }

@@ -870,22 +870,9 @@ fn dispatch_notes_acp_action(
         }
         "acp_expand_all" => {
             acp_entity.update(cx, |chat, cx| {
-                let _ids: Vec<u64> = chat
-                    .live_thread()
-                    .read(cx)
-                    .messages
-                    .iter()
-                    .filter(|m| {
-                        matches!(
-                            m.role,
-                            crate::ai::acp::thread::AcpThreadMessageRole::Thought
-                                | crate::ai::acp::thread::AcpThreadMessageRole::Tool
-                        )
-                    })
-                    .map(|m| m.id)
-                    .collect();
-                // TODO: Re-implement expand-all via transcript entity.
-                // The collapsed_ids field has moved to AcpTranscript.
+                if let Some(transcript) = &chat.transcript {
+                    transcript.update(cx, |t, cx| t.clear_collapsed_ids(cx));
+                }
                 cx.notify();
             });
         }

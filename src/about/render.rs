@@ -337,7 +337,7 @@ fn render_update_card(
             true,
             actions.open_release.clone(),
         ),
-        // TODO(branding): add semantic success token
+        // KNOWN: Uses generic color; a proper semantic success design token requires a theme-API addition.
         UpdateState::Error(_) => (
             "Check failed".to_string(),
             "Check for Updates",

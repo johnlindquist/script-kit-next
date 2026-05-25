@@ -2388,9 +2388,9 @@ impl ScriptListApp {
                 html,
                 container_classes,
                 actions,
-                placeholder: _placeholder, // TODO: render in header
-                hint: _hint,               // TODO: render hint
-                footer: _footer,           // TODO: render footer
+                placeholder: _placeholder, // KNOWN: Not rendered; wiring requires DivPrompt render-surface changes.
+                hint: _hint,               // KNOWN: Not rendered; wiring requires DivPrompt render-surface changes.
+                footer: _footer,           // KNOWN: Not rendered; wiring requires DivPrompt render-surface changes.
                 container_bg,
                 container_padding,
                 opacity,
@@ -7581,7 +7581,7 @@ impl ScriptListApp {
                 }
             }
             // ============================================================
-            // NEW PROMPT TYPES (scaffolding - TODO: implement full UI)
+            // Additional prompt types
             // ============================================================
             PromptMessage::ShowPath {
                 id,

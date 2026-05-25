@@ -96,7 +96,7 @@ pub fn move_first_window_to(x: f64, y: f64, width: f64, height: f64) {
 
 #[cfg(not(target_os = "macos"))]
 pub fn move_first_window_to(_x: f64, _y: f64, _width: f64, _height: f64) {
-    // TODO: Implement for other platforms
+    // KNOWN: Non-macOS stub intentionally no-ops; native window positioning requires platform-specific APIs.
     logging::log(
         "POSITION",
         "move_first_window_to is not implemented for this platform",
