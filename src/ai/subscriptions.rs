@@ -289,9 +289,9 @@ mod tests {
         publish_new_message(
             "chat-a",
             AiMessageInfo {
-                id: "msg-1".to_string(),
-                role: "user".to_string(),
-                content: "hello".to_string(),
+                id: "msg-1".into(),
+                role: "user".into(),
+                content: "hello".into(),
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 tokens_used: None,
             },

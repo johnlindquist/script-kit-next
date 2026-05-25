@@ -5,8 +5,32 @@
 
 use crate::protocol::Field;
 use regex::Regex;
-use std::collections::HashMap;
 use tracing::warn;
+
+type SmallStringMap = Vec<(String, String)>;
+
+fn pair_get<'a>(pairs: &'a [(String, String)], key: &str) -> Option<&'a String> {
+    pairs
+        .iter()
+        .find_map(|(name, value)| (name.as_str() == key).then_some(value))
+}
+
+fn pair_upsert(pairs: &mut SmallStringMap, key: String, value: String) {
+    if let Some((_, existing)) = pairs
+        .iter_mut()
+        .find(|(name, _)| name.as_str() == key.as_str())
+    {
+        *existing = value;
+    } else {
+        pairs.push((key, value));
+    }
+}
+
+fn pair_insert_if_absent(pairs: &mut SmallStringMap, key: String, value: String) {
+    if !pairs.iter().any(|(name, _)| name.as_str() == key.as_str()) {
+        pairs.push((key, value));
+    }
+}
 
 fn compile_regex(pattern: &str, context: &str) -> Option<Regex> {
     match Regex::new(pattern) {
@@ -91,17 +115,17 @@ pub fn parse_form_html(html: &str) -> Vec<Field> {
 }
 
 /// Extract label elements and their text content, indexed by `for` attribute.
-fn extract_labels(html: &str) -> HashMap<String, String> {
-    let mut labels = HashMap::new();
+fn extract_labels(html: &str) -> SmallStringMap {
+    let mut labels = SmallStringMap::new();
 
-    // Labels with `for` attribute
     if let Some(label_regex) = compile_regex(
         r#"<label\s+[^>]*for\s*=\s*["']([^"']+)["'][^>]*>([^<]*)</label>"#,
         "label_with_attrs",
     ) {
         for cap in label_regex.captures_iter(html) {
             if let (Some(for_attr), Some(text)) = (cap.get(1), cap.get(2)) {
-                labels.insert(
+                pair_upsert(
+                    &mut labels,
                     for_attr.as_str().to_string(),
                     text.as_str().trim().to_string(),
                 );
@@ -109,17 +133,17 @@ fn extract_labels(html: &str) -> HashMap<String, String> {
         }
     }
 
-    // Also check for simpler labels without other attributes
     if let Some(simple_label_regex) = compile_regex(
         r#"<label\s+for\s*=\s*["']([^"']+)["']\s*>([^<]*)</label>"#,
         "simple_label",
     ) {
         for cap in simple_label_regex.captures_iter(html) {
             if let (Some(for_attr), Some(text)) = (cap.get(1), cap.get(2)) {
-                let key = for_attr.as_str().to_string();
-                labels
-                    .entry(key)
-                    .or_insert_with(|| text.as_str().trim().to_string());
+                pair_insert_if_absent(
+                    &mut labels,
+                    for_attr.as_str().to_string(),
+                    text.as_str().trim().to_string(),
+                );
             }
         }
     }
@@ -128,68 +152,59 @@ fn extract_labels(html: &str) -> HashMap<String, String> {
 }
 
 /// Parse HTML attributes from an attribute string.
-fn parse_attributes(attrs_str: &str) -> HashMap<String, String> {
-    let mut attrs = HashMap::new();
+fn parse_attributes(attrs_str: &str) -> SmallStringMap {
+    let mut attrs = SmallStringMap::new();
 
-    // Match attribute="value" or attribute='value'
     if let Some(attr_regex) = compile_regex(r#"(\w+)\s*=\s*["']([^"']*)["']"#, "attributes") {
         for cap in attr_regex.captures_iter(attrs_str) {
             if let (Some(name), Some(value)) = (cap.get(1), cap.get(2)) {
-                attrs.insert(name.as_str().to_lowercase(), value.as_str().to_string());
+                pair_upsert(
+                    &mut attrs,
+                    name.as_str().to_lowercase(),
+                    value.as_str().to_string(),
+                );
             }
         }
     }
 
-    // Check for boolean attributes like `checked` (no value)
-    if attrs_str.contains("checked") && !attrs.contains_key("checked") {
-        attrs.insert("checked".to_string(), "true".to_string());
+    if attrs_str.contains("checked") && pair_get(&attrs, "checked").is_none() {
+        attrs.push(("checked".to_string(), "true".to_string()));
     }
 
     attrs
 }
 
 /// Convert input element attributes to a Field.
-fn input_to_field(
-    attrs: &HashMap<String, String>,
-    labels: &HashMap<String, String>,
-) -> Option<Field> {
-    let name = attrs.get("name")?.clone();
-    let field_type = attrs
-        .get("type")
+fn input_to_field(attrs: &[(String, String)], labels: &[(String, String)]) -> Option<Field> {
+    let name = pair_get(attrs, "name")?.clone();
+    let field_type = pair_get(attrs, "type")
         .cloned()
         .unwrap_or_else(|| "text".to_string());
 
-    // Skip hidden inputs and submit buttons
     if field_type == "hidden" || field_type == "submit" || field_type == "button" {
         return None;
     }
 
     let mut field = Field::new(name.clone());
 
-    // Set field type
     field.field_type = Some(field_type.clone());
 
-    // Get label - try by id first, then by name
-    let label = attrs
-        .get("id")
-        .and_then(|id| labels.get(id).cloned())
-        .or_else(|| labels.get(&name).cloned());
+    let label = pair_get(attrs, "id")
+        .and_then(|id| pair_get(labels, id).cloned())
+        .or_else(|| pair_get(labels, &name).cloned());
     field.label = label;
 
-    // Set placeholder
-    if let Some(placeholder) = attrs.get("placeholder") {
+    if let Some(placeholder) = pair_get(attrs, "placeholder") {
         field.placeholder = Some(placeholder.clone());
     }
 
-    // Set value (for checkbox, use "checked" state as value)
     if field_type == "checkbox" {
-        if attrs.contains_key("checked") {
+        if pair_get(attrs, "checked").is_some() {
             field.value = Some("true".to_string());
         } else {
-            // Use the value attribute if present, otherwise default
-            field.value = attrs.get("value").cloned();
+            field.value = pair_get(attrs, "value").cloned();
         }
-    } else if let Some(value) = attrs.get("value") {
+    } else if let Some(value) = pair_get(attrs, "value") {
         field.value = Some(value.clone());
     }
 
@@ -198,24 +213,21 @@ fn input_to_field(
 
 /// Convert textarea element to a Field.
 fn textarea_to_field(
-    attrs: &HashMap<String, String>,
+    attrs: &[(String, String)],
     content: &str,
-    labels: &HashMap<String, String>,
+    labels: &[(String, String)],
 ) -> Option<Field> {
-    let name = attrs.get("name")?.clone();
+    let name = pair_get(attrs, "name")?.clone();
 
     let mut field = Field::new(name.clone());
     field.field_type = Some("textarea".to_string());
 
-    // Get label
-    let label = attrs
-        .get("id")
-        .and_then(|id| labels.get(id).cloned())
-        .or_else(|| labels.get(&name).cloned());
+    let label = pair_get(attrs, "id")
+        .and_then(|id| pair_get(labels, id).cloned())
+        .or_else(|| pair_get(labels, &name).cloned());
     field.label = label;
 
-    // Set placeholder
-    if let Some(placeholder) = attrs.get("placeholder") {
+    if let Some(placeholder) = pair_get(attrs, "placeholder") {
         field.placeholder = Some(placeholder.clone());
     }
 
@@ -228,20 +240,15 @@ fn textarea_to_field(
 }
 
 /// Convert select element to a Field.
-fn select_to_field(
-    attrs: &HashMap<String, String>,
-    labels: &HashMap<String, String>,
-) -> Option<Field> {
-    let name = attrs.get("name")?.clone();
+fn select_to_field(attrs: &[(String, String)], labels: &[(String, String)]) -> Option<Field> {
+    let name = pair_get(attrs, "name")?.clone();
 
     let mut field = Field::new(name.clone());
     field.field_type = Some("select".to_string());
 
-    // Get label
-    let label = attrs
-        .get("id")
-        .and_then(|id| labels.get(id).cloned())
-        .or_else(|| labels.get(&name).cloned());
+    let label = pair_get(attrs, "id")
+        .and_then(|id| pair_get(labels, id).cloned())
+        .or_else(|| pair_get(labels, &name).cloned());
     field.label = label;
 
     Some(field)
