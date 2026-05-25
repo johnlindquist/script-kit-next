@@ -233,6 +233,8 @@ pub fn migrate_from_kenv() -> bool {
         "Migrating from ~/.kenv to ~/.scriptkit"
     );
 
+    let mut failures = Vec::<String>::new();
+
     // Create the new plugin structure.
     let main_scripts = new_scriptkit.join("plugins").join("main").join("scripts");
     let main_scriptlets = new_scriptkit
@@ -253,20 +255,42 @@ pub fn migrate_from_kenv() -> bool {
     // Move scripts from ~/.kenv/scripts to ~/.scriptkit/plugins/main/scripts
     let old_scripts = old_kenv.join("scripts");
     if old_scripts.exists() && old_scripts.is_dir() {
-        if let Ok(entries) = fs::read_dir(&old_scripts) {
-            for entry in entries.flatten() {
-                let old_path = entry.path();
-                let file_name = old_path.file_name().unwrap_or_default();
-                let new_path = main_scripts.join(file_name);
+        match fs::read_dir(&old_scripts) {
+            Ok(entries) => {
+                for entry in entries {
+                    match entry {
+                        Ok(entry) => {
+                            let old_path = entry.path();
+                            let file_name = old_path.file_name().unwrap_or_default();
+                            let new_path = main_scripts.join(file_name);
 
-                if let Err(e) = fs::rename(&old_path, &new_path) {
-                    warn!(
-                        error = %e,
-                        old = %old_path.display(),
-                        new = %new_path.display(),
-                        "Failed to move script"
-                    );
+                            if let Err(e) = fs::rename(&old_path, &new_path) {
+                                let err_msg = format!(
+                                    "Failed to move script from {} to {}: {}",
+                                    old_path.display(),
+                                    new_path.display(),
+                                    e
+                                );
+                                warn!("{}", err_msg);
+                                failures.push(err_msg);
+                            }
+                        }
+                        Err(e) => {
+                            let err_msg = format!("Failed to read script entry: {}", e);
+                            warn!("{}", err_msg);
+                            failures.push(err_msg);
+                        }
+                    }
                 }
+            }
+            Err(e) => {
+                let err_msg = format!(
+                    "Failed to read scripts directory ({}): {}",
+                    old_scripts.display(),
+                    e
+                );
+                warn!("{}", err_msg);
+                failures.push(err_msg);
             }
         }
     }
@@ -274,20 +298,42 @@ pub fn migrate_from_kenv() -> bool {
     // Move scriptlets from ~/.kenv/scriptlets to ~/.scriptkit/plugins/main/scriptlets
     let old_scriptlets = old_kenv.join("scriptlets");
     if old_scriptlets.exists() && old_scriptlets.is_dir() {
-        if let Ok(entries) = fs::read_dir(&old_scriptlets) {
-            for entry in entries.flatten() {
-                let old_path = entry.path();
-                let file_name = old_path.file_name().unwrap_or_default();
-                let new_path = main_scriptlets.join(file_name);
+        match fs::read_dir(&old_scriptlets) {
+            Ok(entries) => {
+                for entry in entries {
+                    match entry {
+                        Ok(entry) => {
+                            let old_path = entry.path();
+                            let file_name = old_path.file_name().unwrap_or_default();
+                            let new_path = main_scriptlets.join(file_name);
 
-                if let Err(e) = fs::rename(&old_path, &new_path) {
-                    warn!(
-                        error = %e,
-                        old = %old_path.display(),
-                        new = %new_path.display(),
-                        "Failed to move scriptlet"
-                    );
+                            if let Err(e) = fs::rename(&old_path, &new_path) {
+                                let err_msg = format!(
+                                    "Failed to move scriptlet from {} to {}: {}",
+                                    old_path.display(),
+                                    new_path.display(),
+                                    e
+                                );
+                                warn!("{}", err_msg);
+                                failures.push(err_msg);
+                            }
+                        }
+                        Err(e) => {
+                            let err_msg = format!("Failed to read scriptlet entry: {}", e);
+                            warn!("{}", err_msg);
+                            failures.push(err_msg);
+                        }
+                    }
                 }
+            }
+            Err(e) => {
+                let err_msg = format!(
+                    "Failed to read scriptlets directory ({}): {}",
+                    old_scriptlets.display(),
+                    e
+                );
+                warn!("{}", err_msg);
+                failures.push(err_msg);
             }
         }
     }
@@ -314,12 +360,14 @@ pub fn migrate_from_kenv() -> bool {
         let new_path = new_scriptkit.join(file);
         if old_path.exists() && !new_path.exists() {
             if let Err(e) = fs::rename(&old_path, &new_path) {
-                warn!(
-                    error = %e,
-                    old = %old_path.display(),
-                    new = %new_path.display(),
-                    "Failed to move kit-owned config file"
+                let err_msg = format!(
+                    "Failed to move kit-owned config file from {} to {}: {}",
+                    old_path.display(),
+                    new_path.display(),
+                    e
                 );
+                warn!("{}", err_msg);
+                failures.push(err_msg);
             }
         }
     }
@@ -331,12 +379,14 @@ pub fn migrate_from_kenv() -> bool {
         let new_path = new_scriptkit.join(file);
         if old_path.exists() && !new_path.exists() {
             if let Err(e) = fs::rename(&old_path, &new_path) {
-                warn!(
-                    error = %e,
-                    old = %old_path.display(),
-                    new = %new_path.display(),
-                    "Failed to move root-owned workspace file"
+                let err_msg = format!(
+                    "Failed to move root-owned workspace file from {} to {}: {}",
+                    old_path.display(),
+                    new_path.display(),
+                    e
                 );
+                warn!("{}", err_msg);
+                failures.push(err_msg);
             }
         }
     }
@@ -348,7 +398,15 @@ pub fn migrate_from_kenv() -> bool {
         let new_path = new_scriptkit.join(dir);
         if old_path.exists() && old_path.is_dir() && !new_path.exists() {
             if let Err(e) = fs::rename(&old_path, &new_path) {
-                warn!(error = %e, dir = dir, "Failed to move data directory");
+                let err_msg = format!(
+                    "Failed to move data directory {} from {} to {}: {}",
+                    dir,
+                    old_path.display(),
+                    new_path.display(),
+                    e
+                );
+                warn!("{}", err_msg);
+                failures.push(err_msg);
             }
         }
     }
@@ -368,14 +426,29 @@ pub fn migrate_from_kenv() -> bool {
         let new_path = new_scriptkit.join(file);
         if old_path.exists() && !new_path.exists() {
             if let Err(e) = fs::rename(&old_path, &new_path) {
-                warn!(error = %e, file = file, "Failed to move data file");
+                let err_msg = format!(
+                    "Failed to move data file {} from {} to {}: {}",
+                    file,
+                    old_path.display(),
+                    new_path.display(),
+                    e
+                );
+                warn!("{}", err_msg);
+                failures.push(err_msg);
             }
         }
     }
 
     // Remove the old ~/.kenv directory (should be mostly empty now)
-    if let Err(e) = fs::remove_dir_all(&old_kenv) {
-        warn!(error = %e, "Failed to remove old ~/.kenv directory, may have remaining files");
+    if failures.is_empty() {
+        if let Err(e) = fs::remove_dir_all(&old_kenv) {
+            warn!(error = %e, "Failed to remove old ~/.kenv directory, may have remaining files");
+        }
+    } else {
+        tracing::error!(
+            failures = ?failures,
+            "Migration encountered failures. Preserving old ~/.kenv directory to prevent data loss."
+        );
     }
 
     // Create symlink for backwards compatibility (Unix only)
@@ -1281,8 +1354,29 @@ fn ensure_tsconfig_paths(tsconfig_path: &Path, warnings: &mut Vec<String>) {
 
     let mut config: Value = if tsconfig_path.exists() {
         match fs::read_to_string(tsconfig_path) {
-            Ok(content) => serde_json::from_str(&content).unwrap_or_else(|_| json!({})),
-            Err(_) => json!({}),
+            Ok(content) => match serde_json::from_str(&content) {
+                Ok(v) => v,
+                Err(e) => {
+                    let err_msg = format!(
+                        "tsconfig.json exists at {} but is not valid JSON (parsing failed: {}). Preserving original file to prevent data loss.",
+                        tsconfig_path.display(),
+                        e
+                    );
+                    warnings.push(err_msg.clone());
+                    warn!("{}", err_msg);
+                    return;
+                }
+            },
+            Err(e) => {
+                let err_msg = format!(
+                    "Failed to read existing tsconfig.json at {}: {}. Preserving original file.",
+                    tsconfig_path.display(),
+                    e
+                );
+                warnings.push(err_msg.clone());
+                warn!("{}", err_msg);
+                return;
+            }
         }
     } else {
         json!({})

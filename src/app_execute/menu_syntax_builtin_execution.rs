@@ -354,20 +354,64 @@ fn append_app_owned_jsonl_in_sk_path(
     filename: &str,
     record: &serde_json::Value,
 ) -> Result<(), String> {
-    use std::io::Write;
     let dir = sk_path.join("menu-syntax");
     std::fs::create_dir_all(&dir)
         .map_err(|err| format!("Menu syntax: failed to create artifact dir: {err}"))?;
     let path = dir.join(filename);
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .map_err(|err| format!("Menu syntax: failed to open {}: {err}", path.display()))?;
-    let line = serde_json::to_string(record)
-        .map_err(|err| format!("Menu syntax: failed to serialize artifact: {err}"))?;
-    writeln!(file, "{line}")
-        .map_err(|err| format!("Menu syntax: failed to write {}: {err}", path.display()))
+    
+    // Read existing file if it exists
+    let existing = match std::fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(err) => {
+            return Err(format!(
+                "Menu syntax: failed to read {}: {err}",
+                path.display()
+            ));
+        }
+    };
+
+    let mut lines = Vec::new();
+    for line in existing.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<serde_json::Value>(trimmed) {
+            Ok(_) => {
+                lines.push(line.to_string());
+            }
+            Err(e) => {
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %e,
+                    line = %trimmed,
+                    "Encountered corrupt line in JSONL during append. Skipping corrupt line."
+                );
+            }
+        }
+    }
+
+    lines.push(
+        serde_json::to_string(record)
+            .map_err(|err| format!("Menu syntax: failed to serialize artifact: {err}"))?,
+    );
+
+    let mut contents = lines.join("\n");
+    contents.push('\n');
+
+    // Atomic write using temp file + rename
+    let temp_filename = format!("{}.tmp-{}", filename, uuid::Uuid::new_v4());
+    let temp_path = dir.join(&temp_filename);
+    if let Err(e) = std::fs::write(&temp_path, &contents) {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(format!("Menu syntax: failed to write to temp file {}: {}", temp_path.display(), e));
+    }
+    if let Err(e) = std::fs::rename(&temp_path, &path) {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(format!("Menu syntax: failed to rename temp file {} to {}: {}", temp_path.display(), path.display(), e));
+    }
+    Ok(())
 }
 
 fn read_app_owned_jsonl_record_by_key(
@@ -390,15 +434,31 @@ fn read_app_owned_jsonl_record_by_key_in_sk_path(
     key_value: &str,
 ) -> Option<serde_json::Value> {
     let path = sk_path.join("menu-syntax").join(filename);
-    let contents = std::fs::read_to_string(path).ok()?;
+    let contents = std::fs::read_to_string(&path).ok()?;
     contents.lines().rev().find_map(|line| {
-        let value = serde_json::from_str::<serde_json::Value>(line.trim()).ok()?;
-        let matches_key = value
-            .get(key_name)
-            .and_then(|value| value.as_str())
-            .map(|value| value == key_value)
-            .unwrap_or(false);
-        matches_key.then_some(value)
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        match serde_json::from_str::<serde_json::Value>(trimmed) {
+            Ok(value) => {
+                let matches_key = value
+                    .get(key_name)
+                    .and_then(|value| value.as_str())
+                    .map(|value| value == key_value)
+                    .unwrap_or(false);
+                matches_key.then_some(value)
+            }
+            Err(e) => {
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %e,
+                    line = %trimmed,
+                    "Failed to parse JSONL line. Skipping corrupt line."
+                );
+                None
+            }
+        }
     })
 }
 
@@ -468,17 +528,25 @@ fn upsert_app_owned_jsonl_by_key_in_sk_path(
         if trimmed.is_empty() {
             continue;
         }
-        let should_replace = serde_json::from_str::<serde_json::Value>(trimmed)
-            .ok()
-            .and_then(|value| {
-                value
+        match serde_json::from_str::<serde_json::Value>(trimmed) {
+            Ok(value) => {
+                let should_replace = value
                     .get(key_name)
                     .and_then(|value| value.as_str())
                     .map(|value| value == key_value)
-            })
-            .unwrap_or(false);
-        if !should_replace {
-            lines.push(line.to_string());
+                    .unwrap_or(false);
+                if !should_replace {
+                    lines.push(line.to_string());
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %e,
+                    line = %trimmed,
+                    "Encountered corrupt line in JSONL during upsert. Skipping corrupt line."
+                );
+            }
         }
     }
     lines.push(
@@ -487,8 +555,19 @@ fn upsert_app_owned_jsonl_by_key_in_sk_path(
     );
     let mut contents = lines.join("\n");
     contents.push('\n');
-    std::fs::write(&path, contents)
-        .map_err(|err| format!("Menu syntax: failed to write {}: {err}", path.display()))
+
+    // Atomic write using temp file + rename
+    let temp_filename = format!("{}.tmp-{}", filename, uuid::Uuid::new_v4());
+    let temp_path = dir.join(&temp_filename);
+    if let Err(e) = std::fs::write(&temp_path, &contents) {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(format!("Menu syntax: failed to write to temp file {}: {}", temp_path.display(), e));
+    }
+    if let Err(e) = std::fs::rename(&temp_path, &path) {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(format!("Menu syntax: failed to rename temp file {} to {}: {}", temp_path.display(), path.display(), e));
+    }
+    Ok(())
 }
 
 fn app_owned_source(

@@ -1116,20 +1116,37 @@ impl ScriptListApp {
                                                 if let protocol::ClipboardAction::Write = action {
                                                     match format {
                                                         Some(protocol::ClipboardFormat::Image) => {
-                                                            let _ =
-                                                                write_clipboard_image_from_base64(
-                                                                    content.as_ref(),
+                                                            if let Err(e) = write_clipboard_image_from_base64(
+                                                                content.as_ref(),
+                                                            ) {
+                                                                tracing::error!(
+                                                                    category = "EXEC",
+                                                                    error = %e,
+                                                                    "Fire-and-forget clipboard image write failed"
                                                                 );
+                                                            }
                                                         }
                                                         Some(protocol::ClipboardFormat::Text)
                                                         | None => {
                                                             if let Some(text) = content {
                                                                 use arboard::Clipboard;
-                                                                if let Ok(mut clipboard) =
-                                                                    Clipboard::new()
-                                                                {
-                                                                    let _ = clipboard
-                                                                        .set_text(text.clone());
+                                                                match Clipboard::new() {
+                                                                    Ok(mut clipboard) => {
+                                                                        if let Err(e) = clipboard.set_text(text.clone()) {
+                                                                            tracing::error!(
+                                                                                category = "EXEC",
+                                                                                error = %e,
+                                                                                "Fire-and-forget clipboard text write failed"
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                    Err(e) => {
+                                                                        tracing::error!(
+                                                                            category = "EXEC",
+                                                                            error = %e,
+                                                                            "Fire-and-forget clipboard init failed for write"
+                                                                        );
+                                                                    }
                                                                 }
                                                             }
                                                         }
@@ -1226,10 +1243,10 @@ impl ScriptListApp {
                                                                 {
                                                                     Ok(()) => {
                                                                         tracing::info!(
-                                                                        category = "EXEC",
-                                                                        bytes_len = text.len(),
-                                                                        "Clipboard write success"
-                                                                    );
+                                                                            category = "EXEC",
+                                                                            bytes_len = text.len(),
+                                                                            "Clipboard write success"
+                                                                        );
                                                                         Message::Submit {
                                                                             id: req_id,
                                                                             value: Some(
@@ -1238,39 +1255,45 @@ impl ScriptListApp {
                                                                         }
                                                                     }
                                                                     Err(e) => {
-                                                                        tracing::info!(
+                                                                        tracing::error!(
                                                                             category = "EXEC",
                                                                             error = %e,
                                                                             "Clipboard write error"
                                                                         );
                                                                         Message::Submit {
                                                                             id: req_id,
-                                                                            value: Some(
-                                                                                String::new(),
-                                                                            ),
+                                                                            value: Some(format!(
+                                                                                "ERROR:ERR_CLIPBOARD_WRITE_FAILED:{}",
+                                                                                e
+                                                                            )),
                                                                         }
                                                                     }
                                                                 }
                                                             } else {
-                                                                tracing::info!(
-                                                            category = "EXEC",
-                                                            "Clipboard write: no content provided"
-                                                        );
+                                                                tracing::error!(
+                                                                    category = "EXEC",
+                                                                    "Clipboard write: no content provided"
+                                                                );
                                                                 Message::Submit {
                                                                     id: req_id,
-                                                                    value: Some(String::new()),
+                                                                    value: Some(
+                                                                        "ERROR:ERR_CLIPBOARD_MISSING_CONTENT:clipboard.writeText requires text content.".to_string(),
+                                                                    ),
                                                                 }
                                                             }
                                                         }
                                                         Err(e) => {
-                                                            tracing::info!(
+                                                            tracing::error!(
                                                                 category = "EXEC",
                                                                 error = %e,
                                                                 "Clipboard init error"
                                                             );
                                                             Message::Submit {
                                                                 id: req_id,
-                                                                value: Some(String::new()),
+                                                                value: Some(format!(
+                                                                    "ERROR:ERR_CLIPBOARD_ACCESS_FAILED:{}",
+                                                                    e
+                                                                )),
                                                             }
                                                         }
                                                     },

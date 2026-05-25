@@ -5472,12 +5472,35 @@ impl ScriptListApp {
                     crate::menu_bar::current_app_commands::DoInCurrentAppAction::ExecuteEntry(
                         entry_index,
                     ) => {
+                        let entry = match entries.get(entry_index) {
+                            Some(e) => e.clone(),
+                            None => {
+                                let message = format!(
+                                    "Failed to execute command: menu entry index {} is out of bounds (total {} entries).",
+                                    entry_index,
+                                    entries.len()
+                                );
+                                tracing::warn!(
+                                    trace_id = %dctx.trace_id,
+                                    entry_index = entry_index,
+                                    total_entries = entries.len(),
+                                    "do_in_current_app.execute_entry — index out of bounds"
+                                );
+                                self.show_error_toast(message.clone(), cx);
+                                return Self::builtin_error(
+                                    dctx,
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
+                                    message,
+                                    "do_in_current_app_execute_index_out_of_bounds",
+                                );
+                            }
+                        };
                         tracing::info!(
                             target: "script_kit::do_in_trace",
                             event = "DO_IN_TRACE execution.execute_entry",
                             trace_id = %dctx.trace_id,
                             entry_index = entry_index,
-                            entry_name = %entries[entry_index].name,
+                            entry_name = %entry.name,
                             query_preview = %effective_query_safe,
                             raw_query_preview = %raw_query_safe,
                             "DO_IN_TRACE execution.execute_entry"
@@ -5485,10 +5508,9 @@ impl ScriptListApp {
                         tracing::info!(
                             trace_id = %dctx.trace_id,
                             entry_index = entry_index,
-                            entry_name = %entries[entry_index].name,
+                            entry_name = %entry.name,
                             "do_in_current_app.action → ExecuteEntry — running menu command directly"
                         );
-                        let entry = entries[entry_index].clone();
                         self.execute_builtin_inner(&entry, effective_query_for_router, dctx, cx)
                     }
                     crate::menu_bar::current_app_commands::DoInCurrentAppAction::GenerateScript => {
