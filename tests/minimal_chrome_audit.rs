@@ -279,6 +279,44 @@ fn select_drop_layout_info_has_prompt_owned_branches() {
 }
 
 #[test]
+fn mini_layout_info_reports_single_column_without_preview() {
+    let source = include_str!("../src/app_layout/build_layout_info.rs");
+    assert!(
+        source.contains("let uses_split_preview = matches!(")
+            && source.contains("crate::window_resize::ViewType::ExpandedMainWindow")
+            && source.contains("crate::window_resize::ViewType::ScriptList"),
+        "layout info must derive split-preview receipts from the view type"
+    );
+    assert!(
+        source.contains("let list_width = if uses_split_preview")
+            && source.contains("} else {\n            window_width"),
+        "mini layout info must give ScriptList the full window width"
+    );
+    assert!(
+        source.contains("if uses_split_preview {\n            // Preview panel"),
+        "layout info must only emit PreviewPanel for split-preview receipts"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"mini_layout_info\",\"single_column\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
+fn mini_component_bounds_do_not_emit_preview_panel() {
+    let source = include_str!("../src/app_layout/build_component_bounds.rs");
+    assert!(
+        source.contains(
+            "let uses_split_preview = matches!(self.main_window_mode, MainWindowMode::Full);"
+        ) && source
+            .contains("let list_width = if uses_split_preview { width * 0.5 } else { width };"),
+        "debug component bounds must keep mini ScriptList full-width"
+    );
+    assert!(
+        source.contains("if uses_split_preview {\n                    // Preview panel"),
+        "debug component bounds must gate preview panel bounds behind full-mode split preview"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"mini_component_bounds\",\"single_column\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
 fn form_prompt_wrapper_has_no_prompt_footer_or_hardcoded_hex() {
     let source = include_str!("../src/render_prompts/form/render.rs");
     assert!(

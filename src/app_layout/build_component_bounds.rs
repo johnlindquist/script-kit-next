@@ -98,8 +98,8 @@ impl ScriptListApp {
         // Build view-specific bounds
         match &self.current_view {
             AppView::ScriptList => {
-                // ScriptList has left panel (50%) + right preview panel (50%)
-                let list_width = width * 0.5;
+                let uses_split_preview = matches!(self.main_window_mode, MainWindowMode::Full);
+                let list_width = if uses_split_preview { width * 0.5 } else { width };
                 let item_height = px(LIST_ITEM_HEIGHT);
 
                 bounds.push(
@@ -134,18 +134,20 @@ impl ScriptListApp {
                     );
                 }
 
-                // Preview panel (right side)
-                bounds.push(
-                    ComponentBounds::new(
-                        "PreviewPanel",
-                        gpui::Bounds {
-                            origin: gpui::point(list_width, content_top),
-                            size: gpui::size(width - list_width, content_height),
-                        },
-                    )
-                    .with_type(ComponentType::Container)
-                    .with_padding(BoxModel::uniform(content_padding)),
-                );
+                if uses_split_preview {
+                    // Preview panel (right side)
+                    bounds.push(
+                        ComponentBounds::new(
+                            "PreviewPanel",
+                            gpui::Bounds {
+                                origin: gpui::point(list_width, content_top),
+                                size: gpui::size(width - list_width, content_height),
+                            },
+                        )
+                        .with_type(ComponentType::Container)
+                        .with_padding(BoxModel::uniform(content_padding)),
+                    );
+                }
             }
 
             AppView::DivPrompt { .. } => {
@@ -310,7 +312,8 @@ impl ScriptListApp {
 
         // Only add header detail bounds for ScriptList view (the original behavior)
         if matches!(self.current_view, AppView::ScriptList) {
-            let list_width = width * 0.5;
+            let uses_split_preview = matches!(self.main_window_mode, MainWindowMode::Full);
+            let list_width = if uses_split_preview { width * 0.5 } else { width };
 
             // Input field in header
             // Positioned at: px(HEADER_PADDING_X) = 16, py(HEADER_PADDING_Y) = 8
@@ -396,89 +399,91 @@ impl ScriptListApp {
                 .with_padding(BoxModel::symmetric(4.0, 8.0)),
             );
 
-            // Preview panel contents (right 50% of window)
-            // Preview has its own padding, content starts at list_width + padding
-            let preview_padding = 16.0_f32;
-            let preview_left = list_width + px(preview_padding);
-            let preview_width = width * 0.5 - px(preview_padding * 2.0);
+            if uses_split_preview {
+                // Preview panel contents (right 50% of window)
+                // Preview has its own padding, content starts at list_width + padding
+                let preview_padding = 16.0_f32;
+                let preview_left = list_width + px(preview_padding);
+                let preview_width = width * 0.5 - px(preview_padding * 2.0);
 
-            // Script path label (small text at top of preview)
-            bounds.push(
-                ComponentBounds::new(
-                    "ScriptPath",
-                    gpui::Bounds {
-                        origin: gpui::point(preview_left, content_top + px(8.)),
-                        size: gpui::size(preview_width, px(16.)),
-                    },
-                )
-                .with_type(ComponentType::Other)
-                .with_padding(BoxModel::symmetric(2.0, 0.0)),
-            );
+                // Script path label (small text at top of preview)
+                bounds.push(
+                    ComponentBounds::new(
+                        "ScriptPath",
+                        gpui::Bounds {
+                            origin: gpui::point(preview_left, content_top + px(8.)),
+                            size: gpui::size(preview_width, px(16.)),
+                        },
+                    )
+                    .with_type(ComponentType::Other)
+                    .with_padding(BoxModel::symmetric(2.0, 0.0)),
+                );
 
-            // Script title (large heading)
-            bounds.push(
-                ComponentBounds::new(
-                    "ScriptTitle",
-                    gpui::Bounds {
-                        origin: gpui::point(preview_left, content_top + px(32.)),
-                        size: gpui::size(preview_width, px(32.)),
-                    },
-                )
-                .with_type(ComponentType::Header)
-                .with_padding(BoxModel::symmetric(4.0, 0.0)),
-            );
+                // Script title (large heading)
+                bounds.push(
+                    ComponentBounds::new(
+                        "ScriptTitle",
+                        gpui::Bounds {
+                            origin: gpui::point(preview_left, content_top + px(32.)),
+                            size: gpui::size(preview_width, px(32.)),
+                        },
+                    )
+                    .with_type(ComponentType::Header)
+                    .with_padding(BoxModel::symmetric(4.0, 0.0)),
+                );
 
-            // Description label
-            bounds.push(
-                ComponentBounds::new(
-                    "DescLabel", // Shortened
-                    gpui::Bounds {
-                        origin: gpui::point(preview_left, content_top + px(72.)),
-                        size: gpui::size(px(80.), px(16.)),
-                    },
-                )
-                .with_type(ComponentType::Other)
-                .with_padding(BoxModel::uniform(2.0)),
-            );
+                // Description label
+                bounds.push(
+                    ComponentBounds::new(
+                        "DescLabel", // Shortened
+                        gpui::Bounds {
+                            origin: gpui::point(preview_left, content_top + px(72.)),
+                            size: gpui::size(px(80.), px(16.)),
+                        },
+                    )
+                    .with_type(ComponentType::Other)
+                    .with_padding(BoxModel::uniform(2.0)),
+                );
 
-            // Description value
-            bounds.push(
-                ComponentBounds::new(
-                    "DescValue", // Shortened
-                    gpui::Bounds {
-                        origin: gpui::point(preview_left, content_top + px(92.)),
-                        size: gpui::size(preview_width, px(20.)),
-                    },
-                )
-                .with_type(ComponentType::Other)
-                .with_padding(BoxModel::symmetric(2.0, 0.0)),
-            );
+                // Description value
+                bounds.push(
+                    ComponentBounds::new(
+                        "DescValue", // Shortened
+                        gpui::Bounds {
+                            origin: gpui::point(preview_left, content_top + px(92.)),
+                            size: gpui::size(preview_width, px(20.)),
+                        },
+                    )
+                    .with_type(ComponentType::Other)
+                    .with_padding(BoxModel::symmetric(2.0, 0.0)),
+                );
 
-            // Code Preview label
-            bounds.push(
-                ComponentBounds::new(
-                    "CodeLabel", // Shortened from CodePreviewLabel
-                    gpui::Bounds {
-                        origin: gpui::point(preview_left, content_top + px(130.)),
-                        size: gpui::size(px(100.), px(16.)),
-                    },
-                )
-                .with_type(ComponentType::Other)
-                .with_padding(BoxModel::uniform(2.0)),
-            );
+                // Code Preview label
+                bounds.push(
+                    ComponentBounds::new(
+                        "CodeLabel", // Shortened from CodePreviewLabel
+                        gpui::Bounds {
+                            origin: gpui::point(preview_left, content_top + px(130.)),
+                            size: gpui::size(px(100.), px(16.)),
+                        },
+                    )
+                    .with_type(ComponentType::Other)
+                    .with_padding(BoxModel::uniform(2.0)),
+                );
 
-            // Code preview area
-            bounds.push(
-                ComponentBounds::new(
-                    "CodePreview",
-                    gpui::Bounds {
-                        origin: gpui::point(preview_left, content_top + px(150.)),
-                        size: gpui::size(preview_width, height - content_top - px(170.)),
-                    },
-                )
-                .with_type(ComponentType::Container)
-                .with_padding(BoxModel::uniform(12.0)),
-            );
+                // Code preview area
+                bounds.push(
+                    ComponentBounds::new(
+                        "CodePreview",
+                        gpui::Bounds {
+                            origin: gpui::point(preview_left, content_top + px(150.)),
+                            size: gpui::size(preview_width, height - content_top - px(170.)),
+                        },
+                    )
+                    .with_type(ComponentType::Container)
+                    .with_padding(BoxModel::uniform(12.0)),
+                );
+            }
 
             // List item icons (left side of each list item)
             // Icons are typically 24x24, positioned with some padding from left edge

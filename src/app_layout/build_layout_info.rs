@@ -27,6 +27,11 @@ impl ScriptListApp {
         let window_width =
             crate::window_resize::width_for_view(layout_view_type).unwrap_or(750.0_f32);
         let window_height = f32::from(crate::window_resize::height_for_view(layout_view_type, 0));
+        let uses_split_preview = matches!(
+            layout_view_type,
+            crate::window_resize::ViewType::ExpandedMainWindow
+                | crate::window_resize::ViewType::ScriptList
+        );
 
         // Determine current prompt type
         let prompt_type = match &self.current_view {
@@ -91,7 +96,11 @@ impl ScriptListApp {
         const BUTTON_HEIGHT: f32 = 28.0;
         const DIVIDER_HEIGHT: f32 = 1.0;
         let header_height = HEADER_PADDING_Y * 2.0 + BUTTON_HEIGHT + DIVIDER_HEIGHT; // 45px
-        let list_width = window_width * 0.5;
+        let list_width = if uses_split_preview {
+            window_width * 0.5
+        } else {
+            window_width
+        };
         let content_top = header_height;
         let content_height = window_height - header_height;
 
@@ -138,15 +147,22 @@ impl ScriptListApp {
 
         // Content area
         components.push(
-            LayoutComponentInfo::new("ContentArea", LayoutComponentType::Container)
+            {
+                let component = LayoutComponentInfo::new("ContentArea", LayoutComponentType::Container)
                 .with_bounds(0.0, content_top, window_width, content_height)
-                .with_flex_row()
                 .with_flex_grow(1.0)
                 .with_depth(1)
-                .with_parent("Window")
-                .with_explanation(
-                    "flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.".to_string()
-                ),
+                .with_parent("Window");
+                if uses_split_preview {
+                    component
+                        .with_flex_row()
+                        .with_explanation("flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.".to_string())
+                } else {
+                    component
+                        .with_flex_column()
+                        .with_explanation("flex-grow:1 fills remaining height after header. Mini receipts use a single full-width column.".to_string())
+                }
+            },
         );
 
         if matches!(
@@ -232,7 +248,7 @@ impl ScriptListApp {
             };
         }
 
-        // Script list (left panel) - 50% width
+        // Script list: full width for MiniMainWindow, left panel for split-preview surfaces.
         components.push(
             LayoutComponentInfo::new("ScriptList", LayoutComponentType::List)
                 .with_bounds(0.0, content_top, list_width, content_height)
@@ -240,25 +256,27 @@ impl ScriptListApp {
                 .with_depth(2)
                 .with_parent("ContentArea")
                 .with_explanation(format!(
-                    "Width = 50% of window = {}px. Uses uniform_list for virtualized scrolling with {}px item height.",
+                    "Width = {}px. Uses uniform_list for virtualized scrolling with {}px item height.",
                     list_width, LIST_ITEM_HEIGHT
                 )),
         );
 
-        // Preview panel (right panel) - remaining 50%
-        let preview_width = window_width - list_width;
-        components.push(
-            LayoutComponentInfo::new("PreviewPanel", LayoutComponentType::Panel)
-                .with_bounds(list_width, content_top, preview_width, content_height)
-                .with_padding(16.0, 16.0, 16.0, 16.0)
-                .with_flex_column()
-                .with_depth(2)
-                .with_parent("ContentArea")
-                .with_explanation(format!(
-                    "Width = remaining 50% = {}px. Has 16px padding on all sides.",
-                    preview_width
-                )),
-        );
+        if uses_split_preview {
+            // Preview panel (right panel) - remaining 50%
+            let preview_width = window_width - list_width;
+            components.push(
+                LayoutComponentInfo::new("PreviewPanel", LayoutComponentType::Panel)
+                    .with_bounds(list_width, content_top, preview_width, content_height)
+                    .with_padding(16.0, 16.0, 16.0, 16.0)
+                    .with_flex_column()
+                    .with_depth(2)
+                    .with_parent("ContentArea")
+                    .with_explanation(format!(
+                        "Width = remaining 50% = {}px. Has 16px padding on all sides.",
+                        preview_width
+                    )),
+            );
+        }
 
         // List items (sample of first few visible)
         let visible_items = ((content_height / LIST_ITEM_HEIGHT) as usize).min(5);
