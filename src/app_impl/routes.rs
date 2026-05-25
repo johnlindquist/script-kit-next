@@ -58,8 +58,6 @@ pub enum AppRoute {
 /// grow new arms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FilterableView {
-    DesignGallery,
-    FooterGallery,
     ClipboardHistory,
     AppLauncher,
     BrowserTabs,
@@ -73,8 +71,6 @@ impl FilterableView {
     /// coverage test to pin that every `FilterableView` is the
     /// target of *some* `TriggerBuiltin`.
     pub const ALL: &'static [FilterableView] = &[
-        FilterableView::DesignGallery,
-        FilterableView::FooterGallery,
         FilterableView::ClipboardHistory,
         FilterableView::AppLauncher,
         FilterableView::BrowserTabs,
@@ -90,8 +86,6 @@ impl FilterableView {
     /// without updating the fixture is intentionally a test failure.
     pub const fn name(self) -> &'static str {
         match self {
-            FilterableView::DesignGallery => "DesignGallery",
-            FilterableView::FooterGallery => "FooterGallery",
             FilterableView::ClipboardHistory => "ClipboardHistory",
             FilterableView::AppLauncher => "AppLauncher",
             FilterableView::BrowserTabs => "BrowserTabs",
@@ -184,19 +178,6 @@ pub const fn plan_trigger_builtin_route(id: TriggerBuiltin) -> AppRoute {
         TriggerBuiltin::AiVault => AppRoute::ExecuteBuiltin("builtin/vault"),
         TriggerBuiltin::Settings => AppRoute::ExecuteBuiltin("builtin/settings"),
         TriggerBuiltin::ChooseTheme => AppRoute::ExecuteBuiltin("builtin/choose-theme"),
-        TriggerBuiltin::DesignGallery => {
-            AppRoute::ShowFilterableView(FilterableView::DesignGallery)
-        }
-        TriggerBuiltin::FooterGallery => {
-            AppRoute::ShowFilterableView(FilterableView::FooterGallery)
-        }
-        TriggerBuiltin::DesignNonListStates => {
-            AppRoute::ExecuteBuiltin("builtin/design-non-list-states")
-        }
-        TriggerBuiltin::BrowseKitStore => AppRoute::ExecuteBuiltin("builtin/browse-kit-store"),
-        TriggerBuiltin::ManageInstalledKits => {
-            AppRoute::ExecuteBuiltin("builtin/manage-installed-kits")
-        }
         TriggerBuiltin::ScriptKitSelfie => AppRoute::ExecuteBuiltin("builtin/script-kit-selfie"),
         TriggerBuiltin::MiniMainWindow => AppRoute::ExecuteBuiltin("builtin/mini-main-window"),
         TriggerBuiltin::QuickTerminal => AppRoute::ExecuteBuiltin("builtin/quick-terminal"),

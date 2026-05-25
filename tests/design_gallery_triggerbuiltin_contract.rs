@@ -59,7 +59,7 @@ fn body_of<'a>(source: &'a str, signature: &str) -> &'a str {
 
 // doc-anchor-removed: [[removed-docs metadata]]
 #[test]
-fn triggerbuiltin_dispatchers_route_design_gallery_to_appview() {
+fn triggerbuiltin_dispatchers_do_not_route_pruned_design_gallery_alias() {
     for (name, source) in [
         (
             "src/main_entry/runtime_stdin_match_core.rs",
@@ -76,29 +76,9 @@ fn triggerbuiltin_dispatchers_route_design_gallery_to_appview() {
     }
 
     let prepare = body_of(TRIGGER_DISPATCH_SOURCE, "fn prepare_filterable_route(");
-    let design_start = prepare
-        .find("FilterableView::DesignGallery => FilterableRoutePlan")
-        .expect("shared dispatcher must prepare DesignGallery route");
-    let design_arm = &prepare[design_start
-        ..prepare[design_start..]
-            .find("FilterableView::ClipboardHistory")
-            .map(|ix| design_start + ix)
-            .expect("ClipboardHistory arm follows DesignGallery arm")];
     assert!(
-        design_arm.contains("next_view: AppView::DesignGalleryView {"),
-        "DesignGallery route plan must target AppView::DesignGalleryView"
-    );
-    assert!(
-        design_arm.contains("filter: String::new(),"),
-        "DesignGallery route plan must initialize an empty filter"
-    );
-    assert!(
-        design_arm.contains("selected_index: 0,"),
-        "DesignGallery route plan must select the first gallery tile"
-    );
-    assert!(
-        design_arm.contains("resize: true,"),
-        "DesignGallery route plan must request deferred resize"
+        !prepare.contains("FilterableView::DesignGallery => FilterableRoutePlan"),
+        "DesignGallery should not remain reachable through triggerBuiltin after pruning"
     );
     let apply = body_of(TRIGGER_DISPATCH_SOURCE, "fn apply_filterable_route_plan(");
     assert!(
