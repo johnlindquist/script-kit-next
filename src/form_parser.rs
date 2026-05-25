@@ -472,4 +472,180 @@ mod tests {
         assert_eq!(fields[3].field_type, Some("checkbox".to_string()));
         assert_eq!(fields[3].value, Some("yes".to_string()));
     }
+
+    #[test]
+    fn test_parse_unicode_and_emoji_fields() {
+        let html = r#"
+            <label for="名前">お名前 👋</label>
+            <input type="text" id="名前" name="ユーザー名" value="山田太郎 🚀" placeholder="入力してください ✨" />
+            <textarea name="自己紹介" placeholder="ひとこと 🌊">こんにちは 🌍</textarea>
+        "#;
+        let fields = parse_form_html(html);
+        assert_eq!(fields.len(), 2);
+        assert_eq!(fields[0].name, "ユーザー名");
+        assert_eq!(fields[0].field_type.as_deref(), Some("text"));
+        assert_eq!(fields[0].label.as_deref(), Some("お名前 👋"));
+        assert_eq!(
+            fields[0].placeholder.as_deref(),
+            Some("入力してください ✨")
+        );
+        assert_eq!(fields[0].value.as_deref(), Some("山田太郎 🚀"));
+        assert_eq!(fields[1].name, "自己紹介");
+        assert_eq!(fields[1].field_type.as_deref(), Some("textarea"));
+        assert_eq!(fields[1].placeholder.as_deref(), Some("ひとこと 🌊"));
+        assert_eq!(fields[1].value.as_deref(), Some("こんにちは 🌍"));
+    }
+
+    #[test]
+    fn test_parse_single_item_form() {
+        let html = r#"<form><input name="only_field" /></form>"#;
+        let fields = parse_form_html(html);
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].name, "only_field");
+        assert_eq!(fields[0].field_type.as_deref(), Some("text"));
+        assert_eq!(fields[0].label, None);
+        assert_eq!(fields[0].placeholder, None);
+        assert_eq!(fields[0].value, None);
+    }
+
+    #[test]
+    fn test_parse_empty_values_and_missing_name() {
+        let html = r#"
+            <input type="text" name="" value="" />
+            <input type="text" value="missing-name" />
+            <input type="text" name="present" value="" />
+        "#;
+        let fields = parse_form_html(html);
+        assert_eq!(fields.len(), 2);
+        assert_eq!(fields[0].name, "");
+        assert_eq!(fields[0].field_type.as_deref(), Some("text"));
+        assert_eq!(fields[0].value.as_deref(), Some(""));
+        assert_eq!(fields[1].name, "present");
+        assert_eq!(fields[1].field_type.as_deref(), Some("text"));
+        assert_eq!(fields[1].value.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn test_parse_large_form_with_many_fields() {
+        let mut html = String::new();
+        for index in 0..25 {
+            html.push_str(&format!(
+                r#"<input type="text" name="field_{}" value="value_{}" />"#,
+                index, index
+            ));
+        }
+        let fields = parse_form_html(&html);
+        assert_eq!(fields.len(), 25);
+        assert_eq!(fields[0].name, "field_0");
+        assert_eq!(fields[0].value.as_deref(), Some("value_0"));
+        assert_eq!(fields[24].name, "field_24");
+        assert_eq!(fields[24].value.as_deref(), Some("value_24"));
+    }
+
+    #[test]
+    fn test_parse_very_long_field_value() {
+        let long_value = "x".repeat(4096);
+        let html = format!(
+            r#"<input type="text" name="long_field" value="{}" />"#,
+            long_value
+        );
+        let fields = parse_form_html(&html);
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].name, "long_field");
+        assert_eq!(fields[0].value.as_deref(), Some(long_value.as_str()));
+    }
+
+    #[test]
+    fn test_pair_get_on_empty_vec() {
+        let pairs: SmallStringMap = Vec::new();
+        assert_eq!(pair_get(&pairs, "missing").map(|v| v.as_str()), None);
+    }
+
+    #[test]
+    fn test_pair_upsert_replaces_existing_key() {
+        let mut pairs = vec![("name".to_string(), "old".to_string())];
+        pair_upsert(&mut pairs, "name".to_string(), "new".to_string());
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pair_get(&pairs, "name").map(|v| v.as_str()), Some("new"));
+    }
+
+    #[test]
+    fn test_pair_upsert_inserts_new_key() {
+        let mut pairs: SmallStringMap = Vec::new();
+        pair_upsert(&mut pairs, "name".to_string(), "value".to_string());
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pair_get(&pairs, "name").map(|v| v.as_str()), Some("value"));
+    }
+
+    #[test]
+    fn test_pair_insert_if_absent_keeps_existing_key() {
+        let mut pairs = vec![("name".to_string(), "original".to_string())];
+        pair_insert_if_absent(&mut pairs, "name".to_string(), "replacement".to_string());
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(
+            pair_get(&pairs, "name").map(|v| v.as_str()),
+            Some("original")
+        );
+    }
+
+    #[test]
+    fn test_pair_helpers_support_unicode_keys_and_values() {
+        let mut pairs: SmallStringMap = Vec::new();
+        pair_upsert(&mut pairs, "キー 🔑".to_string(), "値 ✨".to_string());
+        pair_insert_if_absent(&mut pairs, "キー 🔑".to_string(), "別の値".to_string());
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(
+            pair_get(&pairs, "キー 🔑").map(|v| v.as_str()),
+            Some("値 ✨")
+        );
+    }
+
+    #[test]
+    fn test_parse_nested_forms_gracefully() {
+        let html = r#"
+            <form>
+                <input type="text" name="outer" />
+                <form>
+                    <input type="email" name="inner" />
+                </form>
+                <input type="password" name="after" />
+            </form>
+        "#;
+        let fields = parse_form_html(html);
+        assert_eq!(fields.len(), 3);
+        assert_eq!(fields[0].name, "outer");
+        assert_eq!(fields[1].name, "inner");
+        assert_eq!(fields[2].name, "after");
+    }
+
+    #[test]
+    fn test_parse_radio_buttons() {
+        let html = r#"
+            <input type="radio" name="choice" value="a" />
+            <input type="radio" name="choice" value="b" checked />
+        "#;
+        let fields = parse_form_html(html);
+        assert_eq!(fields.len(), 2);
+        assert_eq!(fields[0].name, "choice");
+        assert_eq!(fields[0].field_type.as_deref(), Some("radio"));
+        assert_eq!(fields[0].value.as_deref(), Some("a"));
+        assert_eq!(fields[1].name, "choice");
+        assert_eq!(fields[1].field_type.as_deref(), Some("radio"));
+        assert_eq!(fields[1].value.as_deref(), Some("b"));
+    }
+
+    #[test]
+    fn test_parse_multiple_select_as_select_field() {
+        let html = r#"
+            <select name="choices" multiple>
+                <option value="a">A</option>
+                <option value="b">B</option>
+            </select>
+        "#;
+        let fields = parse_form_html(html);
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].name, "choices");
+        assert_eq!(fields[0].field_type.as_deref(), Some("select"));
+        assert_eq!(fields[0].value, None);
+    }
 }
