@@ -101,6 +101,25 @@ macro_rules! protocol_message_variants_system_control {
         error_message: Option<String>,
     },
 
+    /// Redacted acknowledgement that an external `triggerAction` command was
+    /// routed to a shared actions host. This is automation-only receipt
+    /// plumbing; it intentionally carries action identity and routing outcome,
+    /// not prompt text, selected text, assistant output, or clipboard content.
+    #[serde(rename = "triggerActionResult")]
+    TriggerActionResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        #[serde(rename = "actionId")]
+        action_id: String,
+        #[serde(rename = "host")]
+        host: Option<String>,
+        ok: bool,
+        #[serde(rename = "popupClosed")]
+        popup_closed: bool,
+        #[serde(rename = "errorCode", skip_serializing_if = "Option::is_none")]
+        error_code: Option<String>,
+    },
+
     /// Open URL in default browser
     #[serde(rename = "browse")]
     Browse { url: String },

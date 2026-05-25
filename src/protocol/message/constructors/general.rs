@@ -405,12 +405,30 @@ impl Message {
             mode,
             ok,
             submitted,
-            target_id: crate::inline_agent::INLINE_AGENT_WINDOW_AUTOMATION_ID.to_string(),
-            target_kind: "miniAi".to_string(),
+            target_id: "acp-chat".to_string(),
+            target_kind: "main".to_string(),
             text_length,
             instruction_length,
             error_code,
             error_message,
+        }
+    }
+
+    pub fn trigger_action_result(
+        request_id: String,
+        action_id: String,
+        host: Option<String>,
+        ok: bool,
+        popup_closed: bool,
+        error_code: Option<String>,
+    ) -> Self {
+        Message::TriggerActionResult {
+            request_id,
+            action_id,
+            host,
+            ok,
+            popup_closed,
+            error_code,
         }
     }
 
