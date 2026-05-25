@@ -21,6 +21,10 @@ static ROOT_NOTES_SEARCH_CACHE: OnceLock<Mutex<RootNotesSearchCache>> = OnceLock
 static ROOT_NOTES_SEARCH_CACHE_GENERATION: AtomicU64 = AtomicU64::new(0);
 static NOTES_STORAGE_GENERATION: AtomicU64 = AtomicU64::new(0);
 
+fn db_lock_err(e: impl std::fmt::Display) -> anyhow::Error {
+    anyhow::anyhow!("DB lock error: {e}")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RootNotesSectionOptions {
     pub enabled: bool,
@@ -284,9 +288,7 @@ fn ensure_notes_fts_triggers(conn: &Connection) -> Result<()> {
 /// are up-to-date on the existing connection.
 pub fn init_notes_db() -> Result<()> {
     if let Some(db) = NOTES_DB.get() {
-        let conn = db
-            .lock()
-            .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+        let conn = db.lock().map_err(db_lock_err)?;
 
         conn.execute_batch("PRAGMA foreign_keys=ON;")
             .context("Failed to enable notes foreign keys")?;
@@ -339,9 +341,7 @@ fn rebuild_notes_search_index_with_conn(conn: &Connection) -> Result<()> {
 /// FTS index is out of sync with the notes table (e.g. after a migration).
 pub fn rebuild_notes_search_index() -> Result<()> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
     rebuild_notes_search_index_with_conn(&conn)
 }
 
@@ -356,9 +356,7 @@ fn get_db() -> Result<Arc<Mutex<Connection>>> {
 /// Save a note (insert or update)
 pub fn save_note(note: &Note) -> Result<()> {
     let db = get_db()?;
-    let mut conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let mut conn = db.lock().map_err(db_lock_err)?;
 
     let tx = conn
         .transaction()
@@ -561,9 +559,7 @@ fn backfill_note_metadata_with_conn(conn: &Connection) -> Result<()> {
 /// Get a note by ID
 pub fn get_note(id: NoteId) -> Result<Option<Note>> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let mut stmt = conn
         .prepare(
@@ -586,9 +582,7 @@ pub fn get_note(id: NoteId) -> Result<Option<Note>> {
 /// Get all active notes (not deleted), sorted by pinned first then updated_at desc
 pub fn get_all_notes() -> Result<Vec<Note>> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let mut stmt = conn
         .prepare(
@@ -614,9 +608,7 @@ pub fn get_all_notes() -> Result<Vec<Note>> {
 /// Get notes in trash (soft-deleted)
 pub fn get_deleted_notes() -> Result<Vec<Note>> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let mut stmt = conn
         .prepare(
@@ -658,9 +650,7 @@ pub fn search_notes(query: &str) -> Result<Vec<Note>> {
     }
 
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     if let Some(metadata_notes) = search_notes_metadata_only(&conn, query)? {
         debug!(query = %query, count = metadata_notes.len(), method = "metadata_only", "Note search completed");
@@ -797,9 +787,7 @@ fn search_notes_by_metadata(conn: &Connection, mode: &str, query: &str) -> Resul
 
 pub(crate) fn get_note_tags(note_id: NoteId) -> Result<Vec<String>> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
     let mut stmt = conn
         .prepare(
             r#"
@@ -820,9 +808,7 @@ pub(crate) fn get_note_tags(note_id: NoteId) -> Result<Vec<String>> {
 
 pub(crate) fn get_note_aliases(note_id: NoteId) -> Result<Vec<String>> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
     let mut stmt = conn
         .prepare(
             r#"
@@ -863,9 +849,7 @@ pub(crate) fn get_note_backlink_count(note_id: NoteId) -> Result<usize> {
 
 pub(crate) fn get_note_backlinks(note_id: NoteId) -> Result<Vec<NoteBacklinkSummary>> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
     let mut stmt = conn
         .prepare(
             r#"
@@ -906,9 +890,7 @@ pub(crate) fn get_note_backlinks(note_id: NoteId) -> Result<Vec<NoteBacklinkSumm
 
 fn count_note_links(sql: &str, note_id: NoteId) -> Result<usize> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
     let count: i64 = conn
         .query_row(sql, params![note_id.as_str()], |row| row.get(0))
         .context("Failed to count note links")?;
@@ -1005,9 +987,7 @@ fn search_root_notes_meta_result(
 ) -> Result<Vec<RootNoteSearchHit>> {
     init_notes_db()?;
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let limit = options.max_results.clamp(1, 5) as i64;
     let hits = if query.trim().is_empty() {
@@ -1130,9 +1110,7 @@ fn search_root_notes_meta_like(
 /// Permanently delete a note
 pub fn delete_note_permanently(id: NoteId) -> Result<()> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     conn.execute("DELETE FROM notes WHERE id = ?1", params![id.as_str()])
         .context("Failed to delete note")?;
@@ -1145,9 +1123,7 @@ pub fn delete_note_permanently(id: NoteId) -> Result<()> {
 /// Permanently delete all soft-deleted notes in a single batch operation.
 pub fn delete_all_deleted_notes() -> Result<()> {
     let db = get_db()?;
-    let mut conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let mut conn = db.lock().map_err(db_lock_err)?;
 
     let tx = conn
         .transaction()
@@ -1170,9 +1146,7 @@ pub fn delete_all_deleted_notes() -> Result<()> {
 /// Prune notes deleted more than `days` ago
 pub fn prune_old_deleted_notes(days: u32) -> Result<usize> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let cutoff = Utc::now() - chrono::Duration::days(days as i64);
 
@@ -1196,9 +1170,7 @@ pub fn prune_old_deleted_notes(days: u32) -> Result<usize> {
 /// Save a cart item (insert or update).
 pub fn save_note_cart_item(item: &super::model::NoteCartItem) -> Result<()> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let payload_json =
         serde_json::to_string(&item.payload).context("Failed to serialize cart item payload")?;
@@ -1232,9 +1204,7 @@ pub fn save_note_cart_item(item: &super::model::NoteCartItem) -> Result<()> {
 /// List all cart items for a note, ordered by sort_order ascending.
 pub fn list_note_cart_items(note_id: NoteId) -> Result<Vec<super::model::NoteCartItem>> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let mut stmt = conn
         .prepare(
@@ -1268,9 +1238,7 @@ pub fn list_note_cart_items_deduped(note_id: NoteId) -> Result<Vec<super::model:
 /// Delete a cart item by ID.
 pub fn delete_note_cart_item(item_id: &str) -> Result<()> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     conn.execute(
         "DELETE FROM note_cart_items WHERE id = ?1",
@@ -1289,9 +1257,7 @@ pub fn delete_note_cart_items(note_id: NoteId, item_ids: &[String]) -> Result<us
     }
 
     let db = get_db()?;
-    let mut conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let mut conn = db.lock().map_err(db_lock_err)?;
 
     let tx = conn
         .transaction()

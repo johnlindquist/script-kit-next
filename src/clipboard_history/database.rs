@@ -25,6 +25,10 @@ use super::types::{
 /// Global database connection (thread-safe)
 static DB_CONNECTION: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
 
+fn db_lock_err(e: impl std::fmt::Display) -> anyhow::Error {
+    anyhow::anyhow!("DB lock error: {e}")
+}
+
 fn parse_optional_dimension(value: Option<i64>) -> Option<u32> {
     value.and_then(|v| u32::try_from(v).ok())
 }
@@ -282,9 +286,7 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
     }
 
     let conn = get_connection()?;
-    let conn = conn
-        .lock()
-        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn.lock().map_err(db_lock_err)?;
 
     let timestamp = chrono::Utc::now().timestamp_millis();
     let content_hash = compute_content_hash(content);
@@ -368,9 +370,7 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
 /// Returns the number of entries deleted.
 pub fn prune_old_entries() -> Result<usize> {
     let conn = get_connection()?;
-    let conn = conn
-        .lock()
-        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn.lock().map_err(db_lock_err)?;
 
     let retention_days = get_retention_days();
     // Cutoff is in milliseconds (retention_days * 24 * 60 * 60 * 1000)
@@ -404,9 +404,7 @@ pub fn trim_oversize_text_entries() -> Result<usize> {
     }
 
     let conn = get_connection()?;
-    let conn = conn
-        .lock()
-        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn.lock().map_err(db_lock_err)?;
 
     let max_len_db = i64::try_from(max_len).unwrap_or(i64::MAX);
     let deleted = conn
@@ -630,9 +628,7 @@ pub fn get_entry_content(id: &str) -> Option<String> {
 /// Pin a clipboard entry to prevent LRU eviction
 pub fn pin_entry(id: &str) -> Result<()> {
     let conn = get_connection()?;
-    let conn = conn
-        .lock()
-        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn.lock().map_err(db_lock_err)?;
 
     let affected = conn
         .execute("UPDATE history SET pinned = 1 WHERE id = ?", params![id])
@@ -655,9 +651,7 @@ pub fn pin_entry(id: &str) -> Result<()> {
 /// Unpin a clipboard entry
 pub fn unpin_entry(id: &str) -> Result<()> {
     let conn = get_connection()?;
-    let conn = conn
-        .lock()
-        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn.lock().map_err(db_lock_err)?;
 
     let affected = conn
         .execute("UPDATE history SET pinned = 0 WHERE id = ?", params![id])
@@ -682,9 +676,7 @@ pub fn remove_entry(id: &str) -> Result<()> {
     use super::blob_store::{delete_blob, is_blob_content};
 
     let conn = get_connection()?;
-    let conn = conn
-        .lock()
-        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn.lock().map_err(db_lock_err)?;
 
     // Get content first to check if it's a blob (for cleanup)
     let content: Option<String> = conn
@@ -726,9 +718,7 @@ pub fn clear_history() -> Result<()> {
     use super::blob_store::{delete_blob, is_blob_content};
 
     let conn = get_connection()?;
-    let conn = conn
-        .lock()
-        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn.lock().map_err(db_lock_err)?;
 
     // Collect blob references before deleting
     let blob_contents: Vec<String> = {
@@ -770,9 +760,7 @@ pub fn clear_unpinned_history() -> Result<()> {
     use super::blob_store::{delete_blob, is_blob_content};
 
     let conn = get_connection()?;
-    let conn = conn
-        .lock()
-        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn.lock().map_err(db_lock_err)?;
 
     // Collect blob references from unpinned entries before deleting
     let blob_contents: Vec<String> = {
@@ -816,9 +804,7 @@ pub fn clear_unpinned_history() -> Result<()> {
 #[allow(dead_code)] // Used by downstream subtasks (OCR)
 pub fn update_ocr_text(id: &str, text: &str) -> Result<()> {
     let conn = get_connection()?;
-    let conn = conn
-        .lock()
-        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn.lock().map_err(db_lock_err)?;
 
     let affected = conn
         .execute(
@@ -868,9 +854,7 @@ pub fn get_entry_by_id(id: &str) -> Option<ClipboardEntry> {
 /// Run incremental vacuum to reclaim disk space
 pub fn run_incremental_vacuum() -> Result<()> {
     let conn = get_connection()?;
-    let conn = conn
-        .lock()
-        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn.lock().map_err(db_lock_err)?;
 
     conn.execute_batch("PRAGMA incremental_vacuum(100);")
         .context("Incremental vacuum failed")?;
@@ -882,9 +866,7 @@ pub fn run_incremental_vacuum() -> Result<()> {
 /// Run WAL checkpoint (passive mode, doesn't block writers)
 pub fn run_wal_checkpoint() -> Result<()> {
     let conn = get_connection()?;
-    let conn = conn
-        .lock()
-        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn.lock().map_err(db_lock_err)?;
 
     conn.execute_batch("PRAGMA wal_checkpoint(PASSIVE);")
         .context("WAL checkpoint failed")?;

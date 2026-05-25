@@ -16,6 +16,10 @@ use super::model::{Chat, ChatId, ChatSource, ImageAttachment, Message, MessageRo
 /// Global database connection for AI chats
 static AI_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
 
+fn db_lock_err(e: impl std::fmt::Display) -> anyhow::Error {
+    anyhow::anyhow!("DB lock error: {e}")
+}
+
 /// Storage-level alias used by bulk chat creation APIs.
 pub type ChatMessage = Message;
 
@@ -364,9 +368,7 @@ fn save_message_record(
 /// Create a new chat
 pub fn create_chat(chat: &Chat) -> Result<()> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     insert_chat_record(&conn, chat)?;
 
@@ -377,9 +379,7 @@ pub fn create_chat(chat: &Chat) -> Result<()> {
 /// Create a chat and all of its messages in a single SQLite transaction.
 pub fn create_chat_with_messages_bulk(chat: &Chat, messages: &[ChatMessage]) -> Result<()> {
     let db = get_db()?;
-    let mut conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let mut conn = db.lock().map_err(db_lock_err)?;
 
     let tx = conn
         .transaction()
@@ -411,9 +411,7 @@ pub fn create_chat_with_messages_bulk(chat: &Chat, messages: &[ChatMessage]) -> 
 /// Update an existing chat
 pub fn update_chat(chat: &Chat) -> Result<()> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     conn.execute(
         r#"
@@ -440,9 +438,7 @@ pub fn update_chat(chat: &Chat) -> Result<()> {
 /// Update chat title
 pub fn update_chat_title(chat_id: &ChatId, title: &str) -> Result<()> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let now = Utc::now().to_rfc3339();
 
@@ -460,9 +456,7 @@ pub fn update_chat_title(chat_id: &ChatId, title: &str) -> Result<()> {
 #[must_use = "query result should be checked"]
 pub fn get_chat(id: &ChatId) -> Result<Option<Chat>> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let mut stmt = conn
         .prepare(
@@ -486,9 +480,7 @@ pub fn get_chat(id: &ChatId) -> Result<Option<Chat>> {
 #[must_use = "query result should be checked"]
 pub fn get_all_chats() -> Result<Vec<Chat>> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let mut stmt = conn
         .prepare(
@@ -515,9 +507,7 @@ pub fn get_all_chats() -> Result<Vec<Chat>> {
 #[must_use = "query result should be checked"]
 pub fn get_deleted_chats() -> Result<Vec<Chat>> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let mut stmt = conn
         .prepare(
@@ -543,9 +533,7 @@ pub fn get_deleted_chats() -> Result<Vec<Chat>> {
 /// Soft delete a chat
 pub fn delete_chat(chat_id: &ChatId) -> Result<()> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let now = Utc::now().to_rfc3339();
 
@@ -562,9 +550,7 @@ pub fn delete_chat(chat_id: &ChatId) -> Result<()> {
 /// Permanently delete a chat and all its messages
 pub fn delete_chat_permanently(chat_id: &ChatId) -> Result<()> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     // Delete messages first (foreign key constraint)
     conn.execute(
@@ -621,9 +607,7 @@ pub fn search_chats(query: &str) -> Result<Vec<Chat>> {
     }
 
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     // Try FTS search first, fall back to LIKE on error
     let sanitized_query = sanitize_fts_query(query);
@@ -717,9 +701,7 @@ pub fn search_chats_with_snippets(query: &str) -> Result<Vec<ChatSearchResult>> 
     }
 
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let sanitized_query = sanitize_fts_query(query);
     let query_lower = query.trim().to_lowercase();
@@ -905,9 +887,7 @@ fn save_message_without_update(message: &Message) -> Result<()> {
 /// This also reduces fsync overhead by committing once instead of twice.
 fn save_message_internal(message: &Message, update_chat_timestamp: bool) -> Result<()> {
     let db = get_db()?;
-    let mut conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let mut conn = db.lock().map_err(db_lock_err)?;
 
     // Wrap both operations in a single transaction for:
     // 1. Atomicity: both succeed or both fail
@@ -932,9 +912,7 @@ fn save_message_internal(message: &Message, update_chat_timestamp: bool) -> Resu
 /// Delete a single message by ID
 pub fn delete_message(message_id: &str) -> Result<()> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     conn.execute("DELETE FROM messages WHERE id = ?1", params![message_id])
         .context("Failed to delete message")?;
@@ -953,9 +931,7 @@ pub fn delete_messages_batch(message_ids: &[String]) -> Result<()> {
     }
 
     let db = get_db()?;
-    let mut conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let mut conn = db.lock().map_err(db_lock_err)?;
 
     let tx = conn
         .transaction()
@@ -994,9 +970,7 @@ pub fn delete_messages_batch(message_ids: &[String]) -> Result<()> {
 #[must_use = "query result should be checked"]
 pub fn get_chat_messages(chat_id: &ChatId) -> Result<Vec<Message>> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let mut stmt = conn
         .prepare(
@@ -1026,9 +1000,7 @@ pub fn get_chat_messages(chat_id: &ChatId) -> Result<Vec<Message>> {
 #[must_use = "query result should be checked"]
 pub fn get_recent_messages(chat_id: &ChatId, limit: usize) -> Result<Vec<Message>> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let mut stmt = conn
         .prepare(
@@ -1730,9 +1702,7 @@ pub fn insert_mock_data() -> Result<()> {
 /// Safe to call multiple times for the same correlation_id; later calls upsert.
 pub fn save_message_preparation_audit(audit: &crate::ai::AiPreflightAudit) -> Result<()> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let audit_json = serde_json::to_string(audit).context("Failed to serialize preflight audit")?;
 
@@ -1796,9 +1766,7 @@ pub fn get_last_message_preparation_audit(
     chat_id: &ChatId,
 ) -> Result<Option<crate::ai::AiPreflightAudit>> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     let audit_json = conn
         .query_row(
@@ -1826,9 +1794,7 @@ pub fn get_last_message_preparation_audit(
 /// Clear all mock data (for test cleanup)
 pub fn clear_all_chats() -> Result<()> {
     let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let conn = db.lock().map_err(db_lock_err)?;
 
     conn.execute("DELETE FROM messages", [])
         .context("Failed to delete all messages")?;
