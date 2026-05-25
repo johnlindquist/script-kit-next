@@ -19,7 +19,7 @@ struct MainMenuRenderDiagnosticsState {
     filter_perf_start: Option<std::time::Instant>,
     /// Cache fields for highlighting
     last_input_highlight_text: String,
-    last_input_highlight_ranges: Vec<(std::ops::Range<usize>, gpui::Color, String)>,
+    last_input_highlight_ranges: Vec<(std::ops::Range<usize>, gpui::Hsla, String)>,
 }
 
 #[derive(Clone, Debug)]
@@ -954,6 +954,7 @@ struct ScriptListApp {
     // Wheel scroll accumulator for smooth trackpad scrolling
     // Accumulates fractional deltas until they cross 1.0, then converts to item steps
     wheel_accum: f32,
+    main_list_suppress_hover_until_mouse_move: bool,
     // Window focus tracking - for detecting focus lost and auto-dismissing prompts
     // When window loses focus while in a dismissable prompt, close and reset
     was_window_focused: bool,

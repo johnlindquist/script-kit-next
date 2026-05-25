@@ -908,19 +908,28 @@ impl ScriptListApp {
                                     // Hover gating is now handled by ListItem via GPUI input modality
                                     let is_hovered = current_hovered == Some(ix);
 
-                                    // Create hover handler
+                                    let mouse_move_handler = cx.listener(
+                                        move |this: &mut ScriptListApp,
+                                              _event: &gpui::MouseMoveEvent,
+                                              _window,
+                                              cx| {
+                                            this.input_mode = InputMode::Mouse;
+                                            this.main_list_suppress_hover_until_mouse_move = false;
+                                            if this.hovered_index != Some(ix) {
+                                                this.hovered_index = Some(ix);
+                                                cx.notify();
+                                            }
+                                        },
+                                    );
                                     let hover_handler = cx.listener(
                                         move |this: &mut ScriptListApp,
                                               hovered: &bool,
                                               _window,
                                               cx| {
-                                            if *hovered {
-                                                this.input_mode = InputMode::Mouse;
-                                                if this.hovered_index != Some(ix) {
-                                                    this.hovered_index = Some(ix);
-                                                    cx.notify();
-                                                }
-                                            } else if this.hovered_index == Some(ix) {
+                                            if this.main_list_suppress_hover_until_mouse_move {
+                                                return;
+                                            }
+                                            if !*hovered && this.hovered_index == Some(ix) {
                                                 this.hovered_index = None;
                                                 cx.notify();
                                             }
@@ -1012,6 +1021,7 @@ impl ScriptListApp {
                                             ix as u64,
                                         ))
                                         .h(px(effective_list_item_height))
+                                        .on_mouse_move(mouse_move_handler)
                                         .on_hover(hover_handler)
                                         .on_click(click_handler)
                                         .child(item_element)
@@ -1099,6 +1109,10 @@ impl ScriptListApp {
                         // before any selection math so GPUI's native list scroll path
                         // cannot drift the viewport away from the active row.
                         cx.stop_propagation();
+                        this.main_list_suppress_hover_until_mouse_move = true;
+                        if this.hovered_index.take().is_some() {
+                            cx.notify();
+                        }
 
                         let selected_before = this.selected_index;
                         let scroll_top_before = this.main_list_state.logical_scroll_top();
