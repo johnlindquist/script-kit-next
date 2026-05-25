@@ -108,7 +108,7 @@ impl ScriptListApp {
         // previous call sites and must stay that way. Preserve the
         // reset even on unknown names, which the original
         // string-entry path already did.
-        self.opened_from_main_menu = false;
+        self.mark_opened_directly("protocol");
 
         let Some(resolved) = trigger_registry().resolve(name) else {
             self.log_unknown_trigger_builtin(name);
@@ -137,7 +137,7 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> TriggerBuiltin {
-        self.opened_from_main_menu = false;
+        self.mark_opened_directly("protocol");
         self.apply_trigger_builtin(id, window, cx);
         id
     }

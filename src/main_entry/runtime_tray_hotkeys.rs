@@ -89,6 +89,7 @@
                         logging::log("TRAY", "Agent Chat menu item clicked");
                         let _ = cx.update(|cx| {
                             app_entity_for_tray.update(cx, |view, cx| {
+                                view.mark_opened_directly("tray");
                                 view.open_tab_ai_acp_with_entry_intent(None, cx);
                             });
                         });
@@ -263,6 +264,7 @@
                 logging::log("HOTKEY", "AI hotkey triggered - opening Agent Chat");
                 let _ = cx.update(|cx: &mut gpui::App| {
                     app_entity_for_ai_hotkey.update(cx, |view, cx| {
+                        view.mark_opened_directly("shortcut");
                         view.open_tab_ai_acp_with_entry_intent(None, cx);
                     });
                 });
@@ -404,6 +406,7 @@
                             "HOTKEY",
                             "Inside app_entity update, calling execute_by_command_id_or_path",
                         );
+                        view.mark_opened_directly("shortcut");
                         view.execute_by_command_id_or_path(&id_clone, ctx)
                     });
 
@@ -470,6 +473,7 @@
                             "DEEPLINK",
                             "Inside app_entity update, calling execute_by_command_id_or_path",
                         );
+                        view.mark_opened_directly("deeplink");
                         view.execute_by_command_id_or_path(&id_clone, ctx)
                     });
 

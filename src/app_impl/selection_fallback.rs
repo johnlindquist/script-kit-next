@@ -436,6 +436,7 @@ impl ScriptListApp {
                     return;
                 }
 
+                self.mark_opened_from_main_menu("execute_selected");
                 match result {
                     scripts::SearchResult::Script(script_match) => {
                         // Run 13 Pass 2 (user bug report) — if the user
@@ -1092,6 +1093,7 @@ impl ScriptListApp {
                     self.execute_builtin_fallback_inline(&fallback_id, &input, cx);
                 }
                 crate::fallbacks::FallbackItem::Script(config) => {
+                    self.mark_opened_from_main_menu("execute_selected_fallback");
                     self.execute_interactive(&config.script, cx);
                 }
             }

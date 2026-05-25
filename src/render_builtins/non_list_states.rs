@@ -162,12 +162,7 @@ impl ScriptListApp {
                 let has_cmd = event.keystroke.modifiers.platform;
 
                 if crate::ui_foundation::is_key_escape(key) {
-                    this.reset_to_script_list(cx);
-                    this.opened_from_main_menu = false;
-                    this.filter_text.clear();
-                    this.pending_filter_sync = true;
-                    this.pending_focus = Some(FocusTarget::MainFilter);
-                    this.update_window_size_deferred(window, cx);
+                    this.go_back_or_close(window, cx);
                     cx.stop_propagation();
                     return;
                 }

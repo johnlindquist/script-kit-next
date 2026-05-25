@@ -1129,9 +1129,12 @@ impl ScriptListApp {
                     } {
                         logging::log("STDIN", "SimulateKey: Escape - hide focused-text quick prompt Agent Chat");
                         view.close_acp_chat_main_window_state_first(ctx);
-                    } else {
-                        logging::log("STDIN", "SimulateKey: Escape - return to main menu from Agent Chat");
+                    } else if view.opened_from_main_menu {
+                        logging::log("STDIN", "SimulateKey: Escape - return to main menu from Agent Chat (opened from main menu)");
                         view.close_tab_ai_harness_terminal_with_window(window, ctx);
+                    } else {
+                        logging::log("STDIN", "SimulateKey: Escape - close Agent Chat window (opened directly)");
+                        view.close_acp_chat_main_window_state_first(ctx);
                     }
                 } else if has_cmd && key_lower == "w" {
                     logging::log("STDIN", "SimulateKey: Cmd+W - close window from Agent Chat");
@@ -1224,11 +1227,7 @@ impl ScriptListApp {
                         "STDIN",
                         "SimulateKey: Escape - return from non-list states to main menu",
                     );
-                    view.reset_to_script_list(ctx);
-                    view.filter_text.clear();
-                    view.pending_filter_sync = true;
-                    view.pending_focus = Some(FocusTarget::MainFilter);
-                    view.update_window_size_deferred(window, ctx);
+                    view.go_back_or_close(window, ctx);
                 } else {
                     logging::log(
                         "STDIN",

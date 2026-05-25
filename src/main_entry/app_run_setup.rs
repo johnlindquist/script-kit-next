@@ -854,6 +854,7 @@ app.run(move |cx: &mut App| {
                         cx.update(|cx| {
                             show_main_window_helper(window_inner, app_entity_inner.clone(), cx);
                             app_entity_inner.update(cx, |view, cx| {
+                                view.mark_opened_directly("tray");
                                 if let Err(e) = view.open_current_app_commands_from_tray(cx) {
                                     let message = e.to_string();
                                     tracing::warn!(
@@ -883,6 +884,7 @@ app.run(move |cx: &mut App| {
                         cx.update(|cx| {
                             show_main_window_helper(window_inner, app_entity_inner.clone(), cx);
                             app_entity_inner.update(cx, |view, cx| {
+                                view.mark_opened_directly("tray");
                                 view.open_tab_ai_acp_with_entry_intent(None, cx);
                             });
                         });
@@ -1164,6 +1166,7 @@ app.run(move |cx: &mut App| {
                 logging::log("HOTKEY", "AI hotkey triggered - opening Agent Chat");
                 cx.update(|cx: &mut gpui::App| {
                     app_entity_for_ai_hotkey.update(cx, |view, cx| {
+                        view.mark_opened_directly("shortcut");
                         view.open_tab_ai_acp_with_entry_intent(None, cx);
                     });
                 });
@@ -1305,6 +1308,7 @@ app.run(move |cx: &mut App| {
                             "HOTKEY",
                             "Inside app_entity update, calling execute_by_command_id_or_path",
                         );
+                        view.mark_opened_directly("shortcut");
                         view.execute_by_command_id_or_path(&id_clone, ctx)
                     });
 
@@ -1371,6 +1375,7 @@ app.run(move |cx: &mut App| {
                             "DEEPLINK",
                             "Inside app_entity update, calling execute_by_command_id_or_path",
                         );
+                        view.mark_opened_directly("deeplink");
                         view.execute_by_command_id_or_path(&id_clone, ctx)
                     });
 

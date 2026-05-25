@@ -630,6 +630,22 @@ impl ScriptListApp {
             self.close_and_reset_window(cx);
         }
     }
+
+    pub(crate) fn mark_opened_from_main_menu(&mut self, reason: &'static str) {
+        logging::log(
+            "NAV",
+            &format!("launch_origin=main_menu reason={reason}"),
+        );
+        self.opened_from_main_menu = true;
+    }
+
+    pub(crate) fn mark_opened_directly(&mut self, reason: &'static str) {
+        logging::log(
+            "NAV",
+            &format!("launch_origin=direct reason={reason}"),
+        );
+        self.opened_from_main_menu = false;
+    }
 }
 
 #[cfg(all(test, unix))]

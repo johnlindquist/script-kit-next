@@ -194,12 +194,21 @@
                                 cx.stop_propagation();
                                 return;
                             }
-                            tracing::info!(
-                                target: "script_kit::keyboard",
-                                event = "embedded_acp_escape_return_to_origin",
-                            );
-                            this.close_tab_ai_harness_terminal_with_window(window, cx);
-                            logging::log("KEY", "Interceptor: Escape -> return to main menu from Agent Chat");
+                            if this.opened_from_main_menu {
+                                tracing::info!(
+                                    target: "script_kit::keyboard",
+                                    event = "embedded_acp_escape_return_to_origin",
+                                );
+                                this.close_tab_ai_harness_terminal_with_window(window, cx);
+                                logging::log("KEY", "Interceptor: Escape -> return to main menu from Agent Chat");
+                            } else {
+                                tracing::info!(
+                                    target: "script_kit::keyboard",
+                                    event = "embedded_acp_escape_close_window",
+                                );
+                                this.close_acp_chat_main_window_state_first(cx);
+                                logging::log("KEY", "Interceptor: Escape -> close Agent Chat window");
+                            }
                             cx.stop_propagation();
                             return;
                         }
