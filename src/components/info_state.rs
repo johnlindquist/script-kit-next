@@ -309,6 +309,122 @@ pub(crate) fn render_acp_empty_guidance(theme: &theme::Theme) -> AnyElement {
     render_info_state(acp_empty_guidance_spec(), theme)
 }
 
+pub(crate) fn launcher_empty_or_no_results_spec(
+    filter_text_for_render: &str,
+    has_active_filter: bool,
+) -> InfoStateSpec {
+    if filter_text_for_render.is_empty() {
+        return launcher_no_scripts_spec();
+    }
+    if has_active_filter {
+        return launcher_active_filter_no_results_spec(filter_text_for_render);
+    }
+    if launcher_plain_hash_search(filter_text_for_render) {
+        return launcher_plain_hash_no_results_spec(filter_text_for_render);
+    }
+    launcher_generic_no_results_spec(filter_text_for_render)
+}
+
+pub(crate) fn render_launcher_empty_or_no_results(
+    filter_text_for_render: &str,
+    has_active_filter: bool,
+    theme: &theme::Theme,
+) -> AnyElement {
+    render_info_state(
+        launcher_empty_or_no_results_spec(filter_text_for_render, has_active_filter),
+        theme,
+    )
+}
+
+fn launcher_no_scripts_spec() -> InfoStateSpec {
+    InfoStateSpec::new("launcher-empty-no-scripts")
+        .layout(InfoStateLayout::Centered)
+        .density(InfoStateDensity::Compact)
+        .tone(InfoStateTone::Help)
+        .title("No scripts yet")
+        .body("This launcher opens your Script Kit scripts and snippets. Create one now, ask Agent Chat to draft the workflow, or open Actions for setup and install options.")
+        .section(InfoSection::new(vec![
+            InfoGuidanceItem::new(Some("⌘N"), "Create a script")
+                .detail("Start a new automation in your scripts folder."),
+            InfoGuidanceItem::new(Some("⇥"), "Ask Agent Chat")
+                .detail("Describe the workflow you want and let AI draft it."),
+            InfoGuidanceItem::new(Some("⌘K"), "Open Actions")
+                .detail("Find reload, install, and setup commands."),
+        ]))
+        .footer_note("After scripts exist, type here to search and run them.")
+}
+
+fn launcher_active_filter_no_results_spec(filter_text: &str) -> InfoStateSpec {
+    let filter_display = launcher_filter_display(filter_text);
+    InfoStateSpec::new("launcher-empty-active-filter")
+        .layout(InfoStateLayout::Centered)
+        .density(InfoStateDensity::Compact)
+        .tone(InfoStateTone::Recovery)
+        .title(format!("No matches for \"{filter_display}\""))
+        .body("The search is working, but an active filter is narrowing the launcher to zero results. Remove a filter chip or loosen the query to widen the set.")
+        .section(InfoSection::new(vec![
+            InfoGuidanceItem::new(Some("Esc"), "Clear the search"),
+            InfoGuidanceItem::new(Some("Filter"), "Remove a filter chip")
+                .detail("Source and type filters apply before fuzzy matching."),
+            InfoGuidanceItem::new(Some("⌘K"), "Open Actions")
+                .detail("Use actions if you meant to manage scripts or filters."),
+        ]))
+        .footer_note("Filters narrow the library before the launcher ranks results.")
+}
+
+fn launcher_plain_hash_no_results_spec(filter_text: &str) -> InfoStateSpec {
+    let filter_display = launcher_filter_display(filter_text);
+    InfoStateSpec::new("launcher-empty-plain-hash")
+        .layout(InfoStateLayout::Centered)
+        .density(InfoStateDensity::Compact)
+        .tone(InfoStateTone::Help)
+        .title("Tags need a syntax prefix")
+        .body(format!("Plain {filter_display} is treated as launcher text search. Use :#tag to filter existing tags, or add #tag after a capture like ;todo when you are creating one."))
+        .section(InfoSection::titled(
+            "Examples",
+            vec![
+                InfoGuidanceItem::new(Some(":#"), "Filter tagged items").detail("Example: :#work"),
+                InfoGuidanceItem::new(Some(":tag:"), "Filter by tag name")
+                    .detail("Example: :tag:work"),
+                InfoGuidanceItem::new(Some(";todo"), "Create a tagged capture")
+                    .detail("Example: ;todo Buy milk #errands"),
+            ],
+        ))
+        .footer_note("Keep #tag plain only when you want text search, not tag filtering.")
+}
+
+fn launcher_generic_no_results_spec(filter_text: &str) -> InfoStateSpec {
+    let filter_display = launcher_filter_display(filter_text);
+    InfoStateSpec::new("launcher-empty-generic-no-results")
+        .layout(InfoStateLayout::Centered)
+        .density(InfoStateDensity::Compact)
+        .tone(InfoStateTone::Recovery)
+        .title(format!("No results for \"{filter_display}\""))
+        .body("The launcher searches scripts, scriptlets, snippets, and built-in commands by name and metadata. Try fewer words, use a structured filter, capture the thought, or ask Agent Chat to turn it into a script.")
+        .section(InfoSection::new(vec![
+            InfoGuidanceItem::new(Some("Esc"), "Clear the search"),
+            InfoGuidanceItem::new(Some("type:"), "Search by metadata")
+                .detail("Examples: type:script · type:scriptlet · shortcut:cmd+k"),
+            InfoGuidanceItem::new(Some(";todo"), "Capture instead")
+                .detail("Examples: ;todo · ;note"),
+            InfoGuidanceItem::new(Some("⌘↵"), "Ask Agent Chat")
+                .detail("Turn this search into a script request."),
+        ]))
+        .footer_note("Structured filters work best for metadata; plain words work best for names.")
+}
+
+fn launcher_plain_hash_search(filter_text: &str) -> bool {
+    filter_text.starts_with('#') && filter_text.chars().skip(1).all(|ch| !ch.is_whitespace())
+}
+
+fn launcher_filter_display(filter_text: &str) -> String {
+    if filter_text.chars().count() > 30 {
+        format!("{}...", crate::utils::truncate_str_chars(filter_text, 27))
+    } else {
+        filter_text.to_string()
+    }
+}
+
 pub(crate) fn render_info_state(spec: InfoStateSpec, theme: &theme::Theme) -> AnyElement {
     let palette = info_palette(theme);
     let metrics = info_metrics(spec.density);
@@ -604,5 +720,81 @@ mod tests {
         assert!(!copy.contains("Type / for skills"));
         assert!(!copy.contains(&format!("{} new", "⌘N")));
         assert!(!copy.contains(&format!("{} close", "⌘W")));
+    }
+
+    #[test]
+    fn launcher_empty_guidance_teaches_library_and_next_actions() {
+        let spec = launcher_empty_or_no_results_spec("", false);
+        let copy = format!("{spec:?}");
+        assert!(copy.contains("No scripts yet"));
+        assert!(copy.contains("This launcher opens your Script Kit scripts and snippets"));
+        assert!(copy.contains("Create a script"));
+        assert!(copy.contains("Ask Agent Chat"));
+        assert!(copy.contains("Open Actions"));
+        assert!(!copy.contains("No scripts or snippets found"));
+        assert!(!copy.contains("Press ⌘N to create a new script"));
+    }
+
+    #[test]
+    fn launcher_no_results_preserves_active_filter_plain_hash_and_generic_cases() {
+        let active = format!(
+            "{:?}",
+            launcher_empty_or_no_results_spec("type:script nope", true)
+        );
+        assert!(active.contains("No matches for"));
+        assert!(active.contains("active filter is narrowing"));
+        assert!(active.contains("Remove a filter chip"));
+        assert!(active.contains("Source and type filters apply before fuzzy matching"));
+
+        let tag = format!("{:?}", launcher_empty_or_no_results_spec("#work", false));
+        assert!(tag.contains("Tags need a syntax prefix"));
+        assert!(tag.contains("Plain #work is treated as launcher text search"));
+        assert!(tag.contains("Example: :#work"));
+        assert!(tag.contains("Example: :tag:work"));
+        assert!(tag.contains("Example: ;todo Buy milk #errands"));
+
+        let generic = format!("{:?}", launcher_empty_or_no_results_spec("zzz", false));
+        assert!(generic.contains("No results for"));
+        assert!(generic.contains("zzz"));
+        assert!(generic.contains("scripts, scriptlets, snippets, and built-in commands"));
+        assert!(generic.contains("type:script"));
+        assert!(generic.contains("shortcut:cmd+k"));
+        assert!(generic.contains("Ask Agent Chat"));
+    }
+
+    #[test]
+    fn launcher_no_results_truncates_long_utf8_filter_display() {
+        let input = "é".repeat(45);
+        let spec = launcher_empty_or_no_results_spec(&input, false);
+        let copy = format!("{spec:?}");
+        assert!(copy.contains("..."));
+        assert!(!copy.contains(&"é".repeat(45)));
+    }
+
+    #[test]
+    fn launcher_empty_state_routes_through_info_state() {
+        let source = std::fs::read_to_string("src/render_script_list/mod.rs")
+            .expect("failed to read src/render_script_list/mod.rs");
+        let old_empty_title = concat!("No scripts or ", "snippets found");
+        let old_empty_hint = concat!("Press ", "⌘N", " to create a new script");
+        let old_generic_fallback =
+            concat!("Try a different search term or press ", "⌘↵", " to ask AI");
+
+        assert!(
+            source.contains("render_launcher_empty_or_no_results"),
+            "launcher empty/no-results must render through shared InfoState"
+        );
+        assert!(
+            !source.contains(old_empty_title),
+            "old launcher empty title must not return"
+        );
+        assert!(
+            !source.contains(old_empty_hint),
+            "old launcher empty hint must not return"
+        );
+        assert!(
+            !source.contains(old_generic_fallback),
+            "old generic no-results fallback must not return"
+        );
     }
 }

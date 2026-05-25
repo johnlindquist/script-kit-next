@@ -620,109 +620,13 @@ fn render_menu_syntax_main_hint(
 fn render_script_list_empty_state(
     filter_text_for_render: &str,
     has_active_filter: bool,
-    empty_text_color: u32,
-    empty_font_family: String,
+    theme: &crate::theme::Theme,
 ) -> AnyElement {
-    // Empty state rendering with icon and helpful messaging:
-    // empty filter shows creation help; non-empty filter shows search recovery.
-    use crate::designs::icon_variations::IconName;
-
-    if filter_text_for_render.is_empty() {
-        div()
-            .w_full()
-            .h_full()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap(px(EMPTY_STATE_GAP))
-            .font_family(empty_font_family)
-            .child(
-                svg()
-                    .external_path(IconName::Code.external_path())
-                    .size(px(EMPTY_STATE_ICON_SIZE))
-                    .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_ICON)),
-            )
-            .child(
-                div()
-                    .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_MESSAGE))
-                    .text_size(px(EMPTY_STATE_MESSAGE_FONT_SIZE))
-                    .font_weight(FontWeight::MEDIUM)
-                    .child("No scripts or snippets found"),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_HINT))
-                    .child("Press ⌘N to create a new script"),
-            )
-            .into_any_element()
-    } else {
-        // Filtering but no results (including no fallbacks) - shouldn't normally happen.
-        let filter_display = if filter_text_for_render.chars().count() > 30 {
-            format!(
-                "{}...",
-                crate::utils::truncate_str_chars(filter_text_for_render, 27)
-            )
-        } else {
-            filter_text_for_render.to_string()
-        };
-        let plain_hash_search = filter_text_for_render.starts_with('#')
-            && filter_text_for_render
-                .chars()
-                .skip(1)
-                .all(|ch| !ch.is_whitespace());
-        let recovery_hint = if has_active_filter {
-            "There are no search results with this filter applied."
-        } else if plain_hash_search {
-            "Plain #tag is launcher search. Use :#tag to filter tags, or ;todo ... #tag to label a capture."
-        } else {
-            "Try a different search term or press ⌘↵ to ask AI"
-        };
-        let syntax_tips = if has_active_filter {
-            "Edit or remove a filter chip to widen the search."
-        } else if plain_hash_search {
-            "Examples: :#work · :tag:work · ;todo Buy milk #errands"
-        } else {
-            "Filters: type:script · type:scriptlet · shortcut:cmd+k · ;todo · ;note"
-        };
-        div()
-            .w_full()
-            .h_full()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap(px(EMPTY_STATE_GAP))
-            .font_family(empty_font_family)
-            .child(
-                svg()
-                    .external_path(IconName::MagnifyingGlass.external_path())
-                    .size(px(EMPTY_STATE_ICON_SIZE))
-                    .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_ICON)),
-            )
-            .child(
-                div()
-                    .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_MESSAGE))
-                    .text_size(px(EMPTY_STATE_MESSAGE_FONT_SIZE))
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(format!("No results for \"{}\"", filter_display)),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_HINT))
-                    .child(recovery_hint),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_TIPS))
-                    .pt(px(EMPTY_STATE_TIPS_MARGIN_TOP))
-                    .child(syntax_tips),
-            )
-            .into_any_element()
-    }
+    crate::components::render_launcher_empty_or_no_results(
+        filter_text_for_render,
+        has_active_filter,
+        theme,
+    )
 }
 
 impl ScriptListApp {
@@ -821,8 +725,6 @@ impl ScriptListApp {
         // theme's colors while still using the variant's spacing and shape tokens.
         let color_resolver =
             crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
-        let typography_resolver =
-            crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design);
         let spacing_resolver = crate::theme::SpacingResolver::new(self.current_design);
 
         // For Default design, use header constants; for others, use spacing resolver
@@ -860,10 +762,7 @@ impl ScriptListApp {
 
         // NOTE: Removed P4 perf log - called every render frame, causing log spam
 
-        // Build script list using uniform_list for proper virtualized scrolling
-        // Use unified color resolver for consistent empty state styling
-        let empty_text_color = color_resolver.empty_text_color();
-        let empty_font_family = typography_resolver.primary_font().to_string();
+        // Build script list using uniform_list for proper virtualized scrolling.
         let handler_form_owns_input_for_render =
             self.menu_syntax_capture_form_owns_input_for(&filter_text_for_render);
         let show_launcher_ask_ai_hint = !handler_form_owns_input_for_render;
@@ -928,8 +827,7 @@ impl ScriptListApp {
                 render_script_list_empty_state(
                     &filter_text_for_render,
                     has_active_filter,
-                    empty_text_color,
-                    empty_font_family,
+                    &self.theme,
                 )
             }
         } else {
@@ -2122,6 +2020,41 @@ mod render_script_list_click_contract_tests {
         assert!(
             source.contains("this.execute_selected(cx);"),
             "render_script_list click handler should still execute the selected row"
+        );
+    }
+}
+
+#[cfg(test)]
+mod launcher_empty_info_state_contract_tests {
+    use std::fs;
+
+    #[test]
+    fn launcher_empty_state_routes_through_info_state() {
+        let source = fs::read_to_string("src/render_script_list/mod.rs")
+            .expect("failed to read src/render_script_list/mod.rs");
+        let old_empty_title = concat!("No scripts or ", "snippets found");
+        let old_empty_hint = concat!("Press ", "⌘N", " to create a new script");
+        let old_generic_fallback = concat!(
+            "Try a different search term or press ",
+            "⌘↵",
+            " to ask AI"
+        );
+
+        assert!(
+            source.contains("render_launcher_empty_or_no_results"),
+            "launcher empty/no-results must render through shared InfoState"
+        );
+        assert!(
+            !source.contains(old_empty_title),
+            "old launcher empty title must not return"
+        );
+        assert!(
+            !source.contains(old_empty_hint),
+            "old launcher empty hint must not return"
+        );
+        assert!(
+            !source.contains(old_generic_fallback),
+            "old generic no-results fallback must not return"
         );
     }
 }

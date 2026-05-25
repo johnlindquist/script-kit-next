@@ -37,3 +37,20 @@ fn info_state_keeps_context_first_acp_copy() {
     assert!(!source.contains("⌘N new"));
     assert!(!source.contains("⌘W close"));
 }
+
+#[test]
+fn launcher_empty_guidance_uses_shared_info_state() {
+    let launcher = fs::read_to_string("src/render_script_list/mod.rs")
+        .expect("failed to read src/render_script_list/mod.rs");
+    let info = fs::read_to_string("src/components/info_state.rs")
+        .expect("failed to read src/components/info_state.rs");
+
+    assert!(launcher.contains("render_launcher_empty_or_no_results"));
+    assert!(info.contains("launcher_empty_or_no_results_spec"));
+    assert!(info.contains("No scripts yet"));
+    assert!(info.contains("Tags need a syntax prefix"));
+    assert!(info.contains("active filter is narrowing"));
+    assert!(info.contains("scripts, scriptlets, snippets, and built-in commands"));
+    assert!(!launcher.contains("No scripts or snippets found"));
+    assert!(!launcher.contains("Press ⌘N to create a new script"));
+}
