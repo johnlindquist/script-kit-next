@@ -91,6 +91,46 @@ impl ScriptListApp {
             total_ms = open_started_at.elapsed().as_millis() as u64,
         );
 
+        let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+        let ai_preferences = crate::config::load_user_preferences().ai;
+        let effective_profile = crate::ai::agent_chat::profiles::resolve_effective_profile(
+            &ai_preferences,
+            &profile_ctx,
+        );
+        match crate::ai::agent_chat::launch::PiAgentChatLaunch::from_profile(
+            effective_profile.clone(),
+        ) {
+            Ok(Some(pi_launch)) => {
+                self.open_tab_ai_pi_view_from_launch(
+                    pi_launch,
+                    request,
+                    capture_rx,
+                    focused_part,
+                    use_ask_anything_fallback,
+                    explicit_ambient_chip_label,
+                    auto_submit,
+                    effective_intent,
+                    acp_initial_input,
+                    permission_rx,
+                    source_view,
+                    had_harness_session,
+                    pending_script_list_trigger,
+                    open_started_at,
+                    cx,
+                );
+                return;
+            }
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "pi_agent_chat_launch_resolution_failed",
+                    error = %error,
+                    "Falling back to ACP Agent Chat launch"
+                );
+            }
+        }
+
         // --- ACP agent catalog + preflight resolution ---
         let stage_started_at = std::time::Instant::now();
         let catalog = match crate::ai::acp::load_acp_agent_catalog_entries() {
@@ -120,9 +160,14 @@ impl ScriptListApp {
             use_ask_anything_fallback
         };
 
+        let profile_preferred_agent_id = (effective_profile.backend
+            == crate::config::AgentChatBackend::Acp)
+            .then(|| effective_profile.agent.clone())
+            .flatten();
         let preferred_agent_id = retry_request
             .as_ref()
             .and_then(|req| req.preferred_agent_id.clone())
+            .or(profile_preferred_agent_id)
             .or_else(crate::ai::acp::load_preferred_acp_agent_id);
 
         let requirements = retry_request
@@ -211,7 +256,10 @@ impl ScriptListApp {
         // Extract model info before `agent` is moved into spawn_with_approval.
         let agent_models = agent.models.clone();
         // Use the config-backed preferred model, falling back to the first model.
-        let persisted_model = crate::config::load_user_preferences().ai.selected_model_id;
+        let profile_model_id = (effective_profile.backend == crate::config::AgentChatBackend::Acp)
+            .then(|| effective_profile.model.clone())
+            .flatten();
+        let persisted_model = profile_model_id.or(ai_preferences.selected_model_id.clone());
         let default_model_id = persisted_model
             .filter(|id| agent_models.iter().any(|m| m.id == *id))
             .or_else(|| agent_models.first().map(|m| m.id.clone()));
@@ -292,6 +340,7 @@ impl ScriptListApp {
                             initial_input: acp_initial_input.clone(),
                             initial_context_parts: Vec::new(),
                             display_name: agent_display_name.into(),
+                            profile_display_name: Some(effective_profile.name.clone().into()),
                             selected_agent: acp_launch_resolution.selected_agent.clone(),
                             available_agents: acp_launch_resolution.catalog_entries.clone(),
                             launch_requirements: requirements,
@@ -427,6 +476,165 @@ impl ScriptListApp {
 
         // --- Ask Anything fallback: spawn deferred context injection task ---
         // Mark capture as pending so the footer loading dot activates.
+        view_entity_for_staging.update(cx, |view, _cx| {
+            view.set_context_capture_pending(true);
+        });
+
+        self.spawn_acp_deferred_context_staging(
+            view_entity_for_staging,
+            thread,
+            request,
+            capture_rx,
+            effective_intent,
+            auto_submit,
+            open_started_at,
+            cx,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn open_tab_ai_pi_view_from_launch(
+        &mut self,
+        pi_launch: crate::ai::agent_chat::launch::PiAgentChatLaunch,
+        request: TabAiLaunchRequest,
+        capture_rx: TabAiDeferredCaptureRx,
+        focused_part: Option<crate::ai::message_parts::AiContextPart>,
+        use_ask_anything_fallback: bool,
+        explicit_ambient_chip_label: Option<String>,
+        auto_submit: bool,
+        effective_intent: Option<String>,
+        acp_initial_input: Option<String>,
+        permission_rx: async_channel::Receiver<crate::ai::acp::AcpApprovalRequest>,
+        source_view: AppView,
+        had_harness_session: bool,
+        pending_script_list_trigger: Option<char>,
+        open_started_at: std::time::Instant,
+        cx: &mut Context<Self>,
+    ) {
+        let requirements = crate::ai::acp::AcpLaunchRequirements {
+            needs_embedded_context: focused_part.is_some(),
+            needs_image: focused_part
+                .as_ref()
+                .map(|part| part.source().contains("screenshot=1"))
+                .unwrap_or(false),
+        };
+        let warm_spec = pi_launch.warm_spec();
+        let manager = crate::ai::agent_chat::launch::warm_session_manager();
+        if let Err(error) = manager.prepare_warm(warm_spec) {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "pi_agent_chat_warm_prepare_failed",
+                profile_id = %pi_launch.profile.id,
+                warm_key = %pi_launch.warm_key,
+                error = %error,
+            );
+        }
+
+        let Some(lease) = manager.acquire_warm(&pi_launch.warm_key) else {
+            tracing::error!(
+                target: "script_kit::tab_ai",
+                event = "pi_agent_chat_warm_acquire_failed",
+                profile_id = %pi_launch.profile.id,
+                warm_key = %pi_launch.warm_key,
+            );
+            self.toast_manager.push(
+                crate::components::toast::Toast::error(
+                    "Failed to start Pi Agent Chat warm session",
+                    &self.theme,
+                )
+                .duration_ms(Some(TOAST_ERROR_MS)),
+            );
+            cx.notify();
+            return;
+        };
+
+        let connection = lease.connection.clone();
+        let cwd = lease.cwd.clone();
+        let ui_thread_id = lease.ui_thread_id.clone();
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "pi_agent_chat_warm_acquired",
+            profile_id = %pi_launch.profile.id,
+            profile_name = %pi_launch.profile.name,
+            warm_key = %pi_launch.warm_key,
+            generation = lease.generation,
+            ui_thread_id = %ui_thread_id,
+            cwd = %cwd.display(),
+            total_ms = open_started_at.elapsed().as_millis() as u64,
+        );
+
+        let thread = cx.new(|cx| {
+            crate::ai::acp::AcpThread::new(
+                connection,
+                permission_rx,
+                crate::ai::acp::AcpThreadInit {
+                    ui_thread_id,
+                    cwd,
+                    initial_input: acp_initial_input.clone(),
+                    initial_context_parts: Vec::new(),
+                    display_name: pi_launch.profile.name.clone().into(),
+                    profile_display_name: Some(pi_launch.profile.name.clone().into()),
+                    selected_agent: None,
+                    available_agents: Vec::new(),
+                    launch_requirements: requirements,
+                    available_models: pi_launch.available_models.clone(),
+                    selected_model_id: pi_launch.selected_model_id.clone(),
+                },
+                cx,
+            )
+        });
+
+        let view_entity = cx.new(|cx| {
+            crate::ai::acp::AcpChatView::new(thread.clone(), cx).with_ui_variant(request.ui_variant)
+        });
+
+        self.active_agent_chat_warm_lease = Some(lease);
+        self.wire_embedded_acp_footer_callbacks(&view_entity, cx);
+        self.embedded_acp_chat = Some(view_entity.clone());
+        self.tab_ai_harness_return_view = Some(source_view.clone());
+        self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
+        self.seed_tab_ai_apply_back_route(
+            &request.source_view,
+            &request.ui_snapshot,
+            focused_part.as_ref(),
+        );
+
+        let view_entity_for_staging = view_entity.clone();
+        view_entity_for_staging.update(cx, |view, _cx| {
+            view.opened_via_transient_trigger = pending_script_list_trigger;
+        });
+        self.enter_embedded_acp_chat_surface(view_entity, cx);
+        cx.notify();
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "pi_agent_chat_view_switched",
+            profile_id = %pi_launch.profile.id,
+            acp_chat_ui_variant = request.ui_variant.state_id(),
+            total_ms = open_started_at.elapsed().as_millis() as u64,
+        );
+
+        let needs_deferred = self.stage_acp_initial_context_parts(
+            None,
+            &view_entity_for_staging,
+            &thread,
+            focused_part,
+            use_ask_anything_fallback,
+            explicit_ambient_chip_label.clone(),
+            auto_submit,
+            pending_script_list_trigger,
+            request.suppress_focused_part,
+            &source_view,
+            cx,
+        );
+
+        self.schedule_acp_post_paint_harness_teardown(had_harness_session, open_started_at, cx);
+
+        if !needs_deferred {
+            return;
+        }
+
         view_entity_for_staging.update(cx, |view, _cx| {
             view.set_context_capture_pending(true);
         });

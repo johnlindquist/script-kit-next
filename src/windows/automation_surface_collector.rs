@@ -371,6 +371,11 @@ pub fn collect_surface_snapshot(
                     "panel_only_prompt_popup",
                 )
             }),
+        AutomationWindowKind::MiniAi
+            if resolved.id == crate::inline_agent::window::INLINE_AGENT_WINDOW_AUTOMATION_ID =>
+        {
+            collect_inline_agent_snapshot(resolved)
+        }
         _ => return None,
     };
 
@@ -392,6 +397,107 @@ pub fn collect_surface_snapshot(
     );
 
     Some(snapshot)
+}
+
+fn collect_inline_agent_snapshot(resolved: &AutomationWindowInfo) -> SurfaceElementSnapshot {
+    use crate::inline_agent::automation::{
+        INLINE_AGENT_ACTION_APPEND_ID, INLINE_AGENT_ACTION_CHAT_ID, INLINE_AGENT_ACTION_COPY_ID,
+        INLINE_AGENT_ACTION_REPLACE_ID, INLINE_AGENT_APP_BADGE_ID, INLINE_AGENT_COMPACT_ID,
+        INLINE_AGENT_HEADER_ID, INLINE_AGENT_INPUT_ID, INLINE_AGENT_METRICS_ID,
+    };
+
+    let elements = vec![
+        element(
+            INLINE_AGENT_COMPACT_ID,
+            ElementType::Panel,
+            resolved.title.clone(),
+            None,
+            None,
+            None,
+            None,
+        ),
+        element(
+            INLINE_AGENT_HEADER_ID,
+            ElementType::Panel,
+            Some("Inline Agent header".to_string()),
+            None,
+            None,
+            None,
+            None,
+        ),
+        element(
+            INLINE_AGENT_APP_BADGE_ID,
+            ElementType::Panel,
+            Some("Source app".to_string()),
+            None,
+            None,
+            None,
+            None,
+        ),
+        element(
+            INLINE_AGENT_METRICS_ID,
+            ElementType::Panel,
+            Some("Captured text metrics".to_string()),
+            None,
+            None,
+            None,
+            None,
+        ),
+        element(
+            INLINE_AGENT_INPUT_ID,
+            ElementType::Input,
+            Some(crate::inline_agent::types::INLINE_AGENT_INPUT_PLACEHOLDER.to_string()),
+            None,
+            None,
+            Some(true),
+            None,
+        ),
+        element(
+            INLINE_AGENT_ACTION_REPLACE_ID,
+            ElementType::Button,
+            Some("Replace".to_string()),
+            None,
+            None,
+            None,
+            None,
+        ),
+        element(
+            INLINE_AGENT_ACTION_APPEND_ID,
+            ElementType::Button,
+            Some("Append".to_string()),
+            None,
+            None,
+            None,
+            None,
+        ),
+        element(
+            INLINE_AGENT_ACTION_COPY_ID,
+            ElementType::Button,
+            Some("Copy".to_string()),
+            None,
+            None,
+            None,
+            None,
+        ),
+        element(
+            INLINE_AGENT_ACTION_CHAT_ID,
+            ElementType::Button,
+            Some("Chat".to_string()),
+            None,
+            None,
+            None,
+            None,
+        ),
+    ];
+
+    SurfaceElementSnapshot {
+        total_count: elements.len(),
+        elements,
+        focused_semantic_id: Some(INLINE_AGENT_INPUT_ID.to_string()),
+        selected_semantic_id: None,
+        warnings: Vec::new(),
+        quality: SnapshotQuality::Full,
+    }
 }
 
 /// Fallback for surfaces that cannot be fully introspected.

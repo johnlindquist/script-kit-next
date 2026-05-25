@@ -1013,6 +1013,10 @@ struct ScriptListApp {
     /// Hidden, never-shown ACP chat entity warmed at startup. It is consumed
     /// by the first compatible ACP open so prompt submit avoids initialization.
     pub(crate) prewarmed_acp_chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,
+    /// Active Pi-backed Agent Chat warm lease, reset on chat dismissal so the
+    /// next Agent Chat open starts from a fresh warm session.
+    pub(crate) active_agent_chat_warm_lease:
+        Option<crate::ai::agent_chat::warm_session::AgentChatWarmSessionLease>,
     /// Cached ready script path from the ACP `SCRIPT_READY` receipt. Updated
     /// whenever the ACP observer fires. Used by footer button resolution
     /// (which only has `&self`) without needing a `cx` to read the ACP entity.

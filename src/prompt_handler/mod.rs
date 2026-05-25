@@ -1732,6 +1732,68 @@ impl ScriptListApp {
                     );
                 }
             }
+            Message::CaptureFocusedText { request_id } => {
+                let response = match crate::platform::accessibility::capture_focused_text_field(
+                    crate::platform::accessibility::CaptureFocusedTextOptions::default(),
+                ) {
+                    Ok(snapshot) => {
+                        tracing::info!(
+                            category = "STDIN",
+                            event_type = "capture_focused_text_result",
+                            request_id = %request_id,
+                            text_len = snapshot.text.len(),
+                            char_count = snapshot.metrics.chars,
+                            app_name = %snapshot.app.name,
+                            success = true,
+                            "captureFocusedText receipt"
+                        );
+                        Message::focused_text_snapshot_response(
+                            serde_json::json!({
+                                "sessionId": snapshot.session_id.to_string(),
+                                "capturedAtMs": snapshot.captured_at_ms,
+                                "app": {
+                                    "name": snapshot.app.name,
+                                    "bundleId": snapshot.app.bundle_id,
+                                    "processId": snapshot.app.process_id,
+                                },
+                                "text": snapshot.text,
+                                "metrics": {
+                                    "bytes": snapshot.metrics.bytes,
+                                    "chars": snapshot.metrics.chars,
+                                    "utf16Units": snapshot.metrics.utf16_units,
+                                    "lines": snapshot.metrics.lines,
+                                    "estimatedTokens": snapshot.metrics.estimated_tokens,
+                                },
+                                "capabilities": {
+                                    "canReplace": snapshot.capabilities.can_replace,
+                                    "canAppend": snapshot.capabilities.can_append,
+                                    "canCopy": snapshot.capabilities.can_copy,
+                                }
+                            }),
+                            request_id,
+                        )
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            category = "STDIN",
+                            event_type = "capture_focused_text_result",
+                            request_id = %request_id,
+                            success = false,
+                            error = %e,
+                            "captureFocusedText probe failed"
+                        );
+                        Message::focused_text_snapshot_error(e.to_string(), request_id)
+                    }
+                };
+                if let Some(ref sender) = self.response_sender {
+                    let _ = sender.try_send(response);
+                } else {
+                    tracing::warn!(
+                        category = "STDIN",
+                        "No response sender available for captureFocusedText"
+                    );
+                }
+            }
             Message::RequestAccessibility { request_id } => {
                 let granted = crate::permissions_wizard::request_accessibility_permission();
                 tracing::info!(
@@ -1784,6 +1846,142 @@ impl ScriptListApp {
                     tracing::warn!(
                         category = "STDIN",
                         "No response sender available for setSelectedText"
+                    );
+                }
+            }
+            Message::ReplaceFocusedText {
+                session_id,
+                text,
+                request_id,
+            } => {
+                let text_len = text.len();
+                let response = match crate::platform::accessibility::replace_focused_text(
+                    crate::platform::accessibility::FocusedTextSessionId(session_id),
+                    &text,
+                    crate::platform::accessibility::TextMutationOptions::default(),
+                ) {
+                    Ok(_) => {
+                        tracing::info!(
+                            category = "STDIN",
+                            event_type = "replace_focused_text_result",
+                            request_id = %request_id,
+                            text_len,
+                            success = true,
+                            "replaceFocusedText receipt"
+                        );
+                        Message::focused_text_mutation_response("replace".to_string(), request_id)
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            category = "STDIN",
+                            event_type = "replace_focused_text_result",
+                            request_id = %request_id,
+                            text_len,
+                            success = false,
+                            error = %e,
+                            "replaceFocusedText failed"
+                        );
+                        Message::focused_text_mutation_error(
+                            "replace".to_string(),
+                            e.to_string(),
+                            request_id,
+                        )
+                    }
+                };
+                if let Some(ref sender) = self.response_sender {
+                    let _ = sender.try_send(response);
+                } else {
+                    tracing::warn!(
+                        category = "STDIN",
+                        "No response sender available for replaceFocusedText"
+                    );
+                }
+            }
+            Message::AppendFocusedText {
+                session_id,
+                text,
+                request_id,
+            } => {
+                let text_len = text.len();
+                let response = match crate::platform::accessibility::append_focused_text(
+                    crate::platform::accessibility::FocusedTextSessionId(session_id),
+                    &text,
+                    crate::platform::accessibility::TextMutationOptions::default(),
+                ) {
+                    Ok(_) => {
+                        tracing::info!(
+                            category = "STDIN",
+                            event_type = "append_focused_text_result",
+                            request_id = %request_id,
+                            text_len,
+                            success = true,
+                            "appendFocusedText receipt"
+                        );
+                        Message::focused_text_mutation_response("append".to_string(), request_id)
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            category = "STDIN",
+                            event_type = "append_focused_text_result",
+                            request_id = %request_id,
+                            text_len,
+                            success = false,
+                            error = %e,
+                            "appendFocusedText failed"
+                        );
+                        Message::focused_text_mutation_error(
+                            "append".to_string(),
+                            e.to_string(),
+                            request_id,
+                        )
+                    }
+                };
+                if let Some(ref sender) = self.response_sender {
+                    let _ = sender.try_send(response);
+                } else {
+                    tracing::warn!(
+                        category = "STDIN",
+                        "No response sender available for appendFocusedText"
+                    );
+                }
+            }
+            Message::CopyInlineAgentOutput { text, request_id } => {
+                let text_len = text.len();
+                let response = match crate::platform::accessibility::copy_text_output(&text) {
+                    Ok(_) => {
+                        tracing::info!(
+                            category = "STDIN",
+                            event_type = "copy_inline_agent_output_result",
+                            request_id = %request_id,
+                            text_len,
+                            success = true,
+                            "copyInlineAgentOutput receipt"
+                        );
+                        Message::focused_text_mutation_response("copy".to_string(), request_id)
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            category = "STDIN",
+                            event_type = "copy_inline_agent_output_result",
+                            request_id = %request_id,
+                            text_len,
+                            success = false,
+                            error = %e,
+                            "copyInlineAgentOutput failed"
+                        );
+                        Message::focused_text_mutation_error(
+                            "copy".to_string(),
+                            e.to_string(),
+                            request_id,
+                        )
+                    }
+                };
+                if let Some(ref sender) = self.response_sender {
+                    let _ = sender.try_send(response);
+                } else {
+                    tracing::warn!(
+                        category = "STDIN",
+                        "No response sender available for copyInlineAgentOutput"
                     );
                 }
             }

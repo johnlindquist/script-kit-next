@@ -1705,12 +1705,19 @@ impl RenderOnce for ListItem {
         // without waiting for state updates via cx.notify().
         //
         // For selected items, we don't apply hover styles (they already have full focus styling).
+        let pl_val = if self.show_accent_bar {
+            ITEM_PADDING_X - ACCENT_BAR_WIDTH
+        } else {
+            ITEM_PADDING_X
+        };
+
         let inner_content_id = ElementId::NamedInteger("list-item-inner".into(), item_index as u64);
         let mut inner_content = div()
             .id(inner_content_id)
             .w_full()
             .h_full()
-            .px(px(ITEM_PADDING_X))
+            .pl(px(pl_val))
+            .pr(px(ITEM_PADDING_X))
             .py(px(ITEM_PADDING_Y))
             .bg(bg_color)
             .rounded(px(6.0))
@@ -1836,14 +1843,25 @@ impl RenderOnce for ListItem {
             ElementId::NamedInteger("list-item".into(), item_index as u64)
         };
 
-        // Accent bar: Use LEFT BORDER instead of child div because:
+        // Accent bar: Use LEFT BORDER on inner_content instead of container because:
         // 1. GPUI clamps corner radii to ≤ half the shortest side
         // 2. A 3px-wide child with 12px radius gets clamped to ~1.5px (invisible)
-        // 3. A border on the container follows rounded corners naturally
+        // 3. A border on the inner_content follows rounded corners naturally
         let accent_color = rgb(colors.accent_selected);
 
+        // Apply accent bar as left border (only when enabled)
+        if self.show_accent_bar {
+            inner_content =
+                inner_content
+                    .border_l(px(ACCENT_BAR_WIDTH))
+                    .border_color(if self.selected {
+                        accent_color
+                    } else {
+                        gpui::transparent_black().into()
+                    });
+        }
+
         // Base container with ID for stateful interactivity
-        // Use left border for accent indicator - always reserve space, toggle color
         let mut container = div()
             .w_full()
             .h(px(metrics.item_height))
@@ -1854,17 +1872,6 @@ impl RenderOnce for ListItem {
             .flex_row()
             .items_center()
             .id(element_id);
-
-        // Apply accent bar as left border (only when enabled)
-        if self.show_accent_bar {
-            container = container
-                .border_l(px(ACCENT_BAR_WIDTH))
-                .border_color(if self.selected {
-                    accent_color
-                } else {
-                    gpui::transparent_black().into()
-                });
-        }
 
         // Add hover handler if we have both index and callback
         if let (Some(idx), Some(callback)) = (index, on_hover_callback) {

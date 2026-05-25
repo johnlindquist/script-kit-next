@@ -84,8 +84,14 @@ jobs:
       - name: Build release
         run: cargo build --release --bin script-kit-gpui
 
+      - name: Prepare bundled Pi sidecar
+        run: bash scripts/prepare-pi-sidecar.sh
+
       - name: Create bundle
         run: cargo bundle --release --bin script-kit-gpui
+
+      - name: Install Pi sidecar into bundle
+        run: bash scripts/install-pi-sidecar-into-bundle.sh
 
       - name: Verify bundled macOS app contents
         run: bash scripts/verify-macos-bundle.sh
@@ -130,13 +136,16 @@ jobs:
           find "$APP_PATH" -type d -name "*.framework" -print0 | xargs -0 -I{} codesign --force --options runtime --sign "$IDENTITY" "{}"
           find "$APP_PATH" \( -name "*.dylib" -o -name "*.so" \) -type f -print0 | xargs -0 codesign --force --options runtime --sign "$IDENTITY"
 
-          # Sign the main executable
+          # Sign bundled executables before the outer app bundle.
+          codesign --force --options runtime --entitlements entitlements.plist --sign "$IDENTITY" "$APP_PATH/Contents/MacOS/pi"
+          codesign --verify --verbose=4 "$APP_PATH/Contents/MacOS/pi"
           codesign --force --options runtime --entitlements entitlements.plist --sign "$IDENTITY" "$APP_PATH/Contents/MacOS/script-kit-gpui"
 
           # Sign the entire app bundle
           codesign --force --options runtime --entitlements entitlements.plist --sign "$IDENTITY" "$APP_PATH"
 
           # Verify signature
+          codesign --verify --verbose=4 "$APP_PATH/Contents/MacOS/script-kit-gpui"
           codesign --verify --verbose=4 "$APP_PATH"
 
       - name: Create zip for notarization

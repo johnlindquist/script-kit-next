@@ -1,15 +1,18 @@
 const AGENT_CHAT_MOD_SOURCE: &str = include_str!("../src/ai/agent_chat/mod.rs");
 const AGENT_CHAT_EVENTS_SOURCE: &str = include_str!("../src/ai/agent_chat/events.rs");
 const AGENT_CHAT_RUNTIME_SOURCE: &str = include_str!("../src/ai/agent_chat/runtime.rs");
+const AGENT_CHAT_LAUNCH_SOURCE: &str = include_str!("../src/ai/agent_chat/launch.rs");
 const ACP_CLIENT_SOURCE: &str = include_str!("../src/ai/acp/client.rs");
 const ACP_THREAD_SOURCE: &str = include_str!("../src/ai/acp/thread.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
+const APP_STATE_SOURCE: &str = include_str!("../src/main_sections/app_state.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 const ACP_LAUNCH_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
 
 #[test]
 fn agent_chat_runtime_modules_are_declared() {
     assert!(AGENT_CHAT_MOD_SOURCE.contains("pub mod events;"));
+    assert!(AGENT_CHAT_MOD_SOURCE.contains("pub(crate) mod launch;"));
     assert!(AGENT_CHAT_MOD_SOURCE.contains("pub mod runtime;"));
     assert!(AGENT_CHAT_MOD_SOURCE.contains("pub mod metrics;"));
 }
@@ -79,45 +82,62 @@ fn phase_two_keeps_view_out_of_runtime_refactor() {
 }
 
 #[test]
-fn phase_two_does_not_spawn_or_route_pi() {
+fn pi_routing_is_owned_by_agent_chat_launch_and_tab_entry_only() {
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("PiAgentChatLaunch"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("PiAgentChatLaunch::from_profile"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("PiRpcRuntime::spawn"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatWarmSessionSpec"));
+    assert!(
+        ACP_LAUNCH_SOURCE.contains("open_tab_ai_pi_view_from_launch"),
+        "Tab launch should route selected Pi profiles through an explicit helper"
+    );
+    assert!(
+        ACP_LAUNCH_SOURCE.contains("resolve_effective_profile")
+            && ACP_LAUNCH_SOURCE.contains("PiAgentChatLaunch::from_profile"),
+        "Tab launch must branch on the effective Agent Chat profile"
+    );
+
     for (name, source) in [
         ("agent_chat_runtime", AGENT_CHAT_RUNTIME_SOURCE),
         ("acp_client", ACP_CLIENT_SOURCE),
         ("acp_thread", ACP_THREAD_SOURCE),
-        ("tab_ai_mode", TAB_AI_MODE_SOURCE),
-        ("acp_launch", ACP_LAUNCH_SOURCE),
     ] {
         assert!(
             !source.contains("PiLaunchSpec"),
-            "{name} must not import or use PiLaunchSpec in Phase 2"
+            "{} must stay backend-neutral and not import PiLaunchSpec",
+            name
         );
         assert!(
             !source.contains("agent_chat::pi"),
-            "{name} must not import Pi runtime modules in Phase 2"
-        );
-        assert!(
-            !source.contains("Command::new(\"pi\")")
-                && !source.contains("tokio::process::Command::new(\"pi\")")
-                && !source.contains("std::process::Command::new(\"pi\")"),
-            "{name} must not spawn Pi in Phase 2"
+            "{} must stay backend-neutral and not import Pi runtime modules",
+            name
         );
     }
 }
 
 #[test]
-fn phase_two_keeps_tab_routing_on_acp() {
+fn tab_launch_preserves_acp_runtime_path_and_adds_pi_warm_path() {
     assert!(
         ACP_LAUNCH_SOURCE.contains("AcpConnection::spawn_with_approval")
             || ACP_LAUNCH_SOURCE.contains("AcpRuntime::spawn_with_approval"),
-        "Tab Agent Chat launch should still instantiate the ACP runtime"
+        "ACP profiles should still instantiate the ACP runtime"
     );
     assert!(
-        !TAB_AI_MODE_SOURCE.contains("AgentChatBackend::Pi"),
-        "Tab routing must not branch to Pi in Phase 2"
+        ACP_LAUNCH_SOURCE.contains("PiRpcRuntime")
+            || AGENT_CHAT_LAUNCH_SOURCE.contains("PiRpcRuntime"),
+        "Pi profiles should be routed to the Pi RPC runtime"
     );
     assert!(
-        !TAB_AI_MODE_SOURCE.contains("selected_backend")
-            && !TAB_AI_MODE_SOURCE.contains("selectedBackend"),
-        "selectedBackend remains schema-only until the opt-in routing phase"
+        TAB_AI_MODE_SOURCE.contains("dismiss_active_agent_chat_warm_lease"),
+        "Agent Chat close must reset the acquired Pi warm lease"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("closing_pi_agent_chat")
+            && TAB_AI_MODE_SOURCE.contains("self.embedded_acp_chat = None;"),
+        "Normal Pi Agent Chat dismissal must not leave the old embedded entity reusable"
+    );
+    assert!(
+        APP_STATE_SOURCE.contains("active_agent_chat_warm_lease"),
+        "App state must retain the acquired warm lease until chat dismissal"
     );
 }

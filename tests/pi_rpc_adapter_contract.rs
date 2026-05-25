@@ -1,7 +1,7 @@
 use std::fs;
 
 fn read(path: &str) -> String {
-    fs::read_to_string(path).unwrap_or_else(|error| panic!("read {path}: {error}"))
+    fs::read_to_string(path).unwrap_or_else(|error| panic!("read {}: {}", path, error))
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn pi_rpc_protocol_uses_stdio_json_command_names() {
         r#""get_available_models""#,
         r#""set_model""#,
     ] {
-        assert!(source.contains(command), "missing {command}");
+        assert!(source.contains(command), "missing {}", command);
     }
     assert!(source.contains("encode_json_line"));
 }
@@ -51,18 +51,22 @@ fn pi_rpc_event_mapper_targets_current_acp_shaped_aliases() {
 }
 
 #[test]
-fn pi_rpc_scaffolding_does_not_route_tab_to_pi() {
-    for path in [
-        "src/app_impl/tab_ai_mode/mod.rs",
-        "src/app_impl/tab_ai_mode/acp_launch.rs",
-        "src/app_impl/tab_ai_mode/acp_setup.rs",
-    ] {
-        let source = read(path);
-        assert!(
-            !source.contains("PiRpcRuntime") && !source.contains("AgentChatBackend::Pi"),
-            "{path} must not route Tab Agent Chat to Pi in this adapter-only slice"
-        );
-    }
+fn pi_rpc_adapter_is_routed_through_agent_chat_launch_helper() {
+    let launch = read("src/ai/agent_chat/launch.rs");
+    let tab_launch = read("src/app_impl/tab_ai_mode/acp_launch.rs");
+    let tab_mode = read("src/app_impl/tab_ai_mode/mod.rs");
+    let setup = read("src/app_impl/tab_ai_mode/acp_setup.rs");
+
+    assert!(launch.contains("PiRpcRuntime::spawn"));
+    assert!(launch.contains("PiRpcLaunchSpec::new"));
+    assert!(tab_launch.contains("resolve_effective_profile"));
+    assert!(tab_launch.contains("PiAgentChatLaunch::from_profile"));
+    assert!(tab_launch.contains("open_tab_ai_pi_view_from_launch"));
+    assert!(tab_mode.contains("dismiss_active_agent_chat_warm_lease"));
+    assert!(
+        !setup.contains("PiRpcRuntime") && !setup.contains("AgentChatBackend::Pi"),
+        "setup cards should stay ACP setup-owned; Pi routing belongs in launch"
+    );
 }
 
 #[test]

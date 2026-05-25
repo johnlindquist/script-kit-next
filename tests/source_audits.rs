@@ -248,6 +248,9 @@ mod focused_text_mutation_wired;
 #[path = "source_audits/inline_ai_double_command_trigger_wired.rs"]
 mod inline_ai_double_command_trigger_wired;
 
+#[path = "source_audits/inline_agent_trigger_wired.rs"]
+mod inline_agent_trigger_wired;
+
 #[path = "source_audits/stdin_focused_text_protocol_wired.rs"]
 mod stdin_focused_text_protocol_wired;
 

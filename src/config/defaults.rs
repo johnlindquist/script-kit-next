@@ -26,6 +26,7 @@ pub const DEFAULT_WINDOW_SWITCHER: bool = true;
 pub const DEFAULT_AI_HOTKEY_ENABLED: bool = true;
 pub const DEFAULT_LOGS_HOTKEY_ENABLED: bool = true;
 pub const DEFAULT_DICTATION_HOTKEY_ENABLED: bool = true;
+pub const DEFAULT_INLINE_AI_HOTKEY_ENABLED: bool = true;
 
 /// Default unified root-search feature flags.
 pub const DEFAULT_UNIFIED_SEARCH_ENABLED: bool = true;

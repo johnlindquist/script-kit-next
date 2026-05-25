@@ -372,6 +372,12 @@ fn recover_config_fields(value: Value, correlation_id: &str) -> Config {
             "dictationHotkeyEnabled",
             correlation_id,
         ),
+        inline_ai_hotkey: parse_optional_field(object, "inlineAiHotkey", correlation_id),
+        inline_ai_hotkey_enabled: parse_optional_field(
+            object,
+            "inlineAiHotkeyEnabled",
+            correlation_id,
+        ),
         watcher: parse_optional_field(object, "watcher", correlation_id),
         layout: parse_optional_field(object, "layout", correlation_id),
         theme: parse_optional_field(object, "theme", correlation_id),
@@ -1017,11 +1023,13 @@ mod tests {
                 "selectedProfileId": "general",
                 "selectedBackend": "pi",
                 "selectedProfileName": "Legacy",
+                "piBinary": "~/dev/pi_agent_rust/target/debug/pi",
                 "profiles": [
                     {
                         "id": "script-kit",
                         "name": "Script Kit",
                         "backend": "pi",
+                        "piBinary": "~/dev/pi_agent_rust/target/release/pi",
                         "provider": "openai-codex",
                         "model": "gpt-5.4",
                         "systemPrompt": "replace prompt",
@@ -1049,11 +1057,19 @@ mod tests {
         assert_eq!(ai.selected_profile_id.as_deref(), Some("general"));
         assert_eq!(ai.selected_backend, Some(AgentChatBackend::Pi));
         assert_eq!(ai.selected_profile_name.as_deref(), Some("Legacy"));
+        assert_eq!(
+            ai.pi_binary.as_deref(),
+            Some("~/dev/pi_agent_rust/target/debug/pi")
+        );
 
         let profile = ai.profiles.first().expect("profile should parse");
         assert_eq!(profile.id.as_deref(), Some("script-kit"));
         assert_eq!(profile.name, "Script Kit");
         assert_eq!(profile.backend, Some(AgentChatBackend::Pi));
+        assert_eq!(
+            profile.pi_binary.as_deref(),
+            Some("~/dev/pi_agent_rust/target/release/pi")
+        );
         assert_eq!(profile.provider.as_deref(), Some("openai-codex"));
         assert_eq!(profile.agent.as_deref(), None);
         assert_eq!(profile.model.as_deref(), Some("gpt-5.4"));

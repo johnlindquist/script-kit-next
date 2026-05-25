@@ -71,7 +71,7 @@ enum AcpModelSwitchHandlerAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AcpProfileSwitchHandlerAction {
+enum AgentChatProfileSwitchHandlerAction {
     SwitchProfile,
 }
 
@@ -354,14 +354,15 @@ impl AcpModelSwitchHandlerAction {
     }
 }
 
-impl AcpProfileSwitchHandlerAction {
+impl AgentChatProfileSwitchHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
-        crate::actions::acp_switch_profile_name_from_action(action_id).map(|_| Self::SwitchProfile)
+        crate::actions::agent_chat_switch_profile_id_from_action(action_id)
+            .map(|_| Self::SwitchProfile)
     }
 
-    fn unavailable_message(self, profile_name: &str) -> String {
+    fn unavailable_message(self, profile_id: &str) -> String {
         match self {
-            Self::SwitchProfile => format!("Profile '{profile_name}' is no longer available"),
+            Self::SwitchProfile => format!("Profile '{profile_id}' is no longer available"),
         }
     }
 
@@ -371,17 +372,9 @@ impl AcpProfileSwitchHandlerAction {
         }
     }
 
-    fn missing_relaunch_agent_message(self, profile_name: &str) -> String {
+    fn relaunch_message(self, profile_name: &str) -> String {
         match self {
-            Self::SwitchProfile => format!("Profile '{profile_name}' has no agent to relaunch"),
-        }
-    }
-
-    fn relaunch_message(self, profile_name: &str, agent_display_name: &str) -> String {
-        match self {
-            Self::SwitchProfile => {
-                format!("Switching profile to {profile_name} ({agent_display_name})\u{2026}")
-            }
+            Self::SwitchProfile => format!("Switching profile to {profile_name}\u{2026}"),
         }
     }
 
@@ -628,8 +621,7 @@ impl DeferredAiWindowAction {
                 let png_bytes = base64::engine::general_purpose::STANDARD
                     .decode(image_base64)
                     .map_err(|error| {
-                        DeferredAiImageAttachmentStage::DecodeClipboardImage
-                            .failure_message(error)
+                        DeferredAiImageAttachmentStage::DecodeClipboardImage.failure_message(error)
                     })?;
                 let temp_path = std::env::temp_dir().join(format!(
                     "script-kit-acp-clipboard-{}.png",
@@ -914,10 +906,7 @@ impl ScriptListApp {
                             duration_ms = started_at.elapsed().as_millis() as u64,
                             "Failed to complete deferred chat handoff after hiding main window"
                         );
-                        this.show_error_toast(
-                            deferred_action_kind.failure_message(&error),
-                            cx,
-                        );
+                        this.show_error_toast(deferred_action_kind.failure_message(&error), cx);
                     });
                 }
             }
@@ -1314,82 +1303,37 @@ impl ScriptListApp {
             return outcome;
         }
 
-        if let Some(profile_name) =
-            crate::actions::acp_switch_profile_name_from_action(action_id)
+        if let Some(profile_id) =
+            crate::actions::agent_chat_switch_profile_id_from_action(action_id)
         {
-            let Some(profile_action) = AcpProfileSwitchHandlerAction::from_action_id(action_id)
+            let Some(profile_action) =
+                AgentChatProfileSwitchHandlerAction::from_action_id(action_id)
             else {
                 return DispatchOutcome::not_handled();
             };
-            let (current_selected_agent_id, available_agents) = {
-                let view = entity.read(cx);
-                match &view.session {
-                    crate::ai::acp::AcpChatSession::Setup(state) => (
-                        state
-                            .selected_agent
-                            .as_ref()
-                            .map(|agent| agent.id.to_string()),
-                        crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
-                            &state.catalog_entries,
-                        ),
-                    ),
-                    crate::ai::acp::AcpChatSession::Live(thread) => {
-                        let thread = thread.read(cx);
-                        (
-                            thread.selected_agent_id().map(str::to_string),
-                            crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
-                                thread.available_agents(),
-                            ),
-                        )
-                    }
-                }
-            };
 
             let mut prefs = crate::config::load_user_preferences();
-            let Some(profile) = prefs
-                .ai
-                .profiles
-                .iter()
-                .find(|profile| profile.name == profile_name)
-                .cloned()
+            let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+            let Some(profile) =
+                crate::ai::agent_chat::profiles::persist_agent_chat_profile_selection(
+                    &mut prefs.ai,
+                    profile_id,
+                    &ctx,
+                )
             else {
                 return DispatchOutcome::error(
                     crate::action_helpers::ERROR_ACTION_FAILED,
-                    profile_action.unavailable_message(profile_name),
+                    profile_action.unavailable_message(profile_id),
                 );
             };
-
-            let profile_agent_id = profile
-                .agent
-                .as_ref()
-                .map(|agent| agent.trim())
-                .filter(|agent| !agent.is_empty())
-                .map(str::to_string);
-            let should_relaunch = profile_agent_id
-                .as_deref()
-                .is_some_and(|agent_id| current_selected_agent_id.as_deref() != Some(agent_id));
-            let agent_display_name = profile_agent_id
-                .as_deref()
-                .and_then(|agent_id| {
-                    available_agents
-                        .iter()
-                        .find(|entry| entry.id.as_ref() == agent_id)
-                })
-                .map(|entry| entry.display_name.to_string())
-                .or_else(|| profile_agent_id.clone())
-                .unwrap_or_else(|| "current agent".to_string());
-
-            prefs.ai.selected_profile_name = Some(profile.name.clone());
-            if let Some(agent_id) = profile_agent_id.clone() {
-                prefs.ai.selected_acp_agent_id = Some(agent_id);
-            }
 
             let persist_result = crate::config::save_user_preferences(&prefs);
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_switch_profile_persist_result",
+                event = "agent_chat_switch_profile_persist_result",
                 profile_name = %profile.name,
-                profile_agent_id = ?profile_agent_id,
+                profile_id = %profile.id,
+                profile_backend = ?profile.backend,
                 persisted = persist_result.is_ok(),
             );
 
@@ -1402,43 +1346,18 @@ impl ScriptListApp {
 
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_switch_profile_requested",
+                event = "agent_chat_switch_profile_requested",
                 profile_name = %profile.name,
-                profile_agent_id = ?profile_agent_id,
-                current_agent_id = ?current_selected_agent_id,
-                should_relaunch,
+                profile_id = %profile.id,
+                profile_backend = ?profile.backend,
             );
 
-            if should_relaunch {
-                let Some(next_agent_id) = profile_agent_id.clone() else {
-                    return DispatchOutcome::error(
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        profile_action.missing_relaunch_agent_message(&profile.name),
-                    );
-                };
-
-                entity.update(cx, |view, cx| {
-                    view.relaunch_for_agent_switch_preserving_draft(next_agent_id.clone(), cx);
-                });
-
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_switch_profile_relaunch_requested",
-                    profile_name = %profile.name,
-                    agent_id = %next_agent_id,
-                );
-
-                self.close_tab_ai_harness_terminal(cx);
-                self.open_tab_ai_acp_with_entry_intent(None, cx);
-
-                let mut outcome = DispatchOutcome::success();
-                outcome.user_message =
-                    Some(profile_action.relaunch_message(&profile.name, &agent_display_name));
-                return outcome;
-            }
+            self.close_tab_ai_harness_terminal(cx);
+            self.embedded_acp_chat = None;
+            self.open_tab_ai_acp_with_entry_intent(None, cx);
 
             let mut outcome = DispatchOutcome::success();
-            outcome.user_message = Some(profile_action.selected_message(&profile.name));
+            outcome.user_message = Some(profile_action.relaunch_message(&profile.name));
             return outcome;
         }
 
@@ -2084,7 +2003,9 @@ impl ScriptListApp {
                             filter: String::new(),
                             selected_index: 0,
                         },
-                        panel_action.history_search_placeholder().unwrap_or_default(),
+                        panel_action
+                            .history_search_placeholder()
+                            .unwrap_or_default(),
                         true,
                         cx,
                     );

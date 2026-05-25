@@ -40,6 +40,7 @@ pub(crate) mod popup_registry;
 pub(crate) mod popup_window;
 pub(crate) mod portal_contract;
 pub(crate) mod preflight;
+pub(crate) mod profile_selector_popup;
 pub(crate) mod provider;
 pub(crate) mod setup_state;
 pub(crate) mod surface_state;
@@ -151,6 +152,7 @@ pub(crate) fn open_or_focus_chat_with_input(
                 initial_input: Some(input),
                 initial_context_parts: Vec::new(),
                 display_name: agent_display_name.into(),
+                profile_display_name: None,
                 selected_agent: launch_resolution.selected_agent.clone(),
                 available_agents: launch_resolution.catalog_entries.clone(),
                 launch_requirements: requirements,

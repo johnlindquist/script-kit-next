@@ -33,7 +33,7 @@ impl PiLaunchSpec {
         }
 
         Some(Self {
-            pi_binary: PathBuf::from("pi"),
+            pi_binary: profile.pi_binary.clone()?,
             cwd: profile.cwd.clone(),
             provider: profile.provider.clone(),
             model: profile.model.clone(),

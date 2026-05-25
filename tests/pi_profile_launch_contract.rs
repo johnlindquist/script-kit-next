@@ -1,10 +1,14 @@
 use std::path::{Path, PathBuf};
 
+use script_kit_gpui::ai::agent_chat::pi::binary::{
+    bundled_pi_binary_candidate_for_exe, dev_pi_binary_for_home,
+};
 use script_kit_gpui::ai::agent_chat::pi::launch_spec::PiLaunchSpec;
 use script_kit_gpui::ai::agent_chat::profiles::{
-    resolve_effective_profile, AgentChatProfileContext, AgentChatProfileSource,
-    BUILTIN_GENERAL_PROFILE_ID, BUILTIN_SCRIPT_KIT_PROFILE_ID, DEFAULT_PI_MODEL,
-    DEFAULT_PI_PROVIDER, SCRIPT_KIT_PI_TOOLS,
+    agent_chat_profile_picker_entries, persist_agent_chat_profile_selection,
+    resolve_effective_profile, selected_agent_chat_profile_picker_id, AgentChatProfileContext,
+    AgentChatProfileSource, BUILTIN_ACP_FALLBACK_PROFILE_ID, BUILTIN_GENERAL_PROFILE_ID,
+    BUILTIN_SCRIPT_KIT_PROFILE_ID, DEFAULT_PI_MODEL, DEFAULT_PI_PROVIDER, SCRIPT_KIT_PI_TOOLS,
 };
 use script_kit_gpui::config::{AcpProfile, AgentChatBackend, AiPreferences};
 
@@ -14,10 +18,17 @@ fn context() -> AgentChatProfileContext {
     }
 }
 
+fn ai_with_pi_binary(path: &str) -> AiPreferences {
+    AiPreferences {
+        pi_binary: Some(path.to_string()),
+        ..AiPreferences::default()
+    }
+}
+
 #[test]
 fn general_builtin_profile_builds_locked_down_pi_rpc_launch_spec() {
     let ctx = context();
-    let profile = resolve_effective_profile(&AiPreferences::default(), &ctx);
+    let profile = resolve_effective_profile(&ai_with_pi_binary("/tmp/test-pi"), &ctx);
     assert_eq!(profile.source, AgentChatProfileSource::BuiltIn);
     assert_eq!(profile.id, BUILTIN_GENERAL_PROFILE_ID);
     assert_eq!(profile.name, "General");
@@ -31,6 +42,7 @@ fn general_builtin_profile_builds_locked_down_pi_rpc_launch_spec() {
 
     let spec = PiLaunchSpec::from_profile(&profile).expect("general profile should be Pi");
     let argv = spec.argv();
+    assert_eq!(spec.pi_binary, PathBuf::from("/tmp/test-pi"));
     assert_eq!(spec.cwd.as_deref(), profile.cwd.as_deref());
     assert!(argv.starts_with(&["--mode".to_string(), "rpc".to_string()]));
     assert!(argv.contains(&"--provider".to_string()));
@@ -51,7 +63,7 @@ fn general_builtin_profile_builds_locked_down_pi_rpc_launch_spec() {
 #[test]
 fn script_kit_builtin_profile_builds_workspace_pi_rpc_launch_spec() {
     let ctx = context();
-    let mut ai = AiPreferences::default();
+    let mut ai = ai_with_pi_binary("/tmp/test-pi");
     ai.selected_profile_id = Some(BUILTIN_SCRIPT_KIT_PROFILE_ID.to_string());
 
     let profile = resolve_effective_profile(&ai, &ctx);
@@ -139,6 +151,7 @@ fn selected_acp_agent_and_model_fill_missing_legacy_profile_fields() {
 fn selected_model_id_overrides_builtin_profile_default_model() {
     let ctx = context();
     let ai = AiPreferences {
+        pi_binary: Some("/tmp/test-pi".to_string()),
         selected_model_id: Some("gpt-5.5-pro".to_string()),
         ..AiPreferences::default()
     };
@@ -149,9 +162,46 @@ fn selected_model_id_overrides_builtin_profile_default_model() {
 }
 
 #[test]
+fn global_pi_binary_preference_overrides_builtin_profile_binary() {
+    let ctx = context();
+    let ai = AiPreferences {
+        pi_binary: Some("~/dev/pi_agent_rust/target/release/pi".to_string()),
+        ..AiPreferences::default()
+    };
+
+    let profile = resolve_effective_profile(&ai, &ctx);
+    let spec = PiLaunchSpec::from_profile(&profile).expect("general profile should be Pi");
+    assert!(spec
+        .pi_binary
+        .ends_with("dev/pi_agent_rust/target/release/pi"));
+}
+
+#[test]
+fn profile_pi_binary_overrides_global_pi_binary_preference() {
+    let ctx = context();
+    let ai = AiPreferences {
+        pi_binary: Some("/tmp/global-pi".to_string()),
+        selected_profile_id: Some("ops".to_string()),
+        profiles: vec![AcpProfile {
+            id: Some("ops".to_string()),
+            name: "Ops".to_string(),
+            backend: Some(AgentChatBackend::Pi),
+            pi_binary: Some("/tmp/profile-pi".to_string()),
+            ..AcpProfile::default()
+        }],
+        ..AiPreferences::default()
+    };
+
+    let profile = resolve_effective_profile(&ai, &ctx);
+    let spec = PiLaunchSpec::from_profile(&profile).expect("custom profile should be Pi");
+    assert_eq!(spec.pi_binary, PathBuf::from("/tmp/profile-pi"));
+}
+
+#[test]
 fn unmatched_profile_selection_falls_back_to_general() {
     let ctx = context();
     let ai = AiPreferences {
+        pi_binary: Some("/tmp/test-pi".to_string()),
         selected_profile_id: Some("missing".to_string()),
         selected_profile_name: Some("Also Missing".to_string()),
         ..AiPreferences::default()
@@ -160,4 +210,180 @@ fn unmatched_profile_selection_falls_back_to_general() {
     let profile = resolve_effective_profile(&ai, &ctx);
     assert_eq!(profile.id, BUILTIN_GENERAL_PROFILE_ID);
     assert_eq!(profile.backend, AgentChatBackend::Pi);
+}
+
+#[test]
+fn selected_backend_acp_preserves_legacy_acp_fallback_when_no_profile_selected() {
+    let ctx = context();
+    let ai = AiPreferences {
+        selected_backend: Some(AgentChatBackend::Acp),
+        selected_acp_agent_id: Some("claude-code".to_string()),
+        selected_model_id: Some("claude-sonnet-4-6".to_string()),
+        ..AiPreferences::default()
+    };
+
+    let profile = resolve_effective_profile(&ai, &ctx);
+    assert_eq!(profile.id, BUILTIN_ACP_FALLBACK_PROFILE_ID);
+    assert_eq!(profile.backend, AgentChatBackend::Acp);
+    assert_eq!(profile.agent.as_deref(), Some("claude-code"));
+    assert_eq!(profile.model.as_deref(), Some("claude-sonnet-4-6"));
+}
+
+#[test]
+fn selected_profile_id_still_beats_selected_backend() {
+    let ctx = context();
+    let ai = AiPreferences {
+        pi_binary: Some("/tmp/test-pi".to_string()),
+        selected_backend: Some(AgentChatBackend::Acp),
+        selected_profile_id: Some(BUILTIN_SCRIPT_KIT_PROFILE_ID.to_string()),
+        ..AiPreferences::default()
+    };
+
+    let profile = resolve_effective_profile(&ai, &ctx);
+    assert_eq!(profile.id, BUILTIN_SCRIPT_KIT_PROFILE_ID);
+    assert_eq!(profile.backend, AgentChatBackend::Pi);
+}
+
+#[test]
+fn profile_picker_lists_general_script_kit_acp_and_custom_profiles() {
+    let ctx = context();
+    let ai = AiPreferences {
+        profiles: vec![AcpProfile {
+            id: Some("ops".to_string()),
+            name: "Ops".to_string(),
+            backend: Some(AgentChatBackend::Pi),
+            ..AcpProfile::default()
+        }],
+        ..AiPreferences::default()
+    };
+
+    let entries = agent_chat_profile_picker_entries(&ai, &ctx);
+    let ids = entries
+        .iter()
+        .map(|entry| entry.id.as_str())
+        .collect::<Vec<_>>();
+    assert!(ids.contains(&BUILTIN_GENERAL_PROFILE_ID));
+    assert!(ids.contains(&BUILTIN_SCRIPT_KIT_PROFILE_ID));
+    assert!(ids.contains(&BUILTIN_ACP_FALLBACK_PROFILE_ID));
+    assert!(ids.contains(&"ops"));
+    assert_eq!(
+        entries
+            .iter()
+            .find(|entry| entry.id == BUILTIN_GENERAL_PROFILE_ID)
+            .unwrap()
+            .backend,
+        AgentChatBackend::Pi
+    );
+}
+
+#[test]
+fn persisting_builtin_profile_uses_stable_profile_id_and_backend() {
+    let ctx = context();
+    let mut ai = AiPreferences::default();
+    let entry = persist_agent_chat_profile_selection(&mut ai, BUILTIN_SCRIPT_KIT_PROFILE_ID, &ctx)
+        .expect("script-kit profile should exist");
+
+    assert_eq!(entry.name, "Script Kit");
+    assert_eq!(
+        ai.selected_profile_id.as_deref(),
+        Some(BUILTIN_SCRIPT_KIT_PROFILE_ID)
+    );
+    assert_eq!(ai.selected_profile_name, None);
+    assert_eq!(ai.selected_backend, Some(AgentChatBackend::Pi));
+    assert_eq!(
+        selected_agent_chat_profile_picker_id(&ai, &ctx),
+        BUILTIN_SCRIPT_KIT_PROFILE_ID
+    );
+}
+
+#[test]
+fn persisting_acp_fallback_clears_explicit_profile_and_selects_acp_backend() {
+    let ctx = context();
+    let mut ai = AiPreferences {
+        selected_profile_id: Some(BUILTIN_SCRIPT_KIT_PROFILE_ID.to_string()),
+        selected_profile_name: Some("Script Kit".to_string()),
+        selected_backend: Some(AgentChatBackend::Pi),
+        ..AiPreferences::default()
+    };
+
+    let entry =
+        persist_agent_chat_profile_selection(&mut ai, BUILTIN_ACP_FALLBACK_PROFILE_ID, &ctx)
+            .expect("acp fallback profile should exist");
+
+    assert_eq!(entry.backend, AgentChatBackend::Acp);
+    assert_eq!(ai.selected_profile_id, None);
+    assert_eq!(ai.selected_profile_name, None);
+    assert_eq!(ai.selected_backend, Some(AgentChatBackend::Acp));
+    assert_eq!(
+        selected_agent_chat_profile_picker_id(&ai, &ctx),
+        BUILTIN_ACP_FALLBACK_PROFILE_ID
+    );
+}
+
+#[test]
+fn provider_scoped_pi_model_selection_splits_provider_and_model_for_launch() {
+    let ctx = context();
+    let ai = AiPreferences {
+        pi_binary: Some("/tmp/test-pi".to_string()),
+        selected_profile_id: Some(BUILTIN_SCRIPT_KIT_PROFILE_ID.to_string()),
+        selected_model_id: Some("anthropic:claude-3-7-sonnet".to_string()),
+        ..AiPreferences::default()
+    };
+
+    let profile = resolve_effective_profile(&ai, &ctx);
+    assert_eq!(profile.provider.as_deref(), Some("anthropic"));
+    assert_eq!(profile.model.as_deref(), Some("claude-3-7-sonnet"));
+
+    let spec = PiLaunchSpec::from_profile(&profile).expect("script-kit profile should be Pi");
+    let argv = spec.argv();
+    assert!(argv
+        .windows(2)
+        .any(|pair| pair == ["--provider", "anthropic"]));
+    assert!(argv
+        .windows(2)
+        .any(|pair| pair == ["--model", "claude-3-7-sonnet"]));
+    assert!(!argv.contains(&"anthropic:claude-3-7-sonnet".to_string()));
+}
+
+#[test]
+fn profile_picker_skips_custom_profiles_that_collide_with_builtins() {
+    let ctx = context();
+    let ai = AiPreferences {
+        profiles: vec![AcpProfile {
+            id: Some(BUILTIN_GENERAL_PROFILE_ID.to_string()),
+            name: "Shadow General".to_string(),
+            backend: Some(AgentChatBackend::Acp),
+            ..AcpProfile::default()
+        }],
+        ..AiPreferences::default()
+    };
+
+    let general_entries = agent_chat_profile_picker_entries(&ai, &ctx)
+        .into_iter()
+        .filter(|entry| entry.id == BUILTIN_GENERAL_PROFILE_ID)
+        .collect::<Vec<_>>();
+    assert_eq!(general_entries.len(), 1);
+    assert_eq!(general_entries[0].name, "General");
+    assert_eq!(general_entries[0].backend, AgentChatBackend::Pi);
+}
+
+#[test]
+fn bundled_pi_binary_candidate_resolves_next_to_macos_executable() {
+    let exe = Path::new("/Applications/Script Kit.app/Contents/MacOS/script-kit-gpui");
+
+    assert_eq!(
+        bundled_pi_binary_candidate_for_exe(exe),
+        Some(PathBuf::from(
+            "/Applications/Script Kit.app/Contents/MacOS/pi"
+        ))
+    );
+}
+
+#[test]
+fn local_pi_rust_path_is_only_an_existing_executable_dev_fallback() {
+    assert_eq!(dev_pi_binary_for_home(Some(Path::new("/Users/test"))), None);
+    assert_eq!(
+        bundled_pi_binary_candidate_for_exe(Path::new("/tmp/script-kit-gpui")),
+        None
+    );
 }

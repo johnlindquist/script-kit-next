@@ -67,6 +67,7 @@ type AcpFooterActionHandler = std::sync::Arc<dyn Fn(&mut Window, &mut App) + 'st
 type AcpPortalHandler = std::sync::Arc<
     dyn Fn(crate::ai::window::context_picker::types::PortalKind, &mut App) + 'static,
 >;
+type AcpProfileSelectionHandler = std::sync::Arc<dyn Fn(String, &mut App) + 'static>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PortalRefusal {
@@ -100,6 +101,7 @@ pub(crate) struct AcpFooterButtonSpec {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct AcpFooterSnapshot {
     pub(crate) dot_status: crate::footer_popup::FooterDotStatus,
+    pub(crate) profile_display: String,
     pub(crate) model_display: String,
     pub(crate) status_text: Option<&'static str>,
     pub(crate) buttons: Vec<AcpFooterButtonSpec>,
@@ -442,6 +444,10 @@ pub(crate) struct AcpChatView {
     model_selector_open: bool,
     /// Focused row within the model selector popup.
     model_selector_selected_index: usize,
+    /// Whether the Agent Chat profile selector dropdown is open.
+    profile_selector_open: bool,
+    /// Focused row within the Agent Chat profile selector popup.
+    profile_selector_selected_index: usize,
     /// Cmd+F search: (query, current_match_index). None = search hidden.
     pub(crate) search_state: Option<(String, usize)>,
     /// Cached slash commands discovered at creation, with source identity.
@@ -498,6 +504,8 @@ pub(crate) struct AcpChatView {
     on_paste_response_requested: Option<AcpFooterActionHandler>,
     /// Host-owned callback for opening a full built-in view as an attachment portal.
     on_open_portal: Option<AcpPortalHandler>,
+    /// Host-owned callback for persisting an Agent Chat profile and relaunching.
+    on_profile_selected: Option<AcpProfileSelectionHandler>,
     /// Transactional session for the currently staged attachment portal open.
     pending_portal_session: Option<AcpPendingPortalSession>,
     footer_host: AcpFooterHost,
@@ -697,6 +705,7 @@ impl AcpChatView {
 
     fn sync_acp_popup_windows_from_cached_parent(&mut self, cx: &mut Context<Self>) {
         self.sync_mention_popup_window_from_cached_parent(cx);
+        self.sync_profile_selector_popup_window_from_cached_parent(cx);
         self.sync_model_selector_popup_window_from_cached_parent(cx);
         self.sync_history_popup_window_from_cached_parent(cx);
     }
@@ -706,6 +715,32 @@ impl AcpChatView {
         crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
             self.model_selector_selected_index,
             model_count,
+        )
+    }
+
+    fn profile_selector_entries(
+        &self,
+    ) -> Vec<crate::ai::agent_chat::profiles::AgentChatProfilePickerEntry> {
+        let prefs = crate::config::load_user_preferences();
+        let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+        crate::ai::agent_chat::profiles::agent_chat_profile_picker_entries(&prefs.ai, &ctx)
+    }
+
+    fn selected_profile_popup_index(
+        &self,
+        entries: &[crate::ai::agent_chat::profiles::AgentChatProfilePickerEntry],
+    ) -> usize {
+        let prefs = crate::config::load_user_preferences();
+        let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+        let selected_id =
+            crate::ai::agent_chat::profiles::selected_agent_chat_profile_picker_id(&prefs.ai, &ctx);
+        let raw_index = entries
+            .iter()
+            .position(|entry| entry.id == selected_id)
+            .unwrap_or(self.profile_selector_selected_index);
+        crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
+            raw_index,
+            entries.len(),
         )
     }
 
@@ -780,6 +815,13 @@ impl AcpChatView {
         self.on_open_portal = Some(std::sync::Arc::new(callback));
     }
 
+    pub(crate) fn set_on_profile_selected(
+        &mut self,
+        callback: impl Fn(String, &mut App) + 'static,
+    ) {
+        self.on_profile_selected = Some(std::sync::Arc::new(callback));
+    }
+
     pub(crate) fn set_footer_host(&mut self, footer_host: AcpFooterHost) {
         self.footer_host = footer_host;
     }
@@ -800,6 +842,7 @@ impl AcpChatView {
         let thread = self.live_thread().read(cx);
         AcpFooterSnapshot {
             dot_status: self.footer_dot_status(cx),
+            profile_display: thread.profile_display().to_string(),
             model_display: thread.selected_model_display().to_string(),
             status_text: self.footer_status_text(cx),
             buttons: self.footer_buttons_for_thread(thread),
@@ -1115,11 +1158,46 @@ impl AcpChatView {
                     })
                     .child(
                         div()
+                            .id("agent-chat-profile-display")
+                            .flex()
+                            .items_center()
+                            .text_xs()
+                            .text_color(rgba(hint_text_rgba))
+                            .cursor_pointer()
+                            .on_click({
+                                let profile_view = weak_view.clone();
+                                move |_event, window, cx| {
+                                    if let Some(entity) = profile_view.upgrade() {
+                                        entity.update(cx, |chat, cx| {
+                                            chat.toggle_profile_selector_popup(window, cx);
+                                        });
+                                    }
+                                }
+                            })
+                            .child(snapshot.profile_display.clone()),
+                    )
+                    .child(div().text_xs().text_color(rgba(hint_text_rgba)).child("·"))
+                    .child(
+                        div()
                             .id("acp-model-display")
                             .flex()
                             .items_center()
                             .text_xs()
                             .text_color(rgba(hint_text_rgba))
+                            .cursor_pointer()
+                            .on_click({
+                                let model_view = weak_view.clone();
+                                move |_event, window, cx| {
+                                    if let Some(entity) = model_view.upgrade() {
+                                        entity.update(cx, |chat, cx| {
+                                            chat.cache_popup_parent_window(window, cx);
+                                            chat.model_selector_open = !chat.model_selector_open;
+                                            chat.sync_model_selector_popup_window_from_cached_parent(cx);
+                                            cx.notify();
+                                        });
+                                    }
+                                }
+                            })
                             .child(snapshot.model_display),
                     )
                     .when_some(status_text, |d, status| {
@@ -1188,11 +1266,46 @@ impl AcpChatView {
                     })
                     .child(
                         div()
+                            .id("agent-chat-profile-display")
+                            .flex()
+                            .items_center()
+                            .text_xs()
+                            .text_color(rgba(hint_text_rgba))
+                            .cursor_pointer()
+                            .on_click({
+                                let profile_view = weak_view.clone();
+                                move |_event, window, cx| {
+                                    if let Some(entity) = profile_view.upgrade() {
+                                        entity.update(cx, |chat, cx| {
+                                            chat.toggle_profile_selector_popup(window, cx);
+                                        });
+                                    }
+                                }
+                            })
+                            .child(snapshot.profile_display.clone()),
+                    )
+                    .child(div().text_xs().text_color(rgba(hint_text_rgba)).child("·"))
+                    .child(
+                        div()
                             .id("acp-model-display")
                             .flex()
                             .items_center()
                             .text_xs()
                             .text_color(rgba(hint_text_rgba))
+                            .cursor_pointer()
+                            .on_click({
+                                let model_view = weak_view.clone();
+                                move |_event, window, cx| {
+                                    if let Some(entity) = model_view.upgrade() {
+                                        entity.update(cx, |chat, cx| {
+                                            chat.cache_popup_parent_window(window, cx);
+                                            chat.model_selector_open = !chat.model_selector_open;
+                                            chat.sync_model_selector_popup_window_from_cached_parent(cx);
+                                            cx.notify();
+                                        });
+                                    }
+                                }
+                            })
                             .child(snapshot.model_display),
                     )
                     .when_some(status_text, |d, status| {
@@ -2001,6 +2114,164 @@ impl AcpChatView {
         }
     }
 
+    fn profile_selector_popup_snapshot(
+        &self,
+        _cx: &App,
+    ) -> Option<crate::ai::acp::profile_selector_popup::AgentChatProfileSelectorPopupSnapshot> {
+        if !self.profile_selector_open {
+            return None;
+        }
+
+        let prefs = crate::config::load_user_preferences();
+        let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+        let selected_id =
+            crate::ai::agent_chat::profiles::selected_agent_chat_profile_picker_id(&prefs.ai, &ctx);
+        let entries =
+            crate::ai::agent_chat::profiles::agent_chat_profile_picker_entries(&prefs.ai, &ctx);
+        let selected_index = self.selected_profile_popup_index(&entries);
+        let entries = entries
+            .into_iter()
+            .map(|entry| {
+                crate::ai::acp::profile_selector_popup::AgentChatProfileSelectorPopupEntry {
+                    id: entry.id.clone(),
+                    display: SharedString::from(entry.name),
+                    is_active: selected_id == entry.id,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if entries.is_empty() {
+            return None;
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "agent_chat_profile_selector_popup_snapshot_built",
+            entry_count = entries.len(),
+            selected_index,
+            "Built Agent Chat profile selector popup snapshot"
+        );
+
+        Some(
+            crate::ai::acp::profile_selector_popup::AgentChatProfileSelectorPopupSnapshot {
+                selected_index,
+                entries,
+            },
+        )
+    }
+
+    pub(super) fn sync_profile_selector_popup_window_from_cached_parent(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(parent) = self.mention_popup_parent_window else {
+            crate::ai::acp::profile_selector_popup::close_profile_selector_popup_window(cx);
+            return;
+        };
+
+        let source_view = cx.entity().downgrade();
+        if let Some(snapshot) = self.profile_selector_popup_snapshot(cx) {
+            if let Err(error) =
+                crate::ai::acp::profile_selector_popup::sync_profile_selector_popup_window(
+                    cx,
+                    crate::ai::acp::profile_selector_popup::AgentChatProfileSelectorPopupRequest {
+                        parent_window_handle: parent.handle,
+                        parent_bounds: parent.bounds,
+                        display_id: parent.display_id,
+                        source_view,
+                        snapshot,
+                    },
+                )
+            {
+                tracing::error!(error = %error, "agent_chat_profile_selector_popup_sync_failed");
+            }
+        } else {
+            crate::ai::acp::profile_selector_popup::close_profile_selector_popup_window(cx);
+        }
+    }
+
+    pub(crate) fn toggle_profile_selector_popup(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.cache_popup_parent_window(window, cx);
+        self.profile_selector_open = !self.profile_selector_open;
+        if self.profile_selector_open {
+            self.model_selector_open = false;
+            let entries = self.profile_selector_entries();
+            self.profile_selector_selected_index = self.selected_profile_popup_index(&entries);
+        }
+        self.sync_acp_popup_windows_from_cached_parent(cx);
+        cx.notify();
+    }
+
+    pub(crate) fn select_profile_from_popup(&mut self, profile_id: &str, cx: &mut Context<Self>) {
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "agent_chat_profile_selector_selected",
+            profile_id,
+            "Selected Agent Chat profile from inline dropdown"
+        );
+        self.profile_selector_open = false;
+        self.sync_profile_selector_popup_window_from_cached_parent(cx);
+        if let Some(callback) = self.on_profile_selected.clone() {
+            callback(profile_id.to_string(), cx);
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn dismiss_profile_selector_popup(&mut self, cx: &mut Context<Self>) {
+        if !self.profile_selector_open {
+            return;
+        }
+
+        self.profile_selector_open = false;
+        self.sync_profile_selector_popup_window_from_cached_parent(cx);
+        cx.notify();
+    }
+
+    pub(crate) fn move_profile_selector_selection(
+        &mut self,
+        direction: i32,
+        cx: &mut Context<Self>,
+    ) {
+        let profile_count = self.profile_selector_entries().len();
+        if profile_count == 0 {
+            return;
+        }
+
+        let selected_index = self.profile_selector_selected_index.min(profile_count - 1);
+        self.profile_selector_selected_index = if direction < 0 {
+            crate::components::inline_dropdown::inline_dropdown_select_prev(
+                selected_index,
+                profile_count,
+            )
+        } else {
+            crate::components::inline_dropdown::inline_dropdown_select_next(
+                selected_index,
+                profile_count,
+            )
+        };
+
+        self.sync_profile_selector_popup_window_from_cached_parent(cx);
+        cx.notify();
+    }
+
+    pub(crate) fn confirm_profile_selector_selection(&mut self, cx: &mut Context<Self>) {
+        let entries = self.profile_selector_entries();
+        let selected_index = self
+            .profile_selector_selected_index
+            .min(entries.len().saturating_sub(1));
+        let profile_id = entries.get(selected_index).map(|entry| entry.id.clone());
+
+        if let Some(profile_id) = profile_id {
+            self.select_profile_from_popup(&profile_id, cx);
+        } else {
+            self.dismiss_profile_selector_popup(cx);
+        }
+    }
+
     pub(crate) fn select_history_from_popup(
         &mut self,
         entry: &super::history::AcpHistoryEntry,
@@ -2388,6 +2659,11 @@ impl AcpChatView {
     }
 
     pub(crate) fn dismiss_escape_popup(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.profile_selector_open {
+            self.dismiss_profile_selector_popup(cx);
+            return true;
+        }
+
         if self.model_selector_open {
             self.dismiss_model_selector_popup(cx);
             return true;
@@ -2443,7 +2719,8 @@ impl AcpChatView {
     }
 
     pub(crate) fn has_escape_dismissible_popup(&self) -> bool {
-        self.model_selector_open
+        self.profile_selector_open
+            || self.model_selector_open
             || self.mention_session.is_some()
             || self.history_menu.is_some()
             || self.attach_menu_open
@@ -2836,11 +3113,12 @@ impl AcpChatView {
         // Auto-scroll when thread state changes (new messages, streaming updates).
         cx.observe(&thread, |this: &mut Self, thread, cx| {
             // Extract data from thread before mutable operations.
-            let (activity_row_visible, messages, status, model_display, new_ready) = {
+            let (activity_row_visible, messages, status, profile_display, model_display, new_ready) = {
                 let thread_ref = thread.read(cx);
                 let activity = thread_ref.awaiting_first_assistant_text();
                 let msgs = thread_ref.messages.clone();
                 let st = thread_ref.status;
+                let pd = thread_ref.profile_display().to_string();
                 let md = thread_ref.selected_model_display().to_string();
                 let ready = thread_ref
                     .messages
@@ -2850,7 +3128,7 @@ impl AcpChatView {
                     .find_map(|m| parse_script_ready_receipt(m.body.as_ref()))
                     .filter(|r| r.validated)
                     .map(|r| r.path);
-                (activity, msgs, st, md, ready)
+                (activity, msgs, st, pd, md, ready)
             };
 
             if new_ready != this.ready_script_path {
@@ -2867,6 +3145,7 @@ impl AcpChatView {
             if let Some(toolbar) = &this.toolbar {
                 toolbar.update(cx, |toolbar, cx| {
                     toolbar.set_status(status, cx);
+                    toolbar.set_profile_name(profile_display, cx);
                     toolbar.set_model_name(model_display, cx);
                 });
             }
@@ -2933,6 +3212,8 @@ impl AcpChatView {
             attach_menu_open: false,
             model_selector_open: false,
             model_selector_selected_index: 0,
+            profile_selector_open: false,
+            profile_selector_selected_index: 0,
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: slash_task,
@@ -2960,6 +3241,7 @@ impl AcpChatView {
             on_open_history_command: None,
             on_paste_response_requested: None,
             on_open_portal: None,
+            on_profile_selected: None,
             pending_portal_session: None,
             footer_host: AcpFooterHost::Inline,
             ready_script_path: None,
@@ -2996,6 +3278,8 @@ impl AcpChatView {
             attach_menu_open: false,
             model_selector_open: false,
             model_selector_selected_index: 0,
+            profile_selector_open: false,
+            profile_selector_selected_index: 0,
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: noop_slash,
@@ -3022,6 +3306,7 @@ impl AcpChatView {
             on_open_history_command: None,
             on_paste_response_requested: None,
             on_open_portal: None,
+            on_profile_selected: None,
             pending_portal_session: None,
             footer_host: AcpFooterHost::Inline,
             ready_script_path: None,
@@ -6315,13 +6600,31 @@ impl AcpChatView {
 
         let thread_ref = self.live_thread().read(cx);
         let status = thread_ref.status;
+        let profile_name = thread_ref.profile_display().to_string();
         let model_name = thread_ref.selected_model_display().to_string();
 
-        let toolbar = cx.new(|cx| AcpToolbar::new(status, model_name, cx));
+        let toolbar = cx.new(|cx| AcpToolbar::new(status, profile_name, model_name, cx));
 
         cx.subscribe(&toolbar, |this, _toolbar, event, cx| match event {
-            AcpToolbarEvent::ToggleModelSelector => {
+            AcpToolbarEvent::ToggleProfileSelector(parent) => {
+                this.mention_popup_parent_window = Some(*parent);
+                this.profile_selector_open = !this.profile_selector_open;
+                if this.profile_selector_open {
+                    this.model_selector_open = false;
+                    let entries = this.profile_selector_entries();
+                    this.profile_selector_selected_index =
+                        this.selected_profile_popup_index(&entries);
+                }
+                this.sync_acp_popup_windows_from_cached_parent(cx);
+                cx.notify();
+            }
+            AcpToolbarEvent::ToggleModelSelector(parent) => {
+                this.mention_popup_parent_window = Some(*parent);
                 this.model_selector_open = !this.model_selector_open;
+                if this.model_selector_open {
+                    this.profile_selector_open = false;
+                }
+                this.sync_acp_popup_windows_from_cached_parent(cx);
                 cx.notify();
             }
             AcpToolbarEvent::ExportThread => {
@@ -7215,6 +7518,26 @@ impl AcpChatView {
         let key = event.keystroke.key.as_str();
         let modifiers = &event.keystroke.modifiers;
 
+        if self.profile_selector_open {
+            if crate::ui_foundation::is_key_up(key) {
+                self.move_profile_selector_selection(-1, cx);
+                cx.stop_propagation();
+                return;
+            }
+
+            if crate::ui_foundation::is_key_down(key) {
+                self.move_profile_selector_selection(1, cx);
+                cx.stop_propagation();
+                return;
+            }
+
+            if crate::ui_foundation::is_key_enter(key) || crate::ui_foundation::is_key_tab(key) {
+                self.confirm_profile_selector_selection(cx);
+                cx.stop_propagation();
+                return;
+            }
+        }
+
         if self.model_selector_open {
             if crate::ui_foundation::is_key_up(key) {
                 self.move_model_selector_selection(-1, cx);
@@ -7243,6 +7566,9 @@ impl AcpChatView {
         // Close model selector on any non-modifier key
         if self.model_selector_open {
             self.dismiss_model_selector_popup(cx);
+        }
+        if self.profile_selector_open {
+            self.dismiss_profile_selector_popup(cx);
         }
 
         // ── Attach menu dismiss on Escape ───────────────────────

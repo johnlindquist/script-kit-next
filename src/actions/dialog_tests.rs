@@ -545,11 +545,7 @@ fn make_route(id: &str, action_ids: &[&str]) -> ActionsDialogRoute {
     }
 }
 
-fn make_route_with_initial(
-    id: &str,
-    action_ids: &[&str],
-    initial: &str,
-) -> ActionsDialogRoute {
+fn make_route_with_initial(id: &str, action_ids: &[&str], initial: &str) -> ActionsDialogRoute {
     ActionsDialogRoute {
         initial_selected_action_id: Some(initial.to_string()),
         ..make_route(id, action_ids)
@@ -656,12 +652,10 @@ fn route_state_back_stack_restore_preserves_search_and_selection() {
 }
 
 #[test]
-fn acp_root_route_initial_selection_is_change_agent() {
+fn acp_root_route_initial_selection_is_change_profile() {
     // Verify the ACP root route builder sets initial selection
-    // to the "Change Agent" action.
-    use super::builders::{
-        get_acp_chat_root_route, ACP_CHANGE_AGENT_ACTION_ID,
-    };
+    // to the "Change Profile" action.
+    use super::builders::{get_acp_chat_root_route, AGENT_CHAT_CHANGE_PROFILE_ACTION_ID};
 
     let entries = vec![];
     let models = vec![];
@@ -669,7 +663,7 @@ fn acp_root_route_initial_selection_is_change_agent() {
 
     assert_eq!(
         route.initial_selected_action_id.as_deref(),
-        Some(ACP_CHANGE_AGENT_ACTION_ID),
+        Some(AGENT_CHAT_CHANGE_PROFILE_ACTION_ID),
     );
 }
 
@@ -677,8 +671,8 @@ fn acp_root_route_initial_selection_is_change_agent() {
 fn acp_agent_picker_route_initial_selection_is_current_agent() {
     use super::builders::get_acp_agent_picker_route;
     use crate::ai::acp::catalog::{
-        AcpAgentAuthState, AcpAgentCatalogEntry, AcpAgentConfigState,
-        AcpAgentInstallState, AcpAgentSource,
+        AcpAgentAuthState, AcpAgentCatalogEntry, AcpAgentConfigState, AcpAgentInstallState,
+        AcpAgentSource,
     };
 
     fn make_catalog_entry(id: &'static str, name: &'static str) -> AcpAgentCatalogEntry {
@@ -698,7 +692,10 @@ fn acp_agent_picker_route_initial_selection_is_current_agent() {
         }
     }
 
-    let entries = vec![make_catalog_entry("claude", "Claude"), make_catalog_entry("gemini", "Gemini")];
+    let entries = vec![
+        make_catalog_entry("claude", "Claude"),
+        make_catalog_entry("gemini", "Gemini"),
+    ];
 
     let route = get_acp_agent_picker_route(&entries, Some("claude"));
     assert_eq!(

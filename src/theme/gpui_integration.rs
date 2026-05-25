@@ -290,13 +290,12 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     theme_color.info = hex_to_hsla(colors.ui.info);
     theme_color.info_foreground = hex_to_hsla(status_foreground(colors.ui.info));
 
-    // Scrollbar - track is transparent; thumb uses the same neutral overlay
-    // recipe as list selection (text.primary @ opacity.selected) so it stays
-    // visually tied to row chrome instead of rendering as a solid dimmed bar.
+    // Scrollbar - track is transparent; thumb uses the accent color
+    // but maintains the scrollbar's opacity so it's not too distracting.
     theme_color.scrollbar = hsla(0.0, 0.0, 0.0, 0.0);
-    theme_color.scrollbar_thumb = subtle_overlay(colors.text.primary, opacity.selected);
+    theme_color.scrollbar_thumb = subtle_overlay(colors.accent.selected, opacity.selected);
     theme_color.scrollbar_thumb_hover = subtle_overlay(
-        colors.text.primary,
+        colors.accent.selected,
         (opacity.selected + 0.12).clamp(0.0, 1.0),
     );
 
@@ -803,15 +802,14 @@ mod tests {
 
         let mapped = map_scriptkit_to_gpui_theme(&theme, true);
         let opacity = theme.get_opacity();
-        let expected_thumb = subtle_overlay(theme.colors.text.primary, opacity.selected);
+        let expected_thumb = subtle_overlay(theme.colors.accent.selected, opacity.selected);
         let expected_thumb_hover = subtle_overlay(
-            theme.colors.text.primary,
+            theme.colors.accent.selected,
             (opacity.selected + 0.12).clamp(0.0, 1.0),
         );
 
         assert_hsla_close(mapped.scrollbar_thumb, expected_thumb);
         assert_hsla_close(mapped.scrollbar_thumb_hover, expected_thumb_hover);
-        assert_hsla_close(mapped.scrollbar_thumb, mapped.list_active);
     }
 
     #[test]

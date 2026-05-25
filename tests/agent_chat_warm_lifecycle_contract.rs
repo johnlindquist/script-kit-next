@@ -1,5 +1,6 @@
 const AGENT_CHAT_MOD_SOURCE: &str = include_str!("../src/ai/agent_chat/mod.rs");
 const WARM_SESSION_SOURCE: &str = include_str!("../src/ai/agent_chat/warm_session.rs");
+const AGENT_CHAT_LAUNCH_SOURCE: &str = include_str!("../src/ai/agent_chat/launch.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 const ACP_THREAD_SOURCE: &str = include_str!("../src/ai/acp/thread.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
@@ -46,21 +47,19 @@ fn warm_session_manager_is_backend_neutral() {
 }
 
 #[test]
-fn warm_session_lifecycle_does_not_route_tab_agent_chat_to_pi() {
-    for source in [TAB_AI_MODE_SOURCE, ACP_LAUNCH_SOURCE, ACP_SETUP_SOURCE] {
-        for forbidden in [
-            "PiRpcRuntime",
-            "AgentChatBackend::Pi",
-            "agent_chat::pi",
-            "PiLaunchSpec",
-        ] {
-            assert!(
-                !source.contains(forbidden),
-                "Tab Agent Chat routing must not mention {}",
-                forbidden
-            );
-        }
-    }
+fn warm_session_lifecycle_routes_pi_only_through_launch_helper() {
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("PiAgentChatLaunch"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("warm_session_manager"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("PiRpcRuntime::spawn"));
+    assert!(ACP_LAUNCH_SOURCE.contains("resolve_effective_profile"));
+    assert!(ACP_LAUNCH_SOURCE.contains("PiAgentChatLaunch::from_profile"));
+    assert!(ACP_LAUNCH_SOURCE.contains("manager.acquire_warm"));
+    assert!(TAB_AI_MODE_SOURCE.contains("dismiss_active_agent_chat_warm_lease"));
+    assert!(
+        !ACP_SETUP_SOURCE.contains("PiRpcRuntime")
+            && !ACP_SETUP_SOURCE.contains("AgentChatBackend::Pi"),
+        "setup card routing must stay out of the Pi warm path"
+    );
 }
 
 #[test]

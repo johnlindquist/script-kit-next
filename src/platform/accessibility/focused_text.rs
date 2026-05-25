@@ -96,9 +96,69 @@ pub fn capture_focused_text_field(
 
 #[cfg(target_os = "macos")]
 fn capture_focused_text_field_platform(
-    _options: CaptureFocusedTextOptions,
+    options: CaptureFocusedTextOptions,
 ) -> Result<FocusedTextSnapshot, FocusedTextError> {
-    Err(FocusedTextError::UnsupportedTarget)
+    let app = super::app_identity::current_frontmost_app_identity();
+    let element = super::ax::focused_ui_element_for_app(app.process_id)
+        .map_err(|err| FocusedTextError::Platform(err.to_string()))?;
+    let role = super::ax::role(element.as_ptr());
+    let subrole = super::ax::subrole(element.as_ptr());
+
+    let content_kind = classify_content_kind(role.as_deref(), subrole.as_deref());
+    if content_kind == FocusedTextContentKind::Secure && !options.allow_secure_fields {
+        return Err(FocusedTextError::SecureField);
+    }
+
+    let text = super::ax::whole_text(element.as_ptr()).map_err(|err| {
+        if content_kind == FocusedTextContentKind::Unsupported {
+            FocusedTextError::UnsupportedTarget
+        } else {
+            FocusedTextError::Platform(err.to_string())
+        }
+    })?;
+    let selected_range_utf16 = super::ax::selected_text_range(element.as_ptr());
+    let caret_range_utf16 = selected_range_utf16.map(|range| TextRangeUtf16 {
+        location: range.location + range.length,
+        length: 0,
+    });
+    let geometry = super::ax::focused_geometry(element.as_ptr(), selected_range_utf16);
+    let can_edit = super::ax::is_enabled(element.as_ptr()).unwrap_or(true)
+        && content_kind != FocusedTextContentKind::Secure;
+    let captured_at_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default();
+
+    let session_id = FocusedTextSessionId(format!("focused-text-{captured_at_ms}"));
+    super::ax::register_focused_text_session(
+        &session_id,
+        element.as_ptr(),
+        captured_at_ms,
+        text.clone(),
+    )
+    .map_err(|err| FocusedTextError::Platform(err.to_string()))?;
+
+    Ok(FocusedTextSnapshot {
+        session_id,
+        captured_at_ms,
+        app,
+        target: FocusedTextTargetDescriptor {
+            role,
+            subrole,
+            title: None,
+            content_kind,
+        },
+        metrics: TextMetrics::from_text(&text),
+        geometry,
+        capabilities: FocusedTextCapabilities {
+            can_replace: can_edit,
+            can_append: can_edit,
+            can_copy: true,
+        },
+        text,
+        selected_range_utf16,
+        caret_range_utf16,
+    })
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -134,4 +194,21 @@ pub fn focused_text_snapshot_for_tests(text: impl Into<String>) -> FocusedTextSn
         selected_range_utf16: None,
         caret_range_utf16: None,
     }
+}
+
+pub fn classify_content_kind(role: Option<&str>, subrole: Option<&str>) -> FocusedTextContentKind {
+    let role = role.unwrap_or_default();
+    let subrole = subrole.unwrap_or_default();
+    let combined = format!("{role} {subrole}");
+
+    if combined.contains("Secure") || combined.contains("Password") {
+        return FocusedTextContentKind::Secure;
+    }
+    if combined.contains("TextArea") || combined.contains("TextField") {
+        return FocusedTextContentKind::PlainText;
+    }
+    if combined.contains("Text") {
+        return FocusedTextContentKind::RichText;
+    }
+    FocusedTextContentKind::Unsupported
 }

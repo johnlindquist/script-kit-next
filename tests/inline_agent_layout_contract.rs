@@ -1,4 +1,6 @@
-use script_kit_gpui::inline_agent::{place_compact_overlay, InlineAgentLayoutDefaults};
+use script_kit_gpui::inline_agent::{
+    place_compact_overlay, place_expanded_overlay, InlineAgentLayoutDefaults,
+};
 use script_kit_gpui::platform::accessibility::geometry::{DisplayBounds, RectPx};
 
 #[test]
@@ -31,4 +33,31 @@ fn compact_overlay_flips_above_when_anchor_is_near_bottom() {
     assert!(rect.y < 860.0);
     assert!(rect.x >= 12.0);
     assert!(rect.x + rect.width <= 1440.0 - 12.0);
+}
+
+#[test]
+fn expanded_overlay_caps_to_visible_display() {
+    let rect = place_expanded_overlay(
+        RectPx {
+            x: 900.0,
+            y: 700.0,
+            width: 20.0,
+            height: 20.0,
+        },
+        DisplayBounds {
+            visible: RectPx {
+                x: 0.0,
+                y: 0.0,
+                width: 640.0,
+                height: 480.0,
+            },
+        },
+    );
+
+    assert!(rect.width <= 640.0 - 24.0);
+    assert!(rect.height <= 480.0 - 24.0);
+    assert!(rect.x >= 12.0);
+    assert!(rect.y >= 12.0);
+    assert!(rect.x + rect.width <= 640.0 - 12.0);
+    assert!(rect.y + rect.height <= 480.0 - 12.0);
 }

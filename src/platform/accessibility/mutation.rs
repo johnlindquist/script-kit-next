@@ -103,18 +103,40 @@ pub fn plan_append_mutation(
 }
 
 pub fn replace_focused_text(
-    _session_id: FocusedTextSessionId,
-    _text: &str,
-    _options: TextMutationOptions,
+    session_id: FocusedTextSessionId,
+    text: &str,
+    options: TextMutationOptions,
 ) -> Result<TextMutationResult, FocusedTextError> {
+    #[cfg(target_os = "macos")]
+    {
+        return super::ax::replace_registered_focused_text(
+            &session_id,
+            text,
+            options,
+            current_time_ms(),
+        );
+    }
+
+    #[cfg(not(target_os = "macos"))]
     Err(FocusedTextError::UnsupportedTarget)
 }
 
 pub fn append_focused_text(
-    _session_id: FocusedTextSessionId,
-    _text: &str,
-    _options: TextMutationOptions,
+    session_id: FocusedTextSessionId,
+    text: &str,
+    options: TextMutationOptions,
 ) -> Result<TextMutationResult, FocusedTextError> {
+    #[cfg(target_os = "macos")]
+    {
+        return super::ax::append_registered_focused_text(
+            &session_id,
+            text,
+            options,
+            current_time_ms(),
+        );
+    }
+
+    #[cfg(not(target_os = "macos"))]
     Err(FocusedTextError::UnsupportedTarget)
 }
 
@@ -126,4 +148,11 @@ pub fn copy_text_output(text: &str) -> Result<TextMutationResult, FocusedTextErr
         changed_text: false,
         copied_to_clipboard: true,
     })
+}
+
+fn current_time_ms() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default()
 }

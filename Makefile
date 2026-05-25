@@ -28,7 +28,9 @@ run:
 
 # Release bundle (explicit binary target — matches CI)
 bundle:
+	bash scripts/prepare-pi-sidecar.sh
 	cargo bundle --release --bin script-kit-gpui
+	bash scripts/install-pi-sidecar-into-bundle.sh
 
 # All tests including ignored system tests
 test-all:

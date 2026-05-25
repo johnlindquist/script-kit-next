@@ -866,6 +866,7 @@ impl ScriptListApp {
             embedded_acp_chat: None,
             embedded_acp_focus_handle: None,
             prewarmed_acp_chat: None,
+            active_agent_chat_warm_lease: None,
             acp_ready_script_path: None,
             acp_footer_dot_status: None,
             acp_footer_model_display: None,

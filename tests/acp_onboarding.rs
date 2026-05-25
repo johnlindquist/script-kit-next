@@ -199,15 +199,25 @@ fn agent_chat_profile_config_keeps_legacy_ai_keys() {
 }
 
 #[test]
-fn phase_one_does_not_route_tab_runtime_to_pi() {
+fn tab_runtime_routes_pi_profiles_without_removing_acp_entrypoint() {
     assert!(
         TAB_AI_MODE_SOURCE.contains("open_tab_ai_acp_with_entry_intent"),
-        "phase one must keep the Tab Agent Chat launch path on the current ACP entry point"
+        "Tab Agent Chat should keep the current ACP entry point"
     );
     assert!(
-        !TAB_AI_MODE_SOURCE.contains("PiLaunchSpec")
-            && !TAB_AI_MODE_SOURCE.contains("agent_chat::pi"),
-        "phase one must not route Tab runtime directly to Pi"
+        ACP_LAUNCH_SOURCE.contains("resolve_effective_profile")
+            && ACP_LAUNCH_SOURCE.contains("PiAgentChatLaunch::from_profile")
+            && ACP_LAUNCH_SOURCE.contains("open_tab_ai_pi_view_from_launch"),
+        "Tab Agent Chat launch must route selected Pi profiles through the Pi launch helper"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("dismiss_active_agent_chat_warm_lease"),
+        "Pi-backed Agent Chat dismissal must reset and rewarm a fresh session"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("closing_pi_agent_chat")
+            && TAB_AI_MODE_SOURCE.contains("self.embedded_acp_chat = None;"),
+        "Pi-backed Agent Chat dismissal must clear the reusable embedded chat cache"
     );
 }
 

@@ -838,6 +838,10 @@ pub struct AiPreferences {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_backend: Option<AgentChatBackend>,
 
+    /// Custom path to the Pi Rust agent binary used by Pi-backed Agent Chat profiles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pi_binary: Option<String>,
+
     /// Pre-configured Agent Chat profiles. Each profile bundles a display name,
     /// optional agent id + model hint, and a custom system prompt.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -866,6 +870,10 @@ pub struct AcpProfile {
     /// Backend for this profile. Omitted legacy profiles remain ACP-backed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend: Option<AgentChatBackend>,
+
+    /// Optional Pi Rust binary override for this profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pi_binary: Option<String>,
 
     /// Optional ACP agent ID override (e.g. `"claude-code"`). Falls back to the
     /// globally selected agent when omitted.
@@ -1176,6 +1184,14 @@ impl HotkeyConfig {
         }
     }
 
+    /// Create the default inline AI focused-text edit hotkey (Cmd+Ctrl+I).
+    pub fn default_inline_ai_hotkey() -> Self {
+        HotkeyConfig {
+            modifiers: vec!["meta".to_string(), "ctrl".to_string()],
+            key: "KeyI".to_string(),
+        }
+    }
+
     /// Convert to a human-readable display string using macOS symbols (e.g., "⌘⇧K").
     ///
     /// Uses standard macOS modifier symbols in order: ⌃ (Control), ⌥ (Option), ⇧ (Shift), ⌘ (Command)
@@ -1289,6 +1305,10 @@ fn default_logs_hotkey_enabled() -> bool {
 
 fn default_dictation_hotkey_enabled() -> bool {
     DEFAULT_DICTATION_HOTKEY_ENABLED
+}
+
+fn default_inline_ai_hotkey_enabled() -> bool {
+    DEFAULT_INLINE_AI_HOTKEY_ENABLED
 }
 
 // ============================================
@@ -1478,6 +1498,20 @@ pub struct Config {
         rename = "dictationHotkeyEnabled"
     )]
     pub dictation_hotkey_enabled: Option<bool>,
+    /// Hotkey for launching inline AI focused-text editing (default: Cmd+Ctrl+I)
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "inlineAiHotkey"
+    )]
+    pub inline_ai_hotkey: Option<HotkeyConfig>,
+    /// Whether inline AI focused-text hotkey registration is enabled (default: true)
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "inlineAiHotkeyEnabled"
+    )]
+    pub inline_ai_hotkey_enabled: Option<bool>,
     /// Watcher tuning settings
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub watcher: Option<WatcherConfig>,
@@ -1552,6 +1586,8 @@ impl Default for Config {
             logs_hotkey_enabled: None, // Defaults to true via getter
             dictation_hotkey: None, // Will use HotkeyConfig::default_dictation_hotkey() via getter
             dictation_hotkey_enabled: None, // Defaults to true via getter
+            inline_ai_hotkey: None, // Will use HotkeyConfig::default_inline_ai_hotkey() via getter
+            inline_ai_hotkey_enabled: None, // Defaults to true via getter
             watcher: None,          // Will use WatcherConfig::default() via getter
             layout: None,           // Will use LayoutConfig::default() via getter
             theme: None,            // Will use ThemeSelectionPreferences::default() via getter
@@ -1725,6 +1761,26 @@ impl Config {
             self.dictation_hotkey
                 .clone()
                 .unwrap_or_else(HotkeyConfig::default_dictation_hotkey),
+        )
+    }
+
+    /// Returns true if inline AI focused-text hotkey registration is enabled.
+    pub fn is_inline_ai_hotkey_enabled(&self) -> bool {
+        self.inline_ai_hotkey_enabled
+            .unwrap_or_else(default_inline_ai_hotkey_enabled)
+    }
+
+    /// Returns the inline AI focused-text hotkey configuration when enabled.
+    /// Falls back to default (Cmd+Ctrl+I) when enabled but not configured.
+    #[allow(dead_code)]
+    pub fn get_inline_ai_hotkey(&self) -> Option<HotkeyConfig> {
+        if !self.is_inline_ai_hotkey_enabled() {
+            return None;
+        }
+        Some(
+            self.inline_ai_hotkey
+                .clone()
+                .unwrap_or_else(HotkeyConfig::default_inline_ai_hotkey),
         )
     }
 
@@ -2042,6 +2098,42 @@ mod tests {
             ..Config::default()
         };
         assert_eq!(config.get_dictation_hotkey(), None);
+    }
+
+    #[test]
+    fn test_get_inline_ai_hotkey_returns_default_when_unset() {
+        let config = Config::default();
+        assert_eq!(
+            config.get_inline_ai_hotkey(),
+            Some(HotkeyConfig::default_inline_ai_hotkey())
+        );
+    }
+
+    #[test]
+    fn test_get_inline_ai_hotkey_returns_configured_value_when_enabled() {
+        let hotkey = HotkeyConfig {
+            modifiers: vec!["meta".to_string(), "alt".to_string()],
+            key: "KeyI".to_string(),
+        };
+        let config = Config {
+            inline_ai_hotkey: Some(hotkey.clone()),
+            inline_ai_hotkey_enabled: Some(true),
+            ..Config::default()
+        };
+        assert_eq!(config.get_inline_ai_hotkey(), Some(hotkey));
+    }
+
+    #[test]
+    fn test_get_inline_ai_hotkey_returns_none_when_disabled() {
+        let config = Config {
+            inline_ai_hotkey: Some(HotkeyConfig {
+                modifiers: vec!["meta".to_string(), "alt".to_string()],
+                key: "KeyI".to_string(),
+            }),
+            inline_ai_hotkey_enabled: Some(false),
+            ..Config::default()
+        };
+        assert_eq!(config.get_inline_ai_hotkey(), None);
     }
 
     #[test]

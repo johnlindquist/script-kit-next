@@ -1,6 +1,8 @@
 use script_kit_gpui::platform::accessibility::double_modifier_trigger::{
     DoubleCommandOutcome, DoubleCommandState, ModifierEvent,
 };
+use script_kit_gpui::platform::accessibility::focused_text::classify_content_kind;
+use script_kit_gpui::platform::accessibility::focused_text::FocusedTextContentKind;
 use script_kit_gpui::platform::accessibility::geometry::{
     preferred_anchor_geometry, DisplayBounds, FocusedFieldGeometry, RectPx,
 };
@@ -172,5 +174,25 @@ fn double_command_triggers_but_combined_shortcut_resets_state() {
     assert_eq!(
         state.observe(ModifierEvent::CommandUp { at_ms: 1_220 }),
         DoubleCommandOutcome::Trigger
+    );
+}
+
+#[test]
+fn focused_text_content_kind_rejects_secure_fields() {
+    assert_eq!(
+        classify_content_kind(Some("AXTextField"), Some("AXSecureTextField")),
+        FocusedTextContentKind::Secure
+    );
+    assert_eq!(
+        classify_content_kind(Some("AXTextArea"), None),
+        FocusedTextContentKind::PlainText
+    );
+    assert_eq!(
+        classify_content_kind(Some("AXStaticText"), None),
+        FocusedTextContentKind::RichText
+    );
+    assert_eq!(
+        classify_content_kind(Some("AXButton"), None),
+        FocusedTextContentKind::Unsupported
     );
 }

@@ -1,6 +1,6 @@
 use crate::platform::accessibility::{
     ActiveAppIdentity, FocusedFieldGeometry, FocusedTextCapabilities, FocusedTextSessionId,
-    TextMetrics,
+    FocusedTextSnapshot, TextMetrics,
 };
 
 pub const INLINE_AGENT_INPUT_PLACEHOLDER: &str = "Edit, refine, ask...";
@@ -13,6 +13,21 @@ pub struct InlineAgentSnapshot {
     pub metrics: TextMetrics,
     pub capabilities: FocusedTextCapabilities,
     pub anchor: InlineAgentAnchor,
+}
+
+impl From<FocusedTextSnapshot> for InlineAgentSnapshot {
+    fn from(snapshot: FocusedTextSnapshot) -> Self {
+        Self {
+            session_id: snapshot.session_id,
+            app: snapshot.app,
+            text: snapshot.text,
+            metrics: snapshot.metrics,
+            capabilities: snapshot.capabilities,
+            anchor: InlineAgentAnchor {
+                geometry: snapshot.geometry,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -30,9 +45,17 @@ pub enum InlineAgentOutputAction {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InlineAgentTextMutation {
-    Replace { text: String },
-    Append { text: String },
-    Copy { text: String },
+    Replace {
+        session_id: FocusedTextSessionId,
+        text: String,
+    },
+    Append {
+        session_id: FocusedTextSessionId,
+        text: String,
+    },
+    Copy {
+        text: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -59,3 +59,24 @@ pub fn place_compact_overlay(anchor: RectPx, display: DisplayBounds, height: f64
         height,
     }
 }
+
+pub fn place_expanded_overlay(anchor: RectPx, display: DisplayBounds) -> RectPx {
+    let defaults = InlineAgentLayoutDefaults::default();
+    let visible = display.visible;
+    let width = defaults
+        .expanded_width
+        .clamp(defaults.expanded_min_width, defaults.expanded_max_width)
+        .min((visible.width - (defaults.edge_gutter * 2.0)).max(1.0));
+    let height = defaults
+        .expanded_height
+        .min((visible.height - (defaults.edge_gutter * 2.0)).max(1.0));
+    let max_x = visible.x + visible.width - width - defaults.edge_gutter;
+    let max_y = visible.y + visible.height - height - defaults.edge_gutter;
+
+    RectPx {
+        x: anchor.x.clamp(visible.x + defaults.edge_gutter, max_x),
+        y: anchor.y.clamp(visible.y + defaults.edge_gutter, max_y),
+        width,
+        height,
+    }
+}

@@ -88,9 +88,9 @@ impl ScrollbarColors {
         Self {
             track: theme.colors.ui.border,
             track_opacity,
-            thumb: theme.colors.text.primary,
+            thumb: theme.colors.accent.selected,
             thumb_opacity,
-            thumb_hover: theme.colors.text.primary,
+            thumb_hover: theme.colors.accent.selected,
             thumb_hover_opacity,
         }
     }
@@ -126,9 +126,9 @@ impl ScrollbarColors {
         Self {
             track: colors.border,
             track_opacity,
-            thumb: colors.text_secondary,
+            thumb: colors.accent,
             thumb_opacity,
-            thumb_hover: colors.text_primary,
+            thumb_hover: colors.accent,
             thumb_hover_opacity,
         }
     }

@@ -1,31 +1,212 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PasteboardSnapshot {
-    pub item_count: usize,
-    pub change_count: Option<i64>,
+    #[cfg(target_os = "macos")]
+    items: Vec<PasteboardItemSnapshot>,
+    pub change_count: i64,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PasteboardItemSnapshot {
+    representations: Vec<PasteboardRepresentation>,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PasteboardRepresentation {
+    type_name: String,
+    data: Vec<u8>,
 }
 
 pub fn capture_general_pasteboard_snapshot() -> Result<PasteboardSnapshot> {
     #[cfg(target_os = "macos")]
     {
-        Ok(PasteboardSnapshot {
-            item_count: 0,
-            change_count: Some(general_pasteboard_change_count()?),
-        })
+        PasteboardSnapshot::capture()
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        Ok(PasteboardSnapshot {
-            item_count: 0,
-            change_count: None,
-        })
+        bail!("inline-agent pasteboard snapshots require macOS");
     }
 }
 
-pub fn restore_general_pasteboard_snapshot(_snapshot: &PasteboardSnapshot) -> Result<()> {
-    Ok(())
+pub fn restore_general_pasteboard_snapshot(snapshot: &PasteboardSnapshot) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        snapshot.restore()
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = snapshot;
+        bail!("inline-agent pasteboard snapshots require macOS");
+    }
+}
+
+pub fn paste_plain_text_preserving_clipboard(text: &str) -> Result<()> {
+    let snapshot = capture_general_pasteboard_snapshot()
+        .context("Failed to snapshot clipboard before inline-agent paste fallback")?;
+    write_plain_text_to_pasteboard(text).context("Failed to write inline-agent paste fallback")?;
+    let temporary_change_count = general_pasteboard_change_count()
+        .context("Failed to read clipboard change count after inline-agent paste write")?;
+
+    crate::selected_text::simulate_paste_with_cg()
+        .context("Failed to simulate inline-agent paste")?;
+
+    let restore_result = match general_pasteboard_change_count() {
+        Ok(current_change_count) if current_change_count == temporary_change_count => {
+            restore_general_pasteboard_snapshot(&snapshot)
+        }
+        Ok(_) => {
+            bail!("Clipboard changed during inline-agent paste fallback; skipped restore")
+        }
+        Err(e) => Err(e).context("Failed to read clipboard change count before restore"),
+    };
+
+    restore_result.context("Failed to restore clipboard after inline-agent paste fallback")
+}
+
+#[cfg(target_os = "macos")]
+impl PasteboardSnapshot {
+    fn capture() -> Result<Self> {
+        use cocoa::appkit::NSPasteboard;
+        use cocoa::base::{id, nil};
+        use objc::{msg_send, sel, sel_impl};
+
+        unsafe {
+            let pasteboard: id = NSPasteboard::generalPasteboard(nil);
+            if pasteboard == nil {
+                bail!("NSPasteboard.generalPasteboard returned nil");
+            }
+            let change_count: i64 = msg_send![pasteboard, changeCount];
+            let items: id = msg_send![pasteboard, pasteboardItems];
+            if items == nil {
+                return Ok(Self {
+                    items: Vec::new(),
+                    change_count,
+                });
+            }
+
+            let item_count: usize = msg_send![items, count];
+            let mut snapshot_items = Vec::with_capacity(item_count);
+            for item_index in 0..item_count {
+                let item: id = msg_send![items, objectAtIndex: item_index];
+                if item == nil {
+                    bail!("NSPasteboard returned nil item while snapshotting");
+                }
+                let types: id = msg_send![item, types];
+                if types == nil {
+                    bail!("NSPasteboard item returned nil type list while snapshotting");
+                }
+
+                let type_count: usize = msg_send![types, count];
+                let mut representations = Vec::with_capacity(type_count);
+                for type_index in 0..type_count {
+                    let type_id: id = msg_send![types, objectAtIndex: type_index];
+                    if type_id == nil {
+                        bail!("NSPasteboard item returned nil type while snapshotting");
+                    }
+                    let type_name = nsstring_to_string(type_id)
+                        .context("Failed to read NSPasteboard type name while snapshotting")?;
+                    let data: id = msg_send![item, dataForType: type_id];
+                    if data == nil {
+                        bail!("NSPasteboard item data was unavailable while snapshotting");
+                    }
+
+                    let byte_len: usize = msg_send![data, length];
+                    let bytes_ptr: *const u8 = msg_send![data, bytes];
+                    let data = if byte_len == 0 {
+                        Vec::new()
+                    } else {
+                        if bytes_ptr.is_null() {
+                            bail!("NSPasteboard item data pointer was nil while snapshotting");
+                        }
+                        std::slice::from_raw_parts(bytes_ptr, byte_len).to_vec()
+                    };
+                    representations.push(PasteboardRepresentation { type_name, data });
+                }
+                snapshot_items.push(PasteboardItemSnapshot { representations });
+            }
+
+            Ok(Self {
+                items: snapshot_items,
+                change_count,
+            })
+        }
+    }
+
+    fn restore(&self) -> Result<()> {
+        use cocoa::appkit::NSPasteboard;
+        use cocoa::base::{id, nil};
+        use cocoa::foundation::{NSArray, NSData, NSString};
+        use objc::{class, msg_send, sel, sel_impl};
+
+        unsafe {
+            let pasteboard: id = NSPasteboard::generalPasteboard(nil);
+            if pasteboard == nil {
+                bail!("NSPasteboard.generalPasteboard returned nil");
+            }
+
+            let _: i64 = msg_send![pasteboard, clearContents];
+            if self.items.is_empty() {
+                return Ok(());
+            }
+
+            let mut objects: Vec<id> = Vec::with_capacity(self.items.len());
+            for item in &self.items {
+                let pasteboard_item: id = msg_send![class!(NSPasteboardItem), new];
+                if pasteboard_item == nil {
+                    release_objects(&objects);
+                    bail!("Failed to create NSPasteboardItem while restoring clipboard");
+                }
+
+                for representation in &item.representations {
+                    let ns_type = NSString::alloc(nil).init_str(&representation.type_name);
+                    if ns_type == nil {
+                        let _: () = msg_send![pasteboard_item, release];
+                        release_objects(&objects);
+                        bail!("Failed to create NSPasteboard type while restoring clipboard");
+                    }
+
+                    let data = NSData::dataWithBytes_length_(
+                        nil,
+                        representation.data.as_ptr() as *const std::ffi::c_void,
+                        representation.data.len() as u64,
+                    );
+                    if data == nil {
+                        let _: () = msg_send![ns_type, release];
+                        let _: () = msg_send![pasteboard_item, release];
+                        release_objects(&objects);
+                        bail!("Failed to create NSData while restoring clipboard");
+                    }
+
+                    let did_set: bool = msg_send![pasteboard_item, setData: data forType: ns_type];
+                    let _: () = msg_send![ns_type, release];
+                    if !did_set {
+                        let _: () = msg_send![pasteboard_item, release];
+                        release_objects(&objects);
+                        bail!("NSPasteboardItem.setData returned false while restoring clipboard");
+                    }
+                }
+                objects.push(pasteboard_item);
+            }
+
+            let ns_objects: id = NSArray::arrayWithObjects(nil, objects.as_slice());
+            if ns_objects == nil {
+                release_objects(&objects);
+                bail!("Failed to create NSArray while restoring clipboard");
+            }
+
+            let did_write: bool = msg_send![pasteboard, writeObjects: ns_objects];
+            release_objects(&objects);
+            if !did_write {
+                bail!("NSPasteboard.writeObjects returned false while restoring clipboard");
+            }
+            Ok(())
+        }
+    }
 }
 
 pub fn write_plain_text_to_pasteboard(text: &str) -> Result<()> {
@@ -73,6 +254,32 @@ pub fn write_plain_text_to_pasteboard(text: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn nsstring_to_string(value: cocoa::base::id) -> Result<String> {
+    use objc::{msg_send, sel, sel_impl};
+    use std::ffi::CStr;
+
+    if value == cocoa::base::nil {
+        bail!("NSString value was nil");
+    }
+    let utf8: *const std::os::raw::c_char = unsafe { msg_send![value, UTF8String] };
+    if utf8.is_null() {
+        bail!("NSString.UTF8String returned nil");
+    }
+    Ok(unsafe { CStr::from_ptr(utf8) }
+        .to_string_lossy()
+        .into_owned())
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn release_objects(objects: &[cocoa::base::id]) {
+    use objc::{msg_send, sel, sel_impl};
+
+    for object in objects {
+        let _: () = msg_send![*object, release];
+    }
 }
 
 pub fn general_pasteboard_change_count() -> Result<i64> {

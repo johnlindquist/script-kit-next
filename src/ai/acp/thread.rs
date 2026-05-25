@@ -134,6 +134,8 @@ pub(crate) struct AcpThreadInit {
     pub initial_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
     /// Display name for the agent (shown in toolbar, e.g. "Claude Code").
     pub display_name: SharedString,
+    /// Display name for the selected Agent Chat profile (shown beside model).
+    pub profile_display_name: Option<SharedString>,
     /// Available models for this agent.
     pub available_models: Vec<super::config::AcpModelEntry>,
     /// Initially selected model ID (e.g. "claude-sonnet-4-6").
@@ -290,6 +292,8 @@ pub(crate) struct AcpThread {
     selected_model_id: Option<String>,
     /// Display name for the selected model.
     selected_model_display_name: Option<SharedString>,
+    /// Display name for the selected Agent Chat profile.
+    profile_display_name: Option<SharedString>,
 }
 
 impl AcpThread {
@@ -331,6 +335,7 @@ impl AcpThread {
             selected_agent: init.selected_agent,
             available_agents: init.available_agents,
             launch_requirements: init.launch_requirements,
+            profile_display_name: init.profile_display_name,
             setup_state: None,
             usage_tokens: None,
             usage_cost_usd: None,
@@ -1725,6 +1730,13 @@ impl AcpThread {
         &self.display_name
     }
 
+    /// Display name for the selected Agent Chat profile, or the agent name.
+    pub(crate) fn profile_display(&self) -> &str {
+        self.profile_display_name
+            .as_deref()
+            .unwrap_or(&self.display_name)
+    }
+
     /// Short display name for the currently selected model, or the agent name if none selected.
     pub(crate) fn selected_model_display(&self) -> &str {
         self.selected_model_display_name
@@ -2381,6 +2393,7 @@ impl AcpThread {
             available_models: Vec::new(),
             selected_model_id: None,
             selected_model_display_name: None,
+            profile_display_name: None,
         }
     }
 
@@ -2606,6 +2619,7 @@ mod tests {
             available_models: Vec::new(),
             selected_model_id: None,
             selected_model_display_name: None,
+            profile_display_name: None,
         }
     }
 

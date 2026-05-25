@@ -167,12 +167,20 @@ impl RenderOnce for UnifiedListItem {
             content_col = content_col.child(sub_el);
         }
 
+        let pl_val = if self.show_accent_bar {
+            layout.padding_x - 3.0
+        } else {
+            layout.padding_x
+        };
+
         let mut inner = div()
             .w_full()
             .h_full()
-            .px(px(layout.padding_x))
+            .pl(px(pl_val))
+            .pr(px(layout.padding_x))
             .py(px(layout.padding_y))
             .bg(bg_color)
+            .rounded(px(layout.radius))
             .text_color(title_color)
             .font_family(crate::list_item::FONT_SYSTEM_UI)
             .flex()
@@ -204,6 +212,14 @@ impl RenderOnce for UnifiedListItem {
         }
 
         let accent_color = rgb(colors.accent);
+        if self.show_accent_bar {
+            inner = inner.border_l(px(3.0)).border_color(if state.is_selected {
+                accent_color
+            } else {
+                rgba(TRANSPARENT)
+            });
+        }
+
         let mut container = div()
             .w_full()
             .h(px(layout.height))
@@ -214,16 +230,6 @@ impl RenderOnce for UnifiedListItem {
 
         if self.direct_hover && !state.is_selected && !state.is_disabled {
             container = container.hover(move |s| s.bg(hover_bg));
-        }
-
-        if self.show_accent_bar {
-            container = container
-                .border_l(px(3.0))
-                .border_color(if state.is_selected {
-                    accent_color
-                } else {
-                    rgba(TRANSPARENT)
-                });
         }
 
         container.child(inner)

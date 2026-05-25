@@ -4,6 +4,10 @@
 fn acp_actions_menu_keeps_stable_root_labels() {
     let source = include_str!("../src/actions/builders/script_context.rs");
     assert!(
+        source.contains("\"Change Profile\""),
+        "ACP Actions Menu root must say Change Profile"
+    );
+    assert!(
         source.contains("\"Change Agent\""),
         "ACP Actions Menu root must say Change Agent"
     );
@@ -18,7 +22,11 @@ fn acp_actions_menu_keeps_stable_leaf_prefixes_in_builder_and_handler() {
     let builder = include_str!("../src/actions/builders/script_context.rs");
     let handler = include_str!("../src/app_actions/handle_action/mod.rs");
 
-    for needle in ["acp_switch_agent:", "acp_switch_model:"] {
+    for needle in [
+        "agent_chat_switch_profile:",
+        "acp_switch_agent:",
+        "acp_switch_model:",
+    ] {
         assert!(
             builder.contains(needle),
             "ACP builder must emit stable leaf prefix: {needle}"
@@ -27,6 +35,10 @@ fn acp_actions_menu_keeps_stable_leaf_prefixes_in_builder_and_handler() {
 
     // Handler dispatches via function imports rather than raw prefix strings.
     // Verify both dispatch functions are called.
+    assert!(
+        handler.contains("agent_chat_switch_profile_id_from_action"),
+        "ACP handler must dispatch Agent Chat profile leaves via agent_chat_switch_profile_id_from_action"
+    );
     assert!(
         handler.contains("acp_switch_agent_id_from_action"),
         "ACP handler must dispatch acp_switch_agent: leaves via acp_switch_agent_id_from_action"

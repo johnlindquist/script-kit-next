@@ -93,6 +93,13 @@ impl ScriptListApp {
                     app.open_attachment_portal(kind, cx);
                 });
             });
+
+            let profile_app = app_entity.clone();
+            view.set_on_profile_selected(move |profile_id, cx| {
+                profile_app.update(cx, |app, cx| {
+                    app.select_agent_chat_profile_and_relaunch(profile_id, cx);
+                });
+            });
         });
 
         // Observe the ACP view for ready-script state and footer-status changes
@@ -105,6 +112,54 @@ impl ScriptListApp {
             this.schedule_embedded_acp_observed_state_sync(view_entity, cx);
         })
         .detach();
+    }
+
+    fn select_agent_chat_profile_and_relaunch(
+        &mut self,
+        profile_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+        let mut prefs = crate::config::load_user_preferences();
+        let Some(profile) = crate::ai::agent_chat::profiles::persist_agent_chat_profile_selection(
+            &mut prefs.ai,
+            &profile_id,
+            &ctx,
+        ) else {
+            self.toast_manager.push(
+                crate::components::toast::Toast::error(
+                    format!("Agent Chat profile not found: {profile_id}"),
+                    &self.theme,
+                )
+                .duration_ms(Some(TOAST_ERROR_MS)),
+            );
+            cx.notify();
+            return;
+        };
+
+        if let Err(error) = crate::config::save_user_preferences(&prefs) {
+            self.toast_manager.push(
+                crate::components::toast::Toast::error(
+                    format!("Failed to save Agent Chat profile: {error}"),
+                    &self.theme,
+                )
+                .duration_ms(Some(TOAST_ERROR_MS)),
+            );
+            cx.notify();
+            return;
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "agent_chat_profile_persisted",
+            profile_id = %profile.id,
+            profile_name = %profile.name,
+            backend = ?profile.backend,
+        );
+
+        self.close_tab_ai_harness_terminal(cx);
+        self.embedded_acp_chat = None;
+        self.open_tab_ai_acp_with_entry_intent(None, cx);
     }
 
     fn schedule_embedded_acp_observed_state_sync(
@@ -1484,7 +1539,7 @@ impl ScriptListApp {
     /// and triggers a snapshot rebuild. Returns `true` when the chord was
     /// consumed so the legacy ACP route doesn't also fire.
     pub(crate) fn try_route_cmd_enter_to_menu_syntax_ai(&mut self, cx: &mut Context<Self>) -> bool {
-        use crate::menu_syntax::{MenuSyntaxActionState, builtin_schema};
+        use crate::menu_syntax::{builtin_schema, MenuSyntaxActionState};
         let raw = self.filter_text().to_string();
         let mode = &self.menu_syntax_mode;
         let pending = if let Some(invocation) = mode.capture_for(&raw) {
@@ -2400,6 +2455,48 @@ impl ScriptListApp {
             return;
         }
 
+        let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+        match crate::ai::agent_chat::launch::resolve_selected_pi_launch(
+            &crate::config::load_user_preferences().ai,
+            &profile_ctx,
+        ) {
+            Ok(Some(pi_launch)) => {
+                match crate::ai::agent_chat::launch::warm_session_manager()
+                    .prepare_warm(pi_launch.warm_spec())
+                {
+                    Ok(snapshot) => {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "pi_agent_chat_warm_started",
+                            profile_id = %pi_launch.profile.id,
+                            warm_key = %pi_launch.warm_key,
+                            generation = snapshot.generation,
+                            state = ?snapshot.state,
+                        );
+                    }
+                    Err(error) => {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "pi_agent_chat_warm_unavailable",
+                            profile_id = %pi_launch.profile.id,
+                            warm_key = %pi_launch.warm_key,
+                            error = %error,
+                        );
+                    }
+                }
+                return;
+            }
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "pi_agent_chat_warm_resolution_failed",
+                    error = %error,
+                    "Falling back to ACP hot prewarm"
+                );
+            }
+        }
+
         if self.prewarmed_acp_chat.is_some() || self.embedded_acp_chat.is_some() {
             tracing::info!(
                 target: "script_kit::tab_ai",
@@ -2718,6 +2815,7 @@ impl ScriptListApp {
         );
         let closing_quick_terminal = matches!(self.current_view, AppView::QuickTerminalView { .. });
         let closing_acp_chat = matches!(self.current_view, AppView::AcpChatView { .. });
+        let closing_pi_agent_chat = closing_acp_chat && self.active_agent_chat_warm_lease.is_some();
 
         if !closing_quick_terminal && !closing_acp_chat {
             return;
@@ -2740,6 +2838,10 @@ impl ScriptListApp {
                 entity.update(cx, |view, cx| {
                     view.prepare_for_host_hide(cx);
                 });
+            }
+            self.dismiss_active_agent_chat_warm_lease();
+            if closing_pi_agent_chat {
+                self.embedded_acp_chat = None;
             }
         }
 
@@ -2885,6 +2987,7 @@ impl ScriptListApp {
                 view.prepare_for_host_hide(cx);
             });
         }
+        self.dismiss_active_agent_chat_warm_lease();
 
         // A hotkey detach is a deliberate mode switch back to the launcher,
         // not a normal "return to the originating surface" close.
@@ -2928,6 +3031,35 @@ impl ScriptListApp {
             focus_main_filter,
         );
         cx.notify();
+    }
+
+    fn dismiss_active_agent_chat_warm_lease(&mut self) {
+        let Some(lease) = self.active_agent_chat_warm_lease.take() else {
+            return;
+        };
+        let key = lease.key.clone();
+        let generation = lease.generation;
+        match crate::ai::agent_chat::launch::warm_session_manager().dismiss_reset(lease) {
+            Ok(snapshot) => {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "pi_agent_chat_warm_dismiss_reset",
+                    warm_key = %key,
+                    generation,
+                    replacement_generation = snapshot.generation,
+                    replacement_state = ?snapshot.state,
+                );
+            }
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "pi_agent_chat_warm_dismiss_reset_failed",
+                    warm_key = %key,
+                    generation,
+                    error = %error,
+                );
+            }
+        }
     }
 
     /// Schedule a deferred prewarm of the Tab AI harness so the next Tab

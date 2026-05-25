@@ -3013,27 +3013,24 @@ fn acp_model_switch_handler_uses_named_action_states() {
 }
 
 #[test]
-fn acp_profile_switch_handler_uses_named_action_states() {
+fn agent_chat_profile_switch_handler_uses_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpProfileSwitchHandlerAction") && content.contains("SwitchProfile"),
-        "ACP profile switch handler should be driven by named action states"
+        content.contains("enum AgentChatProfileSwitchHandlerAction")
+            && content.contains("SwitchProfile"),
+        "Agent Chat profile switch handler should be driven by named action states"
     );
     assert!(
-        content.contains("AcpProfileSwitchHandlerAction::from_action_id(action_id)")
-            && content.contains("profile_action.unavailable_message(profile_name)")
+        content.contains("AgentChatProfileSwitchHandlerAction::from_action_id(action_id)")
+            && content.contains("profile_action.unavailable_message(profile_id)")
             && content.contains("profile_action.persist_failure_message(&profile.name, error)")
-            && content.contains("profile_action.missing_relaunch_agent_message(&profile.name)")
-            && content.contains("profile_action.relaunch_message(&profile.name, &agent_display_name)")
-            && content.contains("profile_action.selected_message(&profile.name)")
-            && content.contains("Profile '{profile_name}' is no longer available")
+            && content.contains("profile_action.relaunch_message(&profile.name)")
+            && content.contains("Profile '{profile_id}' is no longer available")
             && content.contains("Failed to persist profile '{profile_name}': {error}")
-            && content.contains("Profile '{profile_name}' has no agent to relaunch")
-            && content.contains("Switching profile to {profile_name} ({agent_display_name})")
-            && content.contains("Profile: {profile_name}"),
-        "ACP profile switch handler should derive unavailable, persistence, relaunch, and selected feedback from named state"
+            && content.contains("Switching profile to {profile_name}"),
+        "Agent Chat profile switch handler should derive unavailable, persistence, and relaunch feedback from named state"
     );
 }
 

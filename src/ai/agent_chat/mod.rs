@@ -1,6 +1,7 @@
 //! Backend-neutral Agent Chat profile and launch contracts.
 
 pub mod events;
+pub(crate) mod launch;
 pub mod metrics;
 pub mod pi;
 pub mod profiles;

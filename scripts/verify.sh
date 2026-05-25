@@ -31,7 +31,9 @@ run_step "sdk-types" bun run scripts/check-sdk-types.ts
 run_step "sdk-tests" bun run scripts/test-runner.ts --parallel
 
 if [[ "$SKIP_BUNDLE" -eq 0 ]]; then
+  run_step "pi-sidecar"    bash scripts/prepare-pi-sidecar.sh
   run_step "bundle"        cargo bundle --locked --release --bin script-kit-gpui
+  run_step "bundle-sidecar" bash scripts/install-pi-sidecar-into-bundle.sh
   run_step "bundle-verify" bash scripts/verify-macos-bundle.sh
 fi
 

@@ -1171,6 +1171,30 @@ app.run(move |cx: &mut App| {
             logging::log("HOTKEY", "AI hotkey listener exiting (channel closed)");
         }).detach();
 
+        // Inline AI text-edit listener. Capture happens inside the foreground
+        // update before any inline overlay window is opened, preserving the
+        // external app's focused text field as the accessibility target.
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            logging::log("HOTKEY", "Inline AI hotkey listener started (event-driven)");
+            while let Ok(hotkey_event) = hotkeys::inline_ai_hotkey_channel().1.recv().await {
+                let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
+                logging::log(
+                    "HOTKEY",
+                    "Inline AI hotkey triggered - capturing focused text field",
+                );
+                let _ = cx.update(|cx: &mut gpui::App| {
+                    if let Err(error) = crate::inline_agent::launch_inline_agent_from_focused_text(cx)
+                    {
+                        logging::log(
+                            "HOTKEY",
+                            &format!("Failed to launch inline AI text editor: {}", error),
+                        );
+                    }
+                });
+            }
+            logging::log("HOTKEY", "Inline AI hotkey listener exiting (channel closed)");
+        }).detach();
+
         // Dictation hotkey listener - event-driven via async_channel
         // The global dictation shortcut routes to Agent Chat quick-submit.
         // Contextual main-window/prompt dictation remains available from the

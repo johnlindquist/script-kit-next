@@ -276,6 +276,10 @@ ai: {
 }
 ```
 
+Pi-backed Agent Chat uses the bundled Pi sidecar in release builds. Developers
+and support builds can override it with `SCRIPT_KIT_PI_BINARY`, `ai.piBinary`,
+or a per-profile `piBinary`.
+
 Use the Agent Chat actions menu to change agent, model, or profile. Claude Code settings may still be honored for compatibility when that adapter is selected, but they are not the primary Agent Chat setup flow.
 
 ### Legacy Direct-Provider API Keys
@@ -373,7 +377,9 @@ cargo build --release --bin script-kit-gpui
 
 # macOS app bundle
 cargo install cargo-bundle
+bash scripts/prepare-pi-sidecar.sh
 cargo bundle --release --bin script-kit-gpui
+bash scripts/install-pi-sidecar-into-bundle.sh
 
 # Verify bundle contents
 bash scripts/verify-macos-bundle.sh

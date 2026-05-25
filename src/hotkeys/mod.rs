@@ -36,6 +36,8 @@ pub enum HotkeyAction {
     ToggleLogs,
     /// Voice dictation toggle hotkey
     Dictation,
+    /// Inline AI focused-text editor
+    InlineAiTextEdit,
     /// Script shortcut - run the script at this path
     Script(String),
 }
@@ -73,6 +75,8 @@ struct HotkeyRoutes {
     logs_id: Option<u32>,
     /// Current dictation hotkey ID (for quick lookup)
     dictation_id: Option<u32>,
+    /// Current inline AI text-edit hotkey ID (for quick lookup)
+    inline_ai_id: Option<u32>,
 }
 impl HotkeyRoutes {
     fn new() -> Self {
@@ -84,6 +88,7 @@ impl HotkeyRoutes {
             ai_id: None,
             logs_id: None,
             dictation_id: None,
+            inline_ai_id: None,
         }
     }
 
@@ -100,6 +105,7 @@ impl HotkeyRoutes {
             HotkeyAction::Ai => self.ai_id = Some(id),
             HotkeyAction::ToggleLogs => self.logs_id = Some(id),
             HotkeyAction::Dictation => self.dictation_id = Some(id),
+            HotkeyAction::InlineAiTextEdit => self.inline_ai_id = Some(id),
             HotkeyAction::Script(path) => {
                 self.script_paths.insert(path.clone(), id);
             }
@@ -136,6 +142,11 @@ impl HotkeyRoutes {
                         self.dictation_id = None;
                     }
                 }
+                HotkeyAction::InlineAiTextEdit => {
+                    if self.inline_ai_id == Some(id) {
+                        self.inline_ai_id = None;
+                    }
+                }
                 HotkeyAction::Script(path) => {
                     self.script_paths.remove(path);
                 }
@@ -160,6 +171,7 @@ impl HotkeyRoutes {
             HotkeyAction::Ai => self.ai_id?,
             HotkeyAction::ToggleLogs => self.logs_id?,
             HotkeyAction::Dictation => self.dictation_id?,
+            HotkeyAction::InlineAiTextEdit => self.inline_ai_id?,
             HotkeyAction::Script(path) => *self.script_paths.get(path)?,
         };
         self.routes.get(&id)
@@ -173,6 +185,7 @@ fn hotkey_action_label(action: &HotkeyAction) -> String {
         HotkeyAction::Ai => "Agent Chat".to_string(),
         HotkeyAction::ToggleLogs => "Logs".to_string(),
         HotkeyAction::Dictation => "Dictation".to_string(),
+        HotkeyAction::InlineAiTextEdit => "Inline AI Text Edit".to_string(),
         HotkeyAction::Script(command_id) => command_id.clone(),
     }
 }
@@ -364,6 +377,7 @@ fn rebind_hotkey_transactional(
             HotkeyAction::Ai => routes_guard.ai_id,
             HotkeyAction::ToggleLogs => routes_guard.logs_id,
             HotkeyAction::Dictation => routes_guard.dictation_id,
+            HotkeyAction::InlineAiTextEdit => routes_guard.inline_ai_id,
             HotkeyAction::Script(path) => routes_guard.get_script_id(path),
         }
     };
@@ -393,6 +407,7 @@ fn rebind_hotkey_transactional(
             HotkeyAction::Ai => routes_guard.ai_id,
             HotkeyAction::ToggleLogs => routes_guard.logs_id,
             HotkeyAction::Dictation => routes_guard.dictation_id,
+            HotkeyAction::InlineAiTextEdit => routes_guard.inline_ai_id,
             HotkeyAction::Script(path) => routes_guard.get_script_id(path),
         };
         let old_entry = old_id.and_then(|id| routes_guard.remove_route(id));
@@ -497,6 +512,20 @@ pub fn update_hotkeys(cfg: &config::Config) {
             rebind_hotkey_transactional(
                 &manager_guard,
                 HotkeyAction::ToggleLogs,
+                mods,
+                code,
+                &display,
+            );
+        }
+    }
+
+    // Update inline AI focused-text hotkey
+    if let Some(inline_ai_config) = cfg.get_inline_ai_hotkey() {
+        if let Some((mods, code)) = parse_hotkey_config(&inline_ai_config) {
+            let display = hotkey_config_to_display(&inline_ai_config);
+            rebind_hotkey_transactional(
+                &manager_guard,
+                HotkeyAction::InlineAiTextEdit,
                 mods,
                 code,
                 &display,
@@ -785,6 +814,7 @@ pub fn get_script_for_hotkey(hotkey_id: u32) -> Option<String> {
         .get(&hotkey_id)
         .and_then(|entry| match &entry.action {
             HotkeyAction::Script(path) => Some(path.clone()),
+            HotkeyAction::InlineAiTextEdit => None,
             _ => None,
         })
 }
@@ -1172,6 +1202,20 @@ pub(crate) fn ai_hotkey_channel() -> &'static (
 ) {
     &AI_HOTKEY_CHANNEL
 }
+// INLINE_AI_HOTKEY_CHANNEL: Channel for the system-wide inline focused-text editor.
+#[allow(dead_code)]
+static INLINE_AI_HOTKEY_CHANNEL: LazyLock<(
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+)> = LazyLock::new(|| async_channel::bounded(10));
+/// Get the inline AI text-edit hotkey channel, initializing it on first access.
+#[allow(dead_code)]
+pub(crate) fn inline_ai_hotkey_channel() -> &'static (
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+) {
+    &INLINE_AI_HOTKEY_CHANNEL
+}
 // DICTATION_HOTKEY_CHANNEL: Channel for dictation toggle events
 #[allow(dead_code)]
 static DICTATION_HOTKEY_CHANNEL: LazyLock<(
@@ -1362,6 +1406,13 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
         if let Some(logs_hotkey) = config.get_logs_hotkey() {
             register_builtin_hotkey(&manager_guard, HotkeyAction::ToggleLogs, &logs_hotkey);
         }
+        if let Some(inline_ai_hotkey) = config.get_inline_ai_hotkey() {
+            register_builtin_hotkey(
+                &manager_guard,
+                HotkeyAction::InlineAiTextEdit,
+                &inline_ai_hotkey,
+            );
+        }
 
         // Track which command IDs have been registered to avoid duplicates
         let mut registered_commands: HashSet<String> = HashSet::new();
@@ -1529,6 +1580,23 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
 
                         logging::log("HOTKEY", "AI hotkey pressed - dispatching to main thread");
                         dispatch_ai_hotkey(HotkeyEvent { correlation_id });
+                    }
+                    Some(HotkeyAction::InlineAiTextEdit) => {
+                        let correlation_id = format!("hotkey:inline-ai:{}", Uuid::new_v4());
+                        let _guard = logging::set_correlation_id(correlation_id.clone());
+
+                        logging::log(
+                            "HOTKEY",
+                            "Inline AI hotkey pressed - dispatching focused text capture",
+                        );
+                        if inline_ai_hotkey_channel()
+                            .0
+                            .try_send(HotkeyEvent { correlation_id })
+                            .is_err()
+                        {
+                            logging::log("HOTKEY", "Inline AI hotkey channel full/closed");
+                        }
+                        gcd::dispatch_to_main(|| {});
                     }
                     Some(HotkeyAction::ToggleLogs) => {
                         // Set correlation ID for this hotkey event

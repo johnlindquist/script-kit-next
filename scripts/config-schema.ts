@@ -659,6 +659,7 @@
  * | dictation.selectedDeviceId | string | unset                      | no       |
  * | ai.selectedModelId | string         | unset                       | no       |
  * | ai.selectedAcpAgentId | string      | unset                       | no       |
+ * | ai.piBinary       | string         | bundled Pi sidecar          | no       |
  * | ai.profiles       | AiProfile[]    | unset                       | no       |
  * | ai.activeProfileId | string         | unset                       | no       |
  * | windowManagement.snapMode | SnapMode | unset                     | no       |
@@ -1245,6 +1246,14 @@ export interface AiProfile {
   backend?: AgentChatBackend;
 
   /**
+   * Optional Pi sidecar binary override for this profile. Most users should
+   * omit this and use the bundled Pi binary.
+   *
+   * @example "~/dev/pi_agent_rust/target/debug/pi"
+   */
+  piBinary?: string;
+
+  /**
    * ACP agent id. Ignored by Pi profiles.
    */
   agent?: string;
@@ -1317,6 +1326,14 @@ export interface AiPreferences {
    * Last-selected Agent Chat backend.
    */
   selectedBackend?: AgentChatBackend;
+
+  /**
+   * Optional global Pi sidecar binary override. Release builds use the bundled
+   * Pi binary when this is omitted.
+   *
+   * @example "~/dev/pi_agent_rust/target/debug/pi"
+   */
+  piBinary?: string;
 
   /**
    * Named AI configuration profiles available for quick switching.
@@ -1497,6 +1514,27 @@ export interface Config extends BaseConfig {
    * ```
    */
   ai?: AiPreferences;
+
+  /**
+   * Global shortcut for inline AI focused-text editing.
+   *
+   * When pressed, Script Kit captures the full currently focused text field in
+   * the frontmost macOS app before showing the inline agent overlay.
+   *
+   * @default { modifiers: ["meta", "ctrl"], key: "KeyI" }
+   * @example
+   * ```typescript
+   * inlineAiHotkey: { modifiers: ["meta", "ctrl"], key: "KeyI" }
+   * ```
+   */
+  inlineAiHotkey?: HotkeyConfig;
+
+  /**
+   * Enables registration of the inline AI focused-text global shortcut.
+   *
+   * @default true
+   */
+  inlineAiHotkeyEnabled?: boolean;
 
   /**
    * Design picker preferences and per-design token overrides.

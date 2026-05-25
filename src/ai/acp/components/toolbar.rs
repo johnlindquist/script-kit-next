@@ -1,13 +1,15 @@
 use gpui::{
-    div, prelude::*, px, rgb, rgba, Context, Entity, FocusHandle, IntoElement, ParentElement,
+    div, prelude::*, px, rgb, rgba, App, Context, Entity, FocusHandle, IntoElement, ParentElement,
     Render, Window,
 };
 
 use super::super::thread::AcpThreadStatus;
+use super::super::types::AcpMentionPopupParentWindow;
 use crate::theme;
 
 pub enum AcpToolbarEvent {
-    ToggleModelSelector,
+    ToggleProfileSelector(AcpMentionPopupParentWindow),
+    ToggleModelSelector(AcpMentionPopupParentWindow),
     ExportThread,
     ClearThread,
     OpenHistory,
@@ -18,14 +20,21 @@ impl gpui::EventEmitter<AcpToolbarEvent> for AcpToolbar {}
 
 pub struct AcpToolbar {
     status: AcpThreadStatus,
+    profile_name: String,
     model_name: String,
     focus_handle: FocusHandle,
 }
 
 impl AcpToolbar {
-    pub fn new(status: AcpThreadStatus, model_name: String, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        status: AcpThreadStatus,
+        profile_name: String,
+        model_name: String,
+        cx: &mut Context<Self>,
+    ) -> Self {
         Self {
             status,
+            profile_name,
             model_name,
             focus_handle: cx.focus_handle(),
         }
@@ -38,6 +47,11 @@ impl AcpToolbar {
 
     pub fn set_model_name(&mut self, model_name: String, cx: &mut Context<Self>) {
         self.model_name = model_name;
+        cx.notify();
+    }
+
+    pub fn set_profile_name(&mut self, profile_name: String, cx: &mut Context<Self>) {
+        self.profile_name = profile_name;
         cx.notify();
     }
 }
@@ -63,18 +77,37 @@ impl Render for AcpToolbar {
             .border_color(rgb(theme.colors.ui.border))
             .child(
                 div()
-                    .id("acp-toolbar-model-selector")
+                    .id("agent-chat-profile-selector")
                     .flex()
                     .items_center()
                     .gap(px(8.0))
                     .cursor_pointer()
-                    .on_click(cx.listener(|_view, _event, _window, cx| {
-                        cx.emit(AcpToolbarEvent::ToggleModelSelector);
+                    .on_click(cx.listener(|_view, _event, window, cx| {
+                        let parent = toolbar_popup_parent_window(window, cx);
+                        cx.emit(AcpToolbarEvent::ToggleProfileSelector(parent));
                     }))
                     .child(
                         div()
                             .text_sm()
                             .text_color(rgb(theme.colors.text.primary))
+                            .child(self.profile_name.clone()),
+                    ),
+            )
+            .child(
+                div()
+                    .id("acp-toolbar-model-selector")
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .cursor_pointer()
+                    .on_click(cx.listener(|_view, _event, window, cx| {
+                        let parent = toolbar_popup_parent_window(window, cx);
+                        cx.emit(AcpToolbarEvent::ToggleModelSelector(parent));
+                    }))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(theme.colors.text.muted))
                             .child(self.model_name.clone()),
                     ),
             )
@@ -86,5 +119,15 @@ impl Render for AcpToolbar {
                         .child(format!("{:?}", self.status)),
                 ),
             )
+    }
+}
+
+fn toolbar_popup_parent_window(window: &mut Window, cx: &mut App) -> AcpMentionPopupParentWindow {
+    let display = window.display(cx);
+    AcpMentionPopupParentWindow {
+        handle: window.window_handle(),
+        bounds: window.bounds(),
+        display_id: display.as_ref().map(|display| display.id()),
+        display_bounds: display.as_ref().map(|display| display.visible_bounds()),
     }
 }

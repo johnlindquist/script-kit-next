@@ -210,8 +210,14 @@ jobs:
       - name: Build release
         run: cargo build --release --bin script-kit-gpui
 
+      - name: Prepare bundled Pi sidecar
+        run: bash scripts/prepare-pi-sidecar.sh
+
       - name: Create bundle
         run: cargo bundle --release --bin script-kit-gpui
+
+      - name: Install Pi sidecar into bundle
+        run: bash scripts/install-pi-sidecar-into-bundle.sh
 
       - name: Verify bundled macOS app contents
         run: bash scripts/verify-macos-bundle.sh

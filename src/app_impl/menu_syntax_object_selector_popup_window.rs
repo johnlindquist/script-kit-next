@@ -486,8 +486,15 @@ impl MenuSyntaxObjectSelectorPopupWindow {
             .flex()
             .flex_row()
             .items_center()
-            .px(gpui::px(8.0))
+            .pl(gpui::px(6.0))
+            .pr(gpui::px(8.0))
             .rounded(gpui::px(6.0))
+            .border_l(gpui::px(2.0))
+            .border_color(if is_selected {
+                colors.accent
+            } else {
+                gpui::transparent_black()
+            })
             .bg(if is_selected {
                 selected_row_bg
             } else {
@@ -507,12 +514,6 @@ impl MenuSyntaxObjectSelectorPopupWindow {
             .flex()
             .flex_col()
             .justify_center()
-            .border_l(gpui::px(2.0))
-            .border_color(if is_selected {
-                colors.accent
-            } else {
-                gpui::transparent_black()
-            })
             .child(inner_row)
     }
 

@@ -1477,6 +1477,10 @@ impl ActionsDialog {
 
         dialog.set_root_route(root_route);
         dialog.register_drill_down_route(
+            super::builders::AGENT_CHAT_CHANGE_PROFILE_ACTION_ID,
+            super::builders::get_agent_chat_profile_picker_route_for_host(host),
+        );
+        dialog.register_drill_down_route(
             super::builders::ACP_CHANGE_AGENT_ACTION_ID,
             super::builders::get_acp_agent_picker_route_for_host(
                 context.catalog_entries,
@@ -3675,6 +3679,7 @@ impl Render for ActionsDialog {
                                             selected_bg
                                         };
 
+                                        let pl_val = item_spacing.item_padding_x - ACCENT_BAR_WIDTH;
                                         let inner_row = div()
                                             .id(ElementId::NamedInteger(
                                                 "action-inner-row".into(),
@@ -3685,8 +3690,19 @@ impl Render for ActionsDialog {
                                             .flex()
                                             .flex_row()
                                             .items_center()
-                                            .px(px(item_spacing.item_padding_x))
+                                            .pl(px(pl_val))
+                                            .pr(px(item_spacing.item_padding_x))
                                             .rounded(px(style.row_radius))
+                                            .border_l(px(ACCENT_BAR_WIDTH))
+                                            .border_color(if is_selected {
+                                                if is_destructive {
+                                                    destructive_text
+                                                } else {
+                                                    selection_dot_color
+                                                }
+                                            } else {
+                                                gpui::transparent_black().into()
+                                            })
                                             .bg(if is_selected {
                                                 selected_row_bg
                                             } else {
@@ -3825,16 +3841,7 @@ impl Render for ActionsDialog {
                                             .flex()
                                             .flex_col()
                                             .justify_center()
-                                            .border_l(px(ACCENT_BAR_WIDTH))
-                                            .border_color(if is_selected {
-                                                if is_destructive {
-                                                    destructive_text
-                                                } else {
-                                                    selection_dot_color
-                                                }
-                                            } else {
-                                                gpui::transparent_black().into()
-                                            })
+
                                             .on_click({
                                                 let entity = entity.clone();
                                                 move |event, window, cx| {
