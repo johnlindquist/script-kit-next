@@ -1,4 +1,4 @@
-//! Dispatch and execution of user-triggered actions (copy, paste, reveal, terminal, AI, etc.).
+/// Dispatch and execution of user-triggered actions (copy, paste, reveal, terminal, AI, etc.).
 
 use crate::action_helpers::{ActionOutcomeStatus, DispatchContext, DispatchOutcome};
 use crate::ai::acp::export::build_acp_conversation_markdown_from_thread;

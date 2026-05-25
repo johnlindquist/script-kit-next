@@ -1,4 +1,4 @@
-//! Script execution: process spawning, stdin protocol dispatch, and result handling.
+/// Script execution: process spawning, stdin protocol dispatch, and result handling.
 
 // --- merged from part_000.rs ---
 fn protocol_tile_to_window_control(pos: &protocol::TilePosition) -> window_control::TilePosition {

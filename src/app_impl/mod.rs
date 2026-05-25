@@ -1,4 +1,4 @@
-//! Core ScriptListApp implementation: startup, event handling, UI wiring, and state management.
+/// Core ScriptListApp implementation: startup, event handling, UI wiring, and state management.
 
 #[path = "startup.rs"]
 mod startup;
