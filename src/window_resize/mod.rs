@@ -422,8 +422,8 @@ fn calculate_resized_frame_with_width(
     let height_delta = target_height - current_frame.height;
     let new_origin_y = current_frame.y - height_delta;
     let new_width = target_width.unwrap_or(current_frame.width);
-    // Preserve origin X when width changes (expand/shrink to the right)
-    let new_origin_x = current_frame.x;
+    // Preserve visual center when width changes, then clamp to visible bounds below.
+    let new_origin_x = current_frame.x - ((new_width - current_frame.width) / 2.0);
     let mut resized = FrameGeometry::new(new_origin_x, new_origin_y, new_width, target_height);
 
     if let Some(backing_scale) = sanitize_backing_scale(backing_scale) {
@@ -1243,7 +1243,7 @@ mod resize_tests {
     }
 
     #[test]
-    fn test_calculate_resized_frame_with_width_preserves_x() {
+    fn test_calculate_resized_frame_with_width_preserves_center_x() {
         let current = FrameGeometry::new(100.0, 200.0, 750.0, 500.0);
         let resized = calculate_resized_frame_with_width(current, 400.0, Some(480.0), None, None);
 
@@ -1251,8 +1251,22 @@ mod resize_tests {
         assert!((resized.width - 480.0).abs() < 0.001);
         // Height should be 400
         assert!((resized.height - 400.0).abs() < 0.001);
-        // X should be preserved, not centered
-        assert!((resized.x - 100.0).abs() < 0.001);
+        // Center X should be preserved: 100 + 750/2 == 235 + 480/2.
+        assert!((resized.x - 235.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_calculate_resized_frame_with_width_center_clamps_to_visible_bounds() {
+        let current = FrameGeometry::new(0.0, 200.0, 480.0, 500.0);
+        let visible = FrameGeometry::new(0.0, 0.0, 800.0, 700.0);
+        let resized =
+            calculate_resized_frame_with_width(current, 400.0, Some(750.0), Some(visible), None);
+
+        assert!((resized.width - 750.0).abs() < 0.001);
+        assert!(
+            resized.x >= crate::panel::WINDOW_VISIBLE_EDGE_MARGIN - 0.001,
+            "visible-bounds clamp should keep centered expansion on screen"
+        );
     }
 
     #[test]
