@@ -101,6 +101,22 @@ fn simulate_key_enter_uses_focused_text_submit_path() {
 }
 
 #[test]
+fn simulate_key_cmd_enter_replaces_focused_text_mini_output() {
+    for required in [
+        "has_cmd && key_lower == \"enter\" && !has_shift",
+        "SimulateKey: Cmd+Enter - replace focused-text mini output",
+        "chat.is_focused_text_mini()",
+        "chat.perform_focused_text_mini_action(",
+        "FocusedTextMiniAction::Replace",
+    ] {
+        assert!(
+            SIMULATE_KEY_DISPATCH.contains(required),
+            "simulateKey Cmd+Enter must route focused-text mini Replace: {required}"
+        );
+    }
+}
+
+#[test]
 fn focused_text_initial_enter_remains_replace_semantics() {
     for required in [
         "FocusedTextMiniPhase::InputOnly",

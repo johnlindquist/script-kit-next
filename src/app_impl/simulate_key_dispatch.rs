@@ -1137,6 +1137,19 @@ impl ScriptListApp {
                     logging::log("STDIN", "SimulateKey: Cmd+W - close window from Agent Chat");
                     view.close_tab_ai_harness_terminal_with_window(window, ctx);
                     view.close_and_reset_window(ctx);
+                } else if has_cmd && key_lower == "enter" && !has_shift {
+                    logging::log(
+                        "STDIN",
+                        "SimulateKey: Cmd+Enter - replace focused-text mini output",
+                    );
+                    entity_clone.update(ctx, |chat, cx| {
+                        if chat.is_focused_text_mini() {
+                            chat.perform_focused_text_mini_action(
+                                crate::ai::acp::view::FocusedTextMiniAction::Replace,
+                                cx,
+                            );
+                        }
+                    });
                 } else if key_lower == "enter" && !has_shift {
                     logging::log("STDIN", "SimulateKey: Enter - submit ACP input");
                     entity_clone.update(ctx, |chat, cx| {
