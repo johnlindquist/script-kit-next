@@ -160,6 +160,7 @@ impl Message {
             | Message::FileSearch { request_id, .. }
             | Message::FileSearchResult { request_id, .. }
             | Message::InlineAgentFixtureOpenResult { request_id, .. }
+            | Message::ExternalCommandResult { request_id, .. }
             | Message::TriggerActionResult { request_id, .. }
             // Screenshot capture
             | Message::CaptureScreenshot { request_id, .. }

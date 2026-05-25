@@ -8,11 +8,21 @@ const ACP_LAUNCH: &str = include_str!("../../src/app_impl/tab_ai_mode/acp_launch
 const FOOTER_POPUP: &str = include_str!("../../src/footer_popup.rs");
 const STDIN_COMMANDS: &str = include_str!("../../src/stdin_commands/mod.rs");
 const RUNTIME_STDIN: &str = include_str!("../../src/main_entry/runtime_stdin.rs");
+const RUNTIME_STDIN_MATCH_TAIL: &str =
+    include_str!("../../src/main_entry/runtime_stdin_match_tail.rs");
+const RUNTIME_STDIN_MATCH_SIMULATE_KEY: &str =
+    include_str!("../../src/main_entry/runtime_stdin_match_simulate_key.rs");
 const STARTUP: &str = include_str!("../../src/app_impl/startup.rs");
 const STARTUP_NEW_ACTIONS: &str = include_str!("../../src/app_impl/startup_new_actions.rs");
 const SIMULATE_KEY_DISPATCH: &str = include_str!("../../src/app_impl/simulate_key_dispatch.rs");
 const APP_LAYOUT_COLLECT_ELEMENTS: &str = include_str!("../../src/app_layout/collect_elements.rs");
 const ACP_STATE_TYPES: &str = include_str!("../../src/protocol/types/acp_state.rs");
+const PROTOCOL_SYSTEM_CONTROL: &str =
+    include_str!("../../src/protocol/message/variants/system_control.rs");
+const PROTOCOL_GENERAL_CONSTRUCTORS: &str =
+    include_str!("../../src/protocol/message/constructors/general.rs");
+const PROTOCOL_PROMPT_CONSTRUCTORS: &str =
+    include_str!("../../src/protocol/message/constructors/prompts.rs");
 const INLINE_AGENT_MOD: &str = include_str!("../../src/inline_agent/mod.rs");
 const PROMPT_HANDLER: &str = include_str!("../../src/prompt_handler/mod.rs");
 
@@ -350,4 +360,64 @@ fn focused_text_quick_prompt_origin_survives_expansion_for_escape_hide() {
         FOCUSED_TEXT_ENTRY.contains("mark_focused_text_originated_from_quick_prompt"),
         "focused-text entry must mark quick-prompt origin after staging"
     );
+}
+
+#[test]
+fn focused_text_devtools_mutators_echo_redacted_response_envelopes() {
+    for required in [
+        "#[serde(rename = \"externalCommandResult\")]",
+        "ExternalCommandResult",
+        "#[serde(rename = \"requestId\")]",
+        "command: String",
+        "ok: bool",
+        "error_code: Option<String>",
+        "error_message: Option<String>",
+    ] {
+        assert!(
+            PROTOCOL_SYSTEM_CONTROL.contains(required),
+            "external command result protocol message must include `{required}`"
+        );
+    }
+
+    assert!(
+        PROTOCOL_GENERAL_CONSTRUCTORS.contains("pub fn external_command_result")
+            && PROTOCOL_GENERAL_CONSTRUCTORS.contains("Message::ExternalCommandResult"),
+        "external command result must use a normal protocol Message constructor"
+    );
+    assert!(
+        PROTOCOL_PROMPT_CONSTRUCTORS.contains("Message::ExternalCommandResult { request_id, .. }"),
+        "external command result must echo requestId through Message::request_id"
+    );
+
+    for (source_name, source) in [
+        ("runtime_stdin.rs", RUNTIME_STDIN),
+        ("app_run_setup.rs", APP_RUN_SETUP),
+        ("runtime_stdin_match_tail.rs", RUNTIME_STDIN_MATCH_TAIL),
+    ] {
+        for command in ["setAcpInput", "setAcpTestFixture"] {
+            assert!(
+                source.contains(&format!("\"{command}\".to_string()"))
+                    && source.contains("crate::protocol::Message::external_command_result")
+                    && source.contains("let request_id_value = request_id.clone();"),
+                "{source_name} must send a redacted response envelope for {command}"
+            );
+        }
+    }
+
+    for (source_name, source) in [
+        ("runtime_stdin.rs", RUNTIME_STDIN),
+        ("app_run_setup.rs", APP_RUN_SETUP),
+        (
+            "runtime_stdin_match_simulate_key.rs",
+            RUNTIME_STDIN_MATCH_SIMULATE_KEY,
+        ),
+    ] {
+        assert!(
+            source.contains(
+                "ExternalCommand::SimulateKey { ref key, ref modifiers, ref target, ref request_id }"
+            ) && source.contains("\"simulateKey\".to_string()")
+                && source.contains("crate::protocol::Message::external_command_result"),
+            "{source_name} must send a response envelope for simulateKey"
+        );
+    }
 }

@@ -302,7 +302,8 @@
                                 }
                             }
                             ExternalCommand::SetAcpInput { text, submit, ref request_id } => {
-                                let request_id = request_id.as_ref().map(|id| id.as_str());
+                                let request_id_value = request_id.clone();
+                                let request_id = request_id_value.as_deref();
                                 tracing::info!(
                                     category = "STDIN",
                                     event = "stdin_acp_command_received",
@@ -327,7 +328,7 @@
                                     }
                                     _ => Err("Agent Chat view is not active".to_string()),
                                 };
-                                match result {
+                                match &result {
                                     Ok(()) => {
                                         tracing::info!(
                                             category = "STDIN",
@@ -356,6 +357,22 @@
                                         );
                                     }
                                 }
+                                if let Some(rid) = request_id_value {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(
+                                            crate::protocol::Message::external_command_result(
+                                                rid.to_string(),
+                                                "setAcpInput".to_string(),
+                                                result.is_ok(),
+                                                result
+                                                    .as_ref()
+                                                    .err()
+                                                    .map(|_| "agent_chat_inactive".to_string()),
+                                                result.as_ref().err().cloned(),
+                                            ),
+                                        );
+                                    }
+                                }
                             }
                             ExternalCommand::SetAcpTestFixture {
                                 ref phase,
@@ -363,7 +380,8 @@
                                 ref assistant_text,
                                 ref request_id,
                             } => {
-                                let request_id = request_id.as_ref().map(|id| id.as_str());
+                                let request_id_value = request_id.clone();
+                                let request_id = request_id_value.as_deref();
                                 tracing::info!(
                                     category = "STDIN",
                                     event = "stdin_acp_command_received",
@@ -388,7 +406,7 @@
                                     }
                                     _ => Err("Agent Chat view is not active".to_string()),
                                 };
-                                match result {
+                                match &result {
                                     Ok(()) => {
                                         tracing::info!(
                                             category = "STDIN",
@@ -414,6 +432,22 @@
                                             status = "error",
                                             error = %error,
                                             "STDIN ACP command finished"
+                                        );
+                                    }
+                                }
+                                if let Some(rid) = request_id_value {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(
+                                            crate::protocol::Message::external_command_result(
+                                                rid.to_string(),
+                                                "setAcpTestFixture".to_string(),
+                                                result.is_ok(),
+                                                result
+                                                    .as_ref()
+                                                    .err()
+                                                    .map(|_| "agent_chat_inactive".to_string()),
+                                                result.as_ref().err().cloned(),
+                                            ),
                                         );
                                     }
                                 }

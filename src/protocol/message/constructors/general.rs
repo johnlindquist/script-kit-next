@@ -414,6 +414,22 @@ impl Message {
         }
     }
 
+    pub fn external_command_result(
+        request_id: String,
+        command: String,
+        ok: bool,
+        error_code: Option<String>,
+        error_message: Option<String>,
+    ) -> Self {
+        Message::ExternalCommandResult {
+            request_id,
+            command,
+            ok,
+            error_code,
+            error_message,
+        }
+    }
+
     pub fn trigger_action_result(
         request_id: String,
         action_id: String,

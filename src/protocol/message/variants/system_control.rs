@@ -75,9 +75,7 @@ macro_rules! protocol_message_variants_system_control {
     },
 
     /// Redacted acknowledgement that an Inline Agent fixture open command
-    /// executed. This intentionally exists only for the fixture verbs used by
-    /// DevTools proof; generic mutators such as `simulateKey` remain
-    /// fire-and-forget.
+    /// executed.
     #[serde(rename = "inlineAgentFixtureOpenResult")]
     InlineAgentFixtureOpenResult {
         #[serde(rename = "requestId")]
@@ -95,6 +93,22 @@ macro_rules! protocol_message_variants_system_control {
         text_length: usize,
         #[serde(rename = "instructionLength")]
         instruction_length: usize,
+        #[serde(rename = "errorCode", skip_serializing_if = "Option::is_none")]
+        error_code: Option<String>,
+        #[serde(rename = "errorMessage", skip_serializing_if = "Option::is_none")]
+        error_message: Option<String>,
+    },
+
+    /// Redacted acknowledgement that an external automation mutator command
+    /// executed. This carries command identity and outcome only; it must not
+    /// include prompt text, captured text, assistant output, or clipboard
+    /// content.
+    #[serde(rename = "externalCommandResult")]
+    ExternalCommandResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        command: String,
+        ok: bool,
         #[serde(rename = "errorCode", skip_serializing_if = "Option::is_none")]
         error_code: Option<String>,
         #[serde(rename = "errorMessage", skip_serializing_if = "Option::is_none")]

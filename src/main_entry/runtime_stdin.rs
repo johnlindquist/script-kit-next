@@ -377,7 +377,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     .rekey_main_automation_surface_after_trigger_builtin_dispatch();
                             }
 
-                            ExternalCommand::SimulateKey { ref key, ref modifiers, ref target, .. } => {
+                            ExternalCommand::SimulateKey { ref key, ref modifiers, ref target, ref request_id } => {
                                 view.dispatch_simulate_key(
                                     window,
                                     ctx,
@@ -387,6 +387,19 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         target: target.as_ref(),
                                      },
                                 );
+                                if let Some(rid) = request_id {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(
+                                            crate::protocol::Message::external_command_result(
+                                                rid.to_string(),
+                                                "simulateKey".to_string(),
+                                                true,
+                                                None,
+                                                None,
+                                            ),
+                                        );
+                                    }
+                                }
                             }
 
                             ExternalCommand::OpenNotes => {
@@ -695,7 +708,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 }
                             }
                             ExternalCommand::SetAcpInput { text, submit, ref request_id } => {
-                                let request_id = request_id.as_ref().map(|id| id.as_str());
+                                let request_id_value = request_id.clone();
+                                let request_id = request_id_value.as_deref();
                                 tracing::info!(
                                     category = "STDIN",
                                     event = "stdin_acp_command_received",
@@ -720,7 +734,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                     _ => Err("Agent Chat view is not active".to_string()),
                                 };
-                                match result {
+                                match &result {
                                     Ok(()) => {
                                         tracing::info!(
                                             category = "STDIN",
@@ -749,6 +763,22 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         );
                                     }
                                 }
+                                if let Some(rid) = request_id_value {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(
+                                            crate::protocol::Message::external_command_result(
+                                                rid.to_string(),
+                                                "setAcpInput".to_string(),
+                                                result.is_ok(),
+                                                result
+                                                    .as_ref()
+                                                    .err()
+                                                    .map(|_| "agent_chat_inactive".to_string()),
+                                                result.as_ref().err().cloned(),
+                                            ),
+                                        );
+                                    }
+                                }
                             }
                             ExternalCommand::SetAcpTestFixture {
                                 ref phase,
@@ -756,7 +786,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 ref assistant_text,
                                 ref request_id,
                             } => {
-                                let request_id = request_id.as_ref().map(|id| id.as_str());
+                                let request_id_value = request_id.clone();
+                                let request_id = request_id_value.as_deref();
                                 tracing::info!(
                                     category = "STDIN",
                                     event = "stdin_acp_command_received",
@@ -781,7 +812,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                     _ => Err("Agent Chat view is not active".to_string()),
                                 };
-                                match result {
+                                match &result {
                                     Ok(()) => {
                                         tracing::info!(
                                             category = "STDIN",
@@ -807,6 +838,22 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                             status = "error",
                                             error = %error,
                                             "STDIN ACP command finished"
+                                        );
+                                    }
+                                }
+                                if let Some(rid) = request_id_value {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(
+                                            crate::protocol::Message::external_command_result(
+                                                rid.to_string(),
+                                                "setAcpTestFixture".to_string(),
+                                                result.is_ok(),
+                                                result
+                                                    .as_ref()
+                                                    .err()
+                                                    .map(|_| "agent_chat_inactive".to_string()),
+                                                result.as_ref().err().cloned(),
+                                            ),
                                         );
                                     }
                                 }
