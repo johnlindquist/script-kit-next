@@ -227,6 +227,7 @@ struct FocusedTextAgentChatState {
     snapshot: crate::platform::accessibility::FocusedTextSnapshot,
     session_id: crate::platform::accessibility::FocusedTextSessionId,
     app_name: String,
+    app_bundle_id: Option<String>,
     char_count: usize,
     can_replace: bool,
     can_append: bool,
@@ -843,6 +844,21 @@ impl AcpChatView {
     }
 
     fn sync_acp_popup_windows_from_cached_parent(&mut self, cx: &mut Context<Self>) {
+        if self.is_setup_mode() {
+            self.mention_session = None;
+            self.model_selector_open = false;
+            self.history_menu = None;
+            crate::ai::acp::picker_popup::close_mention_popup_window(cx);
+            crate::ai::acp::model_selector_popup::close_model_selector_popup_window(cx);
+            crate::ai::acp::history_popup::close_history_popup_window(cx);
+            self.sync_profile_selector_popup_window_from_cached_parent(cx);
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_popup_sync_setup_mode_profile_only",
+            );
+            return;
+        }
+
         self.sync_mention_popup_window_from_cached_parent(cx);
         self.sync_profile_selector_popup_window_from_cached_parent(cx);
         self.sync_model_selector_popup_window_from_cached_parent(cx);
@@ -1016,6 +1032,15 @@ impl AcpChatView {
         profile_icon_name: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        if self.is_setup_mode() {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_set_profile_display_ignored_setup_mode",
+                profile_display_name,
+            );
+            return;
+        }
+
         self.live_thread().update(cx, |thread, cx| {
             thread.set_profile_display(profile_display_name.into(), profile_icon_name, cx);
         });
@@ -1053,6 +1078,23 @@ impl AcpChatView {
     }
 
     pub(crate) fn footer_snapshot(&self, cx: &App) -> AcpFooterSnapshot {
+        if self.is_setup_mode() {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_footer_snapshot_hidden_setup_mode",
+            );
+            return AcpFooterSnapshot {
+                visible: false,
+                dot_status: crate::footer_popup::FooterDotStatus::Hidden,
+                profile_display: String::new(),
+                profile_icon_name: None,
+                model_display: String::new(),
+                status_text: None,
+                profile_selector_open: self.profile_selector_open,
+                buttons: Vec::new(),
+            };
+        }
+
         let thread = self.live_thread().read(cx);
         let visible = self.main_window_footer_visible_for_thread(thread);
         AcpFooterSnapshot {
@@ -1072,6 +1114,10 @@ impl AcpChatView {
     }
 
     pub(crate) fn main_window_footer_visible(&self, cx: &App) -> bool {
+        if self.is_setup_mode() {
+            return false;
+        }
+
         let thread = self.live_thread().read(cx);
         self.main_window_footer_visible_for_thread(thread)
     }
@@ -1212,27 +1258,10 @@ impl AcpChatView {
         } else {
             Some("assistant_output_required")
         };
-        let streaming = matches!(thread.status, AcpThreadStatus::Streaming);
 
         if self.ui_variant == AcpChatUiVariant::FocusedTextMini {
-            if matches!(
-                self.focused_text_mini_phase_for_thread(thread),
-                Some(FocusedTextMiniPhase::InputOnly)
-            ) {
+            if !self.focused_text_mini_result_ready_for_thread(thread) || !has_output {
                 return Vec::new();
-            }
-            if !has_output {
-                return Vec::new();
-            }
-            if streaming {
-                return vec![AcpFooterButtonSpec {
-                    action: FooterAction::Stop,
-                    key: "Esc",
-                    label: "Stop",
-                    selected: false,
-                    enabled: true,
-                    disabled_reason: None,
-                }];
             }
             return vec![AcpFooterButtonSpec {
                 action: FooterAction::Replace,
@@ -1279,7 +1308,7 @@ impl AcpChatView {
                     key: "⌘R",
                     label: "Replace",
                     selected: false,
-                    enabled: !streaming && state.can_replace && has_output,
+                    enabled: state.can_replace && has_output,
                     disabled_reason: if !state.can_replace {
                         Some("replace_unavailable")
                     } else {
@@ -1291,7 +1320,7 @@ impl AcpChatView {
                     key: "⌘A",
                     label: "Append",
                     selected: false,
-                    enabled: !streaming && state.can_append && has_output,
+                    enabled: state.can_append && has_output,
                     disabled_reason: if !state.can_append {
                         Some("append_unavailable")
                     } else {
@@ -1303,7 +1332,7 @@ impl AcpChatView {
                     key: "⌘C",
                     label: "Copy",
                     selected: false,
-                    enabled: !streaming && state.can_copy && has_output,
+                    enabled: state.can_copy && has_output,
                     disabled_reason: if !state.can_copy {
                         Some("copy_unavailable")
                     } else {
@@ -1349,10 +1378,9 @@ impl AcpChatView {
         let Some(state) = self.focused_text.as_ref() else {
             return Vec::new();
         };
-        if matches!(
-            self.focused_text_mini_phase_for_thread(thread),
-            Some(FocusedTextMiniPhase::InputOnly)
-        ) {
+        if self.ui_variant == AcpChatUiVariant::FocusedTextMini
+            && !self.focused_text_mini_result_ready_for_thread(thread)
+        {
             return Vec::new();
         }
 
@@ -1499,11 +1527,15 @@ impl AcpChatView {
         }
     }
 
-    fn focused_text_mini_footer_visible_for_thread(&self, thread: &AcpThread) -> bool {
-        !matches!(
+    fn focused_text_mini_result_ready_for_thread(&self, thread: &AcpThread) -> bool {
+        matches!(
             self.focused_text_mini_phase_for_thread(thread),
-            Some(FocusedTextMiniPhase::InputOnly)
+            Some(FocusedTextMiniPhase::Result)
         )
+    }
+
+    fn focused_text_mini_footer_visible_for_thread(&self, thread: &AcpThread) -> bool {
+        self.focused_text_mini_result_ready_for_thread(thread)
     }
 
     fn focused_text_state_phase_for_thread(&self, thread: &AcpThread) -> &'static str {
@@ -1577,6 +1609,10 @@ impl AcpChatView {
         limit: usize,
         cx: &App,
     ) -> Vec<crate::protocol::ElementInfo> {
+        if self.is_setup_mode() || self.build_setup_protocol_snapshot(cx).is_some() {
+            return Vec::new();
+        }
+
         let thread = self.live_thread().read(cx);
         let Some(focused_text) = self.focused_text_state_snapshot(thread) else {
             return Vec::new();
@@ -1992,6 +2028,15 @@ impl AcpChatView {
     ) {
         use crate::footer_popup::FooterAction;
 
+        if self.is_setup_mode() {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_footer_action_ignored_setup_mode",
+                action = ?action,
+            );
+            return;
+        }
+
         if self.focused_text.is_some() {
             if matches!(action, FooterAction::Run) {
                 if let Err(error) = self.submit_focused_text_from_enter(cx) {
@@ -2035,6 +2080,10 @@ impl AcpChatView {
         use crate::ai::acp::thread::AcpThreadStatus;
         use crate::footer_popup::FooterDotStatus;
 
+        if self.is_setup_mode() {
+            return FooterDotStatus::Hidden;
+        }
+
         if self.context_capture_pending {
             return FooterDotStatus::Streaming;
         }
@@ -2049,6 +2098,10 @@ impl AcpChatView {
 
     pub(crate) fn footer_status_text(&self, cx: &App) -> Option<&'static str> {
         use crate::ai::acp::thread::AcpThreadStatus;
+
+        if self.is_setup_mode() {
+            return None;
+        }
 
         if self.context_capture_pending {
             return Some("Loading context...");
@@ -3114,6 +3167,7 @@ impl AcpChatView {
                 crate::ai::acp::profile_selector_popup::AgentChatProfileSelectorPopupEntry {
                     id: entry.id.clone(),
                     display: SharedString::from(entry.name),
+                    icon_name: entry.icon_name.clone(),
                     is_active: selected_id == entry.id,
                 }
             })
@@ -3770,21 +3824,25 @@ impl AcpChatView {
             self.history_menu = None;
         }
         if clear_slash_input {
-            self.live_thread().update(cx, |thread, cx| {
-                let text = thread.input.text().to_string();
-                if text.starts_with('/') {
-                    thread.input.set_text(String::new());
-                    thread.input.set_cursor(0);
-                }
-                cx.notify();
-            });
+            if !self.is_setup_mode() {
+                self.live_thread().update(cx, |thread, cx| {
+                    let text = thread.input.text().to_string();
+                    if text.starts_with('/') {
+                        thread.input.set_text(String::new());
+                        thread.input.set_cursor(0);
+                    }
+                    cx.notify();
+                });
+            }
         }
         if insert_slash_input {
-            self.live_thread().update(cx, |thread, cx| {
-                thread.input.set_text("/".to_string());
-                thread.input.set_cursor(1);
-                cx.notify();
-            });
+            if !self.is_setup_mode() {
+                self.live_thread().update(cx, |thread, cx| {
+                    thread.input.set_text("/".to_string());
+                    thread.input.set_cursor(1);
+                    cx.notify();
+                });
+            }
         }
         if let Some(reason) = log_visible_reason {
             self.log_mention_visible_range(reason);
@@ -3905,7 +3963,7 @@ impl AcpChatView {
     pub(crate) fn collect_acp_state_snapshot(&self, cx: &App) -> crate::protocol::AcpStateSnapshot {
         let setup_snapshot = self.build_setup_protocol_snapshot(cx);
 
-        if self.is_setup_mode() {
+        if self.is_setup_mode() || setup_snapshot.is_some() {
             return self.build_acp_setup_state_snapshot(setup_snapshot);
         }
 
@@ -5390,6 +5448,7 @@ impl AcpChatView {
         let session_id = snapshot.session_id.clone();
         let char_count = snapshot.metrics.chars;
         let app_name = snapshot.app.name.clone();
+        let app_bundle_id = snapshot.app.bundle_id.clone();
         let capabilities = snapshot.capabilities;
         let source_uri = format!("focused-text://{}", snapshot.session_id);
         let part = crate::ai::message_parts::AiContextPart::TextBlock {
@@ -5414,6 +5473,7 @@ impl AcpChatView {
             snapshot,
             session_id,
             app_name: app_name.clone(),
+            app_bundle_id,
             char_count,
             can_replace: capabilities.can_replace,
             can_append: capabilities.can_append,
@@ -5702,6 +5762,12 @@ impl AcpChatView {
         self.history_menu = None;
         self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.profile_selector_open = true;
+        if self.is_setup_mode() {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_profile_picker_opened_setup_mode",
+            );
+        }
         let entries = self.profile_selector_entries();
         self.profile_selector_selected_index = self.selected_profile_popup_index(&entries);
         self.sync_acp_popup_windows_from_cached_parent(cx);
@@ -5929,13 +5995,91 @@ impl AcpChatView {
 
         let thread = self.live_thread().read(cx);
         const FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY: usize = 0;
-        const FOCUSED_TEXT_MINI_SIZE_STREAMING: usize = 1;
         const FOCUSED_TEXT_MINI_SIZE_RESULT: usize = 2;
         match self.focused_text_mini_phase_for_thread(thread)? {
             FocusedTextMiniPhase::InputOnly => Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY),
-            FocusedTextMiniPhase::Streaming => Some(FOCUSED_TEXT_MINI_SIZE_STREAMING),
+            FocusedTextMiniPhase::Streaming => Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY),
             FocusedTextMiniPhase::Result => Some(FOCUSED_TEXT_MINI_SIZE_RESULT),
         }
+    }
+
+    fn render_focused_text_loading_profile_icon(
+        &self,
+        thread: &AcpThread,
+        theme: &crate::theme::Theme,
+    ) -> gpui::AnyElement {
+        let icon_path = crate::components::footer_chrome::footer_icon_path_or_profile(
+            thread
+                .profile_icon_name()
+                .unwrap_or(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN),
+        );
+        div()
+            .id("focused-text-mini-loading-icon")
+            .flex_none()
+            .size(px(22.0))
+            .rounded(px(6.0))
+            .bg(rgba((theme.colors.text.primary << 8) | 0x08))
+            .border_1()
+            .border_color(rgba((theme.colors.text.primary << 8) | 0x14))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                gpui::svg()
+                    .external_path(icon_path)
+                    .size(px(13.0))
+                    .text_color(rgb(theme.colors.accent.selected)),
+            )
+            .with_animation(
+                "focused-text-mini-loading-icon-pulse",
+                Animation::new(Duration::from_millis(1200)).repeat(),
+                |style, delta| {
+                    let sine = (delta * std::f32::consts::PI * 2.0).sin();
+                    let a = 0.5 + (0.5 * sine);
+                    style.opacity(a)
+                },
+            )
+            .into_any_element()
+    }
+
+    fn render_focused_text_app_icon_badge(
+        state: &FocusedTextAgentChatState,
+        theme: &crate::theme::Theme,
+    ) -> gpui::AnyElement {
+        let content = if let Some(icon) = state
+            .app_bundle_id
+            .as_deref()
+            .and_then(crate::app_launcher::cached_app_icon_for_bundle)
+        {
+            crate::icons::render_image(icon, 16.0, 1.0)
+        } else {
+            div()
+                .text_size(px(11.0))
+                .text_color(rgb(theme.colors.text.muted))
+                .child(
+                    state
+                        .app_name
+                        .chars()
+                        .next()
+                        .map(|ch| ch.to_uppercase().collect::<String>())
+                        .unwrap_or_else(|| "A".to_string()),
+                )
+                .into_any_element()
+        };
+
+        div()
+            .id("focused-text-context-badge")
+            .flex_none()
+            .size(px(24.0))
+            .rounded(px(6.0))
+            .bg(rgba((theme.colors.text.primary << 8) | 0x08))
+            .border_1()
+            .border_color(rgba((theme.colors.text.primary << 8) | 0x14))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(content)
+            .into_any_element()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -5957,11 +6101,11 @@ impl AcpChatView {
             .unwrap_or(FocusedTextMiniPhase::InputOnly);
         let output = Self::latest_assistant_response_text(thread);
         let streaming = matches!(phase, FocusedTextMiniPhase::Streaming);
-        let active_no_output = matches!(
+        let active_pending = matches!(
             thread.status,
             AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
-        ) && output.is_none();
-        let show_body = output.is_some();
+        ) && !self.focused_text_mini_result_ready_for_thread(thread);
+        let show_body = output.is_some() && self.focused_text_mini_result_ready_for_thread(thread);
 
         let input_row = div()
             .id("focused-text-mini-input-row")
@@ -5974,28 +6118,8 @@ impl AcpChatView {
             .when(show_body, |d| {
                 d.border_b_1().border_color(rgba(chrome.divider_rgba))
             })
-            .when(active_no_output, |d| {
-                d.child(
-                    div()
-                        .id("focused-text-mini-loading-icon")
-                        .flex_none()
-                        .size(px(18.0))
-                        .rounded(px(5.0))
-                        .bg(rgba((theme.colors.text.primary << 8) | 0x08))
-                        .border_1()
-                        .border_color(rgba((theme.colors.text.primary << 8) | 0x14))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .text_size(px(11.0))
-                        .text_color(rgb(theme.colors.text.muted))
-                        .child("●")
-                        .with_animation(
-                            "focused-text-mini-loading-icon-pulse",
-                            Animation::new(Duration::from_millis(1000)).repeat(),
-                            |style, delta| style.opacity(0.45 + (delta * 0.45)),
-                        ),
-                )
+            .when(active_pending, |d| {
+                d.child(self.render_focused_text_loading_profile_icon(thread, theme))
             })
             .child(div().id("focused-text-input").min_w_0().flex_1().child(
                 Self::render_composer_input_text(
@@ -6012,29 +6136,7 @@ impl AcpChatView {
                 ),
             ))
             .when_some(self.focused_text.as_ref(), |d, state| {
-                d.child(
-                    div()
-                        .id("focused-text-context-badge")
-                        .flex_none()
-                        .size(px(24.0))
-                        .rounded(px(6.0))
-                        .bg(rgba((theme.colors.text.primary << 8) | 0x08))
-                        .border_1()
-                        .border_color(rgba((theme.colors.text.primary << 8) | 0x14))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .text_size(px(11.0))
-                        .text_color(rgb(theme.colors.text.muted))
-                        .child(
-                            state
-                                .app_name
-                                .chars()
-                                .next()
-                                .map(|ch| ch.to_uppercase().collect::<String>())
-                                .unwrap_or_else(|| "A".to_string()),
-                        ),
-                )
+                d.child(Self::render_focused_text_app_icon_badge(state, theme))
             })
             .child(
                 div()
@@ -6063,14 +6165,18 @@ impl AcpChatView {
             .size_full()
             .flex()
             .flex_col()
-            .bg(rgb(theme.colors.background.main))
+            .when_some(
+                crate::ui_foundation::get_vibrancy_background(theme),
+                |d, bg| d.bg(bg),
+            )
             .border_1()
             .border_color(rgba(chrome.border_rgba))
             .rounded(px(10.0))
             .overflow_hidden()
             .child(input_row);
 
-        if let Some(output) = output {
+        if show_body {
+            let output = output.unwrap_or_default();
             root = root.child(
                 div()
                     .id("focused-text-preview")
@@ -8925,7 +9031,37 @@ impl AcpChatView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let key = event.keystroke.key.as_str();
+        let modifiers = &event.keystroke.modifiers;
+
         // Setup mode (initial or runtime recovery): delegate to setup card.
+        if self.is_setup_mode() && self.profile_selector_open {
+            let mut handled = true;
+            if crate::ui_foundation::is_key_up(key) {
+                self.move_profile_selector_selection(-1, cx);
+            } else if crate::ui_foundation::is_key_down(key) {
+                self.move_profile_selector_selection(1, cx);
+            } else if crate::ui_foundation::is_key_enter(key)
+                || crate::ui_foundation::is_key_tab(key)
+            {
+                self.confirm_profile_selector_selection(cx);
+            } else if crate::ui_foundation::is_key_escape(key) {
+                self.dismiss_profile_selector_popup(cx);
+            } else {
+                handled = false;
+            }
+
+            if handled {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_setup_profile_selector_key_handled",
+                    key,
+                );
+                cx.stop_propagation();
+                return;
+            }
+        }
+
         if let Some(card) = &self.setup_card {
             if card.update(cx, |view, cx| view.handle_key_down(event, cx)) {
                 cx.stop_propagation();
@@ -8962,9 +9098,6 @@ impl AcpChatView {
                 return;
             }
         }
-
-        let key = event.keystroke.key.as_str();
-        let modifiers = &event.keystroke.modifiers;
 
         if self.profile_selector_open {
             if crate::ui_foundation::is_key_up(key) {

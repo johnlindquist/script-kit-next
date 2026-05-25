@@ -4,6 +4,7 @@ const ACTION_HANDLER_SOURCE: &str = include_str!("../src/app_actions/handle_acti
 const PROFILES_SOURCE: &str = include_str!("../src/ai/agent_chat/profiles.rs");
 const ACP_LAUNCH_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const FILTER_INPUT_UPDATES_SOURCE: &str = include_str!("../src/app_impl/filter_input_updates.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 const ACP_THREAD_SOURCE: &str = include_str!("../src/ai/acp/thread.rs");
 const ACP_MOD_SOURCE: &str = include_str!("../src/ai/acp/mod.rs");
@@ -119,6 +120,12 @@ fn profile_selector_popup_has_independent_module_and_automation_id() {
     assert!(PROFILE_POPUP_SOURCE.contains("agent-chat-profile-selector-popup"));
     assert!(PROFILE_POPUP_SOURCE.contains("batch_select_profile_by_value"));
     assert!(PROFILE_POPUP_SOURCE.contains("batch_select_profile_by_semantic_id"));
+    assert!(PROFILE_POPUP_SOURCE.contains("icon_name: Option<String>"));
+    assert!(PROFILE_POPUP_SOURCE
+        .contains("render_dense_monoline_picker_row_with_leading_visual_and_accessory"));
+    assert!(PROFILE_POPUP_SOURCE.contains("footer_icon_path_or_profile"));
+    assert!(PROFILE_POPUP_SOURCE.contains("InlineDropdownColors::popup_from_theme"));
+    assert!(PROFILE_POPUP_SOURCE.contains(".external_path(icon_path)"));
 }
 
 #[test]
@@ -197,6 +204,7 @@ fn pipe_trigger_selects_agent_chat_profiles_without_context_attachment() {
     assert!(refresh_body.contains("ContextPickerTrigger::Profile"));
     assert!(refresh_body.contains("self.build_profile_picker_items(&query)"));
     assert!(ACP_VIEW_SOURCE.contains("self.select_profile_from_popup(&profile_id, cx);"));
+    assert!(ACP_VIEW_SOURCE.contains("icon_name: entry.icon_name.clone()"));
     let open_profile_body = fn_body(ACP_VIEW_SOURCE, "pub(crate) fn open_profile_picker(");
     assert!(
         open_profile_body.contains("self.profile_selector_open = true;"),
@@ -231,6 +239,26 @@ fn pipe_trigger_routes_from_main_menu_to_profile_picker() {
 }
 
 #[test]
+fn pipe_set_filter_routes_before_menu_syntax_trigger_popup() {
+    let body = fn_body(
+        FILTER_INPUT_UPDATES_SOURCE,
+        "pub(crate) fn set_filter_text_immediate(",
+    );
+    let special_route = body
+        .find("ScriptListSpecialEntry::AcpProfilePicker")
+        .expect("set_filter_text_immediate must explicitly route bare pipe");
+    let menu_popup = body
+        .find("run_menu_syntax_trigger_popup_state_machine")
+        .expect("menu syntax trigger popup state machine exists");
+    assert!(
+        special_route < menu_popup,
+        "programmatic setFilter('|') must route to Agent Chat profile picker before generic menu-syntax popup can open"
+    );
+    assert!(body.contains("open_tab_ai_acp_with_profile_picker(window, cx)"));
+    assert!(body.contains("close_menu_syntax_trigger_popup_window"));
+}
+
+#[test]
 fn devtools_profile_popup_select_is_lifecycle_sensitive() {
     assert!(DEVTOOLS_ACT_SOURCE.contains("function isPromptPopupTargetReceipt("));
     assert!(DEVTOOLS_ACT_SOURCE.contains("targetInfo(receipt)"));
@@ -252,4 +280,46 @@ fn config_profile_icon_name_flows_to_footer_marker() {
         .contains("profile_icon_name: thread.profile_icon_name().map(str::to_string)"));
     assert!(ACP_VIEW_SOURCE.contains("footer_icon_path_or_profile"));
     assert!(FOOTER_POPUP_SOURCE.contains("pub icon_token: Option<String>"));
+}
+
+#[test]
+fn setup_mode_does_not_call_live_thread_for_profile_picker_or_footer_response() {
+    let ui_window_response = fn_body(
+        include_str!("../src/app_impl/ui_window.rs"),
+        "fn latest_acp_assistant_response(",
+    );
+    assert!(
+        ui_window_response.contains("if view.is_setup_mode()")
+            && ui_window_response.contains("return None;"),
+        "setup-mode ACP footer response lookup must not dereference live_thread"
+    );
+
+    let composer_transition = fn_body(ACP_VIEW_SOURCE, "fn apply_composer_picker_transition(");
+    assert!(
+        composer_transition.contains("if !self.is_setup_mode()")
+            && composer_transition.contains("clear_slash_input")
+            && composer_transition.contains("insert_slash_input"),
+        "setup-mode picker transitions must not mutate composer input through live_thread"
+    );
+    assert!(ACP_VIEW_SOURCE.contains("event = \"acp_setup_profile_selector_key_handled\""));
+    assert!(ACP_VIEW_SOURCE.contains("event = \"acp_popup_sync_setup_mode_profile_only\""));
+    assert!(ACP_VIEW_SOURCE.contains("event = \"acp_footer_snapshot_hidden_setup_mode\""));
+    assert!(ACP_VIEW_SOURCE.contains("event = \"acp_footer_action_ignored_setup_mode\""));
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("event = \"agent_chat_profile_selection_relaunch_from_setup\"")
+    );
+    let collect_state = fn_body(ACP_VIEW_SOURCE, "pub(crate) fn collect_acp_state_snapshot(");
+    assert!(
+        collect_state.contains("self.is_setup_mode() || setup_snapshot.is_some()"),
+        "automation state collection must treat runtime setup recovery as setup before live_thread"
+    );
+    let focused_elements = fn_body(
+        ACP_VIEW_SOURCE,
+        "pub(crate) fn collect_focused_text_mini_elements(",
+    );
+    assert!(
+        focused_elements
+            .contains("self.is_setup_mode() || self.build_setup_protocol_snapshot(cx).is_some()"),
+        "focused-text automation elements must not read live_thread while setup recovery is active"
+    );
 }

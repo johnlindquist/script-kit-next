@@ -442,6 +442,9 @@ impl ScriptListApp {
         };
 
         let view = entity.read(cx);
+        if view.is_setup_mode() {
+            return None;
+        }
         let thread = view.live_thread().read(cx);
         thread
             .messages
@@ -1019,9 +1022,7 @@ impl ScriptListApp {
             "Dispatching main-window footer action"
         );
 
-        if self
-            .main_window_footer_config_with_cx(Some(&*cx))
-            .is_none()
+        if self.main_window_footer_config_with_cx(Some(&*cx)).is_none()
             || !crate::is_main_window_visible()
         {
             tracing::info!(

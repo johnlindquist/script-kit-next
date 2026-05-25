@@ -299,6 +299,7 @@ const MINI_MAIN_WINDOW_WIDTH: f32 = 480.0;
 const FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT: f32 = 64.0;
 const FOCUSED_TEXT_MINI_STREAMING_HEIGHT: f32 = 128.0;
 const FOCUSED_TEXT_MINI_RESULT_HEIGHT: f32 = 150.0;
+const FOCUSED_TEXT_MINI_RESIZE_ANIMATE: bool = true;
 /// Width for full main window (standard launcher)
 const FULL_MAIN_WINDOW_WIDTH: f32 = 750.0;
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -749,7 +750,15 @@ pub fn resize_to_view_sync(view_type: ViewType, item_count: usize) {
         );
     }
     if target_width.is_some() {
-        resize_first_window_to_size(target_height, target_width);
+        if matches!(view_type, ViewType::FocusedTextMini) {
+            resize_first_window_to_size_with_animation(
+                target_height,
+                target_width,
+                FOCUSED_TEXT_MINI_RESIZE_ANIMATE,
+            );
+        } else {
+            resize_first_window_to_size(target_height, target_width);
+        }
     } else {
         resize_first_window_to_height(target_height);
     }
@@ -862,6 +871,16 @@ pub fn get_first_window_height() -> Option<Pixels> {
 /// When width changes, the window preserves its original x position and expands/shrinks to the right.
 #[cfg(target_os = "macos")]
 pub fn resize_first_window_to_size(target_height: Pixels, target_width: Option<f32>) {
+    resize_first_window_to_size_with_animation(target_height, target_width, WINDOW_RESIZE_ANIMATE);
+}
+
+/// Resize the main window with an explicit native animation policy.
+#[cfg(target_os = "macos")]
+pub fn resize_first_window_to_size_with_animation(
+    target_height: Pixels,
+    target_width: Option<f32>,
+    animate: bool,
+) {
     let height_f64: f64 = f32::from(target_height) as f64;
     let width_f64: Option<f64> = target_width.map(|w| w as f64);
 
@@ -896,6 +915,7 @@ pub fn resize_first_window_to_size(target_height: Pixels, target_width: Option<f
             to_height = height_f64,
             from_width = current_width,
             to_width = ?width_f64,
+            animate,
             correlation_id = %correlation_id,
             "Resizing window (height+width)"
         );
@@ -916,7 +936,7 @@ pub fn resize_first_window_to_size(target_height: Pixels, target_width: Option<f
             window,
             setFrame:new_frame
             display:true
-            animate:WINDOW_RESIZE_ANIMATE
+            animate:animate
         ];
 
         logging::log(
@@ -933,6 +953,15 @@ pub fn resize_first_window_to_size(target_height: Pixels, target_width: Option<f
 /// Non-macOS stub for resize_first_window_to_size
 #[cfg(not(target_os = "macos"))]
 pub fn resize_first_window_to_size(_target_height: Pixels, _target_width: Option<f32>) {
+    logging::log("RESIZE", "Window resize is only supported on macOS");
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn resize_first_window_to_size_with_animation(
+    _target_height: Pixels,
+    _target_width: Option<f32>,
+    _animate: bool,
+) {
     logging::log("RESIZE", "Window resize is only supported on macOS");
 }
 

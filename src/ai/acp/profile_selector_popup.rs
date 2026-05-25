@@ -9,7 +9,8 @@ use gpui::{
 };
 
 use crate::components::inline_dropdown::{
-    render_dense_monoline_picker_row_with_accessory, InlineDropdown, InlineDropdownColors,
+    render_dense_monoline_picker_row_with_leading_visual_and_accessory, InlineDropdown,
+    InlineDropdownColors,
 };
 use gpui_component::{IconName, IconNamed};
 
@@ -22,6 +23,7 @@ pub(crate) const AGENT_CHAT_PROFILE_SELECTOR_POPUP_AUTOMATION_ID: &str =
 pub(crate) struct AgentChatProfileSelectorPopupEntry {
     pub(crate) id: String,
     pub(crate) display: SharedString,
+    pub(crate) icon_name: Option<String>,
     pub(crate) is_active: bool,
 }
 
@@ -327,7 +329,7 @@ impl Focusable for AgentChatProfileSelectorPopupWindow {
 impl Render for AgentChatProfileSelectorPopupWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
-        let colors = InlineDropdownColors::from_theme(&theme);
+        let colors = InlineDropdownColors::popup_from_theme(&theme);
         let fg = colors.foreground;
         let muted_fg = colors.muted_foreground;
         let accent = colors.accent;
@@ -353,7 +355,22 @@ impl Render for AgentChatProfileSelectorPopupWindow {
                                 .text_color(accent)
                                 .into_any_element()
                         });
-                        render_dense_monoline_picker_row_with_accessory(
+                        let icon_path =
+                            crate::components::footer_chrome::footer_icon_path_or_profile(
+                                entry.icon_name.as_deref().unwrap_or(
+                                    crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN,
+                                ),
+                            );
+                        let leading_visual = svg()
+                            .external_path(icon_path)
+                            .size(px(14.0))
+                            .text_color(if idx == self.snapshot.selected_index {
+                                fg
+                            } else {
+                                muted_fg
+                            })
+                            .into_any_element();
+                        render_dense_monoline_picker_row_with_leading_visual_and_accessory(
                             SharedString::from(format!("acp-profile-selector-{idx}")),
                             entry.display.clone(),
                             SharedString::default(),
@@ -363,6 +380,7 @@ impl Render for AgentChatProfileSelectorPopupWindow {
                             fg,
                             muted_fg,
                             accent,
+                            leading_visual,
                             accessory,
                         )
                         .cursor_pointer()
@@ -412,11 +430,13 @@ mod tests {
                 AgentChatProfileSelectorPopupEntry {
                     id: "a".into(),
                     display: SharedString::from("A"),
+                    icon_name: Some("sparkles".into()),
                     is_active: false,
                 },
                 AgentChatProfileSelectorPopupEntry {
                     id: "b".into(),
                     display: SharedString::from("B"),
+                    icon_name: Some("bot".into()),
                     is_active: true,
                 },
             ],
@@ -433,11 +453,13 @@ mod tests {
                 AgentChatProfileSelectorPopupEntry {
                     id: "a".into(),
                     display: SharedString::from("A"),
+                    icon_name: Some("sparkles".into()),
                     is_active: false,
                 },
                 AgentChatProfileSelectorPopupEntry {
                     id: "b".into(),
                     display: SharedString::from("B"),
+                    icon_name: Some("bot".into()),
                     is_active: true,
                 },
             ],
@@ -452,6 +474,7 @@ mod tests {
             entries: vec![AgentChatProfileSelectorPopupEntry {
                 id: "a".into(),
                 display: SharedString::from("A"),
+                icon_name: Some("sparkles".into()),
                 is_active: false,
             }],
         };

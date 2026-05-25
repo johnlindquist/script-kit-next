@@ -107,6 +107,35 @@ pub(crate) fn render_dense_monoline_picker_row_with_accessory(
 }
 
 #[allow(clippy::too_many_arguments)]
+pub(crate) fn render_dense_monoline_picker_row_with_leading_visual_and_accessory(
+    id: SharedString,
+    label: SharedString,
+    meta: SharedString,
+    label_highlight_indices: &[usize],
+    meta_highlight_indices: &[usize],
+    is_selected: bool,
+    foreground: Hsla,
+    muted_foreground: Hsla,
+    accent: Hsla,
+    leading_visual: AnyElement,
+    accessory: Option<AnyElement>,
+) -> gpui::Stateful<gpui::Div> {
+    render_dense_monoline_picker_row_full(
+        id,
+        label,
+        meta,
+        label_highlight_indices,
+        meta_highlight_indices,
+        is_selected,
+        foreground,
+        muted_foreground,
+        accent,
+        Some(leading_visual),
+        accessory,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render_dense_monoline_picker_row_with_leading_visual(
     id: SharedString,
     label: SharedString,

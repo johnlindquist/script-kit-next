@@ -187,8 +187,17 @@ impl ScriptListApp {
             backend = ?profile.backend,
         );
 
-        if let AppView::AcpChatView { entity } = &self.current_view {
-            let entity = entity.clone();
+        if let AppView::AcpChatView { entity } = self.current_view.clone() {
+            if entity.read(cx).is_setup_mode() {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "agent_chat_profile_selection_relaunch_from_setup",
+                    profile_id = %profile.id,
+                );
+                self.open_tab_ai_acp_with_entry_intent(None, cx);
+                return;
+            }
+
             entity.update(cx, |view, cx| {
                 view.set_profile_display(profile.name.clone(), profile.icon_name.clone(), cx);
             });
@@ -205,9 +214,13 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         let view_weak = view_entity.downgrade();
-        let generation = ACP_OBSERVED_STATE_SYNC_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        let generation = ACP_OBSERVED_STATE_SYNC_GENERATION
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1;
         cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(std::time::Duration::from_millis(50)).await;
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(50))
+                .await;
 
             let _ = cx.update(|cx| {
                 if ACP_OBSERVED_STATE_SYNC_GENERATION.load(std::sync::atomic::Ordering::Relaxed)

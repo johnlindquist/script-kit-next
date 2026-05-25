@@ -145,6 +145,28 @@ impl ScriptListApp {
         // `empty-clipboard-state` story.
         let handled_by_subview = self.write_filter_to_current_subview(&text);
 
+        if !handled_by_subview
+            && matches!(self.current_view, AppView::ScriptList)
+            && matches!(
+                Self::special_entry_from_script_list_filter(&text),
+                Some(crate::filter_input_core::ScriptListSpecialEntry::AcpProfilePicker)
+            )
+        {
+            self.menu_syntax_object_selector_state = Default::default();
+            self.menu_syntax_trigger_popup_state = Default::default();
+            crate::menu_syntax_object_selector_popup_window::close_menu_syntax_object_selector_popup_window(cx);
+            crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "script_list_special_entry_routed",
+                filter_text = %text,
+                entry_kind = "acp_profile_picker",
+                current_view = ?self.current_view,
+            );
+            self.open_tab_ai_acp_with_profile_picker(window, cx);
+            return;
+        }
+
         // Menu bar items are now pre-fetched by frontmost_app_tracker
         // No lazy loading needed - items are already in cache when we open
 
@@ -202,25 +224,6 @@ impl ScriptListApp {
                 current_view = ?self.current_view,
             );
             self.open_tab_ai_acp_with_mention_picker(window, cx);
-            return;
-        }
-
-        if text == "|"
-            && matches!(self.current_view, AppView::ScriptList)
-            && !handler_form_owns_input
-            && matches!(
-                Self::special_entry_from_script_list_filter(&text),
-                Some(crate::filter_input_core::ScriptListSpecialEntry::AcpProfilePicker)
-            )
-        {
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "script_list_special_entry_routed",
-                filter_text = %text,
-                entry_kind = "acp_profile_picker",
-                current_view = ?self.current_view,
-            );
-            self.open_tab_ai_acp_with_profile_picker(window, cx);
             return;
         }
 
