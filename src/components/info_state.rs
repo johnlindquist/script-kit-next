@@ -602,7 +602,7 @@ mod tests {
         assert!(copy.contains("Add a newline"));
         assert!(copy.contains("Open previous chats"));
         assert!(!copy.contains("Type / for skills"));
-        assert!(!copy.contains("⌘N new"));
-        assert!(!copy.contains("⌘W close"));
+        assert!(!copy.contains(&format!("{} new", "⌘N")));
+        assert!(!copy.contains(&format!("{} close", "⌘W")));
     }
 }
