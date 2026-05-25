@@ -840,7 +840,6 @@ fn root_supported_browser_provider_is_enabled(
     providers.contains(&provider)
 }
 
-#[allow(dead_code)]
 fn browser_tab_provider_for_bundle_id(
     bundle_id: &str,
 ) -> Option<crate::config::BrowserTabProvider> {
@@ -850,21 +849,6 @@ fn browser_tab_provider_for_bundle_id(
         "com.brave.Browser" => Some(crate::config::BrowserTabProvider::Brave),
         "com.microsoft.edgemac" => Some(crate::config::BrowserTabProvider::Edge),
         _ => None,
-    }
-}
-
-#[allow(dead_code)]
-fn root_tab_title(tab: &BrowserTabInfo) -> String {
-    let title = tab.display_title().trim();
-    if title.is_empty() {
-        let host = host_from_url(&tab.url);
-        if host.is_empty() {
-            "Untitled Tab".to_string()
-        } else {
-            host.to_string()
-        }
-    } else {
-        title.to_string()
     }
 }
 
