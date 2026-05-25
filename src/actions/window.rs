@@ -719,8 +719,9 @@ impl Render for ActionsWindow {
                 None => {
                     let matched_action_id = {
                         let dialog = this.dialog.read(cx);
-                        crate::actions::matching_action_id_for_keystroke(
+                        crate::actions::matching_filtered_action_id_for_keystroke(
                             &dialog.actions,
+                            &dialog.filtered_actions,
                             key,
                             modifiers,
                         )
