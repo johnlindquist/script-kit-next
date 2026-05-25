@@ -1,3 +1,5 @@
+//! About screen state and rendering.
+
 pub mod render;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,3 +1,5 @@
+//! Voice dictation: audio capture, transcription, and transcript delivery.
+
 #![allow(dead_code)]
 #![allow(unused_imports)]
 

@@ -1,3 +1,5 @@
+//! Multi-line text area form field component with keyboard navigation.
+
 use gpui::*;
 
 use crate::protocol::Field;

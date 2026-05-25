@@ -1,3 +1,5 @@
+//! Compiles user prompt text, context parts, and system instructions into provider-ready messages.
+
 mod model;
 #[cfg(test)]
 mod tests;

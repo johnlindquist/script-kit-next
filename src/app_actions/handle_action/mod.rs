@@ -1,3 +1,5 @@
+//! Dispatch and execution of user-triggered actions (copy, paste, reveal, terminal, AI, etc.).
+
 use crate::action_helpers::{ActionOutcomeStatus, DispatchContext, DispatchOutcome};
 use crate::ai::acp::export::build_acp_conversation_markdown_from_thread;
 
@@ -1239,6 +1241,26 @@ impl ScriptListApp {
         let AppView::AcpChatView { ref entity } = self.current_view else {
             return DispatchOutcome::not_handled();
         };
+
+        if let Some(action) = crate::ai::acp::view::FocusedTextMiniAction::from_action_id(action_id)
+        {
+            let receipt = entity.update(cx, |view, cx| {
+                view.perform_focused_text_mini_action(action, cx)
+            });
+            tracing::info!(
+                target: "script_kit::focused_text",
+                event = "focused_text_mini_action_dispatched",
+                action_id,
+                success = receipt.success,
+                changed_text = receipt.changed_text,
+                copied_to_clipboard = receipt.copied_to_clipboard,
+                before_ui_variant = %receipt.before_ui_variant,
+                after_ui_variant = %receipt.after_ui_variant,
+                output_length = receipt.output_length,
+                error_code = ?receipt.error_code,
+            );
+            return DispatchOutcome::success();
+        }
 
         if let Some(model_id) = crate::actions::acp_switch_model_id_from_action(action_id) {
             let Some(model_action) = AcpModelSwitchHandlerAction::from_action_id(action_id) else {

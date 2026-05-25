@@ -1,3 +1,5 @@
+//! Emoji data, search, and picker for the built-in emoji surface.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Emoji {
     pub emoji: &'static str,

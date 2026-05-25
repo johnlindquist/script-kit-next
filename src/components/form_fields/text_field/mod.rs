@@ -1,3 +1,5 @@
+//! Single-line text field form component with validation and selection.
+
 use gpui::*;
 
 use crate::protocol::Field;

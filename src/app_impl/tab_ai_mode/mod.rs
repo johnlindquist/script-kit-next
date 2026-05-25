@@ -1,3 +1,5 @@
+//! Tab-AI mode: ACP entry, context staging, inline agent launch, and AI-surface transitions.
+
 use super::*;
 
 mod acp_context_staging;
@@ -85,6 +87,28 @@ impl ScriptListApp {
             view.set_on_paste_response_requested(move |_window, cx| {
                 paste_response_app.update(cx, |app, cx| {
                     app.paste_latest_acp_response_to_frontmost(cx);
+                });
+            });
+
+            let focused_text_expand_app = app_entity.clone();
+            view.set_on_focused_text_expand_requested(move |cx| {
+                focused_text_expand_app.update(cx, |app, cx| {
+                    app.set_main_window_mode_state_only(
+                        MainWindowMode::Full,
+                        cx,
+                        "focused_text_expand_agent_chat",
+                    );
+                });
+            });
+
+            let focused_text_collapse_app = app_entity.clone();
+            view.set_on_focused_text_collapse_requested(move |cx| {
+                focused_text_collapse_app.update(cx, |app, cx| {
+                    app.set_main_window_mode_state_only(
+                        MainWindowMode::Mini,
+                        cx,
+                        "focused_text_collapse_agent_chat",
+                    );
                 });
             });
 

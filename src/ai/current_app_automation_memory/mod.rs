@@ -1,3 +1,5 @@
+//! Persistent memory of frontmost-app automation capabilities for AI agents.
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;

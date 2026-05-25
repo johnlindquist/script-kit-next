@@ -1,3 +1,5 @@
+//! Core ScriptListApp implementation: startup, event handling, UI wiring, and state management.
+
 #[path = "startup.rs"]
 mod startup;
 #[path = "theme_focus.rs"]

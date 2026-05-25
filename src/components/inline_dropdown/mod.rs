@@ -1,3 +1,5 @@
+//! Inline dropdown selector component for form fields.
+
 mod component;
 mod render;
 mod row;

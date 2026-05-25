@@ -1,3 +1,5 @@
+//! User favorites: persistent pinned-script list with ordering and sync.
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;

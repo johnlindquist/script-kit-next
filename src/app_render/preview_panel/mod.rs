@@ -1,3 +1,5 @@
+//! Preview panel rendering for script metadata, markdown, and choice details.
+
 pub(crate) const ALPHA_SECTION_HEADER: u32 = 0xCC;
 pub(crate) const ALPHA_MUTED_LABEL: u32 = 0x99;
 pub(crate) const ALPHA_DIVIDER_DARK: u32 = 0x60;

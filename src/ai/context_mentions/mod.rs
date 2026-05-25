@@ -1,3 +1,5 @@
+//! Parsing and resolution of @-mention context references in AI prompts.
+
 use crate::ai::message_parts::AiContextPart;
 use std::ops::Range;
 use std::path::Path;
