@@ -821,7 +821,7 @@ fn render_chat_body(spec: AcpChatWeightSpec, compact: bool) -> AnyElement {
     }
 }
 
-fn render_empty_body(spec: AcpChatWeightSpec, compact: bool) -> AnyElement {
+fn render_empty_body(_spec: AcpChatWeightSpec, compact: bool) -> AnyElement {
     let theme = get_cached_theme();
     div()
         .flex_1()
@@ -830,33 +830,8 @@ fn render_empty_body(spec: AcpChatWeightSpec, compact: bool) -> AnyElement {
         .flex_col()
         .items_center()
         .justify_center()
-        .gap(px(scale(6.0, compact)))
-        .child(
-            div()
-                .text_size(px(scale(spec.empty_hint_size + 1.0, compact)))
-                .font_weight(spec.metadata_weight)
-                .text_color(theme.colors.text.primary.with_opacity(0.58))
-                .child("Ask Agent Chat"),
-        )
-        .child(
-            div()
-                .text_size(px(scale(spec.empty_hint_size, compact)))
-                .text_color(theme.colors.text.muted.with_opacity(spec.footer_opacity))
-                .child("Type / for skills"),
-        )
-        .child(
-            div()
-                .text_size(px(scale(spec.empty_hint_size, compact)))
-                .font_weight(spec.metadata_weight)
-                .text_color(theme.colors.text.muted.with_opacity(spec.footer_opacity))
-                .child("⇧↩ for newlines"),
-        )
-        .child(
-            div()
-                .text_size(px(scale(spec.empty_hint_size, compact)))
-                .text_color(theme.colors.text.muted.with_opacity(spec.footer_opacity))
-                .child("⌘P history · ⌘K actions"),
-        )
+        .px(px(if compact { 12.0 } else { 24.0 }))
+        .child(crate::components::render_acp_empty_guidance(&theme))
         .into_any_element()
 }
 

@@ -615,6 +615,7 @@ impl ScriptListApp {
                 ScriptListSpecialEntry::FileSearchMini { .. } => "file_search_mini",
                 ScriptListSpecialEntry::AcpSlashPicker => "acp_slash_picker",
                 ScriptListSpecialEntry::AcpMentionPicker => "acp_mention_picker",
+                ScriptListSpecialEntry::AcpProfilePicker => "acp_profile_picker",
                 ScriptListSpecialEntry::QuickTerminal => "quick_terminal",
                 ScriptListSpecialEntry::ActionsHelp => "actions_help",
             };

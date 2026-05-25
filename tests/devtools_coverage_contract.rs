@@ -196,41 +196,43 @@ fn coverage_pins_dictation_states_media_and_privacy_boundaries() {
 }
 
 #[test]
-fn coverage_pins_inline_agent_pi_overlay_and_missing_runtime_proof() {
+fn coverage_pins_focused_text_mini_agent_chat_and_missing_runtime_proof() {
     for needle in [
-        "Inline Agent text-editing overlay",
-        "whole focused-field capture before overlay focus",
-        "external-app anchored compact overlay",
+        "Focused-text mini Agent Chat",
+        "whole focused-field capture before main-window focus",
+        "main-window mini Agent Chat mode",
         "prompt placeholder Edit, refine, ask...",
         "Thinking... processing state",
         "Replace, Append, Copy, and Chat actions",
-        "expanded same-session chat panel",
+        "expanded same-session Agent Chat panel",
         "Cue - N turns header",
         "Stop and Retry controls",
-        "Agent Chat Pi executor",
-        "isolated inline-agent Pi cwd",
+        "Agent Chat Pi Text profile executor",
+        "isolated focused-text Pi cwd",
         "warm Pi session prepare/acquire/dismiss-reset",
-        "no ACP inline-agent fallback",
+        "no ACP backend fallback for focused-text mini",
         "privacy-safe prompt and output logging",
-        "listAutomationWindows MiniAi target id inline-agent",
-        "inspectAutomationWindow target id inline-agent semanticSurface inlineAgent",
-        "getElements(target inline-agent) compact and expanded semantic ids",
-        "getElements(target inline-agent) redacted phase via root status_kind",
-        "getElements(target inline-agent) action disabled reasons",
-        "getState(target inline-agent) redacted phase, mode, output lengths, and action availability envelope",
-        "openInlineAgentWithMockData stdin fixture for mock focused text and deterministic mock streaming",
-        "gated openInlineAgentWithPiData stdin fixture for real warm Pi stream proof",
+        "getAcpState(target main) uiVariant focused-text-mini",
+        "getAcpState(target main) redacted focusedText char count, capabilities, output-ready, and last-apply envelope",
+        "getElements(target main) focused-text-mini-root, focused-text-input, focused-text-preview semantic ids",
+        "getElements(target main) focused-text Replace, Append, Copy, Expand, Stop, Retry semantic action ids",
+        "openFocusedTextAgentChatWithMockData stdin fixture for mock focused text and deterministic ACP output",
+        "openFocusedTextAgentChatWithPiData stdin fixture for real warm Pi Text-profile stream proof",
+        "openInlineAgentWithMockData and openInlineAgentWithPiData compatibility aliases to focused-text Agent Chat",
         "TextEdit capture/replace/append receipts",
         "native double-Command trigger delivery proof",
-        "src/inline_agent/window.rs",
-        "src/ai/inline_agent/agent_chat_adapter.rs",
+        "src/app_impl/tab_ai_mode/focused_text_entry.rs",
+        "src/ai/acp/view.rs",
+        "src/ai/acp/ui_variant.rs",
+        "src/ai/focused_text/platform_bridge.rs",
         "src/ai/agent_chat/launch.rs",
+        "src/ai/agent_chat/profiles.rs",
         "src/platform/accessibility/focused_text.rs",
-        "src/windows/automation_surface_collector.rs",
+        "src/app_layout/collect_elements.rs",
     ] {
         assert!(
             COVERAGE.contains(needle),
-            "coverage CLI must keep Inline Agent Pi coverage explicit: {needle}"
+            "coverage CLI must keep focused-text mini Agent Chat coverage explicit: {needle}"
         );
     }
 }
@@ -254,18 +256,15 @@ fn coverage_source_files_exist_for_notes_and_dictation() {
         "src/dictation/device.rs",
         "src/dictation/transcription.rs",
         "src/main_entry/runtime_tray_hotkeys.rs",
-        "src/inline_agent/window.rs",
-        "src/inline_agent/automation.rs",
-        "src/inline_agent/render_compact.rs",
-        "src/inline_agent/render_expanded.rs",
-        "src/inline_agent/layout.rs",
-        "src/inline_agent/platform_bridge.rs",
-        "src/ai/inline_agent/session.rs",
-        "src/ai/inline_agent/agent_chat_adapter.rs",
+        "src/app_impl/tab_ai_mode/focused_text_entry.rs",
+        "src/ai/acp/view.rs",
+        "src/ai/acp/ui_variant.rs",
+        "src/ai/focused_text/platform_bridge.rs",
         "src/ai/agent_chat/launch.rs",
+        "src/ai/agent_chat/profiles.rs",
         "src/platform/accessibility/focused_text.rs",
         "src/platform/accessibility/mutation.rs",
-        "src/windows/automation_surface_collector.rs",
+        "src/app_layout/collect_elements.rs",
     ] {
         assert!(
             fs::metadata(path).is_ok(),

@@ -867,6 +867,10 @@ pub struct AcpProfile {
     /// Human-readable profile name used as the menu label and selection key.
     pub name: String,
 
+    /// Bundled icon name shown in Agent Chat profile affordances.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon_name: Option<String>,
+
     /// Backend for this profile. Omitted legacy profiles remain ACP-backed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend: Option<AgentChatBackend>,

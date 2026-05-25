@@ -110,22 +110,18 @@ fn storybook_registry_exposes_non_list_state_story() {
 }
 
 #[test]
-fn non_list_state_design_command_routes_to_showcase_surface() {
+fn non_list_state_showcase_surface_remains_without_launcher_or_trigger_command() {
     assert!(
-        BUILTINS_MOD.contains("builtin/design-non-list-states"),
-        "builtins should register a stable command id for the non-list design showcase"
+        !BUILTINS_MOD.contains("builtin/design-non-list-states"),
+        "builtins should not register the pruned non-list design showcase command id"
     );
     assert!(
-        BUILTINS_MOD.contains("Design: Non-List States"),
-        "builtins should expose a searchable command label for the non-list design showcase"
+        !BUILTINS_MOD.contains("Design: Non-List States"),
+        "builtins should not expose a searchable command label for the pruned non-list design showcase"
     );
     assert!(
         BUILTINS_MOD.contains("BuiltInFeature::DesignNonListStates"),
-        "builtins command should use a dedicated non-list design feature"
-    );
-    assert!(
-        BUILTINS_MOD.contains("Open the main-window non-list state design language showcase"),
-        "builtins should describe this as a main-window showcase, not a Storybook route"
+        "the internal non-list design feature may remain for non-launcher surface code"
     );
     assert!(
         BUILTIN_EXECUTION.contains("SurfaceOpenBuiltinAction::NonListStates")
@@ -134,9 +130,9 @@ fn non_list_state_design_command_routes_to_showcase_surface() {
         "execution should route the command to a first-class main-window surface"
     );
     assert!(
-        TRIGGER_REGISTRY.contains("DesignNonListStates")
-            && TRIGGER_REGISTRY.contains("\"builtin/design-non-list-states\""),
-        "triggerBuiltin should resolve the non-list showcase command id for DevTools proof"
+        !TRIGGER_REGISTRY.contains("DesignNonListStates")
+            && !TRIGGER_REGISTRY.contains("\"builtin/design-non-list-states\""),
+        "triggerBuiltin should not resolve the pruned non-list showcase command id"
     );
     assert!(
         APP_VIEW_STATE.contains("NonListStatesView")

@@ -459,6 +459,7 @@ fn acp_state_result_round_trips() {
         context_ready: true,
         has_pending_permission: false,
         input_layout: None,
+        focused_text: None,
         setup: None,
         warnings: Vec::new(),
     };

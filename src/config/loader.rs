@@ -1028,6 +1028,7 @@ mod tests {
                     {
                         "id": "script-kit",
                         "name": "Script Kit",
+                        "iconName": "terminal",
                         "backend": "pi",
                         "piBinary": "~/dev/pi_agent_rust/target/release/pi",
                         "provider": "openai-codex",
@@ -1072,6 +1073,7 @@ mod tests {
         let profile = ai.profiles.first().expect("profile should parse");
         assert_eq!(profile.id.as_deref(), Some("script-kit"));
         assert_eq!(profile.name, "Script Kit");
+        assert_eq!(profile.icon_name.as_deref(), Some("terminal"));
         assert_eq!(profile.backend, Some(AgentChatBackend::Pi));
         assert_eq!(
             profile.pi_binary.as_deref(),

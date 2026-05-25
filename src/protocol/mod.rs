@@ -76,10 +76,10 @@ pub use semantic_id::{generate_semantic_id, generate_semantic_id_named, value_to
 #[allow(unused_imports)]
 pub use types::{
     default_suggested_hit_points, default_surface_hit_point, target_bounds_in_screenshot,
-    target_bounds_in_screenshot_with_main, AcpAcceptedItem, AcpInputLayoutMetrics,
-    AcpInputLayoutTelemetry, AcpKeyRoute, AcpKeyRouteTelemetry, AcpLastInteractionTrace,
-    AcpPickerItemAcceptedTelemetry, AcpPickerState, AcpResolvedTarget, AcpSetupActionKind,
-    AcpSetupSnapshot, AcpStateSnapshot, AcpTestProbeSnapshot, AcpWaitCondition,
+    target_bounds_in_screenshot_with_main, AcpAcceptedItem, AcpFocusedTextState,
+    AcpInputLayoutMetrics, AcpInputLayoutTelemetry, AcpKeyRoute, AcpKeyRouteTelemetry,
+    AcpLastInteractionTrace, AcpPickerItemAcceptedTelemetry, AcpPickerState, AcpResolvedTarget,
+    AcpSetupActionKind, AcpSetupSnapshot, AcpStateSnapshot, AcpTestProbeSnapshot, AcpWaitCondition,
     ActiveFooterButtonSnapshot, ActiveFooterLeftInfoSnapshot, ActiveFooterSnapshot, AiChatInfo,
     AiContextPartInput, AiMessageInfo, AutomationInspectSnapshot, AutomationSurfaceSnapshot,
     AutomationWindowBounds, AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget,

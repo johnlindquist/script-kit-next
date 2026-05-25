@@ -597,6 +597,11 @@ impl DictationOverlay {
                     self.close_overlay_from_within(window, cx);
                 }
             }
+            FooterAction::Replace
+            | FooterAction::Append
+            | FooterAction::Copy
+            | FooterAction::Expand
+            | FooterAction::Retry => {}
         }
     }
 

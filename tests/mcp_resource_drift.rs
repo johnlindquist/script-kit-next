@@ -293,7 +293,7 @@ Example outside the marker block:
 fn drift_audit_parser_ignores_json_examples() {
     let payload = "\
 <!-- drift-audit:trigger-builtin-ids:start -->
-- `builtin/design-gallery`: Opens the gallery.
+- `builtin/clipboard-history`: Opens clipboard history.
 <!-- drift-audit:trigger-builtin-ids:end -->
 
 Example:
@@ -303,7 +303,7 @@ Example:
 ";
     let entries =
         declared_payload_entries(payload, "trigger-builtin-ids", normalize_builtin_command_id);
-    let expected: BTreeSet<String> = ["builtin/design-gallery"]
+    let expected: BTreeSet<String> = ["builtin/clipboard-history"]
         .into_iter()
         .map(String::from)
         .collect();

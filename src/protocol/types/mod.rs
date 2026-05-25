@@ -26,9 +26,9 @@ pub mod simulated_gpui_event;
 mod system;
 
 pub use acp_state::{
-    AcpAcceptedItem, AcpInputLayoutMetrics, AcpInputLayoutTelemetry, AcpKeyRoute,
-    AcpKeyRouteTelemetry, AcpLastInteractionTrace, AcpPickerItemAcceptedTelemetry, AcpPickerState,
-    AcpResolvedTarget, AcpSetupActionKind, AcpSetupSnapshot, AcpStateSnapshot,
+    AcpAcceptedItem, AcpFocusedTextState, AcpInputLayoutMetrics, AcpInputLayoutTelemetry,
+    AcpKeyRoute, AcpKeyRouteTelemetry, AcpLastInteractionTrace, AcpPickerItemAcceptedTelemetry,
+    AcpPickerState, AcpResolvedTarget, AcpSetupActionKind, AcpSetupSnapshot, AcpStateSnapshot,
     AcpTestProbeSnapshot, AcpWaitCondition, ACP_STATE_SCHEMA_VERSION, ACP_TEST_PROBE_MAX_EVENTS,
     ACP_TEST_PROBE_SCHEMA_VERSION,
 };

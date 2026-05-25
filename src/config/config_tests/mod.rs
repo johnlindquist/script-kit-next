@@ -1809,7 +1809,6 @@ fn test_default_confirmation_commands_constant() {
     assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin/force-quit"));
     assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin/stop-all-processes"));
     assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin/clear-suggested"));
-    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin/test-confirmation"));
 }
 
 #[test]
@@ -1825,7 +1824,6 @@ fn test_requires_confirmation_default_commands() {
     assert!(config.requires_confirmation("builtin/force-quit"));
     assert!(config.requires_confirmation("builtin/stop-all-processes"));
     assert!(config.requires_confirmation("builtin/clear-suggested"));
-    assert!(config.requires_confirmation("builtin/test-confirmation"));
 }
 
 #[test]

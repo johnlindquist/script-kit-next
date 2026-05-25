@@ -104,7 +104,6 @@ pub const DEFAULT_CONFIRMATION_COMMANDS: &[&str] = &[
     "builtin/stop-all-processes",
     "builtin/clear-suggested",
     "builtin/sync-to-github",
-    "builtin/test-confirmation", // Dev test item
 ];
 
 /// Commands that should be excluded from frecency/suggested tracking.

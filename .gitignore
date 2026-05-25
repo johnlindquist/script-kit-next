@@ -94,3 +94,6 @@ vendor/**/.cache/
 
 # Local scratch directory
 scratch/
+
+# Generated test reports
+tests/autonomous/api-manifest.json

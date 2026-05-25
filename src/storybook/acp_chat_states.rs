@@ -346,13 +346,8 @@ fn render_empty_transcript(compact: bool) -> AnyElement {
         .flex_col()
         .items_center()
         .justify_center()
-        .gap(px(if compact { 4.0 } else { 6.0 }))
-        .text_xs()
-        .text_color(rgba((theme.colors.text.muted << 8) | 0x70))
-        .child("Type / for skills")
-        .child("⇧↩ for newlines")
-        .child("⌘P history · ⌘K actions")
-        .child("⌘N new · ⌘W close")
+        .px(px(if compact { 12.0 } else { 24.0 }))
+        .child(crate::components::render_acp_empty_guidance(&theme))
         .into_any_element()
 }
 
