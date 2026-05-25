@@ -261,14 +261,19 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_file_mention() {
+    fn test_parse_file_mention() -> Result<(), &'static str> {
         let mentions = parse_mentions("Look at @file:src/main.rs for details");
         assert_eq!(mentions.len(), 1);
-        if let ContextMentionType::File(path) = &mentions[0].kind {
-            assert_eq!(path.to_str().unwrap(), "src/main.rs");
-        } else {
-            panic!("Expected file mention");
+        match &mentions[0].kind {
+            ContextMentionType::File(path) => {
+                let path = path
+                    .to_str()
+                    .ok_or("expected parsed file path to be valid UTF-8")?;
+                assert_eq!(path, "src/main.rs");
+            }
+            _ => return Err("expected file mention"),
         }
+        Ok(())
     }
 
     #[test]
@@ -280,12 +285,12 @@ mod tests {
     }
 
     #[test]
-    fn test_incomplete_mention() {
-        let result = get_incomplete_mention("Check @clip", 11);
-        assert!(result.is_some());
-        let (pos, prefix) = result.unwrap();
+    fn test_incomplete_mention() -> Result<(), &'static str> {
+        let (pos, prefix) =
+            get_incomplete_mention("Check @clip", 11).ok_or("expected incomplete @clip mention")?;
         assert_eq!(pos, 6);
         assert_eq!(prefix, "clip");
+        Ok(())
     }
 
     #[test]

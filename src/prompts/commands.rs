@@ -282,40 +282,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_explain_command() {
-        let cmd = parse_command("/explain How does async work?");
-        assert!(cmd.is_some());
-        let cmd = cmd.unwrap();
+    fn test_parse_explain_command() -> Result<(), &'static str> {
+        let cmd = parse_command("/explain How does async work?")
+            .ok_or("expected /explain command to parse")?;
         assert_eq!(cmd.kind, SlashCommandType::Explain);
         assert_eq!(cmd.raw, "/explain");
         assert_eq!(cmd.argument, "How does async work?");
+        Ok(())
     }
 
     #[test]
-    fn test_parse_fix_command() {
-        let cmd = parse_command("/fix @clipboard");
-        assert!(cmd.is_some());
-        let cmd = cmd.unwrap();
+    fn test_parse_fix_command() -> Result<(), &'static str> {
+        let cmd = parse_command("/fix @clipboard").ok_or("expected /fix command to parse")?;
         assert_eq!(cmd.kind, SlashCommandType::Fix);
         assert_eq!(cmd.argument, "@clipboard");
+        Ok(())
     }
 
     #[test]
-    fn test_parse_command_no_argument() {
-        let cmd = parse_command("/summarize");
-        assert!(cmd.is_some());
-        let cmd = cmd.unwrap();
+    fn test_parse_command_no_argument() -> Result<(), &'static str> {
+        let cmd = parse_command("/summarize").ok_or("expected /summarize command to parse")?;
         assert_eq!(cmd.kind, SlashCommandType::Summarize);
         assert_eq!(cmd.argument, "");
+        Ok(())
     }
 
     #[test]
-    fn test_parse_command_with_whitespace() {
-        let cmd = parse_command("  /improve   some code here  ");
-        assert!(cmd.is_some());
-        let cmd = cmd.unwrap();
+    fn test_parse_command_with_whitespace() -> Result<(), &'static str> {
+        let cmd = parse_command("  /improve   some code here  ")
+            .ok_or("expected /improve command to parse")?;
         assert_eq!(cmd.kind, SlashCommandType::Improve);
         assert_eq!(cmd.argument, "some code here");
+        Ok(())
     }
 
     #[test]
@@ -326,21 +324,21 @@ mod tests {
     }
 
     #[test]
-    fn test_incomplete_command() {
-        let result = get_incomplete_command("/exp", 4);
-        assert!(result.is_some());
-        let (pos, prefix) = result.unwrap();
+    fn test_incomplete_command() -> Result<(), &'static str> {
+        let (pos, prefix) =
+            get_incomplete_command("/exp", 4).ok_or("expected incomplete /exp command")?;
         assert_eq!(pos, 0);
         assert_eq!(prefix, "exp");
+        Ok(())
     }
 
     #[test]
-    fn test_incomplete_command_with_leading_space() {
-        let result = get_incomplete_command("  /fi", 5);
-        assert!(result.is_some());
-        let (pos, prefix) = result.unwrap();
+    fn test_incomplete_command_with_leading_space() -> Result<(), &'static str> {
+        let (pos, prefix) = get_incomplete_command("  /fi", 5)
+            .ok_or("expected incomplete /fi command with leading whitespace")?;
         assert_eq!(pos, 2);
         assert_eq!(prefix, "fi");
+        Ok(())
     }
 
     #[test]
@@ -361,11 +359,12 @@ mod tests {
     }
 
     #[test]
-    fn test_transform_with_command() {
+    fn test_transform_with_command() -> Result<(), &'static str> {
         let (system, msg) = transform_with_command("/explain What is Rust?");
-        assert!(system.is_some());
-        assert!(system.unwrap().contains("explain"));
+        let system = system.ok_or("expected transformed command to include system context")?;
+        assert!(system.contains("explain"));
         assert_eq!(msg, "What is Rust?");
+        Ok(())
     }
 
     #[test]
@@ -376,16 +375,15 @@ mod tests {
     }
 
     #[test]
-    fn test_command_aliases() {
-        // Test "tests" alias for "test"
-        let cmd = parse_command("/tests write tests for this");
-        assert!(cmd.is_some());
-        assert_eq!(cmd.unwrap().kind, SlashCommandType::Test);
+    fn test_command_aliases() -> Result<(), &'static str> {
+        let cmd =
+            parse_command("/tests write tests for this").ok_or("expected /tests alias to parse")?;
+        assert_eq!(cmd.kind, SlashCommandType::Test);
 
-        // Test "summary" alias for "summarize"
-        let cmd = parse_command("/summary of the article");
-        assert!(cmd.is_some());
-        assert_eq!(cmd.unwrap().kind, SlashCommandType::Summarize);
+        let cmd =
+            parse_command("/summary of the article").ok_or("expected /summary alias to parse")?;
+        assert_eq!(cmd.kind, SlashCommandType::Summarize);
+        Ok(())
     }
 
     #[test]
