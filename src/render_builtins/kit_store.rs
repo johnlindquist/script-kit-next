@@ -429,7 +429,6 @@ impl ScriptListApp {
                 self.list_scroll_handle
                     .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
             }
-            cx.notify();
         }
     }
 
