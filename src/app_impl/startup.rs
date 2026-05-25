@@ -36,6 +36,17 @@ fn main_window_global_key_intent(
     None
 }
 
+#[inline]
+fn is_plain_platform_cmd_w(event: &gpui::KeystrokeEvent) -> bool {
+    let key = event.keystroke.key.as_str();
+    let modifiers = &event.keystroke.modifiers;
+    modifiers.platform
+        && !modifiers.shift
+        && !modifiers.alt
+        && !modifiers.control
+        && key.eq_ignore_ascii_case("w")
+}
+
 fn main_window_actions_key_intent(
     current_view: &AppView,
     event: &gpui::KeystrokeEvent,
@@ -91,6 +102,58 @@ impl ScriptListApp {
                 self.close_tab_ai_harness_terminal_with_window(window, cx);
                 self.close_and_reset_window(cx);
                 true
+            }
+        }
+    }
+
+    fn close_main_window_from_top_level_cmd_w(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::info!(
+            target: "script_kit::keyboard",
+            event = "top_level_cmd_w_close_main_window",
+            current_view = %self.app_view_name(),
+            actions_open = crate::actions::is_actions_window_open(),
+            confirm_open = crate::confirm::is_confirm_window_open(),
+            show_actions_popup = self.show_actions_popup,
+        );
+
+        if crate::confirm::is_confirm_window_open() {
+            crate::confirm::route_key_to_confirm_popup("escape", cx);
+        }
+
+        if crate::actions::is_actions_window_open() || self.show_actions_popup {
+            self.close_actions_popup_for_current_view(window, cx);
+        }
+
+        match &self.current_view {
+            AppView::QuickTerminalView { .. } => {
+                self.close_quick_terminal_main_window_state_first(cx);
+            }
+            AppView::AcpChatView { .. } => {
+                self.close_tab_ai_harness_terminal_with_window(window, cx);
+                self.close_and_reset_window(cx);
+            }
+            AppView::ThemeChooserView { .. } => {
+                if let Some(original) = self.theme_before_chooser.take() {
+                    self.restore_theme_chooser_theme(
+                        original,
+                        "theme_chooser_top_level_cmd_w_undo",
+                        cx,
+                    );
+                    let _ = crate::theme::service::persist_theme_and_sync_all_windows(
+                        cx,
+                        self.theme.as_ref(),
+                        "theme_chooser_top_level_cmd_w_undo_persist",
+                    );
+                }
+                self.clear_theme_chooser_controls();
+                self.close_and_reset_window(cx);
+            }
+            _ => {
+                self.close_and_reset_window(cx);
             }
         }
     }
