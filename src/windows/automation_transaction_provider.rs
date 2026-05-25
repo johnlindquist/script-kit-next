@@ -77,6 +77,30 @@ impl<'a> TransactionStateProvider for DetachedAcpTransactionProvider<'a> {
 
     fn select_by_value(&mut self, value: &str, submit: bool) -> Result<Option<String>> {
         let value = value.to_string();
+        if let Some(selected) =
+            crate::ai::acp::profile_selector_popup::batch_select_profile_by_value(&value, self.cx)
+        {
+            tracing::info!(
+                target: "script_kit::transaction",
+                event = "transaction_detached_acp_select_profile_by_value",
+                value = %selected,
+                submit,
+                "detached ACP select_by_value routed to profile selector"
+            );
+            return Ok(Some(selected));
+        }
+        if let Some(selected) =
+            crate::ai::acp::model_selector_popup::batch_select_model_by_value(&value, self.cx)
+        {
+            tracing::info!(
+                target: "script_kit::transaction",
+                event = "transaction_detached_acp_select_model_by_value",
+                value = %selected,
+                submit,
+                "detached ACP select_by_value routed to model selector"
+            );
+            return Ok(Some(selected));
+        }
         self.entity.update(self.cx, |view, cx| {
             let Some(ref session) = view.mention_session else {
                 return Ok(None);
@@ -104,6 +128,36 @@ impl<'a> TransactionStateProvider for DetachedAcpTransactionProvider<'a> {
     }
 
     fn select_by_semantic_id(&mut self, semantic_id: &str, submit: bool) -> Result<Option<String>> {
+        if let Some(selected) =
+            crate::ai::acp::profile_selector_popup::batch_select_profile_by_semantic_id(
+                semantic_id,
+                self.cx,
+            )
+        {
+            tracing::info!(
+                target: "script_kit::transaction",
+                event = "transaction_detached_acp_select_profile_by_semantic_id",
+                semantic_id = %selected,
+                submit,
+                "detached ACP select_by_semantic_id routed to profile selector"
+            );
+            return Ok(Some(selected));
+        }
+        if let Some(selected) =
+            crate::ai::acp::model_selector_popup::batch_select_model_by_semantic_id(
+                semantic_id,
+                self.cx,
+            )
+        {
+            tracing::info!(
+                target: "script_kit::transaction",
+                event = "transaction_detached_acp_select_model_by_semantic_id",
+                semantic_id = %selected,
+                submit,
+                "detached ACP select_by_semantic_id routed to model selector"
+            );
+            return Ok(Some(selected));
+        }
         self.select_by_value(semantic_id, submit)
     }
 

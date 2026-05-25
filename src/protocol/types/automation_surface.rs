@@ -83,6 +83,10 @@ pub struct ActiveFooterSnapshot {
 pub struct ActiveFooterLeftInfoSnapshot {
     pub dot_status: String,
     pub model_name: String,
+    pub profile_name: Option<String>,
+    pub icon_token: Option<String>,
+    pub action: Option<String>,
+    pub selected: bool,
 }
 
 /// Machine-readable footer button state for `getState.activeFooter`.

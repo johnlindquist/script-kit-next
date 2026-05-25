@@ -40,6 +40,99 @@
                                 );
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
+                            ExternalCommand::OpenInlineAgentWithMockData { text, instruction, request_id } => {
+                                logging::log("STDIN", "Opening Inline Agent mock fixture");
+                                let text_length = text.as_ref().map(|value| value.len()).unwrap_or("Hello world".len());
+                                let instruction_length = instruction
+                                    .as_ref()
+                                    .map(|value| value.trim().len())
+                                    .unwrap_or(0);
+                                let requested_submit = instruction_length > 0;
+                                let result = crate::inline_agent::open_inline_agent_mock_fixture(
+                                    ctx,
+                                    text,
+                                    instruction,
+                                );
+                                let ok = result.is_ok();
+                                if let Err(error) = result {
+                                    logging::log(
+                                        "STDIN",
+                                        &format!("Failed to open Inline Agent mock fixture: {error}"),
+                                    );
+                                }
+                                if let Some(rid) = request_id {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(
+                                            crate::protocol::Message::inline_agent_fixture_open_result(
+                                                rid.to_string(),
+                                                "mock".to_string(),
+                                                ok,
+                                                ok && requested_submit,
+                                                text_length,
+                                                instruction_length,
+                                                if ok { None } else { Some("open_failed".to_string()) },
+                                                if ok {
+                                                    None
+                                                } else {
+                                                    Some("Inline Agent mock fixture open failed".to_string())
+                                                },
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
+                            ExternalCommand::OpenInlineAgentWithPiData { text, instruction, request_id } => {
+                                logging::log("STDIN", "Opening Inline Agent real Pi fixture");
+                                let text_length = text.as_ref().map(|value| value.len()).unwrap_or("Hello world".len());
+                                let instruction_length = instruction
+                                    .as_ref()
+                                    .map(|value| value.trim().len())
+                                    .unwrap_or(0);
+                                let requested_submit = instruction_length > 0;
+                                let result = crate::inline_agent::open_inline_agent_pi_fixture(
+                                    ctx,
+                                    text,
+                                    instruction,
+                                );
+                                let ok = result.is_ok();
+                                let (error_code, error_message) = match result {
+                                    Ok(()) => (None, None),
+                                    Err(error) => {
+                                        logging::log(
+                                            "STDIN",
+                                            &format!("Failed to open Inline Agent real Pi fixture: {error}"),
+                                        );
+                                        let error_text = error.to_string();
+                                        if error_text.contains("SCRIPT_KIT_INLINE_AGENT_REAL_PI_FIXTURE") {
+                                            (
+                                                Some("gated_off".to_string()),
+                                                Some("Inline Agent real Pi fixture is gated off".to_string()),
+                                            )
+                                        } else {
+                                            (
+                                                Some("open_failed".to_string()),
+                                                Some("Inline Agent real Pi fixture open failed".to_string()),
+                                            )
+                                        }
+                                    }
+                                };
+                                if let Some(rid) = request_id {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(
+                                            crate::protocol::Message::inline_agent_fixture_open_result(
+                                                rid.to_string(),
+                                                "pi".to_string(),
+                                                ok,
+                                                ok && requested_submit,
+                                                text_length,
+                                                instruction_length,
+                                                error_code,
+                                                error_message,
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
                             ExternalCommand::ShowAiCommandBar => {
                                 logging::log("STDIN", "Showing AI command bar via stdin command");
                                 ai::show_ai_command_bar(ctx);

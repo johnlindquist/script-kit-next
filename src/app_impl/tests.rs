@@ -313,52 +313,51 @@ fn direct_prompt_acp_handoff_can_suppress_focused_part_staging() {
 
 #[test]
 fn legacy_simulate_key_tab_uses_plain_tab_acp_helper() {
-    let runtime_match = fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
-        .expect("Failed to read src/main_entry/runtime_stdin_match_simulate_key.rs");
+    let helper_source = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
+        .expect("Failed to read src/app_impl/simulate_key_dispatch.rs");
     let app_run_setup = fs::read_to_string("src/main_entry/app_run_setup.rs")
         .expect("Failed to read src/main_entry/app_run_setup.rs");
+    let runtime_match = fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
+        .expect("Failed to read src/main_entry/runtime_stdin_match_simulate_key.rs");
 
     assert!(
-        runtime_match.contains("try_route_plain_tab_to_acp_context_capture")
-            && app_run_setup.contains("try_route_plain_tab_to_acp_context_capture"),
-        "Legacy stdin simulateKey Tab path must reuse the plain Tab ACP helper in both include sources"
+        helper_source.contains("try_route_plain_tab_to_acp_context_capture"),
+        "simulateKey Tab helper must reside in unified simulate_key_dispatch.rs"
+    );
+    assert!(
+        app_run_setup.contains("dispatch_simulate_key")
+            && runtime_match.contains("dispatch_simulate_key"),
+        "Both entry points must delegate to dispatch_simulate_key helper"
     );
 }
 
 /// Contract test for `tool-table-driven-simulatekey` (AFK Run 2 Pass #4).
 ///
-/// Both simulateKey dispatchers must emit a structured `unhandled_view` code
+/// The unified simulateKey dispatcher must emit a structured `unhandled_view` code
 /// when the current view has no arm, instead of a silent debug log. This
 /// guards against a regression where a refactor drops the loud receipt and
 /// unhandled views become undetectable from outside the dispatcher.
 #[test]
 fn simulate_key_dispatchers_emit_unhandled_view_receipt() {
-    let runtime_match = fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
-        .expect("Failed to read src/main_entry/runtime_stdin_match_simulate_key.rs");
-    let app_run_setup = fs::read_to_string("src/main_entry/app_run_setup.rs")
-        .expect("Failed to read src/main_entry/app_run_setup.rs");
+    let helper_source = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
+        .expect("Failed to read src/app_impl/simulate_key_dispatch.rs");
 
-    for (label, source) in [
-        ("runtime_stdin_match_simulate_key.rs", runtime_match.as_str()),
-        ("app_run_setup.rs", app_run_setup.as_str()),
-    ] {
-        assert!(
-            source.contains("simulateKey_unhandled_view"),
-            "{label} must emit a `simulateKey_unhandled_view` tracing event from its catch-all arm"
-        );
-        assert!(
-            source.contains("code = \"unhandled_view\""),
-            "{label} must label the unhandled-view event with `code = \"unhandled_view\"` so receipts are machine-parseable"
-        );
-        assert!(
-            source.contains("SimulateKey: UNHANDLED_VIEW"),
-            "{label} must also write a plain-text `SimulateKey: UNHANDLED_VIEW` line via logging::log for operator logs"
-        );
-        assert!(
-            source.contains("view.app_view_name()"),
-            "{label} must name the unhandled view via `app_view_name()` instead of emitting an opaque discriminant"
-        );
-    }
+    assert!(
+        helper_source.contains("simulateKey_unhandled_view"),
+        "simulate_key_dispatch.rs must emit a `simulateKey_unhandled_view` tracing event from its catch-all arm"
+    );
+    assert!(
+        helper_source.contains("code = \"unhandled_view\""),
+        "simulate_key_dispatch.rs must label the unhandled-view event with `code = \"unhandled_view\"` so receipts are machine-parseable"
+    );
+    assert!(
+        helper_source.contains("SimulateKey: UNHANDLED_VIEW"),
+        "simulate_key_dispatch.rs must also write a plain-text `SimulateKey: UNHANDLED_VIEW` line via logging::log for operator logs"
+    );
+    assert!(
+        helper_source.contains("view.app_view_name()"),
+        "simulate_key_dispatch.rs must name the unhandled view via `app_view_name()` instead of emitting an opaque discriminant"
+    );
 }
 
 #[test]

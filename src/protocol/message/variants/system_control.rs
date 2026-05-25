@@ -74,6 +74,33 @@ macro_rules! protocol_message_variants_system_control {
         window_visible: bool,
     },
 
+    /// Redacted acknowledgement that an Inline Agent fixture open command
+    /// executed. This intentionally exists only for the fixture verbs used by
+    /// DevTools proof; generic mutators such as `simulateKey` remain
+    /// fire-and-forget.
+    #[serde(rename = "inlineAgentFixtureOpenResult")]
+    InlineAgentFixtureOpenResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Fixture mode: "mock" or "pi".
+        mode: String,
+        ok: bool,
+        /// True when a non-empty instruction was submitted after opening.
+        submitted: bool,
+        #[serde(rename = "targetId")]
+        target_id: String,
+        #[serde(rename = "targetKind")]
+        target_kind: String,
+        #[serde(rename = "textLength")]
+        text_length: usize,
+        #[serde(rename = "instructionLength")]
+        instruction_length: usize,
+        #[serde(rename = "errorCode", skip_serializing_if = "Option::is_none")]
+        error_code: Option<String>,
+        #[serde(rename = "errorMessage", skip_serializing_if = "Option::is_none")]
+        error_message: Option<String>,
+    },
+
     /// Open URL in default browser
     #[serde(rename = "browse")]
     Browse { url: String },

@@ -95,6 +95,7 @@ impl Message {
         is_focused: bool,
         window_visible: bool,
         mini_ai: Option<serde_json::Value>,
+        inline_agent: Option<serde_json::Value>,
         filter_input_decorations: Option<serde_json::Value>,
         menu_syntax_main_hint: Option<crate::menu_syntax::MenuSyntaxMainHintSnapshot>,
         capture_history_picker: Option<
@@ -127,6 +128,7 @@ impl Message {
             is_focused,
             window_visible,
             mini_ai,
+            inline_agent,
             filter_input_decorations,
             menu_syntax_main_hint,
             capture_history_picker,

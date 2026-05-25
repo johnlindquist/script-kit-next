@@ -159,6 +159,7 @@ impl Message {
             // File search
             | Message::FileSearch { request_id, .. }
             | Message::FileSearchResult { request_id, .. }
+            | Message::InlineAgentFixtureOpenResult { request_id, .. }
             // Screenshot capture
             | Message::CaptureScreenshot { request_id, .. }
             | Message::ScreenshotResult { request_id, .. }

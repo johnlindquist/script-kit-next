@@ -65,7 +65,8 @@ const SHOW_ANCHOR: &str = "ExternalCommand::Show { ref request_id } => {";
 const HIDE_ANCHOR: &str = "ExternalCommand::Hide { ref request_id } => {";
 const SET_FILTER_ANCHOR: &str = "ExternalCommand::SetFilter {";
 
-const SIMKEY_ANCHOR_APP: &str = "ExternalCommand::SimulateKey { ref key, ref modifiers, .. } => {";
+const SIMKEY_ANCHOR_APP: &str =
+    "ExternalCommand::SimulateKey { ref key, ref modifiers, ref target, .. } => {";
 const TRIGGER_ACTION_ANCHOR_APP: &str = "ExternalCommand::TriggerAction {";
 
 /// Slice the `ExternalCommand::Show` arm body — start at the `Show`

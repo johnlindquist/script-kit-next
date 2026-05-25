@@ -389,6 +389,31 @@ impl Message {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn inline_agent_fixture_open_result(
+        request_id: String,
+        mode: String,
+        ok: bool,
+        submitted: bool,
+        text_length: usize,
+        instruction_length: usize,
+        error_code: Option<String>,
+        error_message: Option<String>,
+    ) -> Self {
+        Message::InlineAgentFixtureOpenResult {
+            request_id,
+            mode,
+            ok,
+            submitted,
+            target_id: crate::inline_agent::INLINE_AGENT_WINDOW_AUTOMATION_ID.to_string(),
+            target_kind: "miniAi".to_string(),
+            text_length,
+            instruction_length,
+            error_code,
+            error_message,
+        }
+    }
+
     /// Create a browse message to open URL in default browser
     pub fn browse(url: String) -> Self {
         Message::Browse { url }

@@ -77,6 +77,8 @@ mod tab_ai_mode;
 mod attachment_portal;
 #[path = "trigger_builtin_dispatch.rs"]
 mod trigger_builtin_dispatch;
+#[path = "simulate_key_dispatch.rs"]
+mod simulate_key_dispatch;
 #[path = "acp_surface_transitions.rs"]
 mod acp_surface_transitions;
 #[allow(dead_code)]

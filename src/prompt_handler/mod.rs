@@ -267,6 +267,10 @@ enum GetStateTargetResolution {
         resolved: crate::protocol::AutomationWindowInfo,
         entity: gpui::Entity<crate::actions::ActionsDialog>,
     },
+    InlineAgent {
+        resolved: crate::protocol::AutomationWindowInfo,
+        state: serde_json::Value,
+    },
     UnsupportedNonMain {
         resolved: crate::protocol::AutomationWindowInfo,
     },
@@ -316,6 +320,21 @@ fn resolve_get_state_target(
                     None => GetStateTargetResolution::ResolutionFailed {
                         error: format!(
                             "getState resolved ActionsDialog target {} but no live dialog entity is available",
+                            resolved.id
+                        ),
+                    },
+                }
+            }
+            Ok(resolved)
+                if resolved.kind == crate::protocol::AutomationWindowKind::MiniAi
+                    && resolved.id
+                        == crate::inline_agent::window::INLINE_AGENT_WINDOW_AUTOMATION_ID =>
+            {
+                match crate::inline_agent::window::inline_agent_automation_state() {
+                    Some(state) => GetStateTargetResolution::InlineAgent { resolved, state },
+                    None => GetStateTargetResolution::ResolutionFailed {
+                        error: format!(
+                            "getState resolved inline-agent target {} but no live Inline Agent snapshot is available",
                             resolved.id
                         ),
                     },
@@ -3082,6 +3101,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                                 Some(notes_state),
                                 None,
                             ));
@@ -3112,7 +3132,44 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                                 Some(actions_state),
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                            ));
+                        }
+                        return;
+                    }
+                    GetStateTargetResolution::InlineAgent { resolved, state } => {
+                        if let Some(ref sender) = self.response_sender {
+                            let _ = sender.try_send(Message::state_result(
+                                request_id.clone(),
+                                "inlineAgent".to_string(),
+                                Some(format!("target:{:?}:{}", resolved.kind, resolved.id)),
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                String::new(),
+                                0,
+                                0,
+                                -1,
+                                None,
+                                resolved.focused,
+                                resolved.visible,
+                                None,
+                                Some(state),
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -3155,6 +3212,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                             ));
                         }
                         return;
@@ -3177,6 +3235,7 @@ impl ScriptListApp {
                                 None,
                                 false,
                                 false,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -4300,6 +4359,7 @@ impl ScriptListApp {
                     is_focused,
                     window_visible,
                     Some(self.mini_ai_state_snapshot(cx)),
+                    None,
                     filter_input_decorations,
                     menu_syntax_main_hint,
                     capture_history_picker,
@@ -6615,6 +6675,9 @@ impl ScriptListApp {
                                     let value = value.clone();
                                     let selected = this.update(cx, |_this, cx| {
                                         // Try each popup sub-type in priority order
+                                        if let Some(v) = crate::ai::acp::profile_selector_popup::batch_select_profile_by_value(&value, cx) {
+                                            return Some(v);
+                                        }
                                         if let Some(v) = crate::ai::acp::picker_popup::batch_select_mention_item_by_value(&value, cx) {
                                             return Some(v);
                                         }
@@ -6671,6 +6734,9 @@ impl ScriptListApp {
                             protocol::BatchCommand::SelectBySemanticId { semantic_id, submit: _ } => {
                                 let semantic_id = semantic_id.clone();
                                 let selected = this.update(cx, |_this, cx| {
+                                        if let Some(v) = crate::ai::acp::profile_selector_popup::batch_select_profile_by_semantic_id(&semantic_id, cx) {
+                                            return Some(v);
+                                        }
                                         if let Some(v) = crate::ai::acp::picker_popup::batch_select_mention_item_by_semantic_id(&semantic_id, cx) {
                                             return Some(v);
                                         }
@@ -8996,6 +9062,10 @@ impl ScriptListApp {
                 .map(|info| crate::protocol::ActiveFooterLeftInfoSnapshot {
                     dot_status: Self::active_footer_dot_status_name(info.dot_status).to_string(),
                     model_name: info.model_name.clone(),
+                    profile_name: info.profile_name.clone(),
+                    icon_token: info.icon_token.map(str::to_string),
+                    action: info.action.map(Self::footer_action_name),
+                    selected: info.selected,
                 })
         });
 

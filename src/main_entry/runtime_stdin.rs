@@ -378,740 +378,15 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             }
 
                             ExternalCommand::SimulateKey { ref key, ref modifiers, ref target, .. } => {
-                                logging::log("STDIN", &format!("Simulating key: '{}' with modifiers: {:?}", key, modifiers));
-
-                                // Parse modifiers
-                                let has_cmd = modifiers.contains(&KeyModifier::Cmd);
-                                let has_shift = modifiers.contains(&KeyModifier::Shift);
-                                let _has_alt = modifiers.contains(&KeyModifier::Alt);
-                                let _has_ctrl = modifiers.contains(&KeyModifier::Ctrl);
-
-                                // Handle key based on current view
-                                let key_lower = key.to_lowercase();
-
-                                let simulate_key_target_is_notes = target.as_ref().map_or_else(
-                                    || {
-                                        crate::windows::focused_automation_window().is_some_and(
-                                            |info| {
-                                                matches!(
-                                                    info.kind,
-                                                    crate::protocol::AutomationWindowKind::Notes
-                                                )
-                                            },
-                                        )
-                                    },
-                                    |target| {
-                                        crate::windows::resolve_automation_window(Some(target))
-                                            .is_ok_and(|info| {
-                                                matches!(
-                                                    info.kind,
-                                                    crate::protocol::AutomationWindowKind::Notes
-                                                )
-                                            })
-                                    },
+                                view.dispatch_simulate_key(
+                                    window,
+                                    ctx,
+                                    crate::simulate_key_dispatch::SimulatedKeyInput {
+                                        key,
+                                        modifiers,
+                                        target: target.as_ref(),
+                                     },
                                 );
-
-                                if has_cmd
-                                    && has_shift
-                                    && key_lower == "p"
-                                    && simulate_key_target_is_notes
-                                {
-                                    if let Some((notes_entity, notes_handle)) =
-                                        notes::get_notes_app_entity_and_handle()
-                                    {
-                                        let _ = notes_handle.update(ctx, |_root, notes_window, cx| {
-                                            notes_entity.update(cx, |app, cx| {
-                                                app.toggle_preview(notes_window, cx);
-                                            });
-                                        });
-                                        logging::log(
-                                            "STDIN",
-                                            "SimulateKey: Cmd+Shift+P - toggle Notes preview",
-                                        );
-                                        return;
-                                    }
-                                }
-                                let key_char: Option<&str> = if key.chars().count() == 1 {
-                                    Some(key.as_str())
-                                } else {
-                                    None
-                                };
-
-                                match &view.current_view {
-                                    AppView::ScriptList => {
-                                        // Main script list key handling
-                                        if has_cmd && key_lower == "k" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+K - toggle actions");
-                                            view.toggle_actions(ctx, window);
-                                        } else if view.handle_menu_syntax_form_key_input(
-                                            &key_lower,
-                                            key_char,
-                                            &gpui::Modifiers {
-                                                platform: has_cmd,
-                                                shift: has_shift,
-                                                control: _has_ctrl,
-                                                alt: _has_alt,
-                                                function: false,
-                                            },
-                                            window,
-                                            ctx,
-                                        ) {
-                                            logging::log(
-                                                "STDIN",
-                                                "SimulateKey: menu-syntax form text input",
-                                            );
-                                        } else if view.main_menu_fallback_state.is_active() {
-                                            // Handle keys in fallback mode
-                                            match key_lower.as_str() {
-                                                "tab" => {
-                                                    if view.menu_syntax_capture_form_owns_input() {
-                                                        if has_shift {
-                                                            view.focus_previous_menu_syntax_form_field(window, ctx);
-                                                        } else {
-                                                            view.focus_next_menu_syntax_form_field(window, ctx);
-                                                        }
-                                                        logging::log(
-                                                            "STDIN",
-                                                            "SimulateKey: Tab - move menu syntax form focus",
-                                                        );
-                                                    } else if !has_shift {
-                                                        let _ = view
-                                                            .try_route_plain_tab_to_acp_context_capture(
-                                                                ctx,
-                                                            );
-                                                    }
-                                                }
-                                                "up" | "arrowup" => {
-                                                    if view.main_menu_fallback_state.move_up() {
-                                                        ctx.notify();
-                                                    }
-                                                }
-                                                "down" | "arrowdown" => {
-                                                    if view.main_menu_fallback_state.move_down() {
-                                                        ctx.notify();
-                                                    }
-                                                }
-                                                "enter" => {
-                                                    logging::log("STDIN", "SimulateKey: Enter - execute fallback");
-                                                    view.execute_selected_fallback(ctx);
-                                                }
-                                                "escape" => {
-                                                    logging::log("STDIN", "SimulateKey: Escape - clear filter (exit fallback mode)");
-                                                    view.clear_filter(window, ctx);
-                                                }
-                                                _ => {
-                                                    logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in fallback mode", key_lower));
-                                                }
-                                            }
-                                        } else {
-                                            match key_lower.as_str() {
-                                                "tab" => {
-                                                    if view.menu_syntax_capture_form_owns_input() {
-                                                        if has_shift {
-                                                            view.focus_previous_menu_syntax_form_field(window, ctx);
-                                                        } else {
-                                                            view.focus_next_menu_syntax_form_field(window, ctx);
-                                                        }
-                                                        logging::log(
-                                                            "STDIN",
-                                                            "SimulateKey: Tab - move menu syntax form focus",
-                                                        );
-                                                    } else if !has_shift {
-                                                        let _ = view
-                                                            .try_route_plain_tab_to_acp_context_capture(
-                                                                ctx,
-                                                            );
-                                                    }
-                                                }
-                                                "up" | "arrowup" => {
-                                                    // Use move_selection_up to properly skip section headers
-                                                    view.move_selection_up(ctx);
-                                                }
-                                                "down" | "arrowdown" => {
-                                                    // Use move_selection_down to properly skip section headers
-                                                    view.move_selection_down(ctx);
-                                                }
-                                                "enter" => {
-                                                    if crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open() {
-                                                        if view.apply_menu_syntax_object_selector_intent(
-                                                            crate::menu_syntax::InlinePickerKeyIntent::Accept,
-                                                            window,
-                                                            ctx,
-                                                        ) {
-                                                            logging::log("STDIN", "SimulateKey: Enter - accept menu-syntax object selector");
-                                                            return;
-                                                        }
-                                                    }
-                                                    if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open() {
-                                                        if view.apply_menu_syntax_trigger_popup_intent(
-                                                            crate::menu_syntax::InlinePickerKeyIntent::Accept,
-                                                            window,
-                                                            ctx,
-                                                        ) {
-                                                            logging::log("STDIN", "SimulateKey: Enter - accept menu-syntax popup");
-                                                            return;
-                                                        }
-                                                    }
-                                                    logging::log("STDIN", "SimulateKey: Enter - execute selected");
-                                                    view.execute_selected(ctx);
-                                                }
-                                                "escape" => {
-                                                    logging::log("STDIN", "SimulateKey: Escape - clear filter or hide");
-                                                    if !view.filter_text.is_empty() {
-                                                        view.clear_filter(window, ctx);
-                                                    } else {
-                                                        // Save window position for the current display BEFORE hiding
-                                                        if let Some((x, y, width, height)) = platform::get_main_window_bounds() {
-                                                            let displays = platform::get_macos_displays();
-                                                            let bounds = window_state::PersistedWindowBounds::new(x, y, width, height);
-                                                            if let Some(display) = window_state::find_display_for_bounds(&bounds, &displays) {
-                                                                window_state::save_main_position_for_display(display, bounds);
-                                                            }
-                                                        }
-                                                        script_kit_gpui::set_main_window_visible(false);
-                                                        sync_main_automation_window(current_main_automation_bounds(), false, false);
-                                                        platform::defer_hide_main_window(ctx);
-                                                    }
-                                                }
-                                                _ => {
-                                                    logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in ScriptList", key_lower));
-                                                }
-                                            }
-                                        }
-                                    }
-                                    AppView::ScriptIssuesView { report } => {
-                                        let report = report.clone();
-                                        match key_lower.as_str() {
-                                            "enter" | "return" if !has_shift && !has_cmd => {
-                                                logging::log(
-                                                    "STDIN",
-                                                    "SimulateKey: Enter - fix script issues in Agent Chat",
-                                                );
-                                                view.fix_script_issues_in_agent(&report, ctx);
-                                            }
-                                            "escape" => {
-                                                logging::log(
-                                                    "STDIN",
-                                                    "SimulateKey: Escape - leave script issues view",
-                                                );
-                                                view.go_back_or_close(window, ctx);
-                                            }
-                                            _ => {
-                                                logging::log(
-                                                    "STDIN",
-                                                    &format!(
-                                                        "SimulateKey: Unhandled key '{}' in ScriptIssuesView",
-                                                        key_lower
-                                                    ),
-                                                );
-                                            }
-                                        }
-                                    }
-                                    AppView::PathPrompt { entity, .. } => {
-                                        // Path prompt key handling
-                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to PathPrompt", key_lower));
-                                        let entity_clone = entity.clone();
-                                        entity_clone.update(ctx, |path_prompt: &mut PathPrompt, path_cx| {
-                                            if has_cmd && key_lower == "k" {
-                                                path_prompt.toggle_actions(path_cx);
-                                            } else {
-                                                match key_lower.as_str() {
-                                                    "up" | "arrowup" => path_prompt.move_up(path_cx),
-                                                    "down" | "arrowdown" => path_prompt.move_down(path_cx),
-                                                    "enter" => path_prompt.handle_enter(path_cx),
-                                                    "escape" => path_prompt.submit_cancel(),
-                                                    "left" | "arrowleft" => path_prompt.navigate_to_parent(path_cx),
-                                                    "right" | "arrowright" => path_prompt.navigate_into_selected(path_cx),
-                                                    _ => {
-                                                        logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in PathPrompt", key_lower));
-                                                    }
-                                                }
-                                            }
-                                        });
-                                    }
-                                    AppView::ArgPrompt { id, .. } => {
-                                        // Arg prompt key handling via SimulateKey
-                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to ArgPrompt (actions_popup={})", key_lower, view.show_actions_popup));
-
-                                        // Check for Cmd+K to toggle actions popup
-                                        if has_cmd && key_lower == "k" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+K - toggle arg actions");
-                                            view.toggle_arg_actions(ctx, window);
-                                        } else if view.show_actions_popup {
-                                            // If actions popup is open, route to it
-                                            if let Some(ref dialog) = view.actions_dialog {
-                                                match key_lower.as_str() {
-                                                    "up" | "arrowup" => {
-                                                        logging::log("STDIN", "SimulateKey: Up in actions dialog");
-                                                        dialog.update(ctx, |d, cx| d.move_up(cx));
-                                                    }
-                                                    "down" | "arrowdown" => {
-                                                        logging::log("STDIN", "SimulateKey: Down in actions dialog");
-                                                        dialog.update(ctx, |d, cx| d.move_down(cx));
-                                                    }
-                                                    "enter" => {
-                                                        logging::log("STDIN", "SimulateKey: Enter in actions dialog");
-                                                        let action_id = dialog.read(ctx).get_selected_action_id();
-                                                        let should_close = dialog.read(ctx).selected_action_should_close();
-                                                        if let Some(action_id) = action_id {
-                                                            logging::log("ACTIONS", &format!("SimulateKey: Executing action: {} (close={})", action_id, should_close));
-                                                            if should_close {
-                                                                view.mark_actions_popup_closed();
-                                                                view.focused_input = FocusedInput::ArgPrompt;
-                                                                window.focus(&view.focus_handle, ctx);
-                                                            }
-                                                            view.trigger_action_by_name(&action_id, ctx);
-                                                        }
-                                                    }
-                                                    "escape" => {
-                                                        logging::log("STDIN", "SimulateKey: Escape - close actions dialog");
-                                                        view.mark_actions_popup_closed();
-                                                        view.focused_input = FocusedInput::ArgPrompt;
-                                                        window.focus(&view.focus_handle, ctx);
-                                                    }
-                                                    _ => {
-                                                        logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in ArgPrompt actions dialog", key_lower));
-                                                    }
-                                                }
-                                            }
-                                        } else {
-                                            // Normal arg prompt key handling
-                                            let prompt_id = id.clone();
-                                            match key_lower.as_str() {
-                                                "up" | "arrowup" => {
-                                                    if view.arg_selected_index > 0 {
-                                                        view.arg_selected_index -= 1;
-                                                        view.arg_list_scroll_handle.scroll_to_item(view.arg_selected_index, ScrollStrategy::Nearest);
-                                                        logging::log("STDIN", &format!("SimulateKey: Arg up, index={}", view.arg_selected_index));
-                                                    }
-                                                }
-                                                "down" | "arrowdown" => {
-                                                    let filtered = view.filtered_arg_choices();
-                                                    if view.arg_selected_index < filtered.len().saturating_sub(1) {
-                                                        view.arg_selected_index += 1;
-                                                        view.arg_list_scroll_handle.scroll_to_item(view.arg_selected_index, ScrollStrategy::Nearest);
-                                                        logging::log("STDIN", &format!("SimulateKey: Arg down, index={}", view.arg_selected_index));
-                                                    }
-                                                }
-                                                "enter" => {
-                                                    logging::log("STDIN", "SimulateKey: Enter - submit mini prompt selection");
-                                                    view.submit_arg_prompt_from_current_state(&prompt_id, ctx);
-                                                }
-                                                "escape" => {
-                                                    logging::log("STDIN", "SimulateKey: Escape - cancel script");
-                                                    view.submit_prompt_response(prompt_id, None, ctx);
-                                                    view.cancel_script_execution(ctx);
-                                                }
-                                                _ => {
-                                                    logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in ArgPrompt", key_lower));
-                                                }
-                                            }
-                                        }
-                                    }
-                                    AppView::FormPrompt { entity, id } => {
-                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to FormPrompt", key_lower));
-                                        let entity_clone = entity.clone();
-                                        let prompt_id_clone = id.clone();
-
-                                        if has_cmd
-                                            && !has_shift
-                                            && !_has_alt
-                                            && !_has_ctrl
-                                            && key_lower == "k"
-                                        {
-                                            logging::log("STDIN", "SimulateKey: Cmd+K - toggle form actions");
-                                            view.dispatch_actions_toggle_for_current_view(
-                                                window,
-                                                ctx,
-                                                "stdin_simulate_key_form_prompt",
-                                            );
-                                        } else {
-                                            match key_lower.as_str() {
-                                                "enter" | "return" if !has_shift && !has_cmd => {
-                                                    let validation_message = entity_clone.update(ctx, |form, cx| {
-                                                        form.submit_validation_message(cx)
-                                                    });
-                                                    if let Some(message) = validation_message {
-                                                        logging::log("STDIN", &format!("SimulateKey: Enter blocked FormPrompt validation: {}", message));
-                                                        view.show_hud(message, Some(3000), ctx);
-                                                    } else {
-                                                        logging::log("STDIN", "SimulateKey: Enter in FormPrompt - submitting form");
-                                                        let values = entity_clone.update(ctx, |form, cx| {
-                                                            form.collect_values(cx)
-                                                        });
-                                                        view.submit_prompt_response(
-                                                            prompt_id_clone.clone(),
-                                                            Some(values),
-                                                            ctx,
-                                                        );
-                                                    }
-                                                }
-                                                "escape" | "esc" if !has_cmd => {
-                                                    logging::log("STDIN", "SimulateKey: Escape - cancel FormPrompt");
-                                                    view.submit_prompt_response(
-                                                        prompt_id_clone.clone(),
-                                                        None,
-                                                        ctx,
-                                                    );
-                                                    view.cancel_script_execution(ctx);
-                                                }
-                                                "tab" if !has_cmd && !has_shift => {
-                                                    logging::log("STDIN", "SimulateKey: Tab - next FormPrompt field");
-                                                    entity_clone.update(ctx, |form, cx| {
-                                                        form.focus_next(window, cx);
-                                                    });
-                                                }
-                                                "tab" if !has_cmd && has_shift => {
-                                                    logging::log("STDIN", "SimulateKey: Shift+Tab - previous FormPrompt field");
-                                                    entity_clone.update(ctx, |form, cx| {
-                                                        form.focus_previous(window, cx);
-                                                    });
-                                                }
-                                                _ => {
-                                                    logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in FormPrompt", key_lower));
-                                                }
-                                            }
-                                        }
-                                    }
-                                    AppView::EditorPrompt { entity, id, .. } => {
-                                        // Editor prompt key handling for template/snippet navigation and choice popup
-                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to EditorPrompt", key_lower));
-                                        let entity_clone = entity.clone();
-                                        let prompt_id_clone = id.clone();
-
-                                        // Check if choice popup is visible
-                                        let has_choice_popup = entity_clone.update(ctx, |editor: &mut EditorPrompt, _| {
-                                            editor.is_choice_popup_visible()
-                                        });
-
-                                        if has_choice_popup {
-                                            // Handle choice popup navigation
-                                            match key_lower.as_str() {
-                                                "up" | "arrowup" => {
-                                                    logging::log("STDIN", "SimulateKey: Up in choice popup");
-                                                    entity_clone.update(ctx, |editor, cx| {
-                                                        editor.choice_popup_up_public(cx);
-                                                    });
-                                                }
-                                                "down" | "arrowdown" => {
-                                                    logging::log("STDIN", "SimulateKey: Down in choice popup");
-                                                    entity_clone.update(ctx, |editor, cx| {
-                                                        editor.choice_popup_down_public(cx);
-                                                    });
-                                                }
-                                                "enter" if !has_cmd => {
-                                                    logging::log("STDIN", "SimulateKey: Enter in choice popup - confirming");
-                                                    entity_clone.update(ctx, |editor, cx| {
-                                                        editor.choice_popup_confirm_public(window, cx);
-                                                    });
-                                                }
-                                                "escape" => {
-                                                    logging::log("STDIN", "SimulateKey: Escape in choice popup - cancelling");
-                                                    entity_clone.update(ctx, |editor, cx| {
-                                                        editor.choice_popup_cancel_public(cx);
-                                                    });
-                                                }
-                                                "tab" if !has_shift => {
-                                                    logging::log("STDIN", "SimulateKey: Tab in choice popup - confirm and next");
-                                                    entity_clone.update(ctx, |editor, cx| {
-                                                        editor.choice_popup_confirm_public(window, cx);
-                                                        editor.next_tabstop_public(window, cx);
-                                                    });
-                                                }
-                                                _ => {
-                                                    logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in choice popup", key_lower));
-                                                }
-                                            }
-                                        } else if key_lower == "tab" && !has_cmd {
-                                            // Handle Tab key for snippet navigation
-                                            entity_clone.update(ctx, |editor: &mut EditorPrompt, editor_cx| {
-                                                logging::log("STDIN", "SimulateKey: Tab in EditorPrompt - calling next_tabstop");
-                                                if editor.in_snippet_mode() {
-                                                    editor.next_tabstop_public(window, editor_cx);
-                                                } else {
-                                                    logging::log("STDIN", "SimulateKey: Tab - not in snippet mode");
-                                                }
-                                            });
-                                        } else if key_lower == "enter" && has_cmd {
-                                            // Cmd+Enter submits - get content from editor
-                                            logging::log("STDIN", "SimulateKey: Cmd+Enter in EditorPrompt - submitting");
-                                            let content = entity_clone.update(ctx, |editor, editor_cx| {
-                                                editor.content(editor_cx)
-                                            });
-                                            view.submit_prompt_response(prompt_id_clone.clone(), Some(content), ctx);
-                                        } else if key_lower == "escape" && !has_cmd {
-                                            logging::log("STDIN", "SimulateKey: Escape in EditorPrompt - cancelling");
-                                            view.submit_prompt_response(prompt_id_clone.clone(), None, ctx);
-                                            view.cancel_script_execution(ctx);
-                                        } else {
-                                            logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in EditorPrompt", key_lower));
-                                        }
-                                    }
-                                    AppView::TemplatePrompt { entity, id, .. } => {
-                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to TemplatePrompt (actions_popup={})", key_lower, view.show_actions_popup));
-                                        let entity_clone = entity.clone();
-                                        let prompt_id_clone = id.clone();
-
-                                        if has_cmd
-                                            && !has_shift
-                                            && !_has_alt
-                                            && !_has_ctrl
-                                            && key_lower == "k"
-                                        {
-                                            logging::log("STDIN", "SimulateKey: Cmd+K - toggle template actions");
-                                            view.dispatch_actions_toggle_for_current_view(
-                                                window,
-                                                ctx,
-                                                "stdin_simulate_key_template_prompt",
-                                            );
-                                        } else {
-                                            match key_lower.as_str() {
-                                                "enter" | "return" if !has_shift && !has_cmd => {
-                                                    logging::log("STDIN", "SimulateKey: Enter - submit TemplatePrompt");
-                                                    entity_clone.update(ctx, |prompt, cx| {
-                                                        prompt.submit(cx);
-                                                    });
-                                                }
-                                                "escape" | "esc" if !has_cmd => {
-                                                    logging::log("STDIN", "SimulateKey: Escape - cancel TemplatePrompt");
-                                                    view.submit_prompt_response(
-                                                        prompt_id_clone.clone(),
-                                                        None,
-                                                        ctx,
-                                                    );
-                                                    view.cancel_script_execution(ctx);
-                                                }
-                                                "tab" if !has_cmd && !has_shift => {
-                                                    logging::log("STDIN", "SimulateKey: Tab - next TemplatePrompt field");
-                                                    entity_clone.update(ctx, |prompt, cx| {
-                                                        prompt.next_input(cx);
-                                                    });
-                                                }
-                                                "tab" if !has_cmd && has_shift => {
-                                                    logging::log("STDIN", "SimulateKey: Shift+Tab - previous TemplatePrompt field");
-                                                    entity_clone.update(ctx, |prompt, cx| {
-                                                        prompt.prev_input(cx);
-                                                    });
-                                                }
-                                                "backspace" if !has_cmd && !_has_alt && !_has_ctrl => {
-                                                    logging::log("STDIN", "SimulateKey: Backspace - edit TemplatePrompt field");
-                                                    entity_clone.update(ctx, |prompt, cx| {
-                                                        prompt.handle_backspace(cx);
-                                                    });
-                                                }
-                                                _ if !has_cmd
-                                                    && !has_shift
-                                                    && !_has_alt
-                                                    && !_has_ctrl
-                                                    && key_lower.chars().count() == 1 =>
-                                                {
-                                                    let ch = key_lower.chars().next().unwrap();
-                                                    logging::log("STDIN", &format!("SimulateKey: Char '{}' - edit TemplatePrompt field", ch));
-                                                    entity_clone.update(ctx, |prompt, cx| {
-                                                        prompt.handle_char(ch, cx);
-                                                    });
-                                                }
-                                                _ => {
-                                                    logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in TemplatePrompt", key_lower));
-                                                }
-                                            }
-                                        }
-                                    }
-                                    AppView::HotkeyPrompt { entity, id, .. } => {
-                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to HotkeyPrompt", key_lower));
-                                        let entity_clone = entity.clone();
-                                        let prompt_id_clone = id.clone();
-
-                                        if ((key_lower == "escape" || key_lower == "esc")
-                                            && !has_cmd)
-                                            || (has_cmd && key_lower == "w")
-                                        {
-                                            logging::log("STDIN", "SimulateKey: cancel HotkeyPrompt");
-                                            view.submit_prompt_response(prompt_id_clone, None, ctx);
-                                            view.cancel_script_execution(ctx);
-                                        } else {
-                                            let mut modifiers = gpui::Modifiers::default();
-                                            modifiers.platform = has_cmd;
-                                            modifiers.control = _has_ctrl;
-                                            modifiers.alt = _has_alt;
-                                            modifiers.shift = has_shift;
-                                            let submitted = entity_clone.update(ctx, |prompt, cx| {
-                                                prompt.handle_key_down(&key_lower, modifiers, cx);
-                                                if prompt.shortcut.is_complete() {
-                                                    Some(prompt.shortcut.to_hotkey_info_json())
-                                                } else {
-                                                    None
-                                                }
-                                            });
-                                            if let Some(value) = submitted {
-                                                logging::log("STDIN", "SimulateKey: captured HotkeyPrompt shortcut");
-                                                view.submit_prompt_response(
-                                                    prompt_id_clone,
-                                                    Some(value),
-                                                    ctx,
-                                                );
-                                            }
-                                        }
-                                    }
-                                    AppView::ChatPrompt { entity, .. } => {
-                                        // ChatPrompt key handling
-                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to ChatPrompt (actions_popup={})", key_lower, view.show_actions_popup));
-
-                                        if has_cmd && key_lower == "k" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+K - toggle chat actions");
-                                            view.toggle_chat_actions(ctx, window);
-                                        } else if view.show_actions_popup {
-                                            // If actions popup is open, route to it
-                                            if let Some(ref dialog) = view.actions_dialog {
-                                                match key_lower.as_str() {
-                                                    "up" | "arrowup" => {
-                                                        logging::log("STDIN", "SimulateKey: Up in chat actions dialog");
-                                                        dialog.update(ctx, |d, cx| d.move_up(cx));
-                                                    }
-                                                    "down" | "arrowdown" => {
-                                                        logging::log("STDIN", "SimulateKey: Down in chat actions dialog");
-                                                        dialog.update(ctx, |d, cx| d.move_down(cx));
-                                                    }
-                                                    "enter" => {
-                                                        logging::log("STDIN", "SimulateKey: Enter in chat actions dialog");
-                                                        let action_id = dialog.read(ctx).get_selected_action_id();
-                                                        let should_close = dialog.read(ctx).selected_action_should_close();
-                                                        if let Some(action_id) = action_id {
-                                                            logging::log("ACTIONS", &format!("SimulateKey: Executing chat action: {} (close={})", action_id, should_close));
-                                                            if should_close {
-                                                                view.close_actions_popup(ActionsDialogHost::ChatPrompt, window, ctx);
-                                                            }
-                                                            view.execute_chat_action(&action_id, ctx);
-                                                        }
-                                                    }
-                                                    "escape" => {
-                                                        logging::log("STDIN", "SimulateKey: Escape - close chat actions dialog");
-                                                        view.close_actions_popup(ActionsDialogHost::ChatPrompt, window, ctx);
-                                                    }
-                                                    _ => {
-                                                        // Handle printable characters for search
-                                                        if let Some(ch) = key_lower.chars().next() {
-                                                            if ch.is_alphanumeric() || ch.is_whitespace() || ch == '-' || ch == '_' {
-                                                                logging::log("STDIN", &format!("SimulateKey: Char '{}' in chat actions dialog", ch));
-                                                                dialog.update(ctx, |d, cx| d.handle_char(ch, cx));
-                                                            } else {
-                                                                logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in ChatPrompt actions dialog", key_lower));
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                // Notify the actions window to re-render
-                                                crate::actions::notify_actions_window(ctx);
-                                            }
-                                        } else {
-                                            // Route setup keys (tab, arrows, enter, escape) to ChatPrompt
-                                            entity.update(ctx, |chat, cx| {
-                                                if chat.handle_setup_key(&key_lower, has_shift, cx) {
-                                                    logging::log("STDIN", &format!("SimulateKey: Setup handled '{}'", key_lower));
-                                                } else {
-                                                    logging::log("STDIN", &format!("SimulateKey: Unhandled '{}' in ChatPrompt", key_lower));
-                                                }
-                                            });
-                                        }
-                                    }
-                                    AppView::AcpChatView { ref entity, .. } => {
-                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to AcpChatView", key_lower));
-                                        let entity_clone = entity.clone();
-                                        if has_cmd && key_lower == "k" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+K - open actions in Agent Chat");
-                                            view.toggle_actions(ctx, window);
-                                        } else if has_cmd && key_lower == "f" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+F - toggle search in Agent Chat");
-                                            entity_clone.update(ctx, |chat, cx| {
-                                                if chat.search_state.is_some() {
-                                                    chat.search_state = None;
-                                                } else {
-                                                    chat.search_state = Some((String::new(), 0));
-                                                }
-                                                cx.notify();
-                                            });
-                                        } else if has_cmd && key_lower == "p" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+P - open history command from Agent Chat");
-                                            view.handle_action("acp_show_history".into(), window, ctx);
-                                        } else if has_cmd && key_lower == "n" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+N - new conversation in Agent Chat");
-                                            entity_clone.update(ctx, |chat, cx| {
-                                                if let Some(t) = chat.thread() {
-                                                    t.update(cx, |thread, cx| {
-                                                        thread.clear_messages(cx);
-                                                    });
-                                                }
-                                                chat.collapsed_ids.clear();
-                                                cx.notify();
-                                            });
-                                        } else if view.show_actions_popup && key_lower == "escape" {
-                                            logging::log("STDIN", "SimulateKey: Escape - close Agent Chat actions dialog");
-                                            view.close_actions_popup(ActionsDialogHost::AcpChat, window, ctx);
-                                        } else if key_lower == "escape" {
-                                            let cancelled_streaming = entity_clone.update(ctx, |chat, cx| {
-                                                chat.cancel_streaming_from_escape(cx)
-                                            });
-                                            if cancelled_streaming {
-                                                logging::log("STDIN", "SimulateKey: Escape - cancel Agent Chat streaming");
-                                            } else {
-                                                logging::log("STDIN", "SimulateKey: Escape - return to main menu from Agent Chat");
-                                                view.close_tab_ai_harness_terminal_with_window(window, ctx);
-                                            }
-                                        } else if has_cmd && key_lower == "w" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+W - close window from Agent Chat");
-                                            view.close_tab_ai_harness_terminal_with_window(window, ctx);
-                                            view.close_and_reset_window(ctx);
-                                        } else if key_lower == "enter" && !has_shift {
-                                            logging::log("STDIN", "SimulateKey: Enter - submit ACP input");
-                                            entity_clone.update(ctx, |chat, cx| {
-                                                if let Some(t) = chat.thread() { let _ = t.update(cx, |thread, cx| thread.submit_input(cx)); }
-                                            });
-                                        } else if key_lower == "backspace" {
-                                            entity_clone.update(ctx, |chat, cx| {
-                                                if let Some(t) = chat.thread() {
-                                                    t.update(cx, |thread, cx| {
-                                                        thread.input.backspace();
-                                                        cx.notify();
-                                                    });
-                                                }
-                                            });
-                                        } else if key_lower.chars().count() == 1 {
-                                            // Single character — insert at cursor
-                                            let ch = key_lower.chars().next().unwrap_or(' ');
-                                            entity_clone.update(ctx, |chat, cx| {
-                                                if let Some(t) = chat.thread() {
-                                                    t.update(cx, |thread, cx| {
-                                                        thread.input.insert_char(ch);
-                                                        cx.notify();
-                                                    });
-                                                }
-                                            });
-                                        } else {
-                                            logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in AcpChatView", key_lower));
-                                        }
-                                    }
-                                    AppView::NonListStatesView { .. } => {
-                                        if crate::ui_foundation::is_key_left(&key_lower) {
-                                            logging::log("STDIN", "SimulateKey: Left - previous non-list state");
-                                            view.move_non_list_showcase_selection(-1, ctx);
-                                        } else if crate::ui_foundation::is_key_right(&key_lower) {
-                                            logging::log("STDIN", "SimulateKey: Right - next non-list state");
-                                            view.move_non_list_showcase_selection(1, ctx);
-                                        } else if crate::ui_foundation::is_key_escape(&key_lower) {
-                                            logging::log("STDIN", "SimulateKey: Escape - return from non-list states to main menu");
-                                            view.reset_to_script_list(ctx);
-                                            view.filter_text.clear();
-                                            view.pending_filter_sync = true;
-                                            view.pending_focus = Some(FocusTarget::MainFilter);
-                                            view.update_window_size_deferred(window, ctx);
-                                        } else {
-                                            logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in NonListStatesView", key_lower));
-                                        }
-                                    }
-                                    _ => {
-                                        logging::log("STDIN", &format!("SimulateKey: View {:?} not supported for key simulation", std::mem::discriminant(&view.current_view)));
-                                    }
-                                }
                             }
 
                             ExternalCommand::OpenNotes => {
@@ -1155,6 +430,99 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     "Ignoring deprecated mini mock-data AI alias and opening Agent Chat",
                                 );
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);
+                            }
+                            ExternalCommand::OpenInlineAgentWithMockData { text, instruction, request_id } => {
+                                logging::log("STDIN", "Opening Inline Agent mock fixture");
+                                let text_length = text.as_ref().map(|value| value.len()).unwrap_or("Hello world".len());
+                                let instruction_length = instruction
+                                    .as_ref()
+                                    .map(|value| value.trim().len())
+                                    .unwrap_or(0);
+                                let requested_submit = instruction_length > 0;
+                                let result = crate::inline_agent::open_inline_agent_mock_fixture(
+                                    ctx,
+                                    text,
+                                    instruction,
+                                );
+                                let ok = result.is_ok();
+                                if let Err(error) = result {
+                                    logging::log(
+                                        "STDIN",
+                                        &format!("Failed to open Inline Agent mock fixture: {error}"),
+                                    );
+                                }
+                                if let Some(rid) = request_id {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(
+                                            crate::protocol::Message::inline_agent_fixture_open_result(
+                                                rid.to_string(),
+                                                "mock".to_string(),
+                                                ok,
+                                                ok && requested_submit,
+                                                text_length,
+                                                instruction_length,
+                                                if ok { None } else { Some("open_failed".to_string()) },
+                                                if ok {
+                                                    None
+                                                } else {
+                                                    Some("Inline Agent mock fixture open failed".to_string())
+                                                },
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
+                            ExternalCommand::OpenInlineAgentWithPiData { text, instruction, request_id } => {
+                                logging::log("STDIN", "Opening Inline Agent real Pi fixture");
+                                let text_length = text.as_ref().map(|value| value.len()).unwrap_or("Hello world".len());
+                                let instruction_length = instruction
+                                    .as_ref()
+                                    .map(|value| value.trim().len())
+                                    .unwrap_or(0);
+                                let requested_submit = instruction_length > 0;
+                                let result = crate::inline_agent::open_inline_agent_pi_fixture(
+                                    ctx,
+                                    text,
+                                    instruction,
+                                );
+                                let ok = result.is_ok();
+                                let (error_code, error_message) = match result {
+                                    Ok(()) => (None, None),
+                                    Err(error) => {
+                                        logging::log(
+                                            "STDIN",
+                                            &format!("Failed to open Inline Agent real Pi fixture: {error}"),
+                                        );
+                                        let error_text = error.to_string();
+                                        if error_text.contains("SCRIPT_KIT_INLINE_AGENT_REAL_PI_FIXTURE") {
+                                            (
+                                                Some("gated_off".to_string()),
+                                                Some("Inline Agent real Pi fixture is gated off".to_string()),
+                                            )
+                                        } else {
+                                            (
+                                                Some("open_failed".to_string()),
+                                                Some("Inline Agent real Pi fixture open failed".to_string()),
+                                            )
+                                        }
+                                    }
+                                };
+                                if let Some(rid) = request_id {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(
+                                            crate::protocol::Message::inline_agent_fixture_open_result(
+                                                rid.to_string(),
+                                                "pi".to_string(),
+                                                ok,
+                                                ok && requested_submit,
+                                                text_length,
+                                                instruction_length,
+                                                error_code,
+                                                error_message,
+                                            ),
+                                        );
+                                    }
+                                }
                             }
                             ExternalCommand::ShowAiCommandBar => {
                                 logging::log("STDIN", "Showing AI command bar via stdin command");

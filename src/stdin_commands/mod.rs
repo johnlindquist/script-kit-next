@@ -437,6 +437,25 @@ pub enum ExternalCommand {
     OpenAiWithMockData,
     /// Open the Mini Agent Chat window with mock data (for visual testing)
     OpenMiniAiWithMockData,
+    /// Open the Inline Agent overlay with fixture focused text and optional mock turn.
+    OpenInlineAgentWithMockData {
+        #[serde(default)]
+        text: Option<String>,
+        #[serde(default)]
+        instruction: Option<String>,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
+    /// Open the Inline Agent overlay with fixture focused text and optional real Pi turn.
+    /// This command is gated by SCRIPT_KIT_INLINE_AGENT_REAL_PI_FIXTURE=1.
+    OpenInlineAgentWithPiData {
+        #[serde(default)]
+        text: Option<String>,
+        #[serde(default)]
+        instruction: Option<String>,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Show the AI command bar (Cmd+K menu) for testing the refactored ActionsDialog
     ShowAiCommandBar,
     /// Simulate a key press in the AI window (for testing command bar navigation)
@@ -692,7 +711,9 @@ impl ExternalCommand {
             | Self::TriggerAction { request_id, .. }
             | Self::PushDictationResult { request_id, .. }
             | Self::GetConfigFingerprint { request_id, .. }
-            | Self::PasteClipboardIntoAcp { request_id, .. } => {
+            | Self::PasteClipboardIntoAcp { request_id, .. }
+            | Self::OpenInlineAgentWithMockData { request_id, .. }
+            | Self::OpenInlineAgentWithPiData { request_id, .. } => {
                 request_id.as_ref().map(ExternalCommandRequestId::as_str)
             }
             _ => None,
@@ -714,6 +735,8 @@ impl ExternalCommand {
             Self::OpenMiniAi => "openMiniAi",
             Self::OpenAiWithMockData => "openAiWithMockData",
             Self::OpenMiniAiWithMockData => "openMiniAiWithMockData",
+            Self::OpenInlineAgentWithMockData { .. } => "openInlineAgentWithMockData",
+            Self::OpenInlineAgentWithPiData { .. } => "openInlineAgentWithPiData",
             Self::ShowAiCommandBar => "showAiCommandBar",
             Self::SimulateAiKey { .. } => "simulateAiKey",
             Self::CaptureWindow { .. } => "captureWindow",
@@ -753,6 +776,8 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "openMiniAi",
     "openAiWithMockData",
     "openMiniAiWithMockData",
+    "openInlineAgentWithMockData",
+    "openInlineAgentWithPiData",
     "showAiCommandBar",
     "simulateAiKey",
     "captureWindow",
@@ -1182,6 +1207,11 @@ mod tests {
                 text: String::new(),
                 request_id: None,
             },
+            ExternalCommand::SetMenuSyntaxFormField {
+                field: None,
+                value: String::new(),
+                request_id: None,
+            },
             ExternalCommand::TriggerBuiltin {
                 builtin_id: None,
                 name: None,
@@ -1199,6 +1229,16 @@ mod tests {
             ExternalCommand::OpenMiniAi,
             ExternalCommand::OpenAiWithMockData,
             ExternalCommand::OpenMiniAiWithMockData,
+            ExternalCommand::OpenInlineAgentWithMockData {
+                text: None,
+                instruction: None,
+                request_id: None,
+            },
+            ExternalCommand::OpenInlineAgentWithPiData {
+                text: None,
+                instruction: None,
+                request_id: None,
+            },
             ExternalCommand::ShowAiCommandBar,
             ExternalCommand::SimulateAiKey {
                 key: String::new(),
@@ -1838,6 +1878,43 @@ mod tests {
         let json = r#"{"type": "openMiniAiWithMockData"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         assert!(matches!(cmd, ExternalCommand::OpenMiniAiWithMockData));
+        Ok(())
+    }
+
+    #[test]
+    fn test_external_command_open_inline_agent_with_mock_data_deserialization() -> anyhow::Result<()>
+    {
+        let json = r#"{"type":"openInlineAgentWithMockData","text":"Hello world","instruction":"Translate"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        match cmd {
+            ExternalCommand::OpenInlineAgentWithMockData {
+                text, instruction, ..
+            } => {
+                assert_eq!(text.as_deref(), Some("Hello world"));
+                assert_eq!(instruction.as_deref(), Some("Translate"));
+            }
+            other => panic!("Expected OpenInlineAgentWithMockData, got {other:?}"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_external_command_open_inline_agent_with_pi_data_deserialization() -> anyhow::Result<()>
+    {
+        let json = r#"{"type":"openInlineAgentWithPiData","text":"Hello world","instruction":"Translate","requestId":"ia-pi"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        match cmd {
+            ExternalCommand::OpenInlineAgentWithPiData {
+                text,
+                instruction,
+                request_id,
+            } => {
+                assert_eq!(text.as_deref(), Some("Hello world"));
+                assert_eq!(instruction.as_deref(), Some("Translate"));
+                assert_eq!(request_id.as_ref().map(|id| id.as_str()), Some("ia-pi"));
+            }
+            other => panic!("Expected OpenInlineAgentWithPiData, got {other:?}"),
+        }
         Ok(())
     }
 

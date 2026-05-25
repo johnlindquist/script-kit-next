@@ -42,6 +42,17 @@ static CONFIRM_WINDOW: OnceLock<Mutex<Option<WindowHandle<ConfirmPopupWindow>>>>
 static CONFIRM_RESULT_TX: OnceLock<Mutex<Option<async_channel::Sender<bool>>>> = OnceLock::new();
 static CONFIRM_FOCUSED_BUTTON: OnceLock<Mutex<FocusedButton>> = OnceLock::new();
 
+const CONFIRM_POPUP_AUTOMATION_ID: &str = "confirm-popup";
+
+fn unregister_confirm_popup_automation_window(reason: &'static str) {
+    tracing::info!(
+        target: "script_kit::confirm",
+        event = "confirm_popup_registry_remove",
+        reason
+    );
+    crate::windows::remove_automation_window(CONFIRM_POPUP_AUTOMATION_ID);
+}
+
 #[derive(Clone)]
 pub(crate) struct ConfirmWindowOptions {
     pub title: SharedString,
@@ -390,7 +401,7 @@ pub(crate) fn is_confirm_window_open() -> bool {
 
 pub(crate) fn close_confirm_window(cx: &mut App) {
     // Unregister from automation registry before destroying the window
-    crate::windows::remove_automation_window("confirm-popup");
+    unregister_confirm_popup_automation_window("close_confirm_window");
 
     tracing::info!(
         target: "script_kit::confirm",
@@ -1110,6 +1121,7 @@ impl ConfirmPopupWindow {
                 event = "resolve_and_close_deferred",
                 "resolve_and_close: deferred removal executing"
             );
+            unregister_confirm_popup_automation_window("resolve_and_close");
             clear_confirm_window_handle();
             window.remove_window();
         });

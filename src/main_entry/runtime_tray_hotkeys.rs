@@ -254,6 +254,7 @@
 
         // AI hotkey listener - event-driven via async_channel
         // Same pattern as Notes hotkey - works immediately on app launch
+        let app_entity_for_ai_hotkey = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "AI hotkey listener started (event-driven)");
             // Event-driven: .recv().await blocks until a message arrives
@@ -261,7 +262,7 @@
                 let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
                 logging::log("HOTKEY", "AI hotkey triggered - opening Agent Chat");
                 let _ = cx.update(|cx: &mut gpui::App| {
-                    app_entity.update(cx, |view, cx| {
+                    app_entity_for_ai_hotkey.update(cx, |view, cx| {
                         view.open_tab_ai_acp_with_entry_intent(None, cx);
                     });
                 });
@@ -271,6 +272,7 @@
 
         // Inline AI text-edit listener. Capture must run before opening the
         // overlay so the external focused field remains the AX target.
+        let app_entity_for_inline_ai = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "Inline AI hotkey listener started (event-driven)");
             while let Ok(hotkey_event) = hotkeys::inline_ai_hotkey_channel().1.recv().await {
@@ -280,12 +282,49 @@
                     "Inline AI hotkey triggered - capturing focused text field",
                 );
                 let _ = cx.update(|cx: &mut gpui::App| {
-                    if let Err(error) = crate::inline_agent::launch_inline_agent_from_focused_text(cx)
-                    {
-                        logging::log(
-                            "HOTKEY",
-                            &format!("Failed to launch inline AI text editor: {}", error),
-                        );
+                    let capture_started = std::time::Instant::now();
+                    match crate::platform::accessibility::capture_focused_text_field(
+                        crate::platform::accessibility::CaptureFocusedTextOptions::default(),
+                    ) {
+                        Ok(snapshot) => {
+                            logging::log(
+                                "HOTKEY",
+                                &format!(
+                                    "Inline AI focused text captured before Agent Chat open (chars={}, elapsed_ms={})",
+                                    snapshot.metrics.chars,
+                                    capture_started.elapsed().as_millis()
+                                ),
+                            );
+                            tracing::info!(
+                                target: "script_kit::focused_text",
+                                event = "focused_text_capture_complete_before_agent_chat",
+                                source = "runtime_tray_hotkeys",
+                                session_id = %snapshot.session_id,
+                                app_name = %snapshot.app.name,
+                                chars = snapshot.metrics.chars,
+                                elapsed_ms = capture_started.elapsed().as_millis() as u64,
+                            );
+                            app_entity_for_inline_ai.update(cx, |view, cx| {
+                                view.open_focused_text_agent_chat_from_snapshot(
+                                    snapshot,
+                                    None,
+                                    "inline_ai_hotkey",
+                                    cx,
+                                );
+                            });
+                        }
+                        Err(error) => {
+                            logging::log(
+                                "HOTKEY",
+                                &format!("Failed to capture focused text for inline AI: {}", error),
+                            );
+                            tracing::warn!(
+                                target: "script_kit::focused_text",
+                                event = "focused_text_capture_failed",
+                                source = "runtime_tray_hotkeys",
+                                error = %error,
+                            );
+                        }
                     }
                 });
             }
