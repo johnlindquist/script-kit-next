@@ -111,7 +111,7 @@ fn resize_guard_helper_delegates_to_canonical_state_sizing() {
 }
 
 #[test]
-fn expanded_main_window_is_width_only_not_taller_than_mini() {
+fn expanded_main_window_uses_standard_height_with_full_width() {
     let resize = read("src/window_resize/mod.rs");
     let height_match = source_between(
         &resize,
@@ -119,13 +119,16 @@ fn expanded_main_window_is_width_only_not_taller_than_mini() {
         "fn initial_window_height_with_layout(",
     );
     assert!(
-        height_match.contains("ViewType::ExpandedMainWindow => height_for_expanded_main_window()"),
-        "expanded list/detail surfaces must use the dedicated width-only height path"
+        height_match.contains(
+            "ViewType::ExpandedMainWindow => height_for_expanded_main_window_with_layout(layout_config)"
+        ),
+        "expanded list/detail surfaces must use the configured standard-height path"
     );
     assert!(
         resize.contains("pub(crate) fn height_for_expanded_main_window() -> Pixels")
-            && resize.contains("px(MINI_MAIN_WINDOW_MAX_HEIGHT)"),
-        "expanded list/detail height must remain locked to the mini main-window height"
+            && resize.contains("height_for_expanded_main_window_with_layout(&layout_config)")
+            && resize.contains("initial_window_height_with_layout(layout_config)"),
+        "expanded list/detail height must follow the standard main-window height"
     );
 
     let width_match = source_between(
@@ -137,7 +140,7 @@ fn expanded_main_window_is_width_only_not_taller_than_mini() {
         width_match.contains(
             "ViewType::ScriptList | ViewType::ExpandedMainWindow => Some(FULL_MAIN_WINDOW_WIDTH)"
         ),
-        "expanded list/detail surfaces may widen to full width"
+        "expanded list/detail surfaces must keep full width"
     );
 }
 
@@ -207,12 +210,12 @@ fn file_search_full_presentation_uses_expanded_main_window_sizing() {
     );
     assert!(
         resize_after_results.contains("resize_to_view_sync(ViewType::ExpandedMainWindow, 0);"),
-        "file-search result updates must preserve the expanded width-only sizing"
+        "file-search result updates must preserve expanded sizing"
     );
     assert!(
         !resize_for_presentation.contains("resize_to_view_sync(ViewType::ScriptList, 0)")
             && !resize_after_results.contains("resize_to_view_sync(ViewType::ScriptList, 0)"),
-        "Search Files must not regress to taller ScriptList sizing"
+        "Search Files must not regress to ScriptList sizing"
     );
 }
 

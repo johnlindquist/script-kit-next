@@ -4,7 +4,7 @@
 //!
 //! **Key Rules:**
 //! - ScriptList (main window with preview): FIXED at 500px, never resizes
-//! - Expanded main-window list/detail surfaces: FIXED at mini height, wider only
+//! - Expanded main-window list/detail surfaces: standard height, wider than mini
 //! - ArgPrompt with choices: Dynamic height based on choice count (capped at 500px)
 //! - ArgPrompt without choices (input only): Compact input-only height
 //! - Editor/Div/Term: Full height 700px
@@ -213,11 +213,16 @@ pub(crate) fn height_for_mini_main_window(_sizing: MiniMainWindowSizing) -> Pixe
 
 /// Height for wide list/detail surfaces entered from the mini launcher.
 ///
-/// These surfaces may widen to make room for a preview pane, but they must not
-/// grow taller than the mini main window or the shared input appears to shift
-/// during the transition.
+/// Split-preview surfaces need the same vertical reading space as the standard
+/// main window, while still using their distinct full-width sizing contract.
+fn height_for_expanded_main_window_with_layout(layout_config: &LayoutConfig) -> Pixels {
+    initial_window_height_with_layout(layout_config)
+}
+
+#[allow(dead_code)] // Kept as the named runtime helper for source-audit coverage.
 pub(crate) fn height_for_expanded_main_window() -> Pixels {
-    px(MINI_MAIN_WINDOW_MAX_HEIGHT)
+    let layout_config = runtime_layout_config();
+    height_for_expanded_main_window_with_layout(&layout_config)
 }
 
 /// Canonical size target for the main menu.
@@ -575,7 +580,7 @@ fn height_for_view_with_layout(
         // Views with preview panel - FIXED height, no dynamic resizing
         // DivPrompt also uses standard height to match main window
         ViewType::ScriptList | ViewType::DivPrompt => standard_height,
-        ViewType::ExpandedMainWindow => height_for_expanded_main_window(),
+        ViewType::ExpandedMainWindow => height_for_expanded_main_window_with_layout(layout_config),
         ViewType::MiniMainWindow | ViewType::MiniAiChat => {
             // Flat item_count fallback: assumes all items are selectable (no section headers).
             // Prefer height_for_mini_main_window(MiniMainWindowSizing) for content-aware sizing.
@@ -972,19 +977,19 @@ mod resize_tests {
     }
 
     #[test]
-    fn test_expanded_main_window_is_width_only_from_mini_height() {
+    fn test_expanded_main_window_uses_standard_height() {
         let layout = default_layout();
         assert_eq!(
             height_for_view_with_layout(ViewType::ExpandedMainWindow, 0, &layout),
-            px(MINI_MAIN_WINDOW_MAX_HEIGHT)
+            layout::STANDARD_HEIGHT
         );
         assert_eq!(
             height_for_view_with_layout(ViewType::ExpandedMainWindow, 100, &layout),
-            px(MINI_MAIN_WINDOW_MAX_HEIGHT)
+            layout::STANDARD_HEIGHT
         );
         assert_eq!(
             height_for_view_with_layout(ViewType::ExpandedMainWindow, 0, &layout),
-            height_for_view_with_layout(ViewType::MiniMainWindow, 0, &layout)
+            initial_window_height_with_layout(&layout)
         );
         assert_eq!(
             width_for_view(ViewType::ExpandedMainWindow),
@@ -1112,6 +1117,10 @@ mod resize_tests {
 
         assert_eq!(
             height_for_view_with_layout(ViewType::ScriptList, 0, &custom_layout),
+            px(540.0)
+        );
+        assert_eq!(
+            height_for_view_with_layout(ViewType::ExpandedMainWindow, 0, &custom_layout),
             px(540.0)
         );
         assert_eq!(
