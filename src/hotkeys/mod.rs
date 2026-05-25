@@ -14,6 +14,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex, OnceLock};
 use uuid::Uuid;
+
+const SCRIPT_KIT_SELFIE_COMMAND_ID: &str = "builtin/script-kit-selfie";
+const SCRIPT_KIT_SELFIE_SHORTCUT: &str = "cmd+alt+1";
 // =============================================================================
 // Unified Hotkey Routing System
 // =============================================================================
@@ -1445,6 +1448,18 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                     ),
                 );
             }
+        }
+
+        if !registered_commands.contains(SCRIPT_KIT_SELFIE_COMMAND_ID)
+            && register_script_hotkey_internal(
+                &manager_guard,
+                SCRIPT_KIT_SELFIE_COMMAND_ID,
+                SCRIPT_KIT_SELFIE_SHORTCUT,
+                "Script Kit Selfie",
+            )
+            .is_some()
+        {
+            registered_commands.insert(SCRIPT_KIT_SELFIE_COMMAND_ID.to_string());
         }
 
         // Priority 2: Register inline script/scriptlet metadata shortcuts only

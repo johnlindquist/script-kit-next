@@ -479,6 +479,7 @@ impl UtilityOpenBuiltinAction {
             builtins::UtilityCommandType::ClaudeCode => Some(Self::ClaudeCode),
             builtins::UtilityCommandType::ProcessManager => Some(Self::ProcessManager),
             builtins::UtilityCommandType::StopAllProcesses
+            | builtins::UtilityCommandType::ScriptKitSelfie
             | builtins::UtilityCommandType::DoInCurrentApp
             | builtins::UtilityCommandType::TurnThisIntoCommand
             | builtins::UtilityCommandType::CurrentAppCommands => None,
@@ -569,6 +570,50 @@ impl UtilityProcessBuiltinOutcome {
         match self {
             Self::NoRunningProcesses => 0,
             Self::StopRequested { process_count } => process_count,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UtilitySelfieBuiltinAction {
+    Selfie,
+}
+
+impl UtilitySelfieBuiltinAction {
+    fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
+        match command {
+            builtins::UtilityCommandType::ScriptKitSelfie => Some(Self::Selfie),
+            _ => None,
+        }
+    }
+
+    fn starting_hud(self, state: &str) -> String {
+        match self {
+            Self::Selfie => format!("Capturing Script Kit selfie: {state}"),
+        }
+    }
+
+    fn saved_hud(self, receipt: &crate::platform::ScriptKitSelfieReceipt) -> String {
+        match self {
+            Self::Selfie => format!("Selfie saved: {}", receipt.png_path),
+        }
+    }
+
+    fn failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Selfie => format!("Script Kit Selfie failed: {error}"),
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Selfie => "script_kit_selfie_saved",
+        }
+    }
+
+    fn failure_detail(self) -> &'static str {
+        match self {
+            Self::Selfie => "script_kit_selfie_failed",
         }
     }
 }
@@ -743,6 +788,7 @@ impl UtilityCurrentAppCommandsBuiltinAction {
 enum UtilityCommandBuiltinAction {
     Open(UtilityOpenBuiltinAction),
     Process(UtilityProcessBuiltinAction),
+    Selfie(UtilitySelfieBuiltinAction),
     Recipe(UtilityRecipeBuiltinAction),
     DoInCurrentApp(UtilityDoInCurrentAppBuiltinAction),
     CurrentAppCommands(UtilityCurrentAppCommandsBuiltinAction),
@@ -762,6 +808,10 @@ impl UtilityCommandBuiltinAction {
             builtins::UtilityCommandType::StopAllProcesses => Self::Process(
                 UtilityProcessBuiltinAction::from_command(command)
                     .expect("utility process command should map to process action"),
+            ),
+            builtins::UtilityCommandType::ScriptKitSelfie => Self::Selfie(
+                UtilitySelfieBuiltinAction::from_command(command)
+                    .expect("utility selfie command should map to selfie action"),
             ),
             builtins::UtilityCommandType::TurnThisIntoCommand => Self::Recipe(
                 UtilityRecipeBuiltinAction::from_command(command)
@@ -5080,6 +5130,9 @@ impl ScriptListApp {
             UtilityCommandBuiltinAction::Process(process_action) => {
                 self.execute_utility_process_builtin(process_action, dctx, cx)
             }
+            UtilityCommandBuiltinAction::Selfie(selfie_action) => {
+                self.execute_utility_selfie_builtin(selfie_action, dctx, cx)
+            }
             UtilityCommandBuiltinAction::Recipe(recipe_action) => self
                 .execute_utility_turn_this_into_command_builtin(
                     recipe_action,
@@ -5121,6 +5174,52 @@ impl ScriptListApp {
             self.close_and_reset_window(cx);
         }
         Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn execute_utility_selfie_builtin(
+        &mut self,
+        action: UtilitySelfieBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        let state = self.app_view_name();
+        tracing::info!(
+            category = "BUILTIN",
+            trace_id = %dctx.trace_id,
+            state = %state,
+            "script_kit_selfie.capture_requested"
+        );
+        self.show_hud(action.starting_hud(&state), Some(HUD_2200_MS), cx);
+
+        match crate::platform::capture_script_kit_selfie(&state) {
+            Ok(receipt) => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    image_path = %receipt.png_path,
+                    receipt_path = %receipt.receipt_path,
+                    "script_kit_selfie.capture_saved"
+                );
+                self.show_hud(action.saved_hud(&receipt), Some(HUD_MEDIUM_MS), cx);
+                Self::builtin_success(dctx, action.success_detail())
+            }
+            Err(error) => {
+                let message = action.failure_message(&error);
+                tracing::warn!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    error = %error,
+                    "script_kit_selfie.capture_failed"
+                );
+                self.show_error_toast(message.clone(), cx);
+                Self::builtin_error(
+                    dctx,
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    message,
+                    action.failure_detail(),
+                )
+            }
+        }
     }
 
     fn execute_utility_turn_this_into_command_builtin(

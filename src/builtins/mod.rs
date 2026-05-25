@@ -194,6 +194,8 @@ pub enum UtilityCommandType {
     ClaudeCode,
     /// Inspect actively running Script Kit child processes
     ProcessManager,
+    /// Capture a polished screenshot of Script Kit for marketing/social sharing
+    ScriptKitSelfie,
     /// Terminate all actively running Script Kit child processes
     StopAllProcesses,
     /// Interpret a free-text request against the frontmost app:
@@ -512,6 +514,7 @@ impl BuiltInEntry {
                 UtilityCommandType::QuickTerminal => "Open Quick Terminal",
                 UtilityCommandType::ClaudeCode => "Open Claude Code Terminal",
                 UtilityCommandType::ProcessManager => "Open Process Manager",
+                UtilityCommandType::ScriptKitSelfie => "Capture Selfie",
                 UtilityCommandType::StopAllProcesses => "Stop All Running Scripts",
                 UtilityCommandType::DoInCurrentApp => "Do in Current App",
                 UtilityCommandType::TurnThisIntoCommand => "Turn Into Command",
@@ -627,6 +630,7 @@ impl BuiltInEntry {
                 UtilityCommandType::QuickTerminal => "Terminal",
                 UtilityCommandType::ClaudeCode => "Claude Code",
                 UtilityCommandType::ProcessManager => "Processes",
+                UtilityCommandType::ScriptKitSelfie => "Selfie",
                 UtilityCommandType::StopAllProcesses => "Stop Scripts",
                 UtilityCommandType::DoInCurrentApp => "Current App",
                 UtilityCommandType::TurnThisIntoCommand => "Save Command",
@@ -1669,6 +1673,26 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::ProcessManager),
             "activity",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/script-kit-selfie",
+            "Script Kit Selfie",
+            "Capture Script Kit with the current desktop background and save a receipt",
+            vec![
+                "selfie",
+                "screenshot",
+                "glamor",
+                "glamour",
+                "marketing",
+                "landing",
+                "social",
+                "share",
+                "capture",
+                "promo",
+            ],
+            BuiltInFeature::UtilityCommand(UtilityCommandType::ScriptKitSelfie),
+            "camera",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(

@@ -12,6 +12,7 @@ const NO_MAIN_WINDOW_BUILTINS: &[&str] = &[
     "builtin/dictation-to-ai",
     "builtin/dictation-to-app",
     "builtin/dictation-to-notes",
+    "builtin/script-kit-selfie",
 ];
 
 fn builtin_needs_main_window_for_command_id(identifier: &str) -> bool {
@@ -39,7 +40,8 @@ fn builtin_entry_needs_main_window(entry: &builtins::BuiltInEntry) -> bool {
             | builtins::PermissionCommandType::AllowScreenRecording => false,
         },
         builtins::BuiltInFeature::UtilityCommand(command) => match command {
-            builtins::UtilityCommandType::StopAllProcesses => false,
+            builtins::UtilityCommandType::StopAllProcesses
+            | builtins::UtilityCommandType::ScriptKitSelfie => false,
             builtins::UtilityCommandType::MiniMainWindow
             | builtins::UtilityCommandType::ScratchPad
             | builtins::UtilityCommandType::QuickTerminal
