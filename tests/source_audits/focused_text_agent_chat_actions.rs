@@ -161,7 +161,7 @@ fn focused_text_input_only_omits_semantic_actions_and_preview() {
         "\"focused-text-context-badge\"",
         "\"focused-text-mini-close\"",
         "\"inputOnly\"",
-        "if !input_only",
+        "if result_ready",
     ] {
         assert!(
             ACP_VIEW.contains(required),

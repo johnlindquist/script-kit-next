@@ -1617,7 +1617,7 @@ impl AcpChatView {
         let Some(focused_text) = self.focused_text_state_snapshot(thread) else {
             return Vec::new();
         };
-        let input_only = focused_text.phase == "inputOnly";
+        let result_ready = focused_text.phase == "result";
 
         let mut elements = vec![
             crate::protocol::ElementInfo {
@@ -1689,7 +1689,7 @@ impl AcpChatView {
             },
         ];
 
-        if !input_only {
+        if result_ready {
             elements.push(crate::protocol::ElementInfo {
                 semantic_id: "focused-text-preview".to_string(),
                 element_type: crate::protocol::ElementType::Panel,
