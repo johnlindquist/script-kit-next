@@ -542,7 +542,10 @@ impl ScriptListApp {
 
                                 // Add pin indicator
                                 let name = if entry.pinned {
-                                    format!("📌 {}", display_content)
+                                    let mut s = String::with_capacity("📌 ".len() + display_content.len());
+                                    s.push_str("📌 ");
+                                    s.push_str(&display_content);
+                                    s
                                 } else {
                                     display_content
                                 };
@@ -695,7 +698,12 @@ impl ScriptListApp {
                 div()
                     .text_sm()
                     .text_color(rgb(text_dimmed))
-                    .child(format!("{} entries", self.cached_clipboard_entries.len())),
+                    .child({
+                        use std::fmt::Write as _;
+                        let mut label = String::with_capacity(32);
+                        let _ = write!(label, "{} entries", self.cached_clipboard_entries.len());
+                        label
+                    }),
             );
 
         // List pane with scrollbar overlay
