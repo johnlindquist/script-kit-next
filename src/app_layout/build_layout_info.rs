@@ -22,6 +22,19 @@ impl ScriptListApp {
             | AppView::BrowserHistoryView { .. }
             | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. } => crate::window_resize::ViewType::ExpandedMainWindow,
+            AppView::AppLauncherView { .. }
+            | AppView::WindowSwitcherView { .. }
+            | AppView::BrowserTabsView { .. }
+            | AppView::DesignGalleryView { .. }
+            | AppView::FooterGalleryView { .. }
+            | AppView::EmojiPickerView { .. }
+            | AppView::BrowseKitsView { .. }
+            | AppView::InstalledKitsView { .. }
+            | AppView::ProcessManagerView { .. }
+            | AppView::CurrentAppCommandsView { .. }
+            | AppView::SearchAiPresetsView { .. }
+            | AppView::SettingsView { .. }
+            | AppView::FavoritesBrowseView { .. } => crate::window_resize::ViewType::MiniMainWindow,
             _ => crate::window_resize::ViewType::ScriptList,
         };
         let window_width =

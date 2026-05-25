@@ -304,7 +304,6 @@ fn deferred_sizing_keeps_preview_builtins_wide() {
 
     for view in [
         "AppView::ClipboardHistoryView{",
-        "AppView::FileSearchView{",
         "AppView::ThemeChooserView{",
         "AppView::SdkReferenceView{",
         "AppView::ScriptTemplateCatalogView{",
@@ -321,6 +320,66 @@ fn deferred_sizing_keeps_preview_builtins_wide() {
         assert!(
             !arm.contains("ViewType::MiniMainWindow"),
             "calculate_window_size_params must not narrow preview/detail builtin {view} to MiniMainWindow"
+        );
+    }
+}
+
+#[test]
+fn file_search_sizing_tracks_presentation_contract() {
+    let content = read("src/app_impl/ui_window.rs");
+    let body = source_between(
+        &content,
+        "pub(crate) fn calculate_window_size_params",
+        "    /// Returns the focused button when the active view is `ConfirmPrompt`.",
+    );
+    let compacted = compact_source(body);
+    let arm = compact_app_view_match_arm(&compacted, "AppView::FileSearchView{");
+    assert!(
+        arm.contains("FileSearchPresentation::Mini=>ViewType::MiniMainWindow")
+            && arm.contains("FileSearchPresentation::Full=>ViewType::ExpandedMainWindow"),
+        "FileSearchView must size Mini and Full presentations from their surface contract"
+    );
+}
+
+#[test]
+fn surface_contracts_match_main_window_sizing_shape() {
+    let app_view_state = compact_source(&read("src/main_sections/app_view_state.rs"));
+    let layout_info = compact_source(&read("src/app_layout/build_layout_info.rs"));
+
+    for (kind, preview, visual, view_type) in [
+        (
+            "SurfaceKind::DesignGallery",
+            "NoPersistentPreview",
+            "CompactLauncherVisual",
+            "AppView::DesignGalleryView{..}|",
+        ),
+        (
+            "SurfaceKind::ThemeChooser",
+            "RequiredSplitPreview",
+            "SplitPreviewVisual",
+            "AppView::ThemeChooserView{..}",
+        ),
+        (
+            "SurfaceKind::FileSearchMini",
+            "NoPersistentPreview",
+            "CompactLauncherVisual",
+            "FileSearchPresentation::Mini=>crate::window_resize::ViewType::MiniMainWindow",
+        ),
+        (
+            "SurfaceKind::FileSearchFull",
+            "RequiredSplitPreview",
+            "SplitPreviewVisual",
+            "FileSearchPresentation::Full=>crate::window_resize::ViewType::ExpandedMainWindow",
+        ),
+    ] {
+        let contract = compact_app_view_match_arm(&app_view_state, kind);
+        assert!(
+            contract.contains(preview) && contract.contains(visual),
+            "{kind} contract must declare {preview} and {visual}"
+        );
+        assert!(
+            layout_info.contains(view_type),
+            "build_layout_info must map {kind} to the matching main-window view type"
         );
     }
 }
