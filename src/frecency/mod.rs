@@ -17,6 +17,7 @@ use tracing::{debug, info, instrument, warn};
 pub const HALF_LIFE_DAYS: f64 = DEFAULT_SUGGESTED_HALF_LIFE_DAYS;
 /// Seconds in a day for timestamp calculations
 const SECONDS_PER_DAY: f64 = 86400.0;
+const SECONDS_PER_DAY_U64: u64 = 86400;
 /// A single frecency entry tracking usage of a script
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FrecencyEntry {
@@ -123,7 +124,7 @@ fn calculate_score(count: u32, last_used: u64, half_life_days: f64) -> f64 {
     // True half-life decay: 2^(-days/hl) == e^(-ln(2) * days/hl)
     // At days == hl: decay_factor = 2^(-1) = 0.5 (exactly 50%)
     let decay_factor = (-std::f64::consts::LN_2 * days_since_use / hl).exp();
-    count as f64 * decay_factor
+    f64::from(count) * decay_factor
 }
 /// Get current Unix timestamp in seconds
 fn current_timestamp() -> u64 {
@@ -567,7 +568,7 @@ impl FrecencyStore {
     pub fn prune_stale_entries(&mut self, score_threshold: f64, min_age_days: u64) -> usize {
         let now = current_timestamp();
         let hl = self.half_life_days;
-        let min_age_seconds = min_age_days * SECONDS_PER_DAY as u64;
+        let min_age_seconds = min_age_days * SECONDS_PER_DAY_U64;
 
         let entries_before = self.entries.len();
 
@@ -607,6 +608,11 @@ mod tests {
     // --- merged from part_000.rs ---
     use super::*;
     use std::fs;
+
+    fn days_to_seconds(days: f64) -> u64 {
+        std::time::Duration::from_secs_f64(days * SECONDS_PER_DAY).as_secs()
+    }
+
     // Helper to create a test store with a temp file
     fn create_test_store() -> (FrecencyStore, PathBuf) {
         let temp_dir = std::env::temp_dir();
@@ -654,12 +660,12 @@ mod tests {
         let count = 10;
 
         // One half-life ago (7 days)
-        let one_half_life_ago = now - (HALF_LIFE_DAYS * SECONDS_PER_DAY) as u64;
+        let one_half_life_ago = now - days_to_seconds(HALF_LIFE_DAYS);
         let score = calculate_score(count, one_half_life_ago, HALF_LIFE_DAYS);
 
         // With TRUE half-life, score should be exactly count/2 (50% decay at one half-life)
         // Formula: count * 2^(-days/half_life) = count * 2^(-1) = count/2
-        let expected = count as f64 * 0.5;
+        let expected = f64::from(count) * 0.5;
         assert!(
             (score - expected).abs() < 0.01,
             "Expected ~{} (50% of {}), got {} - half-life formula should give 50% decay at half-life",
@@ -672,11 +678,11 @@ mod tests {
         let count = 100;
 
         // Two half-lives ago (14 days)
-        let two_half_lives_ago = now - (2.0 * HALF_LIFE_DAYS * SECONDS_PER_DAY) as u64;
+        let two_half_lives_ago = now - days_to_seconds(2.0 * HALF_LIFE_DAYS);
         let score = calculate_score(count, two_half_lives_ago, HALF_LIFE_DAYS);
 
         // After 2 half-lives, should be 25% (0.5^2 = 0.25)
-        let expected = count as f64 * 0.25;
+        let expected = f64::from(count) * 0.25;
         assert!(
             (score - expected).abs() < 0.1,
             "Expected ~{} (25% of {}), got {} - two half-lives should give 25% remaining",
@@ -691,12 +697,12 @@ mod tests {
         let count = 100;
 
         // 30 days ago (about 4.3 half-lives with 7-day half-life)
-        let thirty_days_ago = now - (30 * SECONDS_PER_DAY as u64);
+        let thirty_days_ago = now - (30 * SECONDS_PER_DAY_U64);
         let score = calculate_score(count, thirty_days_ago, HALF_LIFE_DAYS);
 
         // With true half-life: 100 * 0.5^(30/7) = 100 * 0.5^4.28 ≈ 5.15
         // Should be heavily decayed but still detectable
-        let expected = count as f64 * 0.5_f64.powf(30.0 / HALF_LIFE_DAYS);
+        let expected = f64::from(count) * 0.5_f64.powf(30.0 / HALF_LIFE_DAYS);
         assert!(
             (score - expected).abs() < 0.5,
             "Expected ~{:.2}, got {:.2}",
@@ -795,7 +801,7 @@ mod tests {
 
         // Manually create an entry with an old timestamp (7 days ago) and accumulated score
         let now = current_timestamp();
-        let seven_days_ago = now - (7 * SECONDS_PER_DAY as u64);
+        let seven_days_ago = now - (7 * SECONDS_PER_DAY_U64);
         let old_entry = FrecencyEntry {
             count: 5,
             last_used: seven_days_ago,
@@ -1047,8 +1053,8 @@ mod tests {
 
         let entry = FrecencyEntry {
             count: 5,
-            last_used: now - (7 * SECONDS_PER_DAY as u64), // 7 days ago
-            score: 10.0,                                   // stored score (as of last_used)
+            last_used: now - (7 * SECONDS_PER_DAY_U64), // 7 days ago
+            score: 10.0,                                // stored score (as of last_used)
         };
 
         // score_at(now) should decay the stored score by elapsed time
@@ -1086,8 +1092,8 @@ mod tests {
 
         let mut entry = FrecencyEntry {
             count: 10,
-            last_used: now - (7 * SECONDS_PER_DAY as u64), // 7 days ago
-            score: 4.0,                                    // accumulated score as of 7 days ago
+            last_used: now - (7 * SECONDS_PER_DAY_U64), // 7 days ago
+            score: 4.0,                                 // accumulated score as of 7 days ago
         };
 
         // record_use should:
@@ -1110,8 +1116,8 @@ mod tests {
         // Script B should rank higher
         let now = current_timestamp();
         let half_life = 7.0;
-        let year_ago = now - (365 * SECONDS_PER_DAY as u64);
-        let two_days_ago = now - (2 * SECONDS_PER_DAY as u64);
+        let year_ago = now - (365 * SECONDS_PER_DAY_U64);
+        let two_days_ago = now - (2 * SECONDS_PER_DAY_U64);
 
         // Script A: high historical usage, long ago
         // With incremental model, even if it had score=100, after a year it's nearly 0
@@ -1148,7 +1154,7 @@ mod tests {
         let mut store = FrecencyStore::with_path(path.clone());
 
         let now = current_timestamp();
-        let week_ago = now - (7 * SECONDS_PER_DAY as u64);
+        let week_ago = now - (7 * SECONDS_PER_DAY_U64);
 
         // Insert entries with explicit timestamps via entries map
         // Entry A: high stored score but old
@@ -1186,7 +1192,7 @@ mod tests {
         let mut store = FrecencyStore::with_path(path.clone());
 
         let now = current_timestamp();
-        let month_ago = now - (30 * SECONDS_PER_DAY as u64); // ~4.3 half-lives
+        let month_ago = now - (30 * SECONDS_PER_DAY_U64); // ~4.3 half-lives
 
         // Entry A: very high stored score but a month old
         // 4.3 half-lives: 0.5^4.3 ≈ 0.05, so 100 * 0.05 = ~5.0 live
@@ -1453,7 +1459,7 @@ mod tests {
         let mut store = FrecencyStore::with_path(path.clone());
 
         let base_time = 1704067200u64; // 2024-01-01
-        let week_later = base_time + (7 * SECONDS_PER_DAY as u64);
+        let week_later = base_time + (7 * SECONDS_PER_DAY_U64);
 
         // Insert entries with explicit timestamps
         // /old.ts: score=10.0 at base_time, will decay to 5.0 at week_later (1 half-life)
@@ -1546,8 +1552,8 @@ mod tests {
         let mut store = FrecencyStore::with_path(path.clone());
 
         let now = current_timestamp();
-        let year_ago = now - (365 * SECONDS_PER_DAY as u64);
-        let week_ago = now - (7 * SECONDS_PER_DAY as u64);
+        let year_ago = now - (365 * SECONDS_PER_DAY_U64);
+        let week_ago = now - (7 * SECONDS_PER_DAY_U64);
 
         // Old entry that should be pruned
         store.entries.insert(
@@ -1611,7 +1617,7 @@ mod tests {
         let mut store = FrecencyStore::with_path(path.clone());
 
         let now = current_timestamp();
-        let year_ago = now - (365 * SECONDS_PER_DAY as u64);
+        let year_ago = now - (365 * SECONDS_PER_DAY_U64);
 
         // Old but heavily used entry - even after a year of decay,
         // if it had score=1000, it might still be above threshold
