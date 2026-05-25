@@ -1097,51 +1097,6 @@ impl AcpChatView {
         }
     }
 
-    fn footer_dot_element(
-        dot_status: crate::footer_popup::FooterDotStatus,
-    ) -> Option<gpui::AnyElement> {
-        use crate::footer_popup::FooterDotStatus;
-
-        let theme = theme::get_cached_theme();
-        let dot_hex = match dot_status {
-            FooterDotStatus::Hidden => return None,
-            FooterDotStatus::Streaming | FooterDotStatus::WaitingForPermission => {
-                theme.colors.accent.selected
-            }
-            FooterDotStatus::Idle => theme.colors.text.secondary,
-            FooterDotStatus::Error => theme.colors.ui.error,
-        };
-        let accent = rgb(dot_hex);
-
-        let dot = div().size(px(6.0)).rounded_full().bg(accent);
-
-        if matches!(
-            dot_status,
-            FooterDotStatus::Streaming | FooterDotStatus::WaitingForPermission
-        ) {
-            let pulse_duration = Duration::from_millis(1200);
-            Some(
-                dot.with_animation(
-                    "acp-footer-dot-pulse",
-                    Animation::new(pulse_duration).repeat(),
-                    move |el, delta| {
-                        let sine = (delta * std::f32::consts::PI * 2.0).sin();
-                        let a = 0.5 + 0.5 * sine;
-                        el.bg(gpui::Rgba {
-                            r: accent.r,
-                            g: accent.g,
-                            b: accent.b,
-                            a,
-                        })
-                    },
-                )
-                .into_any_element(),
-            )
-        } else {
-            Some(dot.into_any_element())
-        }
-    }
-
     fn render_toolbar_from_snapshot(
         snapshot: AcpFooterSnapshot,
         weak_view: WeakEntity<AcpChatView>,
@@ -1275,6 +1230,40 @@ impl AcpChatView {
         weak_view: WeakEntity<AcpChatView>,
         hint_text_rgba: u32,
     ) -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+
+        let robot_icon = gpui::svg()
+            .external_path(crate::components::footer_chrome::FOOTER_PROFILE_ICON_PATH)
+            .size(px(13.0));
+
+        let robot_element = match snapshot.dot_status {
+            crate::footer_popup::FooterDotStatus::Hidden
+            | crate::footer_popup::FooterDotStatus::Idle => robot_icon
+                .text_color(rgba(hint_text_rgba))
+                .into_any_element(),
+            crate::footer_popup::FooterDotStatus::Error => {
+                let error_color = theme.colors.ui.error;
+                robot_icon.text_color(rgb(error_color)).into_any_element()
+            }
+            crate::footer_popup::FooterDotStatus::Streaming
+            | crate::footer_popup::FooterDotStatus::WaitingForPermission => {
+                let accent_color = theme.colors.accent.selected;
+                let pulse_duration = Duration::from_millis(1200);
+                div()
+                    .child(robot_icon.text_color(rgb(accent_color)))
+                    .with_animation(
+                        "acp-footer-robot-pulse",
+                        Animation::new(pulse_duration).repeat(),
+                        move |el, delta| {
+                            let sine = (delta * std::f32::consts::PI * 2.0).sin();
+                            let a = 0.5 + 0.5 * sine;
+                            el.opacity(a)
+                        },
+                    )
+                    .into_any_element()
+            }
+        };
+
         div()
             .id("agent-chat-profile-display")
             .flex()
@@ -1284,7 +1273,7 @@ impl AcpChatView {
             .overflow_hidden()
             .cursor_pointer()
             .when(snapshot.profile_selector_open, |d| {
-                let accent = theme::get_cached_theme().colors.accent.selected;
+                let accent = theme.colors.accent.selected;
                 d.bg(rgba((accent << 8) | 0x18))
                     .rounded(px(4.0))
                     .px(px(4.0))
@@ -1300,15 +1289,7 @@ impl AcpChatView {
                     }
                 }
             })
-            .when_some(Self::footer_dot_element(snapshot.dot_status), |d, dot| {
-                d.child(dot)
-            })
-            .child(
-                gpui::svg()
-                    .external_path(crate::components::footer_chrome::FOOTER_PROFILE_ICON_PATH)
-                    .size(px(13.0))
-                    .text_color(rgba(hint_text_rgba)),
-            )
+            .child(robot_element)
             .child(
                 div()
                     .id("acp-model-display")
