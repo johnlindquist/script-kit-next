@@ -74,9 +74,7 @@ pub fn copy_all_plain_text_preserving_clipboard() -> Result<String> {
 
     #[cfg(target_os = "macos")]
     {
-        simulate_command_key(KEY_A)
-            .context("Failed to select all text for focused-text fallback")?;
-        std::thread::sleep(std::time::Duration::from_millis(40));
+        select_all_text_for_focused_text_fallback()?;
         simulate_command_key(KEY_C).context("Failed to copy text for focused-text fallback")?;
         std::thread::sleep(std::time::Duration::from_millis(90));
 
@@ -103,6 +101,21 @@ pub fn copy_all_plain_text_preserving_clipboard() -> Result<String> {
     {
         let _ = snapshot;
         bail!("focused-text copy fallback requires macOS");
+    }
+}
+
+pub fn select_all_text_for_focused_text_fallback() -> Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        simulate_command_key(KEY_A)
+            .context("Failed to select all text for focused-text fallback")?;
+        std::thread::sleep(std::time::Duration::from_millis(40));
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        bail!("focused-text select-all fallback requires macOS");
     }
 }
 

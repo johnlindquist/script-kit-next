@@ -200,6 +200,7 @@ impl ScriptListApp {
             chat.mark_focused_text_originated_from_quick_prompt();
         });
         self.enter_embedded_acp_chat_surface(view_entity, cx);
+        self.request_focus(FocusTarget::ChatPrompt, cx);
         script_kit_gpui::request_show_main_window();
         crate::window_resize::resize_to_view_sync(crate::window_resize::ViewType::FocusedTextMini, 0);
         cx.notify();
@@ -266,6 +267,7 @@ impl ScriptListApp {
             }
             chat.mark_focused_text_originated_from_quick_prompt();
         });
+        self.request_focus(FocusTarget::ChatPrompt, cx);
         script_kit_gpui::request_show_main_window();
         crate::window_resize::resize_to_view_sync(crate::window_resize::ViewType::FocusedTextMini, 0);
         cx.notify();
