@@ -61,6 +61,21 @@ fn overlay_renders_target_badge() {
 }
 
 #[test]
+fn overlay_target_badge_preserves_full_label_for_accessibility() {
+    assert!(
+        OVERLAY_SOURCE.contains("let target_label = target_badge_label(self.state.target);")
+            && OVERLAY_SOURCE.contains("Tooltip::new(target_label.clone())"),
+        "fixed-width dictation target badge must expose the full label even when the visible text is clipped"
+    );
+    assert!(
+        OVERLAY_SOURCE.contains(".max_w(px(TARGET_BADGE_SLOT_WIDTH_PX - 18.0))")
+            && OVERLAY_SOURCE.contains(".text_ellipsis()")
+            && OVERLAY_SOURCE.contains(".whitespace_nowrap()"),
+        "dictation target badge text must clip predictably inside the fixed overlay width"
+    );
+}
+
+#[test]
 fn hidden_dictation_to_app_route_uses_acp_quick_submit() {
     let hidden_start = BUILTINS_SOURCE
         .find(r#""builtin/dictation-to-app""#)

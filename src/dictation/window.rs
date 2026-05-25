@@ -926,6 +926,7 @@ impl DictationOverlay {
         let hover_bg = theme.colors.background.main.with_opacity(OPACITY_SELECTED);
         let active_bg = theme.colors.background.main.with_opacity(OPACITY_ACTIVE);
 
+        let target_label = target_badge_label(self.state.target);
         let badge_content = render_target_badge_content(self.state.target);
 
         let mut badge = div()
@@ -937,6 +938,9 @@ impl DictationOverlay {
             .border_1()
             .border_color(theme.colors.ui.border.with_opacity(OPACITY_SUBTLE))
             .cursor_default()
+            .tooltip(move |window, cx| {
+                gpui_component::tooltip::Tooltip::new(target_label.clone()).build(window, cx)
+            })
             .child(badge_content);
 
         if interactive {
