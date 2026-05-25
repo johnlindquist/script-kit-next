@@ -250,10 +250,8 @@ pub(crate) fn replace_registered_focused_text(
     now_ms: u128,
 ) -> Result<super::mutation::TextMutationResult, super::FocusedTextError> {
     let target = registered_target(session_id, options, now_ms)?;
-    let mut used_paste_fallback = false;
     if set_whole_text_direct(target.element, text).is_err() {
         paste_replace_fallback(&target, text)?;
-        used_paste_fallback = true;
     }
     let _ = set_selected_text_range(
         target.element,
@@ -262,11 +260,7 @@ pub(crate) fn replace_registered_focused_text(
             length: 0,
         },
     );
-    if used_paste_fallback {
-        verify_whole_text_or_clipboard_fallback(&target, text)?;
-    } else {
-        verify_whole_text(target.element, text)?;
-    }
+    verify_whole_text_or_clipboard_fallback(&target, text)?;
     Ok(super::mutation::TextMutationResult {
         action: super::mutation::TextMutationAction::Replace,
         changed_text: true,
@@ -287,17 +281,10 @@ pub(crate) fn append_registered_focused_text(
         Err(err) => {
             tracing::warn!(
                 target: "script_kit::focused_text",
-                event = "focused_text_append_whole_text_failed_pasting_at_caret",
+                event = "focused_text_append_whole_text_failed_using_captured_text_fallback",
                 error = %err,
             );
-            refocus_registered_target_for_paste(&target)?;
-            super::clipboard::paste_plain_text_preserving_clipboard(text)
-                .map_err(|err| super::FocusedTextError::Platform(err.to_string()))?;
-            return Ok(super::mutation::TextMutationResult {
-                action: super::mutation::TextMutationAction::Append,
-                changed_text: true,
-                copied_to_clipboard: false,
-            });
+            target.captured_text.clone()
         }
     };
     let appended = format!("{current}{text}");
@@ -311,7 +298,7 @@ pub(crate) fn append_registered_focused_text(
             length: 0,
         },
     );
-    verify_whole_text(target.element, &appended)?;
+    verify_whole_text_or_clipboard_fallback(&target, &appended)?;
     Ok(super::mutation::TextMutationResult {
         action: super::mutation::TextMutationAction::Append,
         changed_text: true,
@@ -320,10 +307,11 @@ pub(crate) fn append_registered_focused_text(
 }
 
 #[cfg(target_os = "macos")]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct RegisteredFocusedTextTarget {
     element: AXUIElementRef,
     app_process_id: Option<i32>,
+    captured_text: String,
 }
 
 #[cfg(target_os = "macos")]
@@ -342,6 +330,7 @@ fn registered_target(
     let target = RegisteredFocusedTextTarget {
         element: session.element(),
         app_process_id: session.app_process_id,
+        captured_text: session.captured_text.clone(),
     };
     let mutation_session = super::mutation::FocusedTextMutationSession {
         session_id: session_id.clone(),

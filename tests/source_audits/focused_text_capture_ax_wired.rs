@@ -73,6 +73,7 @@ fn google_docs_style_targets_can_fallback_to_clipboard_for_capture_and_replace()
         "focused_text_replace_whole_text_failed_using_select_all_fallback",
         "select_all_text_for_focused_text_fallback",
         "verify_whole_text_or_clipboard_fallback",
+        "verify_whole_text_or_clipboard_fallback(&target, text)",
         "focused_text_verify_whole_text_failed_trying_clipboard_fallback",
     ] {
         assert!(
@@ -80,6 +81,26 @@ fn google_docs_style_targets_can_fallback_to_clipboard_for_capture_and_replace()
             "AX mutation must support clipboard fallback verification for contenteditable targets: {required}"
         );
     }
+}
+
+#[test]
+fn google_docs_style_append_uses_captured_text_before_clipboard_apply_fallback() {
+    for required in [
+        "captured_text: String",
+        "captured_text: session.captured_text.clone()",
+        "focused_text_append_whole_text_failed_using_captured_text_fallback",
+        "target.captured_text.clone()",
+        "verify_whole_text_or_clipboard_fallback(&target, &appended)",
+    ] {
+        assert!(
+            AX.contains(required),
+            "AX append fallback must preserve append semantics for contenteditable targets: {required}"
+        );
+    }
+    assert!(
+        !AX.contains("focused_text_append_whole_text_failed_pasting_at_caret"),
+        "append fallback must not silently degrade to paste-at-caret when whole-text read fails"
+    );
 }
 
 #[test]
