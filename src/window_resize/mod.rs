@@ -297,7 +297,7 @@ pub(crate) fn resize_to_mini_file_search_window_sync(result_count: usize) {
 /// Width for mini main window (compact launcher)
 const MINI_MAIN_WINDOW_WIDTH: f32 = 480.0;
 const FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT: f32 = 64.0;
-const FOCUSED_TEXT_MINI_STREAMING_HEIGHT: f32 = 128.0;
+const FOCUSED_TEXT_MINI_STREAMING_HEIGHT: f32 = FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT;
 const FOCUSED_TEXT_MINI_RESULT_HEIGHT: f32 = 150.0;
 const FOCUSED_TEXT_MINI_RESIZE_ANIMATE: bool = true;
 /// Width for full main window (standard launcher)

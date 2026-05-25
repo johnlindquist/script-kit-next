@@ -6046,24 +6046,21 @@ impl AcpChatView {
         state: &FocusedTextAgentChatState,
         theme: &crate::theme::Theme,
     ) -> gpui::AnyElement {
-        let content = if let Some(icon) = state
-            .app_bundle_id
-            .as_deref()
-            .and_then(crate::app_launcher::cached_app_icon_for_bundle)
-        {
+        let content = if let Some(icon) = state.app_bundle_id.as_deref().and_then(|bundle_id| {
+            let bundle_id = bundle_id.trim();
+            if bundle_id.is_empty() {
+                None
+            } else {
+                crate::app_launcher::cached_app_icon_for_bundle(bundle_id)
+            }
+        }) {
             crate::icons::render_image(icon, 16.0, 1.0)
         } else {
-            div()
-                .text_size(px(11.0))
+            use gpui_component::IconNamed;
+            gpui::svg()
+                .path(gpui_component::IconName::AppWindow.path())
+                .size(px(14.0))
                 .text_color(rgb(theme.colors.text.muted))
-                .child(
-                    state
-                        .app_name
-                        .chars()
-                        .next()
-                        .map(|ch| ch.to_uppercase().collect::<String>())
-                        .unwrap_or_else(|| "A".to_string()),
-                )
                 .into_any_element()
         };
 

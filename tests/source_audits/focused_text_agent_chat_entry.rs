@@ -28,6 +28,17 @@ const PROTOCOL_PROMPT_CONSTRUCTORS: &str =
 const INLINE_AGENT_MOD: &str = include_str!("../../src/inline_agent/mod.rs");
 const PROMPT_HANDLER: &str = include_str!("../../src/prompt_handler/mod.rs");
 
+fn source_between<'a>(source: &'a str, start_marker: &str, end_marker: &str) -> &'a str {
+    let start = source.find(start_marker).unwrap_or_else(|| {
+        panic!("missing start marker `{start_marker}`");
+    });
+    let after_start = &source[start..];
+    let end = after_start.find(end_marker).unwrap_or_else(|| {
+        panic!("missing end marker `{end_marker}` after `{start_marker}`");
+    });
+    &after_start[..end]
+}
+
 #[test]
 fn inline_ai_hotkeys_capture_before_opening_focused_text_agent_chat() {
     for source in [APP_RUN_SETUP, RUNTIME_TRAY_HOTKEYS] {
@@ -223,6 +234,12 @@ fn focused_text_mini_has_three_sizing_phases() {
             "missing focused-text mini resize constant: {required}"
         );
     }
+    assert!(
+        WINDOW_RESIZE.contains(
+            "const FOCUSED_TEXT_MINI_STREAMING_HEIGHT: f32 = FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT;"
+        ),
+        "streaming focused-text mini height must remain compact until the final result is ready"
+    );
 }
 
 #[test]
@@ -234,8 +251,10 @@ fn focused_text_mini_reuses_app_icon_cache_and_focuses_composer_on_open() {
     for required in [
         "app_bundle_id: Option<String>",
         "snapshot.app.bundle_id.clone()",
+        "bundle_id.trim()",
         "crate::app_launcher::cached_app_icon_for_bundle",
         "crate::icons::render_image",
+        "gpui_component::IconName::AppWindow",
         "\"focused-text-context-badge\"",
     ] {
         assert!(
@@ -243,6 +262,15 @@ fn focused_text_mini_reuses_app_icon_cache_and_focuses_composer_on_open() {
             "focused-text badge must reuse the main-menu app icon cache: {required}"
         );
     }
+    let badge_fn = source_between(
+        ACP_VIEW,
+        "fn render_focused_text_app_icon_badge",
+        "#[allow(clippy::too_many_arguments)]",
+    );
+    assert!(
+        !badge_fn.contains(".chars().next()"),
+        "icon cache misses must render a generic icon, not an app-name initial"
+    );
     assert!(
         FOCUSED_TEXT_ENTRY.contains("self.request_focus(FocusTarget::ChatPrompt, cx);"),
         "focused-text mini open must request composer focus after entering the ACP surface"
