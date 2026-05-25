@@ -1681,11 +1681,17 @@ mod file_search_chrome_audit {
             "file_search uniform_list fallback rows must use the shared list item height"
         );
         assert!(
+            source.contains("let row_height = LIST_ITEM_HEIGHT")
+                && source.contains(".h(px(row_height))")
+                && source.contains("div().id(ix).h(px(LIST_ITEM_HEIGHT))"),
+            "file_search skeleton and fallback rows must both derive height from LIST_ITEM_HEIGHT"
+        );
+        assert!(
             source.contains("row_description_text_rgba"),
             "file_search trailing metadata should derive text color from shared list_item helpers"
         );
         assert!(
-            !source.contains("h(px(52.)"),
+            !source.contains("h(px(52.)") && !source.contains("h(px(52.0)"),
             "file_search must not hardcode taller 52px rows"
         );
     }
