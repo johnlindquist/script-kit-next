@@ -6,6 +6,16 @@ use image::codecs::png::PngEncoder;
 use image::ImageEncoder;
 use xcap::Window;
 
+const DARK_EMPTY_MAX_UNIQUE_BUCKETS: usize = 2;
+const DARK_EMPTY_MAX_MEAN_LUMA: f64 = 5.0;
+const DARK_EMPTY_MAX_NON_BLACK_RATIO: f64 = 0.001;
+const DARK_EMPTY_MAX_LUMA: f64 = 16.0;
+const NON_BLACK_CHANNEL_THRESHOLD: u8 = 8;
+const PIXEL_AUDIT_LUMA_RED_WEIGHT: f64 = 0.2126;
+const PIXEL_AUDIT_LUMA_GREEN_WEIGHT: f64 = 0.7152;
+const PIXEL_AUDIT_LUMA_BLUE_WEIGHT: f64 = 0.0722;
+const PIXEL_AUDIT_COLOR_BUCKET_SIZE: u8 = 32;
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PixelAudit {
@@ -21,10 +31,10 @@ pub(crate) struct PixelAudit {
 impl PixelAudit {
     pub(crate) fn is_blank_like(&self) -> bool {
         let solid_like = self.unique_bucket_count <= 1;
-        let dark_empty_like = self.unique_bucket_count <= 2
-            && self.mean_luma < 5.0
-            && self.non_black_ratio < 0.001
-            && self.max_luma < 16.0;
+        let dark_empty_like = self.unique_bucket_count <= DARK_EMPTY_MAX_UNIQUE_BUCKETS
+            && self.mean_luma < DARK_EMPTY_MAX_MEAN_LUMA
+            && self.non_black_ratio < DARK_EMPTY_MAX_NON_BLACK_RATIO
+            && self.max_luma < DARK_EMPTY_MAX_LUMA;
 
         self.sampled == 0
             || self.non_transparent == 0
@@ -49,15 +59,20 @@ pub(crate) fn audit_screenshot_pixels(image: &image::RgbaImage) -> PixelAudit {
             non_transparent += 1;
         }
 
-        if a > 0 && (r > 8 || g > 8 || b > 8) {
+        if a > 0 && (r > NON_BLACK_CHANNEL_THRESHOLD || g > NON_BLACK_CHANNEL_THRESHOLD || b > NON_BLACK_CHANNEL_THRESHOLD) {
             non_black += 1;
         }
 
-        let luma = 0.2126 * f64::from(r) + 0.7152 * f64::from(g) + 0.0722 * f64::from(b);
+        let luma = PIXEL_AUDIT_LUMA_RED_WEIGHT * f64::from(r) + PIXEL_AUDIT_LUMA_GREEN_WEIGHT * f64::from(g) + PIXEL_AUDIT_LUMA_BLUE_WEIGHT * f64::from(b);
         luma_sum += luma;
         max_luma = max_luma.max(luma);
 
-        let bucket = (r / 32, g / 32, b / 32, if a == 0 { 0 } else { 1 });
+        let bucket = (
+            r / PIXEL_AUDIT_COLOR_BUCKET_SIZE,
+            g / PIXEL_AUDIT_COLOR_BUCKET_SIZE,
+            b / PIXEL_AUDIT_COLOR_BUCKET_SIZE,
+            if a == 0 { 0 } else { 1 },
+        );
         buckets.insert(bucket);
     }
 
@@ -456,6 +471,19 @@ fn core_graphics_owner_pid_for_native_window(
 
 // ── Shared candidate-selection infrastructure ───────────────────────────
 
+const SCRIPT_KIT_CANDIDATE_MIN_WIDTH: u32 = 200;
+const SCRIPT_KIT_CANDIDATE_MIN_HEIGHT: u32 = 50;
+const CANDIDATE_SIZE_CLOSE_DELTA_PX: i32 = 4;
+const CANDIDATE_SIZE_LOOSE_DELTA_PX: i32 = 16;
+const CANDIDATE_SIZE_EXACT_MATCH_SCORE: i32 = 5_000;
+const CANDIDATE_SIZE_CLOSE_MATCH_SCORE: i32 = 2_500;
+const CANDIDATE_SIZE_LOOSE_MATCH_SCORE: i32 = 500;
+const CANDIDATE_SIZE_MISMATCH_PENALTY: i32 = -1_500;
+const CANDIDATE_TITLE_EXACT_MATCH_SCORE: i32 = 1_000;
+const CANDIDATE_TITLE_CONTAINS_MATCH_SCORE: i32 = 500;
+const CANDIDATE_FOCUS_MATCH_SCORE: i32 = 100;
+const MAIN_WINDOW_SECONDARY_TITLE_PENALTY: i32 = 200;
+
 #[derive(Clone)]
 struct Candidate {
     window: Window,
@@ -485,7 +513,7 @@ fn list_script_kit_candidates() -> Result<Vec<Candidate>, Box<dyn std::error::Er
 
         // Width >= 200 filters out small UI elements
         // Height >= 50 allows compact prompts (arg prompt without choices is ~76px)
-        let is_reasonable_size = width >= 200 && height >= 50;
+        let is_reasonable_size = width >= SCRIPT_KIT_CANDIDATE_MIN_WIDTH && height >= SCRIPT_KIT_CANDIDATE_MIN_HEIGHT;
 
         if is_our_window && !is_minimized && is_reasonable_size {
             candidates.push(Candidate {
@@ -521,10 +549,14 @@ fn candidate_size_score(
     let dh = (candidate.height - target_h).abs();
 
     match (dw, dh) {
-        (0, 0) => 5_000,
-        (dw, dh) if dw <= 4 && dh <= 4 => 2_500,
-        (dw, dh) if dw <= 16 && dh <= 16 => 500,
-        _ => -1_500,
+        (0, 0) => CANDIDATE_SIZE_EXACT_MATCH_SCORE,
+        (dw, dh) if dw <= CANDIDATE_SIZE_CLOSE_DELTA_PX && dh <= CANDIDATE_SIZE_CLOSE_DELTA_PX => {
+            CANDIDATE_SIZE_CLOSE_MATCH_SCORE
+        }
+        (dw, dh) if dw <= CANDIDATE_SIZE_LOOSE_DELTA_PX && dh <= CANDIDATE_SIZE_LOOSE_DELTA_PX => {
+            CANDIDATE_SIZE_LOOSE_MATCH_SCORE
+        }
+        _ => CANDIDATE_SIZE_MISMATCH_PENALTY,
     }
 }
 
@@ -541,15 +573,15 @@ fn score_candidate(resolved: &crate::protocol::AutomationWindowInfo, candidate: 
     // Exact title match is a strong signal
     if let Some(title) = resolved.title.as_deref() {
         if !title.is_empty() && candidate.title == title {
-            score += 1_000;
+            score += CANDIDATE_TITLE_EXACT_MATCH_SCORE;
         } else if !title.is_empty() && candidate.title.contains(title) {
-            score += 500;
+            score += CANDIDATE_TITLE_CONTAINS_MATCH_SCORE;
         }
     }
 
     // Focus agreement
     if resolved.focused == candidate.focused {
-        score += 100;
+        score += CANDIDATE_FOCUS_MATCH_SCORE;
     }
 
     // For main-window targets, penalize candidates that are clearly secondary
@@ -559,7 +591,7 @@ fn score_candidate(resolved: &crate::protocol::AutomationWindowInfo, candidate: 
             || candidate.title.contains("AI")
             || candidate.title.contains("Agent Chat"))
     {
-        score -= 200;
+        score -= MAIN_WINDOW_SECONDARY_TITLE_PENALTY;
     }
 
     score
@@ -941,6 +973,8 @@ pub fn capture_app_screenshot(
 ///
 /// # Returns
 /// A tuple of (png_data, width, height) on success.
+const TITLE_CAPTURE_MIN_WINDOW_EDGE: u32 = 100;
+
 pub fn capture_window_by_title(
     title_pattern: &str,
     hi_dpi: bool,
@@ -958,7 +992,7 @@ pub fn capture_window_by_title(
         // Skip tiny windows (e.g. tray icon) when using empty title pattern
         let win_width = window.width().unwrap_or(0);
         let win_height = window.height().unwrap_or(0);
-        let is_too_small = win_width < 100 || win_height < 100;
+        let is_too_small = win_width < TITLE_CAPTURE_MIN_WINDOW_EDGE || win_height < TITLE_CAPTURE_MIN_WINDOW_EDGE;
 
         if is_our_app && title_matches && !is_minimized && !is_too_small {
             tracing::debug!(
