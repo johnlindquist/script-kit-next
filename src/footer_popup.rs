@@ -9,6 +9,7 @@ use std::sync::{Mutex, OnceLock};
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil, NO, YES};
 #[cfg(target_os = "macos")]
+#[allow(unused_imports)]
 use objc::{msg_send, sel, sel_impl};
 
 #[cfg(target_os = "macos")]
