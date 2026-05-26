@@ -16,6 +16,7 @@ fn focused_text_prompt_contains_capture_instruction_and_prior_turns() {
     let (prompt, audit) = build_focused_text_prompt(FocusedTextPromptRequest {
         snapshot: &snapshot,
         instruction: "Make it warmer",
+        scope: None,
         semantics: FocusedTextEditSemantics::Chat,
         previous_turns: &previous_turns,
     });
@@ -36,6 +37,7 @@ fn focused_text_prompt_audit_excludes_sensitive_text() {
     let (_prompt, audit) = build_focused_text_prompt(FocusedTextPromptRequest {
         snapshot: &snapshot,
         instruction: "rewrite private text",
+        scope: None,
         semantics: FocusedTextEditSemantics::Replace,
         previous_turns: &[],
     });

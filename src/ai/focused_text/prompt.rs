@@ -17,6 +17,7 @@ pub struct FocusedTextTurnSummary {
 pub struct FocusedTextPromptRequest<'a> {
     pub snapshot: &'a FocusedTextSnapshot,
     pub instruction: &'a str,
+    pub scope: Option<&'a str>,
     pub semantics: FocusedTextEditSemantics,
     pub previous_turns: &'a [FocusedTextTurnSummary],
 }
@@ -27,6 +28,18 @@ pub fn build_focused_text_prompt(
     let (captured_text, capture_truncated) =
         cdata_text_with_char_limit(&request.snapshot.text, MAX_CAPTURE_PROMPT_CHARS);
     let requested_edit = cdata_text_with_char_limit(request.instruction, MAX_TURN_PROMPT_CHARS).0;
+
+    let scope_xml = request
+        .scope
+        .map(str::trim)
+        .filter(|scope| !scope.is_empty())
+        .map(|scope| {
+            let scope_text = format!("Focus changes on: {scope}");
+            let scope_text = cdata_text_with_char_limit(&scope_text, MAX_TURN_PROMPT_CHARS).0;
+            format!("    <scope><![CDATA[{scope_text}]]></scope>\n")
+        })
+        .unwrap_or_default();
+
     let previous_turns = request
         .previous_turns
         .iter()
@@ -53,6 +66,7 @@ pub fn build_focused_text_prompt(
         "You are the Text Agent Chat profile for focused-field edits.\n\n\
 Task:\n\
 - Use the captured focused-field text and the user instruction.\n\
+- If a scope is provided, focus changes on that target while still returning the required complete output.\n\
 - Produce the best text output for the requested edit semantics.\n\
 - The latest assistant output is what Replace, Append, and Copy will use.\n\
 - For Replace: return only the complete replacement text.\n\
@@ -65,6 +79,7 @@ Task:\n\
   <app name=\"{}\" bundle_id=\"{}\" />\n\
   <capture id=\"{}\" content_kind=\"focused-field\" char_count=\"{}\" prompt_char_count=\"{}\" selected_char_count=\"{}\" line_count=\"{}\" truncated=\"{}\" />\n\
   <requested_edit semantics=\"{}\"><![CDATA[{}]]></requested_edit>\n\
+  {}\n\
   <captured_focused_field><![CDATA[\n{}\n  ]]></captured_focused_field>\n\
   <previous_turns count=\"{}\">{}</previous_turns>\n\
 </focused_text_context>\n\n\
@@ -83,6 +98,7 @@ Return only the assistant output.",
         capture_truncated,
         request.semantics.as_str(),
         requested_edit,
+        scope_xml,
         captured_text,
         request.previous_turns.len(),
         previous_turns

@@ -621,6 +621,14 @@ pub(crate) struct AcpChatView {
     pub(crate) transcript: Option<Entity<AcpTranscript>>,
     ui_variant: AcpChatUiVariant,
     focused_text: Option<FocusedTextAgentChatState>,
+
+    /// Plain natural-language scope for focused-text mini edits.
+    scope_input: String,
+    /// Whether the optional scope row is visible in focused-text mini mode.
+    scope_visible: bool,
+    /// Whether focused-text mini key input is currently routed to the scope row.
+    scope_focused: bool,
+
     /// Setup-mode agent selection picker state (managed by AcpChatView until
     /// fully migrated to AcpSetupCard).
     pub(crate) setup_agent_picker: Option<AcpSetupAgentPickerState>,
@@ -734,6 +742,9 @@ impl AcpChatView {
         self.ui_variant = ui_variant;
 
         self.pending_focused_text_mini_focus_restore = false;
+        if ui_variant != AcpChatUiVariant::FocusedTextMini {
+            self.scope_focused = false;
+        }
         if ui_variant == AcpChatUiVariant::FocusedTextMini && !self.is_setup_mode() {
             let input_locked = {
                 let thread = self.live_thread().read(cx);
@@ -4331,6 +4342,7 @@ impl AcpChatView {
                 && !focused_text_input_locked
             {
                 this.pending_focused_text_mini_focus_restore = true;
+                this.scope_focused = false;
                 this.cursor_visible = true;
                 tracing::info!(
                     target: "script_kit::focused_text",
@@ -4447,6 +4459,9 @@ impl AcpChatView {
             transcript: None,
             ui_variant: AcpChatUiVariant::Standard,
             focused_text: None,
+            scope_input: String::new(),
+            scope_visible: false,
+            scope_focused: false,
             setup_agent_picker: None,
             opened_via_transient_trigger: None,
 
@@ -4518,6 +4533,9 @@ impl AcpChatView {
             transcript: None,
             ui_variant: AcpChatUiVariant::Standard,
             focused_text: None,
+            scope_input: String::new(),
+            scope_visible: false,
+            scope_focused: false,
             setup_agent_picker: None,
             opened_via_transient_trigger: None,
             last_accepted_item: None,
@@ -4805,6 +4823,10 @@ impl AcpChatView {
 
         // Plain Tab accepts the focused picker item (same as Enter but without submit).
         if !has_shift && self.handle_picker_accept_key("tab", cx) {
+            return true;
+        }
+
+        if self.handle_focused_text_scope_tab(has_shift, cx) {
             return true;
         }
 
@@ -5508,6 +5530,9 @@ impl AcpChatView {
             return Ok(());
         }
 
+        let scope = self.scope_input.trim().to_string();
+        let scope = if scope.is_empty() { None } else { Some(scope) };
+
         let previous_turns = {
             let thread = thread_entity.read(cx);
             Self::focused_text_previous_turns(thread)
@@ -5516,6 +5541,7 @@ impl AcpChatView {
             crate::ai::focused_text::FocusedTextPromptRequest {
                 snapshot: &snapshot,
                 instruction: &instruction,
+                scope: scope.as_deref(),
                 semantics,
                 previous_turns: &previous_turns,
             },
@@ -5640,6 +5666,9 @@ impl AcpChatView {
         self.pasted_text_tokens.clear();
         self.pasted_image_tokens.clear();
         self.pending_portal_session = None;
+        self.scope_input.clear();
+        self.scope_visible = false;
+        self.scope_focused = false;
         self.focused_text_mini_input_locked = false;
         self.pending_focused_text_mini_focus_restore = false;
         self.focused_text = Some(FocusedTextAgentChatState {
@@ -6261,14 +6290,142 @@ impl AcpChatView {
         }
 
         let thread = self.live_thread().read(cx);
+        let scope_extra = if self.scope_visible { 1 } else { 0 };
         const FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY: usize = 0;
         const FOCUSED_TEXT_MINI_SIZE_RESULT: usize = 2;
         match self.focused_text_mini_phase_for_thread(thread)? {
-            FocusedTextMiniPhase::InputOnly => Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY),
-            FocusedTextMiniPhase::Loading => Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY),
-            FocusedTextMiniPhase::Streaming => Some(FOCUSED_TEXT_MINI_SIZE_RESULT),
-            FocusedTextMiniPhase::Result => Some(FOCUSED_TEXT_MINI_SIZE_RESULT),
+            FocusedTextMiniPhase::InputOnly => {
+                Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY + scope_extra)
+            }
+            FocusedTextMiniPhase::Loading => Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY + scope_extra),
+            FocusedTextMiniPhase::Streaming => Some(FOCUSED_TEXT_MINI_SIZE_RESULT + scope_extra),
+            FocusedTextMiniPhase::Result => Some(FOCUSED_TEXT_MINI_SIZE_RESULT + scope_extra),
         }
+    }
+
+    fn resize_focused_text_mini_for_scope_change(&self, cx: &App) {
+        if let Some(item_count) = self.focused_text_mini_sizing_count(cx) {
+            crate::window_resize::resize_to_view_sync(
+                crate::window_resize::ViewType::FocusedTextMini,
+                item_count,
+            );
+        }
+    }
+
+    fn normalize_focused_text_scope_input(value: &str) -> String {
+        value
+            .replace("\r\n", "\n")
+            .replace('\r', "\n")
+            .replace('\n', " ")
+    }
+
+    fn handle_focused_text_scope_tab(&mut self, has_shift: bool, cx: &mut Context<Self>) -> bool {
+        if self.ui_variant != AcpChatUiVariant::FocusedTextMini || self.focused_text.is_none() {
+            return false;
+        }
+        let input_locked = {
+            let thread = self.live_thread().read(cx);
+            self.focused_text_input_locked_for_thread(thread)
+        };
+        if input_locked {
+            return false;
+        }
+        if has_shift {
+            if self.scope_focused {
+                self.scope_focused = false;
+                self.cursor_visible = true;
+                cx.notify();
+                return true;
+            }
+            return false;
+        }
+        let was_visible = self.scope_visible;
+        self.scope_visible = true;
+        self.scope_focused = true;
+        self.cursor_visible = true;
+        if !was_visible {
+            self.resize_focused_text_mini_for_scope_change(&*cx);
+        }
+        cx.notify();
+        true
+    }
+
+    fn handle_focused_text_scope_key_down(
+        &mut self,
+        event: &gpui::KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.ui_variant != AcpChatUiVariant::FocusedTextMini
+            || self.focused_text.is_none()
+            || !self.scope_focused
+        {
+            return false;
+        }
+        let input_locked = {
+            let thread = self.live_thread().read(cx);
+            self.focused_text_input_locked_for_thread(thread)
+        };
+        if input_locked {
+            return false;
+        }
+        let key = event.keystroke.key.as_str();
+        let modifiers = &event.keystroke.modifiers;
+        if crate::ui_foundation::is_key_escape(key) {
+            return false;
+        }
+        if crate::ui_foundation::is_key_enter(key) && !modifiers.platform && !modifiers.shift {
+            if let Err(error) = self.submit_focused_text_from_enter(cx) {
+                tracing::warn!(
+                    target: "script_kit::focused_text",
+                    event = "focused_text_submit_failed",
+                    error = %error,
+                );
+            }
+            return true;
+        }
+        if modifiers.platform && key.eq_ignore_ascii_case("v") {
+            if let Some(clipboard) = cx.read_from_clipboard() {
+                if let Some(text) = clipboard.text() {
+                    let normalized = Self::normalize_focused_text_scope_input(&text);
+                    if !normalized.is_empty() {
+                        self.scope_input.push_str(&normalized);
+                        cx.notify();
+                    }
+                }
+            }
+            return true;
+        }
+        if crate::ui_foundation::is_key_backspace(key) {
+            self.scope_input.pop();
+            cx.notify();
+            return true;
+        }
+        if crate::ui_foundation::is_key_delete(key) {
+            return true;
+        }
+        if crate::ui_foundation::is_key_left(key)
+            || crate::ui_foundation::is_key_right(key)
+            || crate::ui_foundation::is_key_up(key)
+            || crate::ui_foundation::is_key_down(key)
+            || key.eq_ignore_ascii_case("home")
+            || key.eq_ignore_ascii_case("end")
+            || key.eq_ignore_ascii_case("pageup")
+            || key.eq_ignore_ascii_case("pagedown")
+        {
+            return true;
+        }
+        if modifiers.platform || modifiers.control {
+            return false;
+        }
+        if let Some(ch) = event.keystroke.key_char.as_deref() {
+            if !ch.is_empty() {
+                self.scope_input
+                    .push_str(&Self::normalize_focused_text_scope_input(ch));
+                cx.notify();
+                return true;
+            }
+        }
+        false
     }
 
     fn focused_text_context_status_label(state: &FocusedTextAgentChatState) -> String {
@@ -6365,6 +6522,13 @@ impl AcpChatView {
         let input_height = crate::window_resize::focused_text_mini_input_height();
         let mini_result_height = crate::window_resize::focused_text_mini_result_height();
         let preview_height = crate::window_resize::focused_text_mini_preview_height();
+        let scope_height = if self.scope_visible {
+            input_height
+        } else {
+            0.0
+        };
+        let content_height = mini_result_height + scope_height;
+        let instruction_focus_view = weak_view.clone();
 
         let input_row = div()
             .id("focused-text-mini-input-row")
@@ -6377,8 +6541,18 @@ impl AcpChatView {
             .flex()
             .items_center()
             .gap(px(8.0))
-            .when(show_transcript, |d| {
+            .when(show_transcript || self.scope_visible, |d| {
                 d.border_b_1().border_color(rgba(chrome.divider_rgba))
+            })
+            .on_click(move |_event, window, cx| {
+                if let Some(entity) = instruction_focus_view.upgrade() {
+                    entity.update(cx, |chat, cx| {
+                        window.focus(&chat.focus_handle, cx);
+                        chat.scope_focused = false;
+                        chat.cursor_visible = true;
+                        cx.notify();
+                    });
+                }
             })
             .child(
                 div()
@@ -6386,11 +6560,16 @@ impl AcpChatView {
                     .min_w_0()
                     .flex_1()
                     .when(input_locked, |d| d.opacity(0.55))
+                    .when(self.scope_focused && !input_locked, |d| d.opacity(0.72))
                     .child(Self::render_composer_input_text(
                         input_text,
                         input_cursor,
                         input_selection,
-                        if input_locked { false } else { cursor_visible },
+                        if input_locked || self.scope_focused {
+                            false
+                        } else {
+                            cursor_visible
+                        },
                         Self::FOCUSED_TEXT_MINI_PLACEHOLDER,
                         false,
                         &[],
@@ -6408,20 +6587,93 @@ impl AcpChatView {
                 "focused-text-profile-icon",
                 profile_icon_name,
                 active_pending,
-                weak_view,
+                weak_view.clone(),
                 theme,
             ));
+
+        let scope_row = if self.scope_visible {
+            let scope_cursor = self.scope_input.chars().count();
+            let scope_selection = TextSelection::caret(scope_cursor);
+            let scope_focus_view = weak_view.clone();
+            Some(
+                div()
+                    .id("focused-text-mini-scope-row")
+                    .w_full()
+                    .h(px(input_height))
+                    .max_h(px(input_height))
+                    .flex_none()
+                    .overflow_hidden()
+                    .px(px(crate::panel::HEADER_PADDING_X))
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .when(show_transcript, |d| {
+                        d.border_b_1().border_color(rgba(chrome.divider_rgba))
+                    })
+                    .on_click(move |_event, window, cx| {
+                        if let Some(entity) = scope_focus_view.upgrade() {
+                            entity.update(cx, |chat, cx| {
+                                window.focus(&chat.focus_handle, cx);
+                                chat.scope_visible = true;
+                                chat.scope_focused = true;
+                                chat.cursor_visible = true;
+                                cx.notify();
+                            });
+                        }
+                    })
+                    .child(
+                        div()
+                            .flex_none()
+                            .w(px(44.0))
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(rgb(theme.colors.text.muted))
+                            .child("Scope"),
+                    )
+                    .child(
+                        div()
+                            .id("focused-text-scope-input")
+                            .min_w_0()
+                            .flex_1()
+                            .when(input_locked, |d| d.opacity(0.55))
+                            .child(Self::render_composer_input_text(
+                                &self.scope_input,
+                                scope_cursor,
+                                scope_selection,
+                                if input_locked {
+                                    false
+                                } else {
+                                    cursor_visible && self.scope_focused
+                                },
+                                "Scope\u{2026}",
+                                false,
+                                &[],
+                                &[],
+                                placeholder_text,
+                                theme,
+                                Some(Self::FOCUSED_TEXT_MINI_INPUT_MAX_VISIBLE_HEIGHT),
+                            )),
+                    )
+                    .into_any_element(),
+            )
+        } else {
+            None
+        };
 
         let mut content = div()
             .id("focused-text-mini-content")
             .w_full()
-            .h(px(mini_result_height))
-            .max_h(px(mini_result_height))
+            .h(px(content_height))
+            .max_h(px(content_height))
             .flex_none()
             .overflow_hidden()
             .flex()
             .flex_col()
             .child(input_row);
+
+        if let Some(scope_row) = scope_row {
+            content = content.child(scope_row);
+        }
 
         if let Some(transcript) = transcript {
             content = content.child(
@@ -9820,6 +10072,18 @@ impl AcpChatView {
             // which will update the query text and refresh the session.
         }
 
+        if crate::ui_foundation::is_key_tab(key)
+            && self.handle_focused_text_scope_tab(modifiers.shift, cx)
+        {
+            cx.stop_propagation();
+            return;
+        }
+
+        if self.handle_focused_text_scope_key_down(event, cx) {
+            cx.stop_propagation();
+            return;
+        }
+
         // Shift+Enter inserts a newline.
         if crate::ui_foundation::is_key_enter(key) && modifiers.shift {
             self.live_thread().update(cx, |thread, cx| {
@@ -9838,7 +10102,7 @@ impl AcpChatView {
                     let thread = self.live_thread().read(cx);
                     (
                         self.focused_text_mini_phase_for_thread(thread),
-                        !thread.input.text().is_empty(),
+                        !thread.input.text().is_empty() || !self.scope_input.is_empty(),
                     )
                 };
 
@@ -9861,20 +10125,28 @@ impl AcpChatView {
 
                 match phase {
                     Some(FocusedTextMiniPhase::InputOnly) if input_has_text => {
+                        self.scope_input.clear();
+                        self.scope_visible = false;
+                        self.scope_focused = false;
                         self.live_thread().update(cx, |thread, cx| {
                             thread.input.clear();
                             cx.notify();
                         });
+                        self.resize_focused_text_mini_for_scope_change(&*cx);
                     }
                     Some(FocusedTextMiniPhase::InputOnly) => {
                         self.trigger_close_window_requested(window, cx);
                     }
                     Some(FocusedTextMiniPhase::Loading) => {
                         let _ = self.cancel_streaming_from_escape(cx);
+                        self.scope_input.clear();
+                        self.scope_visible = false;
+                        self.scope_focused = false;
                         self.live_thread().update(cx, |thread, cx| {
                             thread.input.clear();
                             cx.notify();
                         });
+                        self.resize_focused_text_mini_for_scope_change(&*cx);
                     }
                     Some(FocusedTextMiniPhase::Streaming) => {
                         let _ = self.cancel_streaming_from_escape(cx);
