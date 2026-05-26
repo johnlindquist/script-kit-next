@@ -697,6 +697,7 @@ pub(crate) struct AcpChatView {
     focused_text_variations: Vec<FocusedTextVariationState>,
     focused_text_variation_tasks: Vec<Task<()>>,
     focused_text_selected_variation: Option<usize>,
+    focused_text_editing_variation: Option<usize>,
 
     /// Plain natural-language scope for focused-text mini edits.
     scope_input: String,
@@ -820,6 +821,7 @@ impl AcpChatView {
         self.pending_focused_text_mini_focus_restore = false;
         if ui_variant != AcpChatUiVariant::FocusedTextMini {
             self.scope_focused = false;
+            self.focused_text_editing_variation = None;
         }
         if ui_variant == AcpChatUiVariant::FocusedTextMini && !self.is_setup_mode() {
             let input_locked = {
@@ -1672,6 +1674,7 @@ impl AcpChatView {
     fn reset_focused_text_variations_for_submit(&mut self) {
         self.focused_text_variation_tasks.clear();
         self.focused_text_selected_variation = None;
+        self.focused_text_editing_variation = None;
         self.focused_text_variations = Self::focused_text_variation_angles()
             .iter()
             .copied()
@@ -1683,6 +1686,7 @@ impl AcpChatView {
         self.focused_text_variation_tasks.clear();
         self.focused_text_variations.clear();
         self.focused_text_selected_variation = None;
+        self.focused_text_editing_variation = None;
     }
 
     fn select_first_completed_focused_text_variation(&mut self) {
@@ -1733,26 +1737,33 @@ impl AcpChatView {
         let latest_text = Self::latest_assistant_response_after_latest_user_in_messages(messages)
             .unwrap_or_default();
         {
+            let editing_balanced =
+                self.focused_text_editing_variation == Some(FOCUSED_TEXT_BALANCED_VARIATION_INDEX);
             let variation =
                 &mut self.focused_text_variations[FOCUSED_TEXT_BALANCED_VARIATION_INDEX];
-            if !latest_text.trim().is_empty() {
-                variation.text = latest_text;
-            }
-            variation.status = match status {
-                AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission => {
-                    FocusedTextVariationStatus::Streaming
+            if editing_balanced {
+                variation.status = FocusedTextVariationStatus::Complete;
+                variation.error = None;
+            } else {
+                if !latest_text.trim().is_empty() {
+                    variation.text = latest_text;
                 }
-                AcpThreadStatus::Idle if !variation.text.trim().is_empty() => {
-                    FocusedTextVariationStatus::Complete
-                }
-                AcpThreadStatus::Error => {
-                    if variation.error.is_none() {
-                        variation.error = Some("balanced_turn_failed".to_string());
+                variation.status = match status {
+                    AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission => {
+                        FocusedTextVariationStatus::Streaming
                     }
-                    FocusedTextVariationStatus::Error
-                }
-                AcpThreadStatus::Idle => FocusedTextVariationStatus::Idle,
-            };
+                    AcpThreadStatus::Idle if !variation.text.trim().is_empty() => {
+                        FocusedTextVariationStatus::Complete
+                    }
+                    AcpThreadStatus::Error => {
+                        if variation.error.is_none() {
+                            variation.error = Some("balanced_turn_failed".to_string());
+                        }
+                        FocusedTextVariationStatus::Error
+                    }
+                    AcpThreadStatus::Idle => FocusedTextVariationStatus::Idle,
+                };
+            }
         }
 
         self.select_first_completed_focused_text_variation();
@@ -1766,6 +1777,22 @@ impl AcpChatView {
         cx: &mut Context<Self>,
     ) {
         if index >= self.focused_text_variations.len() {
+            return;
+        }
+
+        if self.focused_text_editing_variation == Some(index) {
+            if matches!(
+                event,
+                AgentChatEvent::TurnFinished { .. }
+                    | AgentChatEvent::Failed { .. }
+                    | AgentChatEvent::SetupRequired { .. }
+            ) {
+                if let Some(variation) = self.focused_text_variations.get_mut(index) {
+                    variation.status = FocusedTextVariationStatus::Complete;
+                    variation.error = None;
+                }
+                cx.notify();
+            }
             return;
         }
 
@@ -1841,8 +1868,8 @@ impl AcpChatView {
             if let Some(text) = self
                 .focused_text_selected_variation
                 .and_then(|index| self.focused_text_variations.get(index))
-                .map(|variation| variation.text.trim().to_string())
-                .filter(|text| !text.is_empty())
+                .filter(|variation| !variation.text.trim().is_empty())
+                .map(|variation| variation.text.clone())
             {
                 return Some(text);
             }
@@ -1854,7 +1881,7 @@ impl AcpChatView {
                     variation.status == FocusedTextVariationStatus::Complete
                         && !variation.text.trim().is_empty()
                 })
-                .map(|variation| variation.text.trim().to_string())
+                .map(|variation| variation.text.clone())
             {
                 return Some(text);
             }
@@ -1882,6 +1909,7 @@ impl AcpChatView {
         if self.focused_text_selected_variation == Some(index) {
             return true;
         }
+        self.focused_text_editing_variation = None;
         self.focused_text_selected_variation = Some(index);
         self.scope_focused = false;
         self.cursor_visible = true;
@@ -4192,6 +4220,10 @@ impl AcpChatView {
     }
 
     pub(crate) fn dismiss_escape_popup(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.exit_focused_text_variation_editor(cx) {
+            return true;
+        }
+
         if self.profile_selector_open {
             self.dismiss_profile_selector_popup(cx);
             return true;
@@ -4259,7 +4291,8 @@ impl AcpChatView {
     }
 
     pub(crate) fn has_escape_dismissible_popup(&self) -> bool {
-        self.profile_selector_open
+        self.focused_text_editing_variation.is_some()
+            || self.profile_selector_open
             || self.model_selector_open
             || self.mention_session.is_some()
             || self.history_menu.is_some()
@@ -4825,6 +4858,7 @@ impl AcpChatView {
             focused_text_variations: Vec::new(),
             focused_text_variation_tasks: Vec::new(),
             focused_text_selected_variation: None,
+            focused_text_editing_variation: None,
             scope_input: String::new(),
             scope_visible: false,
             scope_focused: false,
@@ -4902,6 +4936,7 @@ impl AcpChatView {
             focused_text_variations: Vec::new(),
             focused_text_variation_tasks: Vec::new(),
             focused_text_selected_variation: None,
+            focused_text_editing_variation: None,
             scope_input: String::new(),
             scope_visible: false,
             scope_focused: false,
@@ -6759,6 +6794,182 @@ impl AcpChatView {
             .replace('\n', " ")
     }
 
+    fn normalize_focused_text_variation_editor_input(value: &str) -> String {
+        value.replace("\r\n", "\n").replace('\r', "\n")
+    }
+
+    fn edit_focused_text_variation_text(
+        &mut self,
+        index: usize,
+        edit: impl FnOnce(&mut String),
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(variation) = self.focused_text_variations.get_mut(index) else {
+            self.focused_text_editing_variation = None;
+            cx.notify();
+            return false;
+        };
+        edit(&mut variation.text);
+        variation.status = FocusedTextVariationStatus::Complete;
+        variation.error = None;
+        self.focused_text_selected_variation = Some(index);
+        self.cursor_visible = true;
+        cx.notify();
+        true
+    }
+
+    fn enter_focused_text_variation_editor(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.ui_variant != AcpChatUiVariant::FocusedTextMini
+            || self.focused_text.is_none()
+            || self.scope_focused
+            || self.mention_session.is_some()
+        {
+            return false;
+        }
+        let Some(index) = self.focused_text_selected_variation else {
+            return false;
+        };
+        if index >= self.focused_text_variations.len() {
+            self.focused_text_selected_variation = None;
+            self.focused_text_editing_variation = None;
+            cx.notify();
+            return false;
+        }
+        self.focused_text_editing_variation = Some(index);
+        self.scope_focused = false;
+        self.cursor_visible = true;
+        tracing::info!(
+            target: "script_kit::focused_text",
+            event = "focused_text_variation_editor_opened",
+            index,
+            angle = self.focused_text_variations[index].angle.id(),
+            text_len = self.focused_text_variations[index].text.chars().count(),
+        );
+        cx.notify();
+        true
+    }
+
+    fn exit_focused_text_variation_editor(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.focused_text_editing_variation.take().is_some() {
+            self.cursor_visible = true;
+            cx.notify();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn handle_focused_text_variation_editor_key_down(
+        &mut self,
+        event: &gpui::KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(index) = self.focused_text_editing_variation else {
+            return false;
+        };
+        if self.ui_variant != AcpChatUiVariant::FocusedTextMini
+            || self.focused_text.is_none()
+            || index >= self.focused_text_variations.len()
+        {
+            self.focused_text_editing_variation = None;
+            cx.notify();
+            return false;
+        }
+
+        let key = event.keystroke.key.as_str();
+        let modifiers = &event.keystroke.modifiers;
+
+        if crate::ui_foundation::is_key_escape(key) {
+            self.exit_focused_text_variation_editor(cx);
+            return true;
+        }
+
+        if crate::ui_foundation::is_key_enter(key) && modifiers.platform && !modifiers.shift {
+            self.focused_text_selected_variation = Some(index);
+            let receipt = self.apply_focused_text_output(
+                crate::ai::focused_text::FocusedTextApplyAction::Replace,
+                cx,
+            );
+            if receipt.success {
+                self.focused_text_editing_variation = None;
+                self.cursor_visible = true;
+                self.trigger_close_window_requested(window, cx);
+            }
+            cx.notify();
+            return true;
+        }
+
+        if crate::ui_foundation::is_key_enter(key)
+            && !modifiers.platform
+            && !modifiers.control
+            && !modifiers.alt
+        {
+            return self.edit_focused_text_variation_text(index, |text| text.push('\n'), cx);
+        }
+
+        if modifiers.platform
+            && !modifiers.control
+            && !modifiers.alt
+            && key.eq_ignore_ascii_case("v")
+        {
+            if let Some(clipboard) = cx.read_from_clipboard() {
+                if let Some(text) = clipboard.text() {
+                    let normalized = Self::normalize_focused_text_variation_editor_input(&text);
+                    if !normalized.is_empty() {
+                        let _ = self.edit_focused_text_variation_text(
+                            index,
+                            |current| current.push_str(&normalized),
+                            cx,
+                        );
+                    }
+                }
+            }
+            return true;
+        }
+
+        if crate::ui_foundation::is_key_backspace(key) {
+            return self.edit_focused_text_variation_text(
+                index,
+                |text| {
+                    text.pop();
+                },
+                cx,
+            );
+        }
+
+        if crate::ui_foundation::is_key_delete(key)
+            || crate::ui_foundation::is_key_tab(key)
+            || crate::ui_foundation::is_key_left(key)
+            || crate::ui_foundation::is_key_right(key)
+            || crate::ui_foundation::is_key_up(key)
+            || crate::ui_foundation::is_key_down(key)
+            || key.eq_ignore_ascii_case("home")
+            || key.eq_ignore_ascii_case("end")
+            || key.eq_ignore_ascii_case("pageup")
+            || key.eq_ignore_ascii_case("pagedown")
+        {
+            return true;
+        }
+
+        if modifiers.platform || modifiers.control || modifiers.alt {
+            return false;
+        }
+
+        if let Some(ch) = event.keystroke.key_char.as_deref() {
+            let normalized = Self::normalize_focused_text_variation_editor_input(ch);
+            if !normalized.is_empty() {
+                return self.edit_focused_text_variation_text(
+                    index,
+                    |text| text.push_str(&normalized),
+                    cx,
+                );
+            }
+        }
+
+        false
+    }
+
     fn handle_focused_text_scope_tab(&mut self, has_shift: bool, cx: &mut Context<Self>) -> bool {
         if self.ui_variant != AcpChatUiVariant::FocusedTextMini || self.focused_text.is_none() {
             return false;
@@ -6956,17 +7167,23 @@ impl AcpChatView {
 
     fn render_focused_text_variation_card(
         variation: FocusedTextVariationSnapshot,
+        editing: bool,
+        cursor_visible: bool,
         weak_view: WeakEntity<AcpChatView>,
         theme: &crate::theme::Theme,
     ) -> gpui::AnyElement {
         let selected = variation.selected;
         let streaming = matches!(variation.status, FocusedTextVariationStatus::Streaming);
         let error = matches!(variation.status, FocusedTextVariationStatus::Error);
-        let status_label = match variation.status {
-            FocusedTextVariationStatus::Idle => "Idle",
-            FocusedTextVariationStatus::Streaming => "Streaming",
-            FocusedTextVariationStatus::Complete => "Ready",
-            FocusedTextVariationStatus::Error => "Error",
+        let status_label = if editing {
+            "Editing"
+        } else {
+            match variation.status {
+                FocusedTextVariationStatus::Idle => "Idle",
+                FocusedTextVariationStatus::Streaming => "Streaming",
+                FocusedTextVariationStatus::Complete => "Ready",
+                FocusedTextVariationStatus::Error => "Error",
+            }
         };
         let body = if error {
             variation
@@ -7008,6 +7225,8 @@ impl AcpChatView {
             dot.into_any_element()
         };
         let variation_index = variation.index;
+        let editor_cursor = variation.text.chars().count();
+        let editor_selection = TextSelection::caret(editor_cursor);
         let select_view = weak_view.clone();
         div()
             .id(SharedString::from(format!(
@@ -7020,12 +7239,16 @@ impl AcpChatView {
             .py(px(8.0))
             .rounded(px(8.0))
             .border_1()
-            .border_color(if selected {
+            .border_color(if editing {
+                rgba((theme.colors.accent.selected << 8) | 0xD0)
+            } else if selected {
                 rgba((theme.colors.accent.selected << 8) | 0xA8)
             } else {
                 rgba((theme.colors.ui.border << 8) | 0x36)
             })
-            .bg(if selected {
+            .bg(if editing {
+                rgba((theme.colors.accent.selected << 8) | 0x10)
+            } else if selected {
                 rgba((theme.colors.accent.selected << 8) | 0x14)
             } else {
                 rgba((theme.colors.text.primary << 8) | 0x05)
@@ -7078,7 +7301,36 @@ impl AcpChatView {
                             .child(status_label),
                     ),
             )
-            .child(
+            .child(if editing {
+                div()
+                    .w_full()
+                    .pt(px(6.0))
+                    .child(
+                        div()
+                            .w_full()
+                            .min_h(px(54.0))
+                            .rounded(px(6.0))
+                            .border_1()
+                            .border_color(rgba((theme.colors.accent.selected << 8) | 0x38))
+                            .bg(rgba((theme.colors.text.primary << 8) | 0x04))
+                            .px(px(8.0))
+                            .py(px(6.0))
+                            .child(Self::render_composer_input_text(
+                                &variation.text,
+                                editor_cursor,
+                                editor_selection,
+                                cursor_visible,
+                                "Edit variation\u{2026}",
+                                true,
+                                &[],
+                                &[],
+                                rgba((theme.colors.text.primary << 8) | 0x62),
+                                theme,
+                                None,
+                            )),
+                    )
+                    .into_any_element()
+            } else {
                 div()
                     .w_full()
                     .pt(px(6.0))
@@ -7094,8 +7346,9 @@ impl AcpChatView {
                     } else {
                         0.92
                     })
-                    .child(body),
-            )
+                    .child(body)
+                    .into_any_element()
+            })
             .into_any_element()
     }
 
@@ -7121,6 +7374,7 @@ impl AcpChatView {
         let mini_result_height = crate::window_resize::focused_text_mini_result_height();
         let fallback_preview_height = crate::window_resize::focused_text_mini_preview_height();
         let has_variation_cards = !variations.is_empty();
+        let editing_variation = self.focused_text_editing_variation;
         let show_result_area = has_variation_cards || show_transcript || transcript.is_some();
         let preview_height = if has_variation_cards {
             Self::focused_text_variation_area_height(variations.len(), fallback_preview_height)
@@ -7174,7 +7428,10 @@ impl AcpChatView {
                         input_text,
                         input_cursor,
                         input_selection,
-                        if input_locked || self.scope_focused {
+                        if input_locked
+                            || self.scope_focused
+                            || self.focused_text_editing_variation.is_some()
+                        {
                             false
                         } else {
                             cursor_visible
@@ -7305,8 +7562,11 @@ impl AcpChatView {
                             .flex_col()
                             .gap(px(Self::FOCUSED_TEXT_VARIATION_CARD_GAP))
                             .children(variations.into_iter().map(|variation| {
+                                let editing = editing_variation == Some(variation.index);
                                 Self::render_focused_text_variation_card(
                                     variation,
+                                    editing,
+                                    cursor_visible && editing,
                                     weak_view.clone(),
                                     theme,
                                 )
@@ -10561,10 +10821,16 @@ impl AcpChatView {
             return;
         }
 
+        if self.handle_focused_text_variation_editor_key_down(event, window, cx) {
+            cx.stop_propagation();
+            return;
+        }
+
         // ── Focused-text variations: Up/Down selects stacked result cards ─
         if self.ui_variant == AcpChatUiVariant::FocusedTextMini
             && self.focused_text.is_some()
             && !self.focused_text_variations.is_empty()
+            && self.focused_text_editing_variation.is_none()
             && !self.scope_focused
             && self.mention_session.is_none()
             && !modifiers.platform
@@ -10860,6 +11126,24 @@ impl AcpChatView {
             );
             cx.stop_propagation();
             return;
+        }
+
+        if self.ui_variant == AcpChatUiVariant::FocusedTextMini
+            && self.focused_text.is_some()
+            && crate::ui_foundation::is_key_enter(key)
+            && !modifiers.platform
+            && !modifiers.control
+            && !modifiers.alt
+            && !modifiers.shift
+            && !self.scope_focused
+            && self.mention_session.is_none()
+            && self.focused_text_editing_variation.is_none()
+        {
+            let input_empty = self.live_thread().read(cx).input.text().trim().is_empty();
+            if input_empty && self.enter_focused_text_variation_editor(cx) {
+                cx.stop_propagation();
+                return;
+            }
         }
 
         if self.focused_text.is_some()
