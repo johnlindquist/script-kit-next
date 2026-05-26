@@ -60,12 +60,10 @@ fn profile_selector_is_separate_from_model_selector() {
 }
 
 #[test]
-fn profile_selection_persistence_preserves_acp_fallback_and_stable_ids() {
+fn profile_selection_persistence_uses_stable_ids_and_pi_backend() {
     assert!(PROFILES_SOURCE.contains("persist_agent_chat_profile_selection"));
-    assert!(PROFILES_SOURCE.contains("BUILTIN_ACP_FALLBACK_PROFILE_ID"));
-    assert!(PROFILES_SOURCE.contains("ai.selected_profile_id = None;"));
-    assert!(PROFILES_SOURCE.contains("ai.selected_backend = Some(AgentChatBackend::Acp);"));
     assert!(PROFILES_SOURCE.contains("ai.selected_profile_id = Some(entry.id.clone());"));
+    assert!(PROFILES_SOURCE.contains("ai.selected_backend = Some(AgentChatBackend::Pi);"));
 }
 
 #[test]

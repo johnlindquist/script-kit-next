@@ -109,8 +109,7 @@ pub(crate) fn open_or_focus_chat_with_input(
     let ai_preferences = crate::config::load_user_preferences().ai;
     let pi_launch =
         crate::ai::agent_chat::launch::resolve_selected_pi_launch(&ai_preferences, &profile_ctx)
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| "Pi Agent Chat is unavailable for the selected profile".to_string())?;
+            .map_err(|error| error.to_string())?;
     let warm_spec = pi_launch.warm_spec();
     let manager = crate::ai::agent_chat::launch::warm_session_manager();
     manager

@@ -7,7 +7,6 @@ use crate::config::{
 
 pub const BUILTIN_GENERAL_PROFILE_ID: &str = "general";
 pub const BUILTIN_SCRIPT_KIT_PROFILE_ID: &str = "script-kit";
-pub const BUILTIN_ACP_FALLBACK_PROFILE_ID: &str = "acp";
 pub const BUILTIN_TEXT_PROFILE_ID: &str = "text";
 pub const DEFAULT_PI_PROVIDER: &str = "openai-codex";
 pub const DEFAULT_PI_MODEL: &str = "gpt-5.4";
@@ -258,36 +257,6 @@ pub fn built_in_profiles(ctx: &AgentChatProfileContext) -> Vec<ResolvedAgentChat
     ]
 }
 
-pub fn default_acp_runtime_profile() -> ResolvedAgentChatProfile {
-    ResolvedAgentChatProfile {
-        source: AgentChatProfileSource::BuiltIn,
-        id: BUILTIN_ACP_FALLBACK_PROFILE_ID.to_string(),
-        name: "Agent".to_string(),
-        icon_name: Some(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN.to_string()),
-        backend: AgentChatBackend::Acp,
-        pi_binary: None,
-        agent: None,
-        provider: None,
-        model: None,
-        system_prompt: None,
-        append_system_prompt: None,
-        cwd: None,
-        tools: None,
-        tool_policy: None,
-        path_policy: None,
-        blocked_action_message: None,
-        disable_extensions: None,
-        disable_skills: None,
-        disable_prompt_templates: None,
-        hide_cwd_in_prompt: None,
-        thinking: None,
-        extension_policy: None,
-        session_dir: None,
-        no_session: None,
-        session_durability: None,
-    }
-}
-
 pub fn resolve_effective_profile(
     ai: &AiPreferences,
     ctx: &AgentChatProfileContext,
@@ -324,10 +293,6 @@ pub fn resolve_effective_profile(
         }
     }
 
-    if ai.selected_backend == Some(AgentChatBackend::Acp) {
-        return apply_ai_fallbacks(default_acp_runtime_profile(), ai);
-    }
-
     apply_ai_fallbacks(built_in_general_profile(ctx), ai)
 }
 
@@ -339,10 +304,6 @@ pub fn agent_chat_profile_picker_entries(
         .into_iter()
         .map(AgentChatProfilePickerEntry::from_profile)
         .collect();
-
-    entries.push(AgentChatProfilePickerEntry::from_profile(
-        default_acp_runtime_profile(),
-    ));
 
     for profile in ai
         .profiles
@@ -383,21 +344,14 @@ pub fn persist_agent_chat_profile_selection(
         .find(|entry| entry.id == profile_id)?
         .clone();
 
-    if entry.id == BUILTIN_ACP_FALLBACK_PROFILE_ID {
-        ai.selected_profile_id = None;
-        ai.selected_profile_name = None;
-        ai.selected_backend = Some(AgentChatBackend::Acp);
-        return Some(entry);
-    }
-
     ai.selected_profile_id = Some(entry.id.clone());
     ai.selected_profile_name = None;
-    ai.selected_backend = Some(entry.backend);
+    ai.selected_backend = Some(AgentChatBackend::Pi);
     Some(entry)
 }
 
 pub fn resolve_user_profile(profile: &AcpProfile) -> ResolvedAgentChatProfile {
-    let backend = profile.backend.unwrap_or(AgentChatBackend::Acp);
+    let backend = profile.backend.unwrap_or(AgentChatBackend::Pi);
     ResolvedAgentChatProfile {
         source: AgentChatProfileSource::User,
         id: profile
@@ -449,24 +403,16 @@ pub fn apply_ai_fallbacks(
     mut profile: ResolvedAgentChatProfile,
     ai: &AiPreferences,
 ) -> ResolvedAgentChatProfile {
-    if profile.backend == AgentChatBackend::Pi && profile.pi_binary.is_none() {
+    if profile.pi_binary.is_none() {
         profile.pi_binary = clean_opt(ai.pi_binary.as_deref())
             .map(crate::ai::agent_chat::pi::binary::expand_tilde_path)
             .or_else(crate::ai::agent_chat::pi::binary::default_pi_binary);
     }
 
-    if profile.backend == AgentChatBackend::Acp && profile.agent.is_none() {
-        profile.agent = clean_opt(ai.selected_acp_agent_id.as_deref()).map(str::to_string);
-    }
-
     if let Some(selected_model) = clean_opt(ai.selected_model_id.as_deref()) {
-        if profile.backend == AgentChatBackend::Pi {
-            if let Some((provider, model)) = parse_provider_model_selection(selected_model) {
-                profile.provider = Some(provider);
-                profile.model = Some(model);
-            } else if profile.source == AgentChatProfileSource::BuiltIn || profile.model.is_none() {
-                profile.model = Some(selected_model.to_string());
-            }
+        if let Some((provider, model)) = parse_provider_model_selection(selected_model) {
+            profile.provider = Some(provider);
+            profile.model = Some(model);
         } else if profile.source == AgentChatProfileSource::BuiltIn || profile.model.is_none() {
             profile.model = Some(selected_model.to_string());
         }

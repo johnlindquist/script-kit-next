@@ -104,14 +104,13 @@ impl ScriptListApp {
                 &ai_preferences,
                 &profile_ctx,
             )
-            .map(Some)
         } else {
             crate::ai::agent_chat::launch::PiAgentChatLaunch::from_profile(
                 effective_profile.clone(),
             )
         };
         match pi_launch_result {
-            Ok(Some(pi_launch)) => {
+            Ok(pi_launch) => {
                 self.open_tab_ai_pi_view_from_launch(
                     pi_launch,
                     request,
@@ -127,14 +126,6 @@ impl ScriptListApp {
                     had_harness_session,
                     pending_script_list_trigger,
                     open_started_at,
-                    cx,
-                );
-                return;
-            }
-            Ok(None) => {
-                self.show_pi_agent_chat_unavailable_setup_view(
-                    source_view,
-                    "Pi Agent Chat is unavailable for the selected profile".to_string(),
                     cx,
                 );
                 return;

@@ -1191,11 +1191,9 @@ fn classify_agent_source(agent_id: &str) -> super::catalog::AcpAgentSource {
     }
 }
 
-/// Load the persisted preferred ACP agent ID from config-backed preferences.
+/// Stub — ACP backend has been removed; all profiles use Pi.
 pub(crate) fn load_preferred_acp_agent_id() -> Option<String> {
-    crate::config::load_user_preferences()
-        .ai
-        .selected_acp_agent_id
+    None
 }
 
 /// Resolve the selected profile's non-empty system prompt from loaded
@@ -1228,41 +1226,13 @@ pub(crate) fn load_selected_profile_system_prompt() -> Option<(String, String)> 
     selected_profile_system_prompt_from_preferences(&prefs.ai)
 }
 
-/// Persist the preferred ACP agent ID to `config.ts` synchronously.
-///
-/// Returns `Ok(())` when the write succeeds, so callers can gate retry
-/// logic on a truthful persistence outcome instead of racing an async write.
-pub(crate) fn persist_preferred_acp_agent_id_sync(agent_id: Option<String>) -> anyhow::Result<()> {
-    let mut prefs = crate::config::load_user_preferences();
-    prefs.ai.selected_acp_agent_id = agent_id.clone();
-    crate::config::save_user_preferences(&prefs)?;
-    tracing::info!(
-        target: "script_kit::tab_ai",
-        event = "acp_agent_selection_persisted_sync",
-        ?agent_id,
-    );
+/// Stub — ACP backend has been removed; all profiles use Pi.
+pub(crate) fn persist_preferred_acp_agent_id_sync(_agent_id: Option<String>) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Persist the preferred ACP agent ID to `config.ts` on a background thread.
-///
-/// Delegates to the synchronous helper internally. Use this when the caller
-/// does not need to gate on persistence success (e.g. initial launch).
-pub(crate) fn persist_preferred_acp_agent_id(agent_id: Option<String>) {
-    std::thread::Builder::new()
-        .name("acp-save-agent".into())
-        .spawn(move || {
-            if let Err(error) = persist_preferred_acp_agent_id_sync(agent_id.clone()) {
-                tracing::warn!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_agent_selection_persist_failed",
-                    error = %error,
-                    ?agent_id,
-                );
-            }
-        })
-        .ok();
-}
+/// Stub — ACP backend has been removed; all profiles use Pi.
+pub(crate) fn persist_preferred_acp_agent_id(_agent_id: Option<String>) {}
 
 // ---------------------------------------------------------------------------
 // ACP agent runtime state persistence

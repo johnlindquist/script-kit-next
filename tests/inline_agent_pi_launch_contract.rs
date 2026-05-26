@@ -18,7 +18,6 @@ fn inline_agent_pi_launch_is_owned_by_agent_chat_launch_module() {
 fn focused_text_pi_launch_uses_text_profile_policy_not_selected_acp_backend() {
     for required in [
         "BUILTIN_TEXT_PROFILE_ID",
-        "selected_acp_agent_id: None",
         "selected_backend: Some(AgentChatBackend::Pi)",
         "selected_profile_id: Some(BUILTIN_TEXT_PROFILE_ID.to_string())",
     ] {

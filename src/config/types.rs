@@ -809,11 +809,14 @@ pub struct ScriptKitUserPreferences {
 }
 
 /// Agent Chat backend selected for a profile or runtime preference.
+///
+/// All profiles now resolve through Pi. Legacy `"acp"` values in persisted
+/// config deserialize as `Pi` via the serde alias.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum AgentChatBackend {
     #[default]
-    Acp,
+    #[serde(alias = "acp")]
     Pi,
 }
 
@@ -824,10 +827,6 @@ pub struct AiPreferences {
     /// Last-selected model ID (e.g. "claude-sonnet-4-6").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_model_id: Option<String>,
-
-    /// Last-selected ACP agent ID (e.g. "opencode", "claude-code").
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub selected_acp_agent_id: Option<String>,
 
     /// Last-selected Agent Chat profile id. Takes precedence over the legacy
     /// selected profile name when both are present.
@@ -871,7 +870,7 @@ pub struct AcpProfile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon_name: Option<String>,
 
-    /// Backend for this profile. Omitted legacy profiles remain ACP-backed.
+    /// Backend for this profile. All profiles resolve to Pi.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend: Option<AgentChatBackend>,
 
@@ -879,8 +878,7 @@ pub struct AcpProfile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pi_binary: Option<String>,
 
-    /// Optional ACP agent ID override (e.g. `"claude-code"`). Falls back to the
-    /// globally selected agent when omitted.
+    /// Optional agent identifier forwarded to the Pi backend.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
 

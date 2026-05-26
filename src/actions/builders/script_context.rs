@@ -1254,11 +1254,8 @@ fn acp_model_switch_description(
     AcpModelSelectionActionPlan::from_is_selected(is_selected).description(&display_name)
 }
 
-fn agent_chat_profile_backend_label(backend: crate::config::AgentChatBackend) -> &'static str {
-    match backend {
-        crate::config::AgentChatBackend::Pi => "Pi",
-        crate::config::AgentChatBackend::Acp => "ACP",
-    }
+fn agent_chat_profile_backend_label(_backend: crate::config::AgentChatBackend) -> &'static str {
+    "Pi"
 }
 
 fn agent_chat_profile_source_label(

@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use crate::ai::agent_chat::profiles::ResolvedAgentChatProfile;
-use crate::config::AgentChatBackend;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PiLaunchSpec {
@@ -32,10 +31,6 @@ pub struct PiLaunchSpec {
 
 impl PiLaunchSpec {
     pub fn from_profile(profile: &ResolvedAgentChatProfile) -> Option<Self> {
-        if profile.backend != AgentChatBackend::Pi {
-            return None;
-        }
-
         Some(Self {
             pi_binary: profile.pi_binary.clone()?,
             profile_id: Some(profile.id.clone()),

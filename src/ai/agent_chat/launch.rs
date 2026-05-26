@@ -7,8 +7,8 @@ use crate::ai::acp::config::AcpModelEntry;
 use crate::ai::agent_chat::pi::launch_spec::PiLaunchSpec;
 use crate::ai::agent_chat::pi::{PiRpcLaunchSpec, PiRpcRuntime};
 use crate::ai::agent_chat::profiles::{
-    apply_ai_fallbacks, built_in_general_profile, resolve_effective_profile,
-    AgentChatProfileContext, ResolvedAgentChatProfile, BUILTIN_TEXT_PROFILE_ID,
+    resolve_effective_profile, AgentChatProfileContext, ResolvedAgentChatProfile,
+    BUILTIN_TEXT_PROFILE_ID,
 };
 use crate::ai::agent_chat::runtime::AgentChatConnection;
 use crate::ai::agent_chat::warm_key::pi_warm_key;
@@ -31,20 +31,12 @@ pub(crate) struct PiAgentChatLaunch {
 }
 
 impl PiAgentChatLaunch {
-    pub(crate) fn from_profile(profile: ResolvedAgentChatProfile) -> Result<Option<Self>> {
-        if profile.backend != AgentChatBackend::Pi {
-            return Ok(None);
-        }
-
+    pub(crate) fn from_profile(profile: ResolvedAgentChatProfile) -> Result<Self> {
         let launch_spec = PiLaunchSpec::from_profile(&profile)
             .ok_or_else(|| {
-                if profile.backend == AgentChatBackend::Pi {
-                    anyhow!(
-                        "Pi Agent Chat is selected, but no Pi binary was resolved. Ship Contents/MacOS/pi in the app bundle or configure ai.piBinary / SCRIPT_KIT_PI_BINARY."
-                    )
-                } else {
-                    anyhow!("selected Agent Chat profile is not a Pi profile")
-                }
+                anyhow!(
+                    "Pi Agent Chat is selected, but no Pi binary was resolved. Ship Contents/MacOS/pi in the app bundle or configure ai.piBinary / SCRIPT_KIT_PI_BINARY."
+                )
             })?;
         let cwd = launch_spec
             .cwd
@@ -66,7 +58,7 @@ impl PiAgentChatLaunch {
             })
             .unwrap_or_default();
 
-        Ok(Some(Self {
+        Ok(Self {
             profile,
             launch_spec,
             rpc_spec,
@@ -74,7 +66,7 @@ impl PiAgentChatLaunch {
             cwd,
             selected_model_id,
             available_models,
-        }))
+        })
     }
 
     pub(crate) fn warm_spec(&self) -> AgentChatWarmSessionSpec {
@@ -97,23 +89,8 @@ pub(crate) fn warm_session_manager() -> &'static AgentChatWarmSessionManager {
 pub(crate) fn resolve_selected_pi_launch(
     ai: &AiPreferences,
     ctx: &AgentChatProfileContext,
-) -> Result<Option<PiAgentChatLaunch>> {
-    let selected = resolve_effective_profile(ai, ctx);
-    let profile = if selected.backend == AgentChatBackend::Pi {
-        selected
-    } else {
-        let pi_ai = AiPreferences {
-            selected_model_id: ai.selected_model_id.clone(),
-            selected_acp_agent_id: None,
-            selected_profile_id: None,
-            selected_backend: Some(AgentChatBackend::Pi),
-            pi_binary: ai.pi_binary.clone(),
-            profiles: ai.profiles.clone(),
-            selected_profile_name: None,
-        };
-        apply_ai_fallbacks(built_in_general_profile(ctx), &pi_ai)
-    };
-
+) -> Result<PiAgentChatLaunch> {
+    let profile = resolve_effective_profile(ai, ctx);
     PiAgentChatLaunch::from_profile(profile)
 }
 
@@ -121,26 +98,9 @@ pub(crate) fn resolve_inline_agent_pi_launch(
     ai: &AiPreferences,
     ctx: &AgentChatProfileContext,
 ) -> Result<PiAgentChatLaunch> {
-    let selected = resolve_effective_profile(ai, ctx);
-    let base = if selected.backend == AgentChatBackend::Pi {
-        selected
-    } else {
-        let pi_ai = AiPreferences {
-            selected_model_id: None,
-            selected_acp_agent_id: None,
-            selected_profile_id: None,
-            selected_backend: Some(AgentChatBackend::Pi),
-            pi_binary: ai.pi_binary.clone(),
-            profiles: Vec::new(),
-            selected_profile_name: None,
-        };
-        apply_ai_fallbacks(built_in_general_profile(ctx), &pi_ai)
-    };
-
+    let base = resolve_effective_profile(ai, ctx);
     let inline_profile = inline_agent_pi_profile(base, ctx);
-    PiAgentChatLaunch::from_profile(inline_profile)?.ok_or_else(|| {
-        anyhow!("Pi Agent Chat is unavailable. Configure ai.piBinary or bundle Contents/MacOS/pi.")
-    })
+    PiAgentChatLaunch::from_profile(inline_profile)
 }
 
 pub(crate) fn resolve_focused_text_pi_launch(
@@ -149,7 +109,6 @@ pub(crate) fn resolve_focused_text_pi_launch(
 ) -> Result<PiAgentChatLaunch> {
     let text_ai = AiPreferences {
         selected_model_id: ai.selected_model_id.clone(),
-        selected_acp_agent_id: None,
         selected_profile_id: Some(BUILTIN_TEXT_PROFILE_ID.to_string()),
         selected_backend: Some(AgentChatBackend::Pi),
         pi_binary: ai.pi_binary.clone(),
@@ -157,9 +116,7 @@ pub(crate) fn resolve_focused_text_pi_launch(
         selected_profile_name: None,
     };
 
-    PiAgentChatLaunch::from_profile(resolve_effective_profile(&text_ai, ctx))?.ok_or_else(|| {
-        anyhow!("Pi Agent Chat Text profile is unavailable. Configure ai.piBinary or bundle Contents/MacOS/pi.")
-    })
+    PiAgentChatLaunch::from_profile(resolve_effective_profile(&text_ai, ctx))
 }
 
 fn pi_model_selection_id(profile: &ResolvedAgentChatProfile) -> Option<String> {
@@ -215,7 +172,7 @@ mod tests {
             pi_binary: Some("/tmp/test-pi".to_string()),
             ..AiPreferences::default()
         };
-        let launch = resolve_selected_pi_launch(&ai, &ctx()).unwrap().unwrap();
+        let launch = resolve_selected_pi_launch(&ai, &ctx()).unwrap();
 
         assert_eq!(launch.profile.name, "General");
         assert_eq!(launch.cwd, PathBuf::from("/tmp/kit/agent-chat/general"));
@@ -234,7 +191,7 @@ mod tests {
             ),
             ..AiPreferences::default()
         };
-        let launch = resolve_selected_pi_launch(&ai, &ctx()).unwrap().unwrap();
+        let launch = resolve_selected_pi_launch(&ai, &ctx()).unwrap();
 
         assert_eq!(
             launch.selected_model_id.as_deref(),
@@ -249,22 +206,14 @@ mod tests {
     }
 
     #[test]
-    fn non_pi_profile_does_not_build_pi_launch() {
-        let mut profile = built_in_general_profile(&ctx());
-        profile.backend = AgentChatBackend::Acp;
-
-        assert!(PiAgentChatLaunch::from_profile(profile).unwrap().is_none());
-    }
-
-    #[test]
-    fn selected_backend_acp_migrates_to_pi_default_launch() {
+    fn legacy_acp_backend_resolves_to_pi() {
         let ai = AiPreferences {
             pi_binary: Some("/tmp/test-pi".to_string()),
-            selected_backend: Some(AgentChatBackend::Acp),
+            selected_backend: Some(AgentChatBackend::Pi),
             ..AiPreferences::default()
         };
 
-        let launch = resolve_selected_pi_launch(&ai, &ctx()).unwrap().unwrap();
+        let launch = resolve_selected_pi_launch(&ai, &ctx()).unwrap();
         assert_eq!(launch.profile.backend, AgentChatBackend::Pi);
         assert_eq!(launch.profile.id, "general");
     }
@@ -335,11 +284,9 @@ mod tests {
     }
 
     #[test]
-    fn focused_text_pi_launch_uses_pi_text_profile_when_selected_backend_is_acp() {
+    fn focused_text_pi_launch_uses_text_profile_with_model_override() {
         let ai = AiPreferences {
             pi_binary: Some("/tmp/test-pi".to_string()),
-            selected_backend: Some(AgentChatBackend::Acp),
-            selected_acp_agent_id: Some("codex-acp".to_string()),
             selected_model_id: Some("claude-sonnet".to_string()),
             ..AiPreferences::default()
         };
@@ -365,7 +312,7 @@ mod tests {
             ..AiPreferences::default()
         };
 
-        let launch = resolve_selected_pi_launch(&ai, &ctx).unwrap().unwrap();
+        let launch = resolve_selected_pi_launch(&ai, &ctx).unwrap();
 
         assert_eq!(launch.cwd, kit_path.join("agent-chat").join("general"));
         assert!(launch.cwd.is_dir());

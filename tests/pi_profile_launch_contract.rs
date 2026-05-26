@@ -7,10 +7,9 @@ use script_kit_gpui::ai::agent_chat::pi::launch_spec::PiLaunchSpec;
 use script_kit_gpui::ai::agent_chat::profiles::{
     agent_chat_profile_picker_entries, persist_agent_chat_profile_selection,
     resolve_effective_profile, selected_agent_chat_profile_picker_id, AgentChatProfileContext,
-    AgentChatProfileSource, BUILTIN_ACP_FALLBACK_PROFILE_ID, BUILTIN_GENERAL_PROFILE_ID,
-    BUILTIN_SCRIPT_KIT_PROFILE_ID, BUILTIN_TEXT_PROFILE_ID, DEFAULT_PI_MODEL, DEFAULT_PI_PROVIDER,
-    GENERAL_BLOCKED_ACTION_MESSAGE, GENERAL_PI_TOOLS, SCRIPT_KIT_PI_TOOLS,
-    TEXT_APPEND_SYSTEM_PROMPT, TEXT_BLOCKED_ACTION_MESSAGE,
+    AgentChatProfileSource, BUILTIN_GENERAL_PROFILE_ID, BUILTIN_SCRIPT_KIT_PROFILE_ID,
+    BUILTIN_TEXT_PROFILE_ID, DEFAULT_PI_MODEL, DEFAULT_PI_PROVIDER, GENERAL_BLOCKED_ACTION_MESSAGE,
+    GENERAL_PI_TOOLS, SCRIPT_KIT_PI_TOOLS, TEXT_APPEND_SYSTEM_PROMPT, TEXT_BLOCKED_ACTION_MESSAGE,
 };
 use script_kit_gpui::config::{AcpProfile, AgentChatBackend, AiPreferences};
 
@@ -208,15 +207,14 @@ fn selected_profile_name_resolves_legacy_acp_profile() {
     let profile = resolve_effective_profile(&ai, &ctx);
     assert_eq!(profile.source, AgentChatProfileSource::User);
     assert_eq!(profile.id, "legacy:ops");
-    assert_eq!(profile.backend, AgentChatBackend::Acp);
+    assert_eq!(profile.backend, AgentChatBackend::Pi);
     assert_eq!(profile.system_prompt.as_deref(), Some("legacy prompt"));
 }
 
 #[test]
-fn selected_acp_agent_and_model_fill_missing_legacy_profile_fields() {
+fn selected_model_fills_missing_legacy_profile_fields() {
     let ctx = context();
     let ai = AiPreferences {
-        selected_acp_agent_id: Some("codex-acp".to_string()),
         selected_model_id: Some("gpt-5.4".to_string()),
         selected_profile_name: Some("Ops".to_string()),
         profiles: vec![AcpProfile {
@@ -227,8 +225,7 @@ fn selected_acp_agent_and_model_fill_missing_legacy_profile_fields() {
     };
 
     let profile = resolve_effective_profile(&ai, &ctx);
-    assert_eq!(profile.backend, AgentChatBackend::Acp);
-    assert_eq!(profile.agent.as_deref(), Some("codex-acp"));
+    assert_eq!(profile.backend, AgentChatBackend::Pi);
     assert_eq!(profile.model.as_deref(), Some("gpt-5.4"));
 }
 
@@ -298,19 +295,17 @@ fn unmatched_profile_selection_falls_back_to_general() {
 }
 
 #[test]
-fn selected_backend_acp_preserves_legacy_acp_fallback_when_no_profile_selected() {
+fn legacy_acp_backend_selection_falls_back_to_general_pi() {
     let ctx = context();
     let ai = AiPreferences {
-        selected_backend: Some(AgentChatBackend::Acp),
-        selected_acp_agent_id: Some("claude-code".to_string()),
+        pi_binary: Some("/tmp/test-pi".to_string()),
         selected_model_id: Some("claude-sonnet-4-6".to_string()),
         ..AiPreferences::default()
     };
 
     let profile = resolve_effective_profile(&ai, &ctx);
-    assert_eq!(profile.id, BUILTIN_ACP_FALLBACK_PROFILE_ID);
-    assert_eq!(profile.backend, AgentChatBackend::Acp);
-    assert_eq!(profile.agent.as_deref(), Some("claude-code"));
+    assert_eq!(profile.id, BUILTIN_GENERAL_PROFILE_ID);
+    assert_eq!(profile.backend, AgentChatBackend::Pi);
     assert_eq!(profile.model.as_deref(), Some("claude-sonnet-4-6"));
 }
 
@@ -319,7 +314,7 @@ fn selected_profile_id_still_beats_selected_backend() {
     let ctx = context();
     let ai = AiPreferences {
         pi_binary: Some("/tmp/test-pi".to_string()),
-        selected_backend: Some(AgentChatBackend::Acp),
+        selected_backend: Some(AgentChatBackend::Pi),
         selected_profile_id: Some(BUILTIN_SCRIPT_KIT_PROFILE_ID.to_string()),
         ..AiPreferences::default()
     };
@@ -330,7 +325,7 @@ fn selected_profile_id_still_beats_selected_backend() {
 }
 
 #[test]
-fn profile_picker_lists_general_script_kit_acp_and_custom_profiles() {
+fn profile_picker_lists_builtin_and_custom_profiles() {
     let ctx = context();
     let ai = AiPreferences {
         profiles: vec![AcpProfile {
@@ -350,16 +345,10 @@ fn profile_picker_lists_general_script_kit_acp_and_custom_profiles() {
     assert!(ids.contains(&BUILTIN_GENERAL_PROFILE_ID));
     assert!(ids.contains(&BUILTIN_TEXT_PROFILE_ID));
     assert!(ids.contains(&BUILTIN_SCRIPT_KIT_PROFILE_ID));
-    assert!(ids.contains(&BUILTIN_ACP_FALLBACK_PROFILE_ID));
     assert!(ids.contains(&"ops"));
-    assert_eq!(
-        entries
-            .iter()
-            .find(|entry| entry.id == BUILTIN_GENERAL_PROFILE_ID)
-            .unwrap()
-            .backend,
-        AgentChatBackend::Pi
-    );
+    assert!(entries
+        .iter()
+        .all(|entry| entry.backend == AgentChatBackend::Pi));
 }
 
 #[test]
@@ -379,30 +368,6 @@ fn persisting_builtin_profile_uses_stable_profile_id_and_backend() {
     assert_eq!(
         selected_agent_chat_profile_picker_id(&ai, &ctx),
         BUILTIN_SCRIPT_KIT_PROFILE_ID
-    );
-}
-
-#[test]
-fn persisting_acp_fallback_clears_explicit_profile_and_selects_acp_backend() {
-    let ctx = context();
-    let mut ai = AiPreferences {
-        selected_profile_id: Some(BUILTIN_SCRIPT_KIT_PROFILE_ID.to_string()),
-        selected_profile_name: Some("Script Kit".to_string()),
-        selected_backend: Some(AgentChatBackend::Pi),
-        ..AiPreferences::default()
-    };
-
-    let entry =
-        persist_agent_chat_profile_selection(&mut ai, BUILTIN_ACP_FALLBACK_PROFILE_ID, &ctx)
-            .expect("acp fallback profile should exist");
-
-    assert_eq!(entry.backend, AgentChatBackend::Acp);
-    assert_eq!(ai.selected_profile_id, None);
-    assert_eq!(ai.selected_profile_name, None);
-    assert_eq!(ai.selected_backend, Some(AgentChatBackend::Acp));
-    assert_eq!(
-        selected_agent_chat_profile_picker_id(&ai, &ctx),
-        BUILTIN_ACP_FALLBACK_PROFILE_ID
     );
 }
 
@@ -438,7 +403,7 @@ fn profile_picker_skips_custom_profiles_that_collide_with_builtins() {
         profiles: vec![AcpProfile {
             id: Some(BUILTIN_GENERAL_PROFILE_ID.to_string()),
             name: "Shadow General".to_string(),
-            backend: Some(AgentChatBackend::Acp),
+            backend: Some(AgentChatBackend::Pi),
             ..AcpProfile::default()
         }],
         ..AiPreferences::default()

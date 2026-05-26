@@ -155,21 +155,12 @@ fn client_emits_setup_required_on_auth_failure() {
     );
 }
 
-// ── AiPreferences includes selected_acp_agent_id ──────────────────────
-
-#[test]
-fn ai_preferences_include_selected_acp_agent_id() {
-    assert!(
-        CONFIG_TYPES_SOURCE.contains("selected_acp_agent_id"),
-        "AiPreferences must persist selected_acp_agent_id"
-    );
-}
+// ── AiPreferences Pi-only backend ──────────────────────
 
 #[test]
 fn agent_chat_profile_config_keeps_legacy_ai_keys() {
     for needed in [
         "selected_model_id",
-        "selected_acp_agent_id",
         "selected_profile_name",
         "profiles: Vec<AcpProfile>",
         "system_prompt",

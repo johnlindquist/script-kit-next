@@ -922,10 +922,7 @@ impl AcpChatView {
                     crate::ai::agent_chat::profiles::AgentChatProfileSource::BuiltIn => "Built-in",
                     crate::ai::agent_chat::profiles::AgentChatProfileSource::User => "Custom",
                 };
-                let backend = match entry.backend {
-                    crate::config::AgentChatBackend::Pi => "Pi",
-                    crate::config::AgentChatBackend::Acp => "ACP",
-                };
+                let backend = "Pi";
                 let score = if query_lower.is_empty() {
                     100
                 } else if entry.name.to_ascii_lowercase().starts_with(&query_lower) {

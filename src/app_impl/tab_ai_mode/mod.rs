@@ -2549,7 +2549,7 @@ impl ScriptListApp {
             &crate::config::load_user_preferences().ai,
             &profile_ctx,
         ) {
-            Ok(Some(pi_launch)) => {
+            Ok(pi_launch) => {
                 match crate::ai::agent_chat::launch::warm_session_manager()
                     .prepare_warm_background(pi_launch.warm_spec())
                 {
@@ -2573,9 +2573,7 @@ impl ScriptListApp {
                         );
                     }
                 }
-                return;
             }
-            Ok(None) => {}
             Err(error) => {
                 tracing::warn!(
                     target: "script_kit::tab_ai",

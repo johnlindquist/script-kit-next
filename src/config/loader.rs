@@ -979,7 +979,7 @@ mod tests {
             "layout": { "standardHeight": 640, "maxHeight": 920 },
             "theme": { "presetId": "catppuccin-mocha" },
             "dictation": { "selectedDeviceId": "usb-mic" },
-            "ai": { "selectedModelId": "gpt-5.4", "selectedAcpAgentId": "codex-acp" },
+            "ai": { "selectedModelId": "gpt-5.4" },
             "windowManagement": { "snapMode": "precision" }
         }"#;
 
@@ -1003,10 +1003,6 @@ mod tests {
         assert_eq!(
             config.ai.as_ref().unwrap().selected_model_id.as_deref(),
             Some("gpt-5.4")
-        );
-        assert_eq!(
-            config.ai.as_ref().unwrap().selected_acp_agent_id.as_deref(),
-            Some("codex-acp")
         );
         assert_eq!(
             config.window_management.as_ref().unwrap().snap_mode,
@@ -1061,7 +1057,6 @@ mod tests {
         let config = parse_config_json(json, "test-correlation-id");
         let ai = config.ai.as_ref().expect("ai preferences should parse");
         assert_eq!(ai.selected_model_id.as_deref(), Some("gpt-5.4"));
-        assert_eq!(ai.selected_acp_agent_id.as_deref(), Some("codex-acp"));
         assert_eq!(ai.selected_profile_id.as_deref(), Some("general"));
         assert_eq!(ai.selected_backend, Some(AgentChatBackend::Pi));
         assert_eq!(ai.selected_profile_name.as_deref(), Some("Legacy"));
@@ -1246,10 +1241,6 @@ mod tests {
         );
         assert_eq!(loaded.ai.selected_model_id.as_deref(), Some("gpt-5.4"));
         assert_eq!(
-            loaded.ai.selected_acp_agent_id.as_deref(),
-            Some("codex-acp")
-        );
-        assert_eq!(
             loaded.window_management.snap_mode,
             Some(crate::window_control::SnapMode::Precision)
         );
@@ -1263,7 +1254,6 @@ mod tests {
         assert!(config_contents.contains("dictation"));
         assert!(config_contents.contains("ai"));
         assert!(config_contents.contains("windowManagement"));
-        assert!(config_contents.contains("selectedAcpAgentId"));
         assert!(config_contents.contains("snapMode"));
         assert!(
             !settings_path.exists(),
