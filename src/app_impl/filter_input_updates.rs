@@ -475,6 +475,309 @@ impl ScriptListApp {
         self.set_filter_text_immediate(String::new(), window, cx);
     }
 
+    // ── Spine row acceptance ────────────────────────────────────────────
+
+    /// Accept the currently selected Spine projection row (Enter / click).
+    /// Returns `true` if the action was handled.
+    pub(crate) fn accept_spine_projection_row(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.spine_projection_owns_main_list() {
+            return false;
+        }
+        let Some(row) = self.selected_spine_projection_row() else {
+            tracing::debug!(
+                target: "script_kit::spine",
+                event = "accept_spine_projection_row_no_selection",
+                selected_index = self.selected_index,
+            );
+            return false;
+        };
+        let action = row.action.clone();
+        tracing::info!(
+            target: "script_kit::spine",
+            event = "accept_spine_projection_row",
+            row_id = %row.id,
+            row_title = %row.title,
+            selected_index = self.selected_index,
+        );
+        self.apply_spine_list_action(action, window, cx)
+    }
+
+    /// Return the `SpineListRow` at the current `selected_index`, if any.
+    fn selected_spine_projection_row(&mut self) -> Option<crate::spine::SpineListRow> {
+        let (grouped, flat) = self.get_grouped_results_cached();
+        let item = grouped.get(self.selected_index)?;
+        match item {
+            GroupedListItem::Item(result_idx) => {
+                if let Some(crate::scripts::SearchResult::SpineProjection(row)) =
+                    flat.get(*result_idx)
+                {
+                    if row.is_selectable {
+                        Some(row.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Dispatch a `SpineListAction` from a selected row.
+    pub(crate) fn apply_spine_list_action(
+        &mut self,
+        action: crate::spine::SpineListAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        use crate::spine::SpineListAction;
+        match action {
+            SpineListAction::InsertSegmentText {
+                segment_index,
+                segment_byte_range,
+                text,
+                trailing_space,
+            } => {
+                tracing::info!(
+                    target: "script_kit::spine",
+                    event = "apply_spine_action_insert_segment",
+                    segment_index,
+                    text = %text,
+                    trailing_space,
+                );
+                self.replace_active_segment_text(
+                    segment_index,
+                    segment_byte_range,
+                    text.as_ref(),
+                    trailing_space,
+                    window,
+                    cx,
+                )
+            }
+            SpineListAction::ResolveSegment {
+                segment_index,
+                segment_byte_range,
+                replacement,
+                resolution_id,
+                resolution_label,
+                resolution_source,
+                trailing_space,
+            } => {
+                tracing::info!(
+                    target: "script_kit::spine",
+                    event = "apply_spine_action_resolve_segment",
+                    segment_index,
+                    replacement = %replacement,
+                    resolution_id = %resolution_id,
+                    resolution_label = %resolution_label,
+                    resolution_source = %resolution_source,
+                    trailing_space,
+                );
+                self.replace_active_segment_text(
+                    segment_index,
+                    segment_byte_range,
+                    replacement.as_ref(),
+                    trailing_space,
+                    window,
+                    cx,
+                )
+            }
+            SpineListAction::OpenModeExit { sigil, rest } => {
+                tracing::info!(
+                    target: "script_kit::spine",
+                    event = "apply_spine_action_open_mode_exit",
+                    sigil = %sigil,
+                    rest = %rest,
+                );
+                match sigil {
+                    '~' => {
+                        self.open_file_search_view(
+                            rest.to_string(),
+                            FileSearchPresentation::Mini,
+                            cx,
+                        );
+                        true
+                    }
+                    '>' => {
+                        self.open_quick_terminal(None, cx);
+                        true
+                    }
+                    '?' => {
+                        if self.has_actions() {
+                            self.toggle_actions(cx, window);
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    _ => false,
+                }
+            }
+            SpineListAction::SubmitScriptCapture { target, args } => {
+                tracing::info!(
+                    target: "script_kit::spine",
+                    event = "apply_spine_action_submit_capture_not_wired",
+                    capture_target = %target,
+                    capture_args = %args,
+                );
+                false
+            }
+            SpineListAction::OpenConversation { conversation_id } => {
+                tracing::info!(
+                    target: "script_kit::spine",
+                    event = "apply_spine_action_open_conversation_not_wired",
+                    conversation_id = %conversation_id,
+                );
+                false
+            }
+            SpineListAction::Noop => false,
+        }
+    }
+
+    /// Replace the text of the active Spine segment in the filter input,
+    /// optionally appending a trailing space, and reposition the cursor.
+    pub(crate) fn replace_active_segment_text(
+        &mut self,
+        segment_index: usize,
+        segment_byte_range: std::ops::Range<usize>,
+        replacement: &str,
+        trailing_space: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let current = self.filter_text.clone();
+
+        // Validate byte range against current filter text.
+        if !self.valid_filter_byte_range(&current, &segment_byte_range) {
+            tracing::debug!(
+                target: "script_kit::spine",
+                event = "replace_segment_invalid_byte_range",
+                range_start = segment_byte_range.start,
+                range_end = segment_byte_range.end,
+                filter_len = current.len(),
+            );
+            return false;
+        }
+
+        // Validate segment_index matches current spine parse.
+        if segment_index >= self.spine_parse.segments.len() {
+            tracing::debug!(
+                target: "script_kit::spine",
+                event = "replace_segment_index_out_of_bounds",
+                segment_index,
+                segment_count = self.spine_parse.segments.len(),
+            );
+            return false;
+        }
+
+        // Build the new filter text: prefix + replacement + optional space + suffix.
+        let prefix = &current[..segment_byte_range.start];
+        let suffix = &current[segment_byte_range.end..];
+        let space = if trailing_space { " " } else { "" };
+        let new_text = format!("{prefix}{replacement}{space}{suffix}");
+        let cursor = prefix.len() + replacement.len() + space.len();
+
+        tracing::info!(
+            target: "script_kit::spine",
+            event = "replace_active_segment_text",
+            segment_index,
+            old_range = ?segment_byte_range,
+            replacement,
+            trailing_space,
+            new_text_len = new_text.len(),
+            cursor,
+        );
+
+        self.set_filter_text_and_cursor_immediate(new_text, cursor, window, cx);
+        true
+    }
+
+    /// Set filter text and cursor position in one shot, then reparse spine.
+    pub(crate) fn set_filter_text_and_cursor_immediate(
+        &mut self,
+        text: String,
+        cursor_position: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Use existing set_filter_text_immediate to sync filter + input state.
+        self.set_filter_text_immediate(text.clone(), window, cx);
+
+        // Now reposition the cursor (set_filter_text_immediate places it at end).
+        let cursor = self.clamp_filter_cursor_to_char_boundary(&text, cursor_position);
+        self.suppress_filter_events = true;
+        self.gpui_input_state.update(cx, |state, cx| {
+            state.set_selection(cursor, cursor, window, cx);
+        });
+        self.suppress_filter_events = false;
+
+        // Reparse spine at the new cursor position.
+        if self.spine_enabled {
+            self.set_spine_parse_from_filter_and_cursor(&text, cursor);
+        }
+
+        // Clear fallbacks, invalidate cache, reconcile.
+        self.main_menu_fallback_state.clear();
+        self.invalidate_grouped_cache();
+        self.reconcile_script_list_after_filter_change("spine_segment_replace", cx);
+
+        // Force tail projection if we just typed a trailing space after prompt segments.
+        self.force_spine_tail_projection_after_trailing_space(&text, cursor);
+
+        cx.notify();
+    }
+
+    /// If cursor is at end of text and the last char is whitespace and prompt
+    /// segments exist, force the spine projection to a synthetic empty-tail
+    /// FreeText projection so the tail-hint section appears.
+    fn force_spine_tail_projection_after_trailing_space(&mut self, raw: &str, cursor: usize) {
+        if cursor != raw.len() {
+            return;
+        }
+        if !raw.ends_with(char::is_whitespace) {
+            return;
+        }
+        // Check if any prompt-builder segments exist.
+        let has_prompt_segments = self.spine_parse.segments.iter().any(|seg| {
+            !matches!(seg.kind, crate::spine::SpineSegmentKind::FreeText)
+        });
+        if !has_prompt_segments {
+            return;
+        }
+        // Set projection to a synthetic tail FreeText.
+        self.spine_projection = Some(crate::spine::SpineCursorProjection {
+            active_segment_index: self.spine_parse.segments.len(),
+            active_segment_kind: crate::spine::SpineSegmentKind::FreeText,
+            active_query: String::new(),
+            is_tail: true,
+            has_prompt_segments: true,
+        });
+    }
+
+    /// Check if a byte range is valid for the given filter text.
+    fn valid_filter_byte_range(&self, text: &str, range: &std::ops::Range<usize>) -> bool {
+        range.start <= range.end
+            && range.end <= text.len()
+            && text.is_char_boundary(range.start)
+            && text.is_char_boundary(range.end)
+    }
+
+    /// Clamp a cursor position to the nearest char boundary.
+    fn clamp_filter_cursor_to_char_boundary(&self, text: &str, pos: usize) -> usize {
+        let clamped = pos.min(text.len());
+        // Walk backwards to the nearest char boundary if needed.
+        let mut p = clamped;
+        while p > 0 && !text.is_char_boundary(p) {
+            p -= 1;
+        }
+        p
+    }
+
     pub(crate) fn sync_filter_input_if_needed(
         &mut self,
         window: &mut Window,

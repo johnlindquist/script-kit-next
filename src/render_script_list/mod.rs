@@ -976,7 +976,7 @@ impl ScriptListApp {
                                     let click_handler = cx.listener(
                                         move |this: &mut ScriptListApp,
                                               event: &gpui::ClickEvent,
-                                              _window,
+                                              window,
                                               cx| {
                                             let was_selected = this.selected_index == ix;
                                             // Always select the item on any click
@@ -990,14 +990,18 @@ impl ScriptListApp {
                                                 was_selected,
                                                 click_count,
                                             ) {
-                                                logging::log(
-                                                    "UI",
-                                                    &format!(
-                                                        "Launcher row click submitting item {} (click_count={})",
-                                                        ix, click_count
-                                                    ),
-                                                );
-                                                this.execute_selected(cx);
+                                                if this.spine_projection_owns_main_list() {
+                                                    this.accept_spine_projection_row(window, cx);
+                                                } else {
+                                                    logging::log(
+                                                        "UI",
+                                                        &format!(
+                                                            "Launcher row click submitting item {} (click_count={})",
+                                                            ix, click_count
+                                                        ),
+                                                    );
+                                                    this.execute_selected(cx);
+                                                }
                                             }
                                         },
                                     );
@@ -1515,6 +1519,20 @@ impl ScriptListApp {
                             return;
                         }
                     }
+                }
+
+                // ── Spine projection Enter intercept ──────────────
+                // When the Spine projection owns the main list, plain
+                // Enter accepts the selected projection row instead of
+                // running execute_selected.
+                if this.spine_projection_owns_main_list()
+                    && sk_is_key_enter(key_str)
+                    && !event.keystroke.modifiers.platform
+                    && !event.keystroke.modifiers.shift
+                {
+                    this.accept_spine_projection_row(window, cx);
+                    cx.stop_propagation();
+                    return;
                 }
 
                 // Normal script list navigation
