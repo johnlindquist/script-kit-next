@@ -553,6 +553,14 @@ pub fn set_window_resizable(window: &mut gpui::Window, resizable: bool) {
         };
         if next_style_mask != current_style_mask {
             let _: () = msg_send![ns_window, setStyleMask: next_style_mask];
+            if Some(ns_window) == crate::window_manager::get_main_window() {
+                for button_type in 0..=2 {
+                    let button: id = msg_send![ns_window, standardWindowButton: button_type];
+                    if !button.is_null() {
+                        let _: () = msg_send![button, setHidden: true];
+                    }
+                }
+            }
         }
     }
 }

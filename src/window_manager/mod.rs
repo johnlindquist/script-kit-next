@@ -357,8 +357,9 @@ pub fn find_and_register_main_window() -> bool {
     // any size the user resized to (e.g. 480). Use a wide range to catch all.
     const MIN_WIDTH: f64 = 300.0;
     const MAX_WIDTH: f64 = 1200.0;
-    // MIN_HEIGHT lowered to 50 to accommodate compact arg prompts (76px)
-    const MIN_HEIGHT: f64 = 50.0;
+    // MIN_HEIGHT allows the hidden cold-start launcher panel (observed at
+    // 480x44 in dev-fast) to register before the first hotkey expands it.
+    const MIN_HEIGHT: f64 = 40.0;
     const MAX_HEIGHT: f64 = 800.0;
 
     unsafe {
