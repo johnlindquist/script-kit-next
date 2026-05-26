@@ -1,4 +1,5 @@
 mod catalog_context;
+pub(crate) mod catalog_history;
 mod catalog_profile;
 mod catalog_slash;
 mod catalog_style;

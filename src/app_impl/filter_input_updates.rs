@@ -742,10 +742,8 @@ impl ScriptListApp {
         if !raw.ends_with(char::is_whitespace) {
             return;
         }
-        // Check if any prompt-builder segments exist.
-        let has_prompt_segments = self.spine_parse.segments.iter().any(|seg| {
-            !matches!(seg.kind, crate::spine::SpineSegmentKind::FreeText)
-        });
+        let has_prompt_segments =
+            crate::spine::parse_has_prompt_builder_segments(&self.spine_parse);
         if !has_prompt_segments {
             return;
         }

@@ -149,6 +149,33 @@ impl SpineListRow {
     }
 }
 
+pub fn is_prompt_builder_segment_kind(kind: &SpineSegmentKind) -> bool {
+    matches!(
+        kind,
+        SpineSegmentKind::ContextMention { .. }
+            | SpineSegmentKind::SlashCommand { .. }
+            | SpineSegmentKind::Profile { .. }
+            | SpineSegmentKind::Style { .. }
+    )
+}
+
+pub fn parse_has_prompt_builder_segments(parse: &SpineParse) -> bool {
+    parse
+        .segments
+        .iter()
+        .any(|segment| is_prompt_builder_segment_kind(&segment.kind))
+}
+
+pub fn projection_is_prompt_builder_tail(
+    parse: &SpineParse,
+    projection: &SpineCursorProjection,
+) -> bool {
+    matches!(projection.active_segment_kind, SpineSegmentKind::FreeText)
+        && projection.is_tail
+        && projection.has_prompt_segments
+        && parse_has_prompt_builder_segments(parse)
+}
+
 pub(super) fn ss(value: impl Into<SharedString>) -> SharedString {
     value.into()
 }
@@ -242,7 +269,9 @@ pub fn build_spine_list_sections(
             vec![build_mode_exit_section(parse, projection, *sigil, rest)]
         }
         SpineSegmentKind::ListFilter { .. } => vec![build_filter_hint_section()],
-        SpineSegmentKind::FreeText if projection.is_tail => vec![build_tail_hint_section()],
+        SpineSegmentKind::FreeText if projection_is_prompt_builder_tail(parse, projection) => {
+            build_tail_history_sections(parse, projection)
+        }
         SpineSegmentKind::FreeText => Vec::new(),
     }
 }
@@ -479,26 +508,42 @@ fn build_filter_hint_section() -> SpineListSection {
     }
 }
 
-fn build_tail_hint_section() -> SpineListSection {
-    SpineListSection {
-        id: ss("spine-section-tail"),
-        title: ss("Prompt"),
-        subtitle: Some(ss("Recent prompt rows land here in Step 11")),
-        icon: Some(ss("message-circle")),
-        rows: vec![SpineListRow {
-            id: ss("spine:tail:hint"),
-            kind: SpineListRowKind::Hint,
-            title: ss("Keep typing your prompt"),
-            subtitle: Some(ss("Recent prompts and conversations will project here")),
-            meta: Some(ss("Prompt")),
+fn build_tail_history_sections(
+    parse: &SpineParse,
+    projection: &SpineCursorProjection,
+) -> Vec<SpineListSection> {
+    let segment_index = projection.active_segment_index;
+    let segment_byte_range = active_segment(parse, projection)
+        .map(|s| s.byte_range.clone())
+        .unwrap_or_else(|| {
+            let end = parse.input.len();
+            end..end
+        });
+    let tail_query = projection.active_query.as_str();
+
+    let prompt_rows = super::catalog_history::build_recent_prompt_rows(
+        tail_query,
+        segment_index,
+        segment_byte_range,
+    );
+    let conversation_rows = super::catalog_history::build_conversation_rows(tail_query);
+
+    vec![
+        SpineListSection {
+            id: ss("spine-section-recent-prompts"),
+            title: ss("Recent Prompts"),
+            subtitle: Some(ss("Reuse a previous prompt")),
+            icon: Some(ss("history")),
+            rows: prompt_rows,
+        },
+        SpineListSection {
+            id: ss("spine-section-conversations"),
+            title: ss("Conversations"),
+            subtitle: Some(ss("Resume a past conversation")),
             icon: Some(ss("message-circle")),
-            badges: vec![],
-            score: 0,
-            is_selectable: false,
-            action_label: None,
-            action: SpineListAction::Noop,
-        }],
-    }
+            rows: conversation_rows,
+        },
+    ]
 }
 
 pub fn spine_projection_cache_key(
@@ -802,6 +847,81 @@ mod tests {
             }
             other => panic!("expected ResolveSegment action, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn free_text_tail_after_prompt_builder_segments_builds_history_sections() {
+        // Input with actual free text after prompt-builder segments
+        let input = "@selection /rewrite make it punchier";
+        let parse = parse_spine(input);
+        let proj = project_cursor(&parse, parse.input.len());
+        assert!(projection_is_prompt_builder_tail(&parse, &proj));
+        let sections = build_spine_list_sections(&parse, &proj);
+        assert!(
+            sections
+                .iter()
+                .any(|section| section.title.as_ref() == "Recent Prompts"),
+            "expected Recent Prompts section, got: {:?}",
+            sections
+                .iter()
+                .map(|s| s.title.as_ref())
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            sections
+                .iter()
+                .any(|section| section.title.as_ref() == "Conversations"),
+            "expected Conversations section"
+        );
+    }
+
+    #[test]
+    fn synthetic_tail_projection_builds_history_sections() {
+        // Simulates what force_spine_tail_projection_after_trailing_space does
+        // for "@selection /rewrite " with trailing space
+        let parse = parse_spine("@selection /rewrite ");
+        let synthetic_proj = SpineCursorProjection {
+            active_segment_index: parse.segments.len(),
+            active_segment_kind: SpineSegmentKind::FreeText,
+            active_query: String::new(),
+            is_tail: true,
+            has_prompt_segments: true,
+        };
+        assert!(projection_is_prompt_builder_tail(&parse, &synthetic_proj));
+        let sections = build_spine_list_sections(&parse, &synthetic_proj);
+        assert!(
+            sections
+                .iter()
+                .any(|section| section.title.as_ref() == "Recent Prompts"),
+            "expected Recent Prompts section"
+        );
+        assert!(
+            sections
+                .iter()
+                .any(|section| section.title.as_ref() == "Conversations"),
+            "expected Conversations section"
+        );
+    }
+
+    #[test]
+    fn plain_text_free_text_does_not_own_spine_projection() {
+        let parse = parse_spine("punchier");
+        let proj = project_cursor(&parse, parse.input.len());
+        assert!(!projection_is_prompt_builder_tail(&parse, &proj));
+    }
+
+    #[test]
+    fn list_filter_tail_does_not_count_as_prompt_builder() {
+        let parse = parse_spine(":type:script stuff");
+        let proj = project_cursor(&parse, parse.input.len());
+        assert!(!projection_is_prompt_builder_tail(&parse, &proj));
+    }
+
+    #[test]
+    fn capture_tail_does_not_count_as_prompt_builder() {
+        let parse = parse_spine(";todo stuff");
+        let proj = project_cursor(&parse, parse.input.len());
+        assert!(!projection_is_prompt_builder_tail(&parse, &proj));
     }
 
     #[test]

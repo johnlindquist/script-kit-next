@@ -172,8 +172,14 @@ impl ScriptListApp {
             return false;
         }
         match &self.spine_projection {
-            Some(proj) => !matches!(proj.active_segment_kind, crate::spine::SpineSegmentKind::FreeText)
-                || proj.is_tail,
+            Some(proj) => {
+                !matches!(
+                    proj.active_segment_kind,
+                    crate::spine::SpineSegmentKind::FreeText
+                ) || (proj.is_tail
+                    && proj.has_prompt_segments
+                    && crate::spine::parse_has_prompt_builder_segments(&self.spine_parse))
+            }
             None => false,
         }
     }
