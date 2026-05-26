@@ -385,6 +385,8 @@ impl ScriptListApp {
                     scripts::SearchResult::Fallback(_) => None,
                     // Script Issues is a synthetic diagnostic row — no frecency.
                     scripts::SearchResult::ScriptIssue(_) => None,
+                    // Spine projections don't track frecency.
+                    scripts::SearchResult::SpineProjection(_) => None,
                 };
                 if let Some(path) = frecency_path {
                     self.frecency_store.record_use(&path);
@@ -581,6 +583,9 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::ScriptIssue(_) => {
                         self.open_script_issues_view(cx);
+                    }
+                    scripts::SearchResult::SpineProjection(_) => {
+                        // Spine projection rows are not actionable from the main menu.
                     }
                 }
             }

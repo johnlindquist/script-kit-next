@@ -1045,13 +1045,13 @@ impl ScriptListApp {
                 for section in sections {
                     grouped_items.push(GroupedListItem::SectionHeader(
                         section.title.to_string(),
-                        section.icon.as_ref().map(|icon| icon.to_string()),
+                        section.icon.as_ref().map(|icon| icon.as_ref().to_string()),
                     ));
                     for row in section.rows {
                         if !row.is_selectable {
                             grouped_items.push(GroupedListItem::SectionHeader(
                                 row.title.to_string(),
-                                row.icon.as_ref().map(|icon| icon.to_string()),
+                                row.icon.as_ref().map(|icon| icon.as_ref().to_string()),
                             ));
                             continue;
                         }

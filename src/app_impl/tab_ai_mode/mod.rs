@@ -3477,6 +3477,7 @@ impl ScriptListApp {
             scripts::SearchResult::Skill(_) => "skill",
             scripts::SearchResult::Fallback(_) => "fallback",
             scripts::SearchResult::ScriptIssue(_) => "scriptIssue",
+            scripts::SearchResult::SpineProjection(_) => "spineProjection",
         };
         let metadata = match result {
             scripts::SearchResult::Script(m) => serde_json::json!({
@@ -3603,6 +3604,7 @@ impl ScriptListApp {
                 "fatalCount": m.fatal_count,
                 "warningCount": m.warning_count,
             }),
+            scripts::SearchResult::SpineProjection(_) => serde_json::json!({}),
         };
         crate::ai::TabAiTargetContext {
             source: "ScriptList".to_string(),

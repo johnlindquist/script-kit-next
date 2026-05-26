@@ -360,7 +360,8 @@ pub(crate) fn root_unified_action_subject_from_result(
         | SearchResult::Scriptlet(_)
         | SearchResult::Todo(_)
         | SearchResult::Agent(_)
-        | SearchResult::Fallback(_) => None,
+        | SearchResult::Fallback(_)
+        | SearchResult::SpineProjection(_) => None,
     }
 }
 

@@ -635,7 +635,7 @@ fn spine_projection_icon_kind(
     let (_, fallback_icon) = row.kind.type_accessory_info();
     row.icon
         .as_ref()
-        .and_then(|icon| crate::list_item::IconKind::from_icon_hint(icon.as_ref()))
+        .and_then(|icon: &gpui::SharedString| crate::list_item::IconKind::from_icon_hint(icon.as_ref()))
         .or_else(|| crate::list_item::IconKind::from_icon_hint(fallback_icon))
         .or_else(|| Some(crate::list_item::IconKind::Svg(fallback_icon.to_string())))
 }
@@ -655,13 +655,13 @@ fn render_spine_projection_row(
         .hovered(is_hovered)
         .with_accent_bar(true)
         .semantic_id(row.id.to_string())
-        .description_opt(row.subtitle.as_ref().map(|subtitle| subtitle.to_string()))
+        .description_opt(row.subtitle.as_ref().map(|subtitle: &gpui::SharedString| subtitle.to_string()))
         .icon_kind_opt(spine_projection_icon_kind(row))
         .type_accessory(crate::list_item::TypeAccessory {
             label: type_label,
             icon_name: type_icon,
         })
-        .source_hint_opt(row.meta.as_ref().map(|meta| meta.to_string()))
+        .source_hint_opt(row.meta.as_ref().map(|meta: &gpui::SharedString| meta.to_string()))
         .into_any_element()
 }
 
