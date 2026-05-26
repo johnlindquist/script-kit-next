@@ -1229,7 +1229,7 @@ impl AcpChatView {
     fn footer_buttons_for_thread(&self, thread: &AcpThread) -> Vec<AcpFooterButtonSpec> {
         use crate::footer_popup::FooterAction;
 
-        if self.focused_text.is_some() && self.ui_variant == AcpChatUiVariant::FocusedTextMini {
+        if self.focused_text.is_some() {
             return self.focused_text_visible_footer_buttons(thread);
         }
 
@@ -2126,21 +2126,37 @@ impl AcpChatView {
         &mut self,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
-        let has_instruction = {
+        let (phase, has_instruction, semantics) = {
             let thread = self.live_thread().read(cx);
-            !thread.input.text().trim().is_empty()
+            (
+                self.focused_text_mini_phase_for_thread(thread),
+                !thread.input.text().trim().is_empty(),
+                self.focused_text_enter_semantics_for_thread(thread),
+            )
         };
+
+        if self.ui_variant == AcpChatUiVariant::FocusedTextMini {
+            match phase {
+                Some(FocusedTextMiniPhase::Loading) => {
+                    return Ok(());
+                }
+                Some(FocusedTextMiniPhase::Streaming) => {
+                    let _ = self.cancel_streaming_from_escape(cx);
+                    return Ok(());
+                }
+                Some(FocusedTextMiniPhase::Result) if !has_instruction => {
+                    return Ok(());
+                }
+                Some(FocusedTextMiniPhase::InputOnly)
+                | Some(FocusedTextMiniPhase::Result)
+                | None => {}
+            }
+        }
+
         if !has_instruction {
             return Ok(());
         }
 
-        let (phase, semantics) = {
-            let thread = self.live_thread().read(cx);
-            (
-                self.focused_text_mini_phase_for_thread(thread),
-                self.focused_text_enter_semantics_for_thread(thread),
-            )
-        };
         if self.ui_variant == AcpChatUiVariant::FocusedTextMini
             && matches!(phase, Some(FocusedTextMiniPhase::Result))
         {
