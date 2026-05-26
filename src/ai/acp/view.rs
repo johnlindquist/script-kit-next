@@ -145,7 +145,7 @@ pub(crate) struct FocusedTextVariationSnapshot {
     pub(crate) error: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct FocusedTextVariationState {
     angle: crate::ai::focused_text::FocusedTextPromptAngle,
     text: String,
@@ -696,6 +696,10 @@ pub(crate) struct AcpChatView {
     focused_text: Option<FocusedTextAgentChatState>,
     focused_text_variations: Vec<FocusedTextVariationState>,
     focused_text_variation_tasks: Vec<Task<()>>,
+    /// History of previous variation generations for Cmd+Left/Right navigation.
+    focused_text_variation_history: Vec<Vec<FocusedTextVariationState>>,
+    /// Current position in the generation history (None = latest).
+    focused_text_variation_history_index: Option<usize>,
     focused_text_selected_variation: Option<usize>,
     focused_text_editing_variation: Option<usize>,
 
@@ -1685,6 +1689,8 @@ impl AcpChatView {
     fn clear_focused_text_variations(&mut self) {
         self.focused_text_variation_tasks.clear();
         self.focused_text_variations.clear();
+        self.focused_text_variation_history.clear();
+        self.focused_text_variation_history_index = None;
         self.focused_text_selected_variation = None;
         self.focused_text_editing_variation = None;
     }
@@ -1944,6 +1950,104 @@ impl AcpChatView {
             (None, false) => 0,
         };
         self.select_focused_text_variation(next, cx)
+    }
+
+    fn save_focused_text_variation_history_slot(&mut self, index: usize) {
+        if let Some(entry) = self.focused_text_variation_history.get_mut(index) {
+            *entry = self.focused_text_variations.clone();
+        }
+    }
+
+    fn navigate_focused_text_variation_history(
+        &mut self,
+        delta: i32,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.focused_text_variation_history.is_empty() {
+            return false;
+        }
+
+        if self.focused_text_variation_history_index.is_none() && delta < 0 {
+            let should_push =
+                self.focused_text_variation_history.last() != Some(&self.focused_text_variations);
+            if should_push {
+                self.focused_text_variation_history
+                    .push(self.focused_text_variations.clone());
+            }
+        }
+
+        let len = self.focused_text_variation_history.len();
+        let current = self
+            .focused_text_variation_history_index
+            .unwrap_or(len.saturating_sub(1));
+        let target = current as i32 + delta;
+        if target < 0 {
+            return false;
+        }
+        let target = target as usize;
+
+        if target >= len {
+            if delta <= 0 {
+                return false;
+            }
+            self.save_focused_text_variation_history_slot(current);
+            self.focused_text_variation_history_index = None;
+            self.focused_text_selected_variation = None;
+            self.focused_text_editing_variation = None;
+            self.select_first_completed_focused_text_variation();
+            cx.notify();
+            return true;
+        }
+
+        self.save_focused_text_variation_history_slot(current);
+        self.focused_text_variations = self.focused_text_variation_history[target].clone();
+        self.focused_text_variation_history_index = Some(target);
+        self.focused_text_selected_variation = None;
+        self.focused_text_editing_variation = None;
+        self.select_first_completed_focused_text_variation();
+        cx.notify();
+        true
+    }
+
+    fn regenerate_focused_text_variations(&mut self, cx: &mut Context<Self>) {
+        let Some(index) = self.focused_text_selected_variation else {
+            return;
+        };
+        let source_text = self
+            .focused_text_variations
+            .get(index)
+            .map(|variation| variation.text.clone())
+            .unwrap_or_default();
+        if source_text.trim().is_empty() {
+            return;
+        }
+
+        if !self.focused_text_variations.is_empty() {
+            self.focused_text_variation_history
+                .push(self.focused_text_variations.clone());
+            self.focused_text_variation_history_index = None;
+        }
+
+        let semantics = {
+            let thread = self.live_thread().read(cx);
+            self.focused_text_enter_semantics_for_thread(thread)
+        };
+
+        tracing::info!(
+            target: "script_kit::focused_text",
+            event = "focused_text_variations_regenerated",
+            source_index = index,
+            source_text_len = source_text.chars().count(),
+            history_len = self.focused_text_variation_history.len(),
+        );
+
+        if let Err(error) = self.submit_focused_text_turn(semantics, cx, Some(source_text)) {
+            tracing::warn!(
+                target: "script_kit::focused_text",
+                event = "focused_text_regenerate_failed",
+                error = %error,
+            );
+        }
     }
 
     fn latest_user_prompt_for_display(thread: &AcpThread) -> Option<String> {
@@ -2555,7 +2659,7 @@ impl AcpChatView {
         {
             self.expand_focused_text_to_full_chat(cx);
         }
-        self.submit_focused_text_turn(semantics, cx)
+        self.submit_focused_text_turn(semantics, cx, None)
     }
 
     fn footer_hint_label(button: &AcpFooterButtonSpec) -> &'static str {
@@ -4857,6 +4961,8 @@ impl AcpChatView {
             focused_text: None,
             focused_text_variations: Vec::new(),
             focused_text_variation_tasks: Vec::new(),
+            focused_text_variation_history: Vec::new(),
+            focused_text_variation_history_index: None,
             focused_text_selected_variation: None,
             focused_text_editing_variation: None,
             scope_input: String::new(),
@@ -4935,6 +5041,8 @@ impl AcpChatView {
             focused_text: None,
             focused_text_variations: Vec::new(),
             focused_text_variation_tasks: Vec::new(),
+            focused_text_variation_history: Vec::new(),
+            focused_text_variation_history_index: None,
             focused_text_selected_variation: None,
             focused_text_editing_variation: None,
             scope_input: String::new(),
@@ -5916,11 +6024,16 @@ impl AcpChatView {
         &mut self,
         semantics: crate::ai::focused_text::FocusedTextEditSemantics,
         cx: &mut Context<Self>,
+        source_text_override: Option<String>,
     ) -> Result<(), String> {
         let Some(state) = self.focused_text.as_ref() else {
             return Err("no_focused_text".to_string());
         };
-        let snapshot = state.snapshot.clone();
+        let mut snapshot = state.snapshot.clone();
+        if let Some(text) = source_text_override.as_ref() {
+            snapshot.text = text.clone();
+            snapshot.metrics = crate::platform::accessibility::TextMetrics::from_text(text);
+        }
 
         let Some(thread_entity) = self.thread() else {
             return Err("Agent Chat view is not active".to_string());
@@ -5934,7 +6047,20 @@ impl AcpChatView {
             ) {
                 return Ok(());
             }
-            thread.input.text().trim().to_string()
+            let input = thread.input.text().trim().to_string();
+            if !input.is_empty() {
+                input
+            } else if source_text_override.is_some() {
+                thread
+                    .messages
+                    .iter()
+                    .rev()
+                    .find(|message| matches!(message.role, AcpThreadMessageRole::User))
+                    .map(|message| message.body.trim().to_string())
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            }
         };
         if instruction.is_empty() {
             return Ok(());
@@ -11112,6 +11238,43 @@ impl AcpChatView {
             self.trigger_close_requested(window, cx);
             cx.stop_propagation();
             return;
+        }
+
+        if self.ui_variant == AcpChatUiVariant::FocusedTextMini
+            && self.focused_text.is_some()
+            && key.eq_ignore_ascii_case("r")
+            && modifiers.platform
+            && !modifiers.shift
+            && !self.focused_text_variations.is_empty()
+        {
+            self.regenerate_focused_text_variations(cx);
+            cx.stop_propagation();
+            return;
+        }
+
+        if self.ui_variant == AcpChatUiVariant::FocusedTextMini
+            && self.focused_text.is_some()
+            && !self.focused_text_variations.is_empty()
+            && self.focused_text_editing_variation.is_none()
+            && !self.scope_focused
+            && self.mention_session.is_none()
+            && modifiers.platform
+            && !modifiers.shift
+            && !modifiers.control
+            && !modifiers.alt
+        {
+            if crate::ui_foundation::is_key_left(key) {
+                if self.navigate_focused_text_variation_history(-1, cx) {
+                    cx.stop_propagation();
+                    return;
+                }
+            }
+            if crate::ui_foundation::is_key_right(key) {
+                if self.navigate_focused_text_variation_history(1, cx) {
+                    cx.stop_propagation();
+                    return;
+                }
+            }
         }
 
         if self.ui_variant == AcpChatUiVariant::FocusedTextMini

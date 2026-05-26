@@ -117,6 +117,7 @@ impl ScriptListApp {
                 if let Err(error) = chat.submit_focused_text_turn(
                     crate::ai::focused_text::FocusedTextEditSemantics::Replace,
                     cx,
+                    None,
                 ) {
                     tracing::warn!(
                         target: "script_kit::focused_text",
