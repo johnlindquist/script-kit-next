@@ -7,7 +7,7 @@ use super::{
     SpineCursorProjection, SpineParse, SpineSegment, SpineSegmentKind, SpineSegmentResolution,
 };
 
-pub const SPINE_LIST_MODEL_VERSION: u64 = 3;
+pub const SPINE_LIST_MODEL_VERSION: u64 = 4;
 pub const SPINE_LIST_RESOLUTION_GENERATION: u64 = 0;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -334,45 +334,8 @@ fn build_profile_section(
     let range = active_segment_range(parse, projection);
     let query = projection.active_query.as_str();
 
-    let profiles = [
-        ("creative", "Creative", "More exploratory and generative"),
-        ("concise", "Concise", "Short, direct responses"),
-        (
-            "technical",
-            "Technical",
-            "Precise engineering-focused responses",
-        ),
-        ("friendly", "Friendly", "Warm and approachable responses"),
-    ];
-
-    let rows = profiles
-        .iter()
-        .enumerate()
-        .filter(|(_, (id, title, _))| matches_query(id, query) || matches_query(title, query))
-        .map(|(rank, (id, title, subtitle))| SpineListRow {
-            id: ss(format!("spine:|:{id}")),
-            kind: SpineListRowKind::Profile {
-                profile_id: ss(*id),
-            },
-            title: ss(format!("|{id}")),
-            subtitle: Some(ss(*subtitle)),
-            meta: Some(ss(*title)),
-            icon: Some(ss("user-round")),
-            badges: vec![ss("|")],
-            score: i32::MAX.saturating_sub(rank as i32),
-            is_selectable: true,
-            action_label: Some(ss("Insert")),
-            action: SpineListAction::ResolveSegment {
-                segment_index: projection.active_segment_index,
-                segment_byte_range: range.clone(),
-                replacement: ss(format!("|{id}")),
-                resolution_id: ss(*id),
-                resolution_label: ss(*title),
-                resolution_source: ss("profile"),
-                trailing_space: true,
-            },
-        })
-        .collect::<Vec<_>>();
+    let rows =
+        super::catalog_profile::build_profile_rows(query, projection.active_segment_index, range);
 
     section_with_empty(
         "spine-section-profile",
@@ -389,39 +352,8 @@ fn build_style_section(parse: &SpineParse, projection: &SpineCursorProjection) -
     let range = active_segment_range(parse, projection);
     let query = projection.active_query.as_str();
 
-    let styles = [
-        ("professional", "Professional", "Polished workplace tone"),
-        ("concise", "Concise", "Shorten without losing meaning"),
-        ("friendly", "Friendly", "Warmer tone"),
-        ("direct", "Direct", "Plainspoken and direct"),
-    ];
-
-    let rows = styles
-        .iter()
-        .enumerate()
-        .filter(|(_, (id, title, _))| matches_query(id, query) || matches_query(title, query))
-        .map(|(rank, (id, title, subtitle))| SpineListRow {
-            id: ss(format!("spine:.:{id}")),
-            kind: SpineListRowKind::Style { style_id: ss(*id) },
-            title: ss(format!(".{id}")),
-            subtitle: Some(ss(*subtitle)),
-            meta: Some(ss(*title)),
-            icon: Some(ss("sparkles")),
-            badges: vec![ss(".")],
-            score: i32::MAX.saturating_sub(rank as i32),
-            is_selectable: true,
-            action_label: Some(ss("Insert")),
-            action: SpineListAction::ResolveSegment {
-                segment_index: projection.active_segment_index,
-                segment_byte_range: range.clone(),
-                replacement: ss(format!(".{id}")),
-                resolution_id: ss(*id),
-                resolution_label: ss(*title),
-                resolution_source: ss("style"),
-                trailing_space: true,
-            },
-        })
-        .collect::<Vec<_>>();
+    let rows =
+        super::catalog_style::build_style_rows(query, projection.active_segment_index, range);
 
     section_with_empty(
         "spine-section-style",
