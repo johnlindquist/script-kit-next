@@ -281,8 +281,59 @@ fileprivate final class DiskSpaceCargoWatcher {
             }
         }
 
-        writeLastTriggerEpoch(now)
         launchCleanup(reason: reason, freeBytes: free)
+    }
+
+    private func makeCleanupEnv() -> [String: String] {
+        var env = ProcessInfo.processInfo.environment
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        env["HOME"] = home
+        env["PATH"] = "/Users/johnlindquist/.local/bin:\(home)/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        env["SCRIPT_KIT_REPO_ROOT"] = config.repoRoot
+        env["SCRIPT_KIT_WATCHER_STATE_DIR"] = config.stateDir
+        env["SCRIPT_KIT_FREE_THRESHOLD_GIB"] = "\(config.thresholdGiB)"
+        env["SCRIPT_KIT_TARGET_FREE_GIB"] = "\(config.targetFreeGiB)"
+        return env
+    }
+
+    private func launchFallbackCleanup(reason: String) {
+        let emergencyScript = "\(config.repoRoot)/scripts/agentic/disk-space-cargo-emergency-clean.sh"
+        guard fileManager.isExecutableFile(atPath: emergencyScript) else {
+            log("fallback: emergency script not found at \(emergencyScript)")
+            return
+        }
+        log("fallback: running emergency clean directly (Claude unavailable)")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.currentDirectoryURL = URL(fileURLWithPath: config.repoRoot)
+        process.arguments = [
+            emergencyScript, "--apply",
+            "--repo", config.repoRoot,
+            "--threshold-gib", "\(config.thresholdGiB)",
+            "--target-free-gib", "\(config.targetFreeGiB)",
+            "--state-dir", config.stateDir,
+            "--reason", "fallback-\(reason)"
+        ]
+        process.environment = makeCleanupEnv()
+
+        cleanupRunning = true
+        process.terminationHandler = { [weak self] terminated in
+            self?.queue.async {
+                self?.cleanupRunning = false
+                let status = terminated.terminationStatus
+                self?.log("fallback cleanup exited pid=\(terminated.processIdentifier) status=\(status)")
+                if status == 0 {
+                    self?.writeLastTriggerEpoch(Date().timeIntervalSince1970)
+                }
+            }
+        }
+        do {
+            try process.run()
+            log("fallback cleanup launched pid=\(process.processIdentifier)")
+        } catch {
+            cleanupRunning = false
+            log("fallback cleanup launch failed: \(error)")
+        }
     }
 
     private func launchCleanup(reason: String, freeBytes: UInt64) {
@@ -297,25 +348,23 @@ fileprivate final class DiskSpaceCargoWatcher {
             "--state-dir", config.stateDir,
             "--reason", reason
         ]
-
-        var env = ProcessInfo.processInfo.environment
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        env["HOME"] = home
-        env["PATH"] = "/Users/johnlindquist/.local/bin:\(home)/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-        env["SCRIPT_KIT_REPO_ROOT"] = config.repoRoot
-        env["SCRIPT_KIT_WATCHER_STATE_DIR"] = config.stateDir
-        env["SCRIPT_KIT_FREE_THRESHOLD_GIB"] = "\(config.thresholdGiB)"
-        env["SCRIPT_KIT_TARGET_FREE_GIB"] = "\(config.targetFreeGiB)"
-        process.environment = env
+        process.environment = makeCleanupEnv()
 
         cleanupRunning = true
         cleanupProcess = process
 
         process.terminationHandler = { [weak self] terminated in
             self?.queue.async {
+                let status = terminated.terminationStatus
                 self?.cleanupRunning = false
                 self?.cleanupProcess = nil
-                self?.log("cleanup process exited pid=\(terminated.processIdentifier) status=\(terminated.terminationStatus)")
+                self?.log("cleanup process exited pid=\(terminated.processIdentifier) status=\(status)")
+                if status == 0 {
+                    self?.writeLastTriggerEpoch(Date().timeIntervalSince1970)
+                } else {
+                    self?.log("cleanup failed; launching fallback emergency clean")
+                    self?.launchFallbackCleanup(reason: reason)
+                }
             }
         }
 

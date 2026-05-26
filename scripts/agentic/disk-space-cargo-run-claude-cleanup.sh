@@ -162,7 +162,6 @@ export BASH_MAX_OUTPUT_LENGTH=150000
 
 set +e
 "$CLAUDE_BIN" \
-    --bare \
     --disable-slash-commands \
     --settings "$SETTINGS_FILE" \
     --permission-mode dontAsk \
