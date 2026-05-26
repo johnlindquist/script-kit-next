@@ -1016,6 +1016,63 @@ impl ScriptListApp {
             );
         }
 
+        // ── Spine projection path ──────────────────────────────────────
+        // When a sigil segment owns the list, build rows from the Spine
+        // model instead of running normal fuzzy/root grouping.
+        if self.spine_projection_owns_main_list()
+            && self.spine_parse.input == live_filter_text
+        {
+            if let Some(projection) = self.spine_projection.as_ref() {
+                let spine_cache_key = crate::spine::spine_projection_cache_key(
+                    live_filter_text,
+                    computed_filter_text,
+                    &self.spine_parse,
+                    projection,
+                );
+                if self
+                    .main_menu_result_caches
+                    .has_grouped_results_for(&spine_cache_key)
+                {
+                    return self.main_menu_result_caches.clone_grouped_results();
+                }
+
+                let sections = crate::spine::build_spine_list_sections(
+                    &self.spine_parse,
+                    projection,
+                );
+                let mut grouped_items = Vec::new();
+                let mut flat_results: Vec<scripts::SearchResult> = Vec::new();
+                for section in sections {
+                    grouped_items.push(GroupedListItem::SectionHeader(
+                        section.title.to_string(),
+                        section.icon.as_ref().map(|icon| icon.to_string()),
+                    ));
+                    for row in section.rows {
+                        if !row.is_selectable {
+                            grouped_items.push(GroupedListItem::SectionHeader(
+                                row.title.to_string(),
+                                row.icon.as_ref().map(|icon| icon.to_string()),
+                            ));
+                            continue;
+                        }
+                        let flat_index = flat_results.len();
+                        flat_results
+                            .push(scripts::SearchResult::SpineProjection(row));
+                        grouped_items.push(GroupedListItem::Item(flat_index));
+                    }
+                }
+
+                self.main_menu_result_caches.store_grouped_results(
+                    spine_cache_key,
+                    grouped_items,
+                    flat_results,
+                    None,
+                    None,
+                );
+                return self.main_menu_result_caches.clone_grouped_results();
+            }
+        }
+
         #[cfg(target_os = "macos")]
         let tracked_frontmost_app = frontmost_app_tracker::get_last_real_app();
         #[cfg(target_os = "macos")]

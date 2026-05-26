@@ -154,6 +154,8 @@ pub(super) fn build_grouped_view_results(
             SearchResult::Fallback(_) => None,
             // Script issues row is pinned synthetically, not through frecency/grouping
             SearchResult::ScriptIssue(_) => None,
+            // Spine projections don't participate in frecency/grouping
+            SearchResult::SpineProjection(_) => None,
         }
     };
 
@@ -224,6 +226,8 @@ pub(super) fn build_grouped_view_results(
                     SearchResult::Fallback(_) => {}
                     // Script issues row is pinned synthetically, not by grouping logic
                     SearchResult::ScriptIssue(_) => {}
+                    // Spine projections don't participate in grouping
+                    SearchResult::SpineProjection(_) => {}
                 }
             }
         } else {
@@ -258,6 +262,8 @@ pub(super) fn build_grouped_view_results(
                 SearchResult::Fallback(_) => {}
                 // Script issues row is pinned synthetically, not by grouping logic
                 SearchResult::ScriptIssue(_) => {}
+                // Spine projections don't participate in grouping
+                SearchResult::SpineProjection(_) => {}
             }
         }
     }

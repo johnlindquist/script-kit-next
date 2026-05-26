@@ -465,6 +465,8 @@ pub enum SearchResult {
     /// Synthetic row summarizing script validation failures, pinned at the top
     /// of the launcher so authors see "my script vanished" repairs inline.
     ScriptIssue(ScriptIssueMatch),
+    /// In-place Spine prompt-builder row projected into the main list.
+    SpineProjection(crate::spine::SpineListRow),
 }
 
 impl SearchResult {
@@ -500,6 +502,7 @@ impl SearchResult {
             SearchResult::BrowserTab(_) => Some(RootUnifiedSourceFilter::BrowserTabs),
             SearchResult::BrowserHistory(_) => Some(RootUnifiedSourceFilter::BrowserHistory),
             SearchResult::Agent(_) | SearchResult::Fallback(_) => None,
+            SearchResult::SpineProjection(_) => None,
         }
     }
 }
@@ -529,6 +532,7 @@ impl SearchResult {
                 .as_deref()
                 .unwrap_or_else(|| fm.fallback.name()),
             SearchResult::ScriptIssue(issue) => &issue.title,
+            SearchResult::SpineProjection(row) => row.title.as_ref(),
         }
     }
 
@@ -562,6 +566,7 @@ impl SearchResult {
                 .as_deref()
                 .or_else(|| Some(fm.fallback.description())),
             SearchResult::ScriptIssue(issue) => issue.description.as_deref(),
+            SearchResult::SpineProjection(row) => row.subtitle.as_ref().map(|s| s.as_ref()),
         }
     }
 
@@ -586,6 +591,7 @@ impl SearchResult {
             SearchResult::Agent(am) => am.score,
             SearchResult::Fallback(fm) => fm.score,
             SearchResult::ScriptIssue(issue) => issue.score,
+            SearchResult::SpineProjection(row) => row.score,
         }
     }
 
@@ -619,6 +625,7 @@ impl SearchResult {
             SearchResult::Agent(_) => "Agent",
             SearchResult::Fallback(_) => "Fallback",
             SearchResult::ScriptIssue(_) => "Issues",
+            SearchResult::SpineProjection(row) => row.kind.type_label(),
         }
     }
 
@@ -654,6 +661,7 @@ impl SearchResult {
             SearchResult::Window(_) | SearchResult::Skill(_) | SearchResult::Agent(_) => None,
             SearchResult::Fallback(fm) => Some(format!("fallback/{}", fm.fallback.name())),
             SearchResult::ScriptIssue(_) => None,
+            SearchResult::SpineProjection(_) => None,
         }
     }
 
@@ -702,6 +710,7 @@ impl SearchResult {
                 "script-issue/{}:{}:{}:{}",
                 issue.title, issue.failed_count, issue.fatal_count, issue.warning_count
             )),
+            SearchResult::SpineProjection(row) => Some(row.id.to_string()),
             _ => self
                 .history_result_key()
                 .or_else(|| self.launcher_command_id()),
@@ -736,6 +745,7 @@ impl SearchResult {
             SearchResult::Agent(_) => ("Agent", "bot"),
             SearchResult::Fallback(_) => ("Fallback", "zap"),
             SearchResult::ScriptIssue(_) => ("Issues", "triangle-alert"),
+            SearchResult::SpineProjection(row) => row.kind.type_accessory_info(),
         }
     }
 
@@ -784,6 +794,7 @@ impl SearchResult {
             SearchResult::BrowserHistory(_) => Some("Browser History"),
             SearchResult::Window(_) => Some("Windows"),
             SearchResult::ScriptIssue(_) => None,
+            SearchResult::SpineProjection(_) => Some("Spine"),
             _ => None,
         }
     }
@@ -855,6 +866,7 @@ impl SearchResult {
                 }
             }
             SearchResult::ScriptIssue(_) => "Inspect Issues",
+            SearchResult::SpineProjection(row) => row.default_action_text(),
         }
     }
 }

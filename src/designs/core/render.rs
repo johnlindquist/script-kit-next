@@ -395,6 +395,17 @@ pub fn render_design_item(
                     None,
                     Some(IconKind::Svg("ExclamationTriangle".to_string())),
                 ),
+                SearchResult::SpineProjection(row) => (
+                    row.title.to_string(),
+                    row.subtitle.as_ref().map(|s| s.to_string()),
+                    None,
+                    Some(IconKind::Svg(
+                        row.icon
+                            .as_ref()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| "list".to_string()),
+                    )),
+                ),
             };
 
             // During search mode, keep only quiet type icons.

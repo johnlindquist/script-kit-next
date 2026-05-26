@@ -38,6 +38,8 @@ fn result_type_order(r: &SearchResult) -> i32 {
         // Script issues are pinned separately via grouping; if encountered in
         // sort, treat like a high-priority header (above built-ins).
         SearchResult::ScriptIssue(_) => -1,
+        // Spine projections sort after fallbacks
+        SearchResult::SpineProjection(_) => 17,
     }
 }
 

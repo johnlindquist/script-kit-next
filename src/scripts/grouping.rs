@@ -2240,6 +2240,7 @@ mod advanced_query_tests {
                     SearchResult::Fallback(_) => "fallback",
                     SearchResult::ScriptIssue(_) => "scriptIssue",
                     SearchResult::Agent(_) => "agent",
+                    SearchResult::SpineProjection(_) => "spine",
                 };
                 Some((grouped_index, role))
             })

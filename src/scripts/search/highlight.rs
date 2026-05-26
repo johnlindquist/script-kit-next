@@ -522,6 +522,8 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
         }
         // Script issues row is synthetic and not matched against the query
         SearchResult::ScriptIssue(_) => MatchIndices::default(),
+        // Spine projections are not matched against the query
+        SearchResult::SpineProjection(_) => MatchIndices::default(),
     }
 }
 

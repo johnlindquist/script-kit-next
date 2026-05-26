@@ -1,0 +1,893 @@
+use std::fmt::Write as _;
+use std::ops::Range;
+
+use gpui::SharedString;
+
+use super::{
+    SpineCursorProjection, SpineParse, SpineSegment, SpineSegmentKind, SpineSegmentResolution,
+};
+
+pub const SPINE_LIST_MODEL_VERSION: u64 = 1;
+pub const SPINE_LIST_RESOLUTION_GENERATION: u64 = 0;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpineListSection {
+    pub id: SharedString,
+    pub title: SharedString,
+    pub subtitle: Option<SharedString>,
+    pub icon: Option<SharedString>,
+    pub rows: Vec<SpineListRow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpineListRow {
+    pub id: SharedString,
+    pub kind: SpineListRowKind,
+    pub title: SharedString,
+    pub subtitle: Option<SharedString>,
+    pub meta: Option<SharedString>,
+    pub icon: Option<SharedString>,
+    pub badges: Vec<SharedString>,
+    pub score: i32,
+    pub is_selectable: bool,
+    pub action_label: Option<SharedString>,
+    pub action: SpineListAction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpineListRowKind {
+    ContextBuiltin {
+        context_type: SharedString,
+    },
+    ContextSubSearch {
+        context_type: SharedString,
+    },
+    ContextResult {
+        context_type: SharedString,
+        result_id: SharedString,
+    },
+    SlashCommand {
+        command: SharedString,
+    },
+    Profile {
+        profile_id: SharedString,
+    },
+    Style {
+        style_id: SharedString,
+    },
+    CaptureTarget {
+        target: SharedString,
+    },
+    RecentPrompt {
+        prompt_id: SharedString,
+    },
+    Conversation {
+        conversation_id: SharedString,
+    },
+    Hint,
+    Empty,
+}
+
+impl SpineListRowKind {
+    pub fn type_label(&self) -> &'static str {
+        match self {
+            Self::ContextBuiltin { .. } => "Context",
+            Self::ContextSubSearch { .. } => "Context Search",
+            Self::ContextResult { .. } => "Context Result",
+            Self::SlashCommand { .. } => "Command",
+            Self::Profile { .. } => "Profile",
+            Self::Style { .. } => "Style",
+            Self::CaptureTarget { .. } => "Capture",
+            Self::RecentPrompt { .. } => "Recent Prompt",
+            Self::Conversation { .. } => "Conversation",
+            Self::Hint => "Hint",
+            Self::Empty => "Empty",
+        }
+    }
+
+    pub fn type_accessory_info(&self) -> (&'static str, &'static str) {
+        match self {
+            Self::ContextBuiltin { .. } => ("Context", "at-sign"),
+            Self::ContextSubSearch { .. } => ("Context Search", "search"),
+            Self::ContextResult { .. } => ("Context Result", "paperclip"),
+            Self::SlashCommand { .. } => ("Command", "slash"),
+            Self::Profile { .. } => ("Profile", "user-round"),
+            Self::Style { .. } => ("Style", "sparkles"),
+            Self::CaptureTarget { .. } => ("Capture", "inbox"),
+            Self::RecentPrompt { .. } => ("Recent Prompt", "history"),
+            Self::Conversation { .. } => ("Conversation", "message-circle"),
+            Self::Hint => ("Hint", "info"),
+            Self::Empty => ("Empty", "circle"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpineListAction {
+    InsertSegmentText {
+        segment_index: usize,
+        segment_byte_range: Range<usize>,
+        text: SharedString,
+        trailing_space: bool,
+    },
+    ResolveSegment {
+        segment_index: usize,
+        segment_byte_range: Range<usize>,
+        replacement: SharedString,
+        resolution_id: SharedString,
+        resolution_label: SharedString,
+        resolution_source: SharedString,
+        trailing_space: bool,
+    },
+    OpenModeExit {
+        sigil: char,
+        rest: SharedString,
+    },
+    SubmitScriptCapture {
+        target: SharedString,
+        args: SharedString,
+    },
+    OpenConversation {
+        conversation_id: SharedString,
+    },
+    Noop,
+}
+
+impl SpineListRow {
+    pub fn default_action_text(&self) -> &str {
+        self.action_label
+            .as_ref()
+            .map(|label| label.as_ref())
+            .unwrap_or(match self.action {
+                SpineListAction::Noop => "No Action",
+                SpineListAction::OpenModeExit { .. } => "Open",
+                SpineListAction::SubmitScriptCapture { .. } => "Capture",
+                SpineListAction::OpenConversation { .. } => "Open Conversation",
+                SpineListAction::InsertSegmentText { .. }
+                | SpineListAction::ResolveSegment { .. } => "Insert",
+            })
+    }
+}
+
+fn ss(value: impl Into<SharedString>) -> SharedString {
+    value.into()
+}
+
+fn active_segment<'a>(
+    parse: &'a SpineParse,
+    projection: &SpineCursorProjection,
+) -> Option<&'a SpineSegment> {
+    parse.segments.get(projection.active_segment_index)
+}
+
+fn active_segment_range(parse: &SpineParse, projection: &SpineCursorProjection) -> Range<usize> {
+    active_segment(parse, projection)
+        .map(|segment| segment.byte_range.clone())
+        .unwrap_or(0..parse.input.len())
+}
+
+fn stripped_query(query: &str) -> String {
+    query
+        .trim()
+        .trim_start_matches(|ch| matches!(ch, '@' | '/' | '|' | '.' | ';'))
+        .to_ascii_lowercase()
+}
+
+fn matches_query(value: &str, query: &str) -> bool {
+    let query = stripped_query(query);
+    query.is_empty() || value.to_ascii_lowercase().contains(&query)
+}
+
+fn section_with_empty(
+    id: &'static str,
+    title: impl Into<SharedString>,
+    subtitle: Option<SharedString>,
+    icon: Option<SharedString>,
+    mut rows: Vec<SpineListRow>,
+    empty_title: &'static str,
+    empty_subtitle: &'static str,
+) -> SpineListSection {
+    if rows.is_empty() {
+        rows.push(SpineListRow {
+            id: ss(format!("{id}:empty")),
+            kind: SpineListRowKind::Empty,
+            title: ss(empty_title),
+            subtitle: Some(ss(empty_subtitle)),
+            meta: Some(ss("Spine")),
+            icon: Some(ss("circle")),
+            badges: vec![],
+            score: i32::MIN,
+            is_selectable: false,
+            action_label: None,
+            action: SpineListAction::Noop,
+        });
+    }
+    SpineListSection {
+        id: ss(id),
+        title: title.into(),
+        subtitle,
+        icon,
+        rows,
+    }
+}
+
+pub fn build_spine_list_sections(
+    parse: &SpineParse,
+    projection: &SpineCursorProjection,
+) -> Vec<SpineListSection> {
+    let segment = active_segment(parse, projection);
+    let raw = segment.map(|segment| segment.raw.as_str()).unwrap_or("");
+
+    match &projection.active_segment_kind {
+        SpineSegmentKind::ContextMention {
+            context_type,
+            sub_query,
+        } => {
+            if sub_query.is_some() || raw.contains(':') {
+                vec![build_context_subsearch_placeholder_section(
+                    context_type,
+                    sub_query.as_deref().unwrap_or(""),
+                )]
+            } else {
+                vec![build_context_root_section(parse, projection)]
+            }
+        }
+        SpineSegmentKind::SlashCommand { .. } => {
+            vec![build_slash_command_section(parse, projection)]
+        }
+        SpineSegmentKind::Profile { .. } => vec![build_profile_section(parse, projection)],
+        SpineSegmentKind::Style { .. } => vec![build_style_section(parse, projection)],
+        SpineSegmentKind::Capture { .. } => vec![build_capture_section(parse, projection)],
+        SpineSegmentKind::ModeExit { sigil, rest } => {
+            vec![build_mode_exit_section(parse, projection, *sigil, rest)]
+        }
+        SpineSegmentKind::ListFilter { .. } => vec![build_filter_hint_section()],
+        SpineSegmentKind::FreeText if projection.is_tail => vec![build_tail_hint_section()],
+        SpineSegmentKind::FreeText => Vec::new(),
+    }
+}
+
+fn build_context_root_section(
+    parse: &SpineParse,
+    projection: &SpineCursorProjection,
+) -> SpineListSection {
+    let range = active_segment_range(parse, projection);
+    let query = projection.active_query.as_str();
+
+    let builtins = [
+        (
+            "selection",
+            "Selection",
+            "Attach the currently selected text",
+            "mouse-pointer-2",
+        ),
+        (
+            "clipboard",
+            "Clipboard",
+            "Attach current clipboard text",
+            "clipboard",
+        ),
+        ("screenshot", "Screenshot", "Attach a screenshot", "image"),
+        (
+            "app",
+            "Frontmost App",
+            "Attach frontmost app context",
+            "app-window",
+        ),
+        (
+            "window",
+            "Focused Window",
+            "Attach focused window context",
+            "panel-top",
+        ),
+    ];
+    let subsearches = [
+        ("file", "Files", "Search files inline", "file-search"),
+        (
+            "browser-history",
+            "Browser History",
+            "Search browser history inline",
+            "globe",
+        ),
+        (
+            "clipboard",
+            "Clipboard History",
+            "Search clipboard history",
+            "clipboard",
+        ),
+        (
+            "dictation",
+            "Dictation History",
+            "Search saved dictation",
+            "mic",
+        ),
+        (
+            "scripts",
+            "Scripts",
+            "Search Script Kit scripts",
+            "file-code",
+        ),
+        ("scriptlets", "Scriptlets", "Search snippets", "scroll-text"),
+        ("skills", "Skills", "Search plugin skills", "workflow"),
+        ("notes", "Notes", "Search notes", "notebook-text"),
+        (
+            "history",
+            "Conversations",
+            "Search past conversations",
+            "message-circle",
+        ),
+    ];
+
+    let mut rows = Vec::new();
+    for (rank, (id, title, subtitle, icon)) in builtins.iter().enumerate() {
+        if !(matches_query(id, query) || matches_query(title, query)) {
+            continue;
+        }
+        rows.push(SpineListRow {
+            id: ss(format!("spine:@:builtin:{id}")),
+            kind: SpineListRowKind::ContextBuiltin {
+                context_type: ss(*id),
+            },
+            title: ss(*title),
+            subtitle: Some(ss(*subtitle)),
+            meta: Some(ss("Context")),
+            icon: Some(ss(*icon)),
+            badges: vec![ss("@")],
+            score: i32::MAX.saturating_sub(rank as i32),
+            is_selectable: true,
+            action_label: Some(ss("Insert")),
+            action: SpineListAction::ResolveSegment {
+                segment_index: projection.active_segment_index,
+                segment_byte_range: range.clone(),
+                replacement: ss(format!("@{id}")),
+                resolution_id: ss(*id),
+                resolution_label: ss(*title),
+                resolution_source: ss("context-builtin"),
+                trailing_space: true,
+            },
+        });
+    }
+    for (rank, (id, title, subtitle, icon)) in subsearches.iter().enumerate() {
+        if !(matches_query(id, query) || matches_query(title, query)) {
+            continue;
+        }
+        rows.push(SpineListRow {
+            id: ss(format!("spine:@:subsearch:{id}")),
+            kind: SpineListRowKind::ContextSubSearch {
+                context_type: ss(*id),
+            },
+            title: ss(format!("@{id}:")),
+            subtitle: Some(ss(*subtitle)),
+            meta: Some(ss(*title)),
+            icon: Some(ss(*icon)),
+            badges: vec![ss("@"), ss("search")],
+            score: i32::MAX.saturating_sub(100 + rank as i32),
+            is_selectable: true,
+            action_label: Some(ss("Browse")),
+            action: SpineListAction::InsertSegmentText {
+                segment_index: projection.active_segment_index,
+                segment_byte_range: range.clone(),
+                text: ss(format!("@{id}:")),
+                trailing_space: false,
+            },
+        });
+    }
+    section_with_empty(
+        "spine-section-context",
+        "Context",
+        Some(ss("Attach context to the prompt")),
+        Some(ss("at-sign")),
+        rows,
+        "No context matches",
+        "Try @selection, @clipboard, or @file:",
+    )
+}
+
+fn build_context_subsearch_placeholder_section(
+    context_type: &str,
+    sub_query: &str,
+) -> SpineListSection {
+    let context_label = if context_type.trim().is_empty() {
+        "context"
+    } else {
+        context_type
+    };
+    SpineListSection {
+        id: ss(format!("spine-section-context-subsearch:{context_label}")),
+        title: ss(format!("@{context_label}:")),
+        subtitle: Some(ss("Context sub-search rows are wired in Step 12")),
+        icon: Some(ss("search")),
+        rows: vec![SpineListRow {
+            id: ss(format!("spine:@:subsearch-placeholder:{context_label}")),
+            kind: SpineListRowKind::Hint,
+            title: ss(format!(
+                "Search {context_label} for \u{201c}{sub_query}\u{201d}"
+            )),
+            subtitle: Some(ss("Provider-backed rows land here in the sub-search step")),
+            meta: Some(ss("Spine")),
+            icon: Some(ss("info")),
+            badges: vec![ss("@")],
+            score: 0,
+            is_selectable: false,
+            action_label: None,
+            action: SpineListAction::Noop,
+        }],
+    }
+}
+
+fn build_slash_command_section(
+    parse: &SpineParse,
+    projection: &SpineCursorProjection,
+) -> SpineListSection {
+    let range = active_segment_range(parse, projection);
+    let query = projection.active_query.as_str();
+
+    let commands = [
+        (
+            "rewrite",
+            "Rewrite",
+            "Rewrite the prompt or selected context",
+        ),
+        ("summarize", "Summarize", "Summarize attached context"),
+        ("explain", "Explain", "Explain the attached context"),
+        ("fix", "Fix", "Fix grammar, code, or formatting"),
+        ("translate", "Translate", "Translate the text"),
+    ];
+
+    let rows = commands
+        .iter()
+        .enumerate()
+        .filter(|(_, (id, title, _))| matches_query(id, query) || matches_query(title, query))
+        .map(|(rank, (id, title, subtitle))| SpineListRow {
+            id: ss(format!("spine:/:{id}")),
+            kind: SpineListRowKind::SlashCommand { command: ss(*id) },
+            title: ss(format!("/{id}")),
+            subtitle: Some(ss(*subtitle)),
+            meta: Some(ss(*title)),
+            icon: Some(ss("slash")),
+            badges: vec![ss("/")],
+            score: i32::MAX.saturating_sub(rank as i32),
+            is_selectable: true,
+            action_label: Some(ss("Insert")),
+            action: SpineListAction::ResolveSegment {
+                segment_index: projection.active_segment_index,
+                segment_byte_range: range.clone(),
+                replacement: ss(format!("/{id}")),
+                resolution_id: ss(*id),
+                resolution_label: ss(*title),
+                resolution_source: ss("slash-command"),
+                trailing_space: true,
+            },
+        })
+        .collect::<Vec<_>>();
+
+    section_with_empty(
+        "spine-section-slash",
+        "Commands",
+        Some(ss("Choose an AI command")),
+        Some(ss("slash")),
+        rows,
+        "No command matches",
+        "Try /rewrite or /summarize",
+    )
+}
+
+fn build_profile_section(
+    parse: &SpineParse,
+    projection: &SpineCursorProjection,
+) -> SpineListSection {
+    let range = active_segment_range(parse, projection);
+    let query = projection.active_query.as_str();
+
+    let profiles = [
+        ("creative", "Creative", "More exploratory and generative"),
+        ("concise", "Concise", "Short, direct responses"),
+        (
+            "technical",
+            "Technical",
+            "Precise engineering-focused responses",
+        ),
+        ("friendly", "Friendly", "Warm and approachable responses"),
+    ];
+
+    let rows = profiles
+        .iter()
+        .enumerate()
+        .filter(|(_, (id, title, _))| matches_query(id, query) || matches_query(title, query))
+        .map(|(rank, (id, title, subtitle))| SpineListRow {
+            id: ss(format!("spine:|:{id}")),
+            kind: SpineListRowKind::Profile {
+                profile_id: ss(*id),
+            },
+            title: ss(format!("|{id}")),
+            subtitle: Some(ss(*subtitle)),
+            meta: Some(ss(*title)),
+            icon: Some(ss("user-round")),
+            badges: vec![ss("|")],
+            score: i32::MAX.saturating_sub(rank as i32),
+            is_selectable: true,
+            action_label: Some(ss("Insert")),
+            action: SpineListAction::ResolveSegment {
+                segment_index: projection.active_segment_index,
+                segment_byte_range: range.clone(),
+                replacement: ss(format!("|{id}")),
+                resolution_id: ss(*id),
+                resolution_label: ss(*title),
+                resolution_source: ss("profile"),
+                trailing_space: true,
+            },
+        })
+        .collect::<Vec<_>>();
+
+    section_with_empty(
+        "spine-section-profile",
+        "Profiles",
+        Some(ss("Choose a response profile")),
+        Some(ss("user-round")),
+        rows,
+        "No profile matches",
+        "Try |creative or |concise",
+    )
+}
+
+fn build_style_section(parse: &SpineParse, projection: &SpineCursorProjection) -> SpineListSection {
+    let range = active_segment_range(parse, projection);
+    let query = projection.active_query.as_str();
+
+    let styles = [
+        ("professional", "Professional", "Polished workplace tone"),
+        ("concise", "Concise", "Shorten without losing meaning"),
+        ("friendly", "Friendly", "Warmer tone"),
+        ("direct", "Direct", "Plainspoken and direct"),
+    ];
+
+    let rows = styles
+        .iter()
+        .enumerate()
+        .filter(|(_, (id, title, _))| matches_query(id, query) || matches_query(title, query))
+        .map(|(rank, (id, title, subtitle))| SpineListRow {
+            id: ss(format!("spine:.:{id}")),
+            kind: SpineListRowKind::Style { style_id: ss(*id) },
+            title: ss(format!(".{id}")),
+            subtitle: Some(ss(*subtitle)),
+            meta: Some(ss(*title)),
+            icon: Some(ss("sparkles")),
+            badges: vec![ss(".")],
+            score: i32::MAX.saturating_sub(rank as i32),
+            is_selectable: true,
+            action_label: Some(ss("Insert")),
+            action: SpineListAction::ResolveSegment {
+                segment_index: projection.active_segment_index,
+                segment_byte_range: range.clone(),
+                replacement: ss(format!(".{id}")),
+                resolution_id: ss(*id),
+                resolution_label: ss(*title),
+                resolution_source: ss("style"),
+                trailing_space: true,
+            },
+        })
+        .collect::<Vec<_>>();
+
+    section_with_empty(
+        "spine-section-style",
+        "Styles",
+        Some(ss("Style sugar for rewrite prompts")),
+        Some(ss("sparkles")),
+        rows,
+        "No style matches",
+        "Try .professional or .concise",
+    )
+}
+
+fn build_capture_section(
+    parse: &SpineParse,
+    projection: &SpineCursorProjection,
+) -> SpineListSection {
+    let range = active_segment_range(parse, projection);
+    let query = projection.active_query.as_str();
+
+    let targets = [
+        ("todo", "Todo", "Capture a todo item"),
+        ("note", "Note", "Capture a note"),
+        ("link", "Link", "Capture a link"),
+    ];
+
+    let rows = targets
+        .iter()
+        .enumerate()
+        .filter(|(_, (id, title, _))| matches_query(id, query) || matches_query(title, query))
+        .map(|(rank, (id, title, subtitle))| SpineListRow {
+            id: ss(format!("spine:;:{id}")),
+            kind: SpineListRowKind::CaptureTarget { target: ss(*id) },
+            title: ss(format!(";{id}")),
+            subtitle: Some(ss(*subtitle)),
+            meta: Some(ss(*title)),
+            icon: Some(ss("inbox")),
+            badges: vec![ss(";")],
+            score: i32::MAX.saturating_sub(rank as i32),
+            is_selectable: true,
+            action_label: Some(ss("Insert")),
+            action: SpineListAction::InsertSegmentText {
+                segment_index: projection.active_segment_index,
+                segment_byte_range: range.clone(),
+                text: ss(format!(";{id}")),
+                trailing_space: true,
+            },
+        })
+        .collect::<Vec<_>>();
+
+    section_with_empty(
+        "spine-section-capture",
+        "Capture",
+        Some(ss("Choose a capture target")),
+        Some(ss("inbox")),
+        rows,
+        "No capture target matches",
+        "Try ;todo or ;note",
+    )
+}
+
+fn build_mode_exit_section(
+    _parse: &SpineParse,
+    _projection: &SpineCursorProjection,
+    sigil: char,
+    rest: &str,
+) -> SpineListSection {
+    let (title, subtitle, icon) = match sigil {
+        '~' => ("Open File Search", "Browse files", "folder"),
+        '>' => ("Open Quick Terminal", "Run a shell command", "terminal"),
+        '?' => ("Open Actions Help", "Show available actions", "circle-help"),
+        _ => (
+            "Open Mode",
+            "Leave the prompt-builder flow",
+            "external-link",
+        ),
+    };
+
+    SpineListSection {
+        id: ss(format!("spine-section-mode-exit:{sigil}")),
+        title: ss("Mode"),
+        subtitle: Some(ss("Mode-exit sigils leave the Spine projection")),
+        icon: Some(ss(icon)),
+        rows: vec![SpineListRow {
+            id: ss(format!("spine:{sigil}:mode-exit")),
+            kind: SpineListRowKind::Hint,
+            title: ss(title),
+            subtitle: Some(ss(subtitle)),
+            meta: Some(ss("Mode")),
+            icon: Some(ss(icon)),
+            badges: vec![ss(sigil.to_string())],
+            score: i32::MAX,
+            is_selectable: true,
+            action_label: Some(ss("Open")),
+            action: SpineListAction::OpenModeExit {
+                sigil,
+                rest: ss(rest.to_string()),
+            },
+        }],
+    }
+}
+
+fn build_filter_hint_section() -> SpineListSection {
+    SpineListSection {
+        id: ss("spine-section-filter-hint"),
+        title: ss("Refine Search"),
+        subtitle: Some(ss(
+            ": remains a unified-search filter; picker rows move later",
+        )),
+        icon: Some(ss("filter")),
+        rows: vec![SpineListRow {
+            id: ss("spine:::hint"),
+            kind: SpineListRowKind::Hint,
+            title: ss("Keep typing a refine query"),
+            subtitle: Some(ss("Example: :type:script git")),
+            meta: Some(ss("Refine")),
+            icon: Some(ss("filter")),
+            badges: vec![ss(":")],
+            score: 0,
+            is_selectable: false,
+            action_label: None,
+            action: SpineListAction::Noop,
+        }],
+    }
+}
+
+fn build_tail_hint_section() -> SpineListSection {
+    SpineListSection {
+        id: ss("spine-section-tail"),
+        title: ss("Prompt"),
+        subtitle: Some(ss("Recent prompt rows land here in Step 11")),
+        icon: Some(ss("message-circle")),
+        rows: vec![SpineListRow {
+            id: ss("spine:tail:hint"),
+            kind: SpineListRowKind::Hint,
+            title: ss("Keep typing your prompt"),
+            subtitle: Some(ss("Recent prompts and conversations will project here")),
+            meta: Some(ss("Prompt")),
+            icon: Some(ss("message-circle")),
+            badges: vec![],
+            score: 0,
+            is_selectable: false,
+            action_label: None,
+            action: SpineListAction::Noop,
+        }],
+    }
+}
+
+pub fn spine_projection_cache_key(
+    live_filter_text: &str,
+    computed_filter_text: &str,
+    parse: &SpineParse,
+    projection: &SpineCursorProjection,
+) -> String {
+    let active = parse.segments.get(projection.active_segment_index);
+    let active_range = active
+        .map(|segment| segment.byte_range.clone())
+        .unwrap_or(0..0);
+    let active_resolution = active
+        .map(|segment| spine_resolution_cache_key(&segment.resolution))
+        .unwrap_or_else(|| "missing".to_string());
+
+    let mut segment_signature = String::new();
+    for (index, segment) in parse.segments.iter().enumerate() {
+        let _ = write!(
+            segment_signature,
+            "\x1E{index}:{}..{}:raw-len={}:kind={}:resolution={}",
+            segment.byte_range.start,
+            segment.byte_range.end,
+            segment.raw.len(),
+            spine_segment_kind_cache_key(&segment.kind),
+            spine_resolution_cache_key(&segment.resolution),
+        );
+    }
+
+    format!(
+        "main-list-spine-projection\
+        \x1Fmodel-v={}\
+        \x1Fresolution-gen={}\
+        \x1Flive-len={}\
+        \x1Flive={}\
+        \x1Fcomputed-len={}\
+        \x1Fcomputed={}\
+        \x1Fparse-input-len={}\
+        \x1Fparse-input={}\
+        \x1Factive-index={}\
+        \x1Factive-kind={}\
+        \x1Factive-query-len={}\
+        \x1Factive-query={}\
+        \x1Factive-range={}..{}\
+        \x1Factive-resolution={}\
+        \x1Fis-tail={}\
+        \x1Fhas-prompt-segments={}\
+        \x1Fsegments={}",
+        SPINE_LIST_MODEL_VERSION,
+        SPINE_LIST_RESOLUTION_GENERATION,
+        live_filter_text.len(),
+        live_filter_text,
+        computed_filter_text.len(),
+        computed_filter_text,
+        parse.input.len(),
+        parse.input,
+        projection.active_segment_index,
+        spine_segment_kind_cache_key(&projection.active_segment_kind),
+        projection.active_query.len(),
+        projection.active_query,
+        active_range.start,
+        active_range.end,
+        active_resolution,
+        projection.is_tail,
+        projection.has_prompt_segments,
+        segment_signature,
+    )
+}
+
+fn spine_segment_kind_cache_key(kind: &SpineSegmentKind) -> String {
+    match kind {
+        SpineSegmentKind::FreeText => "free-text".to_string(),
+        SpineSegmentKind::ContextMention {
+            context_type,
+            sub_query,
+        } => format!("context:{context_type}:sub={sub_query:?}"),
+        SpineSegmentKind::SlashCommand { command } => format!("slash:{command}"),
+        SpineSegmentKind::Profile { profile_id } => format!("profile:{profile_id}"),
+        SpineSegmentKind::Style { style_id } => format!("style:{style_id}"),
+        SpineSegmentKind::Capture { target, args } => {
+            format!("capture:{target}:args-len={}", args.len())
+        }
+        SpineSegmentKind::ListFilter { query } => format!("filter:{query}"),
+        SpineSegmentKind::ModeExit { sigil, rest } => {
+            format!("mode-exit:{sigil}:rest-len={}", rest.len())
+        }
+    }
+}
+
+fn spine_resolution_cache_key(resolution: &SpineSegmentResolution) -> String {
+    match resolution {
+        SpineSegmentResolution::Unresolved => "unresolved".to_string(),
+        SpineSegmentResolution::Resolved { id, label, source } => {
+            format!("resolved:id={id}:label={label}:source={source}")
+        }
+        SpineSegmentResolution::Unknown {
+            raw,
+            preflight_instruction,
+        } => format!(
+            "unknown:raw-len={}:preflight-len={}",
+            raw.len(),
+            preflight_instruction.len()
+        ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::spine::{parse_spine, project_cursor};
+
+    #[test]
+    fn context_mention_produces_builtin_and_subsearch_rows() {
+        let parse = parse_spine("@");
+        let proj = project_cursor(&parse, 1);
+        let sections = build_spine_list_sections(&parse, &proj);
+        assert!(!sections.is_empty());
+        let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
+        assert!(rows
+            .iter()
+            .any(|r| matches!(r.kind, SpineListRowKind::ContextBuiltin { .. })));
+        assert!(rows
+            .iter()
+            .any(|r| matches!(r.kind, SpineListRowKind::ContextSubSearch { .. })));
+    }
+
+    #[test]
+    fn slash_command_produces_rows() {
+        let parse = parse_spine("/");
+        let proj = project_cursor(&parse, 1);
+        let sections = build_spine_list_sections(&parse, &proj);
+        let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
+        assert!(rows
+            .iter()
+            .any(|r| matches!(r.kind, SpineListRowKind::SlashCommand { .. })));
+    }
+
+    #[test]
+    fn profile_produces_rows() {
+        let parse = parse_spine("|");
+        let proj = project_cursor(&parse, 1);
+        let sections = build_spine_list_sections(&parse, &proj);
+        let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
+        assert!(rows
+            .iter()
+            .any(|r| matches!(r.kind, SpineListRowKind::Profile { .. })));
+    }
+
+    #[test]
+    fn style_produces_rows() {
+        let parse = parse_spine(".");
+        let proj = project_cursor(&parse, 1);
+        let sections = build_spine_list_sections(&parse, &proj);
+        let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
+        assert!(rows
+            .iter()
+            .any(|r| matches!(r.kind, SpineListRowKind::Style { .. })));
+    }
+
+    #[test]
+    fn free_text_without_prompt_segments_returns_empty() {
+        let parse = parse_spine("hello");
+        let proj = project_cursor(&parse, 5);
+        let sections = build_spine_list_sections(&parse, &proj);
+        assert!(sections.is_empty());
+    }
+
+    #[test]
+    fn cache_key_differs_for_different_inputs() {
+        let parse_a = parse_spine("@sel");
+        let proj_a = project_cursor(&parse_a, 4);
+        let parse_b = parse_spine("@clip");
+        let proj_b = project_cursor(&parse_b, 5);
+
+        let key_a = spine_projection_cache_key("@sel", "@sel", &parse_a, &proj_a);
+        let key_b = spine_projection_cache_key("@clip", "@clip", &parse_b, &proj_b);
+        assert_ne!(key_a, key_b);
+    }
+}
