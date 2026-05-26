@@ -1578,11 +1578,7 @@ impl AcpChatView {
     fn focused_text_input_locked_for_thread(&self, thread: &AcpThread) -> bool {
         matches!(
             self.focused_text_mini_phase_for_thread(thread),
-            Some(
-                FocusedTextMiniPhase::Loading
-                    | FocusedTextMiniPhase::Streaming
-                    | FocusedTextMiniPhase::Result
-            )
+            Some(FocusedTextMiniPhase::Loading | FocusedTextMiniPhase::Streaming)
         )
     }
 
@@ -2111,6 +2107,14 @@ impl AcpChatView {
         &mut self,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
+        let has_instruction = {
+            let thread = self.live_thread().read(cx);
+            !thread.input.text().trim().is_empty()
+        };
+        if !has_instruction {
+            return Ok(());
+        }
+
         let (phase, semantics) = {
             let thread = self.live_thread().read(cx);
             (
@@ -2193,7 +2197,7 @@ impl AcpChatView {
             }
             FooterAction::Actions => self.trigger_toggle_actions(window, cx),
             FooterAction::Close => self.trigger_close_requested(window, cx),
-            FooterAction::Ai => self.toggle_profile_selector_popup(window, cx),
+            FooterAction::Ai => self.open_profile_trigger_picker_in_window(window, cx),
             FooterAction::Apply => {}
             FooterAction::Replace
             | FooterAction::Append
@@ -2399,7 +2403,7 @@ impl AcpChatView {
                 move |_event, window, cx| {
                     if let Some(entity) = profile_view.upgrade() {
                         entity.update(cx, |chat, cx| {
-                            chat.toggle_profile_selector_popup(window, cx);
+                            chat.open_profile_trigger_picker_in_window(window, cx);
                         });
                     }
                 }
@@ -5863,6 +5867,8 @@ impl AcpChatView {
         self.open_picker_trigger(PROFILE_TRIGGER_STR, cx);
     }
 
+    // Dedicated selector path retained for setup and legacy automation. Live Agent Chat
+    // profile affordances should use the shared `|` picker path above.
     pub(crate) fn open_profile_picker(&mut self, cx: &mut Context<Self>) {
         self.attach_menu_open = false;
         self.model_selector_open = false;
@@ -6100,7 +6106,7 @@ impl AcpChatView {
             .on_click(move |_event, window, cx| {
                 if let Some(entity) = weak_view.upgrade() {
                     entity.update(cx, |chat, cx| {
-                        chat.toggle_profile_selector_popup(window, cx);
+                        chat.open_profile_trigger_picker_in_window(window, cx);
                     });
                 }
             });
@@ -6284,11 +6290,17 @@ impl AcpChatView {
         theme: &crate::theme::Theme,
     ) -> gpui::AnyElement {
         let chrome = AppChromeColors::from_theme(theme);
+        let input_height = crate::window_resize::focused_text_mini_input_height();
+        let mini_result_height = crate::window_resize::focused_text_mini_result_height();
+        let preview_height = crate::window_resize::focused_text_mini_preview_height();
 
         let input_row = div()
             .id("focused-text-mini-input-row")
             .w_full()
-            .h(px(crate::panel::PROMPT_INPUT_FIELD_HEIGHT))
+            .h(px(input_height))
+            .max_h(px(input_height))
+            .flex_none()
+            .overflow_hidden()
             .px(px(crate::panel::HEADER_PADDING_X))
             .flex()
             .items_center()
@@ -6328,11 +6340,40 @@ impl AcpChatView {
                 theme,
             ));
 
-        let mut root = div()
-            .id("focused-text-mini-root")
-            .size_full()
+        let mut content = div()
+            .id("focused-text-mini-content")
+            .w_full()
+            .h(px(mini_result_height))
+            .max_h(px(mini_result_height))
+            .flex_none()
+            .overflow_hidden()
             .flex()
             .flex_col()
+            .child(input_row);
+
+        if let Some(transcript) = transcript {
+            content = content.child(
+                div()
+                    .id("focused-text-preview")
+                    .w_full()
+                    .h(px(preview_height))
+                    .max_h(px(preview_height))
+                    .flex_none()
+                    .overflow_hidden()
+                    .border_b_1()
+                    .border_color(rgba(chrome.divider_rgba))
+                    .child(div().size_full().overflow_hidden().child(transcript))
+                    .with_animation(
+                        "focused-text-mini-preview-enter",
+                        Animation::new(Duration::from_millis(160)),
+                        |style, delta| style.opacity(delta),
+                    ),
+            );
+        }
+
+        let root = div()
+            .id("focused-text-mini-root")
+            .size_full()
             .when_some(
                 crate::ui_foundation::get_vibrancy_background(theme),
                 |d, bg| d.bg(bg),
@@ -6341,25 +6382,7 @@ impl AcpChatView {
             .border_color(rgba(chrome.border_rgba))
             .rounded(px(10.0))
             .overflow_hidden()
-            .child(input_row);
-
-        if let Some(transcript) = transcript {
-            root = root.child(
-                div()
-                    .id("focused-text-preview")
-                    .flex_1()
-                    .min_h(px(0.0))
-                    .overflow_hidden()
-                    .border_b_1()
-                    .border_color(rgba(chrome.divider_rgba))
-                    .child(transcript)
-                    .with_animation(
-                        "focused-text-mini-preview-enter",
-                        Animation::new(Duration::from_millis(160)),
-                        |style, delta| style.opacity(delta),
-                    ),
-            );
-        }
+            .child(content);
 
         root.into_any_element()
     }
@@ -8312,15 +8335,11 @@ impl AcpChatView {
         cx.subscribe(&toolbar, |this, _toolbar, event, cx| match event {
             AcpToolbarEvent::ToggleProfileSelector(parent) => {
                 this.mention_popup_parent_window = Some(*parent);
-                this.profile_selector_open = !this.profile_selector_open;
-                if this.profile_selector_open {
-                    this.model_selector_open = false;
-                    let entries = this.profile_selector_entries();
-                    this.profile_selector_selected_index =
-                        this.selected_profile_popup_index(&entries);
+                if this.is_setup_mode() {
+                    this.open_profile_picker(cx);
+                } else {
+                    this.open_profile_trigger_picker(cx);
                 }
-                this.sync_acp_popup_windows_from_cached_parent(cx);
-                cx.notify();
             }
             AcpToolbarEvent::ToggleModelSelector(parent) => {
                 this.mention_popup_parent_window = Some(*parent);

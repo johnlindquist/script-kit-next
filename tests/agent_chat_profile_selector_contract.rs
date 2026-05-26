@@ -134,7 +134,9 @@ fn profile_selector_popup_has_independent_module_and_automation_id() {
 fn toolbar_profile_selector_carries_parent_window_for_detached_popup() {
     assert!(ACP_VIEW_SOURCE.contains("AcpToolbarEvent::ToggleProfileSelector(parent)"));
     assert!(ACP_VIEW_SOURCE.contains("this.mention_popup_parent_window = Some(*parent);"));
-    assert!(ACP_VIEW_SOURCE.contains("this.selected_profile_popup_index(&entries)"));
+    assert!(ACP_VIEW_SOURCE.contains("if this.is_setup_mode()"));
+    assert!(ACP_VIEW_SOURCE.contains("this.open_profile_picker(cx);"));
+    assert!(ACP_VIEW_SOURCE.contains("this.open_profile_trigger_picker(cx);"));
 }
 
 #[test]
@@ -187,11 +189,27 @@ fn footer_profile_affordance_is_merged_into_left_status_marker() {
     assert!(ACP_VIEW_SOURCE.contains("profile_selector_open: self.profile_selector_open"));
     assert!(ACP_VIEW_SOURCE.contains("profile_left_info"));
     assert!(ACP_VIEW_SOURCE.contains("render_profile_status_marker_from_snapshot"));
-    assert!(ACP_VIEW_SOURCE.contains("FooterAction::Ai => self.toggle_profile_selector_popup"));
+    assert!(
+        ACP_VIEW_SOURCE.contains("FooterAction::Ai => self.open_profile_trigger_picker_in_window")
+    );
 
     assert!(FOOTER_POPUP_SOURCE.contains("pub action: Option<FooterAction>"));
     assert!(FOOTER_POPUP_SOURCE.contains("pub icon_token: Option<String>"));
     assert!(FOOTER_POPUP_SOURCE.contains("dispatch_acp_footer_action"));
+}
+
+#[test]
+fn profile_affordance_clicks_use_shared_pipe_profile_picker() {
+    let render_icon_body = fn_body(ACP_VIEW_SOURCE, "fn render_input_profile_icon(");
+    let footer_dispatch_body = fn_body(ACP_VIEW_SOURCE, "pub(crate) fn dispatch_footer_button(");
+    let main_window_source = include_str!("../src/app_impl/ui_window.rs");
+
+    assert!(render_icon_body.contains("open_profile_trigger_picker_in_window(window, cx)"));
+    assert!(!render_icon_body.contains("toggle_profile_selector_popup(window, cx)"));
+    assert!(footer_dispatch_body
+        .contains("FooterAction::Ai => self.open_profile_trigger_picker_in_window(window, cx)"));
+    assert!(main_window_source.contains("chat.open_profile_trigger_picker_in_window(window, cx)"));
+    assert!(ACP_PICKER_POPUP_SOURCE.contains("acp-mention-popup"));
 }
 
 #[test]

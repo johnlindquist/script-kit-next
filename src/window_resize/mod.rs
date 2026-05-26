@@ -300,6 +300,18 @@ const FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT: f32 = crate::panel::PROMPT_INPUT_FIEL
 const FOCUSED_TEXT_MINI_STREAMING_HEIGHT: f32 = FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT;
 const FOCUSED_TEXT_MINI_RESULT_HEIGHT: f32 = 150.0;
 const FOCUSED_TEXT_MINI_RESIZE_ANIMATE: bool = true;
+
+pub(crate) fn focused_text_mini_input_height() -> f32 {
+    FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT
+}
+
+pub(crate) fn focused_text_mini_result_height() -> f32 {
+    FOCUSED_TEXT_MINI_RESULT_HEIGHT
+}
+
+pub(crate) fn focused_text_mini_preview_height() -> f32 {
+    (FOCUSED_TEXT_MINI_RESULT_HEIGHT - FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT).max(0.0)
+}
 /// Width for full main window (standard launcher)
 const FULL_MAIN_WINDOW_WIDTH: f32 = 750.0;
 #[derive(Debug, Clone, Copy, PartialEq)]

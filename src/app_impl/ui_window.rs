@@ -278,7 +278,7 @@ impl ScriptListApp {
                 if let AppView::AcpChatView { entity } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |chat, cx| {
-                        chat.toggle_profile_selector_popup(window, cx);
+                        chat.open_profile_trigger_picker_in_window(window, cx);
                     });
                 } else if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();

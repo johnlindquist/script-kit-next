@@ -186,7 +186,7 @@ fn focused_text_mini_loading_has_no_body_thinking_text() {
     assert!(!render_fn.contains("Edit, refine, ask"));
     assert!(ACP_VIEW.contains("FOCUSED_TEXT_MINI_PLACEHOLDER"));
     assert!(render_fn.contains("Self::render_composer_input_text"));
-    assert!(render_fn.contains("crate::panel::PROMPT_INPUT_FIELD_HEIGHT"));
+    assert!(render_fn.contains("focused_text_mini_input_height()"));
     assert!(render_fn.contains("crate::panel::HEADER_PADDING_X"));
     assert!(render_fn.contains("active_pending"));
     assert!(render_fn.contains("render_input_profile_icon"));

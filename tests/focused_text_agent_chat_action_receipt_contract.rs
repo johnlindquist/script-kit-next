@@ -55,8 +55,8 @@ fn focused_text_state_carries_redacted_context_identity_and_last_action() {
         context_status: "captured".to_string(),
         context_failure_code: None,
         context_fingerprint: Some("fnv1a64:0123456789abcdef".to_string()),
-        submitted_prompt_locked: true,
-        submitted_prompt_char_count: Some(12),
+        submitted_prompt_locked: false,
+        submitted_prompt_char_count: None,
         input_redacted: true,
         can_replace: true,
         can_append: true,
@@ -86,8 +86,8 @@ fn focused_text_state_carries_redacted_context_identity_and_last_action() {
     assert_eq!(json["contextPresent"], true);
     assert_eq!(json["contextStatus"], "captured");
     assert_eq!(json["contextFingerprint"], "fnv1a64:0123456789abcdef");
-    assert_eq!(json["submittedPromptLocked"], true);
-    assert_eq!(json["submittedPromptCharCount"], 12);
+    assert_eq!(json["submittedPromptLocked"], false);
+    assert!(json["submittedPromptCharCount"].is_null());
     assert_eq!(json["inputRedacted"], true);
     assert_eq!(json["lastActionReceipt"]["action"], "copy");
     assert_eq!(json["lastActionReceipt"]["outputLength"], 25);

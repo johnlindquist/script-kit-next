@@ -303,6 +303,74 @@ fn focused_text_mini_result_uses_shared_acp_transcript_component() {
 }
 
 #[test]
+fn focused_text_mini_window_animation_reveals_fixed_height_content() {
+    let render_fn = source_between(
+        ACP_VIEW,
+        "fn render_focused_text_mini",
+        "fn render_pending_context_chips",
+    );
+    let input_row = source_between(
+        render_fn,
+        ".id(\"focused-text-mini-input-row\")",
+        ".when_some(self.focused_text.as_ref()",
+    );
+    let preview_block = source_between(
+        render_fn,
+        ".id(\"focused-text-preview\")",
+        ".child(transcript)",
+    );
+
+    for required in [
+        "crate::window_resize::focused_text_mini_input_height()",
+        "crate::window_resize::focused_text_mini_result_height()",
+        "crate::window_resize::focused_text_mini_preview_height()",
+        "\"focused-text-mini-content\"",
+        ".h(px(mini_result_height))",
+        ".max_h(px(mini_result_height))",
+        ".flex_none()",
+        ".overflow_hidden()",
+    ] {
+        assert!(
+            render_fn.contains(required),
+            "focused-text mini animation must reveal fixed content instead of stretching: {required}"
+        );
+    }
+    assert!(input_row.contains(".h(px(input_height))"));
+    assert!(input_row.contains(".max_h(px(input_height))"));
+    assert!(input_row.contains(".flex_none()"));
+    assert!(preview_block.contains(".h(px(preview_height))"));
+    assert!(preview_block.contains(".max_h(px(preview_height))"));
+    assert!(preview_block.contains(".flex_none()"));
+    assert!(
+        !preview_block.contains(".flex_1()"),
+        "focused-text preview viewport must not flex during window height animation"
+    );
+    assert!(
+        !preview_block.contains(".min_h("),
+        "focused-text preview viewport should use fixed height, not min-height fallback"
+    );
+    assert!(render_fn.contains(".child(div().size_full().overflow_hidden().child(transcript))"));
+}
+
+#[test]
+fn focused_text_mini_height_helpers_match_resize_contract() {
+    for required in [
+        "pub(crate) fn focused_text_mini_input_height() -> f32",
+        "pub(crate) fn focused_text_mini_result_height() -> f32",
+        "pub(crate) fn focused_text_mini_preview_height() -> f32",
+        "FOCUSED_TEXT_MINI_RESULT_HEIGHT - FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT",
+        "ViewType::FocusedTextMini => match item_count",
+        "_ => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT)",
+        "FOCUSED_TEXT_MINI_RESIZE_ANIMATE",
+    ] {
+        assert!(
+            WINDOW_RESIZE.contains(required),
+            "focused-text mini sizing helpers must stay aligned with resize contract: {required}"
+        );
+    }
+}
+
+#[test]
 fn focused_text_mini_reuses_app_icon_cache_and_focuses_composer_on_open() {
     assert!(
         APP_LAUNCHER_DB_CACHE.contains("pub fn cached_app_icon_for_bundle"),

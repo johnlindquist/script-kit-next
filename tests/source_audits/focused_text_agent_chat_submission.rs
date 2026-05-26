@@ -73,6 +73,7 @@ fn focused_text_view_keeps_snapshot_in_memory_for_multiturn_prompting() {
 fn focused_text_result_followup_enter_expands_and_submits_chat_semantics() {
     for required in [
         "submit_focused_text_from_enter",
+        "!thread.input.text().trim().is_empty()",
         "FocusedTextMiniPhase::Result",
         "expand_focused_text_to_full_chat",
         "FocusedTextEditSemantics::Chat",
@@ -84,6 +85,24 @@ fn focused_text_result_followup_enter_expands_and_submits_chat_semantics() {
             "missing focused-text result follow-up expansion contract: {required}"
         );
     }
+}
+
+#[test]
+fn focused_text_mini_result_input_is_not_submitted_prompt_locked() {
+    let lock_fn = source_between(
+        ACP_VIEW,
+        "fn focused_text_input_locked_for_thread",
+        "fn focused_text_locked_input_allows_key",
+    );
+
+    assert!(
+        lock_fn.contains("FocusedTextMiniPhase::Loading | FocusedTextMiniPhase::Streaming"),
+        "focused-text mini should lock input only while a turn is active"
+    );
+    assert!(
+        !lock_fn.contains("FocusedTextMiniPhase::Result"),
+        "result-ready focused-text mini input must re-enable for follow-up typing"
+    );
 }
 
 #[test]
@@ -140,9 +159,13 @@ fn focused_text_mini_result_phase_requires_assistant_output() {
 
     assert!(phase_fn
         .contains("let has_output = Self::latest_assistant_response_text(thread).is_some();"));
-    assert!(!phase_fn.contains("has_user_turn"));
+    assert!(phase_fn.contains("let active = matches!("));
     assert!(
-        phase_fn.contains("(true, false) => Some(FocusedTextMiniPhase::InputOnly)"),
-        "streaming without assistant text must stay compact/input-only"
+        phase_fn.contains("(true, false, _) => Some(FocusedTextMiniPhase::Loading)"),
+        "active turn without assistant text should show loading rather than a result"
+    );
+    assert!(
+        phase_fn.contains("(false, true, _) => Some(FocusedTextMiniPhase::Result)"),
+        "result phase must require assistant output"
     );
 }
