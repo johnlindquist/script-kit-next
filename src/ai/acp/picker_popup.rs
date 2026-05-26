@@ -594,7 +594,25 @@ impl AcpMentionPopupWindow {
         let label_hits: std::collections::HashSet<usize> =
             row.highlights.title.iter().map(|r| r.start).collect();
 
-        let mut left_side = div().flex().items_center();
+        let mut left_side = div().flex().items_center().gap(gpui::px(6.0));
+
+        if let ContextPickerItemKind::AgentChatProfile { icon_name, .. } = &item.kind {
+            let icon_path = crate::components::footer_chrome::footer_icon_path_or_profile(
+                icon_name
+                    .as_deref()
+                    .unwrap_or(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN),
+            );
+            left_side = left_side.child(
+                gpui::svg()
+                    .external_path(icon_path)
+                    .size(gpui::px(13.0))
+                    .text_color(if is_selected {
+                        colors.foreground
+                    } else {
+                        colors.foreground.opacity(MUTED_OP)
+                    }),
+            );
+        }
 
         let label_spans = render_trigger_row_label(
             &label,
@@ -650,6 +668,12 @@ impl AcpMentionPopupWindow {
             .items_center()
             .px(gpui::px(8.0))
             .rounded(gpui::px(6.0))
+            .border_l(gpui::px(2.0))
+            .border_color(if is_selected {
+                colors.accent
+            } else {
+                gpui::transparent_black()
+            })
             .bg(if is_selected {
                 selected_row_bg
             } else {
@@ -669,12 +693,6 @@ impl AcpMentionPopupWindow {
             .flex()
             .flex_col()
             .justify_center()
-            .border_l(gpui::px(2.0))
-            .border_color(if is_selected {
-                colors.accent
-            } else {
-                gpui::transparent_black()
-            })
             .child(inner_row)
     }
 

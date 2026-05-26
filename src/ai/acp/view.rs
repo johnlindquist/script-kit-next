@@ -918,6 +918,7 @@ impl AcpChatView {
                     meta: SharedString::from(format!("'{} · {backend}", entry.id)),
                     kind: ContextPickerItemKind::AgentChatProfile {
                         profile_id: entry.id,
+                        icon_name: entry.icon_name,
                     },
                     score,
                     label_highlight_indices: Vec::new(),
@@ -5746,6 +5747,8 @@ impl AcpChatView {
         self.attach_menu_open = false;
         self.model_selector_open = false;
         self.history_menu = None;
+        self.profile_selector_open = false;
+        crate::ai::acp::profile_selector_popup::close_profile_selector_popup_window(cx);
         self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.set_input(trigger.to_string(), cx);
         self.refresh_mention_session(cx);
@@ -5757,6 +5760,10 @@ impl AcpChatView {
 
     pub(crate) fn open_mention_picker(&mut self, cx: &mut Context<Self>) {
         self.open_picker_trigger("@", cx);
+    }
+
+    pub(crate) fn open_profile_trigger_picker(&mut self, cx: &mut Context<Self>) {
+        self.open_picker_trigger(PROFILE_TRIGGER_STR, cx);
     }
 
     pub(crate) fn open_profile_picker(&mut self, cx: &mut Context<Self>) {
@@ -5802,6 +5809,15 @@ impl AcpChatView {
     ) {
         self.cache_popup_parent_window(window, cx);
         self.open_profile_picker(cx);
+    }
+
+    pub(crate) fn open_profile_trigger_picker_in_window(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.cache_popup_parent_window(window, cx);
+        self.open_profile_trigger_picker(cx);
     }
 
     // ── Rendering helpers ─────────────────────────────────────────
@@ -7534,7 +7550,7 @@ impl AcpChatView {
         }
 
         if session.trigger == ContextPickerTrigger::Profile {
-            if let ContextPickerItemKind::AgentChatProfile { profile_id } = item.kind {
+            if let ContextPickerItemKind::AgentChatProfile { profile_id, .. } = item.kind {
                 let current_text = self.live_thread().read(cx).input.text().to_string();
                 let next_text = Self::replace_text_in_char_range(
                     &current_text,

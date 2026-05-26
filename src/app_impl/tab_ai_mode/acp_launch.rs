@@ -383,9 +383,8 @@ impl ScriptListApp {
 
     /// Build the ACP composer text for the first render of a new launch.
     ///
-    /// ScriptList-triggered `@` and `/` routes prefill the raw trigger so the
+    /// ScriptList-triggered `@`, `/`, and `|` routes prefill the raw trigger so the
     /// ACP handoff never paints an empty composer before the picker opens.
-    /// `|` opens the dedicated profile selector and must not leak into the composer.
     pub(super) fn tab_ai_acp_initial_input_for_launch(
         prompt_type: &str,
         effective_intent: Option<&str>,
@@ -404,7 +403,7 @@ impl ScriptListApp {
         }
 
         match (prompt_type, pending_script_list_trigger) {
-            ("ScriptList", Some(trigger @ ('/' | '@'))) => Some(trigger.to_string()),
+            ("ScriptList", Some(trigger @ ('/' | '@' | '|'))) => Some(trigger.to_string()),
             _ => None,
         }
     }

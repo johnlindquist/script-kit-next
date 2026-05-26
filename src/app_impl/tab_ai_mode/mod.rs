@@ -974,7 +974,7 @@ impl ScriptListApp {
                 entity.update(cx, |view, cx| match trigger {
                     '/' => view.open_slash_picker_in_window(window, cx),
                     '@' => view.open_mention_picker_in_window(window, cx),
-                    '|' => view.open_profile_picker_in_window(window, cx),
+                    '|' => view.open_profile_trigger_picker_in_window(window, cx),
                     _ => {}
                 });
             });

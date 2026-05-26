@@ -160,8 +160,11 @@ pub enum ContextPickerItemKind {
     /// A slash command with source-aware identity. Default commands insert
     /// literal `/command` text; plugin and Claude skills stage local content.
     SlashCommand(SlashCommandPayload),
-    /// Agent Chat profile row shown from the `'` trigger.
-    AgentChatProfile { profile_id: String },
+    /// Agent Chat profile row shown from the `|` trigger.
+    AgentChatProfile {
+        profile_id: String,
+        icon_name: Option<String>,
+    },
     /// Opens a full built-in view as a portal for rich browsing.
     /// Selection in the portal attaches the result back to the ACP chat.
     Portal(PortalKind),

@@ -8,7 +8,9 @@ const FILTER_INPUT_UPDATES_SOURCE: &str = include_str!("../src/app_impl/filter_i
 const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 const ACP_THREAD_SOURCE: &str = include_str!("../src/ai/acp/thread.rs");
 const ACP_MOD_SOURCE: &str = include_str!("../src/ai/acp/mod.rs");
+const ACP_PICKER_POPUP_SOURCE: &str = include_str!("../src/ai/acp/picker_popup.rs");
 const PROFILE_POPUP_SOURCE: &str = include_str!("../src/ai/acp/profile_selector_popup.rs");
+const CHAT_WINDOW_SOURCE: &str = include_str!("../src/ai/acp/chat_window.rs");
 const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
 const CONTEXT_PICKER_TYPES_SOURCE: &str = include_str!("../src/ai/window/context_picker/types.rs");
 const CONTEXT_PICKER_SOURCE: &str = include_str!("../src/ai/window/context_picker/mod.rs");
@@ -204,16 +206,25 @@ fn pipe_trigger_selects_agent_chat_profiles_without_context_attachment() {
     assert!(refresh_body.contains("ContextPickerTrigger::Profile"));
     assert!(refresh_body.contains("self.build_profile_picker_items(&query)"));
     assert!(ACP_VIEW_SOURCE.contains("self.select_profile_from_popup(&profile_id, cx);"));
-    assert!(ACP_VIEW_SOURCE.contains("icon_name: entry.icon_name.clone()"));
-    let open_profile_body = fn_body(ACP_VIEW_SOURCE, "pub(crate) fn open_profile_picker(");
-    assert!(
-        open_profile_body.contains("self.profile_selector_open = true;"),
-        "main-menu pipe launch should open the dedicated Agent Chat profile selector"
+    assert!(ACP_VIEW_SOURCE.contains("icon_name: entry.icon_name"));
+    assert!(CONTEXT_PICKER_TYPES_SOURCE.contains("icon_name: Option<String>"));
+    let trigger_body = fn_body(
+        ACP_VIEW_SOURCE,
+        "pub(crate) fn open_profile_trigger_picker(",
     );
     assert!(
-        !open_profile_body.contains("self.open_picker_trigger(PROFILE_TRIGGER_STR"),
-        "main-menu pipe launch must not seed | into the ACP composer"
+        trigger_body.contains("open_picker_trigger(PROFILE_TRIGGER_STR"),
+        "main-menu pipe launch should open the composer profile trigger picker"
     );
+    assert!(
+        !trigger_body.contains("profile_selector_open = true"),
+        "composer pipe trigger must not open the footer profile selector"
+    );
+    let open_picker_body = fn_body(ACP_VIEW_SOURCE, "fn open_picker_trigger(");
+    assert!(open_picker_body.contains("self.set_input(trigger.to_string(), cx);"));
+    assert!(open_picker_body.contains("self.refresh_mention_session(cx);"));
+    assert!(open_picker_body.contains("self.profile_selector_open = false;"));
+    assert!(open_picker_body.contains("close_profile_selector_popup_window"));
     let accept_body = fn_body(ACP_VIEW_SOURCE, "fn accept_mention_selection_impl(");
     assert!(accept_body.contains("ContextPickerTrigger::Profile"));
     assert!(accept_body.contains("ContextPickerItemKind::AgentChatProfile"));
@@ -223,18 +234,35 @@ fn pipe_trigger_selects_agent_chat_profiles_without_context_attachment() {
 }
 
 #[test]
-fn pipe_trigger_routes_from_main_menu_to_profile_picker() {
+fn pipe_trigger_routes_from_main_menu_to_composer_profile_trigger_picker() {
     assert!(TAB_AI_MODE_SOURCE.contains("open_tab_ai_acp_with_profile_picker"));
-    assert!(TAB_AI_MODE_SOURCE.contains("view.open_profile_picker_in_window(window, cx)"));
-    assert!(ACP_VIEW_SOURCE.contains("pub(crate) fn open_profile_picker_in_window("));
+    assert!(TAB_AI_MODE_SOURCE.contains("view.open_profile_trigger_picker_in_window(window, cx)"));
+    assert!(!TAB_AI_MODE_SOURCE.contains("'|' => view.open_profile_picker_in_window(window, cx)"));
+    assert!(ACP_VIEW_SOURCE.contains("pub(crate) fn open_profile_trigger_picker_in_window("));
+    assert!(CHAT_WINDOW_SOURCE.contains("view.open_profile_trigger_picker_in_window(window, cx)"));
+    assert!(!CHAT_WINDOW_SOURCE.contains("view.open_profile_picker_in_window(window, cx)"));
     let initial_input_body = fn_body(
         ACP_LAUNCH_IMPL_SOURCE,
         "pub(super) fn tab_ai_acp_initial_input_for_launch(",
     );
-    assert!(initial_input_body.contains("Some(trigger @ ('/' | '@'))"));
+    assert!(initial_input_body.contains("Some(trigger @ ('/' | '@' | '|'))"));
+}
+
+#[test]
+fn composer_profile_trigger_rows_use_shared_icon_and_selected_chrome() {
+    let row_body = fn_body(ACP_PICKER_POPUP_SOURCE, "fn render_picker_row(");
+    assert!(row_body.contains("ContextPickerItemKind::AgentChatProfile"));
+    assert!(row_body.contains("footer_icon_path_or_profile"));
+    assert!(row_body.contains("FOOTER_PROFILE_ICON_TOKEN"));
+    assert!(row_body.contains("gpui::svg()"));
+    assert!(row_body.contains(".border_l(gpui::px(2.0))"));
+    let outer_row_tail = row_body
+        .split(".id(SharedString::from(format!(\"acp-mention-popup-row-{idx}\")))")
+        .nth(1)
+        .expect("outer row body must be present");
     assert!(
-        !initial_input_body.contains("'|'"),
-        "pipe profile selection must keep the Agent Chat composer empty"
+        !outer_row_tail.contains(".border_l(gpui::px(2.0))"),
+        "composer picker accent bar should live inside the selected item background"
     );
 }
 
