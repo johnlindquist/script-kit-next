@@ -6113,10 +6113,10 @@ impl AcpChatView {
                 .child(icon)
                 .with_animation(
                     "acp-input-profile-icon-pulse",
-                    Animation::new(Duration::from_millis(1200)).repeat(),
+                    Animation::new(Duration::from_millis(2000)).repeat(),
                     |style, delta| {
                         let sine = (delta * std::f32::consts::PI * 2.0).sin();
-                        let a = 0.5 + (0.5 * sine);
+                        let a = 0.8 + (0.2 * sine);
                         style.opacity(a)
                     },
                 )

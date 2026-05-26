@@ -58,9 +58,9 @@ const FOOTER_STREAMING_DOT_SIZE: f64 = 6.0;
 #[cfg(target_os = "macos")]
 const FOOTER_LEFT_DOT_LABEL_GAP: f64 = 6.0;
 #[cfg(target_os = "macos")]
-const FOOTER_ACTIVE_DOT_MIN_OPACITY: f32 = 0.22;
+const FOOTER_ACTIVE_DOT_MIN_OPACITY: f32 = 0.6;
 #[cfg(target_os = "macos")]
-const FOOTER_ACTIVE_DOT_HALF_CYCLE_SECONDS: f64 = 1.1;
+const FOOTER_ACTIVE_DOT_HALF_CYCLE_SECONDS: f64 = 1.0;
 #[cfg(target_os = "macos")]
 const FOOTER_RUN_SLOT_MIN_WIDTH: f64 =
     crate::components::footer_chrome::FOOTER_RUN_SLOT_MIN_WIDTH_PX as f64;
