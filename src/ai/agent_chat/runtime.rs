@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use agent_client_protocol::ContentBlock;
 use anyhow::Result;
@@ -13,14 +14,24 @@ pub(crate) struct AgentChatTurnRequest {
     pub model_id: Option<String>,
 }
 
+pub(crate) struct IsolatedTurnHandle {
+    pub rx: AgentChatEventRx,
+    pub cancel: Option<Arc<std::sync::atomic::AtomicBool>>,
+}
+
+impl IsolatedTurnHandle {
+    pub(crate) fn signal_cancel(&self) {
+        if let Some(flag) = &self.cancel {
+            flag.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+}
+
 pub(crate) trait AgentChatConnection: Send + Sync + 'static {
     fn start_turn(&self, request: AgentChatTurnRequest) -> Result<AgentChatEventRx>;
-    /// Start a turn that must not share the live session's single active stream slot.
-    ///
-    /// The default keeps non-Pi implementations source-compatible. Pi overrides this
-    /// because its normal connection has only one active streaming turn.
-    fn start_isolated_turn(&self, request: AgentChatTurnRequest) -> Result<AgentChatEventRx> {
-        self.start_turn(request)
+    fn start_isolated_turn(&self, request: AgentChatTurnRequest) -> Result<IsolatedTurnHandle> {
+        let rx = self.start_turn(request)?;
+        Ok(IsolatedTurnHandle { rx, cancel: None })
     }
     fn cancel_turn(&self, ui_thread_id: String) -> Result<()>;
     fn prepare_session(&self, ui_thread_id: String, cwd: PathBuf) -> Result<AgentChatEventRx>;

@@ -109,13 +109,19 @@ impl AgentChatConnection for PiRpcRuntime {
         Ok(event_rx)
     }
 
-    fn start_isolated_turn(&self, request: AgentChatTurnRequest) -> Result<AgentChatEventRx> {
+    fn start_isolated_turn(
+        &self,
+        request: AgentChatTurnRequest,
+    ) -> Result<crate::ai::agent_chat::runtime::IsolatedTurnHandle> {
         let Some(spec) = self.spec.clone() else {
             anyhow::bail!("Pi RPC isolated turns are unavailable for sender-only test runtime");
         };
         let (event_tx, event_rx) = async_channel::bounded(256);
-        spawn_single_turn_runtime(spec, request, event_tx)?;
-        Ok(event_rx)
+        let cancel = spawn_single_turn_runtime(spec, request, event_tx)?;
+        Ok(crate::ai::agent_chat::runtime::IsolatedTurnHandle {
+            rx: event_rx,
+            cancel: Some(cancel),
+        })
     }
 
     fn cancel_turn(&self, ui_thread_id: String) -> Result<()> {
@@ -278,11 +284,19 @@ async fn run_pi_rpc_event_loop(
     Ok(())
 }
 
+pub(crate) type IsolatedTurnCancelFlag = Arc<std::sync::atomic::AtomicBool>;
+
+fn new_cancel_flag() -> IsolatedTurnCancelFlag {
+    Arc::new(std::sync::atomic::AtomicBool::new(false))
+}
+
 fn spawn_single_turn_runtime(
     spec: Arc<PiRpcLaunchSpec>,
     request: AgentChatTurnRequest,
     event_tx: AcpEventTx,
-) -> Result<()> {
+) -> Result<IsolatedTurnCancelFlag> {
+    let cancel = new_cancel_flag();
+    let cancel_inner = cancel.clone();
     std::thread::Builder::new()
         .name("pi-rpc-agent-chat-isolated-turn".to_string())
         .spawn(move || {
@@ -298,19 +312,22 @@ fn spawn_single_turn_runtime(
             };
 
             runtime.block_on(async move {
-                if let Err(error) = run_pi_rpc_single_turn(spec, request, event_tx).await {
+                if let Err(error) =
+                    run_pi_rpc_single_turn(spec, request, event_tx, cancel_inner).await
+                {
                     tracing::error!(%error, "pi_rpc_isolated_turn_exited_with_error");
                 }
             });
         })
         .context("Failed to spawn isolated Pi RPC worker thread")?;
-    Ok(())
+    Ok(cancel)
 }
 
 async fn run_pi_rpc_single_turn(
     spec: Arc<PiRpcLaunchSpec>,
     request: AgentChatTurnRequest,
     event_tx: AcpEventTx,
+    cancel: IsolatedTurnCancelFlag,
 ) -> Result<()> {
     let mut cmd = Command::new(&spec.command);
     cmd.args(&spec.args)
@@ -426,15 +443,34 @@ async fn run_pi_rpc_single_turn(
         return Err(error);
     }
 
-    if tokio::time::timeout(std::time::Duration::from_secs(600), done_rx.recv())
-        .await
-        .is_err()
-    {
-        let _ = event_tx
-            .send(AgentChatEvent::Failed {
-                error: "Pi RPC isolated turn timed out".to_string(),
-            })
-            .await;
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(600);
+    loop {
+        let poll_interval = std::time::Duration::from_millis(200);
+        match tokio::time::timeout(poll_interval, done_rx.recv()).await {
+            Ok(_) => break,
+            Err(_) => {
+                if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "pi_rpc_isolated_turn_cancelled",
+                    );
+                    let _ = event_tx
+                        .send(AgentChatEvent::Failed {
+                            error: "cancelled".to_string(),
+                        })
+                        .await;
+                    break;
+                }
+                if tokio::time::Instant::now() >= deadline {
+                    let _ = event_tx
+                        .send(AgentChatEvent::Failed {
+                            error: "Pi RPC isolated turn timed out".to_string(),
+                        })
+                        .await;
+                    break;
+                }
+            }
+        }
     }
 
     let _ = child.kill().await;

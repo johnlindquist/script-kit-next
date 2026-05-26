@@ -1938,7 +1938,7 @@ impl AcpThread {
         &self,
         ui_thread_id: String,
         blocks: Vec<ContentBlock>,
-    ) -> Result<AcpEventRx, String> {
+    ) -> Result<crate::ai::agent_chat::runtime::IsolatedTurnHandle, String> {
         self.connection
             .start_isolated_turn(AgentChatTurnRequest {
                 ui_thread_id,
