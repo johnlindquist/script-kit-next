@@ -2582,6 +2582,43 @@ impl ScriptListApp {
                 );
             }
         }
+
+        let ai_prefs = crate::config::load_user_preferences().ai;
+        match crate::ai::agent_chat::launch::resolve_focused_text_pi_launch(&ai_prefs, &profile_ctx)
+        {
+            Ok(text_launch) => {
+                match crate::ai::agent_chat::launch::warm_session_manager()
+                    .prepare_warm_background(text_launch.warm_spec())
+                {
+                    Ok(snapshot) => {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "pi_agent_chat_warm_started",
+                            profile_id = %text_launch.profile.id,
+                            warm_key = %text_launch.warm_key,
+                            generation = snapshot.generation,
+                            state = ?snapshot.state,
+                        );
+                    }
+                    Err(error) => {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "pi_agent_chat_warm_unavailable",
+                            profile_id = %text_launch.profile.id,
+                            warm_key = %text_launch.warm_key,
+                            error = %error,
+                        );
+                    }
+                }
+            }
+            Err(error) => {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "pi_agent_chat_text_warm_resolution_skipped",
+                    error = %error,
+                );
+            }
+        }
     }
 
     /// Startup prewarm: respects `warmOnStartup=false`.
