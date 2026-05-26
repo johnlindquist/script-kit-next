@@ -2084,6 +2084,7 @@ impl ScriptListApp {
             scripts::SearchResult::Skill(m) => m.skill.title.clone(),
             scripts::SearchResult::Fallback(m) => m.display_label(),
             scripts::SearchResult::ScriptIssue(m) => m.title.clone(),
+            scripts::SearchResult::SpineProjection(_) => String::new(),
         }
     }
 

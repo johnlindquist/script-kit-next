@@ -93,6 +93,7 @@ mod scrolling;
 mod selected_text;
 mod setup;
 mod shortcuts;
+mod spine;
 mod stdin_commands;
 #[cfg(feature = "storybook")]
 mod stories;

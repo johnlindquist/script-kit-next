@@ -1026,6 +1026,11 @@ fn render_focused_info_for_result(
             let _ = match_indices;
             let _ = shortcut_display;
         }
+        scripts::SearchResult::SpineProjection(_) => {
+            // Spine projection rows have no focused info panel
+            let _ = match_indices;
+            let _ = shortcut_display;
+        }
     }
 
     content
@@ -1195,6 +1200,7 @@ impl ScriptListApp {
                     scripts::SearchResult::Skill(_) => None, // Skills don't track frecency
                     scripts::SearchResult::Fallback(_) => None, // Fallbacks don't track frecency
                     scripts::SearchResult::ScriptIssue(_) => None, // Diagnostic row doesn't track frecency
+                    scripts::SearchResult::SpineProjection(_) => None, // Spine projections don't track frecency
                 };
 
                 // Check if this item is "suggested" (has frecency data above min_score)
@@ -1408,6 +1414,7 @@ impl ScriptListApp {
                         false,
                         "Inspect",
                     )),
+                    scripts::SearchResult::SpineProjection(_) => None, // Spine projections have no info panel
                 }
             } else {
                 None
