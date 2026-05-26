@@ -242,6 +242,14 @@ pub fn build_spine_list_sections(
     parse: &SpineParse,
     projection: &SpineCursorProjection,
 ) -> Vec<SpineListSection> {
+    build_spine_list_sections_with_context(parse, projection, None)
+}
+
+pub(crate) fn build_spine_list_sections_with_context(
+    parse: &SpineParse,
+    projection: &SpineCursorProjection,
+    subsearch_ctx: Option<&super::catalog_subsearch::SpineSubsearchContext<'_>>,
+) -> Vec<SpineListSection> {
     let segment = active_segment(parse, projection);
     let raw = segment.map(|segment| segment.raw.as_str()).unwrap_or("");
 
@@ -250,7 +258,19 @@ pub fn build_spine_list_sections(
             context_type,
             sub_query,
         } => {
-            if sub_query.is_some() || raw.contains(':') {
+            if let Some((source, query)) = super::catalog_subsearch::parse_context_subsearch(
+                context_type,
+                sub_query.as_deref(),
+            ) {
+                let range = active_segment_range(parse, projection);
+                vec![super::catalog_subsearch::build_context_subsearch_section(
+                    source,
+                    query,
+                    projection.active_segment_index,
+                    range,
+                    subsearch_ctx,
+                )]
+            } else if sub_query.is_some() || raw.contains(':') {
                 vec![build_context_subsearch_placeholder_section(
                     context_type,
                     sub_query.as_deref().unwrap_or(""),

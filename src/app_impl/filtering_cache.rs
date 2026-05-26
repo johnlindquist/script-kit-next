@@ -1036,10 +1036,18 @@ impl ScriptListApp {
                     return self.main_menu_result_caches.clone_grouped_results();
                 }
 
-                let sections = crate::spine::build_spine_list_sections(
-                    &self.spine_parse,
-                    projection,
-                );
+                let subsearch_ctx =
+                    crate::spine::catalog_subsearch::SpineSubsearchContext {
+                        scripts: &self.scripts,
+                        scriptlets: &self.scriptlets,
+                        skills: &self.skills,
+                    };
+                let sections =
+                    crate::spine::build_spine_list_sections_with_context(
+                        &self.spine_parse,
+                        projection,
+                        Some(&subsearch_ctx),
+                    );
                 let mut grouped_items = Vec::new();
                 let mut flat_results: Vec<scripts::SearchResult> = Vec::new();
                 for section in sections {

@@ -3,6 +3,7 @@ pub(crate) mod catalog_history;
 mod catalog_profile;
 mod catalog_slash;
 mod catalog_style;
+pub(crate) mod catalog_subsearch;
 pub mod input_spans;
 pub mod list;
 pub mod parse;
