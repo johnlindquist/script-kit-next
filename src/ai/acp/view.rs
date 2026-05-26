@@ -15,6 +15,7 @@ use gpui::{
 
 use gpui_component::scroll::ScrollableElement;
 
+use crate::ai::agent_chat::events::{AgentChatEvent, AgentChatEventRx};
 use crate::components::text_input::{
     render_text_input_cursor_selection, TextHighlightRange, TextInlinePillRange,
     TextInputRenderConfig, TextSelection,
@@ -108,6 +109,78 @@ impl FocusedTextMiniPhase {
             Self::Loading => "loading",
             Self::Streaming => "streaming",
             Self::Result => "result",
+        }
+    }
+}
+
+const FOCUSED_TEXT_BALANCED_VARIATION_INDEX: usize = 1;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FocusedTextVariationStatus {
+    Idle,
+    Streaming,
+    Complete,
+    Error,
+}
+
+impl FocusedTextVariationStatus {
+    pub(crate) fn state_id(self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Streaming => "streaming",
+            Self::Complete => "complete",
+            Self::Error => "error",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct FocusedTextVariationSnapshot {
+    pub(crate) index: usize,
+    pub(crate) angle_id: &'static str,
+    pub(crate) label: &'static str,
+    pub(crate) text: String,
+    pub(crate) status: FocusedTextVariationStatus,
+    pub(crate) selected: bool,
+    pub(crate) error: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+struct FocusedTextVariationState {
+    angle: crate::ai::focused_text::FocusedTextPromptAngle,
+    text: String,
+    status: FocusedTextVariationStatus,
+    error: Option<String>,
+}
+
+impl FocusedTextVariationState {
+    fn new(angle: crate::ai::focused_text::FocusedTextPromptAngle) -> Self {
+        Self {
+            angle,
+            text: String::new(),
+            status: FocusedTextVariationStatus::Idle,
+            error: None,
+        }
+    }
+
+    fn streaming(angle: crate::ai::focused_text::FocusedTextPromptAngle) -> Self {
+        Self {
+            angle,
+            text: String::new(),
+            status: FocusedTextVariationStatus::Streaming,
+            error: None,
+        }
+    }
+
+    fn snapshot(&self, index: usize, selected: bool) -> FocusedTextVariationSnapshot {
+        FocusedTextVariationSnapshot {
+            index,
+            angle_id: self.angle.id(),
+            label: self.angle.label(),
+            text: self.text.clone(),
+            status: self.status,
+            selected,
+            error: self.error.clone(),
         }
     }
 }
@@ -621,6 +694,9 @@ pub(crate) struct AcpChatView {
     pub(crate) transcript: Option<Entity<AcpTranscript>>,
     ui_variant: AcpChatUiVariant,
     focused_text: Option<FocusedTextAgentChatState>,
+    focused_text_variations: Vec<FocusedTextVariationState>,
+    focused_text_variation_tasks: Vec<Task<()>>,
+    focused_text_selected_variation: Option<usize>,
 
     /// Plain natural-language scope for focused-text mini edits.
     scope_input: String,
@@ -1310,7 +1386,7 @@ impl AcpChatView {
             return Vec::new();
         };
 
-        let has_output = Self::latest_assistant_response_text(thread).is_some();
+        let has_output = self.selected_focused_text_output(thread).is_some();
         let action_disabled_reason = if has_output {
             None
         } else {
@@ -1442,7 +1518,7 @@ impl AcpChatView {
             return Vec::new();
         }
 
-        let has_output = Self::latest_assistant_response_text(thread).is_some();
+        let has_output = self.selected_focused_text_output(thread).is_some();
         let streaming = matches!(thread.status, AcpThreadStatus::Streaming);
         let output_required = if has_output {
             None
@@ -1562,6 +1638,241 @@ impl AcpChatView {
                     && !message.body.trim().is_empty()
             })
             .map(|message| message.body.to_string())
+    }
+
+    fn latest_assistant_response_after_latest_user(thread: &AcpThread) -> Option<String> {
+        Self::latest_assistant_response_after_latest_user_in_messages(&thread.messages)
+    }
+
+    fn latest_assistant_response_after_latest_user_in_messages(
+        messages: &[AcpThreadMessage],
+    ) -> Option<String> {
+        let last_user_index = messages
+            .iter()
+            .rposition(|message| matches!(message.role, AcpThreadMessageRole::User))?;
+        messages[last_user_index + 1..]
+            .iter()
+            .rev()
+            .find(|message| {
+                matches!(message.role, AcpThreadMessageRole::Assistant)
+                    && !message.body.trim().is_empty()
+            })
+            .map(|message| message.body.to_string())
+    }
+
+    fn focused_text_variation_angles() -> [crate::ai::focused_text::FocusedTextPromptAngle; 3] {
+        use crate::ai::focused_text::FocusedTextPromptAngle;
+        [
+            FocusedTextPromptAngle::Conservative,
+            FocusedTextPromptAngle::Balanced,
+            FocusedTextPromptAngle::Creative,
+        ]
+    }
+
+    fn reset_focused_text_variations_for_submit(&mut self) {
+        self.focused_text_variation_tasks.clear();
+        self.focused_text_selected_variation = None;
+        self.focused_text_variations = Self::focused_text_variation_angles()
+            .iter()
+            .copied()
+            .map(FocusedTextVariationState::streaming)
+            .collect();
+    }
+
+    fn clear_focused_text_variations(&mut self) {
+        self.focused_text_variation_tasks.clear();
+        self.focused_text_variations.clear();
+        self.focused_text_selected_variation = None;
+    }
+
+    fn select_first_completed_focused_text_variation(&mut self) {
+        if self.focused_text_selected_variation.is_some() {
+            return;
+        }
+        let Some(index) = self.focused_text_variations.iter().position(|variation| {
+            variation.status == FocusedTextVariationStatus::Complete
+                && !variation.text.trim().is_empty()
+        }) else {
+            return;
+        };
+        self.focused_text_selected_variation = Some(index);
+        tracing::info!(
+            target: "script_kit::focused_text",
+            event = "focused_text_variation_auto_selected",
+            index,
+            angle = self.focused_text_variations[index].angle.id(),
+            text_len = self.focused_text_variations[index].text.chars().count(),
+        );
+    }
+
+    fn mark_focused_text_variation_failed(
+        &mut self,
+        index: usize,
+        error: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(variation) = self.focused_text_variations.get_mut(index) {
+            variation.status = FocusedTextVariationStatus::Error;
+            variation.error = Some(error);
+        }
+        cx.notify();
+    }
+
+    fn sync_balanced_focused_text_variation(
+        &mut self,
+        messages: &[AcpThreadMessage],
+        status: AcpThreadStatus,
+        cx: &mut Context<Self>,
+    ) {
+        if self.focused_text.is_none()
+            || self.focused_text_variations.len() <= FOCUSED_TEXT_BALANCED_VARIATION_INDEX
+        {
+            return;
+        }
+
+        let latest_text = Self::latest_assistant_response_after_latest_user_in_messages(messages)
+            .unwrap_or_default();
+        {
+            let variation =
+                &mut self.focused_text_variations[FOCUSED_TEXT_BALANCED_VARIATION_INDEX];
+            if !latest_text.trim().is_empty() {
+                variation.text = latest_text;
+            }
+            variation.status = match status {
+                AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission => {
+                    FocusedTextVariationStatus::Streaming
+                }
+                AcpThreadStatus::Idle if !variation.text.trim().is_empty() => {
+                    FocusedTextVariationStatus::Complete
+                }
+                AcpThreadStatus::Error => {
+                    if variation.error.is_none() {
+                        variation.error = Some("balanced_turn_failed".to_string());
+                    }
+                    FocusedTextVariationStatus::Error
+                }
+                AcpThreadStatus::Idle => FocusedTextVariationStatus::Idle,
+            };
+        }
+
+        self.select_first_completed_focused_text_variation();
+        cx.notify();
+    }
+
+    fn apply_focused_text_variation_event(
+        &mut self,
+        index: usize,
+        event: AgentChatEvent,
+        cx: &mut Context<Self>,
+    ) {
+        if index >= self.focused_text_variations.len() {
+            return;
+        }
+
+        match event {
+            AgentChatEvent::AgentMessageDelta(chunk) => {
+                let variation = &mut self.focused_text_variations[index];
+                variation.text.push_str(&chunk);
+                variation.status = FocusedTextVariationStatus::Streaming;
+                variation.error = None;
+            }
+            AgentChatEvent::TurnFinished { .. } => {
+                let variation = &mut self.focused_text_variations[index];
+                if variation.status != FocusedTextVariationStatus::Error {
+                    variation.status = FocusedTextVariationStatus::Complete;
+                }
+            }
+            AgentChatEvent::Failed { error } => {
+                let variation = &mut self.focused_text_variations[index];
+                variation.status = FocusedTextVariationStatus::Error;
+                variation.error = Some(error);
+            }
+            AgentChatEvent::SetupRequired { reason, .. } => {
+                let variation = &mut self.focused_text_variations[index];
+                variation.status = FocusedTextVariationStatus::Error;
+                variation.error = Some(format!("setup_required:{reason}"));
+            }
+            AgentChatEvent::UserMessageDelta(_)
+            | AgentChatEvent::AgentThoughtDelta(_)
+            | AgentChatEvent::ToolCallStarted { .. }
+            | AgentChatEvent::ToolCallUpdated { .. }
+            | AgentChatEvent::PlanUpdated { .. }
+            | AgentChatEvent::AvailableCommandsUpdated { .. }
+            | AgentChatEvent::ModeChanged { .. }
+            | AgentChatEvent::UsageUpdated { .. }
+            | AgentChatEvent::ModelsAvailable { .. } => {}
+        }
+
+        self.select_first_completed_focused_text_variation();
+        cx.notify();
+    }
+
+    fn spawn_focused_text_variation_task(
+        &mut self,
+        index: usize,
+        rx: AgentChatEventRx,
+        cx: &mut Context<Self>,
+    ) {
+        let view = cx.entity().downgrade();
+        let task = cx.spawn(async move |_this, cx| {
+            while let Ok(event) = rx.recv().await {
+                let terminal = matches!(
+                    event,
+                    AgentChatEvent::TurnFinished { .. } | AgentChatEvent::Failed { .. }
+                );
+                let view_ref = view.clone();
+                let _ = cx.update(|cx| {
+                    if let Some(entity) = view_ref.upgrade() {
+                        entity.update(cx, |this, cx| {
+                            this.apply_focused_text_variation_event(index, event, cx);
+                        });
+                    }
+                });
+                if terminal {
+                    break;
+                }
+            }
+        });
+        self.focused_text_variation_tasks.push(task);
+    }
+
+    fn selected_focused_text_output(&self, thread: &AcpThread) -> Option<String> {
+        if self.focused_text.is_some() {
+            if let Some(text) = self
+                .focused_text_selected_variation
+                .and_then(|index| self.focused_text_variations.get(index))
+                .map(|variation| variation.text.trim().to_string())
+                .filter(|text| !text.is_empty())
+            {
+                return Some(text);
+            }
+
+            if let Some(text) = self
+                .focused_text_variations
+                .iter()
+                .find(|variation| {
+                    variation.status == FocusedTextVariationStatus::Complete
+                        && !variation.text.trim().is_empty()
+                })
+                .map(|variation| variation.text.trim().to_string())
+            {
+                return Some(text);
+            }
+
+            return Self::latest_assistant_response_after_latest_user(thread);
+        }
+
+        Self::latest_assistant_response_text(thread)
+    }
+
+    pub(crate) fn focused_text_variation_snapshots(&self) -> Vec<FocusedTextVariationSnapshot> {
+        self.focused_text_variations
+            .iter()
+            .enumerate()
+            .map(|(index, variation)| {
+                variation.snapshot(index, self.focused_text_selected_variation == Some(index))
+            })
+            .collect()
     }
 
     fn latest_user_prompt_for_display(thread: &AcpThread) -> Option<String> {
@@ -1709,7 +2020,7 @@ impl AcpChatView {
             can_replace: state.can_replace,
             can_append: state.can_append,
             can_copy: state.can_copy,
-            has_output: Self::latest_assistant_response_text(thread).is_some(),
+            has_output: self.selected_focused_text_output(thread).is_some(),
             last_apply_action: state
                 .last_apply_receipt
                 .as_ref()
@@ -1899,7 +2210,7 @@ impl AcpChatView {
         let before_ui_variant = self.ui_variant.state_id().to_string();
         let output = {
             let thread = self.live_thread().read(cx);
-            Self::latest_assistant_response_text(thread)
+            self.selected_focused_text_output(thread)
         };
         let output_length = output
             .as_ref()
@@ -2027,7 +2338,7 @@ impl AcpChatView {
         let before_ui_variant = self.ui_variant.state_id().to_string();
         let output_length = {
             let thread = self.live_thread().read(cx);
-            Self::latest_assistant_response_text(thread)
+            self.selected_focused_text_output(thread)
                 .map(|value| value.chars().count())
                 .unwrap_or(0)
         };
@@ -3892,6 +4203,13 @@ impl AcpChatView {
             target: "script_kit::keyboard",
             event = "acp_escape_cancel_streaming_requested",
         );
+        self.focused_text_variation_tasks.clear();
+        for variation in &mut self.focused_text_variations {
+            if variation.status == FocusedTextVariationStatus::Streaming {
+                variation.status = FocusedTextVariationStatus::Error;
+                variation.error = Some("cancelled".to_string());
+            }
+        }
         self.live_thread()
             .update(cx, |thread, cx| thread.cancel_streaming(cx));
         true
@@ -4364,6 +4682,8 @@ impl AcpChatView {
                 this.ready_script_path = new_ready;
             }
 
+            this.sync_balanced_focused_text_variation(&messages, status, cx);
+
             // Update toolbar status and model.
             if let Some(toolbar) = &this.toolbar {
                 toolbar.update(cx, |toolbar, cx| {
@@ -4459,6 +4779,9 @@ impl AcpChatView {
             transcript: None,
             ui_variant: AcpChatUiVariant::Standard,
             focused_text: None,
+            focused_text_variations: Vec::new(),
+            focused_text_variation_tasks: Vec::new(),
+            focused_text_selected_variation: None,
             scope_input: String::new(),
             scope_visible: false,
             scope_focused: false,
@@ -4533,6 +4856,9 @@ impl AcpChatView {
             transcript: None,
             ui_variant: AcpChatUiVariant::Standard,
             focused_text: None,
+            focused_text_variations: Vec::new(),
+            focused_text_variation_tasks: Vec::new(),
+            focused_text_selected_variation: None,
             scope_input: String::new(),
             scope_visible: false,
             scope_focused: false,
@@ -5524,6 +5850,12 @@ impl AcpChatView {
 
         let instruction = {
             let thread = thread_entity.read(cx);
+            if matches!(
+                thread.status,
+                AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
+            ) {
+                return Ok(());
+            }
             thread.input.text().trim().to_string()
         };
         if instruction.is_empty() {
@@ -5537,15 +5869,23 @@ impl AcpChatView {
             let thread = thread_entity.read(cx);
             Self::focused_text_previous_turns(thread)
         };
-        let (prompt, audit) = crate::ai::focused_text::build_focused_text_prompt(
-            crate::ai::focused_text::FocusedTextPromptRequest {
-                snapshot: &snapshot,
-                instruction: &instruction,
-                scope: scope.as_deref(),
-                semantics,
-                previous_turns: &previous_turns,
-            },
-        );
+
+        let build_prompt_for = |angle: crate::ai::focused_text::FocusedTextPromptAngle| {
+            crate::ai::focused_text::build_focused_text_prompt_with_angle(
+                crate::ai::focused_text::FocusedTextPromptRequest {
+                    snapshot: &snapshot,
+                    instruction: &instruction,
+                    scope: scope.as_deref(),
+                    semantics,
+                    previous_turns: &previous_turns,
+                },
+                angle,
+            )
+        };
+
+        let angles = Self::focused_text_variation_angles();
+        let (balanced_prompt, audit) =
+            build_prompt_for(angles[FOCUSED_TEXT_BALANCED_VARIATION_INDEX]);
 
         tracing::info!(
             target: "script_kit::focused_text",
@@ -5558,14 +5898,62 @@ impl AcpChatView {
             prompt_capture_char_count = audit.prompt_capture_char_count,
             capture_truncated = audit.capture_truncated,
             completion_status = %audit.completion_status,
+            variation_angle = angles[FOCUSED_TEXT_BALANCED_VARIATION_INDEX].id(),
         );
 
-        let blocks = vec![agent_client_protocol::ContentBlock::Text(
-            agent_client_protocol::TextContent::new(prompt),
+        self.reset_focused_text_variations_for_submit();
+
+        let balanced_blocks = vec![agent_client_protocol::ContentBlock::Text(
+            agent_client_protocol::TextContent::new(balanced_prompt),
         )];
-        thread_entity.update(cx, |thread, cx| {
-            thread.submit_blocks(blocks, instruction, cx)
-        })
+
+        let submit_result = thread_entity.update(cx, |thread, cx| {
+            thread.submit_blocks(balanced_blocks, instruction.clone(), cx)
+        });
+        if let Err(error) = submit_result {
+            self.clear_focused_text_variations();
+            return Err(error);
+        }
+
+        let base_thread_id = thread_entity.read(cx).ui_thread_id().to_string();
+        for (index, angle) in angles.iter().copied().enumerate() {
+            if index == FOCUSED_TEXT_BALANCED_VARIATION_INDEX {
+                continue;
+            }
+
+            let (prompt, audit) = build_prompt_for(angle);
+            tracing::info!(
+                target: "script_kit::focused_text",
+                event = "focused_text_variation_prompt_built",
+                session_id = %audit.session_id,
+                app_bundle_id = %audit.app_bundle_id.as_deref().unwrap_or(""),
+                semantics = %audit.semantics,
+                turn_count = audit.turn_count,
+                capture_char_count = audit.capture_char_count,
+                prompt_capture_char_count = audit.prompt_capture_char_count,
+                capture_truncated = audit.capture_truncated,
+                completion_status = %audit.completion_status,
+                variation_angle = angle.id(),
+                variation_index = index,
+            );
+
+            let blocks = vec![agent_client_protocol::ContentBlock::Text(
+                agent_client_protocol::TextContent::new(prompt),
+            )];
+            let aux_thread_id =
+                format!("{}::focused-text-variation-{}", base_thread_id, angle.id());
+
+            match thread_entity
+                .read(cx)
+                .start_auxiliary_turn(aux_thread_id, blocks)
+            {
+                Ok(rx) => self.spawn_focused_text_variation_task(index, rx, cx),
+                Err(error) => self.mark_focused_text_variation_failed(index, error, cx),
+            }
+        }
+
+        cx.notify();
+        Ok(())
     }
 
     pub(crate) fn stage_inline_context_parts_from_host(
@@ -5671,6 +6059,7 @@ impl AcpChatView {
         self.scope_focused = false;
         self.focused_text_mini_input_locked = false;
         self.pending_focused_text_mini_focus_restore = false;
+        self.clear_focused_text_variations();
         self.focused_text = Some(FocusedTextAgentChatState {
             snapshot,
             session_id,

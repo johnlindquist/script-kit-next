@@ -53,10 +53,17 @@ pub(crate) enum PiRpcRuntimeCommand {
 
 pub(crate) struct PiRpcRuntime {
     tx: async_channel::Sender<PiRpcRuntimeCommand>,
+    /// Stored so focused-text variation turns can use separate Pi processes.
+    ///
+    /// The normal runtime still uses one worker process and one active turn.
+    /// Isolated turns intentionally do not share that worker.
+    spec: Option<Arc<PiRpcLaunchSpec>>,
 }
 
 impl PiRpcRuntime {
     pub(crate) fn spawn(spec: PiRpcLaunchSpec) -> Result<Self> {
+        let spec = Arc::new(spec);
+        let worker_spec = spec.clone();
         let (tx, rx) = async_channel::bounded::<PiRpcRuntimeCommand>(8);
 
         std::thread::Builder::new()
@@ -74,19 +81,22 @@ impl PiRpcRuntime {
                 };
 
                 runtime.block_on(async move {
-                    if let Err(error) = run_pi_rpc_event_loop(spec, rx).await {
+                    if let Err(error) = run_pi_rpc_event_loop(worker_spec, rx).await {
                         tracing::error!(%error, "pi_rpc_event_loop_exited_with_error");
                     }
                 });
             })
             .context("Failed to spawn Pi RPC worker thread")?;
 
-        Ok(Self { tx })
+        Ok(Self {
+            tx,
+            spec: Some(spec),
+        })
     }
 
     #[cfg(test)]
     pub(crate) fn from_sender(tx: async_channel::Sender<PiRpcRuntimeCommand>) -> Self {
-        Self { tx }
+        Self { tx, spec: None }
     }
 }
 
@@ -96,6 +106,15 @@ impl AgentChatConnection for PiRpcRuntime {
         self.tx
             .send_blocking(PiRpcRuntimeCommand::StartTurn { request, event_tx })
             .context("Pi RPC worker channel closed")?;
+        Ok(event_rx)
+    }
+
+    fn start_isolated_turn(&self, request: AgentChatTurnRequest) -> Result<AgentChatEventRx> {
+        let Some(spec) = self.spec.clone() else {
+            anyhow::bail!("Pi RPC isolated turns are unavailable for sender-only test runtime");
+        };
+        let (event_tx, event_rx) = async_channel::bounded(256);
+        spawn_single_turn_runtime(spec, request, event_tx)?;
         Ok(event_rx)
     }
 
@@ -123,7 +142,7 @@ impl AgentChatConnection for PiRpcRuntime {
 }
 
 async fn run_pi_rpc_event_loop(
-    spec: PiRpcLaunchSpec,
+    spec: Arc<PiRpcLaunchSpec>,
     rx: async_channel::Receiver<PiRpcRuntimeCommand>,
 ) -> Result<()> {
     let mut cmd = Command::new(&spec.command);
@@ -257,6 +276,262 @@ async fn run_pi_rpc_event_loop(
 
     let _ = child.kill().await;
     Ok(())
+}
+
+fn spawn_single_turn_runtime(
+    spec: Arc<PiRpcLaunchSpec>,
+    request: AgentChatTurnRequest,
+    event_tx: AcpEventTx,
+) -> Result<()> {
+    std::thread::Builder::new()
+        .name("pi-rpc-agent-chat-isolated-turn".to_string())
+        .spawn(move || {
+            let runtime = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(runtime) => runtime,
+                Err(error) => {
+                    tracing::error!(%error, "pi_rpc_isolated_runtime_build_failed");
+                    return;
+                }
+            };
+
+            runtime.block_on(async move {
+                if let Err(error) = run_pi_rpc_single_turn(spec, request, event_tx).await {
+                    tracing::error!(%error, "pi_rpc_isolated_turn_exited_with_error");
+                }
+            });
+        })
+        .context("Failed to spawn isolated Pi RPC worker thread")?;
+    Ok(())
+}
+
+async fn run_pi_rpc_single_turn(
+    spec: Arc<PiRpcLaunchSpec>,
+    request: AgentChatTurnRequest,
+    event_tx: AcpEventTx,
+) -> Result<()> {
+    let mut cmd = Command::new(&spec.command);
+    cmd.args(&spec.args)
+        .envs(&spec.env)
+        .current_dir(&spec.cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = cmd
+        .spawn()
+        .context("Failed to spawn isolated Pi RPC process")?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .context("Isolated Pi RPC stdin unavailable")?;
+    let stdout = child
+        .stdout
+        .take()
+        .context("Isolated Pi RPC stdout unavailable")?;
+    let stderr = child
+        .stderr
+        .take()
+        .context("Isolated Pi RPC stderr unavailable")?;
+
+    let pending: PendingResponses = Arc::new(Mutex::new(HashMap::new()));
+    let active_turn: ActiveTurn = Arc::new(Mutex::new(None));
+    let (done_tx, done_rx) = async_channel::bounded::<()>(1);
+
+    tokio::spawn(read_single_turn_stdout(
+        stdout,
+        pending.clone(),
+        active_turn.clone(),
+        done_tx,
+    ));
+
+    tokio::spawn(async move {
+        let mut lines = BufReader::new(stderr).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            log_pi_rpc_stderr_line(&line);
+        }
+    });
+
+    if let Some(model_id) = request.model_id.as_deref() {
+        let selection = match PiRpcModelSelection::parse(model_id) {
+            Ok(selection) => selection,
+            Err(error) => {
+                let _ = event_tx
+                    .send(AgentChatEvent::Failed {
+                        error: format!("Invalid Pi model selection: {error}"),
+                    })
+                    .await;
+                let _ = child.kill().await;
+                return Ok(());
+            }
+        };
+
+        if let Err(error) = send_set_model_and_wait(
+            &mut stdin,
+            &pending,
+            "set-model-isolated".to_string(),
+            &selection,
+        )
+        .await
+        {
+            let _ = event_tx
+                .send(AgentChatEvent::Failed {
+                    error: error.to_string(),
+                })
+                .await;
+            let _ = child.kill().await;
+            return Ok(());
+        }
+    }
+
+    if request.cwd != spec.cwd {
+        tracing::debug!(
+            target: "script_kit::tab_ai",
+            event = "pi_rpc_isolated_cwd_mismatch",
+            requested_cwd = %request.cwd.display(),
+            launch_cwd = %spec.cwd.display(),
+            "Pi RPC isolated runtime uses launch cwd for this connection"
+        );
+    }
+
+    let prompt_id = "prompt-isolated".to_string();
+    let payload = match build_prompt_payload(&request.blocks) {
+        Ok(payload) => payload,
+        Err(error) => {
+            let _ = event_tx
+                .send(AgentChatEvent::Failed {
+                    error: error.to_string(),
+                })
+                .await;
+            let _ = child.kill().await;
+            return Ok(());
+        }
+    };
+
+    active_turn.lock().replace(ActiveTurnState {
+        ui_thread_id: request.ui_thread_id.clone(),
+        prompt_id: prompt_id.clone(),
+        event_tx: event_tx.clone(),
+    });
+
+    if let Err(error) = write_json(&mut stdin, &build_prompt_command(prompt_id, payload)).await {
+        let _ = event_tx
+            .send(AgentChatEvent::Failed {
+                error: error.to_string(),
+            })
+            .await;
+        let _ = child.kill().await;
+        return Err(error);
+    }
+
+    if tokio::time::timeout(std::time::Duration::from_secs(600), done_rx.recv())
+        .await
+        .is_err()
+    {
+        let _ = event_tx
+            .send(AgentChatEvent::Failed {
+                error: "Pi RPC isolated turn timed out".to_string(),
+            })
+            .await;
+    }
+
+    let _ = child.kill().await;
+    Ok(())
+}
+
+async fn read_single_turn_stdout<R>(
+    stdout: R,
+    pending: PendingResponses,
+    active_turn: ActiveTurn,
+    done_tx: async_channel::Sender<()>,
+) where
+    R: AsyncRead + Unpin,
+{
+    let mut terminal_event_seen = false;
+    let mut lines = BufReader::new(stdout).lines();
+    while let Ok(Some(line)) = lines.next_line().await {
+        let parsed = match parse_rpc_line(&line) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                send_to_active(
+                    &active_turn,
+                    AgentChatEvent::Failed {
+                        error: format!("Invalid Pi RPC output: {error}"),
+                    },
+                )
+                .await;
+                terminal_event_seen = true;
+                break;
+            }
+        };
+
+        if let super::protocol::PiRpcLine::Response(response) = &parsed {
+            if let Some(id) = response.id.as_ref() {
+                let pending_response = pending.lock().remove(id);
+                if let Some(pending_response) = pending_response {
+                    match pending_response {
+                        PendingResponse::Events(event_tx) => {
+                            send_events(&event_tx, map_rpc_line_to_events(parsed)).await;
+                        }
+                        PendingResponse::Rpc(response_tx) => {
+                            let _ = response_tx.send(response.clone());
+                        }
+                    }
+                    continue;
+                }
+            }
+
+            if response.command.as_deref() == Some("prompt") && !response.success {
+                send_to_active(
+                    &active_turn,
+                    AgentChatEvent::Failed {
+                        error: response
+                            .error
+                            .clone()
+                            .unwrap_or_else(|| "Pi RPC prompt failed".to_string()),
+                    },
+                )
+                .await;
+                terminal_event_seen = true;
+                break;
+            }
+            continue;
+        }
+
+        let events = map_rpc_line_to_events(parsed);
+        let closes_turn = events.iter().any(|event| {
+            matches!(
+                event,
+                AgentChatEvent::TurnFinished { .. } | AgentChatEvent::Failed { .. }
+            )
+        });
+        let event_tx = active_turn
+            .lock()
+            .as_ref()
+            .map(|active| active.event_tx.clone());
+        if let Some(event_tx) = event_tx {
+            send_events(&event_tx, events).await;
+        }
+        if closes_turn {
+            active_turn.lock().take();
+            terminal_event_seen = true;
+            break;
+        }
+    }
+
+    if !terminal_event_seen {
+        send_to_active(
+            &active_turn,
+            AgentChatEvent::Failed {
+                error: "Pi RPC isolated turn ended before completion".to_string(),
+            },
+        )
+        .await;
+    }
+
+    let _ = done_tx.send(()).await;
 }
 
 async fn write_json<W>(writer: &mut W, value: &serde_json::Value) -> Result<()>

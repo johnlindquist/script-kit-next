@@ -8,7 +8,10 @@ pub mod types;
 
 pub use platform_bridge::{FocusedTextPlatformBridge, SystemFocusedTextPlatformBridge};
 pub use privacy::FocusedTextPromptAudit;
-pub use prompt::{build_focused_text_prompt, FocusedTextPromptRequest, FocusedTextTurnSummary};
+pub use prompt::{
+    build_focused_text_prompt, build_focused_text_prompt_with_angle, FocusedTextPromptAngle,
+    FocusedTextPromptRequest, FocusedTextTurnSummary,
+};
 pub use types::{
     FocusedTextApplyAction, FocusedTextEditSemantics, FocusedTextMutation,
     FocusedTextMutationReceipt,

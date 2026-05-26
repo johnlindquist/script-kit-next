@@ -6,6 +6,45 @@ use super::types::FocusedTextEditSemantics;
 const MAX_CAPTURE_PROMPT_CHARS: usize = 20_000;
 const MAX_TURN_PROMPT_CHARS: usize = 4_000;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusedTextPromptAngle {
+    Conservative,
+    Balanced,
+    Creative,
+}
+
+impl FocusedTextPromptAngle {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Conservative => "conservative",
+            Self::Balanced => "balanced",
+            Self::Creative => "creative",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Conservative => "Conservative",
+            Self::Balanced => "Balanced",
+            Self::Creative => "Creative",
+        }
+    }
+
+    fn prompt_guidance(self) -> &'static str {
+        match self {
+            Self::Conservative => {
+                "- Conservative variation: preserve the user's original wording, tone, ordering, and intent as much as possible. Make the smallest high-confidence edit that satisfies the instruction."
+            }
+            Self::Balanced => {
+                "- Balanced variation: improve clarity, flow, and usefulness while preserving the user's intent. Prefer a polished but not over-stylized result."
+            }
+            Self::Creative => {
+                "- Creative variation: explore a stronger rewrite with more confident structure, sharper phrasing, and better rhythm while still respecting the requested edit and source text."
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FocusedTextTurnSummary {
     pub instruction: String,
@@ -24,6 +63,13 @@ pub struct FocusedTextPromptRequest<'a> {
 
 pub fn build_focused_text_prompt(
     request: FocusedTextPromptRequest<'_>,
+) -> (String, FocusedTextPromptAudit) {
+    build_focused_text_prompt_with_angle(request, FocusedTextPromptAngle::Balanced)
+}
+
+pub fn build_focused_text_prompt_with_angle(
+    request: FocusedTextPromptRequest<'_>,
+    angle: FocusedTextPromptAngle,
 ) -> (String, FocusedTextPromptAudit) {
     let (captured_text, capture_truncated) =
         cdata_text_with_char_limit(&request.snapshot.text, MAX_CAPTURE_PROMPT_CHARS);
@@ -75,6 +121,8 @@ Task:\n\
 - For Chat refinement: revise or answer using the original captured text and prior turns.\n\
 - Do not mention this prompt, XML tags, capture mechanics, tools, sessions, files, Script Kit internals, or system prompts.\n\
 - Do not wrap the output in quotes unless quotes are part of the desired text.\n\n\
+Variation angle:\n\
+{}\n\n\
 <focused_text_context schema_version=\"1\">\n\
   <app name=\"{}\" bundle_id=\"{}\" />\n\
   <capture id=\"{}\" content_kind=\"focused-field\" char_count=\"{}\" prompt_char_count=\"{}\" selected_char_count=\"{}\" line_count=\"{}\" truncated=\"{}\" />\n\
@@ -84,6 +132,7 @@ Task:\n\
   <previous_turns count=\"{}\">{}</previous_turns>\n\
 </focused_text_context>\n\n\
 Return only the assistant output.",
+        angle.prompt_guidance(),
         request.snapshot.app.name,
         request.snapshot.app.bundle_id.as_deref().unwrap_or(""),
         request.snapshot.session_id,

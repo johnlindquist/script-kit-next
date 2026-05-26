@@ -15,6 +15,16 @@ pub(crate) struct AgentChatTurnRequest {
 
 pub(crate) trait AgentChatConnection: Send + Sync + 'static {
     fn start_turn(&self, request: AgentChatTurnRequest) -> Result<AgentChatEventRx>;
+    /// Start a turn that must not share the live session's single active stream slot.
+    ///
+    /// The default keeps non-Pi implementations source-compatible. Pi overrides this
+    /// because its normal connection has only one active streaming turn.
+    fn start_isolated_turn(
+        &self,
+        request: AgentChatTurnRequest,
+    ) -> Result<AgentChatEventRx> {
+        self.start_turn(request)
+    }
     fn cancel_turn(&self, ui_thread_id: String) -> Result<()>;
     fn prepare_session(&self, ui_thread_id: String, cwd: PathBuf) -> Result<AgentChatEventRx>;
 }

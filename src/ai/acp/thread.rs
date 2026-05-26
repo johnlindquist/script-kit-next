@@ -1904,6 +1904,26 @@ impl AcpThread {
         self.selected_model_id.as_deref()
     }
 
+    /// Start a view-owned auxiliary turn that must not mutate this thread's
+    /// transcript, status, permissions, or stream_task.
+    ///
+    /// Focused-text variation generation uses this for conservative/creative
+    /// candidates while the balanced candidate remains the canonical thread turn.
+    pub(crate) fn start_auxiliary_turn(
+        &self,
+        ui_thread_id: String,
+        blocks: Vec<ContentBlock>,
+    ) -> Result<AcpEventRx, String> {
+        self.connection
+            .start_isolated_turn(AgentChatTurnRequest {
+                ui_thread_id,
+                cwd: self.cwd.clone(),
+                blocks,
+                model_id: self.selected_model_id.clone(),
+            })
+            .map_err(|error| error.to_string())
+    }
+
     /// Fire-and-forget: ask the ACP worker to create-or-reuse the session for
     /// this thread and emit a fresh `ModelsAvailable` event. Called when the
     /// user invokes the actions dialog so the Change Model picker reflects the
