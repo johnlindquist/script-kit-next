@@ -182,6 +182,7 @@ impl ScriptListApp {
         let handled_by_subview = self.write_filter_to_current_subview(&text);
 
         if !handled_by_subview
+            && !self.spine_enabled
             && matches!(self.current_view, AppView::ScriptList)
             && matches!(
                 Self::special_entry_from_script_list_filter(&text),
@@ -209,6 +210,9 @@ impl ScriptListApp {
         let mut handler_form_owns_input = false;
         if !handled_by_subview && matches!(self.current_view, AppView::ScriptList) {
             self.set_menu_syntax_mode_from_filter(&text);
+            if self.spine_enabled {
+                self.set_spine_parse_from_filter_and_cursor(&text, text.len());
+            }
             handler_form_owns_input = self.menu_syntax_capture_form_owns_input_for(&text);
             self.sync_menu_syntax_form_inputs_from_filter(window, cx);
             if handler_form_owns_input {
@@ -245,6 +249,7 @@ impl ScriptListApp {
         }
 
         if !handled_by_subview
+            && !self.spine_enabled
             && matches!(self.current_view, AppView::ScriptList)
             && !handler_form_owns_input
             && matches!(
