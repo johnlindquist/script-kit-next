@@ -629,6 +629,42 @@ fn render_script_list_empty_state(
     )
 }
 
+fn spine_projection_icon_kind(
+    row: &crate::spine::SpineListRow,
+) -> Option<crate::list_item::IconKind> {
+    let (_, fallback_icon) = row.kind.type_accessory_info();
+    row.icon
+        .as_ref()
+        .and_then(|icon| crate::list_item::IconKind::from_icon_hint(icon.as_ref()))
+        .or_else(|| crate::list_item::IconKind::from_icon_hint(fallback_icon))
+        .or_else(|| Some(crate::list_item::IconKind::Svg(fallback_icon.to_string())))
+}
+
+fn render_spine_projection_row(
+    row: &crate::spine::SpineListRow,
+    ix: usize,
+    is_selected: bool,
+    is_hovered: bool,
+    colors: ListItemColors,
+) -> AnyElement {
+    let (type_label, type_icon) = row.kind.type_accessory_info();
+
+    crate::list_item::ListItem::new(row.title.to_string(), colors)
+        .index(ix)
+        .selected(is_selected)
+        .hovered(is_hovered)
+        .with_accent_bar(true)
+        .semantic_id(row.id.to_string())
+        .description_opt(row.subtitle.as_ref().map(|subtitle| subtitle.to_string()))
+        .icon_kind_opt(spine_projection_icon_kind(row))
+        .type_accessory(crate::list_item::TypeAccessory {
+            label: type_label,
+            icon_name: type_icon,
+        })
+        .source_hint_opt(row.meta.as_ref().map(|meta| meta.to_string()))
+        .into_any_element()
+}
+
 impl ScriptListApp {
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let render_list_start = std::time::Instant::now();
@@ -986,15 +1022,27 @@ impl ScriptListApp {
                                     } else if let Some(result) = flat_results_clone.get(*result_idx)
                                     {
                                         item_name = result.name();
-                                        render_design_item(
-                                            current_design,
-                                            result,
-                                            ix,
-                                            is_selected,
-                                            is_hovered,
-                                            theme_colors,
-                                            &filter_for_highlight,
-                                        )
+                                        if let crate::scripts::SearchResult::SpineProjection(row) =
+                                            result
+                                        {
+                                            render_spine_projection_row(
+                                                row,
+                                                ix,
+                                                is_selected,
+                                                is_hovered,
+                                                theme_colors,
+                                            )
+                                        } else {
+                                            render_design_item(
+                                                current_design,
+                                                result,
+                                                ix,
+                                                is_selected,
+                                                is_hovered,
+                                                theme_colors,
+                                                &filter_for_highlight,
+                                            )
+                                        }
                                     } else {
                                         item_name = "<missing-result>";
                                         div().h(px(effective_list_item_height)).into_any_element()
