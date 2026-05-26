@@ -733,9 +733,9 @@ pub(crate) struct AcpChatView {
     focused_text_instruction_history_draft: Option<String>,
 
     /// Plain natural-language scope for focused-text mini edits.
-    scope_input: String,
+    pub(crate) scope_input: String,
     /// Whether the optional scope row is visible in focused-text mini mode.
-    scope_visible: bool,
+    pub(crate) scope_visible: bool,
     /// Whether focused-text mini key input is currently routed to the scope row.
     scope_focused: bool,
 
@@ -1948,7 +1948,11 @@ impl AcpChatView {
             .collect()
     }
 
-    fn select_focused_text_variation(&mut self, index: usize, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn select_focused_text_variation(
+        &mut self,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) -> bool {
         if index >= self.focused_text_variations.len() {
             return false;
         }
@@ -7170,11 +7174,82 @@ impl AcpChatView {
         }
     }
 
+    pub(crate) fn resize_focused_text_mini_for_scope_change_public(&self, cx: &App) {
+        self.resize_focused_text_mini_for_scope_change(cx);
+    }
+
     fn normalize_focused_text_scope_input(value: &str) -> String {
         value
             .replace("\r\n", "\n")
             .replace('\r', "\n")
             .replace('\n', " ")
+    }
+
+    pub(crate) fn normalize_focused_text_scope_input_public(value: &str) -> String {
+        Self::normalize_focused_text_scope_input(value)
+    }
+
+    pub(crate) fn handle_protocol_escape(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if self.is_focused_text_mini() || self.focused_text_originated_from_quick_prompt() {
+            let (phase, input_has_text) = {
+                let thread = self.live_thread().read(cx);
+                (
+                    self.focused_text_mini_phase_for_thread(thread),
+                    !thread.input.text().is_empty() || !self.scope_input.is_empty(),
+                )
+            };
+
+            let has_editor = self.focused_text_editing_variation.is_some();
+            if has_editor {
+                self.exit_focused_text_variation_editor(cx);
+                return;
+            }
+
+            match phase {
+                Some(FocusedTextMiniPhase::InputOnly) if input_has_text => {
+                    self.scope_input.clear();
+                    self.scope_visible = false;
+                    self.scope_focused = false;
+                    self.live_thread().update(cx, |thread, cx| {
+                        thread.input.clear();
+                        cx.notify();
+                    });
+                    self.resize_focused_text_mini_for_scope_change(&*cx);
+                }
+                Some(FocusedTextMiniPhase::InputOnly) => {
+                    self.trigger_close_window_requested(window, cx);
+                }
+                Some(FocusedTextMiniPhase::Loading) => {
+                    let _ = self.cancel_streaming_from_escape(cx);
+                    self.scope_input.clear();
+                    self.scope_visible = false;
+                    self.scope_focused = false;
+                    self.live_thread().update(cx, |thread, cx| {
+                        thread.input.clear();
+                        cx.notify();
+                    });
+                    self.resize_focused_text_mini_for_scope_change(&*cx);
+                }
+                Some(FocusedTextMiniPhase::Streaming) => {
+                    let _ = self.cancel_streaming_from_escape(cx);
+                }
+                Some(FocusedTextMiniPhase::Result) => {
+                    self.trigger_close_window_requested(window, cx);
+                }
+                None => {
+                    let _ = self.cancel_streaming_from_escape(cx);
+                    self.trigger_close_window_requested(window, cx);
+                }
+            }
+        } else {
+            if !self.cancel_streaming_from_escape(cx) {
+                self.trigger_close_requested(window, cx);
+            }
+        }
     }
 
     fn normalize_focused_text_variation_editor_input(value: &str) -> String {
@@ -7201,7 +7276,7 @@ impl AcpChatView {
         true
     }
 
-    fn enter_focused_text_variation_editor(&mut self, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn enter_focused_text_variation_editor(&mut self, cx: &mut Context<Self>) -> bool {
         if self.ui_variant != AcpChatUiVariant::FocusedTextMini
             || self.focused_text.is_none()
             || self.scope_focused
@@ -7232,7 +7307,7 @@ impl AcpChatView {
         true
     }
 
-    fn exit_focused_text_variation_editor(&mut self, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn exit_focused_text_variation_editor(&mut self, cx: &mut Context<Self>) -> bool {
         if self.focused_text_editing_variation.take().is_some() {
             self.cursor_visible = true;
             cx.notify();

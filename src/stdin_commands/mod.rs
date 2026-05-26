@@ -530,6 +530,30 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
+    /// Set the focused-text mini scope input text.
+    SetAcpScopeInput {
+        text: String,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
+    /// Select a focused-text variation by index (0, 1, or 2).
+    SelectAcpVariation {
+        index: usize,
+        #[serde(default)]
+        edit: bool,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
+    /// Get focused-text variation snapshots.
+    GetAcpVariations {
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
+    /// Send an Escape key through the ACP view's progressive handler.
+    AcpEscape {
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Install a no-token Agent Chat transcript fixture for devtools proof.
     ///
     /// phase accepts "awaitingFirstAssistantText", "assistantText", or "idle".
@@ -729,6 +753,10 @@ impl ExternalCommand {
             | Self::SetAiSearch { request_id, .. }
             | Self::SetAiInput { request_id, .. }
             | Self::SetAcpInput { request_id, .. }
+            | Self::SetAcpScopeInput { request_id, .. }
+            | Self::SelectAcpVariation { request_id, .. }
+            | Self::GetAcpVariations { request_id, .. }
+            | Self::AcpEscape { request_id, .. }
             | Self::SetAcpTestFixture { request_id, .. }
             | Self::GetAiWindowState { request_id, .. }
             | Self::ShowGrid { request_id, .. }
@@ -778,6 +806,10 @@ impl ExternalCommand {
             Self::SetAiSearch { .. } => "setAiSearch",
             Self::SetAiInput { .. } => "setAiInput",
             Self::SetAcpInput { .. } => "setAcpInput",
+            Self::SetAcpScopeInput { .. } => "setAcpScopeInput",
+            Self::SelectAcpVariation { .. } => "selectAcpVariation",
+            Self::GetAcpVariations { .. } => "getAcpVariations",
+            Self::AcpEscape { .. } => "acpEscape",
             Self::SetAcpTestFixture { .. } => "setAcpTestFixture",
             Self::GetAiWindowState { .. } => "getAiWindowState",
             Self::ShowGrid { .. } => "showGrid",
@@ -822,6 +854,10 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "setAiSearch",
     "setAiInput",
     "setAcpInput",
+    "setAcpScopeInput",
+    "selectAcpVariation",
+    "getAcpVariations",
+    "acpEscape",
     "setAcpTestFixture",
     "getAiWindowState",
     "showGrid",

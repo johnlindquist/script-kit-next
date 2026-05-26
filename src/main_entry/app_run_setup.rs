@@ -2864,7 +2864,9 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         entity.update(ctx, |chat, cx| {
                                             chat.set_input_in_window(text.clone(), window, cx);
                                             if submit {
-                                                if let Some(thread) = chat.thread() {
+                                                if chat.is_focused_text_mini() {
+                                                    let _ = chat.submit_focused_text_from_enter(cx);
+                                                } else if let Some(thread) = chat.thread() {
                                                     let _ = thread
                                                         .update(cx, |thread, cx| thread.submit_input(cx));
                                                 }
@@ -3170,6 +3172,105 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             ExternalCommand::ShowShortcutRecorder { ref command_id, ref command_name, .. } => {
                                 logging::log("STDIN", &format!("ShowShortcutRecorder: command_id='{}', command_name='{}'", command_id, command_name));
                                 view.show_shortcut_recorder(command_id.clone(), command_name.clone(), window, ctx);
+                            }
+                            ExternalCommand::SetAcpScopeInput { ref text, ref request_id } => {
+                                let request_id_value = request_id.clone();
+                                let result = match &view.current_view {
+                                    AppView::AcpChatView { entity } => {
+                                        let entity = entity.clone();
+                                        entity.update(ctx, |chat, cx| {
+                                            let was_visible = chat.scope_visible;
+                                            chat.scope_input = crate::ai::acp::view::AcpChatView::normalize_focused_text_scope_input_public(text);
+                                            chat.scope_visible = !chat.scope_input.is_empty();
+                                            if chat.scope_visible != was_visible {
+                                                chat.resize_focused_text_mini_for_scope_change_public(&*cx);
+                                            }
+                                            cx.notify();
+                                        });
+                                        Ok(())
+                                    }
+                                    _ => Err("Agent Chat view is not active".to_string()),
+                                };
+                                if let Some(rid) = request_id_value {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(crate::protocol::Message::external_command_result(
+                                            rid.to_string(), "setAcpScopeInput".to_string(), result.is_ok(),
+                                            result.as_ref().err().map(|_| "agent_chat_inactive".to_string()),
+                                            result.as_ref().err().cloned(),
+                                        ));
+                                    }
+                                }
+                            }
+                            ExternalCommand::SelectAcpVariation { index, edit, ref request_id } => {
+                                let request_id_value = request_id.clone();
+                                let result = match &view.current_view {
+                                    AppView::AcpChatView { entity } => {
+                                        let entity = entity.clone();
+                                        entity.update(ctx, |chat, cx| {
+                                            chat.select_focused_text_variation(index, cx);
+                                            if edit {
+                                                let _ = chat.enter_focused_text_variation_editor(cx);
+                                            }
+                                        });
+                                        Ok(())
+                                    }
+                                    _ => Err("Agent Chat view is not active".to_string()),
+                                };
+                                if let Some(rid) = request_id_value {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(crate::protocol::Message::external_command_result(
+                                            rid.to_string(), "selectAcpVariation".to_string(), result.is_ok(),
+                                            result.as_ref().err().map(|_| "agent_chat_inactive".to_string()),
+                                            result.as_ref().err().cloned(),
+                                        ));
+                                    }
+                                }
+                            }
+                            ExternalCommand::GetAcpVariations { ref request_id } => {
+                                let request_id_value = request_id.clone();
+                                let summary = match &view.current_view {
+                                    AppView::AcpChatView { entity } => {
+                                        let snapshots = entity.read(ctx).focused_text_variation_snapshots();
+                                        if snapshots.is_empty() {
+                                            "no_variations".to_string()
+                                        } else {
+                                            snapshots.iter().map(|s| {
+                                                let preview = if s.text.len() > 100 { format!("{}...", &s.text[..100]) } else { s.text.clone() };
+                                                format!("[{}] {} ({}) sel={} len={}: {}", s.index, s.label, s.status.state_id(), s.selected, s.text.len(), preview)
+                                            }).collect::<Vec<_>>().join(" | ")
+                                        }
+                                    }
+                                    _ => "not_acp".to_string(),
+                                };
+                                if let Some(rid) = request_id_value {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(crate::protocol::Message::external_command_result(
+                                            rid.to_string(), "getAcpVariations".to_string(), true, None, Some(summary),
+                                        ));
+                                    }
+                                }
+                            }
+                            ExternalCommand::AcpEscape { ref request_id } => {
+                                let request_id_value = request_id.clone();
+                                let result = match &view.current_view {
+                                    AppView::AcpChatView { entity } => {
+                                        let entity = entity.clone();
+                                        entity.update(ctx, |chat, cx| {
+                                            chat.handle_protocol_escape(window, cx);
+                                        });
+                                        Ok(())
+                                    }
+                                    _ => Err("Agent Chat view is not active".to_string()),
+                                };
+                                if let Some(rid) = request_id_value {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(crate::protocol::Message::external_command_result(
+                                            rid.to_string(), "acpEscape".to_string(), result.is_ok(),
+                                            result.as_ref().err().map(|_| "agent_chat_inactive".to_string()),
+                                            result.as_ref().err().cloned(),
+                                        ));
+                                    }
+                                }
                             }
                         },
                         StdinCommand::Protocol(message) => {
