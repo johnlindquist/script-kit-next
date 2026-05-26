@@ -7,7 +7,7 @@ use super::{
     SpineCursorProjection, SpineParse, SpineSegment, SpineSegmentKind, SpineSegmentResolution,
 };
 
-pub const SPINE_LIST_MODEL_VERSION: u64 = 1;
+pub const SPINE_LIST_MODEL_VERSION: u64 = 2;
 pub const SPINE_LIST_RESOLUTION_GENERATION: u64 = 0;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,7 +149,7 @@ impl SpineListRow {
     }
 }
 
-fn ss(value: impl Into<SharedString>) -> SharedString {
+pub(super) fn ss(value: impl Into<SharedString>) -> SharedString {
     value.into()
 }
 
@@ -173,7 +173,7 @@ fn stripped_query(query: &str) -> String {
         .to_ascii_lowercase()
 }
 
-fn matches_query(value: &str, query: &str) -> bool {
+pub(super) fn matches_query(value: &str, query: &str) -> bool {
     let query = stripped_query(query);
     query.is_empty() || value.to_ascii_lowercase().contains(&query)
 }
@@ -254,124 +254,12 @@ fn build_context_root_section(
     let range = active_segment_range(parse, projection);
     let query = projection.active_query.as_str();
 
-    let builtins = [
-        (
-            "selection",
-            "Selection",
-            "Attach the currently selected text",
-            "mouse-pointer-2",
-        ),
-        (
-            "clipboard",
-            "Clipboard",
-            "Attach current clipboard text",
-            "clipboard",
-        ),
-        ("screenshot", "Screenshot", "Attach a screenshot", "image"),
-        (
-            "app",
-            "Frontmost App",
-            "Attach frontmost app context",
-            "app-window",
-        ),
-        (
-            "window",
-            "Focused Window",
-            "Attach focused window context",
-            "panel-top",
-        ),
-    ];
-    let subsearches = [
-        ("file", "Files", "Search files inline", "file-search"),
-        (
-            "browser-history",
-            "Browser History",
-            "Search browser history inline",
-            "globe",
-        ),
-        (
-            "clipboard",
-            "Clipboard History",
-            "Search clipboard history",
-            "clipboard",
-        ),
-        (
-            "dictation",
-            "Dictation History",
-            "Search saved dictation",
-            "mic",
-        ),
-        (
-            "scripts",
-            "Scripts",
-            "Search Script Kit scripts",
-            "file-code",
-        ),
-        ("scriptlets", "Scriptlets", "Search snippets", "scroll-text"),
-        ("skills", "Skills", "Search plugin skills", "workflow"),
-        ("notes", "Notes", "Search notes", "notebook-text"),
-        (
-            "history",
-            "Conversations",
-            "Search past conversations",
-            "message-circle",
-        ),
-    ];
+    let rows = super::catalog_context::build_context_root_rows(
+        query,
+        projection.active_segment_index,
+        range,
+    );
 
-    let mut rows = Vec::new();
-    for (rank, (id, title, subtitle, icon)) in builtins.iter().enumerate() {
-        if !(matches_query(id, query) || matches_query(title, query)) {
-            continue;
-        }
-        rows.push(SpineListRow {
-            id: ss(format!("spine:@:builtin:{id}")),
-            kind: SpineListRowKind::ContextBuiltin {
-                context_type: ss(*id),
-            },
-            title: ss(*title),
-            subtitle: Some(ss(*subtitle)),
-            meta: Some(ss("Context")),
-            icon: Some(ss(*icon)),
-            badges: vec![ss("@")],
-            score: i32::MAX.saturating_sub(rank as i32),
-            is_selectable: true,
-            action_label: Some(ss("Insert")),
-            action: SpineListAction::ResolveSegment {
-                segment_index: projection.active_segment_index,
-                segment_byte_range: range.clone(),
-                replacement: ss(format!("@{id}")),
-                resolution_id: ss(*id),
-                resolution_label: ss(*title),
-                resolution_source: ss("context-builtin"),
-                trailing_space: true,
-            },
-        });
-    }
-    for (rank, (id, title, subtitle, icon)) in subsearches.iter().enumerate() {
-        if !(matches_query(id, query) || matches_query(title, query)) {
-            continue;
-        }
-        rows.push(SpineListRow {
-            id: ss(format!("spine:@:subsearch:{id}")),
-            kind: SpineListRowKind::ContextSubSearch {
-                context_type: ss(*id),
-            },
-            title: ss(format!("@{id}:")),
-            subtitle: Some(ss(*subtitle)),
-            meta: Some(ss(*title)),
-            icon: Some(ss(*icon)),
-            badges: vec![ss("@"), ss("search")],
-            score: i32::MAX.saturating_sub(100 + rank as i32),
-            is_selectable: true,
-            action_label: Some(ss("Browse")),
-            action: SpineListAction::InsertSegmentText {
-                segment_index: projection.active_segment_index,
-                segment_byte_range: range.clone(),
-                text: ss(format!("@{id}:")),
-                trailing_space: false,
-            },
-        });
-    }
     section_with_empty(
         "spine-section-context",
         "Context",
@@ -889,5 +777,88 @@ mod tests {
         let key_a = spine_projection_cache_key("@sel", "@sel", &parse_a, &proj_a);
         let key_b = spine_projection_cache_key("@clip", "@clip", &parse_b, &proj_b);
         assert_ne!(key_a, key_b);
+    }
+
+    #[test]
+    fn context_root_contains_all_context_attachment_specs() {
+        let parse = parse_spine("@");
+        let proj = project_cursor(&parse, 1);
+        let sections = build_spine_list_sections(&parse, &proj);
+        let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
+
+        for spec in crate::ai::context_contract::context_attachment_specs() {
+            let mention = spec
+                .mention
+                .expect("Step 5 expects every context attachment spec to have a mention");
+            let expected_id = format!("spine:@:builtin:{}", mention.trim_start_matches('@'));
+            assert!(
+                rows.iter().any(|row| row.id.as_ref() == expected_id),
+                "missing context row for {mention}"
+            );
+        }
+    }
+
+    #[test]
+    fn context_selection_row_uses_context_attachment_contract() {
+        let parse = parse_spine("@sel");
+        let proj = project_cursor(&parse, 4);
+        let sections = build_spine_list_sections(&parse, &proj);
+        let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
+
+        let row = rows
+            .iter()
+            .find(|row| row.id.as_ref() == "spine:@:builtin:selection")
+            .expect("expected @selection row");
+
+        assert_eq!(row.title.as_ref(), "Selection");
+        assert_eq!(
+            row.meta.as_ref().map(|meta| meta.as_ref()),
+            Some("@selection")
+        );
+
+        match &row.action {
+            SpineListAction::ResolveSegment {
+                replacement,
+                resolution_id,
+                resolution_label,
+                resolution_source,
+                trailing_space,
+                ..
+            } => {
+                assert_eq!(replacement.as_ref(), "@selection");
+                assert_eq!(resolution_id.as_ref(), "chat:add_selection_context");
+                assert_eq!(resolution_label.as_ref(), "Selection");
+                assert_eq!(resolution_source.as_ref(), "context-builtin");
+                assert!(*trailing_space);
+            }
+            other => panic!("expected ResolveSegment action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn context_root_includes_file_subsearch_prefix() {
+        let parse = parse_spine("@file");
+        let proj = project_cursor(&parse, 5);
+        let sections = build_spine_list_sections(&parse, &proj);
+        let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
+
+        let row = rows
+            .iter()
+            .find(|row| row.id.as_ref() == "spine:@:subsearch:file")
+            .expect("expected @file: subsearch row");
+
+        assert_eq!(row.title.as_ref(), "@file:");
+
+        match &row.action {
+            SpineListAction::InsertSegmentText {
+                text,
+                trailing_space,
+                ..
+            } => {
+                assert_eq!(text.as_ref(), "@file:");
+                assert!(!*trailing_space);
+            }
+            other => panic!("expected InsertSegmentText action, got {other:?}"),
+        }
     }
 }

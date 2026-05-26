@@ -1,3 +1,4 @@
+mod catalog_context;
 pub mod list;
 pub mod parse;
 pub mod types;
