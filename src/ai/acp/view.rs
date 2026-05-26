@@ -9830,17 +9830,64 @@ impl AcpChatView {
             return;
         }
 
-        // Escape with no open dialogs cancels an active turn first. When the
-        // thread is idle, Escape closes via the host callback.
+        // Escape with no open dialogs unwinds focused-text mini state
+        // progressively before falling back to the normal Agent Chat behavior.
         if crate::ui_foundation::is_key_escape(key) {
             if self.is_focused_text_mini() || self.focused_text_originated_from_quick_prompt() {
+                let (phase, input_has_text) = {
+                    let thread = self.live_thread().read(cx);
+                    (
+                        self.focused_text_mini_phase_for_thread(thread),
+                        !thread.input.text().is_empty(),
+                    )
+                };
+
+                let action = match phase {
+                    Some(FocusedTextMiniPhase::InputOnly) if input_has_text => "clear_input",
+                    Some(FocusedTextMiniPhase::InputOnly) => "close_empty_input",
+                    Some(FocusedTextMiniPhase::Loading) => "cancel_loading",
+                    Some(FocusedTextMiniPhase::Streaming) => "stop_streaming",
+                    Some(FocusedTextMiniPhase::Result) => "close_result",
+                    None => "close_non_mini_focused_text",
+                };
+
                 tracing::info!(
                     target: "script_kit::keyboard",
-                    event = "focused_text_quick_prompt_escape_hide_requested",
+                    event = "focused_text_escape_progressive",
                     ui_variant = self.ui_variant.state_id(),
+                    phase = phase.map(FocusedTextMiniPhase::state_id).unwrap_or("unknown"),
+                    action = action,
                 );
-                let _ = self.cancel_streaming_from_escape(cx);
-                self.trigger_close_window_requested(window, cx);
+
+                match phase {
+                    Some(FocusedTextMiniPhase::InputOnly) if input_has_text => {
+                        self.live_thread().update(cx, |thread, cx| {
+                            thread.input.clear();
+                            cx.notify();
+                        });
+                    }
+                    Some(FocusedTextMiniPhase::InputOnly) => {
+                        self.trigger_close_window_requested(window, cx);
+                    }
+                    Some(FocusedTextMiniPhase::Loading) => {
+                        let _ = self.cancel_streaming_from_escape(cx);
+                        self.live_thread().update(cx, |thread, cx| {
+                            thread.input.clear();
+                            cx.notify();
+                        });
+                    }
+                    Some(FocusedTextMiniPhase::Streaming) => {
+                        let _ = self.cancel_streaming_from_escape(cx);
+                    }
+                    Some(FocusedTextMiniPhase::Result) => {
+                        self.trigger_close_window_requested(window, cx);
+                    }
+                    None => {
+                        let _ = self.cancel_streaming_from_escape(cx);
+                        self.trigger_close_window_requested(window, cx);
+                    }
+                }
+
                 cx.stop_propagation();
                 return;
             }
