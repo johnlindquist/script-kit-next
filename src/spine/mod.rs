@@ -1,4 +1,5 @@
 mod catalog_context;
+mod catalog_slash;
 pub mod list;
 pub mod parse;
 pub mod types;

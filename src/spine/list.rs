@@ -7,7 +7,7 @@ use super::{
     SpineCursorProjection, SpineParse, SpineSegment, SpineSegmentKind, SpineSegmentResolution,
 };
 
-pub const SPINE_LIST_MODEL_VERSION: u64 = 2;
+pub const SPINE_LIST_MODEL_VERSION: u64 = 3;
 pub const SPINE_LIST_RESOLUTION_GENERATION: u64 = 0;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -310,44 +310,11 @@ fn build_slash_command_section(
     let range = active_segment_range(parse, projection);
     let query = projection.active_query.as_str();
 
-    let commands = [
-        (
-            "rewrite",
-            "Rewrite",
-            "Rewrite the prompt or selected context",
-        ),
-        ("summarize", "Summarize", "Summarize attached context"),
-        ("explain", "Explain", "Explain the attached context"),
-        ("fix", "Fix", "Fix grammar, code, or formatting"),
-        ("translate", "Translate", "Translate the text"),
-    ];
-
-    let rows = commands
-        .iter()
-        .enumerate()
-        .filter(|(_, (id, title, _))| matches_query(id, query) || matches_query(title, query))
-        .map(|(rank, (id, title, subtitle))| SpineListRow {
-            id: ss(format!("spine:/:{id}")),
-            kind: SpineListRowKind::SlashCommand { command: ss(*id) },
-            title: ss(format!("/{id}")),
-            subtitle: Some(ss(*subtitle)),
-            meta: Some(ss(*title)),
-            icon: Some(ss("slash")),
-            badges: vec![ss("/")],
-            score: i32::MAX.saturating_sub(rank as i32),
-            is_selectable: true,
-            action_label: Some(ss("Insert")),
-            action: SpineListAction::ResolveSegment {
-                segment_index: projection.active_segment_index,
-                segment_byte_range: range.clone(),
-                replacement: ss(format!("/{id}")),
-                resolution_id: ss(*id),
-                resolution_label: ss(*title),
-                resolution_source: ss("slash-command"),
-                trailing_space: true,
-            },
-        })
-        .collect::<Vec<_>>();
+    let rows = super::catalog_slash::build_slash_command_rows(
+        query,
+        projection.active_segment_index,
+        range,
+    );
 
     section_with_empty(
         "spine-section-slash",
@@ -777,6 +744,76 @@ mod tests {
         let key_a = spine_projection_cache_key("@sel", "@sel", &parse_a, &proj_a);
         let key_b = spine_projection_cache_key("@clip", "@clip", &parse_b, &proj_b);
         assert_ne!(key_a, key_b);
+    }
+
+    #[test]
+    fn slash_root_contains_rewrite_row_from_catalog() {
+        let parse = parse_spine("/");
+        let proj = project_cursor(&parse, 1);
+        let sections = build_spine_list_sections(&parse, &proj);
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].id.as_ref(), "spine-section-slash");
+        let rows: Vec<_> = sections.iter().flat_map(|section| &section.rows).collect();
+        let row = rows
+            .iter()
+            .find(|row| row.id.as_ref() == "spine:/:rewrite")
+            .expect("expected /rewrite row");
+        assert_eq!(row.title.as_ref(), "/rewrite");
+        assert_eq!(
+            row.subtitle.as_ref().map(|s| s.as_ref()),
+            Some("Rewrite the prompt or selected context")
+        );
+        assert!(row.is_selectable);
+        match &row.kind {
+            SpineListRowKind::SlashCommand { command } => {
+                assert_eq!(command.as_ref(), "rewrite");
+            }
+            other => panic!("expected SlashCommand row, got {other:?}"),
+        }
+        match &row.action {
+            SpineListAction::ResolveSegment {
+                replacement,
+                resolution_id,
+                resolution_source,
+                trailing_space,
+                ..
+            } => {
+                assert_eq!(replacement.as_ref(), "/rewrite");
+                assert_eq!(resolution_id.as_ref(), "default:rewrite");
+                assert_eq!(resolution_source.as_ref(), "slash-command-default");
+                assert!(*trailing_space);
+            }
+            other => panic!("expected ResolveSegment action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn slash_rew_filters_to_rewrite() {
+        let parse = parse_spine("/rew");
+        let proj = project_cursor(&parse, 4);
+        let sections = build_spine_list_sections(&parse, &proj);
+        let rows: Vec<_> = sections.iter().flat_map(|section| &section.rows).collect();
+        let titles: Vec<_> = rows.iter().map(|row| row.title.as_ref()).collect();
+        assert!(
+            titles.contains(&"/rewrite"),
+            "expected /rewrite in filtered slash rows: {titles:?}"
+        );
+        assert!(
+            !titles.contains(&"/summarize"),
+            "did not expect /summarize to match /rew: {titles:?}"
+        );
+    }
+
+    #[test]
+    fn slash_unknown_query_produces_empty_row() {
+        let input = "/definitely-no-such-spine-command-zzzz";
+        let parse = parse_spine(input);
+        let proj = project_cursor(&parse, input.len());
+        let sections = build_spine_list_sections(&parse, &proj);
+        let rows: Vec<_> = sections.iter().flat_map(|section| &section.rows).collect();
+        assert_eq!(rows.len(), 1);
+        assert!(matches!(rows[0].kind, SpineListRowKind::Empty));
+        assert!(!rows[0].is_selectable);
     }
 
     #[test]
