@@ -539,6 +539,31 @@ impl AcpThread {
     /// Mirrors common agent prompt-history behavior: plain Up on an empty,
     /// idle composer brings back the previous user prompt with the caret at
     /// the beginning so another Up-like navigation gesture stays natural.
+    /// Replace assistant transcript rows after the latest user turn.
+    pub(crate) fn replace_assistant_messages_after_last_user(
+        &mut self,
+        bodies: Vec<String>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(last_user_index) = self
+            .messages
+            .iter()
+            .rposition(|message| message.role == AcpThreadMessageRole::User)
+        else {
+            return false;
+        };
+
+        self.messages.truncate(last_user_index + 1);
+        for body in bodies {
+            if body.trim().is_empty() {
+                continue;
+            }
+            self.push_message(AcpThreadMessageRole::Assistant, body);
+        }
+        cx.notify();
+        true
+    }
+
     pub(crate) fn recall_last_user_message(&mut self, cx: &mut Context<Self>) -> bool {
         if !matches!(self.status, AcpThreadStatus::Idle | AcpThreadStatus::Error)
             || !self.input.is_empty()

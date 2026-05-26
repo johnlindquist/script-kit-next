@@ -329,6 +329,14 @@
                                 source = "runtime_tray_hotkeys",
                                 error = %error,
                             );
+                            app_entity_for_inline_ai.update(cx, |view, cx| {
+                                view.open_focused_text_agent_chat_from_capture_failure(
+                                    error,
+                                    None,
+                                    "inline_ai_hotkey",
+                                    cx,
+                                );
+                            });
                         }
                     }
                 });

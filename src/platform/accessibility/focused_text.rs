@@ -70,6 +70,8 @@ pub struct FocusedTextSnapshot {
     pub capabilities: FocusedTextCapabilities,
 }
 
+pub const MAX_FOCUSED_TEXT_CAPTURE_CHARS: usize = 50_000;
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum FocusedTextError {
     #[error("accessibility permission is required")]
@@ -82,6 +84,80 @@ pub enum FocusedTextError {
     StaleSession,
     #[error("{0}")]
     Platform(String),
+}
+
+impl FocusedTextError {
+    pub fn reason_code(&self) -> &'static str {
+        match self {
+            Self::AccessibilityPermissionRequired => "accessibilityPermissionRequired",
+            Self::SecureField => "secureField",
+            Self::UnsupportedTarget => "unsupportedTarget",
+            Self::StaleSession => "staleSession",
+            Self::Platform(_) => "platform",
+        }
+    }
+
+    pub fn user_message(&self) -> &'static str {
+        match self {
+            Self::AccessibilityPermissionRequired => {
+                "Accessibility permission needed. Grant access in System Settings to grab focused text."
+            }
+            Self::SecureField => "This is a secure field and can't be accessed.",
+            Self::UnsupportedTarget => {
+                "Unable to grab text from this field. Select text and try again."
+            }
+            Self::StaleSession => "The focused text session expired. Try again.",
+            Self::Platform(_) => "Unable to grab text. Select text and try again.",
+        }
+    }
+
+    pub fn offers_open_settings(&self) -> bool {
+        matches!(self, Self::AccessibilityPermissionRequired)
+    }
+}
+
+pub fn truncate_focused_text_capture(text: String) -> (String, bool) {
+    let char_count = text.chars().count();
+    if char_count <= MAX_FOCUSED_TEXT_CAPTURE_CHARS {
+        return (text, false);
+    }
+    (
+        text.chars()
+            .take(MAX_FOCUSED_TEXT_CAPTURE_CHARS)
+            .collect::<String>(),
+        true,
+    )
+}
+
+pub fn focused_text_snapshot_for_capture_failure() -> FocusedTextSnapshot {
+    let app = super::app_identity::current_frontmost_app_identity();
+    let captured_at_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default();
+    let session_id = FocusedTextSessionId(format!("focused-text-failed-{captured_at_ms}"));
+
+    FocusedTextSnapshot {
+        session_id,
+        captured_at_ms,
+        app,
+        target: FocusedTextTargetDescriptor {
+            role: None,
+            subrole: None,
+            title: None,
+            content_kind: FocusedTextContentKind::Unsupported,
+        },
+        metrics: TextMetrics::from_text(""),
+        geometry: FocusedFieldGeometry::default(),
+        capabilities: FocusedTextCapabilities {
+            can_replace: false,
+            can_append: false,
+            can_copy: true,
+        },
+        text: String::new(),
+        selected_range_utf16: None,
+        caret_range_utf16: None,
+    }
 }
 
 pub fn capture_focused_text_field(

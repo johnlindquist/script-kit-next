@@ -328,4 +328,74 @@ impl ScriptListApp {
         crate::window_resize::resize_to_view_sync(crate::window_resize::ViewType::FocusedTextMini, 0);
         cx.notify();
     }
+
+    pub(crate) fn open_focused_text_agent_chat_from_capture_failure(
+        &mut self,
+        error: crate::platform::accessibility::FocusedTextError,
+        instruction: Option<String>,
+        source: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let reason_code = error.reason_code();
+        let source_view = self.current_view.clone();
+        self.seed_acp_return_origin_for_view(&source_view);
+
+        tracing::warn!(
+            target: "script_kit::focused_text",
+            event = "focused_text_agent_chat_open_capture_failed",
+            source,
+            reason_code,
+            error = %error,
+            source_view = ?source_view,
+        );
+
+        self.set_main_window_mode_state_only(
+            MainWindowMode::Mini,
+            cx,
+            "focused_text_agent_chat_open_capture_failed",
+        );
+
+        self.begin_tab_ai_harness_entry_from_source_view(
+            source_view,
+            None,
+            true,
+            None,
+            crate::ai::TabAiCaptureKind::DefaultContext,
+            true,
+            crate::ai::acp::ui_variant::AcpChatUiVariant::FocusedTextMini,
+            cx,
+        );
+
+        let AppView::AcpChatView { entity } = self.current_view.clone() else {
+            tracing::warn!(
+                target: "script_kit::focused_text",
+                event = "focused_text_agent_chat_open_failed_no_embedded_view",
+            );
+            return;
+        };
+
+        entity.update(cx, |chat, cx| {
+            chat.set_ui_variant(
+                crate::ai::acp::ui_variant::AcpChatUiVariant::FocusedTextMini,
+                cx,
+            );
+            if let Err(stage_error) = chat.stage_focused_text_capture_failure_from_host(
+                reason_code,
+                instruction,
+                source,
+                cx,
+            ) {
+                tracing::warn!(
+                    target: "script_kit::focused_text",
+                    event = "focused_text_agent_chat_stage_failed",
+                    error = %stage_error,
+                );
+            }
+            chat.mark_focused_text_originated_from_quick_prompt();
+        });
+        self.request_focus(FocusTarget::ChatPrompt, cx);
+        script_kit_gpui::request_show_main_window();
+        crate::window_resize::resize_to_view_sync(crate::window_resize::ViewType::FocusedTextMini, 0);
+        cx.notify();
+    }
 }
