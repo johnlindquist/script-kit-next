@@ -665,6 +665,13 @@ impl ScriptListApp {
 
         self.set_menu_syntax_mode_from_filter(&new_text);
 
+        // Spine: reparse alongside the existing menu syntax path.
+        // Cursor position is approximated as end-of-input for now; full cursor
+        // tracking from GPUI selection events will come in a later step.
+        if self.spine_enabled {
+            self.set_spine_parse_from_filter_and_cursor(&new_text, new_text.len());
+        }
+
         // Iter 019 D1 / iter 020 D2a — run the pure popup state machine on
         // every filter update and mirror the resulting transition into the
         // cached `menu_syntax_trigger_popup_state` field. The GPUI window

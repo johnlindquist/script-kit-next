@@ -829,6 +829,12 @@ struct ScriptListApp {
     /// `set_filter_text_immediate` so result grouping and execution can consume
     /// a stable snapshot without racing the filter coalescer.
     menu_syntax_mode: crate::menu_syntax::MenuSyntaxMode,
+    /// Spine parse: parallel projection-based input model.
+    /// When `spine_enabled` is true, sigils drive the main list in-place
+    /// instead of navigating to ACP picker views.
+    spine_enabled: bool,
+    spine_parse: crate::spine::SpineParse,
+    spine_projection: Option<crate::spine::SpineCursorProjection>,
     /// Cached state for the menu-syntax trigger popup. `filter_input_change` runs
     /// `plan_trigger_popup_transition` on every filter update and keeps this
     /// field in sync while the detached popup window renders from the snapshot

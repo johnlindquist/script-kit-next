@@ -157,6 +157,27 @@ impl ScriptListApp {
         }
     }
 
+    // ── Spine projection helpers ──────────────────────────────────────
+
+    /// Reparse the Spine model from the current filter text and cursor position.
+    pub(crate) fn set_spine_parse_from_filter_and_cursor(&mut self, raw: &str, cursor: usize) {
+        self.spine_parse = crate::spine::parse_spine(raw);
+        self.spine_projection = Some(crate::spine::project_cursor(&self.spine_parse, cursor));
+    }
+
+    /// Whether the Spine projection currently owns the main list (i.e., a sigil
+    /// segment is active and should replace the normal unified search results).
+    pub(crate) fn spine_projection_owns_main_list(&self) -> bool {
+        if !self.spine_enabled {
+            return false;
+        }
+        match &self.spine_projection {
+            Some(proj) => !matches!(proj.active_segment_kind, crate::spine::SpineSegmentKind::FreeText)
+                || proj.is_tail,
+            None => false,
+        }
+    }
+
     /// Shared helper that opens file search in the given presentation mode.
     /// Used by both the builtin "Search Files" entry (Full) and the `~`
     /// trigger from ScriptList (Mini).

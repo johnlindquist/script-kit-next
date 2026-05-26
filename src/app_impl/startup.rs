@@ -819,6 +819,12 @@ impl ScriptListApp {
             computed_filter_text: String::new(),
             filter_coalescer: FilterCoalescer::new(),
             menu_syntax_mode: crate::menu_syntax::MenuSyntaxMode::default(),
+            spine_enabled: true,
+            spine_parse: crate::spine::SpineParse {
+                segments: vec![],
+                input: String::new(),
+            },
+            spine_projection: None,
             menu_syntax_trigger_popup_state:
                 crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState::default(),
             menu_syntax_object_selector_state:
