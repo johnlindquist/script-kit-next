@@ -328,13 +328,10 @@ fn config_profile_icon_name_flows_to_footer_marker() {
 
 #[test]
 fn setup_mode_does_not_call_live_thread_for_profile_picker_or_footer_response() {
-    let ui_window_response = fn_body(
-        include_str!("../src/app_impl/ui_window.rs"),
-        "fn latest_acp_assistant_response(",
-    );
+    let pastable_response = fn_body(ACP_VIEW_SOURCE, "fn pastable_response_text(");
     assert!(
-        ui_window_response.contains("if view.is_setup_mode()")
-            && ui_window_response.contains("return None;"),
+        pastable_response.contains("if self.is_setup_mode()")
+            && pastable_response.contains("return None;"),
         "setup-mode ACP footer response lookup must not dereference live_thread"
     );
 

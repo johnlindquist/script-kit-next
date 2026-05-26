@@ -86,7 +86,7 @@ impl ScriptListApp {
             let paste_response_app = app_entity.clone();
             view.set_on_paste_response_requested(move |_window, cx| {
                 paste_response_app.update(cx, |app, cx| {
-                    app.paste_latest_acp_response_to_frontmost(cx);
+                    app.paste_latest_acp_response_to_frontmost(None, cx);
                 });
             });
 

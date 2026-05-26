@@ -842,7 +842,7 @@ fn acp_footer_actions_hint_uses_shared_clickable_toggle_path() {
             && TAB_AI_MODE_SOURCE.contains("view.set_on_open_history_command")
             && TAB_AI_MODE_SOURCE.contains("app.open_embedded_acp_history_popup(window, cx);")
             && TAB_AI_MODE_SOURCE.contains("view.set_on_paste_response_requested")
-            && TAB_AI_MODE_SOURCE.contains("app.paste_latest_acp_response_to_frontmost(cx);"),
+            && TAB_AI_MODE_SOURCE.contains("app.paste_latest_acp_response_to_frontmost(None, cx);"),
         "embedded ACP hosts must wire footer clicks to the existing actions, close, history popup, and paste-response paths"
     );
     assert!(

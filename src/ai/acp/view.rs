@@ -1869,6 +1869,17 @@ impl AcpChatView {
         self.focused_text_variation_tasks.push(task);
     }
 
+    /// Text to apply or paste back into the host app. Prefers the selected
+    /// focused-text variation when variations exist; otherwise the latest
+    /// assistant message from the thread.
+    pub(crate) fn pastable_response_text(&self, cx: &App) -> Option<String> {
+        if self.is_setup_mode() {
+            return None;
+        }
+        let thread = self.live_thread().read(cx);
+        self.selected_focused_text_output(thread)
+    }
+
     fn selected_focused_text_output(&self, thread: &AcpThread) -> Option<String> {
         if self.focused_text.is_some() {
             if let Some(text) = self
@@ -2377,6 +2388,9 @@ impl AcpChatView {
         elements
     }
 
+    /// Apply-back for focused text (Cmd+Enter Replace/Append/Copy, footer
+    /// Replace). Uses `selected_focused_text_output` so the selected variation
+    /// is applied, not the raw thread assistant message.
     fn apply_focused_text_output(
         &mut self,
         action: crate::ai::focused_text::FocusedTextApplyAction,

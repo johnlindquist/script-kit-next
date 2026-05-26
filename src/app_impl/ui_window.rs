@@ -303,7 +303,7 @@ impl ScriptListApp {
                 }
             }
             crate::footer_popup::FooterAction::PasteResponse => {
-                self.paste_latest_acp_response_to_frontmost(cx);
+                self.paste_latest_acp_response_to_frontmost(None, cx);
             }
             crate::footer_popup::FooterAction::Replace
             | crate::footer_popup::FooterAction::Append
@@ -405,8 +405,16 @@ impl ScriptListApp {
         true
     }
 
-    pub(crate) fn paste_latest_acp_response_to_frontmost(&mut self, cx: &mut Context<Self>) {
-        let Some(text) = self.latest_acp_assistant_response(cx) else {
+    /// Paste assistant output into the frontmost app. When `text_override` is
+    /// `Some`, that text is pasted directly. Otherwise the current ACP view
+    /// resolves pastable text (selected focused-text variation when present,
+    /// else the latest assistant message).
+    pub(crate) fn paste_latest_acp_response_to_frontmost(
+        &mut self,
+        text_override: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(text) = text_override.or_else(|| self.latest_acp_assistant_response(cx)) else {
             tracing::info!(
                 target: "script_kit::footer_popup",
                 event = "acp_footer_paste_response_ignored",
@@ -441,22 +449,7 @@ impl ScriptListApp {
             return None;
         };
 
-        let view = entity.read(cx);
-        if view.is_setup_mode() {
-            return None;
-        }
-        let thread = view.live_thread().read(cx);
-        thread
-            .messages
-            .iter()
-            .rev()
-            .find(|message| {
-                matches!(
-                    message.role,
-                    crate::ai::acp::thread::AcpThreadMessageRole::Assistant
-                ) && !message.body.trim().is_empty()
-            })
-            .map(|message| message.body.to_string())
+        entity.read(cx).pastable_response_text(cx)
     }
 
     fn dispatch_design_gallery_select_footer_action(&mut self, cx: &mut Context<Self>) -> bool {
