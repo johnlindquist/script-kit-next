@@ -57,6 +57,7 @@ pub mod scripts;
 pub mod scrolling;
 pub mod selected_text;
 pub mod shortcuts;
+pub mod spine;
 pub mod sync;
 pub mod syntax;
 pub mod term_prompt;
