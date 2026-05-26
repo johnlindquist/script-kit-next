@@ -181,3 +181,124 @@ fn cdata_text_with_char_limit(value: &str, max_chars: usize) -> (String, bool) {
 fn escape_cdata_text(value: &str) -> String {
     value.replace("]]>", "]]]]><![CDATA[>")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_snapshot(text: &str) -> FocusedTextSnapshot {
+        crate::platform::accessibility::focused_text::focused_text_snapshot_for_tests(
+            text.to_string(),
+        )
+    }
+
+    #[test]
+    fn prompt_includes_angle_guidance() {
+        let snapshot = test_snapshot("Hello world");
+        let request = FocusedTextPromptRequest {
+            snapshot: &snapshot,
+            instruction: "fix grammar",
+            scope: None,
+            semantics: FocusedTextEditSemantics::Replace,
+            previous_turns: &[],
+        };
+
+        let (conservative, _) = build_focused_text_prompt_with_angle(
+            request.clone(),
+            FocusedTextPromptAngle::Conservative,
+        );
+        let (creative, _) =
+            build_focused_text_prompt_with_angle(request, FocusedTextPromptAngle::Creative);
+
+        assert!(conservative.contains("Conservative variation"));
+        assert!(creative.contains("Creative variation"));
+        assert!(!conservative.contains("Creative variation"));
+    }
+
+    #[test]
+    fn prompt_includes_scope_when_provided() {
+        let snapshot = test_snapshot("Hello world");
+        let with_scope = FocusedTextPromptRequest {
+            snapshot: &snapshot,
+            instruction: "improve",
+            scope: Some("the verbs"),
+            semantics: FocusedTextEditSemantics::Replace,
+            previous_turns: &[],
+        };
+        let without_scope = FocusedTextPromptRequest {
+            snapshot: &snapshot,
+            instruction: "improve",
+            scope: None,
+            semantics: FocusedTextEditSemantics::Replace,
+            previous_turns: &[],
+        };
+
+        let (with, _) = build_focused_text_prompt(with_scope);
+        let (without, _) = build_focused_text_prompt(without_scope);
+
+        assert!(with.contains("Focus changes on: the verbs"));
+        assert!(!without.contains("<scope>"));
+    }
+
+    #[test]
+    fn empty_scope_is_omitted() {
+        let snapshot = test_snapshot("text");
+        let request = FocusedTextPromptRequest {
+            snapshot: &snapshot,
+            instruction: "edit",
+            scope: Some("   "),
+            semantics: FocusedTextEditSemantics::Replace,
+            previous_turns: &[],
+        };
+        let (prompt, _) = build_focused_text_prompt(request);
+        assert!(!prompt.contains("<scope>"));
+    }
+
+    #[test]
+    fn prompt_includes_app_context() {
+        let snapshot = test_snapshot("content");
+        let request = FocusedTextPromptRequest {
+            snapshot: &snapshot,
+            instruction: "rewrite",
+            scope: None,
+            semantics: FocusedTextEditSemantics::Replace,
+            previous_turns: &[],
+        };
+        let (prompt, _) = build_focused_text_prompt(request);
+        assert!(prompt.contains(&snapshot.app.name));
+    }
+
+    #[test]
+    fn angle_ids_are_distinct() {
+        let ids = [
+            FocusedTextPromptAngle::Conservative.id(),
+            FocusedTextPromptAngle::Balanced.id(),
+            FocusedTextPromptAngle::Creative.id(),
+        ];
+        assert_eq!(ids[0], "conservative");
+        assert_eq!(ids[1], "balanced");
+        assert_eq!(ids[2], "creative");
+    }
+
+    #[test]
+    fn cdata_escape_handles_closing_sequence() {
+        let result = escape_cdata_text("test]]>end");
+        assert_eq!(result, "test]]]]><![CDATA[>end");
+    }
+
+    #[test]
+    fn long_text_is_truncated() {
+        let long_text = "a".repeat(25_000);
+        let snapshot = test_snapshot(&long_text);
+        let request = FocusedTextPromptRequest {
+            snapshot: &snapshot,
+            instruction: "shorten",
+            scope: None,
+            semantics: FocusedTextEditSemantics::Replace,
+            previous_turns: &[],
+        };
+        let (prompt, audit) = build_focused_text_prompt(request);
+        assert!(audit.capture_truncated);
+        assert!(prompt.len() < long_text.len() + 5000);
+    }
+}
