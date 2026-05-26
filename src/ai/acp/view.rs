@@ -664,6 +664,16 @@ pub(crate) struct AcpChatView {
     pending_slash_prime: Option<String>,
     /// True while a deferred context capture is in-flight, driving the footer loading dot.
     context_capture_pending: bool,
+
+    /// Last observed lock state for the focused-text mini instruction input.
+    ///
+    /// Used to detect the Loading/Streaming -> unlocked edge without enforcing
+    /// focus on every render.
+    focused_text_mini_input_locked: bool,
+
+    /// One-shot focus restore requested after focused-text mini input unlocks.
+    pending_focused_text_mini_focus_restore: bool,
+
     /// Portal kinds the host allows this ACP surface to open.
     ///
     /// Defaults to all kinds. Notes-hosted ACP narrows this to only
@@ -722,6 +732,18 @@ impl AcpChatView {
             return;
         }
         self.ui_variant = ui_variant;
+
+        self.pending_focused_text_mini_focus_restore = false;
+        if ui_variant == AcpChatUiVariant::FocusedTextMini && !self.is_setup_mode() {
+            let input_locked = {
+                let thread = self.live_thread().read(cx);
+                self.focused_text_input_locked_for_thread(thread)
+            };
+            self.focused_text_mini_input_locked = input_locked;
+        } else {
+            self.focused_text_mini_input_locked = false;
+        }
+
         if let Some(transcript) = &self.transcript {
             transcript.update(cx, |transcript, cx| {
                 transcript.set_ui_variant(ui_variant, cx);
@@ -4255,13 +4277,27 @@ impl AcpChatView {
         // Auto-scroll when thread state changes (new messages, streaming updates).
         cx.observe(&thread, |this: &mut Self, thread, cx| {
             // Extract data from thread before mutable operations.
-            let (activity_row_visible, messages, status, profile_display, model_display, new_ready) = {
+            let (
+                activity_row_visible,
+                messages,
+                status,
+                profile_display,
+                model_display,
+                new_ready,
+                focused_text_phase,
+                focused_text_input_locked,
+            ) = {
                 let thread_ref = thread.read(cx);
                 let activity = thread_ref.awaiting_first_assistant_text();
                 let msgs = thread_ref.messages.clone();
                 let st = thread_ref.status;
                 let pd = thread_ref.profile_display().to_string();
                 let md = thread_ref.selected_model_display().to_string();
+                let phase = this.focused_text_mini_phase_for_thread(thread_ref);
+                let locked = matches!(
+                    phase,
+                    Some(FocusedTextMiniPhase::Loading | FocusedTextMiniPhase::Streaming)
+                );
                 let ready = thread_ref
                     .messages
                     .iter()
@@ -4270,8 +4306,25 @@ impl AcpChatView {
                     .find_map(|m| parse_script_ready_receipt(m.body.as_ref()))
                     .filter(|r| r.validated)
                     .map(|r| r.path);
-                (activity, msgs, st, pd, md, ready)
+                (activity, msgs, st, pd, md, ready, phase, locked)
             };
+
+            let focused_text_mini_active = focused_text_phase.is_some();
+            if focused_text_mini_active
+                && this.focused_text_mini_input_locked
+                && !focused_text_input_locked
+            {
+                this.pending_focused_text_mini_focus_restore = true;
+                this.cursor_visible = true;
+                tracing::info!(
+                    target: "script_kit::focused_text",
+                    event = "focused_text_mini_input_unlocked_focus_restore_queued",
+                    phase = ?focused_text_phase,
+                );
+                cx.notify();
+            }
+            this.focused_text_mini_input_locked =
+                focused_text_mini_active && focused_text_input_locked;
 
             if new_ready != this.ready_script_path {
                 tracing::info!(
@@ -4399,6 +4452,8 @@ impl AcpChatView {
             ready_script_path: None,
             pending_slash_prime: None,
             context_capture_pending: false,
+            focused_text_mini_input_locked: false,
+            pending_focused_text_mini_focus_restore: false,
             allowed_portal_kinds: Self::all_portal_kinds(),
             _footer_action_task: None,
         }
@@ -4467,6 +4522,8 @@ impl AcpChatView {
             ready_script_path: None,
             pending_slash_prime: None,
             context_capture_pending: false,
+            focused_text_mini_input_locked: false,
+            pending_focused_text_mini_focus_restore: false,
             allowed_portal_kinds: Self::all_portal_kinds(),
             _footer_action_task: None,
         }
@@ -5567,6 +5624,8 @@ impl AcpChatView {
         self.pasted_text_tokens.clear();
         self.pasted_image_tokens.clear();
         self.pending_portal_session = None;
+        self.focused_text_mini_input_locked = false;
+        self.pending_focused_text_mini_focus_restore = false;
         self.focused_text = Some(FocusedTextAgentChatState {
             snapshot,
             session_id,
@@ -10095,6 +10154,21 @@ impl Render for AcpChatView {
             };
             let _ = thread;
 
+            let mut focused_text_cursor_visible = cursor_visible;
+            if self.pending_focused_text_mini_focus_restore && !input_locked {
+                self.pending_focused_text_mini_focus_restore = false;
+                if !crate::actions::is_actions_window_open() {
+                    window.focus(&self.focus_handle, cx);
+                    self.cursor_visible = true;
+                    focused_text_cursor_visible = true;
+                    tracing::info!(
+                        target: "script_kit::focused_text",
+                        event = "focused_text_mini_input_focus_restored",
+                        phase = ?focused_phase,
+                    );
+                }
+            }
+
             let transcript = if show_transcript {
                 Some(self.ensure_transcript(cx).into_any_element())
             } else {
@@ -10121,7 +10195,7 @@ impl Render for AcpChatView {
                     &display_input_text,
                     display_input_cursor,
                     display_input_selection,
-                    cursor_visible,
+                    focused_text_cursor_visible,
                     input_locked,
                     placeholder_text,
                     &theme,
