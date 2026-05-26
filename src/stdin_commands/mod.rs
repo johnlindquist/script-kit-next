@@ -446,6 +446,14 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
+    /// Capture the currently focused external field and open focused-text mini Agent Chat
+    /// with deterministic mock output. Gated by SCRIPT_KIT_FOCUSED_TEXT_LIVE_FIXTURE=1.
+    OpenFocusedTextAgentChatFromFocusedFieldWithMockData {
+        #[serde(default)]
+        instruction: Option<String>,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Open focused-text mini Agent Chat with fixture focused text and real Pi submission.
     OpenFocusedTextAgentChatWithPiData {
         #[serde(default)]
@@ -758,6 +766,9 @@ impl ExternalCommand {
             Self::OpenFocusedTextAgentChatWithMockData { .. } => {
                 "openFocusedTextAgentChatWithMockData"
             }
+            Self::OpenFocusedTextAgentChatFromFocusedFieldWithMockData { .. } => {
+                "openFocusedTextAgentChatFromFocusedFieldWithMockData"
+            }
             Self::OpenFocusedTextAgentChatWithPiData { .. } => "openFocusedTextAgentChatWithPiData",
             Self::OpenInlineAgentWithMockData { .. } => "openInlineAgentWithMockData",
             Self::OpenInlineAgentWithPiData { .. } => "openInlineAgentWithPiData",
@@ -801,6 +812,7 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "openAiWithMockData",
     "openMiniAiWithMockData",
     "openFocusedTextAgentChatWithMockData",
+    "openFocusedTextAgentChatFromFocusedFieldWithMockData",
     "openFocusedTextAgentChatWithPiData",
     "openInlineAgentWithMockData",
     "openInlineAgentWithPiData",
@@ -1257,6 +1269,10 @@ mod tests {
             ExternalCommand::OpenMiniAiWithMockData,
             ExternalCommand::OpenFocusedTextAgentChatWithMockData {
                 text: None,
+                instruction: None,
+                request_id: None,
+            },
+            ExternalCommand::OpenFocusedTextAgentChatFromFocusedFieldWithMockData {
                 instruction: None,
                 request_id: None,
             },
@@ -2292,6 +2308,26 @@ mod tests {
     #[cfg(windows)]
     fn create_symlink(target: &Path, link: &Path) -> anyhow::Result<()> {
         std::os::windows::fs::symlink_dir(target, link).context("create symlink")?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_external_command_open_focused_text_agent_chat_from_focused_field_with_mock_data_deserialization(
+    ) -> anyhow::Result<()> {
+        let json = r#"{"type":"openFocusedTextAgentChatFromFocusedFieldWithMockData","instruction":"Translate","requestId":"ft-live"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        match cmd {
+            ExternalCommand::OpenFocusedTextAgentChatFromFocusedFieldWithMockData {
+                instruction,
+                request_id,
+            } => {
+                assert_eq!(instruction.as_deref(), Some("Translate"));
+                assert_eq!(request_id.as_deref(), Some("ft-live"));
+            }
+            other => panic!(
+                "Expected OpenFocusedTextAgentChatFromFocusedFieldWithMockData, got {other:?}"
+            ),
+        }
         Ok(())
     }
 }

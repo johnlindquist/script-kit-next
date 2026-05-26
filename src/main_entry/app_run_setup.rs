@@ -2572,6 +2572,54 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
+                            ExternalCommand::OpenFocusedTextAgentChatFromFocusedFieldWithMockData { instruction, request_id } => {
+                                logging::log("STDIN", "Opening focused-text Agent Chat live mock fixture");
+                                let instruction_length = instruction
+                                    .as_ref()
+                                    .map(|value| value.trim().len())
+                                    .unwrap_or(0);
+                                let requested_submit = instruction_length > 0;
+                                let result = view.open_focused_text_agent_chat_from_focused_field_mock_fixture(
+                                    instruction,
+                                    ctx,
+                                );
+                                let (ok, text_length, error_code, error_message) = match result {
+                                    Ok(text_length) => (true, text_length, None, None),
+                                    Err(error) => {
+                                        logging::log(
+                                            "STDIN",
+                                            &format!("Failed to open focused-text Agent Chat live mock fixture: {error}"),
+                                        );
+                                        let error_code = if error.contains("SCRIPT_KIT_FOCUSED_TEXT_LIVE_FIXTURE") {
+                                            "gated_off"
+                                        } else {
+                                            "open_failed"
+                                        };
+                                        (
+                                            false,
+                                            0,
+                                            Some(error_code.to_string()),
+                                            Some("Focused-text Agent Chat live mock fixture open failed".to_string()),
+                                        )
+                                    }
+                                };
+                                if let Some(rid) = request_id {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(
+                                            crate::protocol::Message::inline_agent_fixture_open_result(
+                                                rid.to_string(),
+                                                "live-mock".to_string(),
+                                                ok,
+                                                ok && requested_submit,
+                                                text_length,
+                                                instruction_length,
+                                                error_code,
+                                                error_message,
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
                             ExternalCommand::OpenFocusedTextAgentChatWithPiData { text, instruction, request_id }
                             | ExternalCommand::OpenInlineAgentWithPiData { text, instruction, request_id } => {
                                 logging::log("STDIN", "Opening focused-text Agent Chat real Pi fixture");
