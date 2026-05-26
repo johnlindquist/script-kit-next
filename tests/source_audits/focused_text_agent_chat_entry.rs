@@ -206,11 +206,12 @@ fn focused_text_mini_initial_state_is_input_only_without_native_footer() {
 }
 
 #[test]
-fn focused_text_mini_has_three_sizing_phases() {
+fn focused_text_mini_has_four_sizing_phases() {
     for required in [
         "FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY",
         "FOCUSED_TEXT_MINI_SIZE_RESULT",
         "FocusedTextMiniPhase::InputOnly",
+        "FocusedTextMiniPhase::Loading",
         "FocusedTextMiniPhase::Streaming",
         "FocusedTextMiniPhase::Result",
     ] {
@@ -221,8 +222,12 @@ fn focused_text_mini_has_three_sizing_phases() {
     }
     assert!(
         ACP_VIEW
-            .contains("FocusedTextMiniPhase::Streaming => Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY)"),
-        "streaming focused-text mini should keep the compact input-only size until final output"
+            .contains("FocusedTextMiniPhase::Loading => Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY)"),
+        "loading focused-text mini should keep the compact input-only size before assistant output"
+    );
+    assert!(
+        ACP_VIEW.contains("FocusedTextMiniPhase::Streaming => Some(FOCUSED_TEXT_MINI_SIZE_RESULT)"),
+        "streaming focused-text mini should grow once assistant output is visible"
     );
     for required in [
         "FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT",
@@ -258,7 +263,7 @@ fn focused_text_mini_result_uses_shared_acp_transcript_component() {
     );
     let mini_branch = source_between(
         ACP_VIEW,
-        "if self.ui_variant == AcpChatUiVariant::FocusedTextMini {\n            let active_pending",
+        "if self.ui_variant == AcpChatUiVariant::FocusedTextMini {\n            let focused_phase",
         "div()\n            .size_full()",
     );
 

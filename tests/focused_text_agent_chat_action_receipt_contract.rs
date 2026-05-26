@@ -50,8 +50,14 @@ fn focused_text_state_carries_redacted_context_identity_and_last_action() {
         session_id: "focused-text-session-for-tests".to_string(),
         app_name: "TextEdit".to_string(),
         char_count: 11,
+        word_count: 2,
         context_present: true,
+        context_status: "captured".to_string(),
+        context_failure_code: None,
         context_fingerprint: Some("fnv1a64:0123456789abcdef".to_string()),
+        submitted_prompt_locked: true,
+        submitted_prompt_char_count: Some(12),
+        input_redacted: true,
         can_replace: true,
         can_append: true,
         can_copy: true,
@@ -76,8 +82,13 @@ fn focused_text_state_carries_redacted_context_identity_and_last_action() {
     assert_eq!(json["actionsVisible"], true);
     assert_eq!(json["canExpandToChat"], true);
     assert_eq!(json["charCount"], 11);
+    assert_eq!(json["wordCount"], 2);
     assert_eq!(json["contextPresent"], true);
+    assert_eq!(json["contextStatus"], "captured");
     assert_eq!(json["contextFingerprint"], "fnv1a64:0123456789abcdef");
+    assert_eq!(json["submittedPromptLocked"], true);
+    assert_eq!(json["submittedPromptCharCount"], 12);
+    assert_eq!(json["inputRedacted"], true);
     assert_eq!(json["lastActionReceipt"]["action"], "copy");
     assert_eq!(json["lastActionReceipt"]["outputLength"], 25);
 

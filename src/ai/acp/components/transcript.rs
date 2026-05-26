@@ -1,6 +1,6 @@
 use gpui::{
     div, list, prelude::*, px, rems, rgb, rgba, App, Context, Entity, FontWeight, ListAlignment,
-    ListOffset, ListSizingBehavior, ListState, Render, SharedString, StyleRefinement, Window,
+    ListOffset, ListSizingBehavior, ListState, Render, Rgba, SharedString, StyleRefinement, Window,
 };
 use gpui_component::scroll::ScrollableElement;
 use gpui_component::text::{TextView, TextViewState, TextViewStyle};
@@ -123,10 +123,10 @@ impl AcpTranscript {
         let mut style = TextViewStyle::default()
             .paragraph_gap(rems(0.28))
             .heading_font_size(|level, _base_size| match level {
-                1 => px(15.0),
-                2 => px(14.0),
-                3 => px(13.0),
-                _ => px(12.0),
+                1 => px(16.0),
+                2 => px(15.0),
+                3 => px(14.0),
+                _ => px(13.0),
             })
             .code_block(
                 StyleRefinement::default()
@@ -136,7 +136,7 @@ impl AcpTranscript {
                     .rounded(px(5.0))
                     .px(px(7.0))
                     .py(px(4.0))
-                    .text_size(px(11.0)),
+                    .text_size(px(12.0)),
             );
 
         style.highlight_theme = Arc::new(
@@ -153,13 +153,14 @@ impl AcpTranscript {
         text_view_state: &gpui::Entity<TextViewState>,
         theme: &crate::theme::Theme,
         colors: &PromptColors,
+        text_color: Rgba,
     ) -> TextView {
         TextView::new(text_view_state)
             .style(Self::transcript_text_style(theme, colors))
             .selectable(true)
             .w_full()
-            .text_xs()
-            .text_color(rgb(colors.text_primary))
+            .text_sm()
+            .text_color(text_color)
     }
 
     fn render_message(
@@ -229,6 +230,7 @@ impl AcpTranscript {
                 text_view_state,
                 theme,
                 _colors,
+                rgb(_colors.text_primary),
             ));
 
         if matches!(presentation, AcpTranscriptPresentation::RoleSplit) {
@@ -264,6 +266,7 @@ impl AcpTranscript {
                 text_view_state,
                 _theme,
                 _colors,
+                rgb(_colors.text_primary),
             ));
 
         if matches!(presentation, AcpTranscriptPresentation::RoleSplit) {
@@ -333,21 +336,35 @@ impl AcpTranscript {
             .cursor_pointer()
             .child(
                 div()
-                    .text_xs()
+                    .text_sm()
                     .opacity(header_opacity)
+                    .when(is_tool, |d| d.text_color(rgb(_colors.accent_color)))
                     .child(chevron.to_string()),
             )
-            .child(div().text_xs().opacity(header_opacity).child(label))
+            .child(
+                div()
+                    .text_sm()
+                    .opacity(header_opacity)
+                    .when(is_tool, |d| d.text_color(rgb(_colors.accent_color)))
+                    .child(label),
+            )
             .when_some(status_hint.clone(), |d, status| {
-                d.child(div().text_xs().opacity(0.35).child(status))
+                d.child(
+                    div()
+                        .text_sm()
+                        .opacity(0.35)
+                        .when(is_tool, |d| d.text_color(rgb(_colors.accent_color)))
+                        .child(status),
+                )
             })
             .when(
                 is_collapsed && line_count > 1 && status_hint.is_none(),
                 |d| {
                     d.child(
                         div()
-                            .text_xs()
+                            .text_sm()
                             .opacity(0.35)
+                            .when(is_tool, |d| d.text_color(rgb(_colors.accent_color)))
                             .child(format!("{line_count} lines")),
                     )
                 },
@@ -356,6 +373,12 @@ impl AcpTranscript {
         container = container.child(header);
 
         if !is_collapsed {
+            let body_color = if is_tool {
+                rgb(_colors.accent_color)
+            } else {
+                rgb(_colors.text_primary)
+            };
+
             let body = div()
                 .pt(px(4.0))
                 .max_h(px(200.0))
@@ -364,6 +387,7 @@ impl AcpTranscript {
                     text_view_state,
                     theme,
                     _colors,
+                    body_color,
                 ));
 
             container = container.child(body);
@@ -391,10 +415,10 @@ impl AcpTranscript {
                     .items_center()
                     .gap(px(6.0))
                     .pb(px(4.0))
-                    .child(div().text_xs().opacity(0.75).child("\u{26A0}"))
+                    .child(div().text_sm().opacity(0.75).child("\u{26A0}"))
                     .child(
                         div()
-                            .text_xs()
+                            .text_sm()
                             .font_weight(FontWeight::SEMIBOLD)
                             .opacity(0.75)
                             .child("Error"),
@@ -404,9 +428,10 @@ impl AcpTranscript {
                 text_view_state,
                 &theme::get_cached_theme(),
                 _colors,
+                rgb(_colors.text_primary),
             ))
             .child(
-                div().pt(px(4.0)).text_xs().opacity(0.40).child(
+                div().pt(px(4.0)).text_sm().opacity(0.40).child(
                     "Try sending your message again or use \u{2318}N for a new conversation",
                 ),
             )
@@ -430,6 +455,7 @@ impl AcpTranscript {
                 text_view_state,
                 theme,
                 _colors,
+                rgb(_colors.text_primary),
             ))
             .into_any_element()
     }
@@ -446,9 +472,22 @@ impl Render for AcpTranscript {
         );
         let messages_snapshot = self.messages.clone();
         let collapsed_ids = self.collapsed_ids.clone();
+        let visible_indices: Vec<usize> = if focused_text_preview {
+            messages_snapshot
+                .iter()
+                .enumerate()
+                .filter_map(|(ix, msg)| {
+                    (matches!(msg.role, AcpThreadMessageRole::Assistant)
+                        && !msg.body.trim().is_empty())
+                    .then_some(ix)
+                })
+                .collect()
+        } else {
+            (0..messages_snapshot.len()).collect()
+        };
 
-        if self.list_state.item_count() != messages_snapshot.len() {
-            self.list_state.reset(messages_snapshot.len());
+        if self.list_state.item_count() != visible_indices.len() {
+            self.list_state.reset(visible_indices.len());
             self.list_state.set_follow_tail(true);
         }
 
@@ -471,71 +510,97 @@ impl Render for AcpTranscript {
 
         let message_views_snapshot = self.message_views.clone();
         let ui_variant = self.ui_variant;
+        let transcript_content = if focused_text_preview {
+            let mut preview = div().size_full().flex().flex_col().overflow_hidden();
+
+            for message_ix in visible_indices.iter().copied() {
+                let Some(msg) = messages_snapshot.get(message_ix) else {
+                    continue;
+                };
+                let Some(text_view_state) = message_views_snapshot.get(&msg.id) else {
+                    continue;
+                };
+
+                let is_collapsible = matches!(
+                    msg.role,
+                    AcpThreadMessageRole::Thought | AcpThreadMessageRole::Tool
+                );
+                let is_collapsed = is_collapsible && !collapsed_ids.contains(&msg.id);
+                preview = preview.child(div().w_full().px(px(8.0)).pb(px(4.0)).child(
+                    Self::render_message(ui_variant, msg, &colors, is_collapsed, text_view_state),
+                ));
+            }
+
+            preview.into_any_element()
+        } else {
+            list(self.list_state.clone(), move |ix, _window, _cx| {
+                let Some(&message_ix) = visible_indices.get(ix) else {
+                    return div().into_any();
+                };
+                let msg = &messages_snapshot[message_ix];
+
+                let is_collapsible = matches!(
+                    msg.role,
+                    AcpThreadMessageRole::Thought | AcpThreadMessageRole::Tool
+                );
+                let is_collapsed = is_collapsible && !collapsed_ids.contains(&msg.id);
+
+                let prev_was_user = message_ix > 0
+                    && matches!(
+                        messages_snapshot[message_ix - 1].role,
+                        AcpThreadMessageRole::User
+                    );
+                let is_response_start =
+                    prev_was_user && !matches!(msg.role, AcpThreadMessageRole::User);
+                let is_new_turn = message_ix > 0
+                    && matches!(msg.role, AcpThreadMessageRole::User)
+                    && !matches!(
+                        messages_snapshot[message_ix - 1].role,
+                        AcpThreadMessageRole::User
+                    );
+
+                let Some(text_view_state) = message_views_snapshot.get(&msg.id) else {
+                    return div().into_any();
+                };
+
+                div()
+                    .w_full()
+                    .px(px(8.0))
+                    .pb(px(4.0))
+                    .when(is_response_start, |d| d.mt(px(4.0)))
+                    .when(is_new_turn, |d| {
+                        d.mt(px(8.0))
+                            .pt(px(8.0))
+                            .border_t_1()
+                            .border_color(rgba((theme.colors.ui.border << 8) | 0x18))
+                    })
+                    .when(
+                        matches!(
+                            ui_variant.config().transcript,
+                            AcpTranscriptPresentation::DenseLog
+                        ),
+                        |d| d.pb(px(1.0)),
+                    )
+                    .child(Self::render_message(
+                        ui_variant,
+                        msg,
+                        &colors,
+                        is_collapsed,
+                        text_view_state,
+                    ))
+                    .into_any()
+            })
+            .size_full()
+            .with_sizing_behavior(ListSizingBehavior::Auto)
+            .into_any_element()
+        };
 
         div()
             .relative()
             .flex_1()
             .min_h(px(0.))
             .overflow_hidden()
-            .child(
-                list(self.list_state.clone(), move |ix, _window, _cx| {
-                    let msg = &messages_snapshot[ix];
-                    if focused_text_preview {
-                        if !matches!(msg.role, AcpThreadMessageRole::Assistant)
-                            || msg.body.trim().is_empty()
-                        {
-                            return div().into_any();
-                        }
-                    }
-
-                    let is_collapsible = matches!(
-                        msg.role,
-                        AcpThreadMessageRole::Thought | AcpThreadMessageRole::Tool
-                    );
-                    let is_collapsed = is_collapsible && !collapsed_ids.contains(&msg.id);
-
-                    let prev_was_user = ix > 0
-                        && matches!(messages_snapshot[ix - 1].role, AcpThreadMessageRole::User);
-                    let is_response_start =
-                        prev_was_user && !matches!(msg.role, AcpThreadMessageRole::User);
-                    let is_new_turn = ix > 0
-                        && matches!(msg.role, AcpThreadMessageRole::User)
-                        && !matches!(messages_snapshot[ix - 1].role, AcpThreadMessageRole::User);
-
-                    let Some(text_view_state) = message_views_snapshot.get(&msg.id) else {
-                        return div().into_any();
-                    };
-
-                    div()
-                        .w_full()
-                        .px(px(8.0))
-                        .pb(px(4.0))
-                        .when(is_response_start, |d| d.mt(px(4.0)))
-                        .when(is_new_turn, |d| {
-                            d.mt(px(8.0))
-                                .pt(px(8.0))
-                                .border_t_1()
-                                .border_color(rgba((theme.colors.ui.border << 8) | 0x18))
-                        })
-                        .when(
-                            matches!(
-                                ui_variant.config().transcript,
-                                AcpTranscriptPresentation::DenseLog
-                            ),
-                            |d| d.pb(px(1.0)),
-                        )
-                        .child(Self::render_message(
-                            ui_variant,
-                            msg,
-                            &colors,
-                            is_collapsed,
-                            text_view_state,
-                        ))
-                        .into_any()
-                })
-                .size_full()
-                .with_sizing_behavior(ListSizingBehavior::Auto),
-            )
+            .child(transcript_content)
             .vertical_scrollbar(&self.list_state)
     }
 }

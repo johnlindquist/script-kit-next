@@ -157,9 +157,11 @@ fn focused_text_mini_result_footer_is_replace_only() {
 fn focused_text_input_only_omits_semantic_actions_and_preview() {
     for required in [
         "FocusedTextMiniPhase::InputOnly",
+        "FocusedTextMiniPhase::Loading",
         "collect_focused_text_mini_elements",
         "\"focused-text-context-badge\"",
-        "\"focused-text-mini-close\"",
+        "\"focused-text-context-status\"",
+        "\"focused-text-profile-icon\"",
         "\"inputOnly\"",
         "if result_ready",
     ] {
@@ -187,10 +189,85 @@ fn focused_text_mini_loading_has_no_body_thinking_text() {
     assert!(render_fn.contains("crate::panel::PROMPT_INPUT_FIELD_HEIGHT"));
     assert!(render_fn.contains("crate::panel::HEADER_PADDING_X"));
     assert!(render_fn.contains("active_pending"));
-    assert!(render_fn.contains("render_focused_text_loading_profile_icon"));
-    assert!(render_fn.contains("focused-text-mini-close"));
-    assert!(render_fn.contains("on_click"));
-    assert!(render_fn.contains("trigger_close_window_requested"));
+    assert!(render_fn.contains("render_input_profile_icon"));
+    assert!(render_fn.contains("FOCUSED_TEXT_MINI_INPUT_MAX_VISIBLE_HEIGHT"));
+    assert!(render_fn.contains("focused-text-mini-preview-enter"));
+    assert!(render_fn.contains("input_locked"));
+    assert!(!render_fn.contains("focused-text-mini-close"));
+    assert!(!render_fn.contains(".child(\"×\")"));
+    assert!(!render_fn.contains("trigger_close_window_requested"));
+    assert!(ACP_VIEW.contains("fn focused_text_locked_input_allows_key"));
+    assert!(ACP_VIEW.contains("Self::focused_text_locked_input_allows_key(key)"));
+}
+
+#[test]
+fn agent_chat_profile_icon_lives_in_input_not_footer() {
+    let composer_fn = source_between(
+        ACP_VIEW,
+        "fn render_composer_bar",
+        "pub(crate) fn focused_text_mini_sizing_count",
+    );
+    let mini_render_fn = source_between(
+        ACP_VIEW,
+        "fn render_focused_text_mini",
+        "fn render_pending_context_chips",
+    );
+    let footer_marker_fn = source_between(
+        ACP_VIEW,
+        "fn render_profile_status_marker_from_snapshot",
+        "pub(crate) fn build_external_host_footer",
+    );
+    let left_info_fn = source_between(
+        ACP_VIEW,
+        "pub(crate) fn profile_left_info",
+        "#[derive(Clone, Debug)]",
+    );
+
+    assert!(composer_fn.contains("\"agent-chat-input-profile-icon\""));
+    assert!(composer_fn.contains("render_input_profile_icon"));
+    assert!(mini_render_fn.contains("\"focused-text-profile-icon\""));
+    assert!(mini_render_fn.contains("render_input_profile_icon"));
+    let input_pos = mini_render_fn
+        .find(".id(\"focused-text-input\")")
+        .expect("mini input should render before trailing accessories");
+    let app_badge_pos = mini_render_fn
+        .find("render_focused_text_app_icon_badge")
+        .expect("app badge should remain in the mini input row");
+    let profile_pos = mini_render_fn
+        .find("\"focused-text-profile-icon\"")
+        .expect("profile icon should remain semantic");
+    assert!(input_pos < app_badge_pos && app_badge_pos < profile_pos);
+    assert!(!mini_render_fn.contains(".child(self.render_focused_text_profile_icon"));
+    assert!(!footer_marker_fn.contains("footer_icon_path_or_profile"));
+    assert!(!footer_marker_fn.contains("acp-footer-profile-icon-pulse"));
+    assert!(left_info_fn.contains("icon_token: None"));
+    assert!(!left_info_fn.contains("icon_token: Some"));
+}
+
+#[test]
+fn focused_text_mini_semantics_are_redacted_and_diagnostic() {
+    for required in [
+        "word_count",
+        "context_status",
+        "submitted_prompt_locked",
+        "submitted_prompt_char_count",
+        "input_redacted",
+        "focused_text_context_status_label",
+        "focused-text-context-status",
+        "focused-text-profile-icon",
+        "value: None",
+        "submitted_prompt_locked",
+    ] {
+        assert!(
+            ACP_VIEW.contains(required),
+            "missing focused-text diagnostic/redaction contract: {required}"
+        );
+    }
+
+    assert!(
+        !ACP_VIEW.contains("value: Some(thread.input.text().to_string())"),
+        "focused-text mini semantic input must not expose raw prompt text"
+    );
 }
 
 #[test]

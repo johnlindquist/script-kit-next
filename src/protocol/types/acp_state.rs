@@ -163,9 +163,20 @@ pub struct AcpFocusedTextState {
     pub session_id: String,
     pub app_name: String,
     pub char_count: usize,
+    pub word_count: usize,
     pub context_present: bool,
+    #[serde(default)]
+    pub context_status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_failure_code: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_fingerprint: Option<String>,
+    #[serde(default)]
+    pub submitted_prompt_locked: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub submitted_prompt_char_count: Option<usize>,
+    #[serde(default)]
+    pub input_redacted: bool,
     pub can_replace: bool,
     pub can_append: bool,
     pub can_copy: bool,
