@@ -100,6 +100,7 @@ enum FocusedTextMiniPhase {
     Loading,
     Streaming,
     Result,
+    Error,
 }
 
 impl FocusedTextMiniPhase {
@@ -109,6 +110,7 @@ impl FocusedTextMiniPhase {
             Self::Loading => "loading",
             Self::Streaming => "streaming",
             Self::Result => "result",
+            Self::Error => "error",
         }
     }
 }
@@ -217,6 +219,8 @@ impl FocusedTextContextStatus {
                 "unsupportedTarget" => {
                     "Unable to grab text from this field. Select text and try again."
                 }
+                "staleSession" => "The focused text session expired. Try again.",
+                "platform" => "Unable to grab text due to a system error. Select text and try again.",
                 _ => "Unable to grab text. Select text and try again.",
             }),
         }
@@ -722,6 +726,10 @@ pub(crate) struct AcpChatView {
     focused_text: Option<FocusedTextAgentChatState>,
     focused_text_variations: Vec<FocusedTextVariationState>,
     focused_text_variation_tasks: Vec<Task<()>>,
+    focused_text_variation_cancel_flags: Vec<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// Monotonic generation counter — incremented on each new variation submit
+    /// so that stale async tasks from a previous generation are discarded.
+    focused_text_variation_generation: u64,
     /// History of previous variation generations for Cmd+Left/Right navigation.
     focused_text_variation_history: Vec<Vec<FocusedTextVariationState>>,
     /// Current position in the generation history (None = latest).
@@ -1704,8 +1712,17 @@ impl AcpChatView {
         ]
     }
 
+    fn cancel_isolated_variation_processes(&mut self) {
+        for flag in &self.focused_text_variation_cancel_flags {
+            flag.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        self.focused_text_variation_cancel_flags.clear();
+    }
+
     fn reset_focused_text_variations_for_submit(&mut self) {
+        self.cancel_isolated_variation_processes();
         self.focused_text_variation_tasks.clear();
+        self.focused_text_variation_generation += 1;
         self.focused_text_selected_variation = None;
         self.focused_text_editing_variation = None;
         self.focused_text_variations = Self::focused_text_variation_angles()
@@ -1716,6 +1733,7 @@ impl AcpChatView {
     }
 
     fn clear_focused_text_variations(&mut self) {
+        self.cancel_isolated_variation_processes();
         self.focused_text_variation_tasks.clear();
         self.focused_text_variations.clear();
         self.focused_text_variation_history.clear();
@@ -1808,9 +1826,13 @@ impl AcpChatView {
     fn apply_focused_text_variation_event(
         &mut self,
         index: usize,
+        generation: u64,
         event: AgentChatEvent,
         cx: &mut Context<Self>,
     ) {
+        if generation != self.focused_text_variation_generation {
+            return;
+        }
         if index >= self.focused_text_variations.len() {
             return;
         }
@@ -1876,17 +1898,20 @@ impl AcpChatView {
         cx: &mut Context<Self>,
     ) {
         let view = cx.entity().downgrade();
+        let generation = self.focused_text_variation_generation;
         let task = cx.spawn(async move |_this, cx| {
             while let Ok(event) = rx.recv().await {
                 let terminal = matches!(
                     event,
-                    AgentChatEvent::TurnFinished { .. } | AgentChatEvent::Failed { .. }
+                    AgentChatEvent::TurnFinished { .. }
+                        | AgentChatEvent::Failed { .. }
+                        | AgentChatEvent::SetupRequired { .. }
                 );
                 let view_ref = view.clone();
                 let _ = cx.update(|cx| {
                     if let Some(entity) = view_ref.upgrade() {
                         entity.update(cx, |this, cx| {
-                            this.apply_focused_text_variation_event(index, event, cx);
+                            this.apply_focused_text_variation_event(index, generation, event, cx);
                         });
                     }
                 });
@@ -2125,13 +2150,23 @@ impl AcpChatView {
             thread.status,
             AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
         );
-        let has_output = Self::latest_assistant_response_text(thread).is_some();
-        let has_user_turn = Self::has_submitted_user_turn(thread);
-        match (active, has_output, has_user_turn) {
-            (true, false, _) => Some(FocusedTextMiniPhase::Loading),
-            (true, true, _) => Some(FocusedTextMiniPhase::Streaming),
-            (false, true, _) => Some(FocusedTextMiniPhase::Result),
-            (false, false, _) => Some(FocusedTextMiniPhase::InputOnly),
+        let has_output = Self::latest_assistant_response_after_latest_user(thread).is_some();
+        let has_variations = !self.focused_text_variations.is_empty();
+        let all_variations_failed = has_variations
+            && self
+                .focused_text_variations
+                .iter()
+                .all(|v| v.status == FocusedTextVariationStatus::Error);
+
+        if !active && has_variations && all_variations_failed {
+            return Some(FocusedTextMiniPhase::Error);
+        }
+
+        match (active, has_output || has_variations) {
+            (true, false) => Some(FocusedTextMiniPhase::Loading),
+            (true, true) => Some(FocusedTextMiniPhase::Streaming),
+            (false, true) => Some(FocusedTextMiniPhase::Result),
+            (false, false) => Some(FocusedTextMiniPhase::InputOnly),
         }
     }
 
@@ -2782,7 +2817,7 @@ impl AcpChatView {
                 | Some(FocusedTextMiniPhase::Streaming) => {
                     crate::ai::focused_text::FocusedTextEditSemantics::Replace
                 }
-                Some(FocusedTextMiniPhase::Result) | None => {
+                Some(FocusedTextMiniPhase::Result) | Some(FocusedTextMiniPhase::Error) | None => {
                     crate::ai::focused_text::FocusedTextEditSemantics::Chat
                 }
             }
@@ -2813,11 +2848,14 @@ impl AcpChatView {
                     let _ = self.cancel_streaming_from_escape(cx);
                     return Ok(());
                 }
-                Some(FocusedTextMiniPhase::Result) if !has_instruction => {
+                Some(FocusedTextMiniPhase::Result | FocusedTextMiniPhase::Error)
+                    if !has_instruction =>
+                {
                     return Ok(());
                 }
                 Some(FocusedTextMiniPhase::InputOnly)
                 | Some(FocusedTextMiniPhase::Result)
+                | Some(FocusedTextMiniPhase::Error)
                 | None => {}
             }
         }
@@ -2827,7 +2865,10 @@ impl AcpChatView {
         }
 
         if self.ui_variant == AcpChatUiVariant::FocusedTextMini
-            && matches!(phase, Some(FocusedTextMiniPhase::Result))
+            && matches!(
+                phase,
+                Some(FocusedTextMiniPhase::Result | FocusedTextMiniPhase::Error)
+            )
         {
             self.expand_focused_text_to_full_chat(cx);
         }
@@ -4553,7 +4594,10 @@ impl AcpChatView {
         tracing::info!(
             target: "script_kit::keyboard",
             event = "acp_escape_cancel_streaming_requested",
+            variation_generation = self.focused_text_variation_generation,
         );
+        self.focused_text_variation_generation += 1;
+        self.cancel_isolated_variation_processes();
         self.focused_text_variation_tasks.clear();
         for variation in &mut self.focused_text_variations {
             if variation.status == FocusedTextVariationStatus::Streaming {
@@ -5133,6 +5177,8 @@ impl AcpChatView {
             focused_text: None,
             focused_text_variations: Vec::new(),
             focused_text_variation_tasks: Vec::new(),
+            focused_text_variation_cancel_flags: Vec::new(),
+            focused_text_variation_generation: 0,
             focused_text_variation_history: Vec::new(),
             focused_text_variation_history_index: None,
             focused_text_selected_variation: None,
@@ -5216,6 +5262,8 @@ impl AcpChatView {
             focused_text: None,
             focused_text_variations: Vec::new(),
             focused_text_variation_tasks: Vec::new(),
+            focused_text_variation_cancel_flags: Vec::new(),
+            focused_text_variation_generation: 0,
             focused_text_variation_history: Vec::new(),
             focused_text_variation_history_index: None,
             focused_text_selected_variation: None,
@@ -6332,7 +6380,12 @@ impl AcpChatView {
                 .read(cx)
                 .start_auxiliary_turn(aux_thread_id, blocks)
             {
-                Ok(rx) => self.spawn_focused_text_variation_task(index, rx, cx),
+                Ok(handle) => {
+                    if let Some(cancel) = handle.cancel {
+                        self.focused_text_variation_cancel_flags.push(cancel);
+                    }
+                    self.spawn_focused_text_variation_task(index, handle.rx, cx);
+                }
                 Err(error) => self.mark_focused_text_variation_failed(index, error, cx),
             }
         }
@@ -7161,7 +7214,9 @@ impl AcpChatView {
             FocusedTextMiniPhase::Loading if has_variations => Some(result_size + scope_extra),
             FocusedTextMiniPhase::Loading => Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY + scope_extra),
             FocusedTextMiniPhase::Streaming => Some(result_size + scope_extra),
-            FocusedTextMiniPhase::Result => Some(result_size + scope_extra),
+            FocusedTextMiniPhase::Result | FocusedTextMiniPhase::Error => {
+                Some(result_size + scope_extra)
+            }
         }
     }
 
@@ -7237,7 +7292,7 @@ impl AcpChatView {
                 Some(FocusedTextMiniPhase::Streaming) => {
                     let _ = self.cancel_streaming_from_escape(cx);
                 }
-                Some(FocusedTextMiniPhase::Result) => {
+                Some(FocusedTextMiniPhase::Result | FocusedTextMiniPhase::Error) => {
                     self.trigger_close_window_requested(window, cx);
                 }
                 None => {
@@ -11305,9 +11360,9 @@ impl AcpChatView {
             if is_streaming {
                 self.live_thread()
                     .update(cx, |thread, cx| thread.cancel_streaming(cx));
+                cx.stop_propagation();
+                return;
             }
-            cx.stop_propagation();
-            return;
         }
 
         // ── Cmd+0 → reset Agent Chat zoom/font sizing ───────────
@@ -11368,12 +11423,15 @@ impl AcpChatView {
         }
 
         // ── Focused-text variations: Up/Down selects stacked result cards ─
+        // When the instruction input has text, Up/Down recalls instruction
+        // history instead (handled in the next block).
         if self.ui_variant == AcpChatUiVariant::FocusedTextMini
             && self.focused_text.is_some()
             && !self.focused_text_variations.is_empty()
             && self.focused_text_editing_variation.is_none()
             && !self.scope_focused
             && self.mention_session.is_none()
+            && self.live_thread().read(cx).input.is_empty()
             && !modifiers.platform
             && !modifiers.control
             && !modifiers.alt
@@ -11556,7 +11614,8 @@ impl AcpChatView {
                 cx.stop_propagation();
                 return;
             }
-            if (crate::ui_foundation::is_key_enter(key) || crate::ui_foundation::is_key_tab(key))
+            if (crate::ui_foundation::is_key_enter(key)
+                || (crate::ui_foundation::is_key_tab(key) && !modifiers.shift))
                 && self.handle_picker_accept_key(key, cx)
             {
                 cx.stop_propagation();
@@ -11618,6 +11677,7 @@ impl AcpChatView {
                     Some(FocusedTextMiniPhase::Loading) => "cancel_loading",
                     Some(FocusedTextMiniPhase::Streaming) => "stop_streaming",
                     Some(FocusedTextMiniPhase::Result) => "close_result",
+                    Some(FocusedTextMiniPhase::Error) => "close_error",
                     None => "close_non_mini_focused_text",
                 };
 
@@ -11657,7 +11717,7 @@ impl AcpChatView {
                     Some(FocusedTextMiniPhase::Streaming) => {
                         let _ = self.cancel_streaming_from_escape(cx);
                     }
-                    Some(FocusedTextMiniPhase::Result) => {
+                    Some(FocusedTextMiniPhase::Result | FocusedTextMiniPhase::Error) => {
                         self.trigger_close_window_requested(window, cx);
                     }
                     None => {
@@ -11688,6 +11748,9 @@ impl AcpChatView {
             && modifiers.platform
             && !modifiers.shift
             && !self.focused_text_variations.is_empty()
+            && self.focused_text_editing_variation.is_none()
+            && !self.scope_focused
+            && self.mention_session.is_none()
         {
             self.regenerate_focused_text_variations(cx);
             cx.stop_propagation();
@@ -12654,5 +12717,99 @@ mod tests {
             std::path::PathBuf::from("~/.scriptkit/plugins/main/scripts/clipboard-cleanup.ts")
         );
         assert!(receipt.validated);
+    }
+
+    // ── Focused-text variation state tests ──────────────────────────
+
+    use crate::ai::focused_text::FocusedTextPromptAngle;
+
+    #[test]
+    fn variation_streaming_starts_with_streaming_status() {
+        let state =
+            super::FocusedTextVariationState::streaming(FocusedTextPromptAngle::Conservative);
+        assert_eq!(state.status, super::FocusedTextVariationStatus::Streaming);
+        assert!(state.text.is_empty());
+        assert!(state.error.is_none());
+    }
+
+    #[test]
+    fn variation_status_state_ids_are_distinct() {
+        let ids = [
+            super::FocusedTextVariationStatus::Idle.state_id(),
+            super::FocusedTextVariationStatus::Streaming.state_id(),
+            super::FocusedTextVariationStatus::Complete.state_id(),
+            super::FocusedTextVariationStatus::Error.state_id(),
+        ];
+        for i in 0..ids.len() {
+            for j in (i + 1)..ids.len() {
+                assert_ne!(ids[i], ids[j], "state_ids must be unique");
+            }
+        }
+    }
+
+    #[test]
+    fn mini_phase_state_ids_are_distinct() {
+        let ids = [
+            super::FocusedTextMiniPhase::InputOnly.state_id(),
+            super::FocusedTextMiniPhase::Loading.state_id(),
+            super::FocusedTextMiniPhase::Streaming.state_id(),
+            super::FocusedTextMiniPhase::Result.state_id(),
+            super::FocusedTextMiniPhase::Error.state_id(),
+        ];
+        for i in 0..ids.len() {
+            for j in (i + 1)..ids.len() {
+                assert_ne!(ids[i], ids[j], "phase state_ids must be unique");
+            }
+        }
+    }
+
+    #[test]
+    fn variation_angles_returns_three_distinct_angles() {
+        let angles = AcpChatView::focused_text_variation_angles();
+        assert_eq!(angles.len(), 3);
+        assert_eq!(angles[0].id(), "conservative");
+        assert_eq!(angles[1].id(), "balanced");
+        assert_eq!(angles[2].id(), "creative");
+    }
+
+    #[test]
+    fn variation_snapshot_preserves_state() {
+        let mut state =
+            super::FocusedTextVariationState::streaming(FocusedTextPromptAngle::Balanced);
+        state.text = "Hello world".to_string();
+        state.status = super::FocusedTextVariationStatus::Complete;
+        let snapshot = state.snapshot(1, true);
+        assert_eq!(snapshot.text, "Hello world");
+        assert_eq!(snapshot.status, super::FocusedTextVariationStatus::Complete);
+        assert_eq!(snapshot.angle_id, "balanced");
+        assert!(snapshot.selected);
+    }
+
+    #[test]
+    fn focused_text_context_status_user_messages_cover_all_known_codes() {
+        let codes_and_expected = [
+            ("accessibilityPermissionRequired", "Accessibility"),
+            ("secureField", "secure field"),
+            ("unsupportedTarget", "Unable to grab text"),
+            ("staleSession", "session expired"),
+            ("platform", "system error"),
+        ];
+        for (code, substring) in codes_and_expected {
+            let status = super::FocusedTextContextStatus::CaptureFailed { reason_code: code };
+            let msg = status.user_message().unwrap_or("");
+            assert!(
+                msg.contains(substring),
+                "code {code:?} message should contain {substring:?}, got: {msg:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_capture_reason_code_has_generic_message() {
+        let status = super::FocusedTextContextStatus::CaptureFailed {
+            reason_code: "unknown_future_code",
+        };
+        let msg = status.user_message().unwrap_or("");
+        assert!(msg.contains("Unable to grab text"));
     }
 }
