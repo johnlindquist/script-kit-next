@@ -19,10 +19,7 @@ pub(crate) trait AgentChatConnection: Send + Sync + 'static {
     ///
     /// The default keeps non-Pi implementations source-compatible. Pi overrides this
     /// because its normal connection has only one active streaming turn.
-    fn start_isolated_turn(
-        &self,
-        request: AgentChatTurnRequest,
-    ) -> Result<AgentChatEventRx> {
+    fn start_isolated_turn(&self, request: AgentChatTurnRequest) -> Result<AgentChatEventRx> {
         self.start_turn(request)
     }
     fn cancel_turn(&self, ui_thread_id: String) -> Result<()>;

@@ -1875,6 +1875,49 @@ impl AcpChatView {
             .collect()
     }
 
+    fn select_focused_text_variation(&mut self, index: usize, cx: &mut Context<Self>) -> bool {
+        if index >= self.focused_text_variations.len() {
+            return false;
+        }
+        if self.focused_text_selected_variation == Some(index) {
+            return true;
+        }
+        self.focused_text_selected_variation = Some(index);
+        self.scope_focused = false;
+        self.cursor_visible = true;
+        tracing::info!(
+            target: "script_kit::focused_text",
+            event = "focused_text_variation_selected",
+            index,
+            angle = self.focused_text_variations[index].angle.id(),
+            status = self.focused_text_variations[index].status.state_id(),
+            text_len = self.focused_text_variations[index].text.chars().count(),
+        );
+        cx.notify();
+        true
+    }
+
+    fn move_focused_text_variation_selection(
+        &mut self,
+        direction: i32,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let count = self.focused_text_variations.len();
+        if count == 0 {
+            return false;
+        }
+        let current = self
+            .focused_text_selected_variation
+            .filter(|index| *index < count);
+        let next = match (current, direction < 0) {
+            (Some(index), true) => index.saturating_sub(1),
+            (Some(index), false) => (index + 1).min(count.saturating_sub(1)),
+            (None, true) => count.saturating_sub(1),
+            (None, false) => 0,
+        };
+        self.select_focused_text_variation(next, cx)
+    }
+
     fn latest_user_prompt_for_display(thread: &AcpThread) -> Option<String> {
         thread
             .messages
@@ -6680,15 +6723,23 @@ impl AcpChatView {
 
         let thread = self.live_thread().read(cx);
         let scope_extra = if self.scope_visible { 1 } else { 0 };
+        let has_variations = !self.focused_text_variations.is_empty();
         const FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY: usize = 0;
         const FOCUSED_TEXT_MINI_SIZE_RESULT: usize = 2;
+        const FOCUSED_TEXT_MINI_SIZE_VARIATIONS: usize = 5;
+        let result_size = if has_variations {
+            FOCUSED_TEXT_MINI_SIZE_VARIATIONS
+        } else {
+            FOCUSED_TEXT_MINI_SIZE_RESULT
+        };
         match self.focused_text_mini_phase_for_thread(thread)? {
             FocusedTextMiniPhase::InputOnly => {
                 Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY + scope_extra)
             }
+            FocusedTextMiniPhase::Loading if has_variations => Some(result_size + scope_extra),
             FocusedTextMiniPhase::Loading => Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY + scope_extra),
-            FocusedTextMiniPhase::Streaming => Some(FOCUSED_TEXT_MINI_SIZE_RESULT + scope_extra),
-            FocusedTextMiniPhase::Result => Some(FOCUSED_TEXT_MINI_SIZE_RESULT + scope_extra),
+            FocusedTextMiniPhase::Streaming => Some(result_size + scope_extra),
+            FocusedTextMiniPhase::Result => Some(result_size + scope_extra),
         }
     }
 
@@ -6891,6 +6942,163 @@ impl AcpChatView {
             .into_any_element()
     }
 
+    fn focused_text_variation_area_height(count: usize, fallback_height: f32) -> f32 {
+        if count == 0 {
+            return fallback_height;
+        }
+        let cards_height = (count as f32 * Self::FOCUSED_TEXT_VARIATION_CARD_MIN_HEIGHT)
+            + (count.saturating_sub(1) as f32 * Self::FOCUSED_TEXT_VARIATION_CARD_GAP)
+            + (Self::FOCUSED_TEXT_VARIATION_AREA_PADDING_Y * 2.0);
+        cards_height
+            .max(fallback_height)
+            .min(Self::FOCUSED_TEXT_VARIATION_AREA_MAX_HEIGHT)
+    }
+
+    fn render_focused_text_variation_card(
+        variation: FocusedTextVariationSnapshot,
+        weak_view: WeakEntity<AcpChatView>,
+        theme: &crate::theme::Theme,
+    ) -> gpui::AnyElement {
+        let selected = variation.selected;
+        let streaming = matches!(variation.status, FocusedTextVariationStatus::Streaming);
+        let error = matches!(variation.status, FocusedTextVariationStatus::Error);
+        let status_label = match variation.status {
+            FocusedTextVariationStatus::Idle => "Idle",
+            FocusedTextVariationStatus::Streaming => "Streaming",
+            FocusedTextVariationStatus::Complete => "Ready",
+            FocusedTextVariationStatus::Error => "Error",
+        };
+        let body = if error {
+            variation
+                .error
+                .clone()
+                .filter(|value| !value.trim().is_empty())
+                .map(|value| format!("Error: {value}"))
+                .unwrap_or_else(|| "This variation failed.".to_string())
+        } else if variation.text.trim().is_empty() {
+            match variation.status {
+                FocusedTextVariationStatus::Idle => "Waiting to start\u{2026}".to_string(),
+                FocusedTextVariationStatus::Streaming => "Thinking\u{2026}".to_string(),
+                FocusedTextVariationStatus::Complete => "No text returned.".to_string(),
+                FocusedTextVariationStatus::Error => "This variation failed.".to_string(),
+            }
+        } else {
+            variation.text.clone()
+        };
+        let dot_color = match variation.status {
+            FocusedTextVariationStatus::Streaming => rgb(theme.colors.accent.selected),
+            FocusedTextVariationStatus::Complete => {
+                rgba((theme.colors.accent.selected << 8) | 0xB8)
+            }
+            FocusedTextVariationStatus::Error => rgb(theme.colors.ui.error),
+            FocusedTextVariationStatus::Idle => rgba((theme.colors.text.primary << 8) | 0x32),
+        };
+        let dot = div().size(px(7.0)).rounded(px(999.0)).bg(dot_color);
+        let dot = if streaming {
+            dot.with_animation(
+                "focused-text-variation-dot-pulse",
+                Animation::new(Duration::from_millis(1200)).repeat(),
+                |style, delta| {
+                    let sine = (delta * std::f32::consts::PI * 2.0).sin();
+                    style.opacity(0.65 + (0.35 * ((sine + 1.0) / 2.0)))
+                },
+            )
+            .into_any_element()
+        } else {
+            dot.into_any_element()
+        };
+        let variation_index = variation.index;
+        let select_view = weak_view.clone();
+        div()
+            .id(SharedString::from(format!(
+                "focused-text-variation-card-{}",
+                variation.index
+            )))
+            .w_full()
+            .min_h(px(Self::FOCUSED_TEXT_VARIATION_CARD_MIN_HEIGHT))
+            .px(px(10.0))
+            .py(px(8.0))
+            .rounded(px(8.0))
+            .border_1()
+            .border_color(if selected {
+                rgba((theme.colors.accent.selected << 8) | 0xA8)
+            } else {
+                rgba((theme.colors.ui.border << 8) | 0x36)
+            })
+            .bg(if selected {
+                rgba((theme.colors.accent.selected << 8) | 0x14)
+            } else {
+                rgba((theme.colors.text.primary << 8) | 0x05)
+            })
+            .cursor_pointer()
+            .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x08)))
+            .on_click(move |_event, window, cx| {
+                if let Some(entity) = select_view.upgrade() {
+                    entity.update(cx, |chat, cx| {
+                        window.focus(&chat.focus_handle, cx);
+                        let _ = chat.select_focused_text_variation(variation_index, cx);
+                    });
+                }
+            })
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex()
+                            .items_center()
+                            .gap(px(7.0))
+                            .child(dot)
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(if selected {
+                                        rgb(theme.colors.accent.selected)
+                                    } else {
+                                        rgb(theme.colors.text.primary)
+                                    })
+                                    .child(variation.label),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_xs()
+                            .text_color(if error {
+                                rgb(theme.colors.ui.error)
+                            } else {
+                                rgb(theme.colors.text.muted)
+                            })
+                            .child(status_label),
+                    ),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .pt(px(6.0))
+                    .text_sm()
+                    .line_height(px(18.0))
+                    .text_color(if error {
+                        rgb(theme.colors.ui.error)
+                    } else {
+                        rgb(theme.colors.text.primary)
+                    })
+                    .opacity(if variation.text.trim().is_empty() && !error {
+                        0.62
+                    } else {
+                        0.92
+                    })
+                    .child(body),
+            )
+            .into_any_element()
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn render_focused_text_mini(
         &self,
@@ -6899,6 +7107,7 @@ impl AcpChatView {
         profile_icon_name: Option<&str>,
         weak_view: WeakEntity<AcpChatView>,
         transcript: Option<gpui::AnyElement>,
+        variations: Vec<FocusedTextVariationSnapshot>,
         input_text: &str,
         input_cursor: usize,
         input_selection: TextSelection,
@@ -6910,13 +7119,24 @@ impl AcpChatView {
         let chrome = AppChromeColors::from_theme(theme);
         let input_height = crate::window_resize::focused_text_mini_input_height();
         let mini_result_height = crate::window_resize::focused_text_mini_result_height();
-        let preview_height = crate::window_resize::focused_text_mini_preview_height();
+        let fallback_preview_height = crate::window_resize::focused_text_mini_preview_height();
+        let has_variation_cards = !variations.is_empty();
+        let show_result_area = has_variation_cards || show_transcript || transcript.is_some();
+        let preview_height = if has_variation_cards {
+            Self::focused_text_variation_area_height(variations.len(), fallback_preview_height)
+        } else {
+            fallback_preview_height
+        };
         let scope_height = if self.scope_visible {
             input_height
         } else {
             0.0
         };
-        let content_height = mini_result_height + scope_height;
+        let content_height = if has_variation_cards {
+            input_height + scope_height + preview_height
+        } else {
+            mini_result_height + scope_height
+        };
         let instruction_focus_view = weak_view.clone();
 
         let input_row = div()
@@ -6930,7 +7150,7 @@ impl AcpChatView {
             .flex()
             .items_center()
             .gap(px(8.0))
-            .when(show_transcript || self.scope_visible, |d| {
+            .when(show_result_area || self.scope_visible, |d| {
                 d.border_b_1().border_color(rgba(chrome.divider_rgba))
             })
             .on_click(move |_event, window, cx| {
@@ -6996,7 +7216,7 @@ impl AcpChatView {
                     .flex()
                     .items_center()
                     .gap(px(8.0))
-                    .when(show_transcript, |d| {
+                    .when(show_result_area, |d| {
                         d.border_b_1().border_color(rgba(chrome.divider_rgba))
                     })
                     .on_click(move |_event, window, cx| {
@@ -7064,7 +7284,41 @@ impl AcpChatView {
             content = content.child(scope_row);
         }
 
-        if let Some(transcript) = transcript {
+        if has_variation_cards {
+            content = content.child(
+                div()
+                    .id("focused-text-variations-preview")
+                    .w_full()
+                    .h(px(preview_height))
+                    .max_h(px(Self::FOCUSED_TEXT_VARIATION_AREA_MAX_HEIGHT))
+                    .flex_none()
+                    .border_b_1()
+                    .border_color(rgba(chrome.divider_rgba))
+                    .overflow_y_scrollbar()
+                    .child(
+                        div()
+                            .id("focused-text-variation-cards")
+                            .w_full()
+                            .px(px(8.0))
+                            .py(px(Self::FOCUSED_TEXT_VARIATION_AREA_PADDING_Y))
+                            .flex()
+                            .flex_col()
+                            .gap(px(Self::FOCUSED_TEXT_VARIATION_CARD_GAP))
+                            .children(variations.into_iter().map(|variation| {
+                                Self::render_focused_text_variation_card(
+                                    variation,
+                                    weak_view.clone(),
+                                    theme,
+                                )
+                            })),
+                    )
+                    .with_animation(
+                        "focused-text-mini-variations-enter",
+                        Animation::new(Duration::from_millis(160)),
+                        |style, delta| style.opacity(delta),
+                    ),
+            );
+        } else if let Some(transcript) = transcript {
             content = content.child(
                 div()
                     .id("focused-text-preview")
@@ -8878,6 +9132,10 @@ impl AcpChatView {
     /// is rendered through the standard ACP composer text renderer.
     const FOCUSED_TEXT_MINI_PLACEHOLDER: &'static str = "Ask";
     const FOCUSED_TEXT_MINI_INPUT_MAX_VISIBLE_HEIGHT: f32 = 44.0;
+    const FOCUSED_TEXT_VARIATION_CARD_MIN_HEIGHT: f32 = 96.0;
+    const FOCUSED_TEXT_VARIATION_CARD_GAP: f32 = 8.0;
+    const FOCUSED_TEXT_VARIATION_AREA_PADDING_Y: f32 = 8.0;
+    const FOCUSED_TEXT_VARIATION_AREA_MAX_HEIGHT: f32 = 500.0;
 
     fn mention_picker_width_for_window(window_width: f32) -> f32 {
         let max_width = (window_width - (Self::ACP_MENTION_PICKER_EDGE_GUTTER * 2.0))
@@ -10303,6 +10561,31 @@ impl AcpChatView {
             return;
         }
 
+        // ── Focused-text variations: Up/Down selects stacked result cards ─
+        if self.ui_variant == AcpChatUiVariant::FocusedTextMini
+            && self.focused_text.is_some()
+            && !self.focused_text_variations.is_empty()
+            && !self.scope_focused
+            && self.mention_session.is_none()
+            && !modifiers.platform
+            && !modifiers.control
+            && !modifiers.alt
+            && !modifiers.shift
+        {
+            if crate::ui_foundation::is_key_up(key) {
+                if self.move_focused_text_variation_selection(-1, cx) {
+                    cx.stop_propagation();
+                    return;
+                }
+            }
+            if crate::ui_foundation::is_key_down(key) {
+                if self.move_focused_text_variation_selection(1, cx) {
+                    cx.stop_propagation();
+                    return;
+                }
+            }
+        }
+
         // ── Up → recall latest user prompt when composer is empty ─
         if !modifiers.platform
             && !modifiers.control
@@ -10893,7 +11176,8 @@ impl Render for AcpChatView {
                 }
             }
 
-            let transcript = if show_transcript {
+            let variations = self.focused_text_variation_snapshots();
+            let transcript = if show_transcript && variations.is_empty() {
                 Some(self.ensure_transcript(cx).into_any_element())
             } else {
                 None
@@ -10916,6 +11200,7 @@ impl Render for AcpChatView {
                     profile_icon_name.as_deref(),
                     view_entity.clone(),
                     transcript,
+                    variations,
                     &display_input_text,
                     display_input_cursor,
                     display_input_selection,

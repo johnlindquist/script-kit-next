@@ -616,9 +616,9 @@ fn height_for_view_with_layout(
             height
         }
         ViewType::FocusedTextMini => match item_count {
-            0 => px(FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT),
-            1 => px(FOCUSED_TEXT_MINI_STREAMING_HEIGHT),
-            _ => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT),
+            0 => px(FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT + WINDOW_BORDER_Y),
+            1 => px(FOCUSED_TEXT_MINI_STREAMING_HEIGHT + WINDOW_BORDER_Y),
+            _ => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT + WINDOW_BORDER_Y),
         },
         ViewType::ArgPromptWithChoices => {
             let visible_items = item_count.max(1) as f32;
