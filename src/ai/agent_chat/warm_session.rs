@@ -203,11 +203,30 @@ impl AgentChatWarmSessionManager {
         };
 
         let manager = self.clone();
-        std::thread::spawn(move || {
-            let (spec, generation, ui_thread_id) = should_spawn;
-            let slot = manager.prepare_slot_with_generation(spec, generation, ui_thread_id);
-            manager.insert_prepared_slot_if_current(slot, generation);
-        });
+        std::thread::Builder::new()
+            .name("warm-prepare-background".to_string())
+            .spawn(move || {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "warm_background_thread_started",
+                );
+                let (spec, generation, ui_thread_id) = should_spawn;
+                let slot = manager.prepare_slot_with_generation(spec, generation, ui_thread_id);
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "warm_background_thread_finished",
+                    state = ?slot.state,
+                );
+                manager.insert_prepared_slot_if_current(slot, generation);
+            })
+            .map_err(|error| {
+                tracing::error!(
+                    target: "script_kit::tab_ai",
+                    event = "warm_background_thread_spawn_failed",
+                    %error,
+                );
+            })
+            .ok();
 
         Ok(snapshot)
     }
@@ -410,18 +429,57 @@ impl AgentChatWarmSessionManager {
         generation: u64,
         ui_thread_id: String,
     ) -> WarmSlot {
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "warm_prepare_slot_begin",
+            generation,
+            key = %spec.key,
+        );
         match spec.factory.spawn_connection() {
             Ok(connection) => {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "warm_prepare_slot_connection_spawned",
+                    generation,
+                    key = %spec.key,
+                );
                 let state = match connection.prepare_session(ui_thread_id.clone(), spec.cwd.clone())
                 {
                     Ok(events) => {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "warm_prepare_slot_session_sent",
+                            generation,
+                            key = %spec.key,
+                        );
                         if wait_for_prepare_ready(events, DEFAULT_PREPARE_READY_TIMEOUT) {
+                            tracing::info!(
+                                target: "script_kit::tab_ai",
+                                event = "warm_prepare_slot_ready",
+                                generation,
+                                key = %spec.key,
+                            );
                             AgentChatWarmSessionState::Ready
                         } else {
+                            tracing::warn!(
+                                target: "script_kit::tab_ai",
+                                event = "warm_prepare_slot_timeout",
+                                generation,
+                                key = %spec.key,
+                            );
                             AgentChatWarmSessionState::Failed
                         }
                     }
-                    Err(_) => AgentChatWarmSessionState::Failed,
+                    Err(error) => {
+                        tracing::warn!(
+                            target: "script_kit::tab_ai",
+                            event = "warm_prepare_slot_session_error",
+                            generation,
+                            key = %spec.key,
+                            %error,
+                        );
+                        AgentChatWarmSessionState::Failed
+                    }
                 };
 
                 WarmSlot {
@@ -433,14 +491,23 @@ impl AgentChatWarmSessionManager {
                     acquired_at: None,
                 }
             }
-            Err(_) => WarmSlot {
-                spec,
-                generation,
-                ui_thread_id: Some(ui_thread_id),
-                state: AgentChatWarmSessionState::Failed,
-                connection: None,
-                acquired_at: None,
-            },
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "warm_prepare_slot_spawn_failed",
+                    generation,
+                    key = %spec.key,
+                    %error,
+                );
+                WarmSlot {
+                    spec,
+                    generation,
+                    ui_thread_id: Some(ui_thread_id),
+                    state: AgentChatWarmSessionState::Failed,
+                    connection: None,
+                    acquired_at: None,
+                }
+            }
         }
     }
 
