@@ -3129,9 +3129,9 @@ mod tests {
                 pid: 5678,
             }),
             selected_text: Some("selected words".to_string()),
-            browser: Some(crate::context_snapshot::BrowserContext {
-                url: "https://example.com".to_string(),
-            }),
+            browser: Some(crate::context_snapshot::BrowserContext::from_url(
+                "https://example.com".to_string(),
+            )),
             ..Default::default()
         };
         let blob = TabAiContextBlob::from_parts(

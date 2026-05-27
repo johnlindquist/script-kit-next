@@ -341,9 +341,7 @@ fn test_preflight_snapshot_reports_exact_recommendation_count() {
             bundle_id: "com.apple.Safari".to_string(),
             name: "Safari".to_string(),
         }),
-        browser: Some(BrowserContext {
-            url: "https://example.com".to_string(),
-        }),
+        browser: Some(BrowserContext::from_url("https://example.com".to_string())),
         focused_window: Some(FocusedWindowContext {
             title: "Safari".to_string(),
             width: 1440,
@@ -414,9 +412,7 @@ fn test_preflight_snapshot_without_live_snapshot_suppresses_recommendations() {
             bundle_id: "com.apple.Safari".to_string(),
             name: "Safari".to_string(),
         }),
-        browser: Some(BrowserContext {
-            url: "https://example.com".to_string(),
-        }),
+        browser: Some(BrowserContext::from_url("https://example.com".to_string())),
         focused_window: Some(FocusedWindowContext {
             title: "Safari".to_string(),
             width: 1440,
@@ -487,9 +483,7 @@ fn test_recommendation_determinism_same_input_same_output() {
             bundle_id: "com.apple.Safari".to_string(),
             name: "Safari".to_string(),
         }),
-        browser: Some(BrowserContext {
-            url: "https://docs.rs".to_string(),
-        }),
+        browser: Some(BrowserContext::from_url("https://docs.rs".to_string())),
         focused_window: Some(FocusedWindowContext {
             title: "docs.rs".to_string(),
             width: 1440,

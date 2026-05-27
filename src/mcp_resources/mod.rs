@@ -3934,9 +3934,9 @@ mod tests {
                 bundle_id: "com.example.App".to_string(),
                 name: "Example App".to_string(),
             }),
-            browser: Some(crate::context_snapshot::BrowserContext {
-                url: "https://example.com".to_string(),
-            }),
+            browser: Some(crate::context_snapshot::BrowserContext::from_url(
+                "https://example.com".to_string(),
+            )),
             warnings: vec!["focusedWindow: permission denied".to_string()],
             ..Default::default()
         };

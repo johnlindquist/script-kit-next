@@ -77,9 +77,7 @@ mod tests {
                 shortcut: None,
                 children: Vec::new(),
             }],
-            browser: Some(BrowserContext {
-                url: "https://example.com".to_string(),
-            }),
+            browser: Some(BrowserContext::from_url("https://example.com".to_string())),
             focused_window: Some(FocusedWindowContext {
                 title: "Example".to_string(),
                 width: 1440,

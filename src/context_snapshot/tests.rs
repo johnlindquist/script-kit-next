@@ -17,9 +17,9 @@ fn default_capture_options_enable_all_sections() {
 }
 
 #[test]
-fn snapshot_default_has_schema_version_4() {
+fn snapshot_default_has_schema_version_5() {
     let snapshot = AiContextSnapshot::default();
-    assert_eq!(snapshot.schema_version, 4);
+    assert_eq!(snapshot.schema_version, 5);
     assert!(snapshot.selected_text.is_none());
     assert!(snapshot.frontmost_app.is_none());
     assert!(snapshot.menu_bar_items.is_empty());
@@ -49,9 +49,9 @@ fn snapshot_serializes_to_stable_camel_case_json() {
                 children: vec![],
             }],
         }],
-        browser: Some(BrowserContext {
-            url: "https://docs.rs/gpui/latest/gpui/".to_string(),
-        }),
+        browser: Some(BrowserContext::from_url(
+            "https://docs.rs/gpui/latest/gpui/".to_string(),
+        )),
         focused_window: Some(FocusedWindowContext {
             title: "README.md \u{2014} script-kit-gpui".to_string(),
             width: 1440,
@@ -64,7 +64,7 @@ fn snapshot_serializes_to_stable_camel_case_json() {
     };
 
     let json = serde_json::to_string(&snapshot).expect("snapshot should serialize");
-    assert!(json.contains("\"schemaVersion\":4"));
+    assert!(json.contains("\"schemaVersion\":5"));
     assert!(
         json.contains("\"selectedText\":\"fn render(...) -> impl IntoElement\""),
         "should use camelCase for selectedText"
@@ -105,7 +105,7 @@ fn snapshot_omits_none_fields_in_json() {
         "None fields should be omitted"
     );
     // Only schemaVersion should remain
-    assert!(json.contains("\"schemaVersion\":4"));
+    assert!(json.contains("\"schemaVersion\":5"));
 }
 
 #[test]
@@ -197,9 +197,7 @@ fn full_seed() -> CaptureContextSeed {
             shortcut: None,
             children: vec![],
         }]),
-        browser: Ok(Some(BrowserContext {
-            url: "https://example.com".into(),
-        })),
+        browser: Ok(Some(BrowserContext::from_url("https://example.com".into()))),
         focused_window: Ok(Some(FocusedWindowContext {
             title: "Main".into(),
             width: 1200,
@@ -254,9 +252,7 @@ fn capture_from_seed_keeps_partial_success_and_records_warnings() {
         selected_text: Err("permission denied".into()),
         frontmost_app: Ok(None),
         menu_bar_items: Err("menu not ready".into()),
-        browser: Ok(Some(BrowserContext {
-            url: "https://example.com".into(),
-        })),
+        browser: Ok(Some(BrowserContext::from_url("https://example.com".into()))),
         focused_window: Err("no focused window".into()),
         focused_window_image: Ok(None),
         script_kit_panel_image: Ok(None),

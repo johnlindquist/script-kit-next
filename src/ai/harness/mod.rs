@@ -1965,9 +1965,9 @@ mod tests {
                     name: "VS Code".to_string(),
                 }),
                 menu_bar_items: vec![],
-                browser: Some(crate::context_snapshot::BrowserContext {
-                    url: "https://docs.rs/gpui".to_string(),
-                }),
+                browser: Some(crate::context_snapshot::BrowserContext::from_url(
+                    "https://docs.rs/gpui".to_string(),
+                )),
                 focused_window: Some(crate::context_snapshot::FocusedWindowContext {
                     title: "fibonacci.ts".to_string(),
                     width: 1440,

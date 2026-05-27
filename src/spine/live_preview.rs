@@ -26,6 +26,8 @@ pub(crate) struct SpineLivePreview {
     pub frontmost_app_name: Option<String>,
     pub active_window_title: Option<String>,
     pub browser_url: Option<String>,
+    pub browser_url_is_focused: bool,
+    pub browser_url_app_name: Option<String>,
     pub selection_text: Option<String>,
     pub clipboard_text: Option<String>,
     pub menu_bar_summary: Option<String>,
@@ -35,6 +37,8 @@ pub(crate) struct SpineLivePreview {
 #[derive(Debug)]
 struct ExpensiveResult {
     browser_url: Option<String>,
+    browser_url_is_focused: bool,
+    browser_url_app_name: Option<String>,
     selection_text: Option<String>,
 }
 
@@ -114,10 +118,14 @@ impl SpineLivePreviewCache {
             .ok()
             .and_then(|mut slot| slot.ready.take().map(|(_, r)| r));
         if let Some(r) = result {
-            if r.browser_url != self.current.browser_url
-                || r.selection_text != self.current.selection_text
-            {
+            let changed = r.browser_url != self.current.browser_url
+                || r.browser_url_is_focused != self.current.browser_url_is_focused
+                || r.browser_url_app_name != self.current.browser_url_app_name
+                || r.selection_text != self.current.selection_text;
+            if changed {
                 self.current.browser_url = r.browser_url;
+                self.current.browser_url_is_focused = r.browser_url_is_focused;
+                self.current.browser_url_app_name = r.browser_url_app_name;
                 self.current.selection_text = r.selection_text;
                 self.generation = self.generation.wrapping_add(1);
             }
@@ -165,10 +173,25 @@ impl SpineLivePreviewCache {
 
         let slot = Arc::clone(&self.pending_expensive);
         std::thread::spawn(move || {
-            let browser_url = if needs.browser_url {
-                crate::platform::get_any_browser_tab_url()
+            let (browser_url, browser_url_is_focused, browser_url_app_name) = if needs.browser_url {
+                match crate::platform::get_any_browser_tab_url_with_source() {
+                    Some(hit) => {
+                        let is_focused = matches!(
+                            hit.source,
+                            crate::platform::BrowserUrlSource::FocusedBrowser
+                        );
+                        let app_name = match &hit.source {
+                            crate::platform::BrowserUrlSource::RunningBrowserFallback {
+                                app_name,
+                            } => Some(app_name.clone()),
+                            _ => None,
+                        };
+                        (Some(hit.url), is_focused, app_name)
+                    }
+                    None => (None, false, None),
+                }
             } else {
-                None
+                (None, false, None)
             };
             let selection_text = if needs.selection_text {
                 crate::selected_text::get_selected_text()
@@ -179,6 +202,8 @@ impl SpineLivePreviewCache {
             };
             let result = ExpensiveResult {
                 browser_url,
+                browser_url_is_focused,
+                browser_url_app_name,
                 selection_text,
             };
             if let Ok(mut slot) = slot.lock() {
@@ -294,7 +319,13 @@ impl SpineLivePreview {
             }
             ContextAttachmentKind::Browser => {
                 if self.browser_url.is_some() {
-                    "Attach this page\u{2019}s URL to your command".into()
+                    if self.browser_url_is_focused {
+                        "Attach this page\u{2019}s URL to your command".into()
+                    } else if let Some(app) = &self.browser_url_app_name {
+                        format!("Attach URL from running {app}")
+                    } else {
+                        "Attach browser URL".into()
+                    }
                 } else {
                     "No supported browser focused".into()
                 }

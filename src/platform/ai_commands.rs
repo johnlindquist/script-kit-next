@@ -757,12 +757,18 @@ pub fn capture_script_kit_panel_screenshot(
 /// spawned at all.
 ///
 /// # Returns
-/// The URL string on success.
-///
-/// # Blocking
-/// This function still spawns `osascript` for the URL query, so it must not
-/// be called directly from the UI thread. Callers should dispatch it through
-/// `cx.background_executor().spawn(...)`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BrowserUrlSource {
+    FocusedBrowser,
+    RunningBrowserFallback { app_name: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BrowserTabUrl {
+    pub url: String,
+    pub source: BrowserUrlSource,
+}
+
 #[cfg(target_os = "macos")]
 pub fn get_focused_browser_tab_url() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let Some(tracked) = crate::frontmost_app_tracker::get_last_real_app() else {
@@ -842,58 +848,83 @@ pub fn get_focused_browser_tab_url() -> Result<String, Box<dyn std::error::Error
     Err("Browser URL retrieval is only supported on macOS".into())
 }
 
-/// Try to get a browser URL from any running supported browser, regardless of
-/// which app is frontmost. Uses a single osascript call that checks running
-/// browsers and fetches the URL in one shot.
 #[cfg(target_os = "macos")]
-pub fn get_any_browser_tab_url() -> Option<String> {
+pub fn get_any_browser_tab_url_with_source() -> Option<BrowserTabUrl> {
     if let Ok(url) = get_focused_browser_tab_url() {
-        return Some(url);
+        return Some(BrowserTabUrl {
+            url,
+            source: BrowserUrlSource::FocusedBrowser,
+        });
     }
 
-    // Single osascript: check which browsers are running and get the first URL
-    let script = r#"tell application "System Events"
-set pNames to name of every process
-end tell
+    let fallback_browsers: &[(&str, &str)] = &[
+        (
+            "Google Chrome",
+            r#"tell application "Google Chrome" to return URL of active tab of front window"#,
+        ),
+        (
+            "Safari",
+            r#"tell application "Safari" to return URL of front document"#,
+        ),
+        (
+            "Arc",
+            r#"tell application "Arc" to return URL of active tab of front window"#,
+        ),
+        (
+            "Brave Browser",
+            r#"tell application "Brave Browser" to return URL of active tab of front window"#,
+        ),
+        (
+            "Microsoft Edge",
+            r#"tell application "Microsoft Edge" to return URL of active tab of front window"#,
+        ),
+        (
+            "Chromium",
+            r#"tell application "Chromium" to return URL of active tab of front window"#,
+        ),
+        (
+            "Vivaldi",
+            r#"tell application "Vivaldi" to return URL of active tab of front window"#,
+        ),
+        (
+            "Opera",
+            r#"tell application "Opera" to return URL of active tab of front window"#,
+        ),
+    ];
 
-if pNames contains "Google Chrome" then
-try
-tell application "Google Chrome" to return URL of active tab of front window
-end try
-end if
-
-if pNames contains "Safari" then
-try
-tell application "Safari" to return URL of front document
-end try
-end if
-
-if pNames contains "Arc" then
-try
-tell application "Arc" to return URL of active tab of front window
-end try
-end if
-
-if pNames contains "Brave Browser" then
-try
-tell application "Brave Browser" to return URL of active tab of front window
-end try
-end if
-
-if pNames contains "Microsoft Edge" then
-try
-tell application "Microsoft Edge" to return URL of active tab of front window
-end try
-end if
-
-return """#;
-
-    if let Ok(url) = crate::platform::run_osascript(script, "get_any_browser_tab_url") {
+    for (app_name, url_script) in fallback_browsers {
+        let script = format!(
+            "tell application \"System Events\" to set isRunning to exists process \"{app_name}\"\n\
+             if isRunning then\n\
+             try\n\
+             {url_script}\n\
+             end try\n\
+             end if\n\
+             return \"\""
+        );
+        let Ok(url) = crate::platform::run_osascript(&script, "get_any_browser_tab_url") else {
+            continue;
+        };
         let url = url.trim().to_string();
         if !url.is_empty() {
-            return Some(url);
+            return Some(BrowserTabUrl {
+                url,
+                source: BrowserUrlSource::RunningBrowserFallback {
+                    app_name: (*app_name).to_string(),
+                },
+            });
         }
     }
+    None
+}
+
+#[cfg(target_os = "macos")]
+pub fn get_any_browser_tab_url() -> Option<String> {
+    get_any_browser_tab_url_with_source().map(|hit| hit.url)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn get_any_browser_tab_url_with_source() -> Option<BrowserTabUrl> {
     None
 }
 

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Schema version for `AiContextSnapshot`. Bump when adding/removing/renaming fields.
-pub const AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION: u32 = 4;
+pub const AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION: u32 = 5;
 
 /// Options controlling which context sections are captured.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -169,11 +169,35 @@ pub struct FrontmostAppContext {
     pub name: String,
 }
 
-/// Browser tab context (URL only in v1).
+/// How the browser URL was discovered.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum BrowserUrlSource {
+    FocusedBrowser,
+    RunningBrowserFallback,
+    #[default]
+    Unknown,
+}
+
+/// Browser tab context with source metadata (v5+).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowserContext {
     pub url: String,
+    #[serde(default)]
+    pub source: BrowserUrlSource,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_name: Option<String>,
+}
+
+impl BrowserContext {
+    pub fn from_url(url: String) -> Self {
+        Self {
+            url,
+            source: BrowserUrlSource::Unknown,
+            app_name: None,
+        }
+    }
 }
 
 /// Focused window metadata. Pixel data lives in `Base64PngContext` (v2+).

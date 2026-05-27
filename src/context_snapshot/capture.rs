@@ -195,7 +195,7 @@ fn capture_browser_live() -> Result<Option<BrowserContext>, String> {
     match crate::platform::get_focused_browser_tab_url() {
         Ok(url) if !url.trim().is_empty() => {
             tracing::info!("context_snapshot: captured browser URL");
-            Ok(Some(BrowserContext { url }))
+            Ok(Some(BrowserContext::from_url(url)))
         }
         Ok(_) => Ok(None),
         Err(error) => Err(error.to_string()),
