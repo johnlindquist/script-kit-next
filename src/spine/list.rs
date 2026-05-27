@@ -284,7 +284,24 @@ pub(crate) fn build_spine_list_sections_with_context(
         }
         SpineSegmentKind::Profile { .. } => vec![build_profile_section(parse, projection)],
         SpineSegmentKind::Style { .. } => vec![build_style_section(parse, projection)],
-        SpineSegmentKind::Capture { .. } => vec![build_capture_section(parse, projection)],
+        SpineSegmentKind::Capture { .. } => {
+            let range = active_segment_range(parse, projection);
+            let query = projection.active_query.as_str();
+            let rows = super::catalog_capture::build_capture_rows(
+                query,
+                projection.active_segment_index,
+                range,
+            );
+            vec![section_with_empty(
+                "spine-section-capture",
+                "Capture",
+                Some(ss("Choose a capture target")),
+                Some(ss("inbox")),
+                rows,
+                "No capture target matches",
+                "Try ;todo or ;note",
+            )]
+        }
         SpineSegmentKind::ModeExit { sigil, rest } => {
             vec![build_mode_exit_section(parse, projection, *sigil, rest)]
         }
@@ -419,54 +436,6 @@ fn build_style_section(parse: &SpineParse, projection: &SpineCursorProjection) -
         rows,
         "No style matches",
         "Try .professional or .concise",
-    )
-}
-
-fn build_capture_section(
-    parse: &SpineParse,
-    projection: &SpineCursorProjection,
-) -> SpineListSection {
-    let range = active_segment_range(parse, projection);
-    let query = projection.active_query.as_str();
-
-    let targets = [
-        ("todo", "Todo", "Capture a todo item"),
-        ("note", "Note", "Capture a note"),
-        ("link", "Link", "Capture a link"),
-    ];
-
-    let rows = targets
-        .iter()
-        .enumerate()
-        .filter(|(_, (id, title, _))| matches_query(id, query) || matches_query(title, query))
-        .map(|(rank, (id, title, subtitle))| SpineListRow {
-            id: ss(format!("spine:;:{id}")),
-            kind: SpineListRowKind::CaptureTarget { target: ss(*id) },
-            title: ss(format!(";{id}")),
-            subtitle: Some(ss(*subtitle)),
-            meta: Some(ss(*title)),
-            icon: Some(ss("inbox")),
-            badges: vec![ss(";")],
-            score: i32::MAX.saturating_sub(rank as i32),
-            is_selectable: true,
-            action_label: Some(ss("Insert")),
-            action: SpineListAction::InsertSegmentText {
-                segment_index: projection.active_segment_index,
-                segment_byte_range: range.clone(),
-                text: ss(format!(";{id}")),
-                trailing_space: true,
-            },
-        })
-        .collect::<Vec<_>>();
-
-    section_with_empty(
-        "spine-section-capture",
-        "Capture",
-        Some(ss("Choose a capture target")),
-        Some(ss("inbox")),
-        rows,
-        "No capture target matches",
-        "Try ;todo or ;note",
     )
 }
 
