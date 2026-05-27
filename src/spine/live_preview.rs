@@ -1,6 +1,26 @@
 use crate::ai::context_contract::ContextAttachmentKind;
 use std::sync::{Arc, Mutex};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SpinePreviewNeeds {
+    pub cheap_context: bool,
+    pub browser_url: bool,
+    pub selection_text: bool,
+}
+
+impl SpinePreviewNeeds {
+    pub(crate) const CONTEXT_ROOT: Self = Self {
+        cheap_context: true,
+        browser_url: true,
+        selection_text: true,
+    };
+    pub(crate) const STYLE: Self = Self {
+        cheap_context: false,
+        browser_url: false,
+        selection_text: true,
+    };
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SpineLivePreview {
     pub frontmost_app_name: Option<String>,
@@ -104,8 +124,16 @@ impl SpineLivePreviewCache {
         }
     }
 
-    pub(crate) fn refresh_expensive_fields_nonblocking(&mut self) {
+    pub(crate) fn refresh_preview_nonblocking(&mut self, needs: SpinePreviewNeeds) {
         self.collect_pending_expensive();
+
+        if needs.cheap_context {
+            self.refresh_cheap_fields();
+        }
+
+        if !needs.browser_url && !needs.selection_text {
+            return;
+        }
 
         const THROTTLE: std::time::Duration = std::time::Duration::from_secs(2);
         const MAX_IN_FLIGHT: std::time::Duration = std::time::Duration::from_secs(8);
@@ -137,11 +165,21 @@ impl SpineLivePreviewCache {
 
         let slot = Arc::clone(&self.pending_expensive);
         std::thread::spawn(move || {
-            let result = ExpensiveResult {
-                browser_url: crate::platform::get_any_browser_tab_url(),
-                selection_text: crate::selected_text::get_selected_text()
+            let browser_url = if needs.browser_url {
+                crate::platform::get_any_browser_tab_url()
+            } else {
+                None
+            };
+            let selection_text = if needs.selection_text {
+                crate::selected_text::get_selected_text()
                     .ok()
-                    .filter(|t| !t.trim().is_empty()),
+                    .filter(|t| !t.trim().is_empty())
+            } else {
+                None
+            };
+            let result = ExpensiveResult {
+                browser_url,
+                selection_text,
             };
             if let Ok(mut slot) = slot.lock() {
                 if slot.in_flight.map(|(id, _)| id) == Some(request_id) {

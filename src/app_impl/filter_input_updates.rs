@@ -683,18 +683,16 @@ impl ScriptListApp {
         });
         self.suppress_filter_events = false;
 
-        // Reparse spine at the new cursor position.
+        // Reparse spine at the new cursor position and force tail projection
+        // before invalidation/reconciliation so list state sees the correct projection.
         if self.spine_enabled {
             self.set_spine_parse_from_filter_and_cursor(&text, cursor);
+            self.force_spine_tail_projection_after_trailing_space(&text, cursor);
         }
 
-        // Clear fallbacks, invalidate cache, reconcile.
         self.main_menu_fallback_state.clear();
         self.invalidate_grouped_cache();
         self.reconcile_script_list_after_filter_change("spine_segment_replace", cx);
-
-        // Force tail projection if we just typed a trailing space after prompt segments.
-        self.force_spine_tail_projection_after_trailing_space(&text, cursor);
 
         cx.notify();
     }

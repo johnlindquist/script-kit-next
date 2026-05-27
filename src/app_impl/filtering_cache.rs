@@ -1018,30 +1018,37 @@ impl ScriptListApp {
             && self.spine_parse.input == live_filter_text
         {
             if let Some(projection) = self.spine_projection.as_ref() {
-                let needs_preview = match &projection.active_segment_kind {
-                    crate::spine::SpineSegmentKind::Style { .. } => true,
-                    crate::spine::SpineSegmentKind::ContextMention { sub_query, .. } => {
-                        sub_query.is_none()
+                let preview_needs = match &projection.active_segment_kind {
+                    crate::spine::SpineSegmentKind::Style { .. } => {
+                        Some(crate::spine::live_preview::SpinePreviewNeeds::STYLE)
                     }
-                    _ => false,
+                    crate::spine::SpineSegmentKind::ContextMention { sub_query, .. }
+                        if sub_query.is_none() =>
+                    {
+                        Some(crate::spine::live_preview::SpinePreviewNeeds::CONTEXT_ROOT)
+                    }
+                    _ => None,
                 };
-                if needs_preview {
+                if let Some(needs) = preview_needs {
+                    if needs.cheap_context {
+                        self.spine_live_preview_cache
+                            .set_script_count(self.scripts.len());
+                    }
                     self.spine_live_preview_cache
-                        .set_script_count(self.scripts.len());
-                    self.spine_live_preview_cache.refresh_cheap_fields();
-                    self.spine_live_preview_cache
-                        .refresh_expensive_fields_nonblocking();
+                        .refresh_preview_nonblocking(needs);
                 }
 
+                let preview_generation = preview_needs
+                    .map(|_| self.spine_live_preview_cache.generation)
+                    .unwrap_or(0);
                 let spine_cache_key = format!(
-                    "{}\x1Fpreview-gen={}",
+                    "{}\x1Fpreview-gen={preview_generation}",
                     crate::spine::spine_projection_cache_key(
                         live_filter_text,
                         computed_filter_text,
                         &self.spine_parse,
                         projection,
                     ),
-                    self.spine_live_preview_cache.generation,
                 );
                 if self
                     .main_menu_result_caches
@@ -1057,11 +1064,8 @@ impl ScriptListApp {
                         skills: &self.skills,
                     };
 
-                let live_preview = if needs_preview {
-                    Some(&self.spine_live_preview_cache.current)
-                } else {
-                    None
-                };
+                let live_preview = preview_needs
+                    .map(|_| &self.spine_live_preview_cache.current);
 
                 let sections = crate::spine::list::build_spine_list_sections_full(
                     &self.spine_parse,

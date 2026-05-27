@@ -24,7 +24,7 @@ pub struct CaptureContextOptions {
 
 impl CaptureContextOptions {
     /// Full metadata capture including a desktop screenshot.
-    /// Used by @here context attachment in the Spine.
+    /// Used by @all / context-full through the default context profile.
     pub const fn all() -> Self {
         Self {
             include_selected_text: true,
@@ -57,7 +57,7 @@ impl CaptureContextOptions {
 
     /// Lightweight capture — omits selected text and menu bar for lower
     /// token cost and reduced permission surface. Includes screenshot for
-    /// @all context attachment in the Spine.
+    /// @here / current context in the Spine.
     pub const fn minimal() -> Self {
         Self {
             include_selected_text: false,
@@ -217,16 +217,13 @@ mod tests {
     #[test]
     fn spine_context_profiles_include_screenshots() {
         let all = CaptureContextOptions::all();
-        assert!(
-            all.include_screenshot,
-            "all() includes screenshot for @here"
-        );
+        assert!(all.include_screenshot, "all() includes screenshot for @all");
         assert!(!all.include_panel_screenshot);
 
         let minimal = CaptureContextOptions::minimal();
         assert!(
             minimal.include_screenshot,
-            "minimal() includes screenshot for @all"
+            "minimal() includes screenshot for @here"
         );
         assert!(!minimal.include_panel_screenshot);
 

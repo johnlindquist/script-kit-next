@@ -7,16 +7,26 @@ pub(crate) struct ContextTemplateVars {
 
 impl ContextTemplateVars {
     pub(crate) fn from_frontmost_tracker() -> Self {
-        let tracked = crate::frontmost_app_tracker::get_last_real_app();
-        Self {
-            app_name: tracked
-                .as_ref()
-                .map(|a| a.name.clone())
-                .unwrap_or_else(|| "Current App".to_string()),
-            window_title: tracked
-                .as_ref()
-                .and_then(|a| a.window_title.clone())
-                .unwrap_or_else(|| "Focused Window".to_string()),
+        #[cfg(target_os = "macos")]
+        {
+            let tracked = crate::frontmost_app_tracker::get_last_real_app();
+            return Self {
+                app_name: tracked
+                    .as_ref()
+                    .map(|a| a.name.clone())
+                    .unwrap_or_else(|| "Current App".to_string()),
+                window_title: tracked
+                    .as_ref()
+                    .and_then(|a| a.window_title.clone())
+                    .unwrap_or_else(|| "Focused Window".to_string()),
+            };
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Self {
+                app_name: "Current App".to_string(),
+                window_title: "Focused Window".to_string(),
+            }
         }
     }
 }
