@@ -9,6 +9,7 @@ pub(crate) mod catalog_subsearch;
 pub mod input_spans;
 pub mod list;
 pub mod parse;
+pub(crate) mod prompt_plan;
 pub mod types;
 
 pub use input_spans::*;

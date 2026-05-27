@@ -507,7 +507,7 @@ impl ScriptListApp {
     }
 
     /// Return the `SpineListRow` at the current `selected_index`, if any.
-    fn selected_spine_projection_row(&mut self) -> Option<crate::spine::SpineListRow> {
+    pub(crate) fn selected_spine_projection_row(&mut self) -> Option<crate::spine::SpineListRow> {
         let (grouped, flat) = self.get_grouped_results_cached();
         let item = grouped.get(self.selected_index)?;
         match item {

@@ -58,7 +58,7 @@ pub enum SpineSegmentResolution {
 }
 
 /// The full parse result for a Spine input string.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SpineParse {
     /// Ordered segments parsed from the input.
     pub segments: Vec<SpineSegment>,

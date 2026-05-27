@@ -313,6 +313,79 @@ impl ScriptListApp {
         );
     }
 
+    pub(crate) fn try_submit_spine_prompt_plan_from_enter(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.spine_enabled || !matches!(self.current_view, AppView::ScriptList) {
+            return false;
+        }
+
+        let raw = self.filter_text.clone();
+        if raw.trim().is_empty() {
+            return false;
+        }
+
+        self.set_spine_parse_from_filter_and_cursor(&raw, raw.len());
+
+        let plan = crate::spine::prompt_plan::build_spine_prompt_plan(&self.spine_parse);
+        if !plan.should_submit_to_chat() {
+            return false;
+        }
+
+        let prompt = plan.normalized_prompt.trim().to_string();
+        let parts = plan.context_parts.clone();
+
+        if prompt.is_empty() && parts.is_empty() {
+            return false;
+        }
+
+        tracing::info!(
+            target: "script_kit::spine",
+            event = "spine_prompt_plan_submit",
+            raw_len = plan.raw_input.len(),
+            prompt_len = prompt.len(),
+            context_count = parts.len(),
+            warning_count = plan.unknown_warnings.len(),
+            profile = ?plan.selected_profile.as_ref().map(|p| p.id.as_str()),
+            style = ?plan.selected_style.as_ref().map(|s| s.id.as_str()),
+        );
+
+        self.filter_text.clear();
+        self.computed_filter_text.clear();
+        self.pending_filter_sync = true;
+        self.spine_parse = Default::default();
+        self.spine_projection = None;
+        self.invalidate_grouped_cache();
+
+        self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(
+            Some(prompt.clone()),
+            cx,
+        );
+
+        if let AppView::AcpChatView { entity } = &self.current_view {
+            let entity = entity.clone();
+            entity.update(cx, |chat, cx| {
+                if let Err(e) = chat.submit_reused_entry_intent_with_host_context(
+                    prompt,
+                    parts,
+                    "spine_prompt_plan",
+                    cx,
+                ) {
+                    tracing::warn!(
+                        target: "script_kit::spine",
+                        event = "spine_prompt_plan_acp_submit_failed",
+                        error = %e,
+                    );
+                }
+            });
+        }
+
+        cx.notify();
+        true
+    }
+
     /// Entry point that always routes to ACP chat, bypassing the surface
     /// preference routing that may redirect to the quick terminal.
     ///

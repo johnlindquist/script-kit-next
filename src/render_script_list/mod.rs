@@ -1522,17 +1522,38 @@ impl ScriptListApp {
                 }
 
                 // ── Spine projection Enter intercept ──────────────
-                // When the Spine projection owns the main list, plain
-                // Enter accepts the selected projection row instead of
-                // running execute_selected.
-                if this.spine_projection_owns_main_list()
-                    && sk_is_key_enter(key_str)
+                // Spine Enter routing:
+                // 1. Projection rows win (accept the selected row).
+                // 2. Complete prompt-builder plans submit to ACP chat.
+                // 3. Everything else falls through to normal execution.
+                if sk_is_key_enter(key_str)
                     && !event.keystroke.modifiers.platform
                     && !event.keystroke.modifiers.shift
+                    && !event.keystroke.modifiers.alt
+                    && !event.keystroke.modifiers.control
                 {
-                    this.accept_spine_projection_row(window, cx);
-                    cx.stop_propagation();
-                    return;
+                    if this.spine_projection_owns_main_list() {
+                        if let Some(row) = this.selected_spine_projection_row() {
+                            if row.is_selectable
+                                && !matches!(
+                                    row.action,
+                                    crate::spine::SpineListAction::Noop
+                                )
+                            {
+                                this.apply_spine_list_action(
+                                    row.action.clone(),
+                                    window,
+                                    cx,
+                                );
+                                cx.stop_propagation();
+                                return;
+                            }
+                        }
+                    }
+                    if this.try_submit_spine_prompt_plan_from_enter(window, cx) {
+                        cx.stop_propagation();
+                        return;
+                    }
                 }
 
                 // Normal script list navigation
