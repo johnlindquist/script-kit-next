@@ -181,6 +181,9 @@ pub(crate) fn build_spine_prompt_plan(parse: &SpineParse) -> SpinePromptPlan {
             SpineSegmentKind::ListFilter { .. } => {
                 plan.blocked_reason = Some(SpinePromptPlanBlockReason::ListFilter);
             }
+            SpineSegmentKind::ProjectCwd { .. } => {
+                plan.prompt_builder_segment_count += 1;
+            }
             SpineSegmentKind::ModeExit { .. } => {
                 plan.blocked_reason = Some(SpinePromptPlanBlockReason::ModeExit);
             }

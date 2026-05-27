@@ -482,6 +482,38 @@ impl FrecencyStore {
             .collect()
     }
 
+    pub fn top_directory_paths(&self, limit: usize) -> Vec<(String, f64)> {
+        const DIR_PREFIX: &str = "dir/";
+        let now = current_timestamp();
+        let hl = self.half_life_days;
+        let mut items: Vec<_> = self
+            .entries
+            .iter()
+            .filter_map(|(key, score)| {
+                key.strip_prefix(DIR_PREFIX)
+                    .map(|path| (path.to_string(), score.score_at(now, hl), score.last_used))
+            })
+            .collect();
+
+        items.sort_by(|a, b| {
+            match b.1.partial_cmp(&a.1) {
+                Some(std::cmp::Ordering::Equal) | None => {}
+                Some(ord) => return ord,
+            }
+            match b.2.cmp(&a.2) {
+                std::cmp::Ordering::Equal => {}
+                ord => return ord,
+            }
+            a.0.cmp(&b.0)
+        });
+
+        items
+            .into_iter()
+            .take(limit)
+            .map(|(path, score, _)| (path, score))
+            .collect()
+    }
+
     /// Get the top N items by frecency score at a specific timestamp (for testing)
     ///
     /// Same as `get_recent_items()` but allows querying at a specific timestamp

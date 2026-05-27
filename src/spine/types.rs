@@ -35,7 +35,12 @@ pub enum SpineSegmentKind {
     Capture { target: String, args: String },
     /// `:` list filter / advanced query, e.g. `:type:script`
     ListFilter { query: String },
-    /// `~`, `>`, `?` — mode exit sigils
+    /// `>` project/cwd selector, e.g. `>:dev`
+    ProjectCwd {
+        /// Sub-query after `:`, e.g. "dev" in `>:dev`
+        sub_query: Option<String>,
+    },
+    /// `~`, `?`, `!` — mode exit sigils
     ModeExit { sigil: char, rest: String },
 }
 

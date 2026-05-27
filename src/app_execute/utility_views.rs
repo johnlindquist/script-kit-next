@@ -68,6 +68,50 @@ impl ScriptListApp {
             .collect()
     }
 
+    pub(crate) fn recent_directory_results_from_frecency(
+        &self,
+        limit: usize,
+    ) -> Vec<crate::file_search::FileResult> {
+        let mut seen = std::collections::HashSet::new();
+        let mut hydrated: Vec<_> = self
+            .frecency_store
+            .top_directory_paths(limit.saturating_mul(3).max(limit))
+            .into_iter()
+            .filter_map(|(path, score)| {
+                if !seen.insert(path.clone()) {
+                    return None;
+                }
+                let meta = crate::file_search::get_file_metadata(&path)?;
+                if meta.file_type != crate::file_search::FileType::Directory {
+                    return None;
+                }
+                let file = crate::file_search::FileResult {
+                    path: meta.path,
+                    name: meta.name,
+                    size: meta.size,
+                    modified: meta.modified,
+                    file_type: meta.file_type,
+                };
+                Some((file, score))
+            })
+            .collect();
+
+        hydrated.sort_by(|(a, a_score), (b, b_score)| {
+            b_score
+                .partial_cmp(a_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| b.modified.cmp(&a.modified))
+                .then_with(|| a.name.cmp(&b.name))
+                .then_with(|| a.path.cmp(&b.path))
+        });
+
+        hydrated
+            .into_iter()
+            .take(limit)
+            .map(|(file, _)| file)
+            .collect()
+    }
+
     fn resolve_file_search_results_with(
         query: &str,
         parse_directory_path: impl Fn(&str) -> Option<crate::file_search::ParsedDirPath>,

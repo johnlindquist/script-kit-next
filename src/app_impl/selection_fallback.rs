@@ -650,6 +650,15 @@ impl ScriptListApp {
     fn record_root_file_open_use(&mut self, file: &crate::file_search::FileResult) {
         self.frecency_store
             .record_use(&format!("file/{}", file.path));
+        if file.file_type == crate::file_search::FileType::Directory {
+            self.frecency_store
+                .record_use(&format!("dir/{}", file.path));
+        } else if let Some(parent) = std::path::Path::new(&file.path).parent() {
+            if let Some(parent_str) = parent.to_str() {
+                self.frecency_store
+                    .record_use(&format!("dir/{}", parent_str));
+            }
+        }
         if let Err(error) = self.frecency_store.save() {
             tracing::warn!(
                 path = %file.path,

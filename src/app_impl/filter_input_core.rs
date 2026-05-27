@@ -11,7 +11,7 @@ impl ScriptListApp {
     /// Transient first-character launch triggers should not persist when the
     /// user returns to the ScriptList surface.
     pub(crate) fn is_transient_script_list_trigger(new_text: &str) -> bool {
-        matches!(new_text, "~" | ">" | "?")
+        matches!(new_text, "~" | "!" | "?")
     }
 
     /// Parse `raw` through the menu-syntax classifier and store the result in
@@ -112,7 +112,7 @@ impl ScriptListApp {
         }
 
         match new_text {
-            ">" => Some(ScriptListSpecialEntry::QuickTerminal),
+            "!" => Some(ScriptListSpecialEntry::QuickTerminal),
             "?" => Some(ScriptListSpecialEntry::ActionsHelp),
             _ => None,
         }
@@ -125,9 +125,9 @@ impl ScriptListApp {
     ) {
         match presentation {
             FileSearchPresentation::Mini => {
-                crate::window_resize::resize_to_mini_file_search_window_sync(result_count);
+                crate::window_resize::resize_to_file_search_window_sync(result_count);
             }
-            FileSearchPresentation::Full => resize_to_view_sync(ViewType::ExpandedMainWindow, 0),
+            FileSearchPresentation::Full => resize_to_view_sync(ViewType::MainWindow, 0),
         }
     }
 
@@ -142,10 +142,10 @@ impl ScriptListApp {
     ) {
         match presentation {
             FileSearchPresentation::Mini if is_first_batch || is_done => {
-                crate::window_resize::resize_to_mini_file_search_window_sync(result_count);
+                crate::window_resize::resize_to_file_search_window_sync(result_count);
             }
             FileSearchPresentation::Full if is_first_batch => {
-                resize_to_view_sync(ViewType::ExpandedMainWindow, 0);
+                resize_to_view_sync(ViewType::MainWindow, 0);
             }
             _ => {} // skip intermediate batch resizes
         }
@@ -484,8 +484,12 @@ mod tests {
             None,
         );
         assert_eq!(
-            ScriptListApp::special_entry_from_script_list_filter(">"),
+            ScriptListApp::special_entry_from_script_list_filter("!"),
             Some(ScriptListSpecialEntry::QuickTerminal)
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter(">"),
+            None
         );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter("?"),
@@ -509,7 +513,7 @@ mod tests {
     fn test_is_transient_script_list_trigger() {
         use super::ScriptListApp;
 
-        for trigger in ["~", ">", "?"] {
+        for trigger in ["~", "!", "?"] {
             assert!(
                 ScriptListApp::is_transient_script_list_trigger(trigger),
                 "expected '{trigger}' to be transient"

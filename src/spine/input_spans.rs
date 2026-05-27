@@ -87,6 +87,7 @@ pub fn accent_ranges_for_parse(
             SpineSegmentKind::Profile { .. } => "spine.profile.completed",
             SpineSegmentKind::Style { .. } => "spine.style.completed",
             SpineSegmentKind::Capture { .. } => "spine.capture.completed",
+            SpineSegmentKind::ProjectCwd { .. } => "spine.cwd.completed",
             _ => continue,
         };
 
@@ -148,6 +149,7 @@ fn decorates_segment_kind(kind: &SpineSegmentKind) -> bool {
             | SpineSegmentKind::Style { .. }
             | SpineSegmentKind::Capture { .. }
             | SpineSegmentKind::ListFilter { .. }
+            | SpineSegmentKind::ProjectCwd { .. }
             | SpineSegmentKind::ModeExit { .. }
     )
 }
@@ -173,6 +175,7 @@ fn unresolved_segment_tone(
         },
         SpineSegmentKind::Capture { .. }
         | SpineSegmentKind::ListFilter { .. }
+        | SpineSegmentKind::ProjectCwd { .. }
         | SpineSegmentKind::ModeExit { .. } => Some(SpineInputSpanTone::Hint),
         SpineSegmentKind::FreeText => None,
     }
@@ -248,6 +251,10 @@ fn segment_query(segment: &SpineSegment) -> &str {
         SpineSegmentKind::Style { style_id } => style_id.as_str(),
         SpineSegmentKind::Capture { target, .. } => target.as_str(),
         SpineSegmentKind::ListFilter { query } => query.as_str(),
+        SpineSegmentKind::ProjectCwd {
+            sub_query: Some(sq),
+        } => sq.as_str(),
+        SpineSegmentKind::ProjectCwd { sub_query: None } => "",
         SpineSegmentKind::ModeExit { rest, .. } => rest.as_str(),
     }
 }

@@ -1,9 +1,9 @@
 use super::types::*;
 
-const PROMPT_BUILDER_SIGILS: &[char] = &['@', '/', '|', '.'];
+const PROMPT_BUILDER_SIGILS: &[char] = &['@', '/', '|', '.', '>'];
 const CAPTURE_SIGIL: char = ';';
 const FILTER_SIGIL: char = ':';
-const MODE_EXIT_SIGILS: &[char] = &['~', '>', '?'];
+const MODE_EXIT_SIGILS: &[char] = &['~', '?', '!'];
 
 /// Parse an input string into a sequence of Spine segments.
 ///
@@ -92,6 +92,7 @@ fn is_prompt_builder_segment(seg: &SpineSegment) -> bool {
             | SpineSegmentKind::SlashCommand { .. }
             | SpineSegmentKind::Profile { .. }
             | SpineSegmentKind::Style { .. }
+            | SpineSegmentKind::ProjectCwd { .. }
     )
 }
 
@@ -248,6 +249,16 @@ fn classify_sigil_segment(sigil: char, rest: &str) -> SpineSegmentKind {
         ':' => SpineSegmentKind::ListFilter {
             query: rest.to_string(),
         },
+        '>' => {
+            let trimmed = rest.strip_prefix(':').unwrap_or(rest);
+            if trimmed.is_empty() && !rest.contains(':') {
+                SpineSegmentKind::ProjectCwd { sub_query: None }
+            } else {
+                SpineSegmentKind::ProjectCwd {
+                    sub_query: Some(trimmed.to_string()),
+                }
+            }
+        }
         _ => SpineSegmentKind::FreeText,
     }
 }
@@ -280,6 +291,10 @@ fn extract_active_query(seg: &SpineSegment, cursor_byte: usize) -> String {
         SpineSegmentKind::Style { style_id } => style_id.clone(),
         SpineSegmentKind::Capture { target, .. } => target.clone(),
         SpineSegmentKind::ListFilter { query } => query.clone(),
+        SpineSegmentKind::ProjectCwd {
+            sub_query: Some(sq),
+        } => sq.clone(),
+        SpineSegmentKind::ProjectCwd { sub_query: None } => String::new(),
         SpineSegmentKind::ModeExit { rest, .. } => rest.clone(),
     }
 }
@@ -424,12 +439,44 @@ mod tests {
     }
 
     #[test]
-    fn mode_exit_greater() {
-        let parse = parse_spine(">ls -la");
+    fn project_cwd_root() {
+        let parse = parse_spine(">");
         assert_eq!(parse.segments.len(), 1);
         assert!(matches!(
             &parse.segments[0].kind,
-            SpineSegmentKind::ModeExit { sigil: '>', .. }
+            SpineSegmentKind::ProjectCwd { sub_query: None }
+        ));
+    }
+
+    #[test]
+    fn project_cwd_with_query() {
+        let parse = parse_spine(">:dev");
+        assert_eq!(parse.segments.len(), 1);
+        assert!(matches!(
+            &parse.segments[0].kind,
+            SpineSegmentKind::ProjectCwd { sub_query: Some(sq) }
+            if sq == "dev"
+        ));
+    }
+
+    #[test]
+    fn project_cwd_directory_browse() {
+        let parse = parse_spine(">:~/dev/");
+        assert_eq!(parse.segments.len(), 1);
+        assert!(matches!(
+            &parse.segments[0].kind,
+            SpineSegmentKind::ProjectCwd { sub_query: Some(sq) }
+            if sq == "~/dev/"
+        ));
+    }
+
+    #[test]
+    fn mode_exit_bang() {
+        let parse = parse_spine("!ls -la");
+        assert_eq!(parse.segments.len(), 1);
+        assert!(matches!(
+            &parse.segments[0].kind,
+            SpineSegmentKind::ModeExit { sigil: '!', .. }
         ));
     }
 

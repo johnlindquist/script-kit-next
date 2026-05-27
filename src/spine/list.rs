@@ -151,6 +151,7 @@ pub fn is_prompt_builder_segment_kind(kind: &SpineSegmentKind) -> bool {
             | SpineSegmentKind::SlashCommand { .. }
             | SpineSegmentKind::Profile { .. }
             | SpineSegmentKind::Style { .. }
+            | SpineSegmentKind::ProjectCwd { .. }
     )
 }
 
@@ -182,7 +183,10 @@ fn active_segment<'a>(
     parse.segments.get(projection.active_segment_index)
 }
 
-fn active_segment_range(parse: &SpineParse, projection: &SpineCursorProjection) -> Range<usize> {
+pub(super) fn active_segment_range(
+    parse: &SpineParse,
+    projection: &SpineCursorProjection,
+) -> Range<usize> {
     active_segment(parse, projection)
         .map(|segment| segment.byte_range.clone())
         .unwrap_or(0..parse.input.len())
@@ -300,6 +304,9 @@ pub(crate) fn build_spine_list_sections_full(
                 "No capture target matches",
                 "Try ;todo or ;note",
             )]
+        }
+        SpineSegmentKind::ProjectCwd { .. } => {
+            vec![super::catalog_cwd::build_cwd_section(parse, projection)]
         }
         SpineSegmentKind::ModeExit { sigil, rest } => {
             vec![build_mode_exit_section(parse, projection, *sigil, rest)]
@@ -615,6 +622,9 @@ fn spine_segment_kind_cache_key(kind: &SpineSegmentKind) -> String {
             format!("capture:{target}:args-len={}", args.len())
         }
         SpineSegmentKind::ListFilter { query } => format!("filter:{query}"),
+        SpineSegmentKind::ProjectCwd { sub_query } => {
+            format!("cwd:sub={sub_query:?}")
+        }
         SpineSegmentKind::ModeExit { sigil, rest } => {
             format!("mode-exit:{sigil}:rest-len={}", rest.len())
         }

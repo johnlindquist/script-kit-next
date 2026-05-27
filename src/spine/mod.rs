@@ -1,5 +1,6 @@
 mod catalog_capture;
 mod catalog_context;
+mod catalog_cwd;
 mod catalog_filter;
 pub(crate) mod catalog_history;
 mod catalog_profile;
