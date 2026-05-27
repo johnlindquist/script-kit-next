@@ -18,6 +18,8 @@ pub(crate) enum ContextSubsearchSource {
     Skills,
     Notes,
     History,
+    Calendar,
+    Notifications,
 }
 
 impl ContextSubsearchSource {
@@ -32,6 +34,8 @@ impl ContextSubsearchSource {
             "skills" => Some(Self::Skills),
             "notes" => Some(Self::Notes),
             "history" => Some(Self::History),
+            "calendar" => Some(Self::Calendar),
+            "notifications" => Some(Self::Notifications),
             _ => None,
         }
     }
@@ -47,6 +51,8 @@ impl ContextSubsearchSource {
             Self::Skills => "skills",
             Self::Notes => "notes",
             Self::History => "history",
+            Self::Calendar => "calendar",
+            Self::Notifications => "notifications",
         }
     }
 
@@ -61,6 +67,8 @@ impl ContextSubsearchSource {
             Self::Skills => "Skills",
             Self::Notes => "Notes",
             Self::History => "Conversations",
+            Self::Calendar => "Calendar Events",
+            Self::Notifications => "Notifications",
         }
     }
 
@@ -75,6 +83,8 @@ impl ContextSubsearchSource {
             Self::Skills => "workflow",
             Self::Notes => "notebook-text",
             Self::History => "message-circle",
+            Self::Calendar => "calendar",
+            Self::Notifications => "bell",
         }
     }
 }
@@ -123,6 +133,11 @@ pub(crate) fn build_context_subsearch_section(
         ContextSubsearchSource::Scripts
         | ContextSubsearchSource::Scriptlets
         | ContextSubsearchSource::Skills => vec![hint_row(
+            "Loading\u{2026}",
+            "Results are loaded by the launcher",
+            source,
+        )],
+        ContextSubsearchSource::Calendar | ContextSubsearchSource::Notifications => vec![hint_row(
             "Loading\u{2026}",
             "Results are loaded by the launcher",
             source,

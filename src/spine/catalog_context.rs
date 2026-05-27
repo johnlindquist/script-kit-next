@@ -4,7 +4,7 @@ use crate::ai::context_contract::{
     context_attachment_specs, ContextAttachmentKind, ContextAttachmentSpec,
 };
 
-use super::list::{matches_query, ss, SpineListAction, SpineListRow, SpineListRowKind};
+use super::list::{ss, SpineListAction, SpineListRow, SpineListRowKind};
 
 #[derive(Debug, Clone, Copy)]
 struct ContextSubsearchSpec {
@@ -69,7 +69,58 @@ const CONTEXT_SUBSEARCH_SPECS: &[ContextSubsearchSpec] = &[
         subtitle: "Search plugin skills",
         icon: "workflow",
     },
+    ContextSubsearchSpec {
+        prefix: "calendar",
+        title: "Calendar Events",
+        subtitle: "Search calendar events",
+        icon: "calendar",
+    },
+    ContextSubsearchSpec {
+        prefix: "notifications",
+        title: "Notifications",
+        subtitle: "Search notifications",
+        icon: "bell",
+    },
 ];
+
+const PENALTY_EXACT: i32 = 0;
+const PENALTY_PREFIX: i32 = 100;
+const PENALTY_SUBSTRING: i32 = 1000;
+
+const CATEGORY_PENALTY_BUILTIN: i32 = 0;
+const CATEGORY_PENALTY_SUBSEARCH: i32 = 50;
+
+fn normalized_context_query(query: &str) -> String {
+    query
+        .trim()
+        .trim_start_matches(|ch: char| matches!(ch, '@' | '/' | '|' | '.' | ';'))
+        .to_ascii_lowercase()
+}
+
+fn context_value_match_penalty(value: &str, normalized_query: &str) -> Option<i32> {
+    if normalized_query.is_empty() {
+        return Some(PENALTY_EXACT);
+    }
+    let value_lower = value.to_ascii_lowercase();
+    let trimmed =
+        value_lower.trim_start_matches(|ch: char| matches!(ch, '@' | '/' | '|' | '.' | ';'));
+    if trimmed == normalized_query {
+        Some(PENALTY_EXACT)
+    } else if trimmed.starts_with(normalized_query) {
+        Some(PENALTY_PREFIX)
+    } else if value_lower.contains(normalized_query) {
+        Some(PENALTY_SUBSTRING)
+    } else {
+        None
+    }
+}
+
+fn context_row_score(match_penalty: i32, category_penalty: i32, rank: usize) -> i32 {
+    i32::MAX
+        .saturating_sub(match_penalty)
+        .saturating_sub(category_penalty)
+        .saturating_sub(rank as i32)
+}
 
 pub(super) fn build_context_root_rows(
     query: &str,
@@ -124,10 +175,8 @@ fn build_builtin_context_row(
     live_preview: Option<&super::live_preview::SpineLivePreview>,
 ) -> Option<SpineListRow> {
     let mention = spec.mention?;
-
-    if !context_spec_matches_query(spec, query) {
-        return None;
-    }
+    let normalized_query = normalized_context_query(query);
+    let match_penalty = context_spec_match_penalty(spec, &normalized_query)?;
 
     let slug = mention_slug(mention);
 
@@ -152,7 +201,7 @@ fn build_builtin_context_row(
         meta: Some(ss(mention)),
         icon: Some(ss(icon_for_context_kind(spec.kind))),
         badges: vec![ss("@")],
-        score: i32::MAX.saturating_sub(rank as i32),
+        score: context_row_score(match_penalty, CATEGORY_PENALTY_BUILTIN, rank),
         is_selectable: true,
         action_label: Some(ss("Attach")),
         action: SpineListAction::ResolveSegment {
@@ -174,14 +223,9 @@ fn build_subsearch_context_row(
     segment_index: usize,
     segment_byte_range: Range<usize>,
 ) -> Option<SpineListRow> {
-    if !(matches_query(spec.prefix, query)
-        || matches_query(spec.title, query)
-        || matches_query(spec.subtitle, query))
-    {
-        return None;
-    }
-
     let prefix_text = format!("@{}:", spec.prefix);
+    let normalized_query = normalized_context_query(query);
+    let match_penalty = subsearch_spec_match_penalty(spec, &prefix_text, &normalized_query)?;
 
     Some(SpineListRow {
         id: ss(format!("spine:@:subsearch:{}", spec.prefix)),
@@ -193,7 +237,7 @@ fn build_subsearch_context_row(
         meta: Some(ss(spec.title)),
         icon: Some(ss(spec.icon)),
         badges: vec![ss("@"), ss("search")],
-        score: i32::MAX.saturating_sub(100 + rank as i32),
+        score: context_row_score(match_penalty, CATEGORY_PENALTY_SUBSEARCH, rank),
         is_selectable: true,
         action_label: Some(ss("Browse")),
         action: SpineListAction::InsertSegmentText {
@@ -205,29 +249,40 @@ fn build_subsearch_context_row(
     })
 }
 
-fn context_spec_matches_query(spec: &ContextAttachmentSpec, query: &str) -> bool {
-    let mention_matches = spec
-        .mention
-        .is_some_and(|mention| matches_query(mention, query));
-    let mention_alias_matches = spec
-        .mention_aliases
-        .iter()
-        .any(|alias| matches_query(alias, query));
-    let slash_matches = spec
-        .slash_command
-        .is_some_and(|slash| matches_query(slash, query));
-    let slash_alias_matches = spec
-        .slash_aliases
-        .iter()
-        .any(|alias| matches_query(alias, query));
+fn context_spec_match_penalty(spec: &ContextAttachmentSpec, normalized_query: &str) -> Option<i32> {
+    let direct_values = [
+        Some(spec.label),
+        Some(spec.action_title),
+        Some(spec.action_id),
+        spec.mention,
+        spec.slash_command,
+    ];
 
-    matches_query(spec.label, query)
-        || matches_query(spec.action_title, query)
-        || matches_query(spec.action_id, query)
-        || mention_matches
-        || mention_alias_matches
-        || slash_matches
-        || slash_alias_matches
+    let mut best: Option<i32> = direct_values
+        .iter()
+        .copied()
+        .flatten()
+        .filter_map(|value| context_value_match_penalty(value, normalized_query))
+        .min();
+
+    for alias in spec.mention_aliases.iter().chain(spec.slash_aliases.iter()) {
+        if let Some(penalty) = context_value_match_penalty(alias, normalized_query) {
+            best = Some(best.map_or(penalty, |b| b.min(penalty)));
+        }
+    }
+
+    best
+}
+
+fn subsearch_spec_match_penalty(
+    spec: &ContextSubsearchSpec,
+    prefix_text: &str,
+    normalized_query: &str,
+) -> Option<i32> {
+    [spec.prefix, prefix_text, spec.title, spec.subtitle]
+        .iter()
+        .filter_map(|value| context_value_match_penalty(value, normalized_query))
+        .min()
 }
 
 fn mention_slug(mention: &str) -> &str {
@@ -254,5 +309,49 @@ fn icon_for_context_kind(kind: ContextAttachmentKind) -> &'static str {
         ContextAttachmentKind::Dictation => "mic",
         ContextAttachmentKind::Calendar => "calendar",
         ContextAttachmentKind::Notifications => "bell",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_prefix_match_scores_above_notifications_substring() {
+        let rows = build_context_root_rows("@fi", 0, 0..3);
+        let file = rows
+            .iter()
+            .find(|row| row.id.as_ref() == "spine:@:subsearch:file")
+            .expect("expected @file: subsearch row");
+        let notifications = rows
+            .iter()
+            .find(|row| row.id.as_ref() == "spine:@:builtin:notifications")
+            .expect("expected @notifications builtin row");
+        assert!(
+            file.score > notifications.score,
+            "@file: (prefix, score={}) must rank above @notifications (substring, score={})",
+            file.score,
+            notifications.score,
+        );
+    }
+
+    #[test]
+    fn exact_mention_beats_prefix() {
+        let penalty_exact = context_value_match_penalty("@clipboard", "clipboard").unwrap();
+        let penalty_prefix = context_value_match_penalty("@clipboard-extra", "clipboard").unwrap();
+        assert!(penalty_exact < penalty_prefix);
+    }
+
+    #[test]
+    fn prefix_beats_substring() {
+        let penalty_prefix = context_value_match_penalty("file", "fi").unwrap();
+        let penalty_sub = context_value_match_penalty("notifications", "fi").unwrap();
+        assert!(penalty_prefix < penalty_sub);
+    }
+
+    #[test]
+    fn empty_query_matches_everything() {
+        let rows = build_context_root_rows("@", 0, 0..1);
+        assert!(!rows.is_empty());
     }
 }

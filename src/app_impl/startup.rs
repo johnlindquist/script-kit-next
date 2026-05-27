@@ -1330,13 +1330,8 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            if matches!(this.current_view, AppView::ScriptList)
-                                && !has_shift
-                                && this.try_route_plain_tab_to_acp_context_capture(cx)
-                            {
-                                cx.stop_propagation();
-                                return;
-                            }
+                            // Tab-to-Agent deprecated: Cmd+Enter is the AI entry.
+                            // Ghost text acceptance (above) now owns plain Tab.
 
                             // Consume Tab/Shift+Tab while the Agent Chat is
                             // open so the surface keeps local tab ownership.

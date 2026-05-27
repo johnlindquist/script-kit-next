@@ -1157,6 +1157,22 @@ impl ScriptListApp {
                         crate::spine::catalog_subsearch::ContextSubsearchSource::Skills => {
                             build_rich_skill_rows(&rich_query, &self.skills)
                         }
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::Calendar => {
+                            build_rich_provider_json_rows(
+                                &rich_query,
+                                crate::mcp_resources::ProviderJsonResourceKind::Calendar,
+                                "Calendar Events",
+                                "calendar",
+                            )
+                        }
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::Notifications => {
+                            build_rich_provider_json_rows(
+                                &rich_query,
+                                crate::mcp_resources::ProviderJsonResourceKind::Notifications,
+                                "Notifications",
+                                "bell",
+                            )
+                        }
                     };
 
                     self.main_menu_result_caches.store_grouped_results(
@@ -2608,6 +2624,86 @@ fn build_rich_skill_rows(
                 score: 0,
                 match_indices: scripts::MatchIndices::default(),
                 match_evidence: None,
+            }));
+            grouped.push(GroupedListItem::Item(idx));
+        }
+    }
+    (grouped, flat)
+}
+
+fn build_rich_provider_json_rows(
+    query: &str,
+    kind: crate::mcp_resources::ProviderJsonResourceKind,
+    section_label: &str,
+    icon: &str,
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    use crate::spine::list::{ss, SpineListAction, SpineListRow, SpineListRowKind};
+
+    let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
+    let mut grouped = Vec::new();
+    let mut flat: Vec<scripts::SearchResult> = Vec::new();
+
+    let items = crate::mcp_resources::read_provider_json_items(kind);
+    let query_lower = query.trim().to_lowercase();
+
+    let header = if query_lower.is_empty() {
+        section_label.to_string()
+    } else {
+        format!("{section_label} matching \u{201c}{}\u{201d}", query.trim())
+    };
+    grouped.push(GroupedListItem::SectionHeader(
+        header,
+        Some(icon.to_string()),
+    ));
+
+    let matches: Vec<_> = items
+        .iter()
+        .filter(|item| {
+            query_lower.is_empty()
+                || item.title.to_lowercase().contains(&query_lower)
+                || item
+                    .subtitle
+                    .as_deref()
+                    .is_some_and(|s| s.to_lowercase().contains(&query_lower))
+        })
+        .take(limit)
+        .collect();
+
+    if matches.is_empty() {
+        if items.is_empty() {
+            grouped.push(GroupedListItem::SectionHeader(
+                format!("No {section_label} available"),
+                None,
+            ));
+        } else {
+            grouped.push(GroupedListItem::SectionHeader(
+                format!("No {section_label} matching \u{201c}{}\u{201d}", query.trim()),
+                None,
+            ));
+        }
+    } else {
+        for (rank, item) in matches.iter().enumerate() {
+            let idx = flat.len();
+            let prefix = match kind {
+                crate::mcp_resources::ProviderJsonResourceKind::Calendar => "calendar",
+                crate::mcp_resources::ProviderJsonResourceKind::Notifications => "notifications",
+                crate::mcp_resources::ProviderJsonResourceKind::Dictation => "dictation",
+            };
+            flat.push(scripts::SearchResult::SpineProjection(SpineListRow {
+                id: ss(format!("spine:provider-json:{prefix}:{rank}")),
+                kind: SpineListRowKind::ContextResult {
+                    context_type: ss(prefix),
+                    result_id: ss(format!("{rank}")),
+                },
+                title: ss(item.title.clone()),
+                subtitle: item.subtitle.as_deref().map(|s| ss(s)),
+                meta: None,
+                icon: Some(ss(icon)),
+                badges: vec![ss("@")],
+                score: i32::MAX.saturating_sub(rank as i32),
+                is_selectable: true,
+                action_label: Some(ss("Attach")),
+                action: SpineListAction::Noop,
             }));
             grouped.push(GroupedListItem::Item(idx));
         }

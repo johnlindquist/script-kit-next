@@ -2389,6 +2389,43 @@ pub fn has_provider_json_resource(kind: ProviderJsonResourceKind) -> bool {
     has_real_data
 }
 
+pub struct ProviderJsonItem {
+    pub title: String,
+    pub subtitle: Option<String>,
+}
+
+pub fn read_provider_json_items(kind: ProviderJsonResourceKind) -> Vec<ProviderJsonItem> {
+    let (candidate, _source) = provider_json_candidate(kind);
+    let Some(text) = candidate else {
+        return Vec::new();
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return Vec::new();
+    };
+    let Some(items) = value.get("items").and_then(|v| v.as_array()) else {
+        return Vec::new();
+    };
+    items
+        .iter()
+        .filter_map(|item| {
+            let title = item
+                .get("title")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())?;
+            let subtitle = item
+                .get("subtitle")
+                .or_else(|| item.get("app"))
+                .or_else(|| item.get("source"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            Some(ProviderJsonItem {
+                title: title.to_string(),
+                subtitle,
+            })
+        })
+        .collect()
+}
+
 /// Determine the resolution source for a provider-backed JSON resource.
 fn provider_json_source(slot_value: &Option<String>, env_key: &str) -> &'static str {
     if slot_value.is_some() {
