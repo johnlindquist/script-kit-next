@@ -409,6 +409,25 @@ pub fn get_last_real_app() -> Option<TrackedApp> {
     TRACKER_STATE.read().last_real_app.clone()
 }
 
+/// Replace `{{app}}` and `{{window}}` template variables in text with live
+/// values from the frontmost app tracker.
+pub fn substitute_context_vars(text: &str) -> String {
+    if !text.contains("{{") {
+        return text.to_string();
+    }
+    let tracked = get_last_real_app();
+    let app_name = tracked
+        .as_ref()
+        .map(|a| a.name.as_str())
+        .unwrap_or("Current App");
+    let window_title = tracked
+        .as_ref()
+        .and_then(|a| a.window_title.as_deref())
+        .unwrap_or("Focused Window");
+    text.replace("{{app}}", app_name)
+        .replace("{{window}}", window_title)
+}
+
 /// Get the bundle identifier for the last real app.
 ///
 /// Returns `None` if no app has been tracked yet.

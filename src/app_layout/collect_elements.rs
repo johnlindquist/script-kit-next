@@ -2067,7 +2067,9 @@ impl ScriptListApp {
     pub(crate) fn script_list_result_label(result: &scripts::SearchResult) -> String {
         match result {
             scripts::SearchResult::Script(m) => m.script.name.clone(),
-            scripts::SearchResult::Scriptlet(m) => m.scriptlet.name.clone(),
+            scripts::SearchResult::Scriptlet(m) => {
+                crate::frontmost_app_tracker::substitute_context_vars(&m.scriptlet.name)
+            }
             scripts::SearchResult::BuiltIn(m) => m.entry.name.clone(),
             scripts::SearchResult::App(m) => m.app.name.clone(),
             scripts::SearchResult::Window(m) => m.window.title.clone(),
@@ -2197,7 +2199,13 @@ impl ScriptListApp {
                     };
                     let label = Self::script_list_result_label(result);
                     let source = result.root_unified_source();
-                    let subtitle = result.description().map(str::to_string);
+                    let subtitle = result.description().map(|d| {
+                        if matches!(result, scripts::SearchResult::Scriptlet(_)) {
+                            crate::frontmost_app_tracker::substitute_context_vars(d)
+                        } else {
+                            d.to_string()
+                        }
+                    });
                     let mut element = protocol::ElementInfo {
                         semantic_id: protocol::generate_semantic_id("choice", row_index, &label),
                         element_type: protocol::ElementType::Choice,

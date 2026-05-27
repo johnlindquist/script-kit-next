@@ -9,10 +9,10 @@ icon: layout-grid
 
 Organize and position windows with keyboard shortcuts. All commands operate on the frontmost window of the app you were using before Script Kit appeared.
 
-## Tile Left Half
+## Tile {{app}} Left Half
 
 <!--
-description: Tile window to left half of screen
+description: Tile {{app}} to left half of screen
 -->
 
 ```ts
@@ -22,10 +22,10 @@ if (win) {
 }
 ```
 
-## Tile Right Half
+## Tile {{app}} Right Half
 
 <!--
-description: Tile window to right half of screen
+description: Tile {{app}} to right half of screen
 -->
 
 ```ts
@@ -35,10 +35,10 @@ if (win) {
 }
 ```
 
-## Tile Top Half
+## Tile {{app}} Top Half
 
 <!--
-description: Tile window to top half of screen
+description: Tile {{app}} to top half of screen
 -->
 
 ```ts
@@ -48,10 +48,10 @@ if (win) {
 }
 ```
 
-## Tile Bottom Half
+## Tile {{app}} Bottom Half
 
 <!--
-description: Tile window to bottom half of screen
+description: Tile {{app}} to bottom half of screen
 -->
 
 ```ts
@@ -61,10 +61,10 @@ if (win) {
 }
 ```
 
-## Tile Top Left
+## Tile {{app}} Top Left
 
 <!--
-description: Tile window to top-left quadrant
+description: Tile {{app}} to top-left quadrant
 -->
 
 ```ts
@@ -74,10 +74,10 @@ if (win) {
 }
 ```
 
-## Tile Top Right
+## Tile {{app}} Top Right
 
 <!--
-description: Tile window to top-right quadrant
+description: Tile {{app}} to top-right quadrant
 -->
 
 ```ts
@@ -87,10 +87,10 @@ if (win) {
 }
 ```
 
-## Tile Bottom Left
+## Tile {{app}} Bottom Left
 
 <!--
-description: Tile window to bottom-left quadrant
+description: Tile {{app}} to bottom-left quadrant
 -->
 
 ```ts
@@ -100,10 +100,10 @@ if (win) {
 }
 ```
 
-## Tile Bottom Right
+## Tile {{app}} Bottom Right
 
 <!--
-description: Tile window to bottom-right quadrant
+description: Tile {{app}} to bottom-right quadrant
 -->
 
 ```ts
@@ -113,10 +113,10 @@ if (win) {
 }
 ```
 
-## Tile Left Third
+## Tile {{app}} Left Third
 
 <!--
-description: Tile window to left third of screen
+description: Tile {{app}} to left third of screen
 -->
 
 ```ts
@@ -126,10 +126,10 @@ if (win) {
 }
 ```
 
-## Tile Center Third
+## Tile {{app}} Center Third
 
 <!--
-description: Tile window to center third of screen
+description: Tile {{app}} to center third of screen
 -->
 
 ```ts
@@ -139,10 +139,10 @@ if (win) {
 }
 ```
 
-## Tile Right Third
+## Tile {{app}} Right Third
 
 <!--
-description: Tile window to right third of screen
+description: Tile {{app}} to right third of screen
 -->
 
 ```ts
@@ -152,10 +152,10 @@ if (win) {
 }
 ```
 
-## Tile Top Third
+## Tile {{app}} Top Third
 
 <!--
-description: Tile window to top third of screen
+description: Tile {{app}} to top third of screen
 -->
 
 ```ts
@@ -165,10 +165,10 @@ if (win) {
 }
 ```
 
-## Tile Middle Third
+## Tile {{app}} Middle Third
 
 <!--
-description: Tile window to middle third of screen
+description: Tile {{app}} to middle third of screen
 -->
 
 ```ts
@@ -178,10 +178,10 @@ if (win) {
 }
 ```
 
-## Tile Bottom Third
+## Tile {{app}} Bottom Third
 
 <!--
-description: Tile window to bottom third of screen
+description: Tile {{app}} to bottom third of screen
 -->
 
 ```ts
@@ -191,10 +191,10 @@ if (win) {
 }
 ```
 
-## Tile First Two Thirds
+## Tile {{app}} First Two Thirds
 
 <!--
-description: Tile window to first two-thirds of screen (left)
+description: Tile {{app}} to first two-thirds of screen (left)
 -->
 
 ```ts
@@ -204,10 +204,10 @@ if (win) {
 }
 ```
 
-## Tile Last Two Thirds
+## Tile {{app}} Last Two Thirds
 
 <!--
-description: Tile window to last two-thirds of screen (right)
+description: Tile {{app}} to last two-thirds of screen (right)
 -->
 
 ```ts
@@ -217,10 +217,10 @@ if (win) {
 }
 ```
 
-## Tile Top Two Thirds
+## Tile {{app}} Top Two Thirds
 
 <!--
-description: Tile window to top two-thirds of screen
+description: Tile {{app}} to top two-thirds of screen
 -->
 
 ```ts
@@ -230,10 +230,10 @@ if (win) {
 }
 ```
 
-## Tile Bottom Two Thirds
+## Tile {{app}} Bottom Two Thirds
 
 <!--
-description: Tile window to bottom two-thirds of screen
+description: Tile {{app}} to bottom two-thirds of screen
 -->
 
 ```ts
@@ -243,10 +243,10 @@ if (win) {
 }
 ```
 
-## Center Window
+## Center {{app}}
 
 <!--
-description: Center window on screen (60% size)
+description: Center {{app}} on screen (60% size)
 -->
 
 ```ts
@@ -256,10 +256,10 @@ if (win) {
 }
 ```
 
-## Almost Maximize
+## Almost Maximize {{app}}
 
 <!--
-description: Expand window to 90% of screen with margins
+description: Expand {{app}} to 90% of screen with margins
 -->
 
 ```ts
@@ -269,10 +269,10 @@ if (win) {
 }
 ```
 
-## Maximize Window
+## Maximize {{app}}
 
 <!--
-description: Maximize window to fill screen
+description: Maximize {{app}} to fill screen
 -->
 
 ```ts
@@ -282,10 +282,10 @@ if (win) {
 }
 ```
 
-## Move to Next Display
+## Move {{app}} to Next Display
 
 <!--
-description: Move window to next display/monitor
+description: Move {{app}} to next display/monitor
 -->
 
 ```ts
@@ -295,10 +295,10 @@ if (win) {
 }
 ```
 
-## Move to Previous Display
+## Move {{app}} to Previous Display
 
 <!--
-description: Move window to previous display/monitor
+description: Move {{app}} to previous display/monitor
 -->
 
 ```ts
@@ -308,10 +308,10 @@ if (win) {
 }
 ```
 
-## Minimize Window
+## Minimize {{app}}
 
 <!--
-description: Minimize the frontmost window
+description: Minimize {{app}}
 -->
 
 ```ts
@@ -321,10 +321,10 @@ if (win) {
 }
 ```
 
-## Close Window
+## Close {{app}} Window
 
 <!--
-description: Close the frontmost window
+description: Close the frontmost {{app}} window
 -->
 
 ```ts
@@ -342,46 +342,24 @@ description: Show information about connected displays
 
 ```ts
 const displays = await getDisplays();
-const displayInfo = displays.map((d, i) =>
-  `Display ${i + 1}${d.isPrimary ? ' (Primary)' : ''}: ${d.bounds.width}x${d.bounds.height} at (${d.bounds.x}, ${d.bounds.y})`
-).join('\n');
-
-await div(`
-<div class="p-4">
-  <h2 class="text-lg font-bold mb-2">Connected Displays</h2>
-  <pre class="text-sm">${displayInfo}</pre>
-</div>
-`);
+await div(
+  `<pre style="padding: 16px; font-size: 12px;">${JSON.stringify(displays, null, 2)}</pre>`
+);
 ```
 
-## Show Window Info
+## Show {{app}} Window Info
 
 <!--
-description: Show information about the frontmost window
+description: Show information about {{app}}'s frontmost window
 -->
 
 ```ts
 const win = await getFrontmostWindow();
 if (win) {
-  const info = `
-Window: ${win.title}
-App: ${win.appName}
-ID: ${win.windowId}
-Position: (${win.bounds?.x}, ${win.bounds?.y})
-Size: ${win.bounds?.width}x${win.bounds?.height}
-  `.trim();
-
-  await div(`
-<div class="p-4">
-  <h2 class="text-lg font-bold mb-2">Frontmost Window</h2>
-  <pre class="text-sm">${info}</pre>
-</div>
-  `);
+  await div(
+    `<pre style="padding: 16px; font-size: 12px;">${JSON.stringify(win, null, 2)}</pre>`
+  );
 } else {
-  await div(`
-<div class="p-4">
-  <p>No frontmost window found</p>
-</div>
-  `);
+  await div('<p style="padding: 16px;">No frontmost window found</p>');
 }
 ```

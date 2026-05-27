@@ -8,6 +8,10 @@ use crate::list_item::ListItemColors;
 use crate::scripts::SearchResult;
 use gpui::{AnyElement, IntoElement};
 
+fn substitute_context_vars(text: &str) -> String {
+    crate::frontmost_app_tracker::substitute_context_vars(text)
+}
+
 /// Map a script's file extension to a more appropriate default icon.
 /// Returns an icon name like "Terminal" for shell scripts, "Code" for everything else.
 /// Only used when the script has no explicit `// Icon:` metadata.
@@ -214,7 +218,9 @@ pub fn render_design_item(
                         code_preview_for_scriptlet(&sm.scriptlet)
                             .or_else(|| Some(sm.scriptlet.tool_display_name().to_string()))
                     });
-                    (sm.scriptlet.name.clone(), description, badge, Some(icon))
+                    let name = substitute_context_vars(&sm.scriptlet.name);
+                    let description = description.map(|d| substitute_context_vars(&d));
+                    (name, description, badge, Some(icon))
                 }
                 SearchResult::BuiltIn(bm) => {
                     // Built-ins: pass icon name through directly (Lucide kebab-case)

@@ -48,12 +48,13 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
 
         let display_file_path = extract_scriptlet_display_path(&scriptlet.file_path);
 
+        let display_name = crate::frontmost_app_tracker::substitute_context_vars(&scriptlet.name);
         better_match_evidence(
             &mut best,
             match_evidence(
                 MatchEvidenceField::Name,
-                &scriptlet.name,
-                primary_text_match(&scriptlet.name, &query_lower, &mut nucleo),
+                &display_name,
+                primary_text_match(&display_name, &query_lower, &mut nucleo),
             ),
         );
 
