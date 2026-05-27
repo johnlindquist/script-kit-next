@@ -53,7 +53,7 @@ pub fn running_status_message(context: &str) -> String {
 // ============================================================================
 
 /// Default placeholder text for the main search input
-pub const DEFAULT_PLACEHOLDER: &str = "Script Kit";
+pub const DEFAULT_PLACEHOLDER: &str = "Search or type @ / | . ; for commands";
 
 // ============================================================================
 // Cursor Styling Constants
@@ -95,7 +95,7 @@ mod tests {
 
     #[test]
     fn test_default_placeholder_text() {
-        assert_eq!(DEFAULT_PLACEHOLDER, "Script Kit");
+        assert_eq!(DEFAULT_PLACEHOLDER, "Search or type @ / | . ; for commands");
     }
 
     #[test]
