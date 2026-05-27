@@ -654,15 +654,6 @@ impl ScriptListApp {
                     _ => false,
                 }
             }
-            SpineListAction::SubmitScriptCapture { target, args } => {
-                tracing::info!(
-                    target: "script_kit::spine",
-                    event = "apply_spine_action_submit_capture_not_wired",
-                    capture_target = %target,
-                    capture_args = %args,
-                );
-                false
-            }
             SpineListAction::OpenConversation { conversation_id } => {
                 tracing::info!(
                     target: "script_kit::spine",

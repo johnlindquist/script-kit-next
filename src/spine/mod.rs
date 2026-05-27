@@ -1,6 +1,5 @@
 mod catalog_capture;
 mod catalog_context;
-#[allow(dead_code)]
 mod catalog_filter;
 pub(crate) mod catalog_history;
 mod catalog_profile;

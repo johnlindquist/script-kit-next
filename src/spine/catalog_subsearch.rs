@@ -132,38 +132,12 @@ pub(crate) fn build_context_subsearch_section(
         )],
     };
 
-    let final_rows = if rows.is_empty() {
-        vec![empty_result_row(source, query)]
-    } else {
-        rows
-    };
-
     SpineListSection {
         id: ss(format!("spine-section-subsearch:{}", source.prefix())),
         title: ss(source.section_title()),
         subtitle: Some(ss(format!("@{}:", source.prefix()))),
         icon: Some(ss(source.icon())),
-        rows: final_rows,
-    }
-}
-
-fn empty_result_row(source: ContextSubsearchSource, query: &str) -> SpineListRow {
-    SpineListRow {
-        id: ss(format!("spine:@:result:{}:empty", source.prefix())),
-        kind: SpineListRowKind::Empty,
-        title: ss(if query.trim().is_empty() {
-            format!("Type to search {}", source.section_title().to_lowercase())
-        } else {
-            format!("No {} matches", source.section_title().to_lowercase())
-        }),
-        subtitle: Some(ss(format!("Try a different @{}: query", source.prefix()))),
-        icon: Some(ss("info")),
-        meta: None,
-        badges: vec![],
-        score: 0,
-        is_selectable: false,
-        action_label: None,
-        action: SpineListAction::Noop,
+        rows,
     }
 }
 

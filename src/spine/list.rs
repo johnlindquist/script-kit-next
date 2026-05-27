@@ -123,10 +123,6 @@ pub enum SpineListAction {
         sigil: char,
         rest: SharedString,
     },
-    SubmitScriptCapture {
-        target: SharedString,
-        args: SharedString,
-    },
     OpenConversation {
         conversation_id: SharedString,
     },
@@ -141,7 +137,6 @@ impl SpineListRow {
             .unwrap_or(match self.action {
                 SpineListAction::Noop => "No Action",
                 SpineListAction::OpenModeExit { .. } => "Open",
-                SpineListAction::SubmitScriptCapture { .. } => "Capture",
                 SpineListAction::OpenConversation { .. } => "Open Conversation",
                 SpineListAction::InsertSegmentText { .. }
                 | SpineListAction::ResolveSegment { .. } => "Insert",

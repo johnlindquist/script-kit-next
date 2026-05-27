@@ -6,7 +6,6 @@ struct FilterQualifier {
     token: &'static str,
     title: &'static str,
     subtitle: &'static str,
-    example: &'static str,
 }
 
 const FILTER_QUALIFIERS: &[FilterQualifier] = &[
@@ -14,67 +13,56 @@ const FILTER_QUALIFIERS: &[FilterQualifier] = &[
         token: "type:script",
         title: "Scripts only",
         subtitle: "Limit results to runnable scripts",
-        example: ":type:script git",
     },
     FilterQualifier {
         token: "type:scriptlet",
         title: "Scriptlets only",
         subtitle: "Limit results to scriptlets",
-        example: ":type:scriptlet shell",
     },
     FilterQualifier {
         token: "type:skill",
         title: "Skills only",
         subtitle: "Find agent skills",
-        example: ":type:skill review",
     },
     FilterQualifier {
         token: "type:builtin",
         title: "Built-ins only",
         subtitle: "Limit results to built-in commands",
-        example: ":type:builtin clipboard",
     },
     FilterQualifier {
         token: "type:app",
         title: "Apps only",
         subtitle: "Limit results to applications",
-        example: ":type:app safari",
     },
     FilterQualifier {
         token: "type:window",
         title: "Windows only",
         subtitle: "Limit results to open windows",
-        example: ":type:window chrome",
     },
     FilterQualifier {
         token: "type:agent",
         title: "Agents only",
         subtitle: "Limit results to agents",
-        example: ":type:agent",
     },
     FilterQualifier {
         token: "shortcut:any",
         title: "Has any shortcut",
         subtitle: "Items with keyboard shortcuts",
-        example: ":shortcut:any",
     },
     FilterQualifier {
         token: "shortcut:none",
         title: "Has no shortcut",
         subtitle: "Items without keyboard shortcuts",
-        example: ":shortcut:none",
     },
     FilterQualifier {
         token: "source:",
         title: "Source filter",
         subtitle: "Broad match against plugin or kit name",
-        example: ":source:main inbox",
     },
     FilterQualifier {
         token: "tag:",
         title: "Tag filter",
         subtitle: "Filter by metadata tag",
-        example: ":#work type:script",
     },
 ];
 
