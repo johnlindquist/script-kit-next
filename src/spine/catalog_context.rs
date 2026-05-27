@@ -131,9 +131,12 @@ fn build_builtin_context_row(
 
     let slug = mention_slug(mention);
 
-    let title = live_preview
-        .and_then(|lp| lp.title_for_context_kind(spec.kind))
-        .unwrap_or_else(|| spec.label.to_string());
+    let live_title = live_preview.and_then(|lp| lp.title_for_context_kind(spec.kind));
+
+    let title = match &live_title {
+        Some(content) => format!("@{}: {content}", spec.label),
+        None => format!("@{}", spec.label),
+    };
 
     let subtitle = live_preview
         .map(|lp| lp.subtitle_for_context_kind(spec.kind))

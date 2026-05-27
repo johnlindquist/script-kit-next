@@ -824,7 +824,7 @@ mod tests {
             .find(|row| row.id.as_ref() == "spine:@:builtin:selection")
             .expect("expected @selection row");
 
-        assert_eq!(row.title.as_ref(), "Selection");
+        assert_eq!(row.title.as_ref(), "@Selection");
         assert_eq!(
             row.meta.as_ref().map(|meta| meta.as_ref()),
             Some("@selection")
