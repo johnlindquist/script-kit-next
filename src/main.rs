@@ -161,6 +161,8 @@ mod menu_bar;
 #[cfg(target_os = "macos")]
 mod frontmost_app_tracker;
 
+mod context_templates;
+
 // Frecency tracking for script usage
 mod frecency;
 

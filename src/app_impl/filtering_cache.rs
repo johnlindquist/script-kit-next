@@ -1825,7 +1825,9 @@ impl ScriptListApp {
             self.ghost_prediction = None;
             return;
         }
-        if self.menu_syntax_owns_list() || self.menu_syntax_capture_form_owns_input() {
+        if self.menu_syntax_trigger_popup_state.owns_main_list()
+            || self.menu_syntax_capture_form_owns_input()
+        {
             self.ghost_prediction = None;
             return;
         }

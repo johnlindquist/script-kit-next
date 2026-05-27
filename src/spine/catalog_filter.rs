@@ -1,7 +1,5 @@
 use std::ops::Range;
 
-use gpui::SharedString;
-
 use super::list::{ss, SpineListAction, SpineListRow, SpineListRowKind, SpineListSection};
 
 struct FilterQualifier {
