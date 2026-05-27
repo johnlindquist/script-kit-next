@@ -189,6 +189,18 @@ impl ScriptListApp {
             if self.spine_enabled {
                 self.set_spine_parse_from_filter_and_cursor(&text, text.len());
                 self.maybe_start_spine_file_subsearch_for_current_projection(cx);
+                let has_cwd_segment = self.spine_parse.segments.iter().any(|s| {
+                    matches!(s.kind, crate::spine::SpineSegmentKind::ProjectCwd { .. })
+                        && matches!(
+                            s.resolution,
+                            crate::spine::SpineSegmentResolution::Resolved { .. }
+                        )
+                });
+                if !has_cwd_segment && self.spine_cwd.is_some() {
+                    self.spine_cwd = None;
+                    self.spine_cwd_revision = self.spine_cwd_revision.wrapping_add(1);
+                    self.invalidate_grouped_cache();
+                }
             }
             handler_form_owns_input = self.menu_syntax_capture_form_owns_input_for(&text);
             self.sync_menu_syntax_form_inputs_from_filter(window, cx);
@@ -614,6 +626,12 @@ impl ScriptListApp {
                     resolution_source = %resolution_source,
                     trailing_space,
                 );
+                if resolution_source.as_ref() == "cwd" {
+                    let path = std::path::PathBuf::from(resolution_id.as_ref());
+                    self.spine_cwd = Some(path);
+                    self.spine_cwd_revision = self.spine_cwd_revision.wrapping_add(1);
+                    self.invalidate_grouped_cache();
+                }
                 self.replace_active_segment_text(
                     segment_index,
                     segment_byte_range,
@@ -639,7 +657,7 @@ impl ScriptListApp {
                         );
                         true
                     }
-                    '>' => {
+                    '!' => {
                         self.open_quick_terminal(None, cx);
                         true
                     }

@@ -1185,6 +1185,45 @@ impl ScriptListApp {
                     return self.main_menu_result_caches.clone_grouped_results();
                 }
 
+                if let crate::spine::SpineSegmentKind::ProjectCwd { sub_query } =
+                    &projection.active_segment_kind
+                {
+                    let recent_dirs = self.recent_directory_results_from_frecency(
+                        crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT,
+                    );
+                    let has_query = sub_query
+                        .as_ref()
+                        .is_some_and(|q| !q.trim().is_empty());
+                    if !recent_dirs.is_empty() || has_query {
+                        let cwd_cache_key = format!(
+                            "{spine_cache_key}\x1Fcwd-rich\x1Fcwd-rev={}",
+                            self.spine_cwd_revision
+                        );
+                        if self
+                            .main_menu_result_caches
+                            .has_grouped_results_for(&cwd_cache_key)
+                        {
+                            return self.main_menu_result_caches.clone_grouped_results();
+                        }
+                        let (grouped_items, flat_results) = if has_query {
+                            build_rich_cwd_subsearch_rows(
+                                sub_query.as_deref().unwrap_or(""),
+                                &recent_dirs,
+                            )
+                        } else {
+                            build_rich_cwd_root_rows(&recent_dirs)
+                        };
+                        self.main_menu_result_caches.store_grouped_results(
+                            cwd_cache_key,
+                            grouped_items,
+                            flat_results,
+                            None,
+                            None,
+                        );
+                        return self.main_menu_result_caches.clone_grouped_results();
+                    }
+                }
+
                 if self
                     .main_menu_result_caches
                     .has_grouped_results_for(&spine_cache_key)
@@ -2699,6 +2738,75 @@ fn build_rich_provider_json_rows(
             }));
             grouped.push(GroupedListItem::Item(idx));
         }
+    }
+    (grouped, flat)
+}
+
+fn build_rich_cwd_root_rows(
+    recent_dirs: &[crate::file_search::FileResult],
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
+    let mut grouped = Vec::new();
+    let mut flat: Vec<scripts::SearchResult> = Vec::new();
+
+    if !recent_dirs.is_empty() {
+        grouped.push(GroupedListItem::SectionHeader(
+            "Recent Directories".to_string(),
+            Some("folder".to_string()),
+        ));
+        for dir in recent_dirs.iter().take(limit) {
+            let idx = flat.len();
+            flat.push(scripts::SearchResult::File(scripts::FileMatch {
+                file: dir.clone(),
+                score: 0,
+            }));
+            grouped.push(GroupedListItem::Item(idx));
+        }
+    } else {
+        grouped.push(GroupedListItem::SectionHeader(
+            "Project / CWD".to_string(),
+            Some("folder".to_string()),
+        ));
+        grouped.push(GroupedListItem::SectionHeader(
+            "No recent directories".to_string(),
+            None,
+        ));
+    }
+    (grouped, flat)
+}
+
+fn build_rich_cwd_subsearch_rows(
+    query: &str,
+    recent_dirs: &[crate::file_search::FileResult],
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
+    let mut grouped = Vec::new();
+    let mut flat: Vec<scripts::SearchResult> = Vec::new();
+
+    let q = query.trim().to_lowercase();
+    let matches: Vec<_> = recent_dirs
+        .iter()
+        .filter(|d| d.name.to_lowercase().contains(&q) || d.path.to_lowercase().contains(&q))
+        .take(limit)
+        .collect();
+
+    let header = if matches.is_empty() {
+        format!("No directories matching \u{201c}{}\u{201d}", query.trim())
+    } else {
+        format!("Directories matching \u{201c}{}\u{201d}", query.trim())
+    };
+    grouped.push(GroupedListItem::SectionHeader(
+        header,
+        Some("folder".to_string()),
+    ));
+
+    for dir in matches {
+        let idx = flat.len();
+        flat.push(scripts::SearchResult::File(scripts::FileMatch {
+            file: dir.clone(),
+            score: 0,
+        }));
+        grouped.push(GroupedListItem::Item(idx));
     }
     (grouped, flat)
 }

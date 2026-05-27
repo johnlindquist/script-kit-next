@@ -837,6 +837,8 @@ impl ScriptListApp {
                 input: String::new(),
             },
             spine_projection: None,
+            spine_cwd: None,
+            spine_cwd_revision: 0,
             spine_live_preview_cache: Default::default(),
             menu_syntax_trigger_popup_state:
                 crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState::default(),

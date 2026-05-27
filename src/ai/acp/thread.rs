@@ -326,6 +326,10 @@ pub(crate) struct AcpThread {
 }
 
 impl AcpThread {
+    pub(crate) fn set_cwd(&mut self, cwd: PathBuf) {
+        self.cwd = cwd;
+    }
+
     /// Create a new thread entity with optional initial input.
     ///
     /// Immediately binds the permission listener. Does NOT send an ACP turn —

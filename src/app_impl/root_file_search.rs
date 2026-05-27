@@ -706,6 +706,7 @@ impl ScriptListApp {
         let cancel = crate::file_search::new_cancel_token();
         self.spine_file_search_cancel = Some(cancel.clone());
         let query_owned = query.to_string();
+        let onlyin = self.spine_cwd.as_ref().map(|p| p.to_string_lossy().to_string());
 
         cx.spawn(async move |this, cx| {
             cx.background_executor()
@@ -721,6 +722,7 @@ impl ScriptListApp {
             std::thread::spawn({
                 let cancel = cancel.clone();
                 let query_owned = query_owned.clone();
+                let onlyin = onlyin.clone();
                 move || {
                     if emit_root_file_search_test_fixture(
                         &query_owned,
@@ -735,7 +737,7 @@ impl ScriptListApp {
                         );
                     crate::file_search::search_files_streaming_with_options(
                         &provider_query,
-                        None,
+                        onlyin.as_deref(),
                         crate::file_search::ROOT_FILE_SOURCE_LIMIT,
                         cancel,
                         crate::file_search::SearchFilesStreamingOptions::root_search(),

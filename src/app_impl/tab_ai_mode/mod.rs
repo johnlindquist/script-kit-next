@@ -359,11 +359,19 @@ impl ScriptListApp {
         self.spine_live_preview_cache = Default::default();
         self.invalidate_grouped_cache();
 
+        let spine_cwd = self.spine_cwd.clone();
         self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(Some(prompt.clone()), cx);
 
         if let AppView::AcpChatView { entity } = &self.current_view {
             let entity = entity.clone();
             entity.update(cx, |chat, cx| {
+                if let Some(cwd) = &spine_cwd {
+                    if let Some(thread_entity) = chat.thread() {
+                        thread_entity.update(cx, |thread, _cx| {
+                            thread.set_cwd(cwd.clone());
+                        });
+                    }
+                }
                 if let Err(e) = chat.submit_reused_entry_intent_with_host_context(
                     prompt,
                     parts,
@@ -5062,7 +5070,7 @@ impl ScriptListApp {
             crate::theme::opacity::OPACITY_GHOST,
         ));
 
-        let hint_px: f32 = crate::window_resize::mini_layout::HINT_STRIP_PADDING_X;
+        let hint_px: f32 = crate::window_resize::main_layout::HINT_STRIP_PADDING_X;
 
         let message: SharedString = format!("Save as {}.ts?", state.filename_stem).into();
 
