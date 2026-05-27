@@ -639,24 +639,24 @@ fn inline_mention_alias_gets_canonical_token() {
     assert_eq!(mentions.len(), 1);
     assert_eq!(mentions[0].token, "@context");
     assert_eq!(
-        mentions[0].canonical_token, "@snapshot",
-        "alias @context should have canonical token @snapshot"
+        mentions[0].canonical_token, "@here",
+        "alias @context should have canonical token @here"
     );
 }
 
 #[test]
 fn inline_mention_primary_token_is_its_own_canonical() {
-    let mentions = parse_inline_context_mentions("Use @snapshot please");
+    let mentions = parse_inline_context_mentions("Use @here please");
     assert_eq!(mentions.len(), 1);
-    assert_eq!(mentions[0].token, "@snapshot");
-    assert_eq!(mentions[0].canonical_token, "@snapshot");
+    assert_eq!(mentions[0].token, "@here");
+    assert_eq!(mentions[0].canonical_token, "@here");
 }
 
 #[test]
 fn inline_mention_canonical_token_with_punctuation() {
     let mentions = parse_inline_context_mentions("Compare @context, @browser.");
     assert_eq!(mentions.len(), 2);
-    assert_eq!(mentions[0].canonical_token, "@snapshot");
+    assert_eq!(mentions[0].canonical_token, "@here");
     assert_eq!(mentions[1].canonical_token, "@browser");
 }
 
@@ -931,10 +931,10 @@ fn inline_sync_plan_uses_canonical_tokens() {
     use std::collections::HashSet;
 
     let attached = vec![crate::ai::context_contract::ContextAttachmentKind::Current.part()];
-    let owned: HashSet<String> = ["@snapshot".to_string()].into_iter().collect();
+    let owned: HashSet<String> = ["@here".to_string()].into_iter().collect();
     let plan = build_inline_mention_sync_plan("Use @context and @browser", &attached, &owned);
 
-    assert!(plan.desired_tokens.contains("@snapshot"));
+    assert!(plan.desired_tokens.contains("@here"));
     assert!(plan.desired_tokens.contains("@browser"));
     // @snapshot is still desired (via @context alias), so not stale.
     assert!(
@@ -993,7 +993,7 @@ fn sync_plan_detects_stale_tokens() {
         crate::ai::context_contract::ContextAttachmentKind::Browser.part(),
         crate::ai::context_contract::ContextAttachmentKind::Current.part(),
     ];
-    let owned: HashSet<String> = ["@browser".to_string(), "@snapshot".to_string()]
+    let owned: HashSet<String> = ["@browser".to_string(), "@here".to_string()]
         .into_iter()
         .collect();
 

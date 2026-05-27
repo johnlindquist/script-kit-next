@@ -1162,7 +1162,7 @@ mod tests {
             }],
             accepted_items: vec![AcpPickerItemAcceptedTelemetry {
                 trigger: "@".to_string(),
-                item_label: "Current Context".to_string(),
+                item_label: "What I\u{2019}m Looking At".to_string(),
                 item_id: "built_in:context".to_string(),
                 accepted_via_key: "tab".to_string(),
                 cursor_after: 17,
@@ -1179,7 +1179,7 @@ mod tests {
                 route: "picker".to_string(),
                 picker_open_before: true,
                 accepted_via_key: Some("tab".to_string()),
-                accepted_label: Some("Current Context".to_string()),
+                accepted_label: Some("What I\u{2019}m Looking At".to_string()),
                 cursor_before: 1,
                 cursor_after: 17,
                 caused_submit: false,
@@ -1314,7 +1314,7 @@ mod tests {
             route: "picker".to_string(),
             picker_open_before: true,
             accepted_via_key: Some("tab".to_string()),
-            accepted_label: Some("Current Context".to_string()),
+            accepted_label: Some("What I\u{2019}m Looking At".to_string()),
             cursor_before: 1,
             cursor_after: 17,
             caused_submit: false,
@@ -1324,7 +1324,7 @@ mod tests {
         assert_eq!(json["route"], "picker");
         assert_eq!(json["pickerOpenBefore"], true);
         assert_eq!(json["acceptedViaKey"], "tab");
-        assert_eq!(json["acceptedLabel"], "Current Context");
+        assert_eq!(json["acceptedLabel"], "What I\u{2019}m Looking At");
         assert_eq!(json["cursorBefore"], 1);
         assert_eq!(json["cursorAfter"], 17);
         assert_eq!(json["causedSubmit"], false);
@@ -1410,7 +1410,7 @@ mod tests {
             route: "picker".to_string(),
             picker_open_before: true,
             accepted_via_key: Some("tab".to_string()),
-            accepted_label: Some("Current Context".to_string()),
+            accepted_label: Some("What I\u{2019}m Looking At".to_string()),
             cursor_before: 1,
             cursor_after: 17,
             caused_submit: false,

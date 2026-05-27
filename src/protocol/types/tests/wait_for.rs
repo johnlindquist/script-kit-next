@@ -500,11 +500,11 @@ fn wait_acp_accepted_via_key_round_trips() {
 #[test]
 fn wait_acp_accepted_label_round_trips() {
     let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedLabel {
-        label: "Current Context".to_string(),
+        label: "What I\u{2019}m Looking At".to_string(),
     });
     let json = serde_json::to_value(&cond).expect("serialize");
     assert_eq!(json["type"], "acpAcceptedLabel");
-    assert_eq!(json["label"], "Current Context");
+    assert_eq!(json["label"], "What I\u{2019}m Looking At");
 
     let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
     assert_eq!(back, cond);
@@ -928,7 +928,7 @@ fn acp_test_probe_result_round_trips() {
         }],
         accepted_items: vec![crate::protocol::AcpPickerItemAcceptedTelemetry {
             trigger: "@".to_string(),
-            item_label: "Current Context".to_string(),
+            item_label: "What I\u{2019}m Looking At".to_string(),
             item_id: "built_in:context".to_string(),
             accepted_via_key: "tab".to_string(),
             cursor_after: 17,

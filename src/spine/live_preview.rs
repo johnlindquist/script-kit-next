@@ -91,43 +91,7 @@ impl SpineLivePreview {
     /// label from `ContextAttachmentSpec.label` should be used as-is.
     pub(crate) fn title_for_context_kind(&self, kind: ContextAttachmentKind) -> Option<String> {
         match kind {
-            ContextAttachmentKind::Current => {
-                let mut parts = Vec::new();
-                if let Some(app) = &self.frontmost_app_name {
-                    parts.push(app.clone());
-                }
-                if self.active_window_title.is_some() {
-                    parts.push("Window".to_string());
-                }
-                if self.browser_url.is_some() {
-                    parts.push("Browser".to_string());
-                }
-                if parts.is_empty() {
-                    None
-                } else {
-                    Some(parts.join(" \u{b7} "))
-                }
-            }
-            ContextAttachmentKind::Full => {
-                let mut parts = Vec::new();
-                if self.selection_text.is_some() {
-                    parts.push("Selection");
-                }
-                if self.clipboard_text.is_some() {
-                    parts.push("Clipboard");
-                }
-                if self.browser_url.is_some() {
-                    parts.push("Browser");
-                }
-                if self.active_window_title.is_some() {
-                    parts.push("Window");
-                }
-                if parts.is_empty() {
-                    None
-                } else {
-                    Some(format!("{} included", parts.join(" \u{b7} ")))
-                }
-            }
+            ContextAttachmentKind::Current | ContextAttachmentKind::Full => None,
             ContextAttachmentKind::Selection => {
                 if let Some(t) = &self.selection_text {
                     let preview = truncate_preview(t, 50);
@@ -178,8 +142,43 @@ impl SpineLivePreview {
     /// Action-oriented subtitle shown below the title in the @ context list.
     pub(crate) fn subtitle_for_context_kind(&self, kind: ContextAttachmentKind) -> Option<String> {
         Some(match kind {
-            ContextAttachmentKind::Current => "Attach snapshot of the current app context".into(),
-            ContextAttachmentKind::Full => "Attach all available context except screenshots".into(),
+            ContextAttachmentKind::Current => {
+                let mut parts = Vec::new();
+                if let Some(app) = &self.frontmost_app_name {
+                    parts.push(app.as_str());
+                }
+                if self.active_window_title.is_some() {
+                    parts.push("focused window");
+                }
+                if self.browser_url.is_some() {
+                    parts.push("browser URL");
+                }
+                if self.selection_text.is_some() {
+                    parts.push("selected text");
+                }
+                if parts.is_empty() {
+                    "Use the active app, focused window, browser URL, and selected text".into()
+                } else {
+                    format!("Includes {}", parts.join(" \u{b7} "))
+                }
+            }
+            ContextAttachmentKind::Full => {
+                let mut parts = Vec::new();
+                if self.clipboard_text.is_some() {
+                    parts.push("clipboard");
+                }
+                if let Some(app) = &self.frontmost_app_name {
+                    parts.push(app.as_str());
+                }
+                if self.browser_url.is_some() {
+                    parts.push("browser");
+                }
+                if self.active_window_title.is_some() {
+                    parts.push("window");
+                }
+                parts.push("menu bar");
+                format!("Includes {}", parts.join(" \u{b7} "))
+            }
             ContextAttachmentKind::Selection => {
                 if self.selection_text.is_some() {
                     "Attach the selected text to your command".into()

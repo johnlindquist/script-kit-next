@@ -9634,7 +9634,7 @@ impl AcpChatView {
 
                 (
                     kind.part(),
-                    kind.spec().mention.unwrap_or("@snapshot").to_string(),
+                    kind.spec().mention.unwrap_or("@here").to_string(),
                     session.trigger == ContextPickerTrigger::Mention,
                 )
             }

@@ -462,7 +462,7 @@ const SLASH_ROWS: [PickerRow; 6] = [
     },
     PickerRow {
         id: "slash-context",
-        label: "Current Context",
+        label: "What I\u{2019}m Looking At",
         meta: "/context",
         description: "Insert the current desktop context bundle with the minimal profile.",
         section: "Context",

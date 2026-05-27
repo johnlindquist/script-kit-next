@@ -154,7 +154,7 @@ mod tests {
             ContextPickerPopupSceneState::Results,
             true,
             [
-                "Current Context",
+                "What I\u{2019}m Looking At",
                 "Full Context",
                 "Browser URL",
                 "Focused Window",

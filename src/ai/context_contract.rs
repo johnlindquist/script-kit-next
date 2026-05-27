@@ -3,8 +3,8 @@ use crate::ai::message_parts::AiContextPart;
 pub(crate) const CONTEXT_SECTION: &str = "Context";
 pub(crate) const CLEAR_CONTEXT_ACTION_ID: &str = "chat:clear_context";
 pub(crate) const CLEAR_CONTEXT_ACTION_TITLE: &str = "Clear Context";
-const CURRENT_SNAPSHOT_MENTION_ALIASES: &[&str] = &["@context"];
-const FULL_SNAPSHOT_MENTION_ALIASES: &[&str] = &["@context-full"];
+const CURRENT_SNAPSHOT_MENTION_ALIASES: &[&str] = &["@context", "@snapshot", "@this"];
+const FULL_SNAPSHOT_MENTION_ALIASES: &[&str] = &["@context-full", "@snapshot-full", "@everything"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ContextAttachmentKind {
@@ -45,13 +45,13 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
     ContextAttachmentSpec {
         kind: ContextAttachmentKind::Current,
         action_id: "chat:add_current_context",
-        action_title: "Attach Current Snapshot",
+        action_title: "Attach What I\u{2019}m Looking At",
         slash_command: Some("/context"),
-        mention: Some("@snapshot"),
+        mention: Some("@here"),
         slash_aliases: &[],
         mention_aliases: CURRENT_SNAPSHOT_MENTION_ALIASES,
         uri: "kit://context?profile=minimal",
-        label: "Current Context",
+        label: "What I\u{2019}m Looking At",
     },
     ContextAttachmentSpec {
         kind: ContextAttachmentKind::Selection,
@@ -111,13 +111,13 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
     ContextAttachmentSpec {
         kind: ContextAttachmentKind::Full,
         action_id: "chat:add_context_full",
-        action_title: "Attach Full Snapshot",
+        action_title: "Attach Everything Available",
         slash_command: Some("/context-full"),
-        mention: Some("@snapshot-full"),
+        mention: Some("@all"),
         slash_aliases: &[],
         mention_aliases: FULL_SNAPSHOT_MENTION_ALIASES,
         uri: "kit://context",
-        label: "Current Context (Full)",
+        label: "Everything Available",
     },
     ContextAttachmentSpec {
         kind: ContextAttachmentKind::GitDiff,
