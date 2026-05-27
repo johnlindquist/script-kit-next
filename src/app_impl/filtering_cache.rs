@@ -1023,11 +1023,27 @@ impl ScriptListApp {
             && self.spine_parse.input == live_filter_text
         {
             if let Some(projection) = self.spine_projection.as_ref() {
-                let spine_cache_key = crate::spine::spine_projection_cache_key(
-                    live_filter_text,
-                    computed_filter_text,
-                    &self.spine_parse,
-                    projection,
+                let needs_preview = matches!(
+                    projection.active_segment_kind,
+                    crate::spine::SpineSegmentKind::ContextMention { .. }
+                        | crate::spine::SpineSegmentKind::Style { .. }
+                );
+                if needs_preview {
+                    self.spine_live_preview_cache
+                        .set_script_count(self.scripts.len());
+                    self.spine_live_preview_cache.refresh_cheap_fields();
+                    self.spine_live_preview_cache.refresh_expensive_fields();
+                }
+
+                let spine_cache_key = format!(
+                    "{}\x1Fpreview-gen={}",
+                    crate::spine::spine_projection_cache_key(
+                        live_filter_text,
+                        computed_filter_text,
+                        &self.spine_parse,
+                        projection,
+                    ),
+                    self.spine_live_preview_cache.generation,
                 );
                 if self
                     .main_menu_result_caches
@@ -1042,17 +1058,6 @@ impl ScriptListApp {
                         scriptlets: &self.scriptlets,
                         skills: &self.skills,
                     };
-
-                let needs_preview = matches!(
-                    projection.active_segment_kind,
-                    crate::spine::SpineSegmentKind::ContextMention { .. }
-                        | crate::spine::SpineSegmentKind::Style { .. }
-                );
-                if needs_preview {
-                    self.spine_live_preview_cache
-                        .set_script_count(self.scripts.len());
-                    self.spine_live_preview_cache.refresh_cheap_fields();
-                }
 
                 let live_preview = if needs_preview {
                     Some(&self.spine_live_preview_cache.current)

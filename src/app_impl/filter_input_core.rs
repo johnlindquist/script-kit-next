@@ -156,18 +156,7 @@ impl ScriptListApp {
     /// Reparse the Spine model from the current filter text and cursor position.
     pub(crate) fn set_spine_parse_from_filter_and_cursor(&mut self, raw: &str, cursor: usize) {
         self.spine_parse = crate::spine::parse_spine(raw);
-        let projection = crate::spine::project_cursor(&self.spine_parse, cursor);
-
-        let needs_expensive_preview = matches!(
-            projection.active_segment_kind,
-            crate::spine::SpineSegmentKind::ContextMention { .. }
-                | crate::spine::SpineSegmentKind::Style { .. }
-        );
-        if needs_expensive_preview && self.spine_live_preview_cache.generation == 0 {
-            self.spine_live_preview_cache.refresh_expensive_fields();
-        }
-
-        self.spine_projection = Some(projection);
+        self.spine_projection = Some(crate::spine::project_cursor(&self.spine_parse, cursor));
     }
 
     /// Whether the Spine projection currently owns the main list (i.e., a sigil

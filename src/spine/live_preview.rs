@@ -15,6 +15,7 @@ pub(crate) struct SpineLivePreview {
 pub(crate) struct SpineLivePreviewCache {
     pub current: SpineLivePreview,
     pub generation: u64,
+    last_expensive_refresh: Option<std::time::Instant>,
 }
 
 impl Default for SpineLivePreviewCache {
@@ -22,6 +23,7 @@ impl Default for SpineLivePreviewCache {
         Self {
             current: SpineLivePreview::default(),
             generation: 0,
+            last_expensive_refresh: None,
         }
     }
 }
@@ -30,36 +32,53 @@ impl SpineLivePreviewCache {
     pub(crate) fn refresh_cheap_fields(&mut self) {
         let tracked_app = crate::frontmost_app_tracker::get_last_real_app();
 
-        self.current.frontmost_app_name = tracked_app.as_ref().map(|a| a.name.clone());
-        self.current.active_window_title =
-            tracked_app.as_ref().and_then(|a| a.window_title.clone());
+        let new_app = tracked_app.as_ref().map(|a| a.name.clone());
+        let new_title = tracked_app.as_ref().and_then(|a| a.window_title.clone());
 
         let menu_snapshot = crate::frontmost_app_tracker::get_cached_menu_snapshot();
-        self.current.menu_bar_summary =
-            match (menu_snapshot.app.as_ref(), menu_snapshot.items.len()) {
-                (Some(app), 0) => Some(format!("{} \u{b7} menu loading\u{2026}", app.name)),
-                (Some(app), n) => Some(format!("{} \u{b7} {n} menus cached", app.name)),
-                (None, _) => Some("No tracked app".to_string()),
-            };
+        let new_menu = match (menu_snapshot.app.as_ref(), menu_snapshot.items.len()) {
+            (Some(app), 0) => Some(format!("{} \u{b7} menu loading\u{2026}", app.name)),
+            (Some(app), n) => Some(format!("{} \u{b7} {n} menus cached", app.name)),
+            (None, _) => Some("No tracked app".to_string()),
+        };
 
-        self.current.clipboard_text = arboard::Clipboard::new()
+        let new_clipboard = arboard::Clipboard::new()
             .ok()
             .and_then(|mut cb| cb.get_text().ok())
             .filter(|t| !t.trim().is_empty());
 
-        self.generation += 1;
+        if new_app != self.current.frontmost_app_name
+            || new_title != self.current.active_window_title
+            || new_menu != self.current.menu_bar_summary
+            || new_clipboard != self.current.clipboard_text
+        {
+            self.current.frontmost_app_name = new_app;
+            self.current.active_window_title = new_title;
+            self.current.menu_bar_summary = new_menu;
+            self.current.clipboard_text = new_clipboard;
+            self.generation += 1;
+        }
     }
 
     pub(crate) fn refresh_expensive_fields(&mut self) {
-        self.current.browser_url = crate::platform::get_focused_browser_tab_url()
-            .ok()
-            .filter(|u| !u.trim().is_empty());
+        const THROTTLE: std::time::Duration = std::time::Duration::from_secs(2);
+        if let Some(last) = self.last_expensive_refresh {
+            if last.elapsed() < THROTTLE {
+                return;
+            }
+        }
+        self.last_expensive_refresh = Some(std::time::Instant::now());
 
-        self.current.selection_text = crate::selected_text::get_selected_text()
+        let new_url = crate::platform::get_any_browser_tab_url();
+        let new_selection = crate::selected_text::get_selected_text()
             .ok()
             .filter(|t| !t.trim().is_empty());
 
-        self.generation += 1;
+        if new_url != self.current.browser_url || new_selection != self.current.selection_text {
+            self.current.browser_url = new_url;
+            self.current.selection_text = new_selection;
+            self.generation += 1;
+        }
     }
 
     pub(crate) fn set_script_count(&mut self, count: usize) {

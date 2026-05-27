@@ -842,6 +842,84 @@ pub fn get_focused_browser_tab_url() -> Result<String, Box<dyn std::error::Error
     Err("Browser URL retrieval is only supported on macOS".into())
 }
 
+/// Try to get a browser URL from any running supported browser, regardless of
+/// which app is frontmost. Tries Chrome first (most common), then Safari, Arc,
+/// Brave, Edge. Returns the first URL found.
+#[cfg(target_os = "macos")]
+pub fn get_any_browser_tab_url() -> Option<String> {
+    if let Ok(url) = get_focused_browser_tab_url() {
+        return Some(url);
+    }
+
+    let running = running_browser_names();
+
+    let probes: &[(&str, &str)] = &[
+        (
+            "Google Chrome",
+            r#"tell application "Google Chrome" to return URL of active tab of front window"#,
+        ),
+        (
+            "Safari",
+            r#"tell application "Safari" to return URL of front document"#,
+        ),
+        (
+            "Arc",
+            r#"tell application "Arc" to return URL of active tab of front window"#,
+        ),
+        (
+            "Brave Browser",
+            r#"tell application "Brave Browser" to return URL of active tab of front window"#,
+        ),
+        (
+            "Microsoft Edge",
+            r#"tell application "Microsoft Edge" to return URL of active tab of front window"#,
+        ),
+    ];
+
+    for (name, script) in probes {
+        if !running.iter().any(|r| r == name) {
+            continue;
+        }
+        if let Ok(url) = crate::platform::run_osascript(script, "get_any_browser_tab_url") {
+            let url = url.trim().to_string();
+            if !url.is_empty() {
+                tracing::debug!(app = %name, url_len = url.len(), "Found browser URL via probe");
+                return Some(url);
+            }
+        }
+    }
+    None
+}
+
+/// Single osascript call that returns the names of all running processes,
+/// filtered to known browser names. Much cheaper than one call per browser.
+#[cfg(target_os = "macos")]
+fn running_browser_names() -> Vec<String> {
+    let script = r#"tell application "System Events"
+set pNames to name of every process
+set out to ""
+repeat with n in pNames
+if n is in {"Google Chrome", "Safari", "Arc", "Brave Browser", "Microsoft Edge"} then
+set out to out & n & linefeed
+end if
+end repeat
+return out
+end tell"#;
+    match crate::platform::run_osascript(script, "running_browser_names") {
+        Ok(output) => output
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn get_any_browser_tab_url() -> Option<String> {
+    None
+}
+
 // ============================================================================
 // Cursor Visibility
 // ============================================================================

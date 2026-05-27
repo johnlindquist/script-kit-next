@@ -294,8 +294,8 @@ pub(crate) fn resize_to_mini_file_search_window_sync(result_count: usize) {
     resize_to_mini_main_window_sync(mini_file_search_sizing(result_count));
 }
 
-/// Width for mini main window (compact launcher)
-const MINI_MAIN_WINDOW_WIDTH: f32 = 480.0;
+/// Width for mini main window — same as full; single-width launcher.
+const MINI_MAIN_WINDOW_WIDTH: f32 = FULL_MAIN_WINDOW_WIDTH;
 const FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT: f32 = crate::panel::PROMPT_INPUT_FIELD_HEIGHT;
 const FOCUSED_TEXT_MINI_STREAMING_HEIGHT: f32 = FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT;
 const FOCUSED_TEXT_MINI_RESULT_HEIGHT: f32 = 150.0;
@@ -1293,7 +1293,7 @@ mod resize_tests {
 
     #[test]
     fn test_mini_main_window_width_constant() {
-        assert_eq!(MINI_MAIN_WINDOW_WIDTH, 480.0);
+        assert_eq!(MINI_MAIN_WINDOW_WIDTH, FULL_MAIN_WINDOW_WIDTH);
         assert_eq!(FULL_MAIN_WINDOW_WIDTH, 750.0);
     }
 

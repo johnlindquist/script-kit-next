@@ -2084,7 +2084,7 @@ impl ScriptListApp {
             scripts::SearchResult::Skill(m) => m.skill.title.clone(),
             scripts::SearchResult::Fallback(m) => m.display_label(),
             scripts::SearchResult::ScriptIssue(m) => m.title.clone(),
-            scripts::SearchResult::SpineProjection(_) => String::new(),
+            scripts::SearchResult::SpineProjection(row) => row.title.to_string(),
         }
     }
 
@@ -2197,11 +2197,12 @@ impl ScriptListApp {
                     };
                     let label = Self::script_list_result_label(result);
                     let source = result.root_unified_source();
+                    let subtitle = result.description().map(str::to_string);
                     let mut element = protocol::ElementInfo {
                         semantic_id: protocol::generate_semantic_id("choice", row_index, &label),
                         element_type: protocol::ElementType::Choice,
                         text: Some(label.clone()),
-                        value: Some(label),
+                        value: subtitle.or_else(|| Some(label)),
                         selected: Some(Some(grouped_index) == selected_grouped_index),
                         focused: None,
                         index: Some(row_index),
