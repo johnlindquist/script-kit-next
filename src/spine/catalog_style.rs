@@ -58,9 +58,9 @@ pub(super) fn build_style_rows(
                 kind: SpineListRowKind::Style {
                     style_id: ss(spec.id),
                 },
-                title: ss(replacement.clone()),
+                title: ss(spec.title),
                 subtitle: Some(ss(spec.description)),
-                meta: Some(ss(spec.title)),
+                meta: None,
                 icon: Some(ss(spec.icon)),
                 badges: vec![ss(".")],
                 score: i32::MAX.saturating_sub(rank as i32),

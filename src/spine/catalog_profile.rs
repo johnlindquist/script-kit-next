@@ -14,13 +14,13 @@ const SPINE_PROFILES: &[ProfileSpec] = &[
         id: "creative",
         title: "Creative",
         description: "More exploratory and generative",
-        icon: "sparkles",
+        icon: "palette",
     },
     ProfileSpec {
         id: "concise",
         title: "Concise",
         description: "Short, direct responses",
-        icon: "minimize-2",
+        icon: "scissors",
     },
     ProfileSpec {
         id: "technical",
@@ -32,7 +32,7 @@ const SPINE_PROFILES: &[ProfileSpec] = &[
         id: "friendly",
         title: "Friendly",
         description: "Warm and approachable responses",
-        icon: "smile",
+        icon: "heart",
     },
 ];
 
@@ -58,9 +58,9 @@ pub(super) fn build_profile_rows(
                 kind: SpineListRowKind::Profile {
                     profile_id: ss(spec.id),
                 },
-                title: ss(replacement.clone()),
+                title: ss(spec.title),
                 subtitle: Some(ss(spec.description)),
-                meta: Some(ss(spec.title)),
+                meta: None,
                 icon: Some(ss(spec.icon)),
                 badges: vec![ss("|")],
                 score: i32::MAX.saturating_sub(rank as i32),

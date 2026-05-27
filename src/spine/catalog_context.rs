@@ -76,12 +76,26 @@ pub(super) fn build_context_root_rows(
     segment_index: usize,
     segment_byte_range: Range<usize>,
 ) -> Vec<SpineListRow> {
+    build_context_root_rows_with_preview(query, segment_index, segment_byte_range, None)
+}
+
+pub(super) fn build_context_root_rows_with_preview(
+    query: &str,
+    segment_index: usize,
+    segment_byte_range: Range<usize>,
+    live_preview: Option<&super::live_preview::SpineLivePreview>,
+) -> Vec<SpineListRow> {
     let mut rows = Vec::new();
 
     for (rank, spec) in context_attachment_specs().iter().enumerate() {
-        if let Some(row) =
-            build_builtin_context_row(spec, rank, query, segment_index, segment_byte_range.clone())
-        {
+        if let Some(row) = build_builtin_context_row(
+            spec,
+            rank,
+            query,
+            segment_index,
+            segment_byte_range.clone(),
+            live_preview,
+        ) {
             rows.push(row);
         }
     }
@@ -107,6 +121,7 @@ fn build_builtin_context_row(
     query: &str,
     segment_index: usize,
     segment_byte_range: Range<usize>,
+    live_preview: Option<&super::live_preview::SpineLivePreview>,
 ) -> Option<SpineListRow> {
     let mention = spec.mention?;
 
@@ -116,13 +131,17 @@ fn build_builtin_context_row(
 
     let slug = mention_slug(mention);
 
+    let subtitle = live_preview
+        .and_then(|lp| lp.subtitle_for_context_kind(spec.kind))
+        .unwrap_or_else(|| spec.action_title.to_string());
+
     Some(SpineListRow {
         id: ss(format!("spine:@:builtin:{slug}")),
         kind: SpineListRowKind::ContextBuiltin {
             context_type: ss(slug),
         },
         title: ss(spec.label),
-        subtitle: Some(ss(spec.action_title)),
+        subtitle: Some(ss(subtitle)),
         meta: Some(ss(mention)),
         icon: Some(ss(icon_for_context_kind(spec.kind))),
         badges: vec![ss("@")],

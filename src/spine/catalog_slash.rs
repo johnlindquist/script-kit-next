@@ -35,21 +35,19 @@ const SPINE_SLASH_COMMANDS: &[SlashCommandSpec] = &[
         icon: "languages",
     },
     SlashCommandSpec {
-        name: "compact",
-        description: "Compact the conversation context",
-        icon: "minimize-2",
-    },
-    SlashCommandSpec {
-        name: "clear",
-        description: "Clear the conversation",
-        icon: "trash-2",
-    },
-    SlashCommandSpec {
         name: "review",
         description: "Review code changes",
         icon: "git-pull-request",
     },
 ];
+
+fn capitalize(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => c.to_uppercase().to_string() + chars.as_str(),
+    }
+}
 
 pub(super) fn build_slash_command_rows(
     query: &str,
@@ -67,14 +65,15 @@ pub(super) fn build_slash_command_rows(
         })
         .map(|(rank, spec)| {
             let replacement = format!("/{}", spec.name);
+            let capitalized = capitalize(spec.name);
             SpineListRow {
                 id: ss(format!("spine:/:{}", spec.name)),
                 kind: SpineListRowKind::SlashCommand {
                     command: ss(spec.name),
                 },
-                title: ss(replacement.clone()),
+                title: ss(capitalized),
                 subtitle: Some(ss(spec.description)),
-                meta: Some(ss(replacement.clone())),
+                meta: None,
                 icon: Some(ss(spec.icon)),
                 badges: vec![ss("/")],
                 score: i32::MAX.saturating_sub(rank as i32),

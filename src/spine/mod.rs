@@ -8,6 +8,7 @@ mod catalog_style;
 pub(crate) mod catalog_subsearch;
 pub mod input_spans;
 pub mod list;
+pub(crate) mod live_preview;
 pub mod parse;
 pub(crate) mod prompt_plan;
 pub mod types;

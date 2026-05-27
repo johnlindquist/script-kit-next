@@ -250,6 +250,15 @@ pub(crate) fn build_spine_list_sections_with_context(
     projection: &SpineCursorProjection,
     subsearch_ctx: Option<&super::catalog_subsearch::SpineSubsearchContext<'_>>,
 ) -> Vec<SpineListSection> {
+    build_spine_list_sections_full(parse, projection, subsearch_ctx, None)
+}
+
+pub(crate) fn build_spine_list_sections_full(
+    parse: &SpineParse,
+    projection: &SpineCursorProjection,
+    subsearch_ctx: Option<&super::catalog_subsearch::SpineSubsearchContext<'_>>,
+    live_preview: Option<&super::live_preview::SpineLivePreview>,
+) -> Vec<SpineListSection> {
     let segment = active_segment(parse, projection);
     let raw = segment.map(|segment| segment.raw.as_str()).unwrap_or("");
 
@@ -276,14 +285,16 @@ pub(crate) fn build_spine_list_sections_with_context(
                     sub_query.as_deref().unwrap_or(""),
                 )]
             } else {
-                vec![build_context_root_section(parse, projection)]
+                vec![build_context_root_section(parse, projection, live_preview)]
             }
         }
         SpineSegmentKind::SlashCommand { .. } => {
             vec![build_slash_command_section(parse, projection)]
         }
         SpineSegmentKind::Profile { .. } => vec![build_profile_section(parse, projection)],
-        SpineSegmentKind::Style { .. } => vec![build_style_section(parse, projection)],
+        SpineSegmentKind::Style { .. } => {
+            vec![build_style_section(parse, projection, live_preview)]
+        }
         SpineSegmentKind::Capture { .. } => {
             let range = active_segment_range(parse, projection);
             let query = projection.active_query.as_str();
@@ -323,14 +334,16 @@ pub(crate) fn build_spine_list_sections_with_context(
 fn build_context_root_section(
     parse: &SpineParse,
     projection: &SpineCursorProjection,
+    live_preview: Option<&super::live_preview::SpineLivePreview>,
 ) -> SpineListSection {
     let range = active_segment_range(parse, projection);
     let query = projection.active_query.as_str();
 
-    let rows = super::catalog_context::build_context_root_rows(
+    let rows = super::catalog_context::build_context_root_rows_with_preview(
         query,
         projection.active_segment_index,
         range,
+        live_preview,
     );
 
     section_with_empty(
@@ -421,12 +434,24 @@ fn build_profile_section(
     )
 }
 
-fn build_style_section(parse: &SpineParse, projection: &SpineCursorProjection) -> SpineListSection {
+fn build_style_section(
+    parse: &SpineParse,
+    projection: &SpineCursorProjection,
+    live_preview: Option<&super::live_preview::SpineLivePreview>,
+) -> SpineListSection {
     let range = active_segment_range(parse, projection);
     let query = projection.active_query.as_str();
 
-    let rows =
+    let mut rows =
         super::catalog_style::build_style_rows(query, projection.active_segment_index, range);
+
+    if let Some(preview) = live_preview.and_then(|lp| lp.style_selection_preview()) {
+        for row in &mut rows {
+            if row.is_selectable {
+                row.subtitle = Some(ss(preview.clone()));
+            }
+        }
+    }
 
     section_with_empty(
         "spine-section-style",
@@ -707,7 +732,7 @@ mod tests {
             .iter()
             .find(|row| row.id.as_ref() == "spine:/:rewrite")
             .expect("expected /rewrite row");
-        assert_eq!(row.title.as_ref(), "/rewrite");
+        assert_eq!(row.title.as_ref(), "Rewrite");
         assert_eq!(
             row.subtitle.as_ref().map(|s| s.as_ref()),
             Some("Rewrite the prompt or selected context")
@@ -744,11 +769,11 @@ mod tests {
         let rows: Vec<_> = sections.iter().flat_map(|section| &section.rows).collect();
         let titles: Vec<_> = rows.iter().map(|row| row.title.as_ref()).collect();
         assert!(
-            titles.contains(&"/rewrite"),
+            titles.contains(&"Rewrite"),
             "expected /rewrite in filtered slash rows: {titles:?}"
         );
         assert!(
-            !titles.contains(&"/summarize"),
+            !titles.contains(&"Summarize"),
             "did not expect /summarize to match /rew: {titles:?}"
         );
     }

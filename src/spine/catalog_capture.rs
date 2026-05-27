@@ -62,9 +62,9 @@ pub(super) fn build_capture_rows(
             kind: SpineListRowKind::CaptureTarget {
                 target: ss(spec.id),
             },
-            title: ss(format!(";{}", spec.id)),
+            title: ss(spec.title),
             subtitle: Some(ss(spec.subtitle)),
-            meta: Some(ss(spec.title)),
+            meta: None,
             icon: Some(ss(spec.icon)),
             badges: vec![ss(";")],
             score: i32::MAX.saturating_sub(rank as i32),
