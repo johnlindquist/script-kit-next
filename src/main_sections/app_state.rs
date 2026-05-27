@@ -648,6 +648,13 @@ struct ScriptListApp {
     root_file_source_chip_visible_limit: usize,
     /// Frozen cache-refreshable passive rows for the current root-search query frame.
     root_passive_frame: Option<RootPassiveFrame>,
+    // ── Spine @file: subsearch async state ─────────────────────────
+    spine_file_search_query: String,
+    pub(crate) spine_file_search_generation: u64,
+    pub(crate) spine_file_search_loading: bool,
+    pub(crate) spine_file_search_results: Vec<file_search::FileResult>,
+    spine_file_search_cancel: Option<file_search::CancelToken>,
+
     /// File row captured when opening the root-file actions palette.
     pending_root_file_actions_file: Option<file_search::FileResult>,
     /// Root unified-search row captured when opening the MainList actions palette.

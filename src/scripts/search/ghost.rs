@@ -45,6 +45,17 @@ pub fn compute_ghost_prediction_with_revision(
         .take(10)
         .collect();
 
+    crate::logging::log(
+        "GHOST_COMPUTE",
+        &format!(
+            "query='{}' total={} eligible={} top_name={:?}",
+            query,
+            flat_results.len(),
+            eligible.len(),
+            eligible.first().map(|r| r.name().to_string()),
+        ),
+    );
+
     if eligible.is_empty() {
         return None;
     }
@@ -52,15 +63,34 @@ pub fn compute_ghost_prediction_with_revision(
     let top = eligible[0];
     let label = top.name();
 
-    let suffix = suffix_for_prefix(query, label)?;
-
-    if suffix.is_empty() {
-        return None;
-    }
+    let suffix = match suffix_for_prefix(query, label) {
+        Some(s) if !s.is_empty() => s,
+        other => {
+            crate::logging::log(
+                "GHOST_COMPUTE",
+                &format!(
+                    "no_suffix query='{}' label='{}' suffix={:?}",
+                    query, label, other
+                ),
+            );
+            return None;
+        }
+    };
 
     let top_score = top.score();
     let second_score = eligible.get(1).map(|r| r.score()).unwrap_or(0);
     let top_tier = top.match_tier();
+
+    crate::logging::log(
+        "GHOST_COMPUTE",
+        &format!(
+            "scores top={} second={} tier={} dominant={}",
+            top_score,
+            second_score,
+            top_tier,
+            dominant_enough(top_score, second_score, top_tier)
+        ),
+    );
 
     if !dominant_enough(top_score, second_score, top_tier) {
         return None;

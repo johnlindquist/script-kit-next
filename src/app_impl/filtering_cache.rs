@@ -1050,6 +1050,68 @@ impl ScriptListApp {
                         projection,
                     ),
                 );
+                // Rich subsearch bypass: @file: and @clipboard: produce native
+                // SearchResult::File / SearchResult::ClipboardHistory rows instead
+                // of generic SpineProjection rows, giving proper icons and preview.
+                if let Some((rich_source, rich_query)) =
+                    active_rich_spine_subsearch(projection)
+                {
+                    let rich_gen = match rich_source {
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::File => {
+                            self.spine_file_search_generation
+                        }
+                        _ => 0,
+                    };
+                    let rich_cache_key = format!(
+                        "{spine_cache_key}\x1Frich={rich_source:?}\x1Frich-gen={rich_gen}"
+                    );
+                    if self
+                        .main_menu_result_caches
+                        .has_grouped_results_for(&rich_cache_key)
+                    {
+                        return self.main_menu_result_caches.clone_grouped_results();
+                    }
+
+                    let (grouped_items, flat_results) = match rich_source {
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::File => {
+                            let recent = self.recent_file_results_from_frecency(
+                                crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT,
+                            );
+                            build_rich_file_subsearch_rows(
+                                &rich_query,
+                                self.spine_file_search_loading,
+                                &self.spine_file_search_results,
+                                &recent,
+                            )
+                        }
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard => {
+                            let options =
+                                crate::clipboard_history::RootClipboardHistorySectionOptions {
+                                    enabled: true,
+                                    max_results:
+                                        crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT,
+                                    min_query_chars: 0,
+                                    ..Default::default()
+                                };
+                            let hits =
+                                crate::clipboard_history::search_root_clipboard_history_meta_direct(
+                                    &rich_query, options,
+                                );
+                            build_rich_clipboard_subsearch_rows(&rich_query, &hits)
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    self.main_menu_result_caches.store_grouped_results(
+                        rich_cache_key,
+                        grouped_items,
+                        flat_results,
+                        None,
+                        None,
+                    );
+                    return self.main_menu_result_caches.clone_grouped_results();
+                }
+
                 if self
                     .main_menu_result_caches
                     .has_grouped_results_for(&spine_cache_key)
@@ -1817,39 +1879,83 @@ impl ScriptListApp {
     }
 
     pub(crate) fn refresh_ghost_from_cached_results(&mut self) {
-        if !matches!(self.current_view, AppView::ScriptList) {
-            self.ghost_prediction = None;
-            return;
-        }
-        if self.show_actions_popup {
-            self.ghost_prediction = None;
-            return;
-        }
-        if self.menu_syntax_trigger_popup_state.owns_main_list()
+        self.refresh_ghost_from_cached_results_with_cx(None);
+    }
+
+    pub(crate) fn refresh_ghost_with_input(
+        &mut self,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        self.refresh_ghost_from_cached_results_with_cx(Some(cx));
+    }
+
+    fn refresh_ghost_from_cached_results_with_cx(
+        &mut self,
+        cx: Option<&mut gpui::Context<Self>>,
+    ) {
+        let should_clear = !matches!(self.current_view, AppView::ScriptList)
+            || self.show_actions_popup
+            || self.menu_syntax_trigger_popup_state.owns_main_list()
             || self.menu_syntax_capture_form_owns_input()
-        {
+            || self.inline_calculator.is_some();
+
+        if should_clear {
             self.ghost_prediction = None;
-            return;
-        }
-        if self.inline_calculator.is_some() {
-            self.ghost_prediction = None;
+            if let Some(cx) = cx {
+                self.gpui_input_state.update(cx, |state, cx| {
+                    if state.has_inline_completion() {
+                        state.clear_inline_completion(cx);
+                    }
+                });
+            }
             return;
         }
 
         let query = &self.computed_filter_text;
         let (_, flat_results) = self.main_menu_result_caches.clone_grouped_results();
+        let has_cx = cx.is_some();
+        logging::log(
+            "GHOST",
+            &format!(
+                "refresh query='{}' flat_results={} has_cx={}",
+                query,
+                flat_results.len(),
+                has_cx
+            ),
+        );
         self.ghost_prediction =
             crate::scripts::search::ghost::compute_ghost_prediction(query, &flat_results);
-        if let Some(ref pred) = self.ghost_prediction {
-            tracing::info!(
-                target: "script_kit::ghost_text",
-                query = %pred.query,
-                ghost_suffix = %pred.ghost_suffix,
-                full_label = %pred.full_label,
-                confidence = %pred.confidence,
-                ghost_id = pred.ghost_id,
-                "ghost_prediction_computed"
-            );
+        logging::log(
+            "GHOST",
+            &format!(
+                "compute_result ghost={:?}",
+                self.ghost_prediction
+                    .as_ref()
+                    .map(|p| format!("suffix='{}' conf={}", p.ghost_suffix, p.confidence))
+            ),
+        );
+        if let Some(cx) = cx {
+            if let Some(ref pred) = self.ghost_prediction {
+                let suffix = pred.ghost_suffix.clone();
+                self.gpui_input_state.update(cx, |state, cx| {
+                    state.set_inline_completion_text(suffix, cx);
+                });
+                tracing::info!(
+                    target: "script_kit::ghost_text",
+                    query = %pred.query,
+                    ghost_suffix = %pred.ghost_suffix,
+                    full_label = %pred.full_label,
+                    confidence = %pred.confidence,
+                    ghost_id = pred.ghost_id,
+                    "ghost_prediction_set_on_input"
+                );
+            } else {
+                self.gpui_input_state.update(cx, |state, cx| {
+                    if state.has_inline_completion() {
+                        state.clear_inline_completion(cx);
+                    }
+                });
+            }
         }
     }
 }
@@ -2022,5 +2128,145 @@ mod tests {
             Some(&alpha),
         ));
     }
+}
+
+fn active_rich_spine_subsearch(
+    projection: &crate::spine::SpineCursorProjection,
+) -> Option<(
+    crate::spine::catalog_subsearch::ContextSubsearchSource,
+    String,
+)> {
+    let crate::spine::SpineSegmentKind::ContextMention {
+        context_type,
+        sub_query,
+    } = &projection.active_segment_kind
+    else {
+        return None;
+    };
+    let (source, query) = crate::spine::catalog_subsearch::parse_context_subsearch(
+        context_type,
+        sub_query.as_deref(),
+    )?;
+    match source {
+        crate::spine::catalog_subsearch::ContextSubsearchSource::File
+        | crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard => {
+            Some((source, query.to_string()))
+        }
+        _ => None,
+    }
+}
+
+fn build_rich_file_subsearch_rows(
+    query: &str,
+    loading: bool,
+    provider_results: &[crate::file_search::FileResult],
+    recent_results: &[crate::file_search::FileResult],
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    let query = query.trim();
+    let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
+
+    let mut grouped = Vec::new();
+    let mut flat: Vec<scripts::SearchResult> = Vec::new();
+
+    if query.is_empty() {
+        if !recent_results.is_empty() {
+            grouped.push(GroupedListItem::SectionHeader(
+                "Recent Files".to_string(),
+                Some("file".to_string()),
+            ));
+            for file in recent_results.iter().take(limit) {
+                let idx = flat.len();
+                flat.push(scripts::SearchResult::File(scripts::FileMatch {
+                    file: file.clone(),
+                    score: 0,
+                }));
+                grouped.push(GroupedListItem::Item(idx));
+            }
+        } else {
+            grouped.push(GroupedListItem::SectionHeader(
+                "Files".to_string(),
+                Some("file".to_string()),
+            ));
+            grouped.push(GroupedListItem::SectionHeader(
+                "No recent files".to_string(),
+                None,
+            ));
+        }
+    } else if !provider_results.is_empty() {
+        grouped.push(GroupedListItem::SectionHeader(
+            format!("Files matching \u{201c}{query}\u{201d}"),
+            Some("file".to_string()),
+        ));
+        for file in provider_results.iter().take(limit) {
+            let idx = flat.len();
+            flat.push(scripts::SearchResult::File(scripts::FileMatch {
+                file: file.clone(),
+                score: 0,
+            }));
+            grouped.push(GroupedListItem::Item(idx));
+        }
+    } else if loading {
+        grouped.push(GroupedListItem::SectionHeader(
+            "Searching files\u{2026}".to_string(),
+            Some("file".to_string()),
+        ));
+    } else {
+        grouped.push(GroupedListItem::SectionHeader(
+            format!("No files matching \u{201c}{query}\u{201d}"),
+            Some("file".to_string()),
+        ));
+    }
+
+    (grouped, flat)
+}
+
+fn build_rich_clipboard_subsearch_rows(
+    query: &str,
+    hits: &[crate::clipboard_history::ClipboardEntryMeta],
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
+    let mut grouped = Vec::new();
+    let mut flat: Vec<scripts::SearchResult> = Vec::new();
+
+    let header = if query.trim().is_empty() {
+        "Recent Clipboard".to_string()
+    } else {
+        format!("Clipboard matching \u{201c}{}\u{201d}", query.trim())
+    };
+
+    grouped.push(GroupedListItem::SectionHeader(
+        header,
+        Some("clipboard".to_string()),
+    ));
+
+    if hits.is_empty() {
+        grouped.push(GroupedListItem::SectionHeader(
+            if query.trim().is_empty() {
+                "Clipboard is empty".to_string()
+            } else {
+                format!("No clipboard entries matching \u{201c}{}\u{201d}", query.trim())
+            },
+            None,
+        ));
+    } else {
+        for entry in hits.iter().take(limit) {
+            let idx = flat.len();
+            let title = crate::spine::text_preview::single_line_truncate(
+                &entry.text_preview,
+                72,
+            );
+            flat.push(scripts::SearchResult::ClipboardHistory(
+                scripts::ClipboardHistoryMatch {
+                    entry: entry.clone(),
+                    title: title.clone(),
+                    subtitle: "Clipboard History".to_string(),
+                    score: 0,
+                },
+            ));
+            grouped.push(GroupedListItem::Item(idx));
+        }
+    }
+
+    (grouped, flat)
 }
 

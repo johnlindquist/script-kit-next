@@ -383,18 +383,17 @@ impl ScriptListApp {
         window: &mut gpui::Window,
         cx: &mut gpui::Context<Self>,
     ) -> bool {
-        let prediction = match self.ghost_prediction.take() {
-            Some(p) => p,
-            None => return false,
-        };
-        let full_label = prediction.full_label.clone();
-        self.pending_programmatic_filter_echo = Some(full_label.clone());
-        self.gpui_input_state.update(cx, |state, cx| {
-            state.set_value(full_label.clone(), window, cx);
+        if self.ghost_prediction.is_none() {
+            return false;
+        }
+        let accepted = self.gpui_input_state.update(cx, |state, window_cx| {
+            state.accept_inline_completion(window, window_cx)
         });
-        self.ghost_prediction = None;
-        cx.notify();
-        true
+        if accepted {
+            self.ghost_prediction = None;
+            cx.notify();
+        }
+        accepted
     }
 }
 

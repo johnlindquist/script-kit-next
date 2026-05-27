@@ -2,6 +2,7 @@ use super::*;
 
 const ROOT_FILE_RESULT_CACHE_LIMIT: usize = 24;
 const ROOT_FILE_SEARCH_DEBOUNCE_MS: u64 = 60;
+const SPINE_FILE_SEARCH_DEBOUNCE_MS: u64 = 80;
 
 #[derive(Clone)]
 enum RootFileSearchRequest {
@@ -609,5 +610,192 @@ impl RootFileSearchTestFixtureResult {
                 _ => crate::file_search::FileType::File,
             },
         }
+    }
+}
+
+impl ScriptListApp {
+    // ── Spine @file: subsearch ───────────────────────────────────────
+
+    fn cancel_spine_file_subsearch(&mut self) {
+        if let Some(cancel) = self.spine_file_search_cancel.take() {
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    fn clear_spine_file_subsearch_state(&mut self, cx: &mut Context<Self>) {
+        self.cancel_spine_file_subsearch();
+        let had_state = !self.spine_file_search_query.is_empty()
+            || !self.spine_file_search_results.is_empty()
+            || self.spine_file_search_loading;
+        self.spine_file_search_query.clear();
+        self.spine_file_search_results.clear();
+        self.spine_file_search_loading = false;
+        if had_state {
+            self.spine_file_search_generation =
+                self.spine_file_search_generation.wrapping_add(1);
+            self.invalidate_grouped_cache();
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn active_spine_context_subsearch(
+        &self,
+    ) -> Option<(
+        crate::spine::catalog_subsearch::ContextSubsearchSource,
+        String,
+    )> {
+        if !self.spine_projection_owns_main_list() {
+            return None;
+        }
+        let projection = self.spine_projection.as_ref()?;
+        match &projection.active_segment_kind {
+            crate::spine::SpineSegmentKind::ContextMention {
+                context_type,
+                sub_query,
+            } => {
+                let (source, query) =
+                    crate::spine::catalog_subsearch::parse_context_subsearch(
+                        context_type,
+                        sub_query.as_deref(),
+                    )?;
+                Some((source, query.to_string()))
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn maybe_start_spine_file_subsearch_for_current_projection(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((source, query)) = self.active_spine_context_subsearch() else {
+            self.clear_spine_file_subsearch_state(cx);
+            return;
+        };
+        if source != crate::spine::catalog_subsearch::ContextSubsearchSource::File {
+            self.clear_spine_file_subsearch_state(cx);
+            return;
+        }
+        self.maybe_start_spine_file_subsearch(&query, cx);
+    }
+
+    fn maybe_start_spine_file_subsearch(
+        &mut self,
+        query: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let query = query.trim();
+        if query.is_empty() {
+            self.clear_spine_file_subsearch_state(cx);
+            return;
+        }
+        if self.spine_file_search_query == query {
+            return;
+        }
+
+        self.cancel_spine_file_subsearch();
+        self.spine_file_search_generation =
+            self.spine_file_search_generation.wrapping_add(1);
+        let generation = self.spine_file_search_generation;
+        self.spine_file_search_query = query.to_string();
+        self.spine_file_search_loading = true;
+        self.spine_file_search_results.clear();
+        self.invalidate_grouped_cache();
+        cx.notify();
+
+        let cancel = crate::file_search::new_cancel_token();
+        self.spine_file_search_cancel = Some(cancel.clone());
+        let query_owned = query.to_string();
+
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(
+                    SPINE_FILE_SEARCH_DEBOUNCE_MS,
+                ))
+                .await;
+            if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                return;
+            }
+
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn({
+                let cancel = cancel.clone();
+                let query_owned = query_owned.clone();
+                move || {
+                    if emit_root_file_search_test_fixture(
+                        &query_owned,
+                        &cancel,
+                        &tx,
+                    ) {
+                        return;
+                    }
+                    let provider_query =
+                        crate::file_search::root_file_provider_query_for_user_query(
+                            &query_owned,
+                        );
+                    crate::file_search::search_files_streaming_with_options(
+                        &provider_query,
+                        None,
+                        crate::file_search::ROOT_FILE_SOURCE_LIMIT,
+                        cancel,
+                        crate::file_search::SearchFilesStreamingOptions::root_search(),
+                        |event| {
+                            let _ = tx.send(event);
+                        },
+                    );
+                }
+            });
+
+            let mut batch = Vec::new();
+            loop {
+                if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
+                match rx.try_recv() {
+                    Ok(crate::file_search::SearchEvent::Result(result)) => {
+                        batch.push(result);
+                    }
+                    Ok(crate::file_search::SearchEvent::Done) => break,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(16))
+                            .await;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                }
+            }
+
+            let _ = cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    app.apply_spine_file_subsearch_results(
+                        generation,
+                        batch,
+                        cx,
+                    );
+                })
+            });
+        })
+        .detach();
+    }
+
+    fn apply_spine_file_subsearch_results(
+        &mut self,
+        generation: u64,
+        results: Vec<crate::file_search::FileResult>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.spine_file_search_generation != generation {
+            return;
+        }
+        let results = dedupe_root_file_results(results);
+        self.spine_file_search_results = results;
+        self.spine_file_search_loading = false;
+        self.spine_file_search_cancel = None;
+        self.invalidate_grouped_cache();
+        if matches!(self.current_view, AppView::ScriptList) {
+            self.sync_list_state_for_filter_replacement();
+            self.validate_selection_bounds(cx);
+        }
+        cx.notify();
     }
 }

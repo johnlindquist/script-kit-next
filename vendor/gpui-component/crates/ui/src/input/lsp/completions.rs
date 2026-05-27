@@ -279,19 +279,31 @@ impl InputState {
 
     /// Check if an inline completion suggestion is currently displayed.
     #[inline]
-    pub(crate) fn has_inline_completion(&self) -> bool {
+    pub fn has_inline_completion(&self) -> bool {
         self.inline_completion.item.is_some()
     }
 
     /// Clear the inline completion suggestion.
-    pub(crate) fn clear_inline_completion(&mut self, cx: &mut Context<Self>) {
+    pub fn clear_inline_completion(&mut self, cx: &mut Context<Self>) {
         self.inline_completion = InlineCompletion::default();
+        cx.notify();
+    }
+
+    /// Set an inline completion suggestion directly (ghost text after cursor).
+    pub fn set_inline_completion_text(&mut self, text: String, cx: &mut Context<Self>) {
+        self.inline_completion.item = Some(InlineCompletionItem {
+            insert_text: text,
+            filter_text: None,
+            range: None,
+            command: None,
+            insert_text_format: None,
+        });
         cx.notify();
     }
 
     /// Accept the inline completion, inserting it at the cursor position.
     /// Returns true if a completion was accepted, false if there was none.
-    pub(crate) fn accept_inline_completion(
+    pub fn accept_inline_completion(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,

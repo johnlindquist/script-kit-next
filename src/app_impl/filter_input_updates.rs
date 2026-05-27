@@ -64,7 +64,7 @@ impl ScriptListApp {
             self.rebuild_main_window_preflight_if_needed();
         }
 
-        self.refresh_ghost_from_cached_results();
+        self.refresh_ghost_with_input(cx);
     }
 
     pub(crate) fn queue_filter_compute(&mut self, value: String, cx: &mut Context<Self>) {
@@ -188,6 +188,7 @@ impl ScriptListApp {
             self.set_menu_syntax_mode_from_filter(&text);
             if self.spine_enabled {
                 self.set_spine_parse_from_filter_and_cursor(&text, text.len());
+                self.maybe_start_spine_file_subsearch_for_current_projection(cx);
             }
             handler_form_owns_input = self.menu_syntax_capture_form_owns_input_for(&text);
             self.sync_menu_syntax_form_inputs_from_filter(window, cx);
@@ -443,6 +444,12 @@ impl ScriptListApp {
         if !self.spine_projection_owns_main_list() {
             return false;
         }
+        // Rich subsearch rows (SearchResult::File, ClipboardHistory) need
+        // interception: resolve them into @file:path / @clipboard:id tokens
+        // instead of executing default file-open / clipboard-paste behavior.
+        if let Some(action) = self.selected_spine_rich_subsearch_action() {
+            return self.apply_spine_list_action(action, window, cx);
+        }
         let Some(row) = self.selected_spine_projection_row() else {
             tracing::debug!(
                 target: "script_kit::spine",
@@ -460,6 +467,79 @@ impl ScriptListApp {
             selected_index = self.selected_index,
         );
         self.apply_spine_list_action(action, window, cx)
+    }
+
+    fn selected_spine_rich_subsearch_action(
+        &mut self,
+    ) -> Option<crate::spine::SpineListAction> {
+        let projection = self.spine_projection.as_ref()?;
+        let crate::spine::SpineSegmentKind::ContextMention {
+            context_type,
+            sub_query,
+        } = &projection.active_segment_kind
+        else {
+            return None;
+        };
+        let (source, _) = crate::spine::catalog_subsearch::parse_context_subsearch(
+            context_type,
+            sub_query.as_deref(),
+        )?;
+        let segment_index = projection.active_segment_index;
+        let segment_byte_range = self
+            .spine_parse
+            .segments
+            .get(segment_index)
+            .map(|seg| seg.byte_range.clone())?;
+
+        let (grouped, flat) = self.get_grouped_results_cached();
+        let result_idx = match grouped.get(self.selected_index)? {
+            GroupedListItem::Item(idx) => *idx,
+            _ => return None,
+        };
+        let result = flat.get(result_idx)?;
+
+        match (source, result) {
+            (
+                crate::spine::catalog_subsearch::ContextSubsearchSource::File,
+                scripts::SearchResult::File(file_match),
+            ) => {
+                let short = crate::file_search::shorten_path(&file_match.file.path);
+                let replacement = format!(
+                    "@file:{}",
+                    crate::spine::catalog_subsearch::escape_ref_component(&short),
+                );
+                Some(crate::spine::SpineListAction::ResolveSegment {
+                    segment_index,
+                    segment_byte_range,
+                    replacement: replacement.into(),
+                    resolution_id: format!("file/{}", file_match.file.path).into(),
+                    resolution_label: file_match.file.name.clone().into(),
+                    resolution_source: "file".into(),
+                    trailing_space: true,
+                })
+            }
+            (
+                crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard,
+                scripts::SearchResult::ClipboardHistory(clip_match),
+            ) => {
+                let replacement = format!(
+                    "@clipboard:{}",
+                    crate::spine::catalog_subsearch::escape_ref_component(
+                        &clip_match.entry.id,
+                    ),
+                );
+                Some(crate::spine::SpineListAction::ResolveSegment {
+                    segment_index,
+                    segment_byte_range,
+                    replacement: replacement.into(),
+                    resolution_id: format!("clipboard/{}", clip_match.entry.id).into(),
+                    resolution_label: clip_match.title.clone().into(),
+                    resolution_source: "clipboard".into(),
+                    trailing_space: true,
+                })
+            }
+            _ => None,
+        }
     }
 
     /// Return the `SpineListRow` at the current `selected_index`, if any.
@@ -689,6 +769,7 @@ impl ScriptListApp {
         if self.spine_enabled {
             self.set_spine_parse_from_filter_and_cursor(&text, cursor);
             self.force_spine_tail_projection_after_trailing_space(&text, cursor);
+            self.maybe_start_spine_file_subsearch_for_current_projection(cx);
         }
 
         self.main_menu_fallback_state.clear();

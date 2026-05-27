@@ -5,8 +5,7 @@ use gpui::SharedString;
 
 use super::list::{ss, SpineListAction, SpineListRow, SpineListRowKind, SpineListSection};
 
-const SUBSEARCH_RENDER_LIMIT: usize = 8;
-const FILE_SCAN_LIMIT: usize = 64;
+pub(crate) const SUBSEARCH_RENDER_LIMIT: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ContextSubsearchSource {
@@ -103,13 +102,27 @@ pub(crate) fn build_context_subsearch_section(
     ctx: Option<&SpineSubsearchContext<'_>>,
 ) -> SpineListSection {
     let rows = match source {
-        ContextSubsearchSource::File => build_file_rows(query, segment_index, segment_byte_range),
+        ContextSubsearchSource::File => vec![hint_row(
+            if query.trim().is_empty() {
+                "Recent files"
+            } else {
+                "Searching files\u{2026}"
+            },
+            "File results are loaded by the launcher",
+            ContextSubsearchSource::File,
+        )],
         ContextSubsearchSource::BrowserHistory => {
             build_browser_history_rows(query, segment_index, segment_byte_range)
         }
-        ContextSubsearchSource::Clipboard => {
-            build_clipboard_rows(query, segment_index, segment_byte_range)
-        }
+        ContextSubsearchSource::Clipboard => vec![hint_row(
+            if query.trim().is_empty() {
+                "Recent clipboard entries"
+            } else {
+                "Searching clipboard\u{2026}"
+            },
+            "Clipboard results are loaded by the launcher",
+            ContextSubsearchSource::Clipboard,
+        )],
         ContextSubsearchSource::Dictation => {
             build_dictation_rows(query, segment_index, segment_byte_range)
         }
@@ -211,44 +224,6 @@ fn empty_result_row(source: ContextSubsearchSource, query: &str) -> SpineListRow
     }
 }
 
-// --- File provider ---
-
-fn build_file_rows(
-    query: &str,
-    segment_index: usize,
-    segment_byte_range: Range<usize>,
-) -> Vec<SpineListRow> {
-    let query = query.trim();
-    if query.is_empty() {
-        return vec![hint_row(
-            "Type a filename",
-            "Example: @file:readme",
-            ContextSubsearchSource::File,
-        )];
-    }
-
-    let raw = crate::file_search::search_files(query, None, FILE_SCAN_LIMIT);
-
-    raw.into_iter()
-        .take(SUBSEARCH_RENDER_LIMIT)
-        .enumerate()
-        .map(|(rank, file)| {
-            let short = crate::file_search::shorten_path(&file.path);
-            let ref_text = format!("@file:{}", escape_ref_component(&short));
-            context_result_row(
-                ContextSubsearchSource::File,
-                segment_index,
-                segment_byte_range.clone(),
-                format!("file/{}", file.path),
-                file.name.clone(),
-                short,
-                ref_text,
-                i32::MAX.saturating_sub(rank as i32),
-            )
-        })
-        .collect()
-}
-
 // --- Browser history provider ---
 
 fn build_browser_history_rows(
@@ -289,40 +264,6 @@ fn build_browser_history_rows(
                 hit.stable_key,
                 title,
                 format!("{} · {}", hit.domain, hit.provider_label),
-                ref_text,
-                i32::MAX.saturating_sub(rank as i32),
-            )
-        })
-        .collect()
-}
-
-// --- Clipboard history provider ---
-
-fn build_clipboard_rows(
-    query: &str,
-    segment_index: usize,
-    segment_byte_range: Range<usize>,
-) -> Vec<SpineListRow> {
-    let options = crate::clipboard_history::RootClipboardHistorySectionOptions {
-        enabled: true,
-        max_results: SUBSEARCH_RENDER_LIMIT,
-        min_query_chars: 0,
-        ..Default::default()
-    };
-
-    crate::clipboard_history::search_root_clipboard_history_meta_direct(query, options)
-        .into_iter()
-        .enumerate()
-        .map(|(rank, entry)| {
-            let title = single_line_truncate(&entry.text_preview, 72);
-            let ref_text = format!("@clipboard:{}", escape_ref_component(&entry.id));
-            context_result_row(
-                ContextSubsearchSource::Clipboard,
-                segment_index,
-                segment_byte_range.clone(),
-                format!("clipboard/{}", entry.id),
-                title,
-                "Clipboard History".to_string(),
                 ref_text,
                 i32::MAX.saturating_sub(rank as i32),
             )
@@ -542,7 +483,7 @@ fn hint_row(title: &str, subtitle: &str, source: ContextSubsearchSource) -> Spin
     }
 }
 
-fn escape_ref_component(input: &str) -> String {
+pub(crate) fn escape_ref_component(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     for ch in input.chars() {
         match ch {

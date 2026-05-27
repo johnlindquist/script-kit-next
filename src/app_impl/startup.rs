@@ -728,6 +728,11 @@ impl ScriptListApp {
             root_file_source_chip_visible_limit:
                 crate::file_search::ROOT_FILE_SOURCE_CHIP_INITIAL_VISIBLE_ROWS,
             root_passive_frame: None,
+            spine_file_search_query: String::new(),
+            spine_file_search_generation: 0,
+            spine_file_search_loading: false,
+            spine_file_search_results: Vec::new(),
+            spine_file_search_cancel: None,
             pending_root_file_actions_file: None,
             pending_root_unified_actions_subject: None,
             cached_processes: Vec::new(),
