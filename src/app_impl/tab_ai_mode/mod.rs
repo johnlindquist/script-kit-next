@@ -315,7 +315,6 @@ impl ScriptListApp {
 
     pub(crate) fn try_submit_spine_prompt_plan_from_enter(
         &mut self,
-        _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
         if !self.spine_enabled || !matches!(self.current_view, AppView::ScriptList) {
@@ -360,10 +359,7 @@ impl ScriptListApp {
         self.spine_live_preview_cache = Default::default();
         self.invalidate_grouped_cache();
 
-        self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(
-            Some(prompt.clone()),
-            cx,
-        );
+        self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(Some(prompt.clone()), cx);
 
         if let AppView::AcpChatView { entity } = &self.current_view {
             let entity = entity.clone();
@@ -1810,6 +1806,12 @@ impl ScriptListApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
+        if self.spine_enabled && matches!(self.current_view, AppView::ScriptList) {
+            let raw = self.filter_text.clone();
+            if !raw.trim().is_empty() {
+                return self.try_submit_spine_prompt_plan_from_enter(cx);
+            }
+        }
         // Run 12 Pass 11 — `cmd-enter-inline-ai-proposal`. When the user is
         // composing power syntax, Cmd+Enter generates an INLINE proposal
         // shown in the hint card (NOT a full ACP chat handoff). Intercept

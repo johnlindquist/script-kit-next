@@ -1550,7 +1550,7 @@ impl ScriptListApp {
                             }
                         }
                     }
-                    if this.try_submit_spine_prompt_plan_from_enter(window, cx) {
+                    if this.try_submit_spine_prompt_plan_from_enter(cx) {
                         cx.stop_propagation();
                         return;
                     }
