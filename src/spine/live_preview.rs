@@ -1,4 +1,5 @@
 use crate::ai::context_contract::ContextAttachmentKind;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SpineLivePreview {
@@ -11,11 +12,18 @@ pub(crate) struct SpineLivePreview {
     pub script_count: Option<usize>,
 }
 
+#[derive(Debug)]
+struct ExpensiveResult {
+    browser_url: Option<String>,
+    selection_text: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct SpineLivePreviewCache {
     pub current: SpineLivePreview,
     pub generation: u64,
-    last_expensive_refresh: Option<std::time::Instant>,
+    last_expensive_kick: Option<std::time::Instant>,
+    pending_expensive: Arc<Mutex<Option<ExpensiveResult>>>,
 }
 
 impl Default for SpineLivePreviewCache {
@@ -23,7 +31,8 @@ impl Default for SpineLivePreviewCache {
         Self {
             current: SpineLivePreview::default(),
             generation: 0,
-            last_expensive_refresh: None,
+            last_expensive_kick: None,
+            pending_expensive: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -60,25 +69,52 @@ impl SpineLivePreviewCache {
         }
     }
 
-    pub(crate) fn refresh_expensive_fields(&mut self) {
+    /// Collect any completed background expensive result into the cache.
+    /// If new data arrived, bumps generation so the spine cache key changes.
+    fn collect_pending_expensive(&mut self) {
+        let result = self
+            .pending_expensive
+            .lock()
+            .ok()
+            .and_then(|mut g| g.take());
+        if let Some(r) = result {
+            if r.browser_url != self.current.browser_url
+                || r.selection_text != self.current.selection_text
+            {
+                self.current.browser_url = r.browser_url;
+                self.current.selection_text = r.selection_text;
+                self.generation += 1;
+            }
+        }
+    }
+
+    /// Non-blocking: kicks a background thread for expensive fields (browser
+    /// URL, selected text) if the throttle has expired. Collects any
+    /// previously completed result first so the current render gets it.
+    pub(crate) fn refresh_expensive_fields_nonblocking(&mut self) {
+        self.collect_pending_expensive();
+
         const THROTTLE: std::time::Duration = std::time::Duration::from_secs(2);
-        if let Some(last) = self.last_expensive_refresh {
+        if let Some(last) = self.last_expensive_kick {
             if last.elapsed() < THROTTLE {
                 return;
             }
         }
-        self.last_expensive_refresh = Some(std::time::Instant::now());
+        self.last_expensive_kick = Some(std::time::Instant::now());
 
-        let new_url = crate::platform::get_any_browser_tab_url();
-        let new_selection = crate::selected_text::get_selected_text()
-            .ok()
-            .filter(|t| !t.trim().is_empty());
-
-        if new_url != self.current.browser_url || new_selection != self.current.selection_text {
-            self.current.browser_url = new_url;
-            self.current.selection_text = new_selection;
-            self.generation += 1;
-        }
+        let slot = Arc::clone(&self.pending_expensive);
+        std::thread::spawn(move || {
+            let url = crate::platform::get_any_browser_tab_url();
+            let sel = crate::selected_text::get_selected_text()
+                .ok()
+                .filter(|t| !t.trim().is_empty());
+            if let Ok(mut g) = slot.lock() {
+                *g = Some(ExpensiveResult {
+                    browser_url: url,
+                    selection_text: sel,
+                });
+            }
+        });
     }
 
     pub(crate) fn set_script_count(&mut self, count: usize) {

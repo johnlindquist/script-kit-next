@@ -1032,7 +1032,8 @@ impl ScriptListApp {
                     self.spine_live_preview_cache
                         .set_script_count(self.scripts.len());
                     self.spine_live_preview_cache.refresh_cheap_fields();
-                    self.spine_live_preview_cache.refresh_expensive_fields();
+                    self.spine_live_preview_cache
+                        .refresh_expensive_fields_nonblocking();
                 }
 
                 let spine_cache_key = format!(
