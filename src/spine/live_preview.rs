@@ -51,11 +51,22 @@ impl SpineLivePreviewCache {
         let new_app = tracked_app.as_ref().map(|a| a.name.clone());
         let new_title = tracked_app.as_ref().and_then(|a| a.window_title.clone());
 
-        let menu_snapshot = crate::frontmost_app_tracker::get_cached_menu_snapshot();
-        let new_menu = match (menu_snapshot.app.as_ref(), menu_snapshot.items.len()) {
-            (Some(app), 0) => Some(format!("{} \u{b7} menu loading\u{2026}", app.name)),
-            (Some(app), n) => Some(format!("{} \u{b7} {n} menus cached", app.name)),
-            (None, _) => Some("No tracked app".to_string()),
+        let menu = crate::frontmost_app_tracker::get_cached_menu_summary();
+        let new_menu = match (menu.app.as_ref(), menu.status) {
+            (Some(app), crate::frontmost_app_tracker::CachedMenuStatus::Ready) => Some(format!(
+                "{} \u{b7} {} menus cached",
+                app.name, menu.item_count
+            )),
+            (Some(app), crate::frontmost_app_tracker::CachedMenuStatus::Fetching) => {
+                Some(format!("{} \u{b7} menu loading\u{2026}", app.name))
+            }
+            (Some(app), crate::frontmost_app_tracker::CachedMenuStatus::NoCache) => {
+                Some(format!("{} \u{b7} menu not cached yet", app.name))
+            }
+            (Some(app), crate::frontmost_app_tracker::CachedMenuStatus::StaleCacheHidden) => {
+                Some(format!("{} \u{b7} menu cache stale", app.name))
+            }
+            _ => Some("No tracked app".to_string()),
         };
 
         let new_clipboard = arboard::Clipboard::new()
@@ -293,22 +304,5 @@ impl SpineLivePreview {
 }
 
 fn truncate_preview(input: &str, max_chars: usize) -> String {
-    let single_line = input
-        .chars()
-        .map(|ch| {
-            if matches!(ch, '\n' | '\r' | '\t') {
-                ' '
-            } else {
-                ch
-            }
-        })
-        .collect::<String>();
-    let trimmed = single_line.trim();
-    if trimmed.chars().count() <= max_chars {
-        trimmed.to_string()
-    } else {
-        let mut out: String = trimmed.chars().take(max_chars.saturating_sub(1)).collect();
-        out.push('\u{2026}');
-        out
-    }
+    super::text_preview::single_line_truncate(input, max_chars)
 }

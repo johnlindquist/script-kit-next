@@ -11,6 +11,7 @@ pub mod list;
 pub(crate) mod live_preview;
 pub mod parse;
 pub(crate) mod prompt_plan;
+pub(crate) mod text_preview;
 pub mod types;
 
 pub use input_spans::*;

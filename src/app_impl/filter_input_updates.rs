@@ -619,8 +619,7 @@ impl ScriptListApp {
             return false;
         }
 
-        // Validate segment_index matches current spine parse.
-        if segment_index >= self.spine_parse.segments.len() {
+        let Some(current_segment) = self.spine_parse.segments.get(segment_index) else {
             tracing::debug!(
                 target: "script_kit::spine",
                 event = "replace_segment_index_out_of_bounds",
@@ -628,12 +627,25 @@ impl ScriptListApp {
                 segment_count = self.spine_parse.segments.len(),
             );
             return false;
+        };
+
+        if current_segment.byte_range != segment_byte_range {
+            tracing::debug!(
+                target: "script_kit::spine",
+                event = "replace_segment_stale_range",
+                segment_index,
+                expected = ?current_segment.byte_range,
+                got = ?segment_byte_range,
+            );
+            return false;
         }
 
-        // Build the new filter text: prefix + replacement + optional space + suffix.
         let prefix = &current[..segment_byte_range.start];
         let suffix = &current[segment_byte_range.end..];
-        let space = if trailing_space { " " } else { "" };
+        let add_space = trailing_space
+            && !replacement.ends_with(char::is_whitespace)
+            && !suffix.starts_with(char::is_whitespace);
+        let space = if add_space { " " } else { "" };
         let new_text = format!("{prefix}{replacement}{space}{suffix}");
         let cursor = prefix.len() + replacement.len() + space.len();
 

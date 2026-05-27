@@ -157,26 +157,7 @@ fn empty_row(id: &'static str, title: &'static str, subtitle: &'static str) -> S
 }
 
 fn single_line_truncate(input: &str, max_chars: usize) -> String {
-    let single_line = input
-        .chars()
-        .map(|ch| {
-            if matches!(ch, '\n' | '\r' | '\t') {
-                ' '
-            } else {
-                ch
-            }
-        })
-        .collect::<String>();
-    let trimmed = single_line.trim();
-    if trimmed.chars().count() <= max_chars {
-        return trimmed.to_string();
-    }
-    let mut out = trimmed
-        .chars()
-        .take(max_chars.saturating_sub(1))
-        .collect::<String>();
-    out.push('\u{2026}');
-    out
+    super::text_preview::single_line_truncate(input, max_chars)
 }
 
 fn stable_tail_row_hash(value: &str) -> u64 {

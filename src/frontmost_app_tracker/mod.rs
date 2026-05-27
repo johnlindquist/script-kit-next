@@ -444,6 +444,46 @@ pub fn get_cached_menu_items() -> Vec<MenuBarItem> {
     }
 }
 
+pub struct CachedMenuSummary {
+    pub app: Option<TrackedApp>,
+    pub item_count: usize,
+    pub status: CachedMenuStatus,
+}
+
+pub fn get_cached_menu_summary() -> CachedMenuSummary {
+    let state = TRACKER_STATE.read();
+    let Some(tracked) = state.last_real_app.clone() else {
+        return CachedMenuSummary {
+            app: None,
+            item_count: 0,
+            status: CachedMenuStatus::NoTrackedApp,
+        };
+    };
+
+    let tracked_identity = MenuCacheIdentity {
+        pid: tracked.pid,
+        bundle_id: tracked.bundle_id.clone(),
+    };
+    let cache_matches = state.cached_menu_identity.as_ref() == Some(&tracked_identity);
+    let is_fetching = state.fetching_menu_identity.as_ref() == Some(&tracked_identity);
+
+    let (item_count, status) = if cache_matches {
+        (state.cached_menu_items.len(), CachedMenuStatus::Ready)
+    } else if is_fetching {
+        (0, CachedMenuStatus::Fetching)
+    } else if state.cached_menu_identity.is_some() {
+        (0, CachedMenuStatus::StaleCacheHidden)
+    } else {
+        (0, CachedMenuStatus::NoCache)
+    };
+
+    CachedMenuSummary {
+        app: Some(tracked),
+        item_count,
+        status,
+    }
+}
+
 pub fn get_cached_menu_snapshot() -> CachedMenuSnapshot {
     let state = TRACKER_STATE.read();
     let Some(tracked) = state.last_real_app.clone() else {
