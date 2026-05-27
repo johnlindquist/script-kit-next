@@ -87,7 +87,9 @@ impl SpineLivePreviewCache {
 }
 
 impl SpineLivePreview {
-    pub(crate) fn subtitle_for_context_kind(&self, kind: ContextAttachmentKind) -> Option<String> {
+    /// Live data promoted to the row title. Returns `None` when the static
+    /// label from `ContextAttachmentSpec.label` should be used as-is.
+    pub(crate) fn title_for_context_kind(&self, kind: ContextAttachmentKind) -> Option<String> {
         match kind {
             ContextAttachmentKind::Current => {
                 let mut parts = Vec::new();
@@ -101,7 +103,7 @@ impl SpineLivePreview {
                     parts.push("Browser".to_string());
                 }
                 if parts.is_empty() {
-                    Some("Snapshot of current app context".to_string())
+                    None
                 } else {
                     Some(parts.join(" \u{b7} "))
                 }
@@ -121,102 +123,106 @@ impl SpineLivePreview {
                     parts.push("Window");
                 }
                 if parts.is_empty() {
-                    Some("All available context except screenshots".to_string())
+                    None
                 } else {
                     Some(format!("{} included", parts.join(" \u{b7} ")))
                 }
             }
             ContextAttachmentKind::Selection => {
                 if let Some(t) = &self.selection_text {
-                    let preview = truncate_preview(t, 60);
-                    if preview.is_empty() {
-                        Some("No text selected".to_string())
-                    } else {
-                        Some(format!("\u{201c}{preview}\u{201d}"))
+                    let preview = truncate_preview(t, 50);
+                    if !preview.is_empty() {
+                        return Some(format!("\u{201c}{preview}\u{201d}"));
                     }
-                } else {
-                    Some("No text selected".to_string())
                 }
+                None
             }
-            ContextAttachmentKind::Browser => {
-                if let Some(url) = &self.browser_url {
-                    Some(truncate_preview(url, 60))
-                } else {
-                    Some("No supported browser focused".to_string())
-                }
-            }
+            ContextAttachmentKind::Browser => self
+                .browser_url
+                .as_ref()
+                .map(|url| truncate_preview(url, 55)),
             ContextAttachmentKind::Window => {
                 match (&self.active_window_title, &self.frontmost_app_name) {
                     (Some(title), Some(app)) if !title.trim().is_empty() => {
-                        Some(format!("{} \u{b7} {}", truncate_preview(title, 45), app))
+                        Some(format!("{} \u{b7} {}", truncate_preview(title, 40), app))
                     }
                     (Some(title), _) if !title.trim().is_empty() => {
-                        Some(truncate_preview(title, 60))
+                        Some(truncate_preview(title, 55))
                     }
                     (_, Some(app)) if !app.trim().is_empty() => Some(app.clone()),
-                    _ => Some("No tracked window".to_string()),
+                    _ => None,
                 }
             }
-            ContextAttachmentKind::Diagnostics => {
-                Some("Capture source health and permissions".to_string())
-            }
-            ContextAttachmentKind::Screenshot => {
-                if let Some(app) = &self.frontmost_app_name {
-                    Some(format!("Ready to capture \u{b7} {app}"))
-                } else {
-                    Some("Ready to capture screen behind Script Kit".to_string())
-                }
-            }
+            ContextAttachmentKind::Screenshot => self
+                .frontmost_app_name
+                .as_ref()
+                .map(|app| format!("Screenshot \u{b7} {app}")),
             ContextAttachmentKind::Clipboard => {
                 if let Some(t) = &self.clipboard_text {
-                    let preview = truncate_preview(t, 60);
-                    if preview.is_empty() {
-                        Some("Clipboard empty".to_string())
-                    } else {
-                        Some(format!("\u{201c}{preview}\u{201d}"))
+                    let preview = truncate_preview(t, 50);
+                    if !preview.is_empty() {
+                        return Some(format!("\u{201c}{preview}\u{201d}"));
                     }
+                }
+                None
+            }
+            ContextAttachmentKind::FrontmostApp => self.frontmost_app_name.clone(),
+            ContextAttachmentKind::MenuBar => self.menu_bar_summary.clone(),
+            ContextAttachmentKind::RecentScripts => {
+                self.script_count.map(|c| format!("{c} scripts indexed"))
+            }
+            _ => None,
+        }
+    }
+
+    /// Action-oriented subtitle shown below the title in the @ context list.
+    pub(crate) fn subtitle_for_context_kind(&self, kind: ContextAttachmentKind) -> Option<String> {
+        Some(match kind {
+            ContextAttachmentKind::Current => "Attach snapshot of the current app context".into(),
+            ContextAttachmentKind::Full => "Attach all available context except screenshots".into(),
+            ContextAttachmentKind::Selection => {
+                if self.selection_text.is_some() {
+                    "Attach the selected text to your command".into()
                 } else {
-                    Some("Clipboard empty".to_string())
+                    "No text selected \u{2014} select text first".into()
+                }
+            }
+            ContextAttachmentKind::Browser => {
+                if self.browser_url.is_some() {
+                    "Attach this page\u{2019}s URL to your command".into()
+                } else {
+                    "No supported browser focused".into()
+                }
+            }
+            ContextAttachmentKind::Window => {
+                "Attach the focused window info to your command".into()
+            }
+            ContextAttachmentKind::Diagnostics => {
+                "Attach capture source health and permissions".into()
+            }
+            ContextAttachmentKind::Screenshot => {
+                "Attach a screenshot of the screen behind Script Kit".into()
+            }
+            ContextAttachmentKind::Clipboard => {
+                if self.clipboard_text.is_some() {
+                    "Attach clipboard contents to your command".into()
+                } else {
+                    "Clipboard is empty".into()
                 }
             }
             ContextAttachmentKind::FrontmostApp => {
-                if let Some(name) = &self.frontmost_app_name {
-                    Some(name.clone())
-                } else {
-                    Some("No tracked app".to_string())
-                }
+                "Attach frontmost app info to your command".into()
             }
-            ContextAttachmentKind::MenuBar => self
-                .menu_bar_summary
-                .clone()
-                .or_else(|| Some("No tracked app".to_string())),
-            ContextAttachmentKind::RecentScripts => {
-                if let Some(count) = self.script_count {
-                    Some(format!("{count} scripts indexed"))
-                } else {
-                    Some("Script Kit scripts and recent invocations".to_string())
-                }
-            }
-            ContextAttachmentKind::GitStatus => {
-                Some("Current repository status at attach time".to_string())
-            }
-            ContextAttachmentKind::GitDiff => {
-                Some("Current repository diff at attach time".to_string())
-            }
-            ContextAttachmentKind::Processes => {
-                Some("Running processes snapshot at attach time".to_string())
-            }
-            ContextAttachmentKind::System => {
-                Some("System, hardware, memory, and battery snapshot".to_string())
-            }
-            ContextAttachmentKind::Dictation => {
-                Some("Dictation transcript at attach time".to_string())
-            }
-            ContextAttachmentKind::Calendar => Some("Calendar events at attach time".to_string()),
-            ContextAttachmentKind::Notifications => {
-                Some("Recent notifications at attach time".to_string())
-            }
-        }
+            ContextAttachmentKind::MenuBar => "Attach menu bar items to your command".into(),
+            ContextAttachmentKind::RecentScripts => "Attach recent script invocations".into(),
+            ContextAttachmentKind::GitStatus => "Attach current repository status".into(),
+            ContextAttachmentKind::GitDiff => "Attach current repository diff".into(),
+            ContextAttachmentKind::Processes => "Attach running processes snapshot".into(),
+            ContextAttachmentKind::System => "Attach system, hardware, and battery info".into(),
+            ContextAttachmentKind::Dictation => "Attach dictation transcript".into(),
+            ContextAttachmentKind::Calendar => "Attach calendar events".into(),
+            ContextAttachmentKind::Notifications => "Attach recent notifications".into(),
+        })
     }
 
     pub(crate) fn style_selection_preview(&self) -> Option<String> {

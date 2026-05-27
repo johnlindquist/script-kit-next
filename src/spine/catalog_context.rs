@@ -131,6 +131,10 @@ fn build_builtin_context_row(
 
     let slug = mention_slug(mention);
 
+    let title = live_preview
+        .and_then(|lp| lp.title_for_context_kind(spec.kind))
+        .unwrap_or_else(|| spec.label.to_string());
+
     let subtitle = live_preview
         .and_then(|lp| lp.subtitle_for_context_kind(spec.kind))
         .unwrap_or_else(|| spec.action_title.to_string());
@@ -140,14 +144,14 @@ fn build_builtin_context_row(
         kind: SpineListRowKind::ContextBuiltin {
             context_type: ss(slug),
         },
-        title: ss(spec.label),
+        title: ss(title),
         subtitle: Some(ss(subtitle)),
         meta: Some(ss(mention)),
         icon: Some(ss(icon_for_context_kind(spec.kind))),
         badges: vec![ss("@")],
         score: i32::MAX.saturating_sub(rank as i32),
         is_selectable: true,
-        action_label: Some(ss("Insert")),
+        action_label: Some(ss("Attach")),
         action: SpineListAction::ResolveSegment {
             segment_index,
             segment_byte_range,
