@@ -610,24 +610,13 @@ impl ScriptListApp {
         }
 
         // ── First-character ScriptList entry routes ──────────────────
-        // When Spine is enabled, prompt-builder sigils (@, /, |) drive the
-        // main list in-place instead of switching to ACP picker views.
-        // Only mode-exit sigils (~, >, ?) still route through the old path.
-        let special_entry = if self.spine_enabled {
-            match new_text.as_str() {
-                "~" | ">" | "?" => Self::special_entry_from_script_list_filter(&new_text),
-                s if s.starts_with("~/") => Self::special_entry_from_script_list_filter(&new_text),
-                _ => None,
-            }
-        } else {
-            Self::special_entry_from_script_list_filter(&new_text)
-        };
+        // Prompt-builder sigils (@, /, |, .) are handled by the Spine
+        // projection and stay in the main list. Only mode-exit sigils and
+        // file search trigger a view switch.
+        let special_entry = Self::special_entry_from_script_list_filter(&new_text);
         if let Some(entry) = special_entry {
             let entry_kind = match &entry {
                 ScriptListSpecialEntry::FileSearchMini { .. } => "file_search_mini",
-                ScriptListSpecialEntry::AcpSlashPicker => "acp_slash_picker",
-                ScriptListSpecialEntry::AcpMentionPicker => "acp_mention_picker",
-                ScriptListSpecialEntry::AcpProfilePicker => "acp_profile_picker",
                 ScriptListSpecialEntry::QuickTerminal => "quick_terminal",
                 ScriptListSpecialEntry::ActionsHelp => "actions_help",
             };
@@ -653,15 +642,6 @@ impl ScriptListApp {
                 ScriptListSpecialEntry::FileSearchMini { .. } => {
                     let query = Self::normalize_mini_file_search_query(&new_text);
                     self.open_file_search_view(query, FileSearchPresentation::Mini, cx);
-                }
-                ScriptListSpecialEntry::AcpSlashPicker => {
-                    self.open_tab_ai_acp_with_slash_picker(window, cx);
-                }
-                ScriptListSpecialEntry::AcpMentionPicker => {
-                    self.open_tab_ai_acp_with_mention_picker(window, cx);
-                }
-                ScriptListSpecialEntry::AcpProfilePicker => {
-                    self.open_tab_ai_acp_with_profile_picker(window, cx);
                 }
                 ScriptListSpecialEntry::QuickTerminal => {
                     self.open_quick_terminal(None, cx);

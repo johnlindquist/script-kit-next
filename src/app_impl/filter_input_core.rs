@@ -3,9 +3,6 @@ use super::*;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ScriptListSpecialEntry {
     FileSearchMini { query: String },
-    AcpSlashPicker,
-    AcpMentionPicker,
-    AcpProfilePicker,
     QuickTerminal,
     ActionsHelp,
 }
@@ -14,7 +11,7 @@ impl ScriptListApp {
     /// Transient first-character launch triggers should not persist when the
     /// user returns to the ScriptList surface.
     pub(crate) fn is_transient_script_list_trigger(new_text: &str) -> bool {
-        matches!(new_text, "~" | "/" | "@" | "|" | ">" | "?")
+        matches!(new_text, "~" | ">" | "?")
     }
 
     /// Parse `raw` through the menu-syntax classifier and store the result in
@@ -115,9 +112,6 @@ impl ScriptListApp {
         }
 
         match new_text {
-            "/" => Some(ScriptListSpecialEntry::AcpSlashPicker),
-            "@" => Some(ScriptListSpecialEntry::AcpMentionPicker),
-            "|" => Some(ScriptListSpecialEntry::AcpProfilePicker),
             ">" => Some(ScriptListSpecialEntry::QuickTerminal),
             "?" => Some(ScriptListSpecialEntry::ActionsHelp),
             _ => None,
@@ -465,11 +459,11 @@ mod tests {
         );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter("/"),
-            Some(ScriptListSpecialEntry::AcpSlashPicker)
+            None,
         );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter("@"),
-            Some(ScriptListSpecialEntry::AcpMentionPicker)
+            None,
         );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter(">"),
