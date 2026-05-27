@@ -518,12 +518,6 @@ impl ScriptListApp {
 
         let mut buttons = vec![
             FooterButtonConfig::new(FooterAction::Run, "↵", run_label).enabled(!footer_disabled),
-            FooterButtonConfig::new(
-                FooterAction::Ai,
-                "⌘↵",
-                crate::ai::acp::labels::AGENT_CHAT_LABEL,
-            )
-            .enabled(!footer_disabled),
         ];
 
         if self.current_view_supports_shared_actions() {

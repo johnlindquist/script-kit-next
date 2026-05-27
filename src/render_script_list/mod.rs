@@ -1782,7 +1782,12 @@ impl ScriptListApp {
                                     }),
                             )
                             .when(show_launcher_ask_ai_hint, |d| {
-                                d.child(crate::components::render_launcher_ask_ai_hint(chrome))
+                                d.child(crate::components::render_launcher_ask_ai_hint(
+                                    &self.theme,
+                                    cx.listener(|this, _event, _window, cx| {
+                                        this.open_tab_ai_chat(cx);
+                                    }),
+                                ))
                             }),
                     )
             })

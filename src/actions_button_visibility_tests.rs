@@ -92,24 +92,24 @@ mod tests {
     }
 
     #[test]
-    fn test_ask_ai_hint_is_non_clickable_visual_hint() {
+    fn test_agent_hint_is_clickable_button() {
         let content = fs::read_to_string("src/components/launcher_ask_ai_hint.rs")
             .expect("Failed to read src/components/launcher_ask_ai_hint.rs");
 
-        let ask_ai_pos = content
-            .find(".id(\"ask-ai-button\")")
-            .expect("Ask AI hint container not found in src/components/launcher_ask_ai_hint.rs");
-        let ask_ai_section = &content[ask_ai_pos..content.len().min(ask_ai_pos + 1200)];
+        let hint_pos = content
+            .find(".id(\"agent-hint-button\")")
+            .expect("Agent hint container not found in src/components/launcher_ask_ai_hint.rs");
+        let hint_section = &content[hint_pos..content.len().min(hint_pos + 1200)];
 
         assert!(
-            ask_ai_section.contains(".cursor_default()"),
-            "Ask AI hint should be non-clickable (cursor_default). Section:\n{}",
-            ask_ai_section
+            hint_section.contains(".cursor_pointer()"),
+            "Agent hint should be clickable (cursor_pointer). Section:\n{}",
+            hint_section
         );
         assert!(
-            !ask_ai_section.contains(".cursor_pointer()"),
-            "Ask AI hint should not imply clickability with cursor_pointer. Section:\n{}",
-            ask_ai_section
+            hint_section.contains(".on_click("),
+            "Agent hint should have an on_click handler. Section:\n{}",
+            hint_section
         );
     }
 
@@ -127,8 +127,8 @@ mod tests {
             "mini mode flag should be computed from main_window_mode"
         );
         assert!(
-            content.contains(".child(crate::components::render_launcher_ask_ai_hint(chrome))"),
-            "Script list should route the Ask AI hint through the shared launcher component"
+            content.contains("render_launcher_ask_ai_hint("),
+            "Script list should route the Agent hint through the shared launcher component"
         );
         assert!(
             content.contains("if is_mini {")
@@ -239,28 +239,33 @@ mod tests {
     }
 
     #[test]
-    fn test_native_footer_uses_cmd_enter_for_ai_and_drops_tab_hint() {
-        let content = fs::read_to_string("src/app_impl/ui_window.rs")
+    fn test_agent_moved_from_footer_to_input_hint() {
+        let footer_content = fs::read_to_string("src/app_impl/ui_window.rs")
             .expect("Failed to read src/app_impl/ui_window.rs");
 
+        let hint_content = fs::read_to_string("src/components/launcher_ask_ai_hint.rs")
+            .expect("Failed to read src/components/launcher_ask_ai_hint.rs");
+
+        // Agent button should NOT be in the standard footer buttons
+        let standard_fn = footer_content
+            .find("fn standard_main_window_footer_buttons")
+            .expect("standard_main_window_footer_buttons must exist");
+        let standard_section =
+            &footer_content[standard_fn..footer_content.len().min(standard_fn + 600)];
         assert!(
-            content.contains("FooterAction::Ai,\n                \"⌘↵\",\n                crate::ai::acp::labels::AGENT_CHAT_LABEL,"),
-            "native footer should advertise Agent with ⌘↵ via AGENT_CHAT_LABEL"
-        );
-        assert!(
-            !content.contains("FooterButtonConfig::new(FooterAction::Ai, \"⇥\", \"AI\")"),
-            "native footer should no longer advertise Tab for AI"
+            !standard_section.contains("FooterAction::Ai"),
+            "Agent button should not be in the standard footer — it moved to the input hint"
         );
 
-        let ai_pos = content
-            .find("FooterAction::Ai,\n                \"⌘↵\",\n                crate::ai::acp::labels::AGENT_CHAT_LABEL,")
-            .expect("native footer AI button must exist");
-        let run_pos = content
-            .find("FooterButtonConfig::new(FooterAction::Run, \"↵\", run_label)")
-            .expect("native footer Run button must exist");
+        // Agent hint should render with Cmd+Enter keycaps in the input header
         assert!(
-            run_pos < ai_pos,
-            "native footer should list ↵ Run before ⌘↵ Agent"
+            hint_content.contains("render_footer_keycap(\"⌘\"")
+                && hint_content.contains("render_footer_keycap(\"↵\""),
+            "Agent hint should render ⌘ and ↵ as footer-style keycaps"
+        );
+        assert!(
+            hint_content.contains(".child(\"Agent\")"),
+            "Agent hint should show the Agent label"
         );
     }
 

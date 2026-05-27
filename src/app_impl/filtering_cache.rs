@@ -1192,20 +1192,12 @@ impl ScriptListApp {
                     return self.main_menu_result_caches.clone_grouped_results();
                 }
 
-                let subsearch_ctx =
-                    crate::spine::catalog_subsearch::SpineSubsearchContext {
-                        scripts: &self.scripts,
-                        scriptlets: &self.scriptlets,
-                        skills: &self.skills,
-                    };
-
                 let live_preview = preview_needs
                     .map(|_| &self.spine_live_preview_cache.current);
 
                 let sections = crate::spine::list::build_spine_list_sections_full(
                     &self.spine_parse,
                     projection,
-                    Some(&subsearch_ctx),
                     live_preview,
                 );
                 let mut grouped_items = Vec::new();
@@ -2696,9 +2688,9 @@ fn build_rich_provider_json_rows(
                     result_id: ss(format!("{rank}")),
                 },
                 title: ss(item.title.clone()),
-                subtitle: item.subtitle.as_deref().map(|s| ss(s)),
+                subtitle: item.subtitle.clone().map(|s| ss(s)),
                 meta: None,
-                icon: Some(ss(icon)),
+                icon: Some(ss(icon.to_string())),
                 badges: vec![ss("@")],
                 score: i32::MAX.saturating_sub(rank as i32),
                 is_selectable: true,

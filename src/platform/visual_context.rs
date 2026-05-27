@@ -124,13 +124,6 @@ pub fn capture_frontmost_window_screenshot() -> anyhow::Result<(Vec<u8>, u32, u3
         (name_str, pid)
     };
 
-    // Use CGWindowListCreateImage to capture the frontmost window
-    #[link(name = "CoreGraphics", kind = "framework")]
-    extern "C" {
-        fn CGMainDisplayID() -> u32;
-        fn CGRectNull() -> cocoa::foundation::NSRect;
-    }
-
     // For now, return a placeholder — full ScreenCaptureKit integration
     // requires async completion handlers that need a Swift bridge
     anyhow::bail!(

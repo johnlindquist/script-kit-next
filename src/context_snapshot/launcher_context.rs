@@ -87,8 +87,6 @@ impl LauncherContextSnapshot {
 }
 
 const CLIPBOARD_TTL_SECS: u64 = 300;
-const SELECTED_TEXT_TTL_SECS: u64 = 30;
-const BROWSER_URL_TTL_SECS: u64 = 60;
 
 pub fn detect_content_kind(text: &str) -> LauncherContextKind {
     let trimmed = text.trim();

@@ -163,6 +163,7 @@ pub(super) fn build_context_root_rows_with_preview(
         }
     }
 
+    rows.sort_by(|a, b| b.score.cmp(&a.score));
     rows
 }
 
@@ -353,5 +354,27 @@ mod tests {
     fn empty_query_matches_everything() {
         let rows = build_context_root_rows("@", 0, 0..1);
         assert!(!rows.is_empty());
+    }
+
+    #[test]
+    fn sorted_results_for_at_fi_show_file_first() {
+        let mut rows = build_context_root_rows("@fi", 0, 0..3);
+        rows.sort_by(|a, b| b.score.cmp(&a.score));
+        let titles: Vec<&str> = rows.iter().map(|r| r.title.as_ref()).collect();
+        let file_pos = titles
+            .iter()
+            .position(|t| t.contains("file"))
+            .expect("@file: row missing");
+        let notif_pos = titles
+            .iter()
+            .position(|t| t.contains("Notif"))
+            .expect("Notifications row missing");
+        assert!(
+            file_pos < notif_pos,
+            "@file: at position {} must appear before Notifications at position {}; order: {:?}",
+            file_pos,
+            notif_pos,
+            titles,
+        );
     }
 }

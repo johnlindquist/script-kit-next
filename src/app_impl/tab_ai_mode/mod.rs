@@ -315,7 +315,7 @@ impl ScriptListApp {
 
     pub(crate) fn try_submit_spine_prompt_plan_from_enter(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
         if !self.spine_enabled || !matches!(self.current_view, AppView::ScriptList) {

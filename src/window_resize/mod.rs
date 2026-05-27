@@ -25,14 +25,14 @@ use std::sync::OnceLock;
 use tracing::{debug, info, warn};
 const RESIZE_MIN_DELTA_PX: f64 = 1.0;
 const WINDOW_RESIZE_ANIMATE: bool = false;
-const MINI_MAIN_WINDOW_MIN_HEIGHT: f32 = 440.0;
-const MINI_MAIN_WINDOW_MAX_HEIGHT: f32 = 440.0;
+const MINI_MAIN_WINDOW_MIN_HEIGHT: f32 = 480.0;
+const MINI_MAIN_WINDOW_MAX_HEIGHT: f32 = 480.0;
 const MINI_MAIN_WINDOW_HEADER_HEIGHT: f32 =
     crate::panel::HEADER_TOTAL_HEIGHT - crate::panel::HEADER_DIVIDER_HEIGHT;
 const MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT: f32 = 30.0;
 const MINI_MAIN_WINDOW_DIVIDER_HEIGHT: f32 = crate::panel::HEADER_DIVIDER_HEIGHT;
 const MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT: f32 = 32.0;
-pub(crate) const MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS: usize = 8;
+pub(crate) const MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS: usize = 9;
 
 /// Available pixel budget for list content in the mini main window.
 ///

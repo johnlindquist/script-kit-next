@@ -457,7 +457,7 @@ fn render_main_menu_surface(stable_id: &str, compact: bool) -> gpui::AnyElement 
 fn main_menu_story_shell_config() -> super::IntegratedSurfaceShellConfig {
     super::IntegratedSurfaceShellConfig {
         width: 480.0,
-        height: 440.0,
+        height: 480.0,
         corner_radius: 12.0,
         body_padding: 0.0,
         footer_height: crate::window_resize::mini_layout::HINT_STRIP_HEIGHT,
@@ -580,7 +580,10 @@ fn render_main_menu_header(live_spec: MainMenuLiveSpec, compact: bool) -> gpui::
         );
 
     if !compact {
-        header = header.child(crate::components::render_launcher_ask_ai_hint(chrome));
+        header = header.child(crate::components::render_launcher_ask_ai_hint(
+            &theme,
+            |_event, _window, _cx| {},
+        ));
     }
 
     header.into_any_element()
@@ -1093,7 +1096,7 @@ mod tests {
     fn shell_config_matches_live_main_menu_size() {
         let shell = main_menu_story_shell_config();
         assert_eq!(shell.width, 480.0);
-        assert_eq!(shell.height, 440.0);
+        assert_eq!(shell.height, 480.0);
         assert_eq!(
             shell.footer_height,
             crate::window_resize::mini_layout::HINT_STRIP_HEIGHT

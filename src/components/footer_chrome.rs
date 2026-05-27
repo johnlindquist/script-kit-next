@@ -652,7 +652,11 @@ pub(crate) fn footer_shortcut_keycap_layout_model<'a>(
     })
 }
 
-fn render_footer_keycap(token: String, max_width_px: Option<f32>, theme: &Theme) -> AnyElement {
+pub(crate) fn render_footer_keycap(
+    token: String,
+    max_width_px: Option<f32>,
+    theme: &Theme,
+) -> AnyElement {
     let footer_text = footer_hint_text_color(theme);
     let full_text = theme.colors.text.primary.to_rgb();
     let hover_border = footer_keycap_border_hover_color(theme);

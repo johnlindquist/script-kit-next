@@ -176,7 +176,7 @@ pub fn projection_is_prompt_builder_tail(
         && parse_has_prompt_builder_segments(parse)
 }
 
-pub(super) fn ss(value: impl Into<SharedString>) -> SharedString {
+pub(crate) fn ss(value: impl Into<SharedString>) -> SharedString {
     value.into()
 }
 
@@ -242,21 +242,19 @@ pub fn build_spine_list_sections(
     parse: &SpineParse,
     projection: &SpineCursorProjection,
 ) -> Vec<SpineListSection> {
-    build_spine_list_sections_with_context(parse, projection, None)
+    build_spine_list_sections_with_context(parse, projection)
 }
 
 pub(crate) fn build_spine_list_sections_with_context(
     parse: &SpineParse,
     projection: &SpineCursorProjection,
-    subsearch_ctx: Option<&super::catalog_subsearch::SpineSubsearchContext<'_>>,
 ) -> Vec<SpineListSection> {
-    build_spine_list_sections_full(parse, projection, subsearch_ctx, None)
+    build_spine_list_sections_full(parse, projection, None)
 }
 
 pub(crate) fn build_spine_list_sections_full(
     parse: &SpineParse,
     projection: &SpineCursorProjection,
-    subsearch_ctx: Option<&super::catalog_subsearch::SpineSubsearchContext<'_>>,
     live_preview: Option<&super::live_preview::SpineLivePreview>,
 ) -> Vec<SpineListSection> {
     let segment = active_segment(parse, projection);
@@ -271,13 +269,8 @@ pub(crate) fn build_spine_list_sections_full(
                 context_type,
                 sub_query.as_deref(),
             ) {
-                let range = active_segment_range(parse, projection);
                 vec![super::catalog_subsearch::build_context_subsearch_section(
-                    source,
-                    query,
-                    projection.active_segment_index,
-                    range,
-                    subsearch_ctx,
+                    source, query,
                 )]
             } else if sub_query.is_some() || raw.contains(':') {
                 vec![build_context_subsearch_placeholder_section(
