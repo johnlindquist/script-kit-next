@@ -641,7 +641,8 @@ impl ScriptListApp {
 
         let ai_vault_hits =
             timed_root_passive_source("ai_vault", search_text, explicit_ai_vault, || {
-                if !advanced_query_active
+                if explicit_ai_vault
+                    && !advanced_query_active
                     && allow_ai_vault
                     && crate::ai_vault::root_ai_vault_query_is_eligible(
                         search_text,
@@ -684,24 +685,18 @@ impl ScriptListApp {
             search_text,
             explicit_browser_history,
             || {
-                if !advanced_query_active
+                if explicit_browser_history
+                    && !advanced_query_active
                     && allow_browser_history
                     && crate::browser_history::root_browser_history_query_is_eligible(
                         search_text,
                         browser_history_options.clone(),
                     )
                 {
-                    if explicit_browser_history {
-                        crate::browser_history::search_root_browser_history_meta_direct(
-                            search_text,
-                            browser_history_options.clone(),
-                        )
-                    } else {
-                        crate::browser_history::search_root_browser_history_meta_cached(
-                            search_text,
-                            browser_history_options.clone(),
-                        )
-                    }
+                    crate::browser_history::search_root_browser_history_meta_direct(
+                        search_text,
+                        browser_history_options.clone(),
+                    )
                 } else {
                     Vec::new()
                 }
