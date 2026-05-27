@@ -288,7 +288,14 @@ pub(crate) fn build_spine_list_sections_with_context(
         SpineSegmentKind::ModeExit { sigil, rest } => {
             vec![build_mode_exit_section(parse, projection, *sigil, rest)]
         }
-        SpineSegmentKind::ListFilter { .. } => vec![build_filter_hint_section()],
+        SpineSegmentKind::ListFilter { .. } => {
+            let range = active_segment_range(parse, projection);
+            vec![super::catalog_filter::build_filter_qualifier_section(
+                &projection.active_query,
+                projection.active_segment_index,
+                range,
+            )]
+        }
         SpineSegmentKind::FreeText if projection_is_prompt_builder_tail(parse, projection) => {
             build_tail_history_sections(parse, projection)
         }
@@ -500,30 +507,6 @@ fn build_mode_exit_section(
                 sigil,
                 rest: ss(rest.to_string()),
             },
-        }],
-    }
-}
-
-fn build_filter_hint_section() -> SpineListSection {
-    SpineListSection {
-        id: ss("spine-section-filter-hint"),
-        title: ss("Refine Search"),
-        subtitle: Some(ss(
-            ": remains a unified-search filter; picker rows move later",
-        )),
-        icon: Some(ss("filter")),
-        rows: vec![SpineListRow {
-            id: ss("spine:::hint"),
-            kind: SpineListRowKind::Hint,
-            title: ss("Keep typing a refine query"),
-            subtitle: Some(ss("Example: :type:script git")),
-            meta: Some(ss("Refine")),
-            icon: Some(ss("filter")),
-            badges: vec![ss(":")],
-            score: 0,
-            is_selectable: false,
-            action_label: None,
-            action: SpineListAction::Noop,
         }],
     }
 }
