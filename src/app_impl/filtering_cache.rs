@@ -1194,7 +1194,7 @@ impl ScriptListApp {
                     let has_query = sub_query
                         .as_ref()
                         .is_some_and(|q| !q.trim().is_empty());
-                    if !recent_dirs.is_empty() || has_query {
+                    if !recent_dirs.is_empty() {
                         let cwd_cache_key = format!(
                             "{spine_cache_key}\x1Fcwd-rich\x1Fcwd-rev={}",
                             self.spine_cwd_revision
