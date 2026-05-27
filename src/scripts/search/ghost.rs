@@ -1,16 +1,39 @@
 use crate::scripts::types::SearchResult;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PredictionRevision {
+    pub query_rev: u64,
+    pub catalog_rev: u64,
+    pub context_rev: u64,
+}
+
 #[derive(Clone, Debug)]
 pub struct GhostPrediction {
     pub query: String,
     pub full_label: String,
     pub ghost_suffix: String,
     pub confidence: f32,
+    pub revision: PredictionRevision,
+    pub ghost_id: u64,
+}
+
+static GHOST_ID_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn next_ghost_id() -> u64 {
+    GHOST_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 pub fn compute_ghost_prediction(
     query: &str,
     flat_results: &[SearchResult],
+) -> Option<GhostPrediction> {
+    compute_ghost_prediction_with_revision(query, flat_results, PredictionRevision::default())
+}
+
+pub fn compute_ghost_prediction_with_revision(
+    query: &str,
+    flat_results: &[SearchResult],
+    revision: PredictionRevision,
 ) -> Option<GhostPrediction> {
     if query.len() < 2 || query.ends_with(' ') {
         return None;
@@ -54,6 +77,8 @@ pub fn compute_ghost_prediction(
         full_label: label.to_string(),
         ghost_suffix: suffix,
         confidence: gap.clamp(0.0, 1.0),
+        revision,
+        ghost_id: next_ghost_id(),
     })
 }
 
@@ -110,6 +135,8 @@ pub fn reconcile_typed_through(
             full_label: prediction.full_label.clone(),
             ghost_suffix: new_suffix.to_string(),
             confidence: prediction.confidence,
+            revision: prediction.revision,
+            ghost_id: next_ghost_id(),
         })
     } else {
         None
@@ -144,14 +171,20 @@ mod tests {
         assert!(compute_ghost_prediction("clip ", &[]).is_none());
     }
 
+    fn test_prediction(query: &str, label: &str, suffix: &str) -> GhostPrediction {
+        GhostPrediction {
+            query: query.to_string(),
+            full_label: label.to_string(),
+            ghost_suffix: suffix.to_string(),
+            confidence: 0.8,
+            revision: PredictionRevision::default(),
+            ghost_id: 0,
+        }
+    }
+
     #[test]
     fn typed_through_advances() {
-        let pred = GhostPrediction {
-            query: "cli".to_string(),
-            full_label: "Clipboard History".to_string(),
-            ghost_suffix: "pboard History".to_string(),
-            confidence: 0.8,
-        };
+        let pred = test_prediction("cli", "Clipboard History", "pboard History");
         let result = reconcile_typed_through("cli", "clip", &pred);
         assert!(result.is_some());
         let r = result.unwrap();
@@ -239,12 +272,7 @@ mod tests {
 
     #[test]
     fn ghost_serializes_in_state() {
-        let pred = GhostPrediction {
-            query: "cli".to_string(),
-            full_label: "Clipboard History".to_string(),
-            ghost_suffix: "pboard History".to_string(),
-            confidence: 0.85,
-        };
+        let pred = test_prediction("cli", "Clipboard History", "pboard History");
         let json = serde_json::json!({
             "query": pred.query,
             "fullLabel": pred.full_label,
@@ -257,12 +285,34 @@ mod tests {
 
     #[test]
     fn typed_through_rejects_mismatch() {
-        let pred = GhostPrediction {
-            query: "cli".to_string(),
-            full_label: "Clipboard History".to_string(),
-            ghost_suffix: "pboard History".to_string(),
-            confidence: 0.8,
-        };
+        let pred = test_prediction("cli", "Clipboard History", "pboard History");
         assert!(reconcile_typed_through("cli", "clx", &pred).is_none());
+    }
+
+    #[test]
+    fn revision_stale_detection() {
+        let rev1 = PredictionRevision {
+            query_rev: 1,
+            catalog_rev: 1,
+            context_rev: 1,
+        };
+        let rev2 = PredictionRevision {
+            query_rev: 2,
+            catalog_rev: 1,
+            context_rev: 1,
+        };
+        assert_ne!(rev1, rev2, "different query_rev should be stale");
+        assert_eq!(rev1, rev1, "same revision should match");
+    }
+
+    #[test]
+    fn ghost_ids_are_unique() {
+        let results = vec![make_builtin_result("Settings", 950_500)];
+        let p1 = compute_ghost_prediction("se", &results).unwrap();
+        let p2 = compute_ghost_prediction("se", &results).unwrap();
+        assert_ne!(
+            p1.ghost_id, p2.ghost_id,
+            "each prediction gets a unique ghost_id"
+        );
     }
 }

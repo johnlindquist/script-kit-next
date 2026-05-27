@@ -15,6 +15,7 @@ pub(super) fn build_search_mode_results(
     frecency_store: &FrecencyStore,
     filter_text: &str,
     preferred_result_key: Option<&str>,
+    launcher_context: Option<&crate::context_snapshot::launcher_context::LauncherContextSnapshot>,
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
     // Apply frecency boost: recently/frequently used items get a score bonus.
     // This is how modern launchers (Raycast, Alfred, Spotlight) work.
@@ -91,10 +92,18 @@ pub(super) fn build_search_mode_results(
                     .and_then(|preferred| result.history_result_key().map(|key| key == preferred))
                     .map(|is_match| if is_match { preferred_match_bonus } else { 0 })
                     .unwrap_or(0);
+                let context_bonus = launcher_context
+                    .map(|ctx| {
+                        crate::context_snapshot::launcher_context::context_boost_for_result(
+                            result, ctx,
+                        )
+                    })
+                    .unwrap_or(0);
                 result
                     .score()
                     .saturating_add(frecency_bonus)
                     .saturating_add(exact_query_bonus)
+                    .saturating_add(context_bonus)
             })
             .collect();
 
@@ -261,7 +270,7 @@ mod tests {
         ];
 
         let (grouped, sorted_results) =
-            build_search_mode_results(results, &[], &FrecencyStore::new(), "position", None);
+            build_search_mode_results(results, &[], &FrecencyStore::new(), "position", None, None);
 
         let first_item = grouped
             .iter()

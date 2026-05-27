@@ -671,6 +671,9 @@ struct ScriptListApp {
     gpui_input_state: Entity<InputState>,
     gpui_input_focused: bool,
     pub(crate) ghost_prediction: Option<crate::scripts::search::ghost::GhostPrediction>,
+    pub(crate) prediction_revision: crate::scripts::search::ghost::PredictionRevision,
+    pub(crate) launcher_context: crate::context_snapshot::launcher_context::LauncherContextSnapshot,
+    launcher_context_generation: u64,
     #[allow(dead_code)]
     gpui_input_subscriptions: Vec<Subscription>,
     /// Subscription for window bounds changes (saves position on drag)

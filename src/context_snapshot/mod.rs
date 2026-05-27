@@ -24,5 +24,7 @@ pub use types::{
     AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
 };
 
+pub mod launcher_context;
+
 #[cfg(test)]
 mod tests;

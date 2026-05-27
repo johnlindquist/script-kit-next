@@ -122,6 +122,7 @@ pub(crate) fn get_grouped_results_with_input_history(
         menu_bar_bundle_id,
         input_history,
         None,
+        None,
     )
 }
 
@@ -148,6 +149,7 @@ pub(crate) fn get_grouped_results_with_input_history_and_query(
     menu_bar_bundle_id: Option<&str>,
     input_history: Option<&crate::input_history::InputHistory>,
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    launcher_context: Option<&crate::context_snapshot::launcher_context::LauncherContextSnapshot>,
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
     // When filter is non-empty and we have menu bar items, include them in search.
     let all_builtins: Vec<BuiltInEntry>;
@@ -185,6 +187,7 @@ pub(crate) fn get_grouped_results_with_input_history_and_query(
             frecency_store,
             filter_text,
             preferred_result_key,
+            launcher_context,
         );
     }
 
@@ -329,6 +332,7 @@ pub(crate) fn get_grouped_results_with_validation_and_query(
         menu_bar_bundle_id,
         input_history,
         advanced_query,
+        None,
     );
 
     // Show the pinned row unconditionally when the grouped view is active
@@ -2038,6 +2042,7 @@ mod advanced_query_tests {
             Option<&str>,
             Option<&crate::input_history::InputHistory>,
             Option<&AdvancedQuery>,
+            Option<&crate::context_snapshot::launcher_context::LauncherContextSnapshot>,
         ) -> (Vec<GroupedListItem>, Vec<SearchResult>) =
             get_grouped_results_with_input_history_and_query;
 

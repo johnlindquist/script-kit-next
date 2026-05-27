@@ -740,6 +740,9 @@ impl ScriptListApp {
             gpui_input_state,
             gpui_input_focused: false,
             ghost_prediction: None,
+            prediction_revision: Default::default(),
+            launcher_context: Default::default(),
+            launcher_context_generation: 0,
             gpui_input_subscriptions: vec![gpui_input_subscription],
             bounds_subscription: None,     // Set later after window setup
             appearance_subscription: None, // Set later after window setup
