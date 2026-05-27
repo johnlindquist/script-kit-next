@@ -1816,7 +1816,7 @@ impl ScriptListApp {
         self.preview_cache_lines.clear();
     }
 
-    fn refresh_ghost_from_cached_results(&mut self) {
+    pub(crate) fn refresh_ghost_from_cached_results(&mut self) {
         if !matches!(self.current_view, AppView::ScriptList) {
             self.ghost_prediction = None;
             return;
@@ -1840,6 +1840,17 @@ impl ScriptListApp {
         let (_, flat_results) = self.main_menu_result_caches.clone_grouped_results();
         self.ghost_prediction =
             crate::scripts::search::ghost::compute_ghost_prediction(query, &flat_results);
+        if let Some(ref pred) = self.ghost_prediction {
+            tracing::info!(
+                target: "script_kit::ghost_text",
+                query = %pred.query,
+                ghost_suffix = %pred.ghost_suffix,
+                full_label = %pred.full_label,
+                confidence = %pred.confidence,
+                ghost_id = pred.ghost_id,
+                "ghost_prediction_computed"
+            );
+        }
     }
 }
 

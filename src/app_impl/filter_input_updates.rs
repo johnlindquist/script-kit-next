@@ -63,6 +63,8 @@ impl ScriptListApp {
         if reason != "filter_immediate" {
             self.rebuild_main_window_preflight_if_needed();
         }
+
+        self.refresh_ghost_from_cached_results();
     }
 
     pub(crate) fn queue_filter_compute(&mut self, value: String, cx: &mut Context<Self>) {
@@ -140,7 +142,6 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.pending_menu_syntax_ai_proposal = None;
-        self.ghost_prediction = None;
 
         let input_already_matches = self.gpui_input_state.read(cx).value().to_string() == text;
         if matches!(self.current_view, AppView::ScriptList)
