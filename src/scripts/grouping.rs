@@ -40,15 +40,15 @@ pub const DEFAULT_MAX_RECENT_ITEMS: usize = 10;
 /// These appear in the SUGGESTED section when the user has no usage history.
 /// Order matters - items appear in this order and must match built-in entry names.
 pub const DEFAULT_SUGGESTED_ITEMS: &[&str] = &[
-    "Agent Chat",
     "Do in Current App",
-    "New Script",
-    "Clipboard History",
-    "Open Notes",
+    "Agent Chat",
     "Search Files",
+    "Clipboard History",
     "Search Browser Tabs",
+    "Window Switcher",
     "Quick Terminal",
-    "SDK Reference",
+    "Open Notes",
+    "New Script",
 ];
 
 /// Maximum number of menu bar items to show in search results

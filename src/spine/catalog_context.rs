@@ -22,28 +22,40 @@ const CONTEXT_SUBSEARCH_SPECS: &[ContextSubsearchSpec] = &[
         icon: "file-search",
     },
     ContextSubsearchSpec {
-        prefix: "browser-history",
-        title: "Browser History",
-        subtitle: "Search browser history inline",
-        icon: "globe",
-    },
-    ContextSubsearchSpec {
         prefix: "clipboard",
         title: "Clipboard History",
         subtitle: "Search clipboard history",
         icon: "clipboard",
     },
     ContextSubsearchSpec {
-        prefix: "dictation",
-        title: "Dictation History",
-        subtitle: "Search saved dictation",
-        icon: "mic",
+        prefix: "browser-history",
+        title: "Browser History",
+        subtitle: "Search browser history inline",
+        icon: "globe",
+    },
+    ContextSubsearchSpec {
+        prefix: "notes",
+        title: "Notes",
+        subtitle: "Search notes",
+        icon: "notebook-text",
+    },
+    ContextSubsearchSpec {
+        prefix: "history",
+        title: "Agent Chat History",
+        subtitle: "Search past conversations",
+        icon: "message-circle",
     },
     ContextSubsearchSpec {
         prefix: "scripts",
         title: "Scripts",
         subtitle: "Search Script Kit scripts",
         icon: "file-code",
+    },
+    ContextSubsearchSpec {
+        prefix: "dictation",
+        title: "Dictation History",
+        subtitle: "Search saved dictation",
+        icon: "mic",
     },
     ContextSubsearchSpec {
         prefix: "scriptlets",
@@ -56,18 +68,6 @@ const CONTEXT_SUBSEARCH_SPECS: &[ContextSubsearchSpec] = &[
         title: "Skills",
         subtitle: "Search plugin skills",
         icon: "workflow",
-    },
-    ContextSubsearchSpec {
-        prefix: "notes",
-        title: "Notes",
-        subtitle: "Search notes",
-        icon: "notebook-text",
-    },
-    ContextSubsearchSpec {
-        prefix: "history",
-        title: "Conversations",
-        subtitle: "Search past conversations",
-        icon: "message-circle",
     },
 ];
 

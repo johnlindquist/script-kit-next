@@ -7,7 +7,7 @@ use super::{
     SpineCursorProjection, SpineParse, SpineSegment, SpineSegmentKind, SpineSegmentResolution,
 };
 
-pub const SPINE_LIST_MODEL_VERSION: u64 = 4;
+pub const SPINE_LIST_MODEL_VERSION: u64 = 5;
 pub const SPINE_LIST_RESOLUTION_GENERATION: u64 = 0;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
