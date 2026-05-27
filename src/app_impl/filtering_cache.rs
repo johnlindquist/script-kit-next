@@ -1043,13 +1043,28 @@ impl ScriptListApp {
                         skills: &self.skills,
                     };
 
-                let live_preview = build_spine_live_preview();
+                let needs_preview = matches!(
+                    projection.active_segment_kind,
+                    crate::spine::SpineSegmentKind::ContextMention { .. }
+                        | crate::spine::SpineSegmentKind::Style { .. }
+                );
+                if needs_preview {
+                    self.spine_live_preview_cache
+                        .set_script_count(self.scripts.len());
+                    self.spine_live_preview_cache.refresh_cheap_fields();
+                }
+
+                let live_preview = if needs_preview {
+                    Some(&self.spine_live_preview_cache.current)
+                } else {
+                    None
+                };
 
                 let sections = crate::spine::list::build_spine_list_sections_full(
                     &self.spine_parse,
                     projection,
                     Some(&subsearch_ctx),
-                    Some(&live_preview),
+                    live_preview,
                 );
                 let mut grouped_items = Vec::new();
                 let mut flat_results: Vec<scripts::SearchResult> = Vec::new();
@@ -1963,19 +1978,3 @@ mod tests {
     }
 }
 
-fn build_spine_live_preview() -> crate::spine::live_preview::SpineLivePreview {
-    let tracked_app = crate::frontmost_app_tracker::get_last_real_app();
-
-    let clipboard_text = arboard::Clipboard::new()
-        .ok()
-        .and_then(|mut cb| cb.get_text().ok())
-        .filter(|t| !t.trim().is_empty());
-
-    crate::spine::live_preview::SpineLivePreview {
-        frontmost_app_name: tracked_app.as_ref().map(|a| a.name.clone()),
-        active_window_title: tracked_app.as_ref().and_then(|a| a.window_title.clone()),
-        browser_url: None,
-        selection_text: None,
-        clipboard_text,
-    }
-}

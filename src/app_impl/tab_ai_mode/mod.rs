@@ -357,6 +357,7 @@ impl ScriptListApp {
         self.pending_filter_sync = true;
         self.spine_parse = Default::default();
         self.spine_projection = None;
+        self.spine_live_preview_cache = Default::default();
         self.invalidate_grouped_cache();
 
         self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(

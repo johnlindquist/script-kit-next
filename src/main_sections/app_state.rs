@@ -835,6 +835,7 @@ struct ScriptListApp {
     spine_enabled: bool,
     spine_parse: crate::spine::SpineParse,
     spine_projection: Option<crate::spine::SpineCursorProjection>,
+    spine_live_preview_cache: crate::spine::live_preview::SpineLivePreviewCache,
     /// Cached state for the menu-syntax trigger popup. `filter_input_change` runs
     /// `plan_trigger_popup_transition` on every filter update and keeps this
     /// field in sync while the detached popup window renders from the snapshot
