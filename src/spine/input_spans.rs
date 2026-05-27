@@ -42,6 +42,60 @@ pub fn input_spans_for_parse(
     normalize_spine_input_spans(parse.input.as_str(), spans)
 }
 
+/// Generate accent ranges for completed Spine segments.
+/// Non-active resolved/hint segments get the full range colored.
+/// Context mentions with sub_queries get only the prefix (@file:) colored.
+/// Active segments are not colored (the user is currently editing them).
+pub fn accent_ranges_for_parse(
+    parse: &SpineParse,
+    projection: Option<&SpineCursorProjection>,
+) -> Vec<(Range<usize>, &'static str)> {
+    let active_index = projection.map(|p| p.active_segment_index);
+    let mut ranges = Vec::new();
+
+    for (index, segment) in parse.segments.iter().enumerate() {
+        let is_active = active_index == Some(index);
+        if is_active {
+            // For active context mentions with sub_query, color just the prefix
+            if let Some(prefix_range) = context_prefix_byte_range(segment) {
+                ranges.push((prefix_range, "spine.context.completed"));
+            }
+            continue;
+        }
+
+        let tone = match tone_for_segment(index, segment) {
+            Some(t) => t,
+            None => continue,
+        };
+
+        if !matches!(
+            tone,
+            SpineInputSpanTone::Resolved | SpineInputSpanTone::Hint
+        ) {
+            continue;
+        }
+
+        // For context mentions with sub_query, only color the prefix
+        if let Some(prefix_range) = context_prefix_byte_range(segment) {
+            ranges.push((prefix_range, "spine.context.completed"));
+            continue;
+        }
+
+        let role = match &segment.kind {
+            SpineSegmentKind::ContextMention { .. } => "spine.context.completed",
+            SpineSegmentKind::SlashCommand { .. } => "spine.command.completed",
+            SpineSegmentKind::Profile { .. } => "spine.profile.completed",
+            SpineSegmentKind::Style { .. } => "spine.style.completed",
+            SpineSegmentKind::Capture { .. } => "spine.capture.completed",
+            _ => continue,
+        };
+
+        ranges.push((segment.byte_range.clone(), role));
+    }
+
+    ranges
+}
+
 pub fn spine_input_span_role_name(span: &SpineInputSpan) -> &'static str {
     match (span.tone, span.is_active) {
         (SpineInputSpanTone::Resolved, false) => "spineResolved",
@@ -61,6 +115,27 @@ fn tone_for_segment(segment_index: usize, segment: &SpineSegment) -> Option<Spin
         SpineSegmentResolution::Resolved { .. } => Some(SpineInputSpanTone::Resolved),
         SpineSegmentResolution::Unknown { .. } => Some(SpineInputSpanTone::Unknown),
         SpineSegmentResolution::Unresolved => unresolved_segment_tone(segment_index, segment),
+    }
+}
+
+/// For context mentions with sub_queries (@file:readme), return the byte range
+/// of just the `@file:` prefix portion for accent coloring.
+pub fn context_prefix_byte_range(segment: &SpineSegment) -> Option<Range<usize>> {
+    match &segment.kind {
+        SpineSegmentKind::ContextMention {
+            context_type,
+            sub_query: Some(_),
+        } => {
+            let prefix_len = 1 + context_type.len() + 1; // @ + type + :
+            let start = segment.byte_range.start;
+            let end = start + prefix_len;
+            if end <= segment.byte_range.end {
+                Some(start..end)
+            } else {
+                None
+            }
+        }
+        _ => None,
     }
 }
 

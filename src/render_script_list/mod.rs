@@ -1649,20 +1649,34 @@ impl ScriptListApp {
         if self.main_menu_render_diagnostics.last_input_highlight_text != highlight_text {
             let capture_targets =
                 crate::menu_syntax::registered_capture_targets_from_scripts(&self.scripts);
-            let next_highlight_ranges = crate::menu_syntax::input_spans_for_input_with_targets(
-                &highlight_text,
-                &capture_targets,
-            )
-            .into_iter()
-            .filter(|span| span.role != crate::menu_syntax::MenuSyntaxFragmentRole::Subject)
-            .map(|span| {
-                (
-                    span.range,
-                    rgb(menu_syntax_input_span_color(&self.theme, span.role)).into(),
-                    menu_syntax_input_span_role_name(span.role).to_string(),
+            let mut next_highlight_ranges: Vec<(std::ops::Range<usize>, gpui::Hsla, String)> =
+                crate::menu_syntax::input_spans_for_input_with_targets(
+                    &highlight_text,
+                    &capture_targets,
                 )
-            })
-            .collect::<Vec<_>>();
+                .into_iter()
+                .filter(|span| span.role != crate::menu_syntax::MenuSyntaxFragmentRole::Subject)
+                .map(|span| {
+                    (
+                        span.range,
+                        rgb(menu_syntax_input_span_color(&self.theme, span.role)).into(),
+                        menu_syntax_input_span_role_name(span.role).to_string(),
+                    )
+                })
+                .collect();
+
+            if self.spine_enabled {
+                let accent_color: gpui::Hsla =
+                    rgb(self.theme.colors.accent.selected).into();
+                let spine_projection = self.spine_projection.as_ref();
+                let spine_accent_ranges = crate::spine::input_spans::accent_ranges_for_parse(
+                    &self.spine_parse,
+                    spine_projection,
+                );
+                for (range, role) in spine_accent_ranges {
+                    next_highlight_ranges.push((range, accent_color, role.to_string()));
+                }
+            }
 
             if self.main_menu_render_diagnostics.last_input_highlight_ranges != next_highlight_ranges {
                 let ranges_for_input = next_highlight_ranges.clone();

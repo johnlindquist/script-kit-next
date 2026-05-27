@@ -214,11 +214,7 @@ fn classify_sigil_segment(sigil: char, rest: &str) -> SpineSegmentKind {
                 let sub_query = rest[colon_pos + 1..].to_string();
                 SpineSegmentKind::ContextMention {
                     context_type,
-                    sub_query: if sub_query.is_empty() {
-                        None
-                    } else {
-                        Some(sub_query)
-                    },
+                    sub_query: Some(sub_query),
                 }
             } else {
                 SpineSegmentKind::ContextMention {
@@ -346,8 +342,8 @@ mod tests {
         assert_eq!(parse.segments.len(), 1);
         assert!(matches!(
             &parse.segments[0].kind,
-            SpineSegmentKind::ContextMention { context_type, sub_query: None }
-            if context_type == "file"
+            SpineSegmentKind::ContextMention { context_type, sub_query: Some(sq) }
+            if context_type == "file" && sq.is_empty()
         ));
     }
 
