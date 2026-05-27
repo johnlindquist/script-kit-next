@@ -635,8 +635,7 @@ impl TextElement {
         window: &mut Window,
         cx: &App,
     ) -> (Option<ShapedLine>, Vec<ShapedLine>) {
-        // Must be focused to show inline completion
-        if !state.focus_handle.is_focused(window) {
+        if !state.should_show_inline_completion(window) {
             return (None, vec![]);
         }
 
@@ -1327,6 +1326,7 @@ impl Element for TextElement {
         let focus_handle = self.state.read(cx).focus_handle.clone();
         let show_cursor = self.state.read(cx).show_cursor(window, cx);
         let focused = focus_handle.is_focused(window);
+        let show_inline_completion = self.state.read(cx).should_show_inline_completion(window);
         let bounds = prepaint.bounds;
         let selected_range = self.state.read(cx).selected_range;
         let visible_range = &prepaint.last_layout.visible_range;
@@ -1571,17 +1571,20 @@ impl Element for TextElement {
         }
 
         // Paint inline completion first line suffix (after cursor on same line)
-        if focused {
+        if show_inline_completion {
             if let Some(first_line) = &prepaint.ghost_first_line {
                 if let Some(cursor_bounds) = prepaint.cursor_bounds_with_scroll() {
                     let first_line_x = cursor_bounds.origin.x + cursor_bounds.size.width;
                     let p = point(first_line_x, cursor_bounds.origin.y);
 
-                    // Paint background to cover any existing text
-                    let bg_bounds = Bounds::new(p, size(first_line.width + px(4.), line_height));
-                    window.paint_quad(fill(bg_bounds, cx.theme().editor_background()));
+                    // Only paint editor background fill when input is focused (editor mode).
+                    // Launcher/non-focused paths skip this to avoid covering vibrancy.
+                    if focused {
+                        let bg_bounds =
+                            Bounds::new(p, size(first_line.width + px(4.), line_height));
+                        window.paint_quad(fill(bg_bounds, cx.theme().editor_background()));
+                    }
 
-                    // Paint first line completion text
                     _ = first_line.paint(p, line_height, text_align, None, window, cx);
                 }
             }

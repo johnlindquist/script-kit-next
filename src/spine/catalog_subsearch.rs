@@ -111,46 +111,22 @@ pub(crate) fn build_context_subsearch_section(
             "File results are loaded by the launcher",
             ContextSubsearchSource::File,
         )],
-        ContextSubsearchSource::BrowserHistory => {
-            build_browser_history_rows(query, segment_index, segment_byte_range)
-        }
-        ContextSubsearchSource::Clipboard => vec![hint_row(
-            if query.trim().is_empty() {
-                "Recent clipboard entries"
-            } else {
-                "Searching clipboard\u{2026}"
-            },
-            "Clipboard results are loaded by the launcher",
-            ContextSubsearchSource::Clipboard,
+        ContextSubsearchSource::BrowserHistory
+        | ContextSubsearchSource::Clipboard
+        | ContextSubsearchSource::Dictation
+        | ContextSubsearchSource::Notes
+        | ContextSubsearchSource::History => vec![hint_row(
+            "Loading\u{2026}",
+            "Results are loaded by the launcher",
+            source,
         )],
-        ContextSubsearchSource::Dictation => {
-            build_dictation_rows(query, segment_index, segment_byte_range)
-        }
-        ContextSubsearchSource::Notes => build_notes_rows(query, segment_index, segment_byte_range),
-        ContextSubsearchSource::History => {
-            build_acp_history_rows(query, segment_index, segment_byte_range)
-        }
-        ContextSubsearchSource::Scripts => {
-            if let Some(ctx) = ctx {
-                build_script_rows(query, segment_index, segment_byte_range, ctx.scripts)
-            } else {
-                vec![]
-            }
-        }
-        ContextSubsearchSource::Scriptlets => {
-            if let Some(ctx) = ctx {
-                build_scriptlet_rows(query, segment_index, segment_byte_range, ctx.scriptlets)
-            } else {
-                vec![]
-            }
-        }
-        ContextSubsearchSource::Skills => {
-            if let Some(ctx) = ctx {
-                build_skill_rows(query, segment_index, segment_byte_range, ctx.skills)
-            } else {
-                vec![]
-            }
-        }
+        ContextSubsearchSource::Scripts
+        | ContextSubsearchSource::Scriptlets
+        | ContextSubsearchSource::Skills => vec![hint_row(
+            "Loading\u{2026}",
+            "Results are loaded by the launcher",
+            source,
+        )],
     };
 
     let final_rows = if rows.is_empty() {

@@ -354,6 +354,11 @@ pub struct InputState {
     pub(super) _context_menu_task: Task<Result<()>>,
     pub(super) inline_completion: InlineCompletion,
 
+    /// When true, inline completion ghost text renders even when the input
+    /// does not hold GPUI focus. Used by launcher search fields where a
+    /// parent surface owns keyboard focus but the input is still visually active.
+    pub inline_completion_visible_without_focus: bool,
+
     /// When true, Tab/Shift+Tab actions are propagated instead of inserting indent.
     /// This is useful for snippet/template navigation where Tab moves between tabstops.
     pub tab_navigation_mode: bool,
@@ -485,10 +490,17 @@ impl InputState {
             _context_menu_task: Task::ready(Ok(())),
             _pending_update: false,
             inline_completion: InlineCompletion::default(),
+            inline_completion_visible_without_focus: false,
             tab_navigation_mode: false,
             tab_navigation_space_as_tab: false,
             submit_on_enter: false,
         }
+    }
+
+    /// Show inline completion ghost text even when this input does not hold GPUI focus.
+    pub fn inline_completion_visible_without_focus(mut self, enabled: bool) -> Self {
+        self.inline_completion_visible_without_focus = enabled;
+        self
     }
 
     /// Set Input to use multi line mode.

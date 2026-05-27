@@ -277,6 +277,13 @@ impl InputState {
         });
     }
 
+    /// Whether inline completion ghost text should be shown in layout/paint.
+    /// Returns true when the input is focused OR when
+    /// `inline_completion_visible_without_focus` is enabled and the window is active.
+    pub fn should_show_inline_completion(&self, window: &Window) -> bool {
+        self.focus_handle.is_focused(window) || self.inline_completion_visible_without_focus
+    }
+
     /// Check if an inline completion suggestion is currently displayed.
     #[inline]
     pub fn has_inline_completion(&self) -> bool {

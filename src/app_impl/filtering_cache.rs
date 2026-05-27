@@ -1099,7 +1099,64 @@ impl ScriptListApp {
                                 );
                             build_rich_clipboard_subsearch_rows(&rich_query, &hits)
                         }
-                        _ => unreachable!(),
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::BrowserHistory => {
+                            let options =
+                                crate::browser_history::RootBrowserHistorySectionOptions {
+                                    enabled: true,
+                                    max_results:
+                                        crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT,
+                                    min_query_chars: 0,
+                                    ..Default::default()
+                                };
+                            let hits =
+                                crate::browser_history::search_root_browser_history_meta_direct(
+                                    &rich_query, options,
+                                );
+                            build_rich_browser_history_rows(&rich_query, &hits)
+                        }
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::Notes => {
+                            let options = crate::notes::RootNotesSectionOptions {
+                                enabled: true,
+                                max_results:
+                                    crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT,
+                                min_query_chars: 0,
+                                ..Default::default()
+                            };
+                            let hits = crate::notes::search_root_notes_meta_direct(
+                                &rich_query, options,
+                            );
+                            build_rich_notes_rows(&rich_query, &hits)
+                        }
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::Dictation => {
+                            let options =
+                                crate::dictation::RootDictationHistorySectionOptions {
+                                    enabled: true,
+                                    max_results:
+                                        crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT,
+                                    min_query_chars: 0,
+                                    ..Default::default()
+                                };
+                            let hits = crate::dictation::search_root_dictation_history_direct(
+                                &rich_query, options,
+                            );
+                            build_rich_dictation_rows(&rich_query, &hits)
+                        }
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::History => {
+                            let hits = crate::ai::acp::history::search_history_direct(
+                                &rich_query,
+                                crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT,
+                            );
+                            build_rich_acp_history_rows(&rich_query, &hits)
+                        }
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::Scripts => {
+                            build_rich_script_rows(&rich_query, &self.scripts)
+                        }
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::Scriptlets => {
+                            build_rich_scriptlet_rows(&rich_query, &self.scriptlets)
+                        }
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::Skills => {
+                            build_rich_skill_rows(&rich_query, &self.skills)
+                        }
                     };
 
                     self.main_menu_result_caches.store_grouped_results(
@@ -1913,27 +1970,8 @@ impl ScriptListApp {
 
         let query = &self.computed_filter_text;
         let (_, flat_results) = self.main_menu_result_caches.clone_grouped_results();
-        let has_cx = cx.is_some();
-        logging::log(
-            "GHOST",
-            &format!(
-                "refresh query='{}' flat_results={} has_cx={}",
-                query,
-                flat_results.len(),
-                has_cx
-            ),
-        );
         self.ghost_prediction =
             crate::scripts::search::ghost::compute_ghost_prediction(query, &flat_results);
-        logging::log(
-            "GHOST",
-            &format!(
-                "compute_result ghost={:?}",
-                self.ghost_prediction
-                    .as_ref()
-                    .map(|p| format!("suffix='{}' conf={}", p.ghost_suffix, p.confidence))
-            ),
-        );
         if let Some(cx) = cx {
             if let Some(ref pred) = self.ghost_prediction {
                 let suffix = pred.ghost_suffix.clone();
@@ -2147,13 +2185,7 @@ fn active_rich_spine_subsearch(
         context_type,
         sub_query.as_deref(),
     )?;
-    match source {
-        crate::spine::catalog_subsearch::ContextSubsearchSource::File
-        | crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard => {
-            Some((source, query.to_string()))
-        }
-        _ => None,
-    }
+    Some((source, query.to_string()))
 }
 
 fn build_rich_file_subsearch_rows(
@@ -2270,3 +2302,315 @@ fn build_rich_clipboard_subsearch_rows(
     (grouped, flat)
 }
 
+fn build_rich_browser_history_rows(
+    query: &str,
+    hits: &[crate::browser_history::RootBrowserHistorySearchHit],
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
+    let mut grouped = Vec::new();
+    let mut flat: Vec<scripts::SearchResult> = Vec::new();
+    let header = if query.trim().is_empty() {
+        "Recent Browser History".to_string()
+    } else {
+        format!("Browser history matching \u{201c}{}\u{201d}", query.trim())
+    };
+    grouped.push(GroupedListItem::SectionHeader(
+        header,
+        Some("globe".to_string()),
+    ));
+    if hits.is_empty() {
+        grouped.push(GroupedListItem::SectionHeader(
+            if query.trim().is_empty() {
+                "No browser history".to_string()
+            } else {
+                format!("No history matching \u{201c}{}\u{201d}", query.trim())
+            },
+            None,
+        ));
+    } else {
+        for hit in hits.iter().take(limit) {
+            let idx = flat.len();
+            flat.push(scripts::SearchResult::BrowserHistory(
+                scripts::BrowserHistoryMatch {
+                    hit: hit.clone(),
+                    subtitle: hit.url.clone(),
+                    score: 0,
+                },
+            ));
+            grouped.push(GroupedListItem::Item(idx));
+        }
+    }
+    (grouped, flat)
+}
+
+fn build_rich_notes_rows(
+    query: &str,
+    hits: &[crate::notes::RootNoteSearchHit],
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
+    let mut grouped = Vec::new();
+    let mut flat: Vec<scripts::SearchResult> = Vec::new();
+    let header = if query.trim().is_empty() {
+        "Recent Notes".to_string()
+    } else {
+        format!("Notes matching \u{201c}{}\u{201d}", query.trim())
+    };
+    grouped.push(GroupedListItem::SectionHeader(
+        header,
+        Some("notebook-text".to_string()),
+    ));
+    if hits.is_empty() {
+        grouped.push(GroupedListItem::SectionHeader(
+            if query.trim().is_empty() {
+                "No notes".to_string()
+            } else {
+                format!("No notes matching \u{201c}{}\u{201d}", query.trim())
+            },
+            None,
+        ));
+    } else {
+        for hit in hits.iter().take(limit) {
+            let idx = flat.len();
+            flat.push(scripts::SearchResult::Note(scripts::NoteMatch {
+                hit: hit.clone(),
+                title: hit.title.clone(),
+                subtitle: format!("{} chars", hit.char_count),
+                score: 0,
+            }));
+            grouped.push(GroupedListItem::Item(idx));
+        }
+    }
+    (grouped, flat)
+}
+
+fn build_rich_dictation_rows(
+    query: &str,
+    hits: &[crate::dictation::RootDictationHistorySearchHit],
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
+    let mut grouped = Vec::new();
+    let mut flat: Vec<scripts::SearchResult> = Vec::new();
+    let header = if query.trim().is_empty() {
+        "Recent Dictation".to_string()
+    } else {
+        format!("Dictation matching \u{201c}{}\u{201d}", query.trim())
+    };
+    grouped.push(GroupedListItem::SectionHeader(
+        header,
+        Some("mic".to_string()),
+    ));
+    if hits.is_empty() {
+        grouped.push(GroupedListItem::SectionHeader(
+            if query.trim().is_empty() {
+                "No dictation history".to_string()
+            } else {
+                format!("No dictation matching \u{201c}{}\u{201d}", query.trim())
+            },
+            None,
+        ));
+    } else {
+        for hit in hits.iter().take(limit) {
+            let idx = flat.len();
+            flat.push(scripts::SearchResult::DictationHistory(
+                scripts::DictationHistoryMatch {
+                    id: hit.id.clone(),
+                    preview: hit.preview.clone(),
+                    target: hit.target.clone(),
+                    timestamp: hit.timestamp.clone(),
+                    audio_duration_ms: hit.audio_duration_ms,
+                    subtitle: hit.target.clone(),
+                    score: 0,
+                    matched_field: hit.matched_field,
+                },
+            ));
+            grouped.push(GroupedListItem::Item(idx));
+        }
+    }
+    (grouped, flat)
+}
+
+fn build_rich_acp_history_rows(
+    query: &str,
+    hits: &[crate::ai::acp::history::AcpHistorySearchHit],
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
+    let mut grouped = Vec::new();
+    let mut flat: Vec<scripts::SearchResult> = Vec::new();
+    let header = if query.trim().is_empty() {
+        "Recent Agent Chat".to_string()
+    } else {
+        format!("Chat history matching \u{201c}{}\u{201d}", query.trim())
+    };
+    grouped.push(GroupedListItem::SectionHeader(
+        header,
+        Some("message-square".to_string()),
+    ));
+    if hits.is_empty() {
+        grouped.push(GroupedListItem::SectionHeader(
+            if query.trim().is_empty() {
+                "No chat history".to_string()
+            } else {
+                format!("No history matching \u{201c}{}\u{201d}", query.trim())
+            },
+            None,
+        ));
+    } else {
+        for hit in hits.iter().take(limit) {
+            let idx = flat.len();
+            flat.push(scripts::SearchResult::AcpHistory(
+                scripts::AcpHistoryMatch {
+                    entry: hit.entry.clone(),
+                    score: 0,
+                    matched_field: hit.matched_field,
+                    subtitle: hit.entry.title_display().to_string(),
+                },
+            ));
+            grouped.push(GroupedListItem::Item(idx));
+        }
+    }
+    (grouped, flat)
+}
+
+fn build_rich_script_rows(
+    query: &str,
+    all_scripts: &[std::sync::Arc<scripts::Script>],
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
+    let mut grouped = Vec::new();
+    let mut flat: Vec<scripts::SearchResult> = Vec::new();
+    let header = if query.trim().is_empty() {
+        "Scripts".to_string()
+    } else {
+        format!("Scripts matching \u{201c}{}\u{201d}", query.trim())
+    };
+    grouped.push(GroupedListItem::SectionHeader(
+        header,
+        Some("code".to_string()),
+    ));
+    let query_lower = query.trim().to_lowercase();
+    let matches: Vec<_> = all_scripts
+        .iter()
+        .filter(|s| {
+            query_lower.is_empty()
+                || s.name.to_lowercase().contains(&query_lower)
+                || s.path
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .is_some_and(|f| f.to_lowercase().contains(&query_lower))
+        })
+        .take(limit)
+        .collect();
+    if matches.is_empty() {
+        grouped.push(GroupedListItem::SectionHeader(
+            format!("No scripts matching \u{201c}{}\u{201d}", query.trim()),
+            None,
+        ));
+    } else {
+        for script in matches {
+            let idx = flat.len();
+            flat.push(scripts::SearchResult::Script(scripts::ScriptMatch {
+                script: std::sync::Arc::clone(script),
+                score: 0,
+                filename: script
+                    .path
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or(&script.name)
+                    .to_string(),
+                match_indices: scripts::MatchIndices::default(),
+                match_kind: scripts::ScriptMatchKind::Name,
+                content_match: None,
+                match_evidence: None,
+            }));
+            grouped.push(GroupedListItem::Item(idx));
+        }
+    }
+    (grouped, flat)
+}
+
+fn build_rich_scriptlet_rows(
+    query: &str,
+    all_scriptlets: &[std::sync::Arc<scripts::Scriptlet>],
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
+    let mut grouped = Vec::new();
+    let mut flat: Vec<scripts::SearchResult> = Vec::new();
+    let header = if query.trim().is_empty() {
+        "Scriptlets".to_string()
+    } else {
+        format!("Scriptlets matching \u{201c}{}\u{201d}", query.trim())
+    };
+    grouped.push(GroupedListItem::SectionHeader(
+        header,
+        Some("workflow".to_string()),
+    ));
+    let query_lower = query.trim().to_lowercase();
+    let matches: Vec<_> = all_scriptlets
+        .iter()
+        .filter(|s| query_lower.is_empty() || s.name.to_lowercase().contains(&query_lower))
+        .take(limit)
+        .collect();
+    if matches.is_empty() {
+        grouped.push(GroupedListItem::SectionHeader(
+            format!("No scriptlets matching \u{201c}{}\u{201d}", query.trim()),
+            None,
+        ));
+    } else {
+        for scriptlet in matches {
+            let idx = flat.len();
+            flat.push(scripts::SearchResult::Scriptlet(
+                scripts::ScriptletMatch {
+                    scriptlet: std::sync::Arc::clone(scriptlet),
+                    score: 0,
+                    display_file_path: None,
+                    match_indices: scripts::MatchIndices::default(),
+                    match_evidence: None,
+                },
+            ));
+            grouped.push(GroupedListItem::Item(idx));
+        }
+    }
+    (grouped, flat)
+}
+
+fn build_rich_skill_rows(
+    query: &str,
+    all_skills: &[std::sync::Arc<crate::plugins::PluginSkill>],
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
+    let mut grouped = Vec::new();
+    let mut flat: Vec<scripts::SearchResult> = Vec::new();
+    let header = if query.trim().is_empty() {
+        "Skills".to_string()
+    } else {
+        format!("Skills matching \u{201c}{}\u{201d}", query.trim())
+    };
+    grouped.push(GroupedListItem::SectionHeader(
+        header,
+        Some("zap".to_string()),
+    ));
+    let query_lower = query.trim().to_lowercase();
+    let matches: Vec<_> = all_skills
+        .iter()
+        .filter(|s| query_lower.is_empty() || s.title.to_lowercase().contains(&query_lower))
+        .take(limit)
+        .collect();
+    if matches.is_empty() {
+        grouped.push(GroupedListItem::SectionHeader(
+            format!("No skills matching \u{201c}{}\u{201d}", query.trim()),
+            None,
+        ));
+    } else {
+        for skill in matches {
+            let idx = flat.len();
+            flat.push(scripts::SearchResult::Skill(scripts::SkillMatch {
+                skill: std::sync::Arc::clone(skill),
+                score: 0,
+                match_indices: scripts::MatchIndices::default(),
+                match_evidence: None,
+            }));
+            grouped.push(GroupedListItem::Item(idx));
+        }
+    }
+    (grouped, flat)
+}

@@ -217,8 +217,11 @@
         })
         .detach();
 
-        let gpui_input_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder(DEFAULT_PLACEHOLDER));
+        let gpui_input_state = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(DEFAULT_PLACEHOLDER)
+                .inline_completion_visible_without_focus(true)
+        });
         let gpui_input_subscription = cx.subscribe_in(&gpui_input_state, window, {
             move |this, _, event: &InputEvent, window, cx| match event {
                 InputEvent::Focus => {

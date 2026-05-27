@@ -1525,7 +1525,6 @@ impl RenderOnce for ListItem {
                     "list-name".into(),
                     item_index as u64,
                 ))
-                .tooltip(move |window, cx| Tooltip::new(full_name.clone()).build(window, cx))
                 .whitespace_nowrap()
                 .line_height(px(metrics.name_line_height))
                 .text_color(base_color)
@@ -1539,7 +1538,6 @@ impl RenderOnce for ListItem {
             } else {
                 rgba((colors.text_primary << 8) | colors.alpha_name)
             };
-            let full_name = self.name.clone();
             div()
                 .text_size(px(metrics.name_font_size))
                 .font_weight(name_weight)
@@ -1549,7 +1547,6 @@ impl RenderOnce for ListItem {
                     "list-name".into(),
                     item_index as u64,
                 ))
-                .tooltip(move |window, cx| Tooltip::new(full_name.clone()).build(window, cx))
                 .whitespace_nowrap()
                 .line_height(px(metrics.name_line_height))
                 .text_color(name_color)
