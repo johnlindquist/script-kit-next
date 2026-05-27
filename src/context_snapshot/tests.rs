@@ -9,7 +9,7 @@ fn default_capture_options_enable_all_sections() {
     assert!(options.include_menu_bar);
     assert!(options.include_browser_url);
     assert!(options.include_focused_window);
-    assert!(!options.include_screenshot, "screenshot off by default");
+    assert!(options.include_screenshot, "screenshot on by default");
     assert!(
         !options.include_panel_screenshot,
         "panel screenshot off by default"

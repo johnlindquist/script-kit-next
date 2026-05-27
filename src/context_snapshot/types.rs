@@ -32,7 +32,7 @@ impl CaptureContextOptions {
             include_menu_bar: true,
             include_browser_url: true,
             include_focused_window: true,
-            include_screenshot: false,
+            include_screenshot: true,
             include_panel_screenshot: false,
         }
     }
@@ -64,7 +64,7 @@ impl CaptureContextOptions {
             include_menu_bar: false,
             include_browser_url: true,
             include_focused_window: true,
-            include_screenshot: false,
+            include_screenshot: true,
             include_panel_screenshot: false,
         }
     }

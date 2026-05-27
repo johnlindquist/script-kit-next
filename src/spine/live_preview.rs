@@ -144,6 +144,7 @@ impl SpineLivePreview {
         Some(match kind {
             ContextAttachmentKind::Current => {
                 let mut parts = Vec::new();
+                parts.push("screenshot");
                 if let Some(app) = &self.frontmost_app_name {
                     parts.push(app.as_str());
                 }
@@ -153,17 +154,11 @@ impl SpineLivePreview {
                 if self.browser_url.is_some() {
                     parts.push("browser URL");
                 }
-                if self.selection_text.is_some() {
-                    parts.push("selected text");
-                }
-                if parts.is_empty() {
-                    "Use the active app, focused window, browser URL, and selected text".into()
-                } else {
-                    format!("Includes {}", parts.join(" \u{b7} "))
-                }
+                format!("Includes {}", parts.join(" \u{b7} "))
             }
             ContextAttachmentKind::Full => {
                 let mut parts = Vec::new();
+                parts.push("screenshot");
                 if self.clipboard_text.is_some() {
                     parts.push("clipboard");
                 }
