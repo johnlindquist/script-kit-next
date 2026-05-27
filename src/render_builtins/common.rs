@@ -59,6 +59,64 @@ impl ScriptListApp {
             .focus_bordered(false)
     }
 
+    pub(crate) fn render_search_input_with_ghost(
+        &self,
+        cx: &gpui::Context<Self>,
+    ) -> gpui::Div {
+        use gpui::*;
+
+        let input = self.render_search_input();
+
+        let ghost_suffix = self
+            .ghost_prediction
+            .as_ref()
+            .map(|p| p.ghost_suffix.clone());
+
+        if let Some(suffix) = ghost_suffix {
+            let typed_text = self.gpui_input_state.read(cx).value().to_string();
+            let font_size = self.theme_font_size_xl();
+            let text_primary = self.theme.colors.text.primary;
+            let ghost_color = gpui::rgba(((text_primary >> 8) << 8) | 0x50);
+
+            div()
+                .w_full()
+                .relative()
+                .child(input)
+                .child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .h_full()
+                        .flex()
+                        .items_center()
+                        .overflow_hidden()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .child(
+                                    div()
+                                        .text_size(px(font_size))
+                                        .line_height(px(crate::panel::CURSOR_HEIGHT_LG))
+                                        .text_color(gpui::rgba(0x00000000))
+                                        .child(typed_text),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(font_size))
+                                        .line_height(px(crate::panel::CURSOR_HEIGHT_LG))
+                                        .text_color(ghost_color)
+                                        .child(suffix),
+                                ),
+                        ),
+                )
+        } else {
+            div().w_full().child(input)
+        }
+    }
+
     /// Emit a structured scroll log line for builtin views.
     #[allow(clippy::too_many_arguments)]
     fn log_builtin_scroll_event(

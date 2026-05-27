@@ -1762,7 +1762,8 @@ impl ScriptListApp {
                                                 ))
                                                 .into_any_element()
                                         } else {
-                                            self.render_search_input().into_any_element()
+                                            self.render_search_input_with_ghost(cx)
+                                                .into_any_element()
                                         }
                                     }),
                             )

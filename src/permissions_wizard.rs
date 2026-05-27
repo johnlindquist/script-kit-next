@@ -1,119 +1,236 @@
 //! Permissions Wizard Module
 //!
-//! This module provides functionality for checking and guiding users through
-//! required macOS permissions. It centralizes permission checking and provides
-//! UI-ready data structures for displaying permission status.
-//!
-//! ## Permission Types
-//!
-//! Script Kit requires the following macOS permissions:
-//!
-//! - **Accessibility**: Required for keyboard monitoring (text expansion),
-//!   window control, and getting selected text. This is the primary permission
-//!   that most features depend on.
-//!
-//! ## Usage
-//!
-//! ```no_run
-//! use script_kit_gpui::permissions_wizard::{check_all_permissions, PermissionType};
-//!
-//! let status = check_all_permissions();
-//!
-//! if !status.accessibility.granted {
-//!     println!("Accessibility permission needed: {}", status.accessibility.description);
-//!     // Show UI to guide user to System Settings
-//! }
-//!
-//! if status.all_granted() {
-//!     println!("All permissions granted!");
-//! }
-//! ```
-//!
-//! ## Architecture
-//!
-//! The wizard provides:
-//! - `PermissionStatus`: Overall status of all required permissions
-//! - `PermissionInfo`: Details about each individual permission
-//! - `PermissionType`: Enum of all permission types
-//! - Functions to check and request each permission type
-//!
-//! The structures are designed to be UI-ready, containing all information
-//! needed to render a permissions wizard dialog.
+//! Unified permission model for Script Kit GPUI. Centralizes permission
+//! checking across Accessibility, Screen Recording, Event Synthesizing,
+//! Input Monitoring, and Microphone.
 
-use macos_accessibility_client::accessibility;
 use tracing::{debug, info, instrument};
 
 // ============================================================================
-// Permission Types
+// Permission Kinds
 // ============================================================================
 
-/// Types of permissions that Script Kit may require
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PermissionType {
-    /// Accessibility permission for keyboard monitoring, window control, selected text
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum PermissionKind {
     Accessibility,
+    ScreenRecording,
+    EventSynthesizing,
+    InputMonitoring,
+    Microphone,
 }
 
-impl PermissionType {
-    /// Get the human-readable name of this permission type
+impl PermissionKind {
     pub fn name(&self) -> &'static str {
         match self {
-            PermissionType::Accessibility => "Accessibility",
+            Self::Accessibility => "Accessibility",
+            Self::ScreenRecording => "Screen Recording",
+            Self::EventSynthesizing => "Event Synthesizing",
+            Self::InputMonitoring => "Input Monitoring",
+            Self::Microphone => "Microphone",
         }
     }
 
-    /// Get the features that depend on this permission
-    pub fn dependent_features(&self) -> &'static [&'static str] {
+    pub fn subtitle(&self) -> &'static str {
         match self {
-            PermissionType::Accessibility => &[
-                "Text expansion / snippets",
-                "Window control (move, resize, tile)",
-                "Get selected text from other apps",
-                "Global keyboard shortcuts",
-            ],
+            Self::Accessibility => "Read selected text, control windows, run text expansion",
+            Self::ScreenRecording => "Capture screenshots for AI context and visual tools",
+            Self::EventSynthesizing => "Paste text and simulate keypresses in other apps",
+            Self::InputMonitoring => "Global keyboard shortcuts and text expansion triggers",
+            Self::Microphone => "Dictation and voice input",
         }
+    }
+
+    pub fn icon(&self) -> &'static str {
+        match self {
+            Self::Accessibility => "accessibility",
+            Self::ScreenRecording => "monitor",
+            Self::EventSynthesizing => "keyboard",
+            Self::InputMonitoring => "ear",
+            Self::Microphone => "mic",
+        }
+    }
+
+    pub fn settings_url(&self) -> &'static str {
+        match self {
+            Self::Accessibility => {
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+            }
+            Self::ScreenRecording => {
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+            }
+            Self::EventSynthesizing => {
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+            }
+            Self::InputMonitoring => {
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+            }
+            Self::Microphone => {
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
+            }
+        }
+    }
+
+    pub fn requirement(&self) -> PermissionRequirement {
+        match self {
+            Self::Accessibility => PermissionRequirement::Required,
+            Self::ScreenRecording => PermissionRequirement::Required,
+            Self::EventSynthesizing => PermissionRequirement::Recommended,
+            Self::InputMonitoring => PermissionRequirement::Recommended,
+            Self::Microphone => PermissionRequirement::Optional,
+        }
+    }
+
+    pub fn all() -> &'static [PermissionKind] {
+        &[
+            Self::Accessibility,
+            Self::ScreenRecording,
+            Self::EventSynthesizing,
+            Self::InputMonitoring,
+            Self::Microphone,
+        ]
     }
 }
 
-impl std::fmt::Display for PermissionType {
+impl std::fmt::Display for PermissionKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionRequirement {
+    Required,
+    Recommended,
+    Optional,
+}
+
 // ============================================================================
-// Permission Info
+// Permission Card State
 // ============================================================================
 
-/// Information about a single permission's status
-///
-/// This struct contains all the information needed to display a permission
-/// status in a wizard UI, including the current state, description, and
-/// instructions for granting the permission.
+#[derive(Debug, Clone)]
+pub struct PermissionCardState {
+    pub kind: PermissionKind,
+    pub status: crate::platform::permiso_detect::PermissionStatus,
+}
+
+// ============================================================================
+// Permission Snapshot
+// ============================================================================
+
+#[derive(Debug, Clone)]
+pub struct PermissionSnapshot {
+    pub cards: Vec<PermissionCardState>,
+}
+
+impl PermissionSnapshot {
+    pub fn current() -> Self {
+        Self {
+            cards: PermissionKind::all()
+                .iter()
+                .map(|&kind| PermissionCardState {
+                    kind,
+                    status: detect_permission(kind),
+                })
+                .collect(),
+        }
+    }
+
+    pub fn all_required_granted(&self) -> bool {
+        self.cards.iter().all(|card| {
+            card.kind.requirement() != PermissionRequirement::Required
+                || card.status == crate::platform::permiso_detect::PermissionStatus::Authorized
+        })
+    }
+
+    pub fn missing_required(&self) -> Vec<PermissionKind> {
+        self.cards
+            .iter()
+            .filter(|card| {
+                card.kind.requirement() == PermissionRequirement::Required
+                    && card.status != crate::platform::permiso_detect::PermissionStatus::Authorized
+            })
+            .map(|card| card.kind)
+            .collect()
+    }
+}
+
+pub fn detect_permission(
+    kind: PermissionKind,
+) -> crate::platform::permiso_detect::PermissionStatus {
+    use crate::platform::permiso_detect;
+    match kind {
+        PermissionKind::Accessibility => permiso_detect::ax_is_trusted(),
+        PermissionKind::ScreenRecording => permiso_detect::screen_capture_authorized(),
+        PermissionKind::Microphone => permiso_detect::microphone_authorized(),
+        PermissionKind::EventSynthesizing => permiso_detect::event_synthesizing_authorized(),
+        PermissionKind::InputMonitoring => permiso_detect::input_monitoring_authorized(),
+    }
+}
+
+// ============================================================================
+// Startup Intent
+// ============================================================================
+
+#[derive(Debug, Clone)]
+pub enum PermissionStartupIntent {
+    OpenFullWizard,
+    ShowReminder { missing: Vec<PermissionKind> },
+    None,
+}
+
+pub fn startup_intent(is_fresh_install: bool) -> PermissionStartupIntent {
+    let snapshot = PermissionSnapshot::current();
+    let missing = snapshot.missing_required();
+
+    if missing.is_empty() {
+        return PermissionStartupIntent::None;
+    }
+
+    if is_fresh_install || !onboarding_state_exists() {
+        return PermissionStartupIntent::OpenFullWizard;
+    }
+
+    PermissionStartupIntent::ShowReminder { missing }
+}
+
+fn onboarding_state_exists() -> bool {
+    let path = crate::setup::get_kit_path().join("permission-onboarding.json");
+    path.exists()
+}
+
+pub fn mark_onboarding_completed() {
+    let path = crate::setup::get_kit_path().join("permission-onboarding.json");
+    let state = serde_json::json!({
+        "schemaVersion": 1,
+        "completedAt": chrono::Utc::now().to_rfc3339(),
+    });
+    if let Ok(content) = serde_json::to_string_pretty(&state) {
+        let _ = std::fs::write(path, content);
+    }
+}
+
+// ============================================================================
+// Backward-compatible public API
+// ============================================================================
+
+/// Legacy alias — preserved for existing callers.
+pub type PermissionType = PermissionKind;
+
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct PermissionInfo {
-    /// The type of permission
-    pub permission_type: PermissionType,
-
-    /// Whether the permission is currently granted
+    pub permission_type: PermissionKind,
     pub granted: bool,
-
-    /// Human-readable description of why this permission is needed
     pub description: String,
-
-    /// Instructions for how to grant this permission
     pub instructions: String,
-
-    /// List of features that require this permission
     pub features: Vec<String>,
 }
 
 impl PermissionInfo {
-    /// Create a new PermissionInfo for accessibility permission
     fn accessibility(granted: bool) -> Self {
         Self {
-            permission_type: PermissionType::Accessibility,
+            permission_type: PermissionKind::Accessibility,
             granted,
             description:
                 "Accessibility permission allows Script Kit to monitor keyboard input \
@@ -125,37 +242,25 @@ impl PermissionInfo {
                  4. Find and select Script Kit\n\
                  5. Enable the toggle next to Script Kit"
                 .to_string(),
-            features: PermissionType::Accessibility
-                .dependent_features()
-                .iter()
+            features: PermissionKind::Accessibility
+                .subtitle()
+                .split(", ")
                 .map(|s| s.to_string())
                 .collect(),
         }
     }
 }
 
-// ============================================================================
-// Permission Status
-// ============================================================================
-
-/// Overall status of all required permissions
-///
-/// This struct provides a comprehensive view of all permissions Script Kit
-/// needs, making it easy to check if the app is fully operational or if
-/// some permissions need to be granted.
 #[derive(Debug, Clone)]
 pub struct PermissionStatus {
-    /// Accessibility permission status
     pub accessibility: PermissionInfo,
 }
 
 impl PermissionStatus {
-    /// Check if all required permissions are granted
     pub fn all_granted(&self) -> bool {
         self.accessibility.granted
     }
 
-    /// Get a list of all permissions that are missing
     pub fn missing_permissions(&self) -> Vec<&PermissionInfo> {
         let mut missing = Vec::new();
         if !self.accessibility.granted {
@@ -165,100 +270,48 @@ impl PermissionStatus {
     }
 }
 
-// ============================================================================
-// Public API
-// ============================================================================
-
-/// Check all required permissions and return their status
-///
-/// This is the main entry point for checking permissions. It queries the
-/// system for each required permission and returns a comprehensive status
-/// object that can be used to render a permissions wizard UI.
-///
-/// # Example
-///
-/// ```no_run
-/// use script_kit_gpui::permissions_wizard::check_all_permissions;
-///
-/// let status = check_all_permissions();
-/// println!("All granted: {}", status.all_granted());
-/// println!("Missing: {:?}", status.missing_permissions().len());
-/// ```
 #[instrument]
 pub fn check_all_permissions() -> PermissionStatus {
     let accessibility_granted = check_accessibility_permission();
-
     let status = PermissionStatus {
         accessibility: PermissionInfo::accessibility(accessibility_granted),
     };
-
     info!(
         all_granted = status.all_granted(),
         accessibility = accessibility_granted,
         "Checked all permissions"
     );
-
     status
 }
 
-/// Check if accessibility permission is granted
-///
-/// This checks whether the application has been granted accessibility
-/// permission in System Settings. This permission is required for:
-/// - Global keyboard monitoring (text expansion)
-/// - Window control operations
-/// - Getting selected text from other applications
-///
-/// # Returns
-///
-/// `true` if accessibility permission is granted, `false` otherwise.
 #[instrument]
 pub fn check_accessibility_permission() -> bool {
-    let granted = accessibility::application_is_trusted();
+    let granted = macos_accessibility_client::accessibility::application_is_trusted();
     debug!(granted, "Checked accessibility permission");
     granted
 }
 
-/// Request accessibility permission from the user
-///
-/// This function triggers the macOS system prompt asking the user to grant
-/// accessibility permission. If the permission is already granted, this
-/// returns `true` immediately without showing a prompt.
-///
-/// # Returns
-///
-/// `true` if permission is granted (either already or after the prompt),
-/// `false` if the user denies the permission or dismisses the dialog.
-///
-/// # Note
-///
-/// After granting permission in System Settings, the user may need to
-/// restart Script Kit for the changes to take effect, depending on when
-/// during the app lifecycle this was called.
 #[instrument]
 pub fn request_accessibility_permission() -> bool {
     info!("Requesting accessibility permission");
-    let granted = accessibility::application_is_trusted_with_prompt();
+    let granted = macos_accessibility_client::accessibility::application_is_trusted_with_prompt();
     info!(granted, "Accessibility permission request completed");
     granted
 }
 
-/// Open System Settings to the accessibility privacy pane
-///
-/// This opens the Privacy & Security > Accessibility section of
-/// System Settings where the user can grant permission to Script Kit.
-///
-/// # Errors
-///
-/// Returns an error if the system settings URL could not be opened.
 pub fn open_accessibility_settings() -> std::io::Result<()> {
     info!("Opening accessibility settings");
-
-    // Use the macOS URL scheme to open the specific settings pane
     std::process::Command::new("open")
-        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+        .arg(PermissionKind::Accessibility.settings_url())
         .spawn()?;
+    Ok(())
+}
 
+pub fn open_permission_settings(kind: PermissionKind) -> std::io::Result<()> {
+    info!(permission = %kind, "Opening permission settings");
+    std::process::Command::new("open")
+        .arg(kind.settings_url())
+        .spawn()?;
     Ok(())
 }
 
@@ -271,68 +324,122 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_permission_type_name() {
-        assert_eq!(PermissionType::Accessibility.name(), "Accessibility");
+    fn test_permission_kind_name() {
+        assert_eq!(PermissionKind::Accessibility.name(), "Accessibility");
+        assert_eq!(PermissionKind::ScreenRecording.name(), "Screen Recording");
     }
 
     #[test]
-    fn test_permission_type_display() {
+    fn test_permission_kind_display() {
         assert_eq!(
-            format!("{}", PermissionType::Accessibility),
+            format!("{}", PermissionKind::Accessibility),
             "Accessibility"
         );
     }
 
     #[test]
-    fn test_permission_type_dependent_features() {
-        let features = PermissionType::Accessibility.dependent_features();
-        assert!(!features.is_empty());
-        assert!(features.iter().any(|f| f.contains("expansion")));
+    fn test_permission_kind_all() {
+        assert_eq!(PermissionKind::all().len(), 5);
     }
 
     #[test]
-    fn test_permission_info_accessibility() {
-        let info = PermissionInfo::accessibility(true);
-        assert_eq!(info.permission_type, PermissionType::Accessibility);
-        assert!(info.granted);
-        assert!(!info.description.is_empty());
-        assert!(!info.instructions.is_empty());
-        assert!(!info.features.is_empty());
+    fn test_permission_requirements() {
+        assert_eq!(
+            PermissionKind::Accessibility.requirement(),
+            PermissionRequirement::Required
+        );
+        assert_eq!(
+            PermissionKind::ScreenRecording.requirement(),
+            PermissionRequirement::Required
+        );
+        assert_eq!(
+            PermissionKind::Microphone.requirement(),
+            PermissionRequirement::Optional
+        );
     }
 
     #[test]
-    fn test_permission_status_all_granted_true() {
-        let status = PermissionStatus {
-            accessibility: PermissionInfo::accessibility(true),
+    fn test_settings_urls() {
+        assert!(PermissionKind::Accessibility
+            .settings_url()
+            .contains("Privacy_Accessibility"));
+        assert!(PermissionKind::ScreenRecording
+            .settings_url()
+            .contains("Privacy_ScreenCapture"));
+        assert!(PermissionKind::InputMonitoring
+            .settings_url()
+            .contains("Privacy_ListenEvent"));
+        assert!(PermissionKind::Microphone
+            .settings_url()
+            .contains("Privacy_Microphone"));
+    }
+
+    #[test]
+    fn test_snapshot_current_does_not_panic() {
+        let snapshot = PermissionSnapshot::current();
+        assert_eq!(snapshot.cards.len(), 5);
+    }
+
+    #[test]
+    fn test_snapshot_all_required_granted_logic() {
+        use crate::platform::permiso_detect::PermissionStatus as PS;
+        let snapshot = PermissionSnapshot {
+            cards: vec![
+                PermissionCardState {
+                    kind: PermissionKind::Accessibility,
+                    status: PS::Authorized,
+                },
+                PermissionCardState {
+                    kind: PermissionKind::ScreenRecording,
+                    status: PS::Authorized,
+                },
+                PermissionCardState {
+                    kind: PermissionKind::EventSynthesizing,
+                    status: PS::Denied,
+                },
+                PermissionCardState {
+                    kind: PermissionKind::InputMonitoring,
+                    status: PS::Denied,
+                },
+                PermissionCardState {
+                    kind: PermissionKind::Microphone,
+                    status: PS::NotDetermined,
+                },
+            ],
         };
-        assert!(status.all_granted());
-        assert!(status.missing_permissions().is_empty());
+        assert!(
+            snapshot.all_required_granted(),
+            "Required (Accessibility, ScreenRecording) are Authorized; non-required can be Denied"
+        );
+        assert!(snapshot.missing_required().is_empty());
     }
 
     #[test]
-    fn test_permission_status_all_granted_false() {
-        let status = PermissionStatus {
-            accessibility: PermissionInfo::accessibility(false),
+    fn test_snapshot_missing_required() {
+        use crate::platform::permiso_detect::PermissionStatus as PS;
+        let snapshot = PermissionSnapshot {
+            cards: vec![
+                PermissionCardState {
+                    kind: PermissionKind::Accessibility,
+                    status: PS::Denied,
+                },
+                PermissionCardState {
+                    kind: PermissionKind::ScreenRecording,
+                    status: PS::Authorized,
+                },
+            ],
         };
-        assert!(!status.all_granted());
-        assert_eq!(status.missing_permissions().len(), 1);
+        let missing = snapshot.missing_required();
+        assert_eq!(missing.len(), 1);
+        assert_eq!(missing[0], PermissionKind::Accessibility);
     }
 
     #[test]
-    fn test_check_accessibility_permission_does_not_panic() {
-        // This test just verifies the function doesn't panic
-        // The actual result depends on system permissions
-        let _ = check_accessibility_permission();
-    }
-
-    #[test]
-    fn test_check_all_permissions_does_not_panic() {
-        // This test just verifies the function doesn't panic
+    fn test_backward_compat_check_all_permissions() {
         let status = check_all_permissions();
-        // Status should always be valid
         assert_eq!(
             status.accessibility.permission_type,
-            PermissionType::Accessibility
+            PermissionKind::Accessibility
         );
     }
 }

@@ -17,6 +17,8 @@ mod skills;
 mod unified;
 mod windows;
 
+pub(crate) mod ghost;
+
 pub use apps::fuzzy_search_apps;
 pub use builtins::fuzzy_search_builtins;
 pub use highlight::compute_match_indices_for_result;

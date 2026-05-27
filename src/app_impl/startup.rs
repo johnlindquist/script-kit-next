@@ -739,6 +739,7 @@ impl ScriptListApp {
             inline_calculator: None,
             gpui_input_state,
             gpui_input_focused: false,
+            ghost_prediction: None,
             gpui_input_subscriptions: vec![gpui_input_subscription],
             bounds_subscription: None,     // Set later after window setup
             appearance_subscription: None, // Set later after window setup
@@ -1297,6 +1298,14 @@ impl ScriptListApp {
                                 } else {
                                     this.focus_next_menu_syntax_form_field(window, cx);
                                 }
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && !has_shift
+                                && this.accept_ghost_prediction(window, cx)
+                            {
                                 cx.stop_propagation();
                                 return;
                             }

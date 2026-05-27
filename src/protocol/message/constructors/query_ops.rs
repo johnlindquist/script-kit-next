@@ -110,6 +110,7 @@ impl Message {
         path_state: Option<serde_json::Value>,
         notes_state: Option<serde_json::Value>,
         dictation_state: Option<serde_json::Value>,
+        ghost_prediction: Option<serde_json::Value>,
     ) -> Self {
         Message::StateResult {
             request_id,
@@ -141,6 +142,7 @@ impl Message {
             path_state,
             notes_state,
             dictation_state,
+            ghost_prediction,
         }
     }
 

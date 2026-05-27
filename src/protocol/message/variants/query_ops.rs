@@ -241,6 +241,14 @@ macro_rules! protocol_message_variants_query_ops {
             skip_serializing_if = "Option::is_none"
         )]
         dictation_state: Option<serde_json::Value>,
+        /// Ghost text prediction state for inline command completion.
+        /// Populated when a dominant prefix-match candidate exists.
+        #[serde(
+            rename = "ghostPrediction",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        ghost_prediction: Option<serde_json::Value>,
     },
 
     // ============================================================

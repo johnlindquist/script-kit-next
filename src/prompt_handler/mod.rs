@@ -3105,6 +3105,7 @@ impl ScriptListApp {
                                 None,
                                 Some(notes_state),
                                 None,
+                                None,
                             ));
                         }
                         return;
@@ -3142,6 +3143,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                             ));
                         }
                         return;
@@ -3166,6 +3168,7 @@ impl ScriptListApp {
                                 resolved.visible,
                                 None,
                                 Some(state),
+                                None,
                                 None,
                                 None,
                                 None,
@@ -3214,6 +3217,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                             ));
                         }
                         return;
@@ -3236,6 +3240,7 @@ impl ScriptListApp {
                                 None,
                                 false,
                                 false,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -4373,6 +4378,14 @@ impl ScriptListApp {
                     path_state,
                     None,
                     dictation_state,
+                    self.ghost_prediction.as_ref().map(|p| {
+                        serde_json::json!({
+                            "query": p.query,
+                            "fullLabel": p.full_label,
+                            "ghostSuffix": p.ghost_suffix,
+                            "confidence": p.confidence,
+                        })
+                    }),
                 );
 
                 tracing::info!(

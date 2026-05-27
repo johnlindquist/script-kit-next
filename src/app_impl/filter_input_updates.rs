@@ -139,10 +139,8 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // Run 12 Pass 11 — clear any pending Cmd+Enter inline AI proposal so
-        // it doesn't survive a filter change (otherwise the proposal would
-        // appear stale against an unrelated input).
         self.pending_menu_syntax_ai_proposal = None;
+        self.ghost_prediction = None;
 
         let input_already_matches = self.gpui_input_state.read(cx).value().to_string() == text;
         if matches!(self.current_view, AppView::ScriptList)

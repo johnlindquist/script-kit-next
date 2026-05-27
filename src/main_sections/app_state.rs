@@ -670,6 +670,7 @@ struct ScriptListApp {
     /// gpui-component input state for the main filter
     gpui_input_state: Entity<InputState>,
     gpui_input_focused: bool,
+    pub(crate) ghost_prediction: Option<crate::scripts::search::ghost::GhostPrediction>,
     #[allow(dead_code)]
     gpui_input_subscriptions: Vec<Subscription>,
     /// Subscription for window bounds changes (saves position on drag)

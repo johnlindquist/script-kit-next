@@ -82,3 +82,41 @@ pub fn microphone_authorized() -> PermissionStatus {
 pub fn microphone_authorized() -> PermissionStatus {
     PermissionStatus::Unknown
 }
+
+#[cfg(target_os = "macos")]
+pub fn input_monitoring_authorized() -> PermissionStatus {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGPreflightListenEventAccess() -> bool;
+    }
+
+    if unsafe { CGPreflightListenEventAccess() } {
+        PermissionStatus::Authorized
+    } else {
+        PermissionStatus::Denied
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn input_monitoring_authorized() -> PermissionStatus {
+    PermissionStatus::Unknown
+}
+
+#[cfg(target_os = "macos")]
+pub fn event_synthesizing_authorized() -> PermissionStatus {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGPreflightPostEventAccess() -> bool;
+    }
+
+    if unsafe { CGPreflightPostEventAccess() } {
+        PermissionStatus::Authorized
+    } else {
+        PermissionStatus::Denied
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn event_synthesizing_authorized() -> PermissionStatus {
+    PermissionStatus::Unknown
+}

@@ -1488,6 +1488,8 @@ impl ScriptListApp {
             last_selectable_index,
         );
 
+        self.refresh_ghost_from_cached_results();
+
         if logging::filter_perf_trace_enabled() || elapsed >= std::time::Duration::from_millis(8) {
             logging::log(
                 "FILTER_PERF",
@@ -1806,6 +1808,30 @@ impl ScriptListApp {
         self.preview_cache_path = None;
         self.preview_cache_match_signature = None;
         self.preview_cache_lines.clear();
+    }
+
+    fn refresh_ghost_from_cached_results(&mut self) {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            self.ghost_prediction = None;
+            return;
+        }
+        if self.show_actions_popup {
+            self.ghost_prediction = None;
+            return;
+        }
+        if self.menu_syntax_owns_list() || self.menu_syntax_capture_form_owns_input() {
+            self.ghost_prediction = None;
+            return;
+        }
+        if self.inline_calculator.is_some() {
+            self.ghost_prediction = None;
+            return;
+        }
+
+        let query = &self.computed_filter_text;
+        let (_, flat_results) = self.main_menu_result_caches.clone_grouped_results();
+        self.ghost_prediction =
+            crate::scripts::search::ghost::compute_ghost_prediction(query, &flat_results);
     }
 }
 

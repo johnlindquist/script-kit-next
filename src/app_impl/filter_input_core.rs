@@ -377,6 +377,25 @@ impl ScriptListApp {
             cx,
         );
     }
+
+    pub(crate) fn accept_ghost_prediction(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut gpui::Context<Self>,
+    ) -> bool {
+        let prediction = match self.ghost_prediction.take() {
+            Some(p) => p,
+            None => return false,
+        };
+        let full_label = prediction.full_label.clone();
+        self.pending_programmatic_filter_echo = Some(full_label.clone());
+        self.gpui_input_state.update(cx, |state, cx| {
+            state.set_value(full_label.clone().into(), window, cx);
+        });
+        self.ghost_prediction = None;
+        cx.notify();
+        true
+    }
 }
 
 #[cfg(test)]

@@ -863,10 +863,14 @@ impl ScriptListApp {
             }
         }
 
-        // Apply the result-frame update before notifying. Rendering between
-        // `filter_text` and `computed_filter_text` would show rows from the
-        // previous query under the new input, changing the visible Enter
-        // target one frame later.
+        if let Some(pred) = self.ghost_prediction.take() {
+            self.ghost_prediction = crate::scripts::search::ghost::reconcile_typed_through(
+                &self.filter_text,
+                &new_text,
+                &pred,
+            );
+        }
+
         self.queue_filter_compute(new_text.clone(), cx);
 
         // Log handler timing
