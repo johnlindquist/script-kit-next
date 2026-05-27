@@ -41,6 +41,7 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
 
     // Create nucleo context once for all scriptlets - reuses buffer across calls
     let mut nucleo = NucleoCtx::new(&query_lower);
+    let vars = crate::context_templates::ContextTemplateVars::from_frontmost_tracker();
     for scriptlet in scriptlets {
         let mut best = None::<MatchEvidence>;
         // Lazy match indices - don't compute during scoring
@@ -48,7 +49,8 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
 
         let display_file_path = extract_scriptlet_display_path(&scriptlet.file_path);
 
-        let display_name = crate::frontmost_app_tracker::substitute_context_vars(&scriptlet.name);
+        let display_name =
+            crate::context_templates::substitute_context_vars(&scriptlet.name, &vars);
         better_match_evidence(
             &mut best,
             match_evidence(

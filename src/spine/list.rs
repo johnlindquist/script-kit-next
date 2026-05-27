@@ -369,7 +369,7 @@ fn build_context_subsearch_placeholder_section(
     SpineListSection {
         id: ss(format!("spine-section-context-subsearch:{context_label}")),
         title: ss(format!("@{context_label}:")),
-        subtitle: Some(ss("Context sub-search rows are wired in Step 12")),
+        subtitle: Some(ss("Unknown context search source")),
         icon: Some(ss("search")),
         rows: vec![SpineListRow {
             id: ss(format!("spine:@:subsearch-placeholder:{context_label}")),
@@ -377,7 +377,9 @@ fn build_context_subsearch_placeholder_section(
             title: ss(format!(
                 "Search {context_label} for \u{201c}{sub_query}\u{201d}"
             )),
-            subtitle: Some(ss("Provider-backed rows land here in the sub-search step")),
+            subtitle: Some(ss(
+                "Try @file:, @clipboard:, @browser-history:, @notes:, or @history:",
+            )),
             meta: Some(ss("Spine")),
             icon: Some(ss("info")),
             badges: vec![ss("@")],
@@ -445,7 +447,8 @@ fn build_style_section(
     let mut rows =
         super::catalog_style::build_style_rows(query, projection.active_segment_index, range);
 
-    if let Some(preview) = live_preview.and_then(|lp| lp.style_selection_preview()) {
+    if let Some(lp) = live_preview {
+        let preview = lp.style_selection_preview();
         for row in &mut rows {
             if row.is_selectable {
                 row.subtitle = Some(ss(preview.clone()));

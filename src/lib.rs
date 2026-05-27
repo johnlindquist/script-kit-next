@@ -120,6 +120,8 @@ pub mod menu_cache;
 #[cfg(target_os = "macos")]
 pub mod frontmost_app_tracker;
 
+pub(crate) mod context_templates;
+
 // Action helpers - centralized path extraction, SDK action routing, pbcopy
 pub mod action_helpers;
 

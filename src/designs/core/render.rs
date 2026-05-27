@@ -9,7 +9,8 @@ use crate::scripts::SearchResult;
 use gpui::{AnyElement, IntoElement};
 
 fn substitute_context_vars(text: &str) -> String {
-    crate::frontmost_app_tracker::substitute_context_vars(text)
+    let vars = crate::context_templates::ContextTemplateVars::from_frontmost_tracker();
+    crate::context_templates::substitute_context_vars(text, &vars).into_owned()
 }
 
 /// Map a script's file extension to a more appropriate default icon.

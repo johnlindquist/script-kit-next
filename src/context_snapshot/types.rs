@@ -23,8 +23,8 @@ pub struct CaptureContextOptions {
 }
 
 impl CaptureContextOptions {
-    /// Full metadata capture. Keeps screenshots off by default to preserve the
-    /// existing lightweight `kit://context` contract.
+    /// Full metadata capture including a desktop screenshot.
+    /// Used by @here context attachment in the Spine.
     pub const fn all() -> Self {
         Self {
             include_selected_text: true,
@@ -56,7 +56,8 @@ impl CaptureContextOptions {
     }
 
     /// Lightweight capture — omits selected text and menu bar for lower
-    /// token cost and reduced permission surface.
+    /// token cost and reduced permission surface. Includes screenshot for
+    /// @all context attachment in the Spine.
     pub const fn minimal() -> Self {
         Self {
             include_selected_text: false,
@@ -211,5 +212,34 @@ mod tests {
         assert!(options.include_focused_window);
         assert!(!options.include_screenshot);
         assert!(!options.include_panel_screenshot);
+    }
+
+    #[test]
+    fn spine_context_profiles_include_screenshots() {
+        let all = CaptureContextOptions::all();
+        assert!(
+            all.include_screenshot,
+            "all() includes screenshot for @here"
+        );
+        assert!(!all.include_panel_screenshot);
+
+        let minimal = CaptureContextOptions::minimal();
+        assert!(
+            minimal.include_screenshot,
+            "minimal() includes screenshot for @all"
+        );
+        assert!(!minimal.include_panel_screenshot);
+
+        let default = CaptureContextOptions::default();
+        assert!(default.include_screenshot, "default() inherits from all()");
+    }
+
+    #[test]
+    fn tab_ai_is_only_profile_with_panel_screenshot() {
+        assert!(CaptureContextOptions::tab_ai().include_panel_screenshot);
+        assert!(!CaptureContextOptions::all().include_panel_screenshot);
+        assert!(!CaptureContextOptions::minimal().include_panel_screenshot);
+        assert!(!CaptureContextOptions::tab_ai_submit().include_panel_screenshot);
+        assert!(!CaptureContextOptions::recommendation().include_panel_screenshot);
     }
 }

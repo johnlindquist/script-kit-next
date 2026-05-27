@@ -1018,11 +1018,13 @@ impl ScriptListApp {
             && self.spine_parse.input == live_filter_text
         {
             if let Some(projection) = self.spine_projection.as_ref() {
-                let needs_preview = matches!(
-                    projection.active_segment_kind,
-                    crate::spine::SpineSegmentKind::ContextMention { .. }
-                        | crate::spine::SpineSegmentKind::Style { .. }
-                );
+                let needs_preview = match &projection.active_segment_kind {
+                    crate::spine::SpineSegmentKind::Style { .. } => true,
+                    crate::spine::SpineSegmentKind::ContextMention { sub_query, .. } => {
+                        sub_query.is_none()
+                    }
+                    _ => false,
+                };
                 if needs_preview {
                     self.spine_live_preview_cache
                         .set_script_count(self.scripts.len());

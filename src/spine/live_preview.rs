@@ -18,12 +18,19 @@ struct ExpensiveResult {
     selection_text: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default)]
+struct ExpensiveSlot {
+    next_request_id: u64,
+    in_flight: Option<(u64, std::time::Instant)>,
+    ready: Option<(u64, ExpensiveResult)>,
+}
+
+#[derive(Debug)]
 pub(crate) struct SpineLivePreviewCache {
     pub current: SpineLivePreview,
     pub generation: u64,
     last_expensive_kick: Option<std::time::Instant>,
-    pending_expensive: Arc<Mutex<Option<ExpensiveResult>>>,
+    pending_expensive: Arc<Mutex<ExpensiveSlot>>,
 }
 
 impl Default for SpineLivePreviewCache {
@@ -32,7 +39,7 @@ impl Default for SpineLivePreviewCache {
             current: SpineLivePreview::default(),
             generation: 0,
             last_expensive_kick: None,
-            pending_expensive: Arc::new(Mutex::new(None)),
+            pending_expensive: Arc::new(Mutex::new(ExpensiveSlot::default())),
         }
     }
 }
@@ -65,60 +72,80 @@ impl SpineLivePreviewCache {
             self.current.active_window_title = new_title;
             self.current.menu_bar_summary = new_menu;
             self.current.clipboard_text = new_clipboard;
-            self.generation += 1;
+            self.generation = self.generation.wrapping_add(1);
         }
     }
 
-    /// Collect any completed background expensive result into the cache.
-    /// If new data arrived, bumps generation so the spine cache key changes.
     fn collect_pending_expensive(&mut self) {
         let result = self
             .pending_expensive
             .lock()
             .ok()
-            .and_then(|mut g| g.take());
+            .and_then(|mut slot| slot.ready.take().map(|(_, r)| r));
         if let Some(r) = result {
             if r.browser_url != self.current.browser_url
                 || r.selection_text != self.current.selection_text
             {
                 self.current.browser_url = r.browser_url;
                 self.current.selection_text = r.selection_text;
-                self.generation += 1;
+                self.generation = self.generation.wrapping_add(1);
             }
         }
     }
 
-    /// Non-blocking: kicks a background thread for expensive fields (browser
-    /// URL, selected text) if the throttle has expired. Collects any
-    /// previously completed result first so the current render gets it.
     pub(crate) fn refresh_expensive_fields_nonblocking(&mut self) {
         self.collect_pending_expensive();
 
         const THROTTLE: std::time::Duration = std::time::Duration::from_secs(2);
-        if let Some(last) = self.last_expensive_kick {
-            if last.elapsed() < THROTTLE {
-                return;
-            }
+        const MAX_IN_FLIGHT: std::time::Duration = std::time::Duration::from_secs(8);
+
+        if self
+            .last_expensive_kick
+            .is_some_and(|last| last.elapsed() < THROTTLE)
+        {
+            return;
         }
+
+        let request_id = {
+            let Ok(mut slot) = self.pending_expensive.lock() else {
+                tracing::warn!(target: "script_kit::spine", "preview expensive slot poisoned");
+                return;
+            };
+            if let Some((_, started_at)) = slot.in_flight {
+                if started_at.elapsed() < MAX_IN_FLIGHT {
+                    return;
+                }
+            }
+            slot.next_request_id = slot.next_request_id.wrapping_add(1).max(1);
+            let id = slot.next_request_id;
+            slot.in_flight = Some((id, std::time::Instant::now()));
+            id
+        };
+
         self.last_expensive_kick = Some(std::time::Instant::now());
 
         let slot = Arc::clone(&self.pending_expensive);
         std::thread::spawn(move || {
-            let url = crate::platform::get_any_browser_tab_url();
-            let sel = crate::selected_text::get_selected_text()
-                .ok()
-                .filter(|t| !t.trim().is_empty());
-            if let Ok(mut g) = slot.lock() {
-                *g = Some(ExpensiveResult {
-                    browser_url: url,
-                    selection_text: sel,
-                });
+            let result = ExpensiveResult {
+                browser_url: crate::platform::get_any_browser_tab_url(),
+                selection_text: crate::selected_text::get_selected_text()
+                    .ok()
+                    .filter(|t| !t.trim().is_empty()),
+            };
+            if let Ok(mut slot) = slot.lock() {
+                if slot.in_flight.map(|(id, _)| id) == Some(request_id) {
+                    slot.ready = Some((request_id, result));
+                    slot.in_flight = None;
+                }
             }
         });
     }
 
     pub(crate) fn set_script_count(&mut self, count: usize) {
-        self.current.script_count = Some(count);
+        if self.current.script_count != Some(count) {
+            self.current.script_count = Some(count);
+            self.generation = self.generation.wrapping_add(1);
+        }
     }
 }
 
@@ -175,9 +202,8 @@ impl SpineLivePreview {
         }
     }
 
-    /// Action-oriented subtitle shown below the title in the @ context list.
-    pub(crate) fn subtitle_for_context_kind(&self, kind: ContextAttachmentKind) -> Option<String> {
-        Some(match kind {
+    pub(crate) fn subtitle_for_context_kind(&self, kind: ContextAttachmentKind) -> String {
+        match kind {
             ContextAttachmentKind::Current => {
                 let mut parts = Vec::new();
                 parts.push("screenshot");
@@ -252,17 +278,17 @@ impl SpineLivePreview {
             ContextAttachmentKind::Dictation => "Attach dictation transcript".into(),
             ContextAttachmentKind::Calendar => "Attach calendar events".into(),
             ContextAttachmentKind::Notifications => "Attach recent notifications".into(),
-        })
+        }
     }
 
-    pub(crate) fn style_selection_preview(&self) -> Option<String> {
+    pub(crate) fn style_selection_preview(&self) -> String {
         if let Some(t) = &self.selection_text {
             let preview = truncate_preview(t, 80);
             if !preview.is_empty() {
-                return Some(format!("Will rewrite: \u{201c}{preview}\u{201d}"));
+                return format!("Will rewrite: \u{201c}{preview}\u{201d}");
             }
         }
-        Some("Will rewrite selected text (select text first)".to_string())
+        "Will rewrite selected text (select text first)".to_string()
     }
 }
 

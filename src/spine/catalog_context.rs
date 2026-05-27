@@ -136,7 +136,7 @@ fn build_builtin_context_row(
         .unwrap_or_else(|| spec.label.to_string());
 
     let subtitle = live_preview
-        .and_then(|lp| lp.subtitle_for_context_kind(spec.kind))
+        .map(|lp| lp.subtitle_for_context_kind(spec.kind))
         .unwrap_or_else(|| spec.action_title.to_string());
 
     Some(SpineListRow {

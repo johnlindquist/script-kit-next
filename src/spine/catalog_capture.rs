@@ -1,7 +1,5 @@
 use std::ops::Range;
 
-use gpui::SharedString;
-
 use super::list::{matches_query, ss, SpineListAction, SpineListRow, SpineListRowKind};
 
 struct CaptureSpec {

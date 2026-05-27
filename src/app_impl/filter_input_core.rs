@@ -510,14 +510,14 @@ mod tests {
     fn test_is_transient_script_list_trigger() {
         use super::ScriptListApp;
 
-        for trigger in ["~", "/", "@", "|", ">", "?"] {
+        for trigger in ["~", ">", "?"] {
             assert!(
                 ScriptListApp::is_transient_script_list_trigger(trigger),
-                "expected '{trigger}' to be treated as a transient ScriptList trigger"
+                "expected '{trigger}' to be transient"
             );
         }
 
-        for query in ["~/src", "@browser", "/tmp", "foo", ""] {
+        for query in ["/", "@", "|", ".", ";", "~/src", "@browser", "/tmp", "foo", ""] {
             assert!(
                 !ScriptListApp::is_transient_script_list_trigger(query),
                 "expected '{query}' to remain a real query"

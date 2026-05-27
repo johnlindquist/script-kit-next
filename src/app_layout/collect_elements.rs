@@ -2068,7 +2068,12 @@ impl ScriptListApp {
         match result {
             scripts::SearchResult::Script(m) => m.script.name.clone(),
             scripts::SearchResult::Scriptlet(m) => {
-                crate::frontmost_app_tracker::substitute_context_vars(&m.scriptlet.name)
+                {
+                    let vars =
+                        crate::context_templates::ContextTemplateVars::from_frontmost_tracker();
+                    crate::context_templates::substitute_context_vars(&m.scriptlet.name, &vars)
+                        .into_owned()
+                }
             }
             scripts::SearchResult::BuiltIn(m) => m.entry.name.clone(),
             scripts::SearchResult::App(m) => m.app.name.clone(),
@@ -2201,7 +2206,8 @@ impl ScriptListApp {
                     let source = result.root_unified_source();
                     let subtitle = result.description().map(|d| {
                         if matches!(result, scripts::SearchResult::Scriptlet(_)) {
-                            crate::frontmost_app_tracker::substitute_context_vars(d)
+                            let vars = crate::context_templates::ContextTemplateVars::from_frontmost_tracker();
+                            crate::context_templates::substitute_context_vars(d, &vars).into_owned()
                         } else {
                             d.to_string()
                         }
