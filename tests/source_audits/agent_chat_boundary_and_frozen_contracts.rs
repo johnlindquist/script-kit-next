@@ -258,3 +258,62 @@ fn frozen_get_acp_state_protocol_contract_is_unchanged() {
         "frozen `AcpStateSnapshot` automation type must remain"
     );
 }
+
+#[test]
+fn agent_chat_user_facing_copy_uses_feature_name() {
+    // Display copy must name the feature "Agent Chat", not "ACP". Each pair
+    // asserts the new copy is present and the old ACP-as-feature label is gone.
+    let cases: &[(&str, &str, &str)] = &[
+        ("src/render_prompts/term.rs", "⌘W Agent Chat", "⌘W ACP"),
+        (
+            "src/storybook/dictation_states.rs",
+            "Agent Chat Target",
+            "\"ACP Target\"",
+        ),
+        (
+            "src/storybook/notes_window_states.rs",
+            "Agent Chat Host",
+            "\"ACP Host\"",
+        ),
+        (
+            "src/storybook/main_menu_variations/mod.rs",
+            "Agent Chat Ready Footer",
+            "\"ACP Ready Footer\"",
+        ),
+        (
+            "src/storybook/built_in_browser_states.rs",
+            "AGENT CHAT THREAD",
+            "\"ACP THREAD\"",
+        ),
+    ];
+    for (path, expect_new, forbid_old) in cases {
+        let src = read(path);
+        assert!(
+            src.contains(expect_new),
+            "{path} must use the Agent Chat feature name (`{expect_new}`)"
+        );
+        assert!(
+            !src.contains(forbid_old),
+            "{path} must not keep the ACP-as-feature display label (`{forbid_old}`)"
+        );
+    }
+}
+
+#[test]
+fn acp_contract_strings_remain_frozen_until_contract_rename_slice() {
+    // Step 6 changes only display copy. Native window title, serialized surface
+    // ids, automation snapshot, and detached-target wire ids stay frozen.
+    assert!(
+        read("src/platform/secondary_window_config.rs").contains("Script Kit ACP"),
+        "frozen native window title `Script Kit ACP` must remain"
+    );
+    assert!(
+        read("src/ai/acp/chat_window.rs").contains("acpDetached"),
+        "frozen detached-target wire id `acpDetached` must remain"
+    );
+    let app_view = read("src/main_sections/app_view_state.rs");
+    assert!(
+        app_view.contains("Some(\"acp_history\")"),
+        "frozen serialized surface id `acp_history` must remain"
+    );
+}

@@ -95,7 +95,7 @@ impl BuiltInBrowserStateId {
             Self::NotesBrowsePortal => "Attachment portal for searchable notes and note preview.",
             Self::WindowSwitcher => "Window list paired with the live actions/details panel.",
             Self::DictationHistory => "Saved dictation browser with transcript preview.",
-            Self::AcpHistory => "ACP conversation history browser with thread preview.",
+            Self::AcpHistory => "Agent Chat conversation history browser with thread preview.",
             Self::SdkReference => "SDK reference browser with list, support state, and snippet.",
             Self::EmptyResults => "Shared no-results state for filtered built-in browsers.",
         }
@@ -286,7 +286,7 @@ fn fixture_for(id: BuiltInBrowserStateId) -> BrowserFixture {
                 subtitle: Some("http://localhost:7337/catalog-json"),
                 body: vec![
                     "Local Storybook catalog endpoint used to confirm registered stories, roles, surfaces, variants, and fixture representation types.",
-                    "Attachment portals preserve the page title and URL as structured ACP context.",
+                    "Attachment portals preserve the page title and URL as structured Agent Chat context.",
                 ],
                 badges: vec!["chrome", "portal", "context"],
                 code_lines: Vec::new(),
@@ -379,7 +379,7 @@ fn fixture_for(id: BuiltInBrowserStateId) -> BrowserFixture {
             ],
             selected_index: 0,
             preview: PreviewPane {
-                eyebrow: "ACP THREAD",
+                eyebrow: "AGENT CHAT THREAD",
                 title: "Storybook state coverage",
                 subtitle: Some("14 messages - last updated today"),
                 body: vec![

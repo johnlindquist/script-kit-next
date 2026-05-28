@@ -60,8 +60,8 @@ impl VariationId for MainMenuVariationId {
             Self::SelectedRow => "Selected Row",
             Self::BottomOfListFooterSafeReveal => "Bottom Footer Safe Reveal",
             Self::FrontmostAppPaste => "Frontmost App Paste",
-            Self::AcpReadyFooter => "ACP Ready Footer",
-            Self::AcpNotReadyFooter => "ACP Not Ready Footer",
+            Self::AcpReadyFooter => "Agent Chat Ready Footer",
+            Self::AcpNotReadyFooter => "Agent Chat Not Ready Footer",
         }
     }
 

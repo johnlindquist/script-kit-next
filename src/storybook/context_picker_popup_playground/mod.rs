@@ -1263,7 +1263,7 @@ fn render_chat_body(spec: ContextPickerPopupPlaygroundSpec, compact: bool) -> An
                 .text_xs()
                 .font_family(FONT_MONO)
                 .text_color(theme.colors.text.dimmed.with_opacity(0.55))
-                .child("ACP composer"),
+                .child("Agent Chat composer"),
         )
         .child(
             div()

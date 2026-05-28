@@ -57,7 +57,7 @@ impl NotesWindowStateId {
             Self::MarkdownPreview => "Markdown Preview",
             Self::Empty => "Empty",
             Self::Trash => "Trash",
-            Self::AcpHost => "ACP Host",
+            Self::AcpHost => "Agent Chat Host",
         }
     }
 
@@ -356,7 +356,7 @@ fn render_notes_body(id: NotesWindowStateId, compact: bool) -> AnyElement {
             compact,
         ),
         _ => render_editor_text_body(
-            "# Daily launch notes\n\n- Verify Storybook canonical states\n- Check popup surfaces\n- Commit logical slices\n\nNext: cover Notes and ACP windows.",
+            "# Daily launch notes\n\n- Verify Storybook canonical states\n- Check popup surfaces\n- Commit logical slices\n\nNext: cover Notes and Agent Chat windows.",
             0xE6,
             compact,
         ),

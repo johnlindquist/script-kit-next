@@ -113,8 +113,8 @@ const SPECS: [DictationCanonicalStateSpec; 11] = [
     },
     DictationCanonicalStateSpec {
         id: "target-acp",
-        name: "ACP Target",
-        description: "Recording targeted at ACP handoff with the ACP badge.",
+        name: "Agent Chat Target",
+        description: "Recording targeted at Agent Chat handoff with the Agent Chat badge.",
         phase: DictationCanonicalPhase::Recording,
         target: DictationTarget::TabAiHarness,
         elapsed_secs: 31,

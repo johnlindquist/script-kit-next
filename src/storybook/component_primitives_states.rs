@@ -374,7 +374,7 @@ fn render_toast_states(compact: bool) -> AnyElement {
         )
         .child(
             Toast::new(
-                "New ACP context available",
+                "New Agent Chat context available",
                 ToastColors::from_theme(&theme, ToastVariant::Info),
             )
             .variant(ToastVariant::Info),

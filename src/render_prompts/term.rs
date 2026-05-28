@@ -83,7 +83,7 @@ fn is_term_prompt_actions_toggle_shortcut(has_cmd: bool, has_shift: bool, key: &
 fn terminal_return_hint_label(return_view: Option<&AppView>) -> &'static str {
     match return_view {
         Some(AppView::ScriptList) => "⌘W Main Menu",
-        Some(AppView::AcpChatView { .. }) => "⌘W ACP",
+        Some(AppView::AcpChatView { .. }) => "⌘W Agent Chat",
         Some(_) => "⌘W Return",
         None => "⌘W Close",
     }
