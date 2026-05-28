@@ -1116,13 +1116,33 @@ impl ScriptListApp {
         crate::footer_popup::sync_main_footer_popup(window, config.as_ref(), &mut *cx);
     }
 
+    /// The global working-directory footer chip, sourced from `spine_cwd_label`
+    /// so the main menu and Agent Chat show the same persistent cwd. Returns
+    /// `None` only when no cwd is established.
+    pub(crate) fn global_footer_cwd_chip(&self) -> Option<crate::footer_popup::FooterCwdChip> {
+        self.spine_cwd_label
+            .as_ref()
+            .map(|label| crate::footer_popup::FooterCwdChip {
+                label: label.clone(),
+                icon_token: "folder".to_string(),
+                key: Some("⇥".to_string()),
+            })
+    }
+
     pub(crate) fn enrich_footer_config_with_acp_info(
         &self,
         config: &mut crate::footer_popup::MainWindowFooterConfig,
     ) {
         if matches!(self.current_view, AppView::AcpChatView { .. }) {
             if let Some(snapshot) = self.acp_footer_snapshot.as_ref() {
-                config.left_info = Some(snapshot.profile_left_info());
+                let mut left_info = snapshot.profile_left_info();
+                // The working-directory chip is the single GLOBAL `spine_cwd`,
+                // shown identically on the main menu and in Agent Chat so it
+                // never disappears (or diverges to the agent's thread cwd) when
+                // switching surfaces. The thread-local `cwd_display` is no
+                // longer the footer's source of truth.
+                left_info.cwd_chip = self.global_footer_cwd_chip();
+                config.left_info = Some(left_info);
                 return;
             }
 
@@ -1143,13 +1163,7 @@ impl ScriptListApp {
                 ),
                 action: Some(crate::footer_popup::FooterAction::Ai),
                 selected: false,
-                cwd_chip: self.spine_cwd_label.as_ref().map(|label| {
-                    crate::footer_popup::FooterCwdChip {
-                        label: label.clone(),
-                        icon_token: "folder".to_string(),
-                        key: Some("⇥".to_string()),
-                    }
-                }),
+                cwd_chip: self.global_footer_cwd_chip(),
             });
             return;
         }

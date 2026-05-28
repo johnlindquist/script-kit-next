@@ -828,6 +828,12 @@ pub struct AiPreferences {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_model_id: Option<String>,
 
+    /// Last-selected global working directory (the footer cwd chip). Restored
+    /// on launch so the user keeps the same directory across app restarts.
+    /// Stored as an absolute path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+
     /// Last-selected Agent Chat profile id. Takes precedence over the legacy
     /// selected profile name when both are present.
     #[serde(default, skip_serializing_if = "Option::is_none")]

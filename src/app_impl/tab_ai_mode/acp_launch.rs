@@ -403,6 +403,38 @@ impl ScriptListApp {
         }
     }
 
+    /// Persist the current `spine_cwd` to user preferences (`ai.cwd`) so it is
+    /// restored on the next app launch. Non-fatal and off the UI thread.
+    pub(crate) fn persist_spine_cwd(&self) {
+        let cwd = self
+            .spine_cwd
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string());
+        std::thread::Builder::new()
+            .name("persist-spine-cwd".into())
+            .spawn(move || {
+                let mut prefs = crate::config::load_user_preferences();
+                if prefs.ai.cwd == cwd {
+                    return;
+                }
+                prefs.ai.cwd = cwd.clone();
+                if let Err(error) = crate::config::save_user_preferences(&prefs) {
+                    tracing::warn!(
+                        target: "script_kit::spine",
+                        event = "persist_spine_cwd_failed",
+                        error = %error,
+                    );
+                } else {
+                    tracing::info!(
+                        target: "script_kit::spine",
+                        event = "persist_spine_cwd",
+                        cwd = ?cwd,
+                    );
+                }
+            })
+            .ok();
+    }
+
     /// The working directory to launch the agent in, derived from the Spine cwd
     /// chip. Returns `None` (use the profile/default cwd) unless the user has
     /// *explicitly* picked a cwd (revision > 0) and it is still a directory.

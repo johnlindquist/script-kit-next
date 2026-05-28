@@ -538,6 +538,7 @@ impl ScriptListApp {
                                         view.cwd_pick_mode = false;
                                         view.invalidate_grouped_cache();
                                         view.prewarm_acp_for_spine_cwd(ctx);
+                                        view.persist_spine_cwd();
                                         view.reset_to_script_list(ctx);
                                         view.clear_filter(window, ctx);
                                         view.record_return_to_script_list_submit(

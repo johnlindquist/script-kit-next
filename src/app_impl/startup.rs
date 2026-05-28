@@ -782,6 +782,32 @@ impl ScriptListApp {
             &std::collections::HashMap::new(),
         );
 
+        // Restore the persisted global working directory (footer cwd chip) so it
+        // survives app restarts; the user tends to stay in one directory. A
+        // restored cwd counts as an explicit pick (revision 1) so the agent
+        // launches there. Falls back to ~/.scriptkit (revision 0) when no valid
+        // persisted directory exists.
+        let (initial_spine_cwd, initial_spine_cwd_label, initial_spine_cwd_revision) = {
+            let persisted = crate::config::load_user_preferences()
+                .ai
+                .cwd
+                .map(std::path::PathBuf::from)
+                .filter(|path| path.is_dir());
+            match persisted {
+                Some(path) => {
+                    let label = crate::file_search::shorten_path(&path.to_string_lossy())
+                        .trim_end_matches('/')
+                        .to_string();
+                    (Some(path), Some(label), 1_u64)
+                }
+                None => (
+                    dirs::home_dir().map(|h| h.join(".scriptkit")),
+                    Some("~/.scriptkit".to_string()),
+                    0_u64,
+                ),
+            }
+        };
+
         let mut app = ScriptListApp {
             scripts,
             scriptlets,
@@ -927,9 +953,9 @@ impl ScriptListApp {
                 input: String::new(),
             },
             spine_projection: None,
-            spine_cwd: dirs::home_dir().map(|h| h.join(".scriptkit")),
-            spine_cwd_label: Some("~/.scriptkit".to_string()),
-            spine_cwd_revision: 0,
+            spine_cwd: initial_spine_cwd,
+            spine_cwd_label: initial_spine_cwd_label,
+            spine_cwd_revision: initial_spine_cwd_revision,
             cwd_pick_mode: false,
             spine_live_preview_cache: Default::default(),
             menu_syntax_trigger_popup_state:

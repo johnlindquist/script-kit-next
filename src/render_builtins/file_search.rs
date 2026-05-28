@@ -791,6 +791,7 @@ impl ScriptListApp {
                                             // agent in the chosen directory
                                             // without a cold-start "try again".
                                             this.prewarm_acp_for_spine_cwd(cx);
+                                            this.persist_spine_cwd();
                                             this.reset_to_script_list(cx);
                                             this.clear_filter(window, cx);
                                             // Sentinel: prevents the shared

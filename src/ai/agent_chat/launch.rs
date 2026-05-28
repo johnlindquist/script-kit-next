@@ -134,6 +134,7 @@ pub(crate) fn resolve_focused_text_pi_launch(
         pi_binary: ai.pi_binary.clone(),
         profiles: ai.profiles.clone(),
         selected_profile_name: None,
+        cwd: ai.cwd.clone(),
     };
 
     PiAgentChatLaunch::from_profile(resolve_effective_profile(&text_ai, ctx))
