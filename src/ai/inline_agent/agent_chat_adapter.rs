@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use agent_client_protocol::{ContentBlock, TextContent};
+use crate::ai::agent_chat::content::{ContentBlock, TextContent};
 
 use super::executor::InlineAgentExecutor;
 use super::types::{

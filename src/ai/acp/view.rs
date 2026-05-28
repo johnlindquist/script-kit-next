@@ -15,6 +15,7 @@ use gpui::{
 
 use gpui_component::scroll::ScrollableElement;
 
+use crate::ai::agent_chat::content::{ContentBlock, TextContent};
 use crate::ai::agent_chat::events::{AgentChatEvent, AgentChatEventRx};
 use crate::components::text_input::{
     render_text_input_cursor_selection, TextHighlightRange, TextInlinePillRange,
@@ -2924,6 +2925,7 @@ impl AcpChatView {
             FooterAction::Retry => "⌘⇧R Retry",
             FooterAction::Close => "⌘W Close",
             FooterAction::Cwd => "📁 CWD",
+            FooterAction::AgentModel => "⇧⇥ Agent",
         }
     }
 
@@ -2987,6 +2989,14 @@ impl AcpChatView {
                 tracing::info!(
                     target: "script_kit::acp",
                     event = "acp_footer_cwd_chip_clicked_not_yet_wired",
+                );
+            }
+            FooterAction::AgentModel => {
+                // Agent/model picker is owned by the main launcher window;
+                // the ACP chat does not currently host it inline.
+                tracing::info!(
+                    target: "script_kit::acp",
+                    event = "acp_footer_agent_model_chip_clicked_noop",
                 );
             }
         }
@@ -6388,9 +6398,7 @@ impl AcpChatView {
 
         self.reset_focused_text_variations_for_submit();
 
-        let balanced_blocks = vec![agent_client_protocol::ContentBlock::Text(
-            agent_client_protocol::TextContent::new(balanced_prompt),
-        )];
+        let balanced_blocks = vec![ContentBlock::Text(TextContent::new(balanced_prompt))];
 
         let submit_result = thread_entity.update(cx, |thread, cx| {
             thread.submit_blocks(balanced_blocks, instruction.clone(), cx)
@@ -6422,9 +6430,7 @@ impl AcpChatView {
                 variation_index = index,
             );
 
-            let blocks = vec![agent_client_protocol::ContentBlock::Text(
-                agent_client_protocol::TextContent::new(prompt),
-            )];
+            let blocks = vec![ContentBlock::Text(TextContent::new(prompt))];
             let aux_thread_id =
                 format!("{}::focused-text-variation-{}", base_thread_id, angle.id());
 
@@ -11173,31 +11179,6 @@ impl AcpChatView {
             return;
         };
 
-        // Skip the blocking disk write when the user confirms the already-selected agent.
-        let already_selected = current_setup
-            .selected_agent
-            .as_ref()
-            .is_some_and(|selected| selected.id == agent.id);
-
-        let persist_result: Result<(), anyhow::Error> = if already_selected {
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_setup_agent_persist_skipped_same_selection",
-                agent_id = %agent.id,
-            );
-            Ok(())
-        } else {
-            crate::ai::acp::persist_preferred_acp_agent_id_sync(Some(agent.id.to_string()))
-        };
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_setup_agent_persist_before_retry",
-            agent_id = %agent.id,
-            persisted = persist_result.is_ok(),
-            already_selected,
-        );
-
         // Re-resolve against the catalog to rebuild card title/body/actions.
         let resolution = crate::ai::acp::resolve_acp_launch_with_requirements(
             &current_setup.catalog_entries,
@@ -11210,7 +11191,7 @@ impl AcpChatView {
             current_setup.launch_requirements,
         );
 
-        let should_auto_retry = resolution.is_ready() && persist_result.is_ok();
+        let should_auto_retry = resolution.is_ready();
 
         if let AcpChatSession::Live(thread) = &self.session {
             thread.update(cx, |thread, cx| {
@@ -11418,43 +11399,6 @@ impl AcpChatView {
             token_count = self.inline_owned_context_tokens.len(),
         );
         cx.notify();
-    }
-
-    pub(crate) fn stage_agent_switch_retry(
-        &mut self,
-        next_agent_id: String,
-        cx: &mut Context<Self>,
-    ) {
-        let launch_requirements = self.current_retry_launch_requirements(cx);
-        let draft_state = self.current_retry_draft_state(cx);
-        let has_draft_state = draft_state.is_some();
-        self.pending_retry_request = Some(AcpRetryRequest {
-            preferred_agent_id: Some(next_agent_id.clone()),
-            launch_requirements,
-            draft_state,
-        });
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_switch_agent_retry_payload_staged",
-            agent_id = %next_agent_id,
-            needs_embedded_context = launch_requirements.needs_embedded_context,
-            needs_image = launch_requirements.needs_image,
-            has_draft_state,
-        );
-        cx.notify();
-    }
-
-    pub(crate) fn relaunch_for_agent_switch_preserving_draft(
-        &mut self,
-        next_agent_id: String,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(thread) = self.thread() {
-            thread.update(cx, |thread, cx| {
-                thread.revalidate_skill_context_for_agent(&next_agent_id, cx);
-            });
-        }
-        self.stage_agent_switch_retry(next_agent_id, cx);
     }
 
     /// Queue an explicit relaunch payload from the current setup state.

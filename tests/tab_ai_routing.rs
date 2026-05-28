@@ -4704,58 +4704,16 @@ fn non_authoring_harness_submission_omits_guidance_block() {
 }
 
 // =========================================================================
-// ACP action-surface agent switch preserves retry payload
+// ACP setup-card agent confirmation refreshes inline setup state
 // =========================================================================
 
 const ACP_ACTION_HANDLER_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 
 #[test]
-fn acp_action_switch_stages_retry_before_persist() {
-    // The action handler must call stage_agent_switch_retry BEFORE
-    // persist_preferred_acp_agent_id_sync so the retry payload captures
-    // the live session's capability requirements before any side effects.
-    let stage_pos = ACP_ACTION_HANDLER_SOURCE
-        .find("stage_agent_switch_retry")
-        .expect("action handler must call stage_agent_switch_retry");
-    let persist_pos = ACP_ACTION_HANDLER_SOURCE
-        .find("persist_preferred_acp_agent_id_sync")
-        .expect("action handler must call persist_preferred_acp_agent_id_sync");
-    assert!(
-        stage_pos < persist_pos || ACP_ACTION_HANDLER_SOURCE.contains("queue_setup_retry_request"),
-        "ACP setup flow must preserve retry payload staging alongside preferred-agent persistence"
-    );
-}
-
-#[test]
-fn acp_action_switch_emits_retry_payload_staged_log() {
-    assert!(
-        ACP_ACTION_HANDLER_SOURCE.contains("acp_switch_agent_retry_payload_staged"),
-        "ACP view must emit acp_switch_agent_retry_payload_staged when staging an agent retry"
-    );
-}
-
-#[test]
-fn acp_action_switch_already_selected_returns_success_message() {
-    assert!(
-        ACP_ACTION_HANDLER_SOURCE.contains("let already_selected = current_setup")
-            && ACP_ACTION_HANDLER_SOURCE
-                .contains("event = \"acp_setup_agent_persist_skipped_same_selection\"")
-            && ACP_ACTION_HANDLER_SOURCE.contains("if already_selected {"),
-        "setup-agent confirmation must special-case the already-selected agent and skip the blocking persist",
-    );
-    assert!(
-        ACP_ACTION_HANDLER_SOURCE.contains("Ok(())")
-            && ACP_ACTION_HANDLER_SOURCE
-                .contains("persist_preferred_acp_agent_id_sync(Some(agent.id.to_string()))"),
-        "already-selected flow must succeed without a disk write while changed selections still persist",
-    );
-}
-
-#[test]
-fn acp_action_switch_reopens_after_persist() {
+fn acp_setup_confirm_refreshes_state_and_queues_retry() {
     assert!(
         ACP_ACTION_HANDLER_SOURCE.contains("self.replace_active_setup_state(next_setup, cx);"),
-        "setup-agent confirmation must refresh the inline setup state after persistence",
+        "setup-agent confirmation must refresh the inline setup state",
     );
     assert!(
         ACP_ACTION_HANDLER_SOURCE.contains("self.queue_setup_retry_request(cx);"),

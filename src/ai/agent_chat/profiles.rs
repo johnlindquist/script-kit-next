@@ -10,6 +10,56 @@ pub const BUILTIN_SCRIPT_KIT_PROFILE_ID: &str = "script-kit";
 pub const BUILTIN_TEXT_PROFILE_ID: &str = "text";
 pub const DEFAULT_PI_PROVIDER: &str = "openai-codex";
 pub const DEFAULT_PI_MODEL: &str = "gpt-5.4";
+
+/// A curated Pi provider ("Agent") and its selectable models for the Shift+Tab
+/// Agent & Model picker.
+///
+/// The live provider/model catalog is advertised dynamically by the `pi` agent
+/// at runtime (`get_available_models`); this static fallback lets the launcher
+/// pre-select a provider/model WITHOUT a live session. Selections persist as
+/// the namespaced `selectedModelId = "<provider>/<model>"` that the Pi launch
+/// reads (see [`parse_provider_model_selection`]). Edit this list to add or
+/// remove providers/models surfaced in the launcher.
+pub struct PiProviderCatalogEntry {
+    pub id: &'static str,
+    pub display_name: &'static str,
+    /// `(model_id, model_display_name)` pairs; `model_id` is the bare model
+    /// (namespaced with the provider id at selection time).
+    pub models: Vec<(&'static str, &'static str)>,
+}
+
+/// Curated static Pi provider → model catalog for the launcher picker.
+pub fn pi_provider_model_catalog() -> Vec<PiProviderCatalogEntry> {
+    vec![
+        PiProviderCatalogEntry {
+            id: "openai-codex",
+            display_name: "Codex",
+            models: vec![
+                ("gpt-5.5", "GPT-5.5"),
+                ("gpt-5.4", "GPT-5.4"),
+                ("gpt-5-mini", "GPT-5 mini"),
+            ],
+        },
+        PiProviderCatalogEntry {
+            id: "anthropic",
+            display_name: "Claude",
+            models: vec![
+                ("claude-opus-4-6", "Opus 4.6"),
+                ("claude-sonnet-4-6", "Sonnet 4.6"),
+                ("claude-sonnet-4-5", "Sonnet 4.5"),
+                ("claude-haiku-4-5", "Haiku 4.5"),
+            ],
+        },
+        PiProviderCatalogEntry {
+            id: "google",
+            display_name: "Gemini",
+            models: vec![
+                ("gemini-2.5-pro", "Gemini 2.5 Pro"),
+                ("gemini-2.5-flash", "Gemini 2.5 Flash"),
+            ],
+        },
+    ]
+}
 pub const GENERAL_PI_TOOLS: [&str; 7] = [
     "web_search",
     "desktop_search",

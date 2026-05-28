@@ -411,6 +411,21 @@ impl ScriptListApp {
                 self.suppress_filter_events = false;
                 cx.notify();
             }
+            crate::footer_popup::FooterAction::AgentModel => {
+                // Click on the Agent·Model chip → open the combined
+                // agent+model picker, mirroring Shift+Tab from ScriptList
+                // (see startup.rs tab_interceptor).
+                tracing::info!(
+                    target: "script_kit::footer_popup",
+                    event = "main_window_footer_agent_model_chip_clicked",
+                    view = ?self.current_view,
+                    "Opening agent/model picker from footer chip"
+                );
+                if !matches!(self.current_view, AppView::ScriptList) {
+                    self.current_view = AppView::ScriptList;
+                }
+                self.open_agent_model_picker_window(window, cx);
+            }
         }
     }
 
@@ -560,6 +575,16 @@ impl ScriptListApp {
                         label.clone(),
                     )
                     .enabled(!footer_disabled),
+                );
+            }
+
+            // Agent · Model chip, pinned to the left immediately right of the
+            // cwd chip. Reflects the persisted Pi provider/model selection and
+            // opens the combined picker on click / Shift+Tab.
+            if let Some(label) = self.agent_model_footer_label() {
+                buttons.push(
+                    FooterButtonConfig::new(FooterAction::AgentModel, "⇧⇥", label)
+                        .enabled(!footer_disabled),
                 );
             }
         }
@@ -1129,6 +1154,18 @@ impl ScriptListApp {
             })
     }
 
+    /// Combined "Agent · Model" footer label, derived from the persisted Pi
+    /// provider/model selection (`spine_agent_label` / `spine_model_label`).
+    /// Returns `None` when neither label is known so the chip stays hidden.
+    pub(crate) fn agent_model_footer_label(&self) -> Option<String> {
+        match (self.spine_agent_label.as_ref(), self.spine_model_label.as_ref()) {
+            (Some(agent), Some(model)) => Some(format!("{agent} · {model}")),
+            (Some(agent), None) => Some(agent.clone()),
+            (None, Some(model)) => Some(model.clone()),
+            (None, None) => None,
+        }
+    }
+
     pub(crate) fn enrich_footer_config_with_acp_info(
         &self,
         config: &mut crate::footer_popup::MainWindowFooterConfig,
@@ -1168,10 +1205,14 @@ impl ScriptListApp {
             return;
         }
 
-        // Main menu (ScriptList): CWD is now rendered as a regular footer
-        // button (see standard_main_window_footer_buttons → FooterAction::Cwd),
-        // so it gets the same bordered chrome + hover state as Open / Actions
-        // and no longer needs the inline left_info cwd_chip path.
+        // Main menu (ScriptList): CWD is rendered as a regular footer button
+        // (see standard_main_window_footer_buttons → FooterAction::Cwd), so it
+        // gets the same bordered chrome + hover state as Open / Actions.
+        //
+        // NOTE: a centered agent/model marker was tried here but overlapped the
+        // cwd button. The agent/model footer indicator is deferred until the
+        // agent-selection backend is reconciled (see below) and a non-colliding
+        // footer slot is chosen.
     }
 
     pub(crate) fn toggle_logs(&mut self, cx: &mut Context<Self>) {

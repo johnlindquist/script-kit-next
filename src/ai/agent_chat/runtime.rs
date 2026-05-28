@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use agent_client_protocol::ContentBlock;
+use crate::ai::agent_chat::content::ContentBlock;
 use anyhow::Result;
 
 use crate::ai::agent_chat::events::AgentChatEventRx;

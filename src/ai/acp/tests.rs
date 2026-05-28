@@ -5,7 +5,7 @@
 //! `permission_broker.rs`, and `events.rs` with
 //! cross-cutting integration-style assertions.
 
-use agent_client_protocol::{ContentBlock, TextContent};
+use crate::ai::agent_chat::content::{ContentBlock, TextContent};
 
 use super::events::AcpEvent;
 use super::permission_broker::{AcpApprovalOption, AcpApprovalRequest, AcpPermissionBroker};
@@ -1906,22 +1906,13 @@ fn acp_retry_request_from_setup_state_without_agent() {
 }
 
 #[test]
-fn tab_ai_mode_consumes_retry_request_before_preference() {
-    // Verify the open path checks for retry request before loading preference.
+fn tab_ai_mode_consumes_retry_request_on_open() {
+    // Verify the open path checks for a staged retry request from the view.
+    // (The legacy per-agent preference fallback was removed — all sessions
+    // use the Pi backend, so there is no agent preference to fall back to.)
     assert!(
         TAB_AI_MODE_SOURCE.contains("take_acp_retry_request_for_open"),
         "tab_ai_mode must check for retry request from current view"
-    );
-    // The retry request should be checked before load_preferred_acp_agent_id.
-    let retry_pos = TAB_AI_MODE_SOURCE
-        .find("take_acp_retry_request_for_open")
-        .expect("must have retry request extraction");
-    let pref_pos = TAB_AI_MODE_SOURCE
-        .find("load_preferred_acp_agent_id")
-        .expect("must still fall back to preference loading");
-    assert!(
-        retry_pos < pref_pos,
-        "retry request must be consumed before preference fallback"
     );
 }
 

@@ -382,28 +382,14 @@ impl NotesApp {
             thread.update(cx, |thread, cx| thread.refresh_models(cx));
         }
 
-        // Read ACP context from the cached view.
-        let (selected_agent_id, catalog_entries, selected_model_id, available_models) = {
+        // Read ACP model context from the cached view.
+        let (selected_model_id, available_models) = {
             let view = acp_view.read(cx);
             match &view.session {
-                crate::ai::acp::AcpChatSession::Setup(state) => (
-                    state
-                        .selected_agent
-                        .as_ref()
-                        .map(|agent| agent.id.to_string()),
-                    crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
-                        &state.catalog_entries,
-                    ),
-                    None,
-                    Vec::new(),
-                ),
+                crate::ai::acp::AcpChatSession::Setup(_) => (None, Vec::new()),
                 crate::ai::acp::AcpChatSession::Live(thread) => {
                     let thread = thread.read(cx);
                     (
-                        thread.selected_agent_id().map(str::to_string),
-                        crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
-                            thread.available_agents(),
-                        ),
                         thread.selected_model_id().map(str::to_string),
                         thread.available_models().to_vec(),
                     )
@@ -429,8 +415,6 @@ impl NotesApp {
                 focus_handle,
                 callback,
                 crate::actions::AcpActionsDialogContext {
-                    catalog_entries: &catalog_entries,
-                    selected_agent_id: selected_agent_id.as_deref(),
                     available_models: &available_models,
                     selected_model_id: selected_model_id.as_deref(),
                     focused_text: false,
@@ -635,130 +619,6 @@ fn dispatch_notes_acp_action(
     if action_id == "acp_close" {
         entity.update(cx, |app: &mut NotesApp, cx| {
             app.close_embedded_acp_via_host("acp_action_close", Some(window), cx);
-        });
-        return;
-    }
-
-    // Handle agent switch by persisting the explicit preference and
-    // relaunching the embedded ACP surface with the current draft input.
-    if let Some(agent_id) = crate::actions::acp_switch_agent_id_from_action(action_id) {
-        let (current_selected_agent_id, available_agents, draft_snapshot) = {
-            let view = acp_entity.read(cx);
-            match &view.session {
-                crate::ai::acp::AcpChatSession::Setup(state) => (
-                    state
-                        .selected_agent
-                        .as_ref()
-                        .map(|agent| agent.id.to_string()),
-                    crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
-                        &state.catalog_entries,
-                    ),
-                    view.capture_draft_snapshot(cx),
-                ),
-                crate::ai::acp::AcpChatSession::Live(thread) => {
-                    let thread = thread.read(cx);
-                    (
-                        thread.selected_agent_id().map(str::to_string),
-                        crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
-                            thread.available_agents(),
-                        ),
-                        view.capture_draft_snapshot(cx),
-                    )
-                }
-            }
-        };
-
-        let agent_display_name = available_agents
-            .iter()
-            .find(|entry| entry.id.as_ref() == agent_id)
-            .map(|entry| entry.display_name.to_string())
-            .unwrap_or_else(|| agent_id.to_string());
-
-        if current_selected_agent_id.as_deref() == Some(agent_id) {
-            tracing::info!(
-                event = "notes_acp_switch_agent_skipped",
-                agent_id,
-                agent_display_name = %agent_display_name,
-                reason = "already_selected",
-            );
-            return;
-        }
-
-        let next_agent_id = agent_id.to_string();
-        let has_draft_input = draft_snapshot.thread.as_ref().is_some_and(|thread| {
-            !thread.input.is_empty() || !thread.pending_context_parts.is_empty()
-        });
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "notes_acp_switch_agent_requested",
-            agent_id = %next_agent_id,
-            agent_display_name = %agent_display_name,
-            has_draft_input,
-        );
-
-        let persist_result =
-            crate::ai::acp::persist_preferred_acp_agent_id_sync(Some(next_agent_id.clone()));
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "notes_acp_switch_agent_persist_result",
-            agent_id = %next_agent_id,
-            persisted = persist_result.is_ok(),
-        );
-
-        if let Err(error) = persist_result {
-            tracing::warn!(
-                target: "script_kit::tab_ai",
-                event = "notes_acp_switch_agent_persist_failed",
-                agent_id = %next_agent_id,
-                error = %error,
-            );
-            return;
-        }
-
-        entity.update(cx, |app: &mut NotesApp, cx| {
-            if app.notes_acp_generation != acp_generation {
-                tracing::warn!(
-                    target: "script_kit::tab_ai",
-                    event = "notes_acp_switch_agent_stale_view",
-                    agent_id = %next_agent_id,
-                    expected_generation = acp_generation,
-                    actual_generation = app.notes_acp_generation,
-                );
-                return;
-            }
-            acp_entity.update(cx, |chat, cx| {
-                chat.prepare_for_host_hide(cx);
-            });
-            app.embedded_acp_chat = None;
-
-            let relaunch_result = app.open_or_focus_embedded_acp(None, window, cx);
-            if relaunch_result.is_ok() {
-                if let Some(ref new_view) = app.embedded_acp_chat {
-                    let snapshot = draft_snapshot.clone();
-                    new_view.update(cx, |chat, cx| {
-                        chat.restore_draft_snapshot(snapshot, cx);
-                    });
-                }
-            }
-
-            match relaunch_result {
-                Ok(()) => tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "notes_acp_switch_agent_relaunched",
-                    agent_id = %next_agent_id,
-                    agent_display_name = %agent_display_name,
-                    has_draft_input,
-                ),
-                Err(error) => tracing::warn!(
-                    target: "script_kit::tab_ai",
-                    event = "notes_acp_switch_agent_relaunch_failed",
-                    agent_id = %next_agent_id,
-                    agent_display_name = %agent_display_name,
-                    error = %error,
-                ),
-            }
         });
         return;
     }

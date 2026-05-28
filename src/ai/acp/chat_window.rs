@@ -712,45 +712,26 @@ pub fn toggle_detached_actions(cx: &mut App) {
             let _ = action_tx.try_send(action_id);
         });
 
-    // Build ACP action context from the view entity (mirrors actions_toggle.rs pattern)
+    // Build ACP model context from the view entity (mirrors actions_toggle.rs pattern)
     #[allow(clippy::type_complexity)]
-    let acp_context: Option<(
-        Option<String>,
-        Vec<crate::ai::acp::AcpAgentCatalogEntry>,
-        Option<String>,
-        Vec<crate::ai::acp::config::AcpModelEntry>,
-    )> = view_weak.as_ref().and_then(|weak| {
-        weak.upgrade().map(|entity| {
-            let view = entity.read(cx);
-            match &view.session {
-                crate::ai::acp::AcpChatSession::Setup(state) => (
-                    state
-                        .selected_agent
-                        .as_ref()
-                        .map(|agent| agent.id.to_string()),
-                    crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
-                        &state.catalog_entries,
-                    ),
-                    None,
-                    Vec::new(),
-                ),
-                crate::ai::acp::AcpChatSession::Live(thread) => {
-                    let thread = thread.read(cx);
-                    (
-                        thread.selected_agent_id().map(str::to_string),
-                        crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
-                            thread.available_agents(),
-                        ),
-                        thread.selected_model_id().map(str::to_string),
-                        thread.available_models().to_vec(),
-                    )
+    let acp_context: Option<(Option<String>, Vec<crate::ai::acp::config::AcpModelEntry>)> =
+        view_weak.as_ref().and_then(|weak| {
+            weak.upgrade().map(|entity| {
+                let view = entity.read(cx);
+                match &view.session {
+                    crate::ai::acp::AcpChatSession::Setup(_) => (None, Vec::new()),
+                    crate::ai::acp::AcpChatSession::Live(thread) => {
+                        let thread = thread.read(cx);
+                        (
+                            thread.selected_model_id().map(str::to_string),
+                            thread.available_models().to_vec(),
+                        )
+                    }
                 }
-            }
-        })
-    });
+            })
+        });
 
-    let (selected_agent_id, catalog_entries, selected_model_id, available_models) =
-        acp_context.unwrap_or_else(|| (None, Vec::new(), None, Vec::new()));
+    let (selected_model_id, available_models) = acp_context.unwrap_or_else(|| (None, Vec::new()));
 
     let dialog = cx.new(|cx| {
         let focus_handle = cx.focus_handle();
@@ -758,8 +739,6 @@ pub fn toggle_detached_actions(cx: &mut App) {
             focus_handle,
             callback,
             crate::actions::AcpActionsDialogContext {
-                catalog_entries: &catalog_entries,
-                selected_agent_id: selected_agent_id.as_deref(),
                 available_models: &available_models,
                 selected_model_id: selected_model_id.as_deref(),
                 focused_text: false,

@@ -5,7 +5,7 @@
 //! Keeps the first ACP slice text-only for capability safety — no image or
 //! resource blocks are emitted here.
 
-use agent_client_protocol::{ContentBlock, TextContent};
+use crate::ai::agent_chat::content::{ContentBlock, TextContent};
 
 use crate::ai::harness::{
     build_tab_ai_artifact_authoring_appendix_for_prompt, TabAiArtifactKind,

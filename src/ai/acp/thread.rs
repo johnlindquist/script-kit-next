@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use agent_client_protocol::{ContentBlock, ImageContent, TextContent};
+use crate::ai::agent_chat::content::{ContentBlock, ImageContent, TextContent};
 use gpui::{Context, SharedString, Task};
 
 use crate::components::text_input::TextInputState;
@@ -2372,30 +2372,6 @@ impl AcpThread {
             staged_by = ?identity.staged_by,
         );
         self.add_context_part(part, cx);
-    }
-
-    pub(crate) fn revalidate_skill_context_for_agent(
-        &mut self,
-        new_agent_id: &str,
-        cx: &mut Context<Self>,
-    ) {
-        let skill_count = self
-            .pending_context_parts
-            .iter()
-            .filter(|part| {
-                matches!(
-                    part,
-                    crate::ai::message_parts::AiContextPart::SkillFile { .. }
-                )
-            })
-            .count();
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_skill_context_revalidated_for_agent_switch",
-            new_agent_id,
-            skill_count,
-        );
-        cx.notify();
     }
 
     /// Replace all pending typed context parts in one host-owned handoff.

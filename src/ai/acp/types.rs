@@ -1,3 +1,4 @@
+use crate::ai::agent_chat::content::{ContentBlock, TextContent};
 use crate::ai::window::context_picker::types::{ContextPickerItem, ContextPickerTrigger};
 
 /// Maps a Script Kit UI session to the ACP session ID returned by `session/new`.
@@ -15,15 +16,16 @@ pub(crate) struct AcpSessionBinding {
 /// logged and skipped rather than being silently passed through.
 pub(crate) fn build_prompt_blocks(
     messages: &[crate::ai::providers::ProviderMessage],
-) -> Vec<agent_client_protocol::ContentBlock> {
+) -> Vec<ContentBlock> {
     let mut blocks = Vec::new();
     for msg in messages {
         if msg.role == "system" {
             // ACP agents handle system prompts via session config, not inline.
             // Emit as a labelled text block so the agent at least sees the content.
-            blocks.push(agent_client_protocol::ContentBlock::Text(
-                agent_client_protocol::TextContent::new(format!("[system]\n{}", msg.content)),
-            ));
+            blocks.push(ContentBlock::Text(TextContent::new(format!(
+                "[system]\n{}",
+                msg.content
+            ))));
             continue;
         }
         if msg.has_images() {
@@ -34,9 +36,7 @@ pub(crate) fn build_prompt_blocks(
             );
         }
         if !msg.content.is_empty() {
-            blocks.push(agent_client_protocol::ContentBlock::Text(
-                agent_client_protocol::TextContent::new(&msg.content),
-            ));
+            blocks.push(ContentBlock::Text(TextContent::new(&msg.content)));
         }
     }
     blocks
@@ -105,7 +105,7 @@ mod tests {
         let blocks = build_prompt_blocks(&messages);
         assert_eq!(blocks.len(), 2);
         match &blocks[0] {
-            agent_client_protocol::ContentBlock::Text(t) => assert_eq!(t.text, "Hello"),
+            ContentBlock::Text(t) => assert_eq!(t.text, "Hello"),
             other => panic!("expected Text, got {:?}", other),
         }
     }
@@ -116,7 +116,7 @@ mod tests {
         let blocks = build_prompt_blocks(&messages);
         assert_eq!(blocks.len(), 1);
         match &blocks[0] {
-            agent_client_protocol::ContentBlock::Text(t) => {
+            ContentBlock::Text(t) => {
                 assert!(t.text.starts_with("[system]"));
                 assert!(t.text.contains("You are helpful"));
             }

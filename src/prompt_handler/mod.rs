@@ -9024,6 +9024,7 @@ impl ScriptListApp {
             crate::footer_popup::FooterAction::Stop => "stop",
             crate::footer_popup::FooterAction::PasteResponse => "pasteResponse",
             crate::footer_popup::FooterAction::Cwd => "cwd",
+            crate::footer_popup::FooterAction::AgentModel => "agentModel",
         }
         .to_string()
     }

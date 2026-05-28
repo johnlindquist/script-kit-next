@@ -858,6 +858,19 @@ struct ScriptListApp {
     /// returns to ScriptList instead of opening the directory with the
     /// default app.
     pub(crate) cwd_pick_mode: bool,
+    /// True while the global Agent & Model picker (Shift+Tab) owns the shared
+    /// actions dialog. Gates the MainList activation path so agent/model
+    /// selections persist to user preferences instead of dispatching as
+    /// ordinary launcher actions. Cleared when the picker closes.
+    pub(crate) agent_model_picker_active: bool,
+    /// Resolved display name of the globally-selected ACP agent (e.g.
+    /// "Claude Code"), shown in the footer marker. Sourced from
+    /// `ai.selectedAcpAgentId` via the agent catalog; refreshed on startup and
+    /// whenever the Agent & Model picker persists a selection.
+    pub(crate) spine_agent_label: Option<String>,
+    /// Resolved display name of the globally-selected model (e.g. "Sonnet
+    /// 4.6"), shown alongside the agent in the footer marker.
+    pub(crate) spine_model_label: Option<String>,
     spine_live_preview_cache: crate::spine::live_preview::SpineLivePreviewCache,
     /// Cached state for the menu-syntax trigger popup. `filter_input_change` runs
     /// `plan_trigger_popup_transition` on every filter update and keeps this

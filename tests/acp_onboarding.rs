@@ -111,49 +111,9 @@ fn setup_has_open_acp_agents_catalog() {
     );
 }
 
-// ── Client advertises terminal auth capability ─────────────────────────
-
-#[test]
-fn client_advertises_auth_capability() {
-    assert!(
-        CLIENT_SOURCE.contains("AuthCapabilities"),
-        "client must use AuthCapabilities in initialize request"
-    );
-    assert!(
-        CLIENT_SOURCE.contains(".auth("),
-        "client must chain .auth() on ClientCapabilities"
-    );
-}
-
-#[test]
-fn client_records_auth_methods_from_initialize() {
-    assert!(
-        CLIENT_SOURCE.contains("auth_method_count"),
-        "client must log auth_method_count from initialize response"
-    );
-    assert!(
-        CLIENT_SOURCE.contains("auth_methods"),
-        "client must record auth_methods from initialize response"
-    );
-}
-
-// ── Client handles auth_required as structured setup event ─────────────
-
-#[test]
-fn client_emits_setup_required_on_auth_failure() {
-    assert!(
-        CLIENT_SOURCE.contains("auth_required"),
-        "client must detect auth_required condition"
-    );
-    assert!(
-        CLIENT_SOURCE.contains("AcpEvent::SetupRequired"),
-        "client must emit SetupRequired event on auth failure"
-    );
-    assert!(
-        CLIENT_SOURCE.contains("acp_auth_required"),
-        "client must log acp_auth_required event"
-    );
-}
+// (Removed: legacy ACP-client auth-capability tests — they referenced a
+// `CLIENT_SOURCE` include of the deleted ACP client. The ACP backend/client
+// was removed; all sessions use the Pi backend.)
 
 // ── AiPreferences Pi-only backend ──────────────────────
 
@@ -211,37 +171,8 @@ fn tab_runtime_routes_pi_profiles_without_removing_acp_entrypoint() {
     );
 }
 
-// ── tab_ai_mode passes preferred agent to preflight ───────────────────
-
-#[test]
-fn tab_ai_mode_passes_preferred_agent_to_preflight() {
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("preferred_agent_id.as_deref()"),
-        "tab_ai_mode must pass the persisted preferred agent into resolve_default_acp_launch"
-    );
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("load_preferred_acp_agent_id"),
-        "tab_ai_mode must load the preferred agent from config-backed preferences"
-    );
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("persist_preferred_acp_agent_id"),
-        "tab_ai_mode must persist the resolved preferred agent after launch"
-    );
-}
-
-// ── ACP config exposes preference helpers ─────────────────────────────
-
-#[test]
-fn acp_config_exposes_agent_preference_helpers() {
-    assert!(
-        ACP_CONFIG_SOURCE.contains("load_preferred_acp_agent_id"),
-        "acp config must expose a preferred-agent loader"
-    );
-    assert!(
-        ACP_CONFIG_SOURCE.contains("persist_preferred_acp_agent_id"),
-        "acp config must expose a preferred-agent persistence helper"
-    );
-}
+// (Removed: legacy per-agent preference load/persist tests — the ACP backend
+// was removed, so all sessions use the Pi backend with no agent preference.)
 
 // ── Catalog loader classifies built-in agents ─────────────────────────
 
@@ -389,19 +320,6 @@ fn codex_setup_normalizes_stale_absolute_adapter_paths() {
     assert!(
         ACP_CONFIG_SOURCE.contains("missing_adapter_does_not_normalize_to_npx_runtime"),
         "config tests must pin stale absolute codex-acp migration away from npx"
-    );
-}
-
-#[test]
-fn tab_ai_mode_does_not_persist_implicit_codex_default() {
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("implicit_codex_default_active"),
-        "tab_ai_mode must distinguish implicit Codex default from explicit preference"
-    );
-    assert!(
-        ACP_LAUNCH_SOURCE.contains("preferred_agent_id.is_none()")
-            && ACP_LAUNCH_SOURCE.contains("&& !implicit_codex_default_active"),
-        "implicit Codex selection must not be persisted as the user's explicit agent"
     );
 }
 
@@ -622,118 +540,6 @@ fn setup_picker_confirm_updates_live_thread_selected_agent() {
     );
 }
 
-// ── Setup picker uses synchronous persistence before retry ──────────
-
-#[test]
-fn setup_picker_uses_sync_persistence_before_retry() {
-    // The confirm path must call the synchronous helper so the persisted
-    // preference is already on disk when a retry reloads it.
-    assert!(
-        ACP_VIEW_SOURCE.contains("persist_preferred_acp_agent_id_sync"),
-        "confirm_setup_agent_picker must use the synchronous persistence helper"
-    );
-    assert!(
-        !ACP_VIEW_SOURCE.contains("persist_preferred_acp_agent_id(Some(agent.id"),
-        "confirm_setup_agent_picker must NOT call the async persistence helper directly"
-    );
-}
-
-#[test]
-fn setup_picker_gates_retry_on_persistence_success() {
-    // Auto-retry must depend on both resolution readiness AND sync persistence.
-    assert!(
-        ACP_VIEW_SOURCE.contains("resolution.is_ready() && persist_result.is_ok()"),
-        "auto-retry must be gated on both resolution readiness and sync persistence success"
-    );
-}
-
-#[test]
-fn setup_picker_emits_persist_before_retry_log() {
-    assert!(
-        ACP_VIEW_SOURCE.contains("acp_setup_agent_persist_before_retry"),
-        "confirm path must emit acp_setup_agent_persist_before_retry log"
-    );
-    assert!(
-        ACP_VIEW_SOURCE.contains("persisted = persist_result.is_ok()"),
-        "persist-before-retry log must include the persisted outcome"
-    );
-}
-
-#[test]
-fn acp_config_exposes_sync_persistence_helper() {
-    assert!(
-        ACP_CONFIG_SOURCE.contains("fn persist_preferred_acp_agent_id_sync"),
-        "acp config must expose a synchronous preferred-agent persistence helper"
-    );
-}
-
-#[test]
-fn async_persistence_delegates_to_sync_helper() {
-    // The async helper must delegate to the sync helper to avoid duplicating
-    // the write logic.
-    let async_fn_start = ACP_CONFIG_SOURCE
-        .find("fn persist_preferred_acp_agent_id(agent_id")
-        .expect("async persistence helper must exist");
-    let async_fn_body = &ACP_CONFIG_SOURCE[async_fn_start..];
-    let next_fn = async_fn_body[1..]
-        .find("\npub(crate) fn ")
-        .unwrap_or(async_fn_body.len());
-    let async_fn_body = &async_fn_body[..next_fn];
-
-    assert!(
-        async_fn_body.contains("persist_preferred_acp_agent_id_sync"),
-        "async persist helper must delegate to the sync helper internally"
-    );
-}
-
-// ── Post-launch persistence rule: fallback must not overwrite preference ──
-
-#[test]
-fn post_launch_persist_decision_is_conditional() {
-    // The open path must NOT unconditionally persist the selected agent.
-    // It must check whether the launch was explicit (retry), first-run,
-    // or already aligned with the saved preference.
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("should_persist_selected_agent"),
-        "tab_ai_mode must compute a should_persist_selected_agent decision"
-    );
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("acp_preferred_agent_post_launch_persist_decision"),
-        "tab_ai_mode must emit the post-launch persist decision tracing event"
-    );
-}
-
-#[test]
-fn fallback_launch_preserves_existing_preference() {
-    // When a capability-driven fallback selects a different agent than the
-    // saved preference, the open path must NOT overwrite the preference.
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("acp_preferred_agent_preserved_during_fallback_launch"),
-        "tab_ai_mode must emit a preservation event when fallback skips persistence"
-    );
-}
-
-#[test]
-fn post_launch_persist_gates_on_retry_or_first_run_or_match() {
-    // The persistence guard must only persist when:
-    // 1. retry_request.is_some() (explicit retry)
-    // 2. preferred_agent_id.is_none() (first-run / no prior preference)
-    // 3. preferred == selected (already aligned)
-    let decision_block_start = TAB_AI_MODE_SOURCE
-        .find("should_persist_selected_agent")
-        .expect("should_persist_selected_agent must exist in tab_ai_mode");
-    let decision_context = &TAB_AI_MODE_SOURCE[decision_block_start..decision_block_start + 300];
-
-    assert!(
-        decision_context.contains("retry_request.is_some()"),
-        "persist decision must check for explicit retry request"
-    );
-    assert!(
-        decision_context.contains("preferred_agent_id.is_none()"),
-        "persist decision must check for absent prior preference (first-run)"
-    );
-    assert!(
-        decision_context.contains("preferred_agent_id.as_deref() == selected_agent_id.as_deref()"),
-        "persist decision must check whether preference already matches selection"
-    );
-}
+// (Removed: legacy ACP agent-preference persistence tests — the per-agent
+// preference load/persist flow was deleted when the ACP backend was removed.
+// All sessions now use the Pi backend with provider/model selection.)

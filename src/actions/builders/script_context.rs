@@ -767,95 +767,8 @@ pub fn get_global_actions() -> Vec<Action> {
 }
 
 #[allow(dead_code)] // Used by the binary ACP actions surface.
-const ACP_SWITCH_AGENT_ACTION_PREFIX: &str = "acp_switch_agent:";
-#[allow(dead_code)] // Used by the binary ACP actions surface.
 const ACP_SWITCH_MODEL_ACTION_PREFIX: &str = "acp_switch_model:";
 const AGENT_CHAT_SWITCH_PROFILE_ACTION_PREFIX: &str = "agent_chat_switch_profile:";
-
-#[allow(dead_code)] // Used by the binary ACP actions surface.
-fn acp_agent_source_label(source: crate::ai::acp::AcpAgentSource) -> &'static str {
-    match source {
-        crate::ai::acp::AcpAgentSource::LegacyClaudeCode => "Legacy",
-        crate::ai::acp::AcpAgentSource::ScriptKitCatalog => "Catalog",
-        crate::ai::acp::AcpAgentSource::BuiltIn => "Built-in",
-    }
-}
-
-#[allow(dead_code)] // Used by the binary ACP actions surface.
-fn acp_agent_state_label(entry: &crate::ai::acp::AcpAgentCatalogEntry) -> &'static str {
-    match (entry.install_state, entry.auth_state, entry.config_state) {
-        (crate::ai::acp::AcpAgentInstallState::Unsupported, _, _) => "Unsupported",
-        (crate::ai::acp::AcpAgentInstallState::NeedsInstall, _, _) => "Needs install",
-        (_, crate::ai::acp::AcpAgentAuthState::NeedsAuthentication, _) => "Needs auth",
-        (
-            _,
-            _,
-            crate::ai::acp::AcpAgentConfigState::Missing
-            | crate::ai::acp::AcpAgentConfigState::Invalid,
-        ) => "Needs config",
-        _ => "Ready",
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum AcpAgentSelectionActionPlan {
-    CurrentAgent,
-    AvailableAgent,
-}
-
-impl AcpAgentSelectionActionPlan {
-    fn from_is_selected(is_selected: bool) -> Self {
-        if is_selected {
-            Self::CurrentAgent
-        } else {
-            Self::AvailableAgent
-        }
-    }
-
-    fn action_title(self, display_name: &str) -> String {
-        match self {
-            Self::CurrentAgent => format!("Current Agent: {display_name}"),
-            Self::AvailableAgent => format!("Use {display_name}"),
-        }
-    }
-
-    fn picker_title(self, display_name: &str) -> String {
-        match self {
-            Self::CurrentAgent => format!("{display_name} \u{2713}"),
-            Self::AvailableAgent => display_name.to_string(),
-        }
-    }
-
-    fn description(self, entry: &crate::ai::acp::AcpAgentCatalogEntry) -> String {
-        let source = acp_agent_source_label(entry.source);
-        let state = acp_agent_state_label(entry);
-
-        match self {
-            Self::CurrentAgent => format!("Currently selected agent. {source} · {state}"),
-            Self::AvailableAgent => {
-                format!("Reconnect Agent Chat using this agent. {source} · {state}")
-            }
-        }
-    }
-}
-
-#[allow(dead_code)] // Used by the binary ACP actions surface.
-fn acp_agent_switch_description(
-    entry: &crate::ai::acp::AcpAgentCatalogEntry,
-    is_selected: bool,
-) -> String {
-    AcpAgentSelectionActionPlan::from_is_selected(is_selected).description(entry)
-}
-
-#[allow(dead_code)] // Used by the binary ACP actions surface.
-fn acp_switch_agent_action_id(agent_id: &str) -> String {
-    format!("{ACP_SWITCH_AGENT_ACTION_PREFIX}{agent_id}")
-}
-
-#[allow(dead_code)] // Used by ACP chat action dispatch in the binary target.
-pub(crate) fn acp_switch_agent_id_from_action(action_id: &str) -> Option<&str> {
-    action_id.strip_prefix(ACP_SWITCH_AGENT_ACTION_PREFIX)
-}
 
 #[allow(dead_code)] // Used by the binary ACP actions surface.
 fn acp_switch_model_action_id(model_id: &str) -> String {
@@ -1134,55 +1047,19 @@ pub(crate) fn get_focused_text_agent_chat_root_route(
     }
 }
 
-#[allow(dead_code)] // Used by the binary ACP actions surface.
-pub(crate) fn get_acp_chat_actions_with_agents(
-    catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
-    selected_agent_id: Option<&str>,
-) -> Vec<Action> {
-    let mut actions = get_acp_chat_actions();
-
-    if catalog_entries.is_empty() {
-        return actions;
-    }
-
-    let selected_agent_id = selected_agent_id.filter(|id| !id.is_empty());
-    actions.extend(catalog_entries.iter().map(|entry| {
-        let is_selected = selected_agent_id == Some(entry.id.as_ref());
-        let selection_plan = AcpAgentSelectionActionPlan::from_is_selected(is_selected);
-
-        Action::new(
-            acp_switch_agent_action_id(entry.id.as_ref()),
-            selection_plan.action_title(&entry.display_name),
-            Some(selection_plan.description(entry)),
-            ActionCategory::ScriptContext,
-        )
-        .with_icon(IconName::Terminal)
-        .with_section("Agent")
-    }));
-
-    actions
-}
-
 // ── ACP route builders ───────────────────────────────────────────────────────
-
-/// Action ID for the root-level "Change Agent" entry that pushes the agent picker.
-pub const ACP_CHANGE_AGENT_ACTION_ID: &str = "acp:change_agent";
 /// Action ID for the root-level "Change Model" entry that pushes the model picker.
 pub const ACP_CHANGE_MODEL_ACTION_ID: &str = "acp:change_model";
 /// Action ID for the root-level "Change Profile" entry that pushes Agent Chat profiles.
 pub const AGENT_CHAT_CHANGE_PROFILE_ACTION_ID: &str = "agent_chat:change_profile";
 
 /// Stable root labels and descriptions for ACP Actions Menu parity across hosts.
-const ACP_CHANGE_AGENT_LABEL: &str = "Change Agent";
-const ACP_CHANGE_AGENT_DESCRIPTION: &str = "Pick the agent for this chat";
 const ACP_CHANGE_MODEL_LABEL: &str = "Change Model";
 const ACP_CHANGE_MODEL_DESCRIPTION: &str = "Pick the model for this chat";
 const AGENT_CHAT_CHANGE_PROFILE_LABEL: &str = "Change Profile";
 const AGENT_CHAT_CHANGE_PROFILE_DESCRIPTION: &str = "Pick the Agent Chat profile";
 /// Route ID for the ACP root actions menu.
 pub const ACP_ROOT_ROUTE_ID: &str = "acp:root";
-/// Route ID for the agent picker sub-route.
-pub const ACP_AGENT_PICKER_ROUTE_ID: &str = "acp:agent_picker";
 /// Route ID for the model picker sub-route.
 pub const ACP_MODEL_PICKER_ROUTE_ID: &str = "acp:model_picker";
 /// Route ID for the Agent Chat profile picker sub-route.
@@ -1312,11 +1189,11 @@ fn agent_chat_profile_picker_actions(
         .collect()
 }
 
-/// Build the root-level ACP actions list. Includes a single "Change Agent"
-/// entry (which triggers drill-down) plus the standard ACP chat actions.
+/// Build the root-level ACP actions list. Includes the profile and model
+/// picker entries (which trigger drill-down) plus the standard ACP chat
+/// actions. (The legacy "Change Agent" picker was removed — all sessions use
+/// the Pi backend, with provider/model chosen via the Shift+Tab picker.)
 pub(crate) fn get_acp_chat_root_actions(
-    catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
-    selected_agent_id: Option<&str>,
     available_models: &[crate::ai::acp::config::AcpModelEntry],
     selected_model_id: Option<&str>,
 ) -> Vec<Action> {
@@ -1326,37 +1203,22 @@ pub(crate) fn get_acp_chat_root_actions(
         .iter()
         .find(|entry| entry.id == selected_profile_id)
         .map(|entry| entry.name.clone());
-    let selected_agent =
-        selected_agent_id.and_then(|id| catalog_entries.iter().find(|e| e.id.as_ref() == id));
     let selected_model =
         selected_model_id.and_then(|id| available_models.iter().find(|entry| entry.id == id));
-    let agent_picker_plan = AcpRootPickerActionPlan::from_selected_display_name(
-        selected_agent.map(|entry| entry.display_name.to_string()),
-    );
     let model_picker_plan = AcpRootPickerActionPlan::from_selected_display_name(
         selected_model.map(acp_model_display_name),
     );
     let profile_picker_plan =
         AcpRootPickerActionPlan::from_selected_display_name(selected_profile_name);
 
-    let mut actions = vec![
-        Action::new(
-            AGENT_CHAT_CHANGE_PROFILE_ACTION_ID,
-            AGENT_CHAT_CHANGE_PROFILE_LABEL,
-            Some(profile_picker_plan.description(AGENT_CHAT_CHANGE_PROFILE_DESCRIPTION)),
-            ActionCategory::ScriptContext,
-        )
-        .with_icon(IconName::Settings)
-        .with_section("Agent"),
-        Action::new(
-            ACP_CHANGE_AGENT_ACTION_ID,
-            ACP_CHANGE_AGENT_LABEL,
-            Some(agent_picker_plan.description(ACP_CHANGE_AGENT_DESCRIPTION)),
-            ActionCategory::ScriptContext,
-        )
-        .with_icon(IconName::Terminal)
-        .with_section("Agent"),
-    ];
+    let mut actions = vec![Action::new(
+        AGENT_CHAT_CHANGE_PROFILE_ACTION_ID,
+        AGENT_CHAT_CHANGE_PROFILE_LABEL,
+        Some(profile_picker_plan.description(AGENT_CHAT_CHANGE_PROFILE_DESCRIPTION)),
+        ActionCategory::ScriptContext,
+    )
+    .with_icon(IconName::Settings)
+    .with_section("Agent")];
 
     if !available_models.is_empty() {
         actions.push(
@@ -1380,29 +1242,6 @@ pub(crate) fn get_agent_chat_profile_picker_actions() -> Vec<Action> {
     let entries = agent_chat_profile_picker_entries();
     let selected_profile_id = selected_agent_chat_profile_picker_id();
     agent_chat_profile_picker_actions(&entries, &selected_profile_id)
-}
-
-/// Build the second-level agent picker actions. Preserves the existing
-/// `acp_switch_agent:<id>` action IDs so `handle_acp_chat_action` keeps working.
-pub(crate) fn get_acp_agent_picker_actions(
-    catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
-    selected_agent_id: Option<&str>,
-) -> Vec<Action> {
-    let selected_agent_id = selected_agent_id.filter(|id| !id.is_empty());
-    catalog_entries
-        .iter()
-        .map(|entry| {
-            let is_selected = selected_agent_id == Some(entry.id.as_ref());
-            let selection_plan = AcpAgentSelectionActionPlan::from_is_selected(is_selected);
-            Action::new(
-                acp_switch_agent_action_id(entry.id.as_ref()),
-                selection_plan.picker_title(&entry.display_name),
-                Some(selection_plan.description(entry)),
-                ActionCategory::ScriptContext,
-            )
-            .with_icon(IconName::Terminal)
-        })
-        .collect()
 }
 
 /// Build the second-level ACP model picker actions.
@@ -1477,7 +1316,6 @@ fn acp_host_action_plan(host: AcpActionsDialogHost, action_id: &str) -> AcpHostA
             if matches!(
                 action_id,
                 "agent_chat:change_profile"
-                    | "acp:change_agent"
                     | "acp:change_model"
                     | "acp_copy_last_response"
                     | "acp_retry_last"
@@ -1491,7 +1329,6 @@ fn acp_host_action_plan(host: AcpActionsDialogHost, action_id: &str) -> AcpHostA
                     | "acp_clear_history"
                     | "acp_close"
             ) || action_id.starts_with(AGENT_CHAT_SWITCH_PROFILE_ACTION_PREFIX)
-                || action_id.starts_with(ACP_SWITCH_AGENT_ACTION_PREFIX)
                 || action_id.starts_with(ACP_SWITCH_MODEL_ACTION_PREFIX)
             {
                 if action_id == "acp_close" {
@@ -1506,8 +1343,7 @@ fn acp_host_action_plan(host: AcpActionsDialogHost, action_id: &str) -> AcpHostA
         AcpActionsDialogHost::Detached => {
             if matches!(
                 action_id,
-                "acp:change_agent"
-                    | "acp:change_model"
+                "acp:change_model"
                     | "acp_copy_last_response"
                     | "acp_retry_last"
                     | "acp_export_markdown"
@@ -1519,8 +1355,7 @@ fn acp_host_action_plan(host: AcpActionsDialogHost, action_id: &str) -> AcpHostA
                     | "acp_new_conversation"
                     | "acp_clear_history"
                     | "acp_close"
-            ) || action_id.starts_with(ACP_SWITCH_AGENT_ACTION_PREFIX)
-                || action_id.starts_with(ACP_SWITCH_MODEL_ACTION_PREFIX)
+            ) || action_id.starts_with(ACP_SWITCH_MODEL_ACTION_PREFIX)
             {
                 AcpHostActionPlan::IncludeWithShortcut
             } else {
@@ -1562,8 +1397,6 @@ fn filter_acp_actions_for_host(host: AcpActionsDialogHost, actions: Vec<Action>)
 
 /// Build an `ActionsDialogRoute` for the ACP root menu, filtered for the given host.
 pub(crate) fn get_acp_chat_root_route_for_host(
-    catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
-    selected_agent_id: Option<&str>,
     available_models: &[crate::ai::acp::config::AcpModelEntry],
     selected_model_id: Option<&str>,
     host: AcpActionsDialogHost,
@@ -1573,27 +1406,16 @@ pub(crate) fn get_acp_chat_root_route_for_host(
         AcpActionsDialogHost::Notes => "notes",
         AcpActionsDialogHost::Detached => "detached",
     };
-    let context_title = selected_agent_id
-        .and_then(|id| catalog_entries.iter().find(|e| e.id.as_ref() == id))
-        .map(|e| e.display_name.to_string())
-        .or_else(|| Some("Agent Chat".to_string()));
 
     let actions = filter_acp_actions_for_host(
         host,
-        get_acp_chat_root_actions(
-            catalog_entries,
-            selected_agent_id,
-            available_models,
-            selected_model_id,
-        ),
+        get_acp_chat_root_actions(available_models, selected_model_id),
     );
 
-    let agent_count = catalog_entries.len();
     let model_count = available_models.len();
     tracing::info!(
         event = "acp_actions_menu_built",
         host = host_label,
-        agent_count,
         model_count,
         action_count = actions.len(),
         "Built ACP Actions Menu"
@@ -1602,27 +1424,9 @@ pub(crate) fn get_acp_chat_root_route_for_host(
     crate::actions::ActionsDialogRoute {
         id: ACP_ROOT_ROUTE_ID.to_string(),
         actions,
-        context_title,
+        context_title: Some("Agent Chat".to_string()),
         search_placeholder: Some("Search Agent Chat actions...".to_string()),
         initial_selected_action_id: Some(AGENT_CHAT_CHANGE_PROFILE_ACTION_ID.to_string()),
-    }
-}
-
-/// Build an `ActionsDialogRoute` for the agent picker sub-route, filtered for the given host.
-pub(crate) fn get_acp_agent_picker_route_for_host(
-    catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
-    selected_agent_id: Option<&str>,
-    host: AcpActionsDialogHost,
-) -> crate::actions::ActionsDialogRoute {
-    crate::actions::ActionsDialogRoute {
-        id: ACP_AGENT_PICKER_ROUTE_ID.to_string(),
-        actions: filter_acp_actions_for_host(
-            host,
-            get_acp_agent_picker_actions(catalog_entries, selected_agent_id),
-        ),
-        context_title: Some("Change Agent".to_string()),
-        search_placeholder: Some("Search agents...".to_string()),
-        initial_selected_action_id: selected_agent_id.map(acp_switch_agent_action_id),
     }
 }
 
@@ -1668,29 +1472,12 @@ pub(crate) fn get_agent_chat_profile_picker_route() -> crate::actions::ActionsDi
 /// Build an `ActionsDialogRoute` for the ACP root menu (shared host).
 #[allow(dead_code)]
 pub(crate) fn get_acp_chat_root_route(
-    catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
-    selected_agent_id: Option<&str>,
     available_models: &[crate::ai::acp::config::AcpModelEntry],
     selected_model_id: Option<&str>,
 ) -> crate::actions::ActionsDialogRoute {
     get_acp_chat_root_route_for_host(
-        catalog_entries,
-        selected_agent_id,
         available_models,
         selected_model_id,
-        AcpActionsDialogHost::Shared,
-    )
-}
-
-/// Build an `ActionsDialogRoute` for the agent picker sub-route (shared host).
-#[allow(dead_code)]
-pub(crate) fn get_acp_agent_picker_route(
-    catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
-    selected_agent_id: Option<&str>,
-) -> crate::actions::ActionsDialogRoute {
-    get_acp_agent_picker_route_for_host(
-        catalog_entries,
-        selected_agent_id,
         AcpActionsDialogHost::Shared,
     )
 }
@@ -2153,30 +1940,6 @@ mod tests {
         }
     }
 
-    fn sample_acp_agent(
-        id: &str,
-        display_name: &str,
-        source: crate::ai::acp::AcpAgentSource,
-        install_state: crate::ai::acp::AcpAgentInstallState,
-        auth_state: crate::ai::acp::AcpAgentAuthState,
-        config_state: crate::ai::acp::AcpAgentConfigState,
-    ) -> crate::ai::acp::AcpAgentCatalogEntry {
-        crate::ai::acp::AcpAgentCatalogEntry {
-            id: id.to_string().into(),
-            display_name: display_name.to_string().into(),
-            source,
-            install_state,
-            auth_state,
-            config_state,
-            install_hint: None,
-            config_hint: None,
-            supports_embedded_context: None,
-            supports_image: None,
-            last_session_ok: false,
-            config: None,
-        }
-    }
-
     fn sample_acp_model(id: &str, display_name: &str) -> crate::ai::acp::config::AcpModelEntry {
         crate::ai::acp::config::AcpModelEntry {
             id: id.to_string(),
@@ -2187,12 +1950,9 @@ mod tests {
 
     #[test]
     fn test_acp_close_shortcut_is_only_advertised_for_detached_host() {
-        let shared =
-            get_acp_chat_root_route_for_host(&[], None, &[], None, AcpActionsDialogHost::Shared);
-        let notes =
-            get_acp_chat_root_route_for_host(&[], None, &[], None, AcpActionsDialogHost::Notes);
-        let detached =
-            get_acp_chat_root_route_for_host(&[], None, &[], None, AcpActionsDialogHost::Detached);
+        let shared = get_acp_chat_root_route_for_host(&[], None, AcpActionsDialogHost::Shared);
+        let notes = get_acp_chat_root_route_for_host(&[], None, AcpActionsDialogHost::Notes);
+        let detached = get_acp_chat_root_route_for_host(&[], None, AcpActionsDialogHost::Detached);
 
         let shared_close = shared
             .actions
@@ -2244,10 +2004,6 @@ mod tests {
             AcpActionsDialogHost::Detached,
         ] {
             assert_eq!(
-                acp_host_action_plan(host, "acp_switch_agent:codex"),
-                AcpHostActionPlan::IncludeWithShortcut
-            );
-            assert_eq!(
                 acp_host_action_plan(host, "acp_switch_model:gpt"),
                 AcpHostActionPlan::IncludeWithShortcut
             );
@@ -2255,69 +2011,8 @@ mod tests {
     }
 
     #[test]
-    fn test_acp_chat_actions_with_agents_adds_agent_section_entries() {
-        let actions = get_acp_chat_actions_with_agents(
-            &[
-                sample_acp_agent(
-                    "codex-acp",
-                    "Codex (ACP)",
-                    crate::ai::acp::AcpAgentSource::BuiltIn,
-                    crate::ai::acp::AcpAgentInstallState::Ready,
-                    crate::ai::acp::AcpAgentAuthState::Unknown,
-                    crate::ai::acp::AcpAgentConfigState::Valid,
-                ),
-                sample_acp_agent(
-                    "opencode",
-                    "OpenCode",
-                    crate::ai::acp::AcpAgentSource::BuiltIn,
-                    crate::ai::acp::AcpAgentInstallState::NeedsInstall,
-                    crate::ai::acp::AcpAgentAuthState::Unknown,
-                    crate::ai::acp::AcpAgentConfigState::Valid,
-                ),
-            ],
-            Some("codex-acp"),
-        );
-
-        let current = actions
-            .iter()
-            .find(|action| action.id == "acp_switch_agent:codex-acp")
-            .expect("current agent action should exist");
-        assert_eq!(current.title, "Current Agent: Codex (ACP)");
-        assert_eq!(current.section.as_deref(), Some("Agent"));
-        assert!(
-            current
-                .description
-                .as_deref()
-                .is_some_and(|description| description.contains("Currently selected agent")),
-            "current agent description should explain selection state"
-        );
-
-        let alternate = actions
-            .iter()
-            .find(|action| action.id == "acp_switch_agent:opencode")
-            .expect("alternate agent action should exist");
-        assert_eq!(alternate.title, "Use OpenCode");
-        assert!(
-            alternate
-                .description
-                .as_deref()
-                .is_some_and(|description| description.contains("Needs install")),
-            "alternate agent description should include readiness state"
-        );
-    }
-
-    #[test]
     fn test_acp_chat_root_actions_add_change_model_when_models_exist() {
         let actions = get_acp_chat_root_actions(
-            &[sample_acp_agent(
-                "codex-acp",
-                "Codex (ACP)",
-                crate::ai::acp::AcpAgentSource::BuiltIn,
-                crate::ai::acp::AcpAgentInstallState::Ready,
-                crate::ai::acp::AcpAgentAuthState::Unknown,
-                crate::ai::acp::AcpAgentConfigState::Valid,
-            )],
-            Some("codex-acp"),
             &[
                 sample_acp_model("claude-sonnet-4-6", "Sonnet 4.6"),
                 sample_acp_model("claude-opus-4-6", "Opus 4.6"),
@@ -2357,15 +2052,6 @@ mod tests {
             .find(|action| action.id == "acp_switch_model:claude-sonnet-4-6")
             .expect("alternate model action should exist");
         assert_eq!(alternate.title, "Sonnet 4.6");
-    }
-
-    #[test]
-    fn test_acp_switch_agent_action_parser_returns_agent_id() {
-        assert_eq!(
-            acp_switch_agent_id_from_action("acp_switch_agent:codex-acp"),
-            Some("codex-acp")
-        );
-        assert_eq!(acp_switch_agent_id_from_action("acp_retry_last"), None);
     }
 
     #[test]

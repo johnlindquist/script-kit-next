@@ -12,12 +12,28 @@
 //!    forces the change to be deliberate (and paired with a contract migration).
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn read(rel: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
     fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+}
+
+fn collect_rs_files(root: impl AsRef<Path>, files: &mut Vec<PathBuf>) {
+    let root = root.as_ref();
+    let entries = match fs::read_dir(root) {
+        Ok(entries) => entries,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_rs_files(path, files);
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            files.push(path);
+        }
+    }
 }
 
 #[test]
@@ -55,6 +71,35 @@ fn app_view_state_uses_agent_chat_ui_boundary() {
     assert!(
         app_view.contains("crate::ai::agent_chat::ui::AgentChatView"),
         "AcpChatView variant entity must flow through the agent_chat::ui boundary"
+    );
+}
+
+#[test]
+fn agent_client_protocol_is_imported_only_through_content_boundary() {
+    // The external `agent_client_protocol` crate is a type-only content-block
+    // dependency. All of `src/` must reach it through the single
+    // `agent_chat::content` choke point so the dependency stays visible and
+    // swappable. The only file allowed to name the crate is content.rs.
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut files = Vec::new();
+    collect_rs_files(manifest.join("src"), &mut files);
+
+    let allowed = manifest.join("src/ai/agent_chat/content.rs");
+    let mut offenders = Vec::new();
+    for file in files {
+        if file == allowed {
+            continue;
+        }
+        let contents = fs::read_to_string(&file).unwrap_or_default();
+        if contents.contains("agent_client_protocol") {
+            offenders.push(file.display().to_string());
+        }
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "agent_client_protocol must only be referenced in \
+         src/ai/agent_chat/content.rs; offenders: {offenders:?}"
     );
 }
 

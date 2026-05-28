@@ -7,7 +7,4 @@
 //! Centralizing the import keeps the dependency boundary visible and makes a
 //! future swap or local wrapper a single-file change.
 
-// Forward-looking boundary: import sites are migrated to this module in a
-// later slice. Re-exports may be unused until then.
-#[allow(unused_imports)]
 pub(crate) use agent_client_protocol::{ContentBlock, ImageContent, TextContent};

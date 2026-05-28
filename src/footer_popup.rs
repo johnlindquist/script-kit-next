@@ -110,6 +110,10 @@ pub(crate) enum FooterAction {
     /// Click the CWD footer chip — opens the directory picker so the user
     /// can change their current working directory.
     Cwd,
+    /// Click the Agent · Model footer chip — opens the Shift+Tab Agent & Model
+    /// picker so the user can change the agent (Pi provider) and model used by
+    /// the next launch.
+    AgentModel,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -494,9 +498,9 @@ impl GpuiFooterOverlay {
         let item_height = crate::components::footer_chrome::footer_button_height(
             crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
         );
-        let key_first =
-            is_footer_left_pinned_mic_button(&button) && !matches!(action, FooterAction::Cwd);
-        let justify = if matches!(action, FooterAction::Cwd) {
+        let key_first = is_footer_left_pinned_mic_button(&button)
+            && !matches!(action, FooterAction::Cwd | FooterAction::AgentModel);
+        let justify = if matches!(action, FooterAction::Cwd | FooterAction::AgentModel) {
             crate::components::footer_chrome::FooterHintContentJustify::Start
         } else if key_first {
             crate::components::footer_chrome::FooterHintContentJustify::Start
@@ -2225,8 +2229,11 @@ unsafe fn layout_footer_hints(
     let mut trailing_x = (hints_bounds.size.width - trailing_item_width)
         .max(left_pinned_width)
         .max(0.0);
+    // Left-pinned buttons (e.g. Cwd, then Agent·Model) lay out left-to-right
+    // from x=0 so multiple left chips sit side by side instead of overlapping.
+    let mut left_x = 0.0;
     for (item, target_width, action, enabled, left_pinned) in items {
-        let x = if left_pinned { 0.0 } else { trailing_x };
+        let x = if left_pinned { left_x } else { trailing_x };
         let item_y = crate::components::footer_chrome::FOOTER_BUTTON_VERTICAL_INSET_PX as f64;
         let item_height =
             crate::components::footer_chrome::footer_button_height(hints_bounds.size.height as f32)
@@ -2248,7 +2255,9 @@ unsafe fn layout_footer_hints(
         );
         let _: () = msg_send![item, setFrame: frame];
         let _: () = msg_send![hints_view, addSubview: item];
-        if !left_pinned {
+        if left_pinned {
+            left_x += target_width + FOOTER_HINT_ITEM_GAP;
+        } else {
             trailing_x += target_width + FOOTER_HINT_ITEM_GAP;
         }
     }
@@ -2256,7 +2265,10 @@ unsafe fn layout_footer_hints(
 
 #[cfg(target_os = "macos")]
 fn is_footer_left_pinned_mic_button(button_cfg: &FooterButtonConfig) -> bool {
-    if matches!(button_cfg.action, FooterAction::Cwd) {
+    if matches!(
+        button_cfg.action,
+        FooterAction::Cwd | FooterAction::AgentModel
+    ) {
         // Cwd chip is rendered as a regular footer button (bordered label +
         // bordered keycap + hover state, parity with trailing buttons) and
         // pinned to the far left. Shares the left-pinned helper because the
@@ -2328,6 +2340,7 @@ fn footer_hint_slot_width(action: FooterAction) -> f64 {
         FooterAction::Stop => FOOTER_STOP_SLOT_WIDTH,
         FooterAction::PasteResponse => FOOTER_PASTE_RESPONSE_SLOT_WIDTH,
         FooterAction::Cwd => FOOTER_AI_SLOT_WIDTH,
+        FooterAction::AgentModel => FOOTER_AI_SLOT_WIDTH,
     }
 }
 
@@ -2363,7 +2376,10 @@ fn footer_hint_content_layout_for_button(
     label_width: f64,
     key_width: f64,
 ) -> (f64, f64, f64) {
-    if matches!(button_cfg.action, FooterAction::Cwd) {
+    if matches!(
+        button_cfg.action,
+        FooterAction::Cwd | FooterAction::AgentModel
+    ) {
         // Left-pinned, but label appears LEFT of the keycap to mirror the
         // trailing buttons' "label then key" reading order.
         let gap_width = if label_width > 0.0 && key_width > 0.0 {
@@ -2566,7 +2582,10 @@ unsafe fn make_footer_hint_item(
     }
 
     let chrome = crate::theme::AppChromeColors::from_theme(theme);
-    let edge_padding_x = if matches!(button_cfg.action, FooterAction::Run | FooterAction::Cwd) {
+    let edge_padding_x = if matches!(
+        button_cfg.action,
+        FooterAction::Run | FooterAction::Cwd | FooterAction::AgentModel
+    ) {
         FOOTER_RUN_HINT_PADDING_X
     } else {
         FOOTER_HINT_PADDING_X
@@ -3268,6 +3287,7 @@ fn footer_action_key(action: FooterAction) -> &'static str {
         FooterAction::Stop => "stop",
         FooterAction::PasteResponse => "pasteResponse",
         FooterAction::Cwd => "cwd",
+        FooterAction::AgentModel => "agentModel",
     }
 }
 
@@ -4088,6 +4108,7 @@ fn footer_action_selector(action: FooterAction) -> objc::runtime::Sel {
         FooterAction::Stop => sel!(stopFooterAction:),
         FooterAction::PasteResponse => sel!(pasteResponseFooterAction:),
         FooterAction::Cwd => sel!(cwdFooterAction:),
+        FooterAction::AgentModel => sel!(agentModelFooterAction:),
     }
 }
 
@@ -4159,6 +4180,10 @@ fn footer_action_target_class() -> *const objc::runtime::Class {
         decl.add_method(
             sel!(cwdFooterAction:),
             footer_cwd_action as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(agentModelFooterAction:),
+            footer_agent_model_action as extern "C" fn(&Object, Sel, id),
         );
         decl.register() as *const _ as usize
     }) as *const objc::runtime::Class
@@ -4259,4 +4284,13 @@ extern "C" fn footer_paste_response_action(
 #[cfg(target_os = "macos")]
 extern "C" fn footer_cwd_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, sender: id) {
     send_footer_action_from_sender(sender, FooterAction::Cwd);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_agent_model_action(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    sender: id,
+) {
+    send_footer_action_from_sender(sender, FooterAction::AgentModel);
 }

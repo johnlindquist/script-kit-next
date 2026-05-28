@@ -808,6 +808,11 @@ impl ScriptListApp {
             }
         };
 
+        // Resolve the persisted agent/model into footer display labels so the
+        // selection (Shift+Tab Agent & Model picker) is visible on first paint.
+        let (initial_spine_agent_label, initial_spine_model_label) =
+            Self::resolve_agent_model_footer_labels();
+
         let mut app = ScriptListApp {
             scripts,
             scriptlets,
@@ -957,6 +962,9 @@ impl ScriptListApp {
             spine_cwd_label: initial_spine_cwd_label,
             spine_cwd_revision: initial_spine_cwd_revision,
             cwd_pick_mode: false,
+            agent_model_picker_active: false,
+            spine_agent_label: initial_spine_agent_label,
+            spine_model_label: initial_spine_model_label,
             spine_live_preview_cache: Default::default(),
             menu_syntax_trigger_popup_state:
                 crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState::default(),
@@ -1491,6 +1499,26 @@ impl ScriptListApp {
                                     state.set_selection(len, len, window, cx);
                                 });
                                 this.suppress_filter_events = false;
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            // Shift+Tab on the main menu opens the global
+                            // Agent & Model picker so the user can pre-configure
+                            // (and persist) which agent/model the next Cmd+Enter
+                            // launch uses, without leaving the launcher.
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && has_shift
+                                && this.spine_enabled
+                                && !this.show_actions_popup
+                                && !this.menu_syntax_capture_form_owns_input()
+                            {
+                                tracing::info!(
+                                    target: "script_kit::spine",
+                                    event = "agent_model_picker_open_shift_tab",
+                                    "Shift+Tab → Agent & Model picker"
+                                );
+                                this.open_agent_model_picker_window(window, cx);
                                 cx.stop_propagation();
                                 return;
                             }

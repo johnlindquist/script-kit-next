@@ -77,11 +77,6 @@ enum AgentChatProfileSwitchHandlerAction {
     SwitchProfile,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AcpAgentSwitchHandlerAction {
-    SwitchAgent,
-}
-
 impl AcpLastResponseHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -383,32 +378,6 @@ impl AgentChatProfileSwitchHandlerAction {
     fn selected_message(self, profile_name: &str) -> String {
         match self {
             Self::SwitchProfile => format!("Profile: {profile_name}"),
-        }
-    }
-}
-
-impl AcpAgentSwitchHandlerAction {
-    fn from_action_id(action_id: &str) -> Option<Self> {
-        crate::actions::acp_switch_agent_id_from_action(action_id).map(|_| Self::SwitchAgent)
-    }
-
-    fn already_selected_message(self, display_name: &str) -> String {
-        match self {
-            Self::SwitchAgent => format!("Already using {display_name}"),
-        }
-    }
-
-    fn persist_failure_message(self, display_name: &str, error: impl std::fmt::Display) -> String {
-        match self {
-            Self::SwitchAgent => {
-                format!("Failed to persist agent selection for {display_name}: {error}")
-            }
-        }
-    }
-
-    fn relaunch_message(self, display_name: &str) -> String {
-        match self {
-            Self::SwitchAgent => format!("Switching agent to {display_name}\u{2026}"),
         }
     }
 }
@@ -1380,96 +1349,6 @@ impl ScriptListApp {
 
             let mut outcome = DispatchOutcome::success();
             outcome.user_message = Some(profile_action.relaunch_message(&profile.name));
-            return outcome;
-        }
-
-        if let Some(agent_id) = crate::actions::acp_switch_agent_id_from_action(action_id) {
-            let Some(agent_action) = AcpAgentSwitchHandlerAction::from_action_id(action_id) else {
-                return DispatchOutcome::not_handled();
-            };
-            let (current_selected_agent_id, available_agents) = {
-                let view = entity.read(cx);
-                match &view.session {
-                    crate::ai::acp::AcpChatSession::Setup(state) => (
-                        state
-                            .selected_agent
-                            .as_ref()
-                            .map(|agent| agent.id.to_string()),
-                        crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
-                            &state.catalog_entries,
-                        ),
-                    ),
-                    crate::ai::acp::AcpChatSession::Live(thread) => {
-                        let thread = thread.read(cx);
-                        (
-                            thread.selected_agent_id().map(str::to_string),
-                            crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
-                                thread.available_agents(),
-                            ),
-                        )
-                    }
-                }
-            };
-
-            let agent_display_name = available_agents
-                .iter()
-                .find(|entry| entry.id.as_ref() == agent_id)
-                .map(|entry| entry.display_name.to_string())
-                .unwrap_or_else(|| agent_id.to_string());
-
-            if current_selected_agent_id.as_deref() == Some(agent_id) {
-                let mut outcome = DispatchOutcome::success();
-                outcome.user_message =
-                    Some(agent_action.already_selected_message(&agent_display_name));
-                return outcome;
-            }
-
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_switch_agent_requested",
-                agent_id,
-                agent_display_name = %agent_display_name,
-            );
-
-            let next_agent_id = agent_id.to_string();
-
-            // Persist the explicit preference synchronously before staging
-            // the retry payload — only explicit switches persist a new preference.
-            let persist_result =
-                crate::ai::acp::persist_preferred_acp_agent_id_sync(Some(next_agent_id.clone()));
-
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_switch_agent_persist_result",
-                agent_id = %next_agent_id,
-                persisted = persist_result.is_ok(),
-            );
-
-            if let Err(error) = persist_result {
-                return DispatchOutcome::error(
-                    crate::action_helpers::ERROR_ACTION_FAILED,
-                    agent_action.persist_failure_message(&agent_display_name, error),
-                );
-            }
-
-            // Preserve the current session's capability requirements
-            // (screenshot/context needs, runtime recovery context, etc.)
-            // so the reopen path consumes a truthful retry payload.
-            entity.update(cx, |view, cx| {
-                view.relaunch_for_agent_switch_preserving_draft(next_agent_id.clone(), cx);
-            });
-
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_switch_agent_relaunch_requested",
-                agent_id = %next_agent_id,
-            );
-
-            self.close_tab_ai_harness_terminal(cx);
-            self.open_tab_ai_acp_with_entry_intent(None, cx);
-
-            let mut outcome = DispatchOutcome::success();
-            outcome.user_message = Some(agent_action.relaunch_message(&agent_display_name));
             return outcome;
         }
 

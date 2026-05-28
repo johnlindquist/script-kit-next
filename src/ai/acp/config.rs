@@ -1191,11 +1191,6 @@ fn classify_agent_source(agent_id: &str) -> super::catalog::AcpAgentSource {
     }
 }
 
-/// Stub — ACP backend has been removed; all profiles use Pi.
-pub(crate) fn load_preferred_acp_agent_id() -> Option<String> {
-    None
-}
-
 /// Resolve the selected profile's non-empty system prompt from loaded
 /// preferences.
 pub(crate) fn selected_profile_system_prompt_from_preferences(
@@ -1225,14 +1220,6 @@ pub(crate) fn load_selected_profile_system_prompt() -> Option<(String, String)> 
     let prefs = crate::config::load_user_preferences();
     selected_profile_system_prompt_from_preferences(&prefs.ai)
 }
-
-/// Stub — ACP backend has been removed; all profiles use Pi.
-pub(crate) fn persist_preferred_acp_agent_id_sync(_agent_id: Option<String>) -> anyhow::Result<()> {
-    Ok(())
-}
-
-/// Stub — ACP backend has been removed; all profiles use Pi.
-pub(crate) fn persist_preferred_acp_agent_id(_agent_id: Option<String>) {}
 
 // ---------------------------------------------------------------------------
 // ACP agent runtime state persistence

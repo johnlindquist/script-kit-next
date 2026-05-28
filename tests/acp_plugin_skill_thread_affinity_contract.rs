@@ -19,18 +19,12 @@ fn main_menu_skill_stages_on_target_acp_view() {
 }
 
 #[test]
-// doc-anchor-removed: [[removed-docs skill target-thread contract#Agent switch revalidates staged skill]]
-fn skill_context_identity_is_bound_to_thread_and_revalidated_on_agent_switch() {
+fn skill_context_identity_is_bound_to_thread() {
     let thread = read("src/ai/acp/thread.rs");
     assert!(thread.contains("pub(crate) struct SkillContextIdentity"));
     assert!(thread.contains("pub(crate) fn add_or_replace_skill_context"));
-    assert!(thread.contains("pub(crate) fn revalidate_skill_context_for_agent"));
 
     let view = read("src/ai/acp/view.rs");
     assert!(view.contains("ui_thread_id().to_string()"));
     assert!(view.contains("add_or_replace_skill_context(identity, part, cx)"));
-    assert!(view.contains("relaunch_for_agent_switch_preserving_draft"));
-
-    let actions = read("src/app_actions/handle_action/mod.rs");
-    assert!(actions.contains("relaunch_for_agent_switch_preserving_draft"));
 }

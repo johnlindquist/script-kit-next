@@ -602,7 +602,8 @@ impl DictationOverlay {
             | FooterAction::Copy
             | FooterAction::Expand
             | FooterAction::Retry
-            | FooterAction::Cwd => {}
+            | FooterAction::Cwd
+            | FooterAction::AgentModel => {}
         }
     }
 

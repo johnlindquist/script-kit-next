@@ -593,7 +593,7 @@ fn route_initial_selection_carries_through_to_grouped_items() {
 
 #[test]
 fn route_preserves_context_title_and_placeholder() {
-    let route = make_route("acp:root", &["change_agent", "copy"]);
+    let route = make_route("acp:root", &["change_model", "copy"]);
     assert_eq!(route.context_title.as_deref(), Some("acp:root title"));
     assert_eq!(
         route.search_placeholder.as_deref(),
@@ -657,52 +657,11 @@ fn acp_root_route_initial_selection_is_change_profile() {
     // to the "Change Profile" action.
     use super::builders::{get_acp_chat_root_route, AGENT_CHAT_CHANGE_PROFILE_ACTION_ID};
 
-    let entries = vec![];
     let models = vec![];
-    let route = get_acp_chat_root_route(&entries, None, &models, None);
+    let route = get_acp_chat_root_route(&models, None);
 
     assert_eq!(
         route.initial_selected_action_id.as_deref(),
         Some(AGENT_CHAT_CHANGE_PROFILE_ACTION_ID),
     );
-}
-
-#[test]
-fn acp_agent_picker_route_initial_selection_is_current_agent() {
-    use super::builders::get_acp_agent_picker_route;
-    use crate::ai::acp::catalog::{
-        AcpAgentAuthState, AcpAgentCatalogEntry, AcpAgentConfigState, AcpAgentInstallState,
-        AcpAgentSource,
-    };
-
-    fn make_catalog_entry(id: &'static str, name: &'static str) -> AcpAgentCatalogEntry {
-        AcpAgentCatalogEntry {
-            id: id.into(),
-            display_name: name.into(),
-            source: AcpAgentSource::ScriptKitCatalog,
-            install_state: AcpAgentInstallState::Ready,
-            auth_state: AcpAgentAuthState::Unknown,
-            config_state: AcpAgentConfigState::Valid,
-            install_hint: None,
-            config_hint: None,
-            supports_embedded_context: None,
-            supports_image: None,
-            last_session_ok: false,
-            config: None,
-        }
-    }
-
-    let entries = vec![
-        make_catalog_entry("claude", "Claude"),
-        make_catalog_entry("gemini", "Gemini"),
-    ];
-
-    let route = get_acp_agent_picker_route(&entries, Some("claude"));
-    assert_eq!(
-        route.initial_selected_action_id.as_deref(),
-        Some("acp_switch_agent:claude"),
-    );
-
-    let route_none = get_acp_agent_picker_route(&entries, None);
-    assert_eq!(route_none.initial_selected_action_id, None);
 }

@@ -1,5 +1,14 @@
 use super::*;
 
+/// Action-id prefix for provider ("Agent") rows in the Shift+Tab Agent & Model
+/// picker. Provider rows are drill-only; the persisted value is the namespaced
+/// model id selected within the drill.
+const PI_PROVIDER_ACTION_PREFIX: &str = "pi_provider:";
+
+fn pi_provider_action_id(provider_id: &str) -> String {
+    format!("{PI_PROVIDER_ACTION_PREFIX}{provider_id}")
+}
+
 pub(crate) const TERM_PROMPT_CLEAR_ACTION_ID: &str = "clear";
 pub(crate) const TERM_PROMPT_CLEAR_SHORTCUT: &str = "⌘K";
 pub(crate) const TERM_PROMPT_ACTIONS_TOGGLE_ACTION_ID: &str = "term_prompt_toggle_actions";
@@ -283,6 +292,13 @@ impl ScriptListApp {
                             && !crate::platform::is_main_window_focused();
 
                     app.mark_actions_popup_closed();
+                    // The Agent & Model picker only ever owns the dialog while
+                    // open; refresh the footer labels from the just-persisted
+                    // selection, then clear its gate on any actions-popup close.
+                    if app.agent_model_picker_active {
+                        app.refresh_agent_model_footer_labels();
+                    }
+                    app.agent_model_picker_active = false;
                     app.clear_actions_context_for_host(host);
                     app.mark_filter_resync_after_actions_if_needed();
                     app.pop_focus_overlay(cx);
@@ -729,38 +745,17 @@ impl ScriptListApp {
                     thread.update(cx, |thread, cx| thread.refresh_models(cx));
                 }
 
-                let (
-                    selected_agent_id,
-                    catalog_entries,
-                    selected_model_id,
-                    available_models,
-                    focused_text,
-                    focused_text_expanded,
-                ) = {
+                let (selected_model_id, available_models, focused_text, focused_text_expanded) = {
                     let view = entity.read(cx);
                     let focused_text = view.has_focused_text_context();
                     let focused_text_expanded = view.focused_text_actions_expanded();
                     match &view.session {
-                        crate::ai::acp::AcpChatSession::Setup(state) => (
-                            state
-                                .selected_agent
-                                .as_ref()
-                                .map(|agent| agent.id.to_string()),
-                            crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
-                                &state.catalog_entries,
-                            ),
-                            None,
-                            Vec::new(),
-                            focused_text,
-                            focused_text_expanded,
-                        ),
+                        crate::ai::acp::AcpChatSession::Setup(_) => {
+                            (None, Vec::new(), focused_text, focused_text_expanded)
+                        }
                         crate::ai::acp::AcpChatSession::Live(thread) => {
                             let thread = thread.read(cx);
                             (
-                                thread.selected_agent_id().map(str::to_string),
-                                crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
-                                    thread.available_agents(),
-                                ),
                                 thread.selected_model_id().map(str::to_string),
                                 thread.available_models().to_vec(),
                                 focused_text,
@@ -773,16 +768,12 @@ impl ScriptListApp {
                 tracing::info!(
                     target: "script_kit::tab_ai",
                     event = "acp_actions_context_built",
-                    selected_agent_id = ?selected_agent_id,
-                    catalog_count = catalog_entries.len(),
                     selected_model_id = ?selected_model_id,
                     model_count = available_models.len(),
                     focused_text,
                 );
 
                 Some((
-                    selected_agent_id,
-                    catalog_entries,
                     selected_model_id,
                     available_models,
                     focused_text,
@@ -856,21 +847,17 @@ impl ScriptListApp {
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
                 let mut dialog = if let Some((
-                    ref selected_agent_id,
-                    ref catalog_entries,
                     ref selected_model_id,
                     ref available_models,
                     focused_text,
                     focused_text_expanded,
                 )) = acp_context
                 {
-                    // ACP chat view: use route-based dialog with drill-down agent/model pickers
+                    // ACP chat view: use route-based dialog with drill-down model/profile pickers
                     ActionsDialog::with_acp_chat(
                         focus_handle,
                         std::sync::Arc::new(|_action_id| {}),
                         crate::actions::AcpActionsDialogContext {
-                            catalog_entries,
-                            selected_agent_id: selected_agent_id.as_deref(),
                             available_models,
                             selected_model_id: selected_model_id.as_deref(),
                             focused_text,
@@ -1101,6 +1088,272 @@ impl ScriptListApp {
 
         logging::log("FOCUS", "Root file actions opened, keyboard routing active");
         cx.notify();
+    }
+
+    /// Open the global Agent & Model picker (Shift+Tab from the main menu).
+    ///
+    /// Reuses the shared actions-dialog window: the root route lists agent
+    /// profiles and selecting one drills into the model catalog. Both
+    /// selections persist GLOBALLY to user preferences
+    /// (`ai.selected_profile_id` / `ai.selected_model_id`) so they
+    /// pre-configure the next Cmd+Enter launch — no live ACP thread required.
+    /// Profiles already bundle a model, and a picked `selected_model_id` is
+    /// applied across profiles via `apply_ai_fallbacks`, so the single static
+    /// model catalog is shared by every agent entry.
+    pub(crate) fn open_agent_model_picker_window(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let host = ActionsDialogHost::MainList;
+        let host_label = actions_dialog_host_label(&host);
+        let recently_closed = self.was_actions_recently_closed();
+
+        if self.show_actions_popup || is_actions_window_open() {
+            self.close_actions_popup(host, window, cx);
+            cx.notify();
+            return;
+        }
+
+        if recently_closed {
+            tracing::info!(
+                target: "script_kit::actions",
+                event = "agent_model_picker_toggle_suppressed_recent_close",
+                "Suppressed agent/model picker reopen because the dialog was just closed"
+            );
+            cx.notify();
+            return;
+        }
+
+        // The "Agent" is the Pi PROVIDER (Codex, Claude, …); each provider
+        // drills into its models. The persisted value is the namespaced
+        // `selectedModelId = "provider/model"` that the Pi launch actually
+        // reads (parsed by `parse_provider_model_selection`), so no separate
+        // agent-id persistence is required. The provider/model catalog is a
+        // curated static fallback — the live catalog is advertised dynamically
+        // by the `pi` agent at runtime.
+        let selected_model_id = crate::config::load_user_preferences()
+            .ai
+            .selected_model_id
+            .clone();
+        let catalog = crate::ai::agent_chat::profiles::pi_provider_model_catalog();
+        let selected_provider = selected_model_id
+            .as_deref()
+            .and_then(crate::ai::agent_chat::profiles::parse_provider_model_selection)
+            .map(|(provider, _model)| provider);
+
+        let provider_actions: Vec<crate::actions::Action> = catalog
+            .iter()
+            .map(|provider| {
+                let is_selected = selected_provider.as_deref() == Some(provider.id);
+                let description = if is_selected {
+                    format!("{} · current", provider.display_name)
+                } else {
+                    format!("{} models", provider.display_name)
+                };
+                crate::actions::Action::new(
+                    pi_provider_action_id(provider.id),
+                    provider.display_name.to_string(),
+                    Some(description),
+                    crate::actions::ActionCategory::ScriptContext,
+                )
+                .with_icon(crate::designs::icon_variations::IconName::Settings)
+            })
+            .collect();
+
+        let agent_route = crate::actions::ActionsDialogRoute {
+            id: "pi:provider_picker".to_string(),
+            actions: provider_actions.clone(),
+            context_title: Some("Agent".to_string()),
+            search_placeholder: Some("Search agents…".to_string()),
+            initial_selected_action_id: selected_provider
+                .as_deref()
+                .map(pi_provider_action_id),
+        };
+        let agent_actions = provider_actions;
+
+        // One model picker route per provider, with namespaced "provider/model"
+        // ids so the existing `acp_switch_model` persist path stores the full
+        // selection. Keyed by the provider's drill action id.
+        let model_routes_by_action: std::collections::HashMap<String, crate::actions::ActionsDialogRoute> =
+            catalog
+                .iter()
+                .map(|provider| {
+                    let models: Vec<crate::ai::acp::config::AcpModelEntry> = provider
+                        .models
+                        .iter()
+                        .map(|(model_id, model_display)| crate::ai::acp::config::AcpModelEntry {
+                            id: format!("{}/{}", provider.id, model_id),
+                            display_name: Some(model_display.to_string()),
+                            context_window: None,
+                        })
+                        .collect();
+                    let route = crate::actions::get_acp_model_picker_route(
+                        &models,
+                        selected_model_id.as_deref(),
+                    );
+                    (pi_provider_action_id(provider.id), route)
+                })
+                .collect();
+
+        let context_title = Some("Agent & Model".to_string());
+        let theme_arc = std::sync::Arc::clone(&self.theme);
+        let is_mini = matches!(self.main_window_mode, MainWindowMode::Mini);
+        let config = crate::actions::ActionsDialogConfig {
+            search_position: if is_mini {
+                crate::actions::SearchPosition::Top
+            } else {
+                crate::actions::SearchPosition::Bottom
+            },
+            section_style: crate::actions::SectionStyle::Headers,
+            anchor: if is_mini {
+                crate::actions::AnchorPosition::Top
+            } else {
+                crate::actions::AnchorPosition::Bottom
+            },
+            show_icons: true,
+            search_placeholder: context_title.clone(),
+            show_context_header: false,
+            ..crate::actions::ActionsDialogConfig::default()
+        };
+
+        let position = self.main_list_actions_window_position();
+        crate::actions::emit_actions_popup_event(
+            crate::actions::ActionsPopupEvent::OpenRequested,
+            Some(host_label),
+            Some(position),
+            None,
+            None,
+            None,
+        );
+
+        self.resync_filter_input_after_actions_if_needed(window, cx);
+        self.begin_actions_popup_window_open(cx, window);
+
+        let dialog = cx.new(|cx| {
+            let focus_handle = cx.focus_handle();
+            let mut dialog = crate::actions::ActionsDialog::from_actions_with_context(
+                focus_handle,
+                std::sync::Arc::new(|_action_id| {}),
+                agent_actions.clone(),
+                None,
+                None,
+                theme_arc,
+                crate::designs::DesignVariant::Default,
+                context_title,
+                config,
+            );
+            dialog.set_root_route(agent_route.clone());
+            dialog.set_skip_track_focus(true);
+            dialog.set_match_main_window_background(true);
+            // Each agent entry drills into its own model catalog (agents with
+            // no static models select-and-close, persisting just the agent).
+            for action in &agent_actions {
+                if let Some(route) = model_routes_by_action.get(&action.id) {
+                    dialog.register_drill_down_route(action.id.clone(), route.clone());
+                }
+            }
+            dialog
+        });
+
+        self.actions_dialog = Some(dialog.clone());
+        // Mark the picker active so the shared MainList activation path persists
+        // agent/model selections globally (and skips ordinary launcher dispatch)
+        // only while this picker owns the dialog.
+        self.agent_model_picker_active = true;
+        let app_entity = cx.entity().clone();
+        dialog.update(cx, |d, _cx| {
+            // Use the SHARED activation callback: keys routed through the main
+            // window's actions interceptor call `handle_actions_dialog_activation`
+            // directly, so the custom-callback path on the detached window would
+            // be bypassed. Persistence is handled inside that shared path, scoped
+            // by `agent_model_picker_active` + the globally-unique action IDs.
+            d.set_on_activation(Self::make_actions_dialog_activation_callback(
+                app_entity.clone(),
+                host,
+            ));
+            d.set_on_close(Self::make_actions_window_on_close_callback(
+                app_entity.clone(),
+                host,
+                "Agent/model picker closed via escape, focus restored via coordinator",
+            ));
+        });
+
+        let main_bounds = window.bounds();
+        let display_id = window.display(cx).map(|d| d.id());
+        Self::spawn_open_actions_window(
+            cx,
+            window.window_handle(),
+            main_bounds,
+            display_id,
+            dialog,
+            position,
+            "Agent/model picker window opened",
+            "Failed to open agent/model picker window",
+        );
+
+        logging::log("FOCUS", "Agent/model picker opened, keyboard routing active");
+        cx.notify();
+    }
+
+    pub(crate) fn persist_agent_model_picker_model(model_id: &str) {
+        let mut prefs = crate::config::load_user_preferences();
+        if prefs.ai.selected_model_id.as_deref() == Some(model_id) {
+            return;
+        }
+        prefs.ai.selected_model_id = Some(model_id.to_string());
+        let persisted = crate::config::save_user_preferences(&prefs).is_ok();
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "agent_model_picker_model_persisted",
+            model_id = %model_id,
+            persisted,
+        );
+    }
+
+    /// Resolve the persisted agent/model selection into footer display labels.
+    /// Returns `(agent_display_name, model_display_name)`. The model name is
+    /// looked up in the selected agent's catalog models when possible, else the
+    /// provider prefix is stripped (e.g. "openai-codex/gpt-5.5" → "gpt-5.5").
+    pub(crate) fn resolve_agent_model_footer_labels() -> (Option<String>, Option<String>) {
+        let Some((provider_id, model_id)) = crate::config::load_user_preferences()
+            .ai
+            .selected_model_id
+            .as_deref()
+            .and_then(crate::ai::agent_chat::profiles::parse_provider_model_selection)
+        else {
+            return (None, None);
+        };
+
+        let catalog = crate::ai::agent_chat::profiles::pi_provider_model_catalog();
+        let provider = catalog.iter().find(|entry| entry.id == provider_id);
+
+        let agent_label = Some(
+            provider
+                .map(|entry| entry.display_name.to_string())
+                .unwrap_or_else(|| provider_id.clone()),
+        );
+        let model_label = Some(
+            provider
+                .and_then(|entry| {
+                    entry
+                        .models
+                        .iter()
+                        .find(|(mid, _)| *mid == model_id)
+                        .map(|(_, disp)| disp.to_string())
+                })
+                .unwrap_or_else(|| model_id.clone()),
+        );
+
+        (agent_label, model_label)
+    }
+
+    /// Refresh the cached footer agent/model labels from persisted preferences.
+    /// Called after the Agent & Model picker persists a new selection.
+    pub(crate) fn refresh_agent_model_footer_labels(&mut self) {
+        let (agent_label, model_label) = Self::resolve_agent_model_footer_labels();
+        self.spine_agent_label = agent_label;
+        self.spine_model_label = model_label;
     }
 
     pub(crate) fn toggle_root_unified_result_actions(

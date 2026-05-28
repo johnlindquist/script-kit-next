@@ -501,8 +501,6 @@ pub enum ActionsDialogEscapeOutcome {
 
 #[derive(Clone, Copy)]
 pub struct AcpActionsDialogContext<'a> {
-    pub(crate) catalog_entries: &'a [crate::ai::acp::AcpAgentCatalogEntry],
-    pub(crate) selected_agent_id: Option<&'a str>,
     pub(crate) available_models: &'a [crate::ai::acp::config::AcpModelEntry],
     pub(crate) selected_model_id: Option<&'a str>,
     pub(crate) focused_text: bool,
@@ -1460,8 +1458,6 @@ impl ActionsDialog {
             super::builders::get_focused_text_agent_chat_root_route(context.focused_text_expanded)
         } else {
             super::builders::get_acp_chat_root_route_for_host(
-                context.catalog_entries,
-                context.selected_agent_id,
                 context.available_models,
                 context.selected_model_id,
                 host,
@@ -1485,14 +1481,6 @@ impl ActionsDialog {
         dialog.register_drill_down_route(
             super::builders::AGENT_CHAT_CHANGE_PROFILE_ACTION_ID,
             super::builders::get_agent_chat_profile_picker_route_for_host(host),
-        );
-        dialog.register_drill_down_route(
-            super::builders::ACP_CHANGE_AGENT_ACTION_ID,
-            super::builders::get_acp_agent_picker_route_for_host(
-                context.catalog_entries,
-                context.selected_agent_id,
-                host,
-            ),
         );
         dialog.register_drill_down_route(
             super::builders::ACP_CHANGE_MODEL_ACTION_ID,

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use agent_client_protocol::ContentBlock;
+use crate::ai::agent_chat::content::ContentBlock;
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
@@ -184,7 +184,7 @@ pub(crate) fn parse_rpc_line(line: &str) -> Result<PiRpcLine> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol::{ImageContent, TextContent};
+    use crate::ai::agent_chat::content::{ImageContent, TextContent};
 
     #[test]
     fn pi_rpc_prompt_command_uses_stdio_protocol_shape() {

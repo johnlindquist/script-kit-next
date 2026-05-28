@@ -23,10 +23,7 @@ const ACP_ONBOARDING_SOURCE_AUDIT_ANCHORS: &str = r#"
 load_acp_agent_catalog_entries
 resolve_acp_launch_with_requirements
 preferred_agent_id.as_deref()
-load_preferred_acp_agent_id
-persist_preferred_acp_agent_id
 launch_requirements: requirements
-should_persist_selected_agent
 implicit_codex_default_active
 retry_request.is_some()
 preferred_agent_id.is_none()

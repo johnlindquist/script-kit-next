@@ -129,6 +129,8 @@ impl ScriptListApp {
     ) {
         match activation {
             crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
+                // Agent & Model picker: provider ("Agent") rows are drill-only;
+                // nothing persists until a model is chosen.
                 crate::actions::notify_actions_window(cx);
                 if let Some(dialog) = self.actions_dialog.as_ref() {
                     crate::actions::resize_actions_window(cx, dialog);
@@ -245,6 +247,21 @@ impl ScriptListApp {
 
         match host {
             ActionsDialogHost::MainList => {
+                // Agent & Model picker (Shift+Tab): persist the selected model
+                // or agent to user preferences instead of dispatching it as an
+                // ordinary launcher action. Gated so it only intercepts while
+                // the picker owns the dialog. Action IDs are globally unique.
+                if self.agent_model_picker_active {
+                    // The model row carries the namespaced "provider/model" id;
+                    // persisting it records both the agent and the model.
+                    if let Some(model_id) =
+                        crate::actions::acp_switch_model_id_from_action(&action_id)
+                    {
+                        Self::persist_agent_model_picker_model(model_id);
+                        self.refresh_agent_model_footer_labels();
+                        return;
+                    }
+                }
                 if let Some(subject) = self.pending_root_unified_actions_subject.clone() {
                     if crate::root_unified_result_actions::execute_root_unified_result_action(
                         self, &action_id, &subject, window, cx,
@@ -653,6 +670,9 @@ impl ScriptListApp {
         if is_key_enter(key) {
             match dialog.update(cx, |d, cx| d.activate_selected(cx)) {
                 crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
+                    // Agent & Model picker: a provider ("Agent") row is drill-only
+                    // — nothing persists until a model is chosen, because the
+                    // provider is encoded in the namespaced model id.
                     crate::actions::notify_actions_window(cx);
                     crate::actions::resize_actions_window(cx, dialog);
                     let (route_id, search_placeholder, route_depth, escape_hint) = {
