@@ -386,7 +386,7 @@ pub struct NotesApp {
 
     /// Cached ACP chat entity — survives mode switches so conversation state
     /// is preserved when toggling between Notes and ACP.
-    embedded_acp_chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,
+    embedded_acp_chat: Option<Entity<crate::ai::agent_chat::ui::AgentChatView>>,
     /// Generation for the currently embedded ACP view, used to reject stale popup actions.
     notes_acp_generation: u64,
     /// Active inline mention replacement session for note-local `@note`

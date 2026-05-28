@@ -46,7 +46,7 @@ impl ScriptListApp {
 
     fn wire_embedded_acp_footer_callbacks(
         &mut self,
-        view_entity: &Entity<crate::ai::acp::AcpChatView>,
+        view_entity: &Entity<crate::ai::agent_chat::ui::AgentChatView>,
         cx: &mut Context<Self>,
     ) {
         let app_entity = cx.entity().clone();
@@ -207,7 +207,7 @@ impl ScriptListApp {
 
     fn schedule_embedded_acp_observed_state_sync(
         &mut self,
-        view_entity: Entity<crate::ai::acp::AcpChatView>,
+        view_entity: Entity<crate::ai::agent_chat::ui::AgentChatView>,
         cx: &mut Context<Self>,
     ) {
         let view_weak = view_entity.downgrade();
@@ -241,7 +241,7 @@ impl ScriptListApp {
 
     fn sync_embedded_acp_observed_state(
         &mut self,
-        view_entity: &Entity<crate::ai::acp::AcpChatView>,
+        view_entity: &Entity<crate::ai::agent_chat::ui::AgentChatView>,
         cx: &mut Context<Self>,
     ) {
         let view = view_entity.read(cx);
@@ -1067,7 +1067,7 @@ impl ScriptListApp {
     fn schedule_embedded_acp_picker_open(
         &self,
         window_handle: gpui::AnyWindowHandle,
-        entity: gpui::Entity<crate::ai::acp::AcpChatView>,
+        entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
         trigger: char,
         cx: &mut Context<Self>,
     ) {
@@ -1154,14 +1154,14 @@ impl ScriptListApp {
     fn take_prewarmed_acp_chat_for_launch(
         &mut self,
         selected_agent_id: Option<&str>,
-        requirements: crate::ai::acp::AcpLaunchRequirements,
+        requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements,
         retry_request_active: bool,
         cx: &mut Context<Self>,
     ) -> Option<(
-        gpui::Entity<crate::ai::acp::AcpChatView>,
-        gpui::Entity<crate::ai::acp::AcpThread>,
+        gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
+        gpui::Entity<crate::ai::agent_chat::ui::AgentChatThread>,
     )> {
-        if retry_request_active || requirements != crate::ai::acp::AcpLaunchRequirements::default()
+        if retry_request_active || requirements != crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default()
         {
             tracing::info!(
                 target: "script_kit::tab_ai",
@@ -1349,7 +1349,7 @@ impl ScriptListApp {
     /// with the new-session ACP path.
     fn submit_live_acp_tab_ai_from_plan(
         &mut self,
-        entity: gpui::Entity<crate::ai::acp::AcpChatView>,
+        entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
         plan: crate::ai::TabAiQuickSubmitPlan,
         cx: &mut Context<Self>,
     ) {

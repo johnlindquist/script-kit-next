@@ -210,12 +210,12 @@ impl ScriptListApp {
             source_view = ?source_view,
         );
 
-        let (_broker, permission_rx) = crate::ai::acp::AcpPermissionBroker::new();
+        let (_broker, permission_rx) = crate::ai::agent_chat::ui::AgentChatPermissionBroker::new();
         let thread = cx.new(|cx| {
-            crate::ai::acp::AcpThread::new(
+            crate::ai::agent_chat::ui::AgentChatThread::new(
                 std::sync::Arc::new(FocusedTextFixtureConnection),
                 permission_rx,
-                crate::ai::acp::AcpThreadInit {
+                crate::ai::agent_chat::ui::AgentChatThreadInit {
                     ui_thread_id: "focused-text-mock-fixture".to_string(),
                     cwd: std::env::temp_dir().join("script-kit-focused-text-fixture"),
                     initial_input: instruction.clone(),
@@ -225,7 +225,7 @@ impl ScriptListApp {
                     profile_icon_name: None,
                     selected_agent: None,
                     available_agents: Vec::new(),
-                    launch_requirements: crate::ai::acp::AcpLaunchRequirements::default(),
+                    launch_requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
                     available_models: Vec::new(),
                     selected_model_id: None,
                 },
@@ -237,7 +237,7 @@ impl ScriptListApp {
         });
 
         let view_entity = cx.new(|cx| {
-            crate::ai::acp::AcpChatView::new(thread, cx)
+            crate::ai::agent_chat::ui::AgentChatView::new(thread, cx)
                 .with_ui_variant(crate::ai::acp::ui_variant::AcpChatUiVariant::FocusedTextMini)
         });
         self.wire_embedded_acp_footer_callbacks(&view_entity, cx);

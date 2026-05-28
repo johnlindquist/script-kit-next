@@ -15,7 +15,7 @@ impl ScriptListApp {
     /// every state mirror that must move in lock-step with that view.
     pub(crate) fn enter_embedded_acp_chat_surface(
         &mut self,
-        entity: gpui::Entity<crate::ai::acp::AcpChatView>,
+        entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
         cx: &mut gpui::Context<Self>,
     ) {
         self.embedded_acp_focus_handle = Some(entity.read(cx).focus_handle(cx));

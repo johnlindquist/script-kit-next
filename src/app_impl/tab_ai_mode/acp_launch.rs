@@ -82,7 +82,7 @@ impl ScriptListApp {
 
         // --- Permission broker + ACP connection ---
         let stage_started_at = std::time::Instant::now();
-        let (_broker, permission_rx) = crate::ai::acp::AcpPermissionBroker::new();
+        let (_broker, permission_rx) = crate::ai::agent_chat::ui::AgentChatPermissionBroker::new();
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_open_stage",
@@ -175,7 +175,7 @@ impl ScriptListApp {
         open_started_at: std::time::Instant,
         cx: &mut Context<Self>,
     ) {
-        let requirements = crate::ai::acp::AcpLaunchRequirements {
+        let requirements = crate::ai::agent_chat::ui::AgentChatLaunchRequirements {
             needs_embedded_context: focused_part.is_some(),
             needs_image: focused_part
                 .as_ref()
@@ -234,10 +234,10 @@ impl ScriptListApp {
         );
 
         let thread = cx.new(|cx| {
-            crate::ai::acp::AcpThread::new(
+            crate::ai::agent_chat::ui::AgentChatThread::new(
                 connection,
                 permission_rx,
-                crate::ai::acp::AcpThreadInit {
+                crate::ai::agent_chat::ui::AgentChatThreadInit {
                     ui_thread_id,
                     cwd,
                     initial_input: acp_initial_input.clone(),
@@ -256,7 +256,7 @@ impl ScriptListApp {
         });
 
         let view_entity = cx.new(|cx| {
-            crate::ai::acp::AcpChatView::new(thread.clone(), cx).with_ui_variant(request.ui_variant)
+            crate::ai::agent_chat::ui::AgentChatView::new(thread.clone(), cx).with_ui_variant(request.ui_variant)
         });
 
         self.active_agent_chat_warm_lease = Some(lease);
@@ -365,7 +365,7 @@ impl ScriptListApp {
     pub(super) fn take_acp_retry_request_for_open(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> Option<crate::ai::acp::AcpRetryRequest> {
+    ) -> Option<crate::ai::agent_chat::ui::AgentChatRetryRequest> {
         if let AppView::AcpChatView { entity } = &self.current_view {
             return entity.update(cx, |view, _cx| view.take_retry_request());
         }

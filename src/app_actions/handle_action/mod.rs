@@ -558,7 +558,7 @@ impl DeferredAiWindowAction {
 
     fn apply_to_acp(
         self,
-        entity: Entity<crate::ai::acp::view::AcpChatView>,
+        entity: Entity<crate::ai::agent_chat::ui::AgentChatView>,
         cx: &mut App,
     ) -> Result<&'static str, String> {
         entity.update(cx, move |chat, cx| match self {
@@ -885,7 +885,7 @@ impl ScriptListApp {
         .detach();
     }
 
-    fn active_acp_chat_entity(&self) -> Option<Entity<crate::ai::acp::view::AcpChatView>> {
+    fn active_acp_chat_entity(&self) -> Option<Entity<crate::ai::agent_chat::ui::AgentChatView>> {
         crate::ai::acp::chat_window::get_detached_acp_view_entity().or_else(|| {
             let AppView::AcpChatView { entity } = &self.current_view else {
                 return None;

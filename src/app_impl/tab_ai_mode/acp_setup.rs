@@ -7,10 +7,10 @@ impl ScriptListApp {
     fn show_embedded_acp_setup_view(
         &mut self,
         source_view: AppView,
-        setup: crate::ai::acp::AcpInlineSetupState,
+        setup: crate::ai::agent_chat::ui::AgentChatInlineSetupState,
         cx: &mut Context<Self>,
     ) {
-        let view_entity = cx.new(|cx| crate::ai::acp::AcpChatView::new_setup(setup, cx));
+        let view_entity = cx.new(|cx| crate::ai::agent_chat::ui::AgentChatView::new_setup(setup, cx));
         self.wire_embedded_acp_footer_callbacks(&view_entity, cx);
         self.tab_ai_harness_return_view = Some(source_view);
         self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
@@ -30,15 +30,15 @@ impl ScriptListApp {
             event = "acp_catalog_load_failed",
             error = %error,
         );
-        let setup = crate::ai::acp::AcpInlineSetupState {
+        let setup = crate::ai::agent_chat::ui::AgentChatInlineSetupState {
             reason_code: "catalogLoadFailed",
             title: "Failed to load ACP catalog".into(),
             body: format!("{error}").into(),
-            primary_action: crate::ai::acp::AcpSetupAction::OpenCatalog,
-            secondary_action: Some(crate::ai::acp::AcpSetupAction::Retry),
+            primary_action: crate::ai::agent_chat::ui::AgentChatSetupAction::OpenCatalog,
+            secondary_action: Some(crate::ai::agent_chat::ui::AgentChatSetupAction::Retry),
             selected_agent: None,
             catalog_entries: Vec::new(),
-            launch_requirements: crate::ai::acp::AcpLaunchRequirements::default(),
+            launch_requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
         };
         self.show_embedded_acp_setup_view(source_view, setup, cx);
     }
@@ -54,15 +54,15 @@ impl ScriptListApp {
             event = "pi_agent_chat_unavailable",
             error = %error,
         );
-        let setup = crate::ai::acp::AcpInlineSetupState {
+        let setup = crate::ai::agent_chat::ui::AgentChatInlineSetupState {
             reason_code: "piAgentChatUnavailable",
             title: "Pi Agent Chat is unavailable".into(),
             body: error.into(),
-            primary_action: crate::ai::acp::AcpSetupAction::Retry,
+            primary_action: crate::ai::agent_chat::ui::AgentChatSetupAction::Retry,
             secondary_action: None,
             selected_agent: None,
             catalog_entries: Vec::new(),
-            launch_requirements: crate::ai::acp::AcpLaunchRequirements::default(),
+            launch_requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
         };
         self.show_embedded_acp_setup_view(source_view, setup, cx);
     }
@@ -72,11 +72,11 @@ impl ScriptListApp {
     pub(super) fn show_acp_launch_blocked_setup_view(
         &mut self,
         source_view: AppView,
-        acp_launch_resolution: &crate::ai::acp::AcpLaunchResolution,
-        requirements: crate::ai::acp::AcpLaunchRequirements,
+        acp_launch_resolution: &crate::ai::agent_chat::ui::AgentChatLaunchResolution,
+        requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements,
         cx: &mut Context<Self>,
     ) {
-        let setup = crate::ai::acp::AcpInlineSetupState::from_resolution(
+        let setup = crate::ai::agent_chat::ui::AgentChatInlineSetupState::from_resolution(
             acp_launch_resolution,
             requirements,
         );

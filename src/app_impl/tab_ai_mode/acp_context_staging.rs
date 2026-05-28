@@ -11,7 +11,7 @@ fn should_stage_focused_part_for_retry_draft_restore(has_retry_draft_state: bool
 }
 
 fn clear_stale_acp_ambient_bootstrap(
-    thread_entity: &gpui::Entity<crate::ai::acp::AcpThread>,
+    thread_entity: &gpui::Entity<crate::ai::agent_chat::ui::AgentChatThread>,
     cx: &mut gpui::App,
 ) {
     thread_entity.update(cx, |thread, cx| {
@@ -44,8 +44,8 @@ impl ScriptListApp {
     pub(super) fn stage_acp_initial_context_parts(
         &mut self,
         retry_draft_state: Option<crate::ai::acp::view::AcpRetryDraftState>,
-        view_entity_for_staging: &gpui::Entity<crate::ai::acp::AcpChatView>,
-        thread: &gpui::Entity<crate::ai::acp::AcpThread>,
+        view_entity_for_staging: &gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
+        thread: &gpui::Entity<crate::ai::agent_chat::ui::AgentChatThread>,
         focused_part: Option<crate::ai::message_parts::AiContextPart>,
         use_ask_anything_fallback: bool,
         explicit_ambient_chip_label: Option<String>,
@@ -180,8 +180,8 @@ impl ScriptListApp {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn spawn_acp_deferred_context_staging(
         &mut self,
-        view_entity_for_staging: gpui::Entity<crate::ai::acp::AcpChatView>,
-        thread: gpui::Entity<crate::ai::acp::AcpThread>,
+        view_entity_for_staging: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
+        thread: gpui::Entity<crate::ai::agent_chat::ui::AgentChatThread>,
         request: TabAiLaunchRequest,
         capture_rx: TabAiDeferredCaptureRx,
         effective_intent: Option<String>,

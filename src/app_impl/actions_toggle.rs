@@ -734,7 +734,7 @@ impl ScriptListApp {
                 // Change Model drill-down. Fire-and-forget: this dialog opening
                 // uses whatever the thread has right now; subsequent openings pick
                 // up whatever the agent just advertised.
-                let thread_for_refresh = if let crate::ai::acp::AcpChatSession::Live(ref thread) =
+                let thread_for_refresh = if let crate::ai::agent_chat::ui::AgentChatSession::Live(ref thread) =
                     entity.read(cx).session
                 {
                     Some(thread.clone())
@@ -750,10 +750,10 @@ impl ScriptListApp {
                     let focused_text = view.has_focused_text_context();
                     let focused_text_expanded = view.focused_text_actions_expanded();
                     match &view.session {
-                        crate::ai::acp::AcpChatSession::Setup(_) => {
+                        crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => {
                             (None, Vec::new(), focused_text, focused_text_expanded)
                         }
-                        crate::ai::acp::AcpChatSession::Live(thread) => {
+                        crate::ai::agent_chat::ui::AgentChatSession::Live(thread) => {
                             let thread = thread.read(cx);
                             (
                                 thread.selected_model_id().map(str::to_string),

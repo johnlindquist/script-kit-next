@@ -375,12 +375,12 @@ enum AcpReadTarget {
     /// Read from the detached ACP chat window's entity.
     Detached {
         info: crate::protocol::AutomationWindowInfo,
-        entity: gpui::Entity<crate::ai::acp::view::AcpChatView>,
+        entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
     },
     /// Read from the Notes-hosted embedded ACP chat entity.
     Notes {
         info: crate::protocol::AutomationWindowInfo,
-        entity: gpui::Entity<crate::ai::acp::view::AcpChatView>,
+        entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
     },
 }
 
@@ -396,7 +396,7 @@ enum AutomationReadTarget {
     /// Detached ACP chat window.
     AcpDetached {
         info: crate::protocol::AutomationWindowInfo,
-        entity: gpui::Entity<crate::ai::acp::view::AcpChatView>,
+        entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
     },
     /// Notes window.
     Notes {
@@ -560,8 +560,8 @@ fn is_acp_wait_condition(condition: &protocol::WaitCondition) -> bool {
 /// Return the live ACP chat entity for automation, preferring the detached window
 /// when it is open and falling back to the embedded main-window view.
 fn active_acp_chat_entity(
-    embedded: Option<&gpui::Entity<crate::ai::acp::view::AcpChatView>>,
-) -> Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> {
+    embedded: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
+) -> Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> {
     crate::ai::acp::chat_window::get_detached_acp_view_entity().or_else(|| embedded.cloned())
 }
 
@@ -572,7 +572,7 @@ fn resolve_automation_read_target(
     request_id: &str,
     op: &'static str,
     target: Option<&crate::protocol::AutomationWindowTarget>,
-    embedded_acp: Option<&gpui::Entity<crate::ai::acp::view::AcpChatView>>,
+    embedded_acp: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
     cx: &gpui::App,
 ) -> Result<AutomationReadTarget, crate::protocol::TransactionError> {
     let Some(target) = target else {
@@ -737,7 +737,7 @@ fn resolve_acp_read_target(
     request_id: &str,
     op: &'static str,
     target: Option<&crate::protocol::AutomationWindowTarget>,
-    embedded_acp: Option<&gpui::Entity<crate::ai::acp::view::AcpChatView>>,
+    embedded_acp: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
     cx: &gpui::App,
 ) -> Result<AcpReadTarget, crate::protocol::TransactionError> {
     // No explicit target → default to main window (preserves existing behavior).
@@ -988,7 +988,7 @@ fn build_notes_ui_snapshot(
 /// Build a UI state snapshot for a detached ACP target — mirrors
 /// [`DetachedAcpTransactionProvider::snapshot`](crate::windows::automation_transaction_provider).
 fn build_acp_detached_ui_snapshot(
-    entity: &gpui::Entity<crate::ai::acp::view::AcpChatView>,
+    entity: &gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
     cx: &gpui::App,
 ) -> crate::protocol::UiStateSnapshot {
     let view = entity.read(cx);
@@ -2118,14 +2118,14 @@ impl ScriptListApp {
 
     fn script_error_acp_view_entity(
         &self,
-    ) -> Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> {
+    ) -> Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> {
         crate::ai::acp::chat_window::get_detached_acp_view_entity()
             .or_else(|| self.embedded_acp_automation_entity())
     }
 
     fn embedded_acp_automation_entity(
         &self,
-    ) -> Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> {
+    ) -> Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> {
         match &self.current_view {
             AppView::AcpChatView { entity } => Some(entity.clone()),
             _ => None,
@@ -2135,7 +2135,7 @@ impl ScriptListApp {
     fn ensure_script_error_acp_view(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> Option<gpui::Entity<crate::ai::acp::AcpChatView>> {
+    ) -> Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> {
         if let Some(entity) = self.script_error_acp_view_entity() {
             return Some(entity);
         }
@@ -2202,7 +2202,7 @@ impl ScriptListApp {
     }
 
     fn stage_script_error_context_on_acp_view(
-        view_entity: gpui::Entity<crate::ai::acp::AcpChatView>,
+        view_entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
         bundle: ScriptErrorAcpContextBundle,
         prompt: String,
         cx: &mut Context<Self>,
@@ -5150,7 +5150,7 @@ impl ScriptListApp {
                 };
 
                 // Extract the detached ACP entity for backward-compatible condition checking.
-                let detached_entity: Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> =
+                let detached_entity: Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> =
                     if let AutomationReadTarget::AcpDetached { ref entity, .. } = resolved_target {
                         Some(entity.clone())
                     } else {
@@ -5624,7 +5624,7 @@ impl ScriptListApp {
                 };
                 let batch_target_kind = batch_target_kind_for_resolved_target(&batch_target);
 
-                let detached_batch_entity: Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> =
+                let detached_batch_entity: Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> =
                     if let AutomationReadTarget::AcpDetached { ref entity, .. } = batch_target {
                         Some(entity.clone())
                     } else {
@@ -8841,7 +8841,7 @@ impl ScriptListApp {
     fn wait_condition_satisfied_for_target(
         &self,
         condition: &protocol::WaitCondition,
-        detached_entity: Option<&gpui::Entity<crate::ai::acp::view::AcpChatView>>,
+        detached_entity: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
         cx: &Context<Self>,
     ) -> bool {
         match condition {
@@ -9275,7 +9275,7 @@ impl ScriptListApp {
     /// Collect ACP state from the given detached entity, or fall through to main.
     fn collect_acp_state_for_target(
         &self,
-        detached_entity: Option<&gpui::Entity<crate::ai::acp::view::AcpChatView>>,
+        detached_entity: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
         cx: &Context<Self>,
     ) -> protocol::AcpStateSnapshot {
         match detached_entity {
@@ -9287,7 +9287,7 @@ impl ScriptListApp {
     /// Collect ACP test probe from the given detached entity, or fall through to main.
     fn collect_acp_test_probe_for_target(
         &self,
-        detached_entity: Option<&gpui::Entity<crate::ai::acp::view::AcpChatView>>,
+        detached_entity: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
         tail: usize,
         cx: &Context<Self>,
     ) -> protocol::AcpTestProbeSnapshot {

@@ -11,7 +11,7 @@ impl NotesApp {
         &mut self,
         initial_input: Option<String>,
         cx: &mut Context<Self>,
-    ) -> Result<gpui::Entity<crate::ai::acp::view::AcpChatView>, String> {
+    ) -> Result<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>, String> {
         if let Some(entity) = self.embedded_acp_chat.as_ref().cloned() {
             tracing::info!(
                 event = "notes_embedded_acp_view_ensured",
@@ -21,7 +21,7 @@ impl NotesApp {
             return Ok(entity);
         }
 
-        let requirements = crate::ai::acp::preflight::AcpLaunchRequirements::default();
+        let requirements = crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default();
         let view =
             crate::ai::acp::hosted::spawn_hosted_view(initial_input.clone(), requirements, cx)?;
         self.wire_acp_host_callbacks(&view, cx);
@@ -213,7 +213,7 @@ impl NotesApp {
     /// not reach here in normal operation. The branches remain as
     /// defense-in-depth logging.
     fn handle_acp_portal_static(
-        chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,
+        chat: Option<Entity<crate::ai::agent_chat::ui::AgentChatView>>,
         kind: crate::ai::window::context_picker::types::PortalKind,
         cx: &mut gpui::App,
     ) {
@@ -294,7 +294,7 @@ impl NotesApp {
     /// to Notes-owned handlers.
     fn wire_acp_host_callbacks(
         &self,
-        view: &Entity<crate::ai::acp::view::AcpChatView>,
+        view: &Entity<crate::ai::agent_chat::ui::AgentChatView>,
         cx: &mut Context<Self>,
     ) {
         let notes_entity = cx.entity().downgrade();
@@ -386,8 +386,8 @@ impl NotesApp {
         let (selected_model_id, available_models) = {
             let view = acp_view.read(cx);
             match &view.session {
-                crate::ai::acp::AcpChatSession::Setup(_) => (None, Vec::new()),
-                crate::ai::acp::AcpChatSession::Live(thread) => {
+                crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => (None, Vec::new()),
+                crate::ai::agent_chat::ui::AgentChatSession::Live(thread) => {
                     let thread = thread.read(cx);
                     (
                         thread.selected_model_id().map(str::to_string),
@@ -561,7 +561,7 @@ impl NotesApp {
 
     pub(crate) fn embedded_acp_chat_entity(
         &self,
-    ) -> Option<Entity<crate::ai::acp::view::AcpChatView>> {
+    ) -> Option<Entity<crate::ai::agent_chat::ui::AgentChatView>> {
         self.embedded_acp_chat.clone()
     }
 }
@@ -573,7 +573,7 @@ impl NotesApp {
 /// can interact with the ACP view entity and the Notes host state.
 fn dispatch_notes_acp_action(
     entity: Option<Entity<NotesApp>>,
-    acp_target: gpui::WeakEntity<crate::ai::acp::view::AcpChatView>,
+    acp_target: gpui::WeakEntity<crate::ai::agent_chat::ui::AgentChatView>,
     acp_generation: u64,
     action_id: &str,
     window: &mut Window,

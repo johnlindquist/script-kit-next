@@ -103,6 +103,119 @@ fn agent_client_protocol_is_imported_only_through_content_boundary() {
     );
 }
 
+/// The chat-runtime/UI types that MUST flow through the `agent_chat::ui`
+/// facade once an outer consumer references them by an `acp::` path.
+const RUNTIME_TYPES: &[&str] = &[
+    "AcpChatView",
+    "AcpThread",
+    "AcpThreadInit",
+    "AcpThreadMessage",
+    "AcpThreadStatus",
+    "AcpEvent",
+    "AcpEventRx",
+    "AcpChatSession",
+    "AcpInlineSetupState",
+    "AcpSetupAction",
+    "AcpRetryRequest",
+    "AcpHistoryResumeRequest",
+    "AcpPermissionBroker",
+    "AcpLaunchBlocker",
+    "AcpLaunchRequirements",
+    "AcpLaunchResolution",
+    "AcpToolCallState",
+];
+
+/// Returns the first runtime type that `content` reaches via an `acp::` path
+/// (optionally through a single submodule segment, e.g. `acp::view::AcpThread`).
+/// The frozen `AppView::AcpChatView` enum variant is NOT matched because it has
+/// no `acp::` path prefix.
+fn first_acp_runtime_reference(content: &str) -> Option<String> {
+    let is_ident = |c: char| c.is_alphanumeric() || c == '_';
+    for (idx, _) in content.match_indices("acp::") {
+        let rest = &content[idx + "acp::".len()..];
+        // Optionally skip one lowercase submodule segment like `view::`.
+        let after_submodule = match rest.find("::") {
+            Some(pos)
+                if pos > 0
+                    && rest[..pos]
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c == '_') =>
+            {
+                &rest[pos + 2..]
+            }
+            _ => rest,
+        };
+        for ty in RUNTIME_TYPES {
+            if let Some(tail) = after_submodule.strip_prefix(ty) {
+                if !tail.chars().next().is_some_and(is_ident) {
+                    return Some((*ty).to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+#[test]
+fn outer_consumers_reach_runtime_types_through_agent_chat_ui() {
+    // Outer feature roots must import the chat-runtime/UI types via the
+    // `agent_chat::ui` facade, not directly from `crate::ai::acp`. Non-runtime
+    // ACP compatibility surfaces (catalog/config/portal/history/surface_state/
+    // actions-dialog/context builders) are allowed to stay on `crate::ai::acp`.
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let outer_roots = [
+        "src/app_impl",
+        "src/notes",
+        "src/render_builtins",
+        "src/actions",
+        "src/app_actions",
+        "src/prompt_handler",
+        "src/test_support",
+    ];
+
+    let mut offenders = Vec::new();
+    for root in outer_roots {
+        let mut files = Vec::new();
+        collect_rs_files(manifest.join(root), &mut files);
+        for file in files {
+            let contents = fs::read_to_string(&file).unwrap_or_default();
+            if let Some(ty) = first_acp_runtime_reference(&contents) {
+                offenders.push(format!("{} reaches acp::{ty}", file.display()));
+            }
+        }
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "outer consumers must import chat-runtime types from \
+         crate::ai::agent_chat::ui, not crate::ai::acp; offenders: {offenders:#?}"
+    );
+}
+
+#[test]
+fn agent_chat_ui_facade_stays_runtime_only() {
+    // The facade is a runtime/UI boundary; it must NOT absorb non-runtime ACP
+    // compatibility surfaces. Those get their own future boundaries if needed.
+    let ui = read("src/ai/agent_chat/ui/mod.rs");
+    for forbidden in [
+        "AcpAgentCatalogEntry",
+        "AcpAgentConfig",
+        "AcpAgentRuntimeState",
+        "AcpActionsDialogContext",
+        "AcpPortalLaunchContract",
+        "AcpHistoryEntry",
+        "portal_contract",
+        "catalog::",
+        "config::",
+        "history::",
+    ] {
+        assert!(
+            !ui.contains(forbidden),
+            "agent_chat::ui must stay runtime-only; it must not re-export `{forbidden}`"
+        );
+    }
+}
+
 #[test]
 fn frozen_serialized_surface_ids_are_unchanged() {
     let app_view = read("src/main_sections/app_view_state.rs");
