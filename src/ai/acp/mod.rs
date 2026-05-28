@@ -1,6 +1,12 @@
-//! Agent Client Protocol (ACP) integration.
+//! Legacy ACP-named implementation for the Agent Chat UI.
 //!
-//! Provides the Agent Chat UI surface and ACP-named compatibility contracts.
+//! This module is the live implementation of the Agent Chat chat surface. The
+//! `Acp*` names are retained as **compatibility contracts** (action IDs, route
+//! IDs, `getAcpState`, serialized surface IDs, telemetry labels), not because
+//! an Agent Client Protocol transport is still in use — the active backend is
+//! Pi (`crate::ai::agent_chat`). New feature-level code should import the
+//! canonical `AgentChat*` types from `crate::ai::agent_chat::ui` rather than
+//! reaching into this module directly.
 //!
 //! # Module Layout
 //!
@@ -52,9 +58,7 @@ pub(crate) use catalog::{
 pub(crate) use config::{
     claude_code_agent_config_cached, ensure_acp_agents_catalog_seeded,
     load_acp_agent_catalog_entries, load_acp_agent_configs, load_acp_agent_runtime_states,
-    load_preferred_acp_agent_id, open_acp_agents_catalog_in_editor,
-    persist_acp_agent_runtime_state, persist_preferred_acp_agent_id,
-    persist_preferred_acp_agent_id_sync, prewarm_agent_config,
+    open_acp_agents_catalog_in_editor, persist_acp_agent_runtime_state, prewarm_agent_config,
     refresh_acp_agent_catalog_entries_with_snapshot, AcpAgentConfig, AcpAgentRuntimeState,
     AcpAgentRuntimeStateFile,
 };

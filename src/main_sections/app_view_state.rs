@@ -294,13 +294,17 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
-    /// Showing the ACP-backed Tab AI chat surface for the default Tab path.
+    /// Showing the Agent Chat surface for the default Tab path.
+    ///
+    /// The `AcpChatView` variant name and `"acp_chat"` serialized id are kept
+    /// for launcher surface-contract compatibility; the entity now flows
+    /// through the canonical `agent_chat::ui` boundary.
     ///
     /// Verification-bearing new-script requests deliberately route to
     /// `QuickTerminalView` so the agent can run Bun verification inside the
     /// live harness terminal session before reporting success.
     AcpChatView {
-        entity: Entity<crate::ai::acp::view::AcpChatView>,
+        entity: Entity<crate::ai::agent_chat::ui::AgentChatView>,
     },
     /// In-window confirm state — replaces the popup dialog when the main window
     /// is the active context. Restored to `previous` when the user confirms or

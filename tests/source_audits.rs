@@ -128,6 +128,9 @@ mod actions_popup_contract;
 #[path = "source_audits/acp_no_legacy_backend.rs"]
 mod acp_no_legacy_backend;
 
+#[path = "source_audits/agent_chat_boundary_and_frozen_contracts.rs"]
+mod agent_chat_boundary_and_frozen_contracts;
+
 #[path = "source_audits/scriptlist_hide_bounds_reset.rs"]
 mod scriptlist_hide_bounds_reset;
 
