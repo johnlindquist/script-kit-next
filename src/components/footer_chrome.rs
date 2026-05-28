@@ -24,7 +24,7 @@ pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX: f32 = 2.0;
 pub(crate) const FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX: f32 = 6.0;
 pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 4.0;
 pub(crate) const FOOTER_RUN_SLOT_MIN_WIDTH_PX: f32 = 92.0;
-pub(crate) const FOOTER_RUN_SLOT_MAX_WIDTH_PX: f32 = 172.0;
+pub(crate) const FOOTER_RUN_SLOT_MAX_WIDTH_PX: f32 = 242.0;
 pub(crate) const FOOTER_ACTIONS_SLOT_WIDTH_PX: f32 = 92.0;
 pub(crate) const FOOTER_AI_SLOT_WIDTH_PX: f32 = 52.0;
 pub(crate) const FOOTER_APPLY_SLOT_WIDTH_PX: f32 = 84.0;
@@ -109,8 +109,8 @@ pub(crate) fn footer_action_slot_width(slot: FooterActionSlot) -> f32 {
 pub(crate) fn footer_rail_chrome(theme: &Theme) -> FooterRailChrome {
     let chrome = crate::theme::AppChromeColors::from_theme(theme);
     FooterRailChrome {
-        height_px: crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
-        side_inset_px: crate::window_resize::mini_layout::HINT_STRIP_PADDING_X,
+        height_px: crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+        side_inset_px: crate::window_resize::main_layout::HINT_STRIP_PADDING_X,
         item_gap_px: FOOTER_ACTION_ITEM_GAP_PX,
         surface_rgba: chrome.inline_dropdown_surface_rgba,
         divider_rgba: chrome.divider_rgba,
@@ -805,7 +805,7 @@ mod tests {
         assert_eq!(FOOTER_ACTION_CONTENT_PADDING_X_PX, 2.0);
         assert_eq!(FOOTER_ACTION_BUTTON_RADIUS_PX, 4.0);
         assert_eq!(FOOTER_RUN_SLOT_MIN_WIDTH_PX, 92.0);
-        assert_eq!(FOOTER_RUN_SLOT_MAX_WIDTH_PX, 172.0);
+        assert_eq!(FOOTER_RUN_SLOT_MAX_WIDTH_PX, 242.0);
         assert_eq!(footer_action_slot_width(FooterActionSlot::Actions), 92.0);
         assert_eq!(footer_action_slot_width(FooterActionSlot::Ai), 52.0);
         assert_eq!(footer_action_slot_width(FooterActionSlot::Apply), 84.0);
@@ -826,11 +826,11 @@ mod tests {
         let rail = footer_rail_chrome(&theme);
         assert_eq!(
             rail.height_px,
-            crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT
+            crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT
         );
         assert_eq!(
             rail.side_inset_px,
-            crate::window_resize::mini_layout::HINT_STRIP_PADDING_X
+            crate::window_resize::main_layout::HINT_STRIP_PADDING_X
         );
         assert_eq!(rail.surface_rgba, chrome.inline_dropdown_surface_rgba);
         assert_eq!(rail.divider_rgba, chrome.divider_rgba);

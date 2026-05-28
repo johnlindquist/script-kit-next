@@ -473,34 +473,50 @@ impl TextElement {
             .filter_map(|(range, color)| {
                 let start = range.start.max(visible_byte_range.start);
                 let end = range.end.min(visible_byte_range.end);
-                (start < end).then_some((start..end, *color))
+                if start < end
+                    && state.text.is_char_boundary(start)
+                    && state.text.is_char_boundary(end)
+                {
+                    Some((start..end, *color))
+                } else {
+                    None
+                }
             })
             .collect();
         if ranges.is_empty() {
             return None;
         }
-        ranges.sort_by_key(|(range, _)| range.start);
+        ranges.sort_by(|(a, _), (b, _)| a.start.cmp(&b.start).then(a.end.cmp(&b.end)));
 
         let mut styles = Vec::new();
         let mut cursor = visible_byte_range.start;
         for (range, color) in ranges {
-            if cursor < range.start {
-                styles.push((cursor..range.start, HighlightStyle::default()));
+            let start = range.start.max(cursor);
+            let end = range.end.min(visible_byte_range.end);
+            if start >= end {
+                continue;
+            }
+            if cursor < start {
+                styles.push((cursor..start, HighlightStyle::default()));
             }
             styles.push((
-                range.start..range.end,
+                start..end,
                 HighlightStyle {
                     color: Some(color),
                     ..HighlightStyle::default()
                 },
             ));
-            cursor = range.end;
+            cursor = end;
         }
         if cursor < visible_byte_range.end {
             styles.push((cursor..visible_byte_range.end, HighlightStyle::default()));
         }
 
-        Some(styles)
+        if styles.is_empty() {
+            None
+        } else {
+            Some(styles)
+        }
     }
 
     fn layout_selections(

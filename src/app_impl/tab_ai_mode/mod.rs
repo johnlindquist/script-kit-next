@@ -313,6 +313,27 @@ impl ScriptListApp {
         );
     }
 
+    /// Unified spine Enter dispatch: try the selected row's action, then fall
+    /// back to submitting the prompt plan. Returns true if the spine consumed
+    /// the Enter, false to let the caller's default action run.
+    pub(crate) fn try_handle_spine_enter(
+        &mut self,
+        window: &mut Window,
+        ctx: &mut Context<Self>,
+    ) -> bool {
+        if !self.spine_projection_owns_main_list() {
+            return false;
+        }
+        // accept_spine_projection_row handles rich subsearch interception
+        // (@file:, @clipboard:, etc.) before applying the row's action. If it
+        // succeeds, the Spine consumed Enter. Otherwise (e.g. Noop placeholder,
+        // no selection), fall through to plan submission.
+        if self.accept_spine_projection_row(window, ctx) {
+            return true;
+        }
+        self.try_submit_spine_prompt_plan_from_enter(ctx)
+    }
+
     pub(crate) fn try_submit_spine_prompt_plan_from_enter(
         &mut self,
         cx: &mut Context<Self>,
@@ -329,7 +350,14 @@ impl ScriptListApp {
         self.set_spine_parse_from_filter_and_cursor(&raw, raw.len());
 
         let plan = crate::spine::prompt_plan::build_spine_prompt_plan(&self.spine_parse);
-        if !plan.should_submit_to_chat() {
+        // Plain prose without sigils normally doesn't submit to chat. But when
+        // the user has already established a working directory via the cwd
+        // chip (typed `>` then picked a folder), Cmd+Enter on a non-empty
+        // prompt should dispatch to ACP with that cwd. The chip is itself a
+        // context anchor.
+        let cwd_anchor_authorizes_submit =
+            self.spine_cwd.is_some() && !plan.normalized_prompt.trim().is_empty();
+        if !plan.should_submit_to_chat() && !cwd_anchor_authorizes_submit {
             return false;
         }
 
@@ -360,17 +388,19 @@ impl ScriptListApp {
         self.invalidate_grouped_cache();
 
         let spine_cwd = self.spine_cwd.clone();
-        self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(Some(prompt.clone()), cx);
+        self.embedded_acp_chat = None;
+        self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(None, cx);
 
         if let AppView::AcpChatView { entity } = &self.current_view {
             let entity = entity.clone();
             entity.update(cx, |chat, cx| {
-                if let Some(cwd) = &spine_cwd {
-                    if let Some(thread_entity) = chat.thread() {
-                        thread_entity.update(cx, |thread, _cx| {
+                if let Some(thread_entity) = chat.thread() {
+                    thread_entity.update(cx, |thread, cx| {
+                        thread.clear_messages(cx);
+                        if let Some(cwd) = &spine_cwd {
                             thread.set_cwd(cwd.clone());
-                        });
-                    }
+                        }
+                    });
                 }
                 if let Err(e) = chat.submit_reused_entry_intent_with_host_context(
                     prompt,
@@ -985,10 +1015,13 @@ impl ScriptListApp {
         if let AppView::AcpChatView { entity } = &self.current_view {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_trigger_picker_open_embedded_deferred",
+                event = "acp_spine_trigger_seeded_embedded",
                 trigger = "@",
             );
-            self.schedule_embedded_acp_picker_open(window.window_handle(), entity.clone(), '@', cx);
+            entity.update(cx, |view, cx| {
+                view.set_input("@".to_string(), cx);
+                view.refresh_acp_spine_from_composer(cx);
+            });
         }
     }
 
@@ -1049,11 +1082,17 @@ impl ScriptListApp {
                 .await;
 
             let _ = window_handle.update(cx, |_root, window, cx| {
-                entity.update(cx, |view, cx| match trigger {
-                    '/' => view.open_slash_picker_in_window(window, cx),
-                    '@' => view.open_mention_picker_in_window(window, cx),
-                    '|' => view.open_profile_trigger_picker_in_window(window, cx),
-                    _ => {}
+                entity.update(cx, |view, cx| {
+                    let sigil = match trigger {
+                        '/' | '@' | '|' | '.' | ';' | '>' => Some(trigger.to_string()),
+                        _ => None,
+                    };
+                    if let Some(s) = sigil {
+                        view.set_input(s, cx);
+                        view.refresh_acp_spine_from_composer(cx);
+                    } else {
+                        let _ = window;
+                    }
                 });
             });
         })

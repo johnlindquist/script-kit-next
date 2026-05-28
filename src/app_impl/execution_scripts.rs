@@ -42,7 +42,7 @@ fn builtin_entry_needs_main_window(entry: &builtins::BuiltInEntry) -> bool {
         builtins::BuiltInFeature::UtilityCommand(command) => match command {
             builtins::UtilityCommandType::StopAllProcesses
             | builtins::UtilityCommandType::ScriptKitSelfie => false,
-            builtins::UtilityCommandType::MiniMainWindow
+            builtins::UtilityCommandType::MainWindow
             | builtins::UtilityCommandType::ScratchPad
             | builtins::UtilityCommandType::QuickTerminal
             | builtins::UtilityCommandType::ClaudeCode

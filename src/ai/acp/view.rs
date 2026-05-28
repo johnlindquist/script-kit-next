@@ -49,6 +49,7 @@ use crate::ai::window::context_picker::{
     build_picker_items, build_slash_picker_items_with_payloads, slash_picker_empty_row,
     slash_picker_loading_row, slash_picker_no_match_row,
 };
+use crate::spine::list::{SpineListAction, SpineListRow, SpineListRowKind, SpineListSection};
 
 use super::components::setup_card::{AcpSetupAgentPickerState, AcpSetupCard, AcpSetupCardEvent};
 use super::components::toolbar::{AcpToolbar, AcpToolbarEvent};
@@ -320,6 +321,7 @@ pub(crate) struct AcpFooterSnapshot {
     pub(crate) status_text: Option<&'static str>,
     pub(crate) profile_selector_open: bool,
     pub(crate) buttons: Vec<AcpFooterButtonSpec>,
+    pub(crate) cwd_display: Option<String>,
 }
 
 impl AcpFooterSnapshot {
@@ -333,14 +335,24 @@ impl AcpFooterSnapshot {
     }
 
     pub(crate) fn profile_left_info(&self) -> crate::footer_popup::FooterLeftInfo {
+        let model_label = self.model_status_label();
+        let cwd_chip = self
+            .cwd_display
+            .as_ref()
+            .map(|cwd| crate::footer_popup::FooterCwdChip {
+                label: cwd.clone(),
+                icon_token: "folder".to_string(),
+                key: None,
+            });
         crate::footer_popup::FooterLeftInfo {
             dot_status: self.dot_status,
-            model_name: self.model_status_label(),
+            model_name: model_label,
             prefer_accent_for_active_states: true,
             profile_name: Some(self.profile_display.clone()),
             icon_token: None,
             action: Some(crate::footer_popup::FooterAction::Ai),
             selected: self.profile_selector_open,
+            cwd_chip,
         }
     }
 }
@@ -701,6 +713,10 @@ pub(crate) struct AcpChatView {
     _slash_discovery_task: Task<()>,
     /// Active @-mention picker session (None = picker hidden).
     pub(crate) mention_session: Option<AcpMentionSession>,
+    /// Surface-local Spine state for the ACP composer. When this projection
+    /// owns the conversation area, the transcript is replaced with the
+    /// Spine list (context / slash / profile / style / capture / CWD rows).
+    pub(crate) composer_spine: crate::ai::acp::composer_state::AcpComposerSpineState,
     /// Exact active trigger dismissed by pointer/escape while the input text remains unchanged.
     dismissed_mention_trigger: Option<AcpDismissedMentionTrigger>,
     /// Cached parent window metadata for the detached picker popup.
@@ -1250,7 +1266,7 @@ impl AcpChatView {
         if self.uses_external_footer_host() {
             0.0
         } else {
-            crate::window_resize::mini_layout::HINT_STRIP_HEIGHT
+            crate::window_resize::main_layout::HINT_STRIP_HEIGHT
         }
     }
 
@@ -1269,11 +1285,24 @@ impl AcpChatView {
                 status_text: None,
                 profile_selector_open: self.profile_selector_open,
                 buttons: Vec::new(),
+                cwd_display: None,
             };
         }
 
         let thread = self.live_thread().read(cx);
         let visible = self.main_window_footer_visible_for_thread(thread);
+        let cwd = thread.cwd().clone();
+        let cwd_display = if cwd.as_os_str().is_empty() || cwd == std::path::PathBuf::from(".") {
+            None
+        } else {
+            let home = dirs::home_dir().unwrap_or_default();
+            let display = if cwd.starts_with(&home) {
+                format!("~/{}", cwd.strip_prefix(&home).unwrap_or(&cwd).display())
+            } else {
+                cwd.display().to_string()
+            };
+            Some(display)
+        };
         AcpFooterSnapshot {
             visible,
             dot_status: self.footer_dot_status(cx),
@@ -1287,6 +1316,7 @@ impl AcpChatView {
             } else {
                 Vec::new()
             },
+            cwd_display,
         }
     }
 
@@ -2893,6 +2923,7 @@ impl AcpChatView {
             FooterAction::Expand => "⌘↵ Chat",
             FooterAction::Retry => "⌘⇧R Retry",
             FooterAction::Close => "⌘W Close",
+            FooterAction::Cwd => "📁 CWD",
         }
     }
 
@@ -2949,6 +2980,15 @@ impl AcpChatView {
             | FooterAction::Copy
             | FooterAction::Expand
             | FooterAction::Retry => {}
+            FooterAction::Cwd => {
+                // TODO: Open the CWD picker as an overlay so the user can
+                // change their directory without leaving the chat. For now,
+                // log so the chip-click receipt still appears in tests.
+                tracing::info!(
+                    target: "script_kit::acp",
+                    event = "acp_footer_cwd_chip_clicked_not_yet_wired",
+                );
+            }
         }
     }
 
@@ -3048,9 +3088,9 @@ impl AcpChatView {
 
         div()
             .w_full()
-            .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
-            .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
-            .py(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_Y))
+            .h(px(crate::window_resize::main_layout::HINT_STRIP_HEIGHT))
+            .px(px(crate::window_resize::main_layout::HINT_STRIP_PADDING_X))
+            .py(px(crate::window_resize::main_layout::HINT_STRIP_PADDING_Y))
             .flex()
             .flex_row()
             .items_center()
@@ -3100,9 +3140,9 @@ impl AcpChatView {
 
         div()
             .w_full()
-            .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
-            .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
-            .py(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_Y))
+            .h(px(crate::window_resize::main_layout::HINT_STRIP_HEIGHT))
+            .px(px(crate::window_resize::main_layout::HINT_STRIP_PADDING_X))
+            .py(px(crate::window_resize::main_layout::HINT_STRIP_PADDING_Y))
             .flex()
             .flex_row()
             .items_center()
@@ -4789,6 +4829,7 @@ impl AcpChatView {
             thread.input.set_cursor(prefill.chars().count());
             cx.notify();
         });
+        self.refresh_acp_spine_from_composer(cx);
         self.refresh_mention_session(cx);
         tracing::info!(
             target: "script_kit::tab_ai",
@@ -5097,8 +5138,11 @@ impl AcpChatView {
                 });
             }
 
-            // Update the unified picker (@ mentions + / commands) on any input change.
-            this.refresh_mention_session(cx);
+            // Update composer projections on any input/cursor change.
+            this.refresh_acp_spine_from_composer(cx);
+            if !this.acp_spine_owns_list() {
+                this.refresh_mention_session(cx);
+            }
 
             if let Some(item_count) = this.focused_text_mini_sizing_count(&*cx) {
                 crate::window_resize::resize_to_view_sync(
@@ -5139,7 +5183,10 @@ impl AcpChatView {
             let _ = cx.update(|cx| {
                 this.update(cx, |view, cx| {
                     view.cached_slash_commands = commands;
-                    view.refresh_mention_session(cx);
+                    view.refresh_acp_spine_from_composer(cx);
+                    if !view.acp_spine_owns_list() {
+                        view.refresh_mention_session(cx);
+                    }
                     cx.notify();
                 })
             });
@@ -5164,6 +5211,7 @@ impl AcpChatView {
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: slash_task,
             mention_session: None,
+            composer_spine: Default::default(),
             dismissed_mention_trigger: None,
             mention_popup_parent_window: None,
             inline_owned_context_tokens: HashSet::new(),
@@ -5249,6 +5297,7 @@ impl AcpChatView {
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: noop_slash,
             mention_session: None,
+            composer_spine: Default::default(),
             dismissed_mention_trigger: None,
             mention_popup_parent_window: None,
             inline_owned_context_tokens: HashSet::new(),
@@ -6172,7 +6221,10 @@ impl AcpChatView {
 
         self.live_thread()
             .update(cx, |thread, cx| thread.set_input(value, cx));
-        self.refresh_mention_session(cx);
+        self.refresh_acp_spine_from_composer(cx);
+        if !self.acp_spine_owns_list() {
+            self.refresh_mention_session(cx);
+        }
     }
 
     pub(crate) fn set_input_in_window(
@@ -6860,7 +6912,10 @@ impl AcpChatView {
         crate::ai::acp::profile_selector_popup::close_profile_selector_popup_window(cx);
         self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.set_input(trigger.to_string(), cx);
-        self.refresh_mention_session(cx);
+        self.refresh_acp_spine_from_composer(cx);
+        if !self.acp_spine_owns_list() {
+            self.refresh_mention_session(cx);
+        }
     }
 
     pub(crate) fn open_slash_picker(&mut self, cx: &mut Context<Self>) {
@@ -6873,6 +6928,858 @@ impl AcpChatView {
 
     pub(crate) fn open_profile_trigger_picker(&mut self, cx: &mut Context<Self>) {
         self.open_picker_trigger(PROFILE_TRIGGER_STR, cx);
+    }
+
+    pub(crate) fn refresh_acp_spine_from_composer(&mut self, cx: &mut Context<Self>) {
+        if self.is_setup_mode() {
+            self.composer_spine.clear();
+            tracing::info!(target: "script_kit::acp_spine", event = "refresh_skipped_setup_mode");
+            return;
+        }
+        let (text, cursor) = {
+            let thread = self.live_thread().read(cx);
+            (thread.input.text().to_string(), thread.input.cursor())
+        };
+        self.composer_spine.refresh(&text, cursor);
+        let owns = self.acp_spine_owns_list();
+        let kind = self
+            .composer_spine
+            .input
+            .projection
+            .as_ref()
+            .map(|p| format!("{:?}", p.active_segment_kind))
+            .unwrap_or_else(|| "none".to_string());
+        tracing::info!(
+            target: "script_kit::acp_spine",
+            event = "refresh_acp_spine_from_composer",
+            text = %text,
+            cursor,
+            owns_list = owns,
+            active_kind = %kind,
+        );
+        if owns {
+            self.mention_session = None;
+            self.dismissed_mention_trigger = None;
+            crate::ai::acp::picker_popup::close_mention_popup_window(cx);
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn acp_spine_owns_list(&self) -> bool {
+        self.composer_spine.owns_list() && self.acp_spine_has_context_projection()
+    }
+
+    fn acp_spine_has_context_projection(&self) -> bool {
+        let Some(kind) = self
+            .composer_spine
+            .input
+            .projection
+            .as_ref()
+            .map(|projection| &projection.active_segment_kind)
+        else {
+            return false;
+        };
+        matches!(
+            kind,
+            crate::spine::SpineSegmentKind::ContextMention { .. }
+                | crate::spine::SpineSegmentKind::SlashCommand { .. }
+                | crate::spine::SpineSegmentKind::Profile { .. }
+                | crate::spine::SpineSegmentKind::Style { .. }
+                | crate::spine::SpineSegmentKind::Capture { .. }
+                | crate::spine::SpineSegmentKind::ProjectCwd { .. }
+        )
+    }
+
+    fn acp_spine_rows(&self) -> Vec<SpineListRow> {
+        self.acp_spine_sections()
+            .into_iter()
+            .flat_map(|section| section.rows)
+            .collect()
+    }
+
+    fn acp_spine_sections(&self) -> Vec<SpineListSection> {
+        if !self.acp_spine_has_context_projection() {
+            return Vec::new();
+        }
+        let Some(projection) = self.composer_spine.input.projection.as_ref() else {
+            return Vec::new();
+        };
+
+        if let crate::spine::SpineSegmentKind::ContextMention {
+            context_type,
+            sub_query,
+        } = &projection.active_segment_kind
+        {
+            if let Some((source, rich_query)) =
+                crate::spine::catalog_subsearch::parse_context_subsearch(
+                    context_type,
+                    sub_query.as_deref(),
+                )
+            {
+                let segment_index = projection.active_segment_index;
+                let Some(segment_byte_range) = self
+                    .composer_spine
+                    .input
+                    .parse
+                    .segments
+                    .get(segment_index)
+                    .map(|segment| segment.byte_range.clone())
+                else {
+                    return Vec::new();
+                };
+
+                return match source {
+                    crate::spine::catalog_subsearch::ContextSubsearchSource::File => {
+                        let files = crate::file_search::search_files(rich_query, None, 10);
+                        vec![self.acp_rich_file_subsearch_section(
+                            rich_query,
+                            segment_index,
+                            segment_byte_range,
+                            &files,
+                        )]
+                    }
+                    crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard => {
+                        let options =
+                            crate::clipboard_history::RootClipboardHistorySectionOptions {
+                                enabled: true,
+                                max_results: 10,
+                                min_query_chars: 0,
+                                ..Default::default()
+                            };
+                        let hits =
+                            crate::clipboard_history::search_root_clipboard_history_meta_direct(
+                                rich_query, options,
+                            );
+                        vec![self.acp_rich_clipboard_subsearch_section(
+                            rich_query,
+                            segment_index,
+                            segment_byte_range,
+                            &hits,
+                        )]
+                    }
+                    crate::spine::catalog_subsearch::ContextSubsearchSource::Notes => {
+                        vec![Self::acp_spine_pending_subsearch_section(
+                            "notes", "@notes:", "note", rich_query,
+                        )]
+                    }
+                    crate::spine::catalog_subsearch::ContextSubsearchSource::BrowserHistory => {
+                        vec![Self::acp_spine_pending_subsearch_section(
+                            "browser",
+                            "@browser:",
+                            "globe",
+                            rich_query,
+                        )]
+                    }
+                    crate::spine::catalog_subsearch::ContextSubsearchSource::Dictation => {
+                        vec![Self::acp_spine_pending_subsearch_section(
+                            "dictation",
+                            "@dictation:",
+                            "mic",
+                            rich_query,
+                        )]
+                    }
+                    crate::spine::catalog_subsearch::ContextSubsearchSource::Notifications => {
+                        vec![Self::acp_spine_pending_subsearch_section(
+                            "notifications",
+                            "@notifications:",
+                            "bell",
+                            rich_query,
+                        )]
+                    }
+                    _ => Vec::new(),
+                };
+            }
+        }
+
+        crate::spine::list::build_spine_list_sections_full(
+            &self.composer_spine.input.parse,
+            projection,
+            None,
+        )
+    }
+
+    fn acp_rich_file_subsearch_section(
+        &self,
+        query: &str,
+        segment_index: usize,
+        segment_byte_range: std::ops::Range<usize>,
+        files: &[crate::file_search::FileResult],
+    ) -> SpineListSection {
+        let trimmed = query.trim();
+        let title = if trimmed.is_empty() {
+            "Files".to_string()
+        } else {
+            format!("Files matching \"{trimmed}\"")
+        };
+        let rows = if files.is_empty() {
+            vec![Self::acp_spine_hint_row(
+                "No files",
+                if trimmed.is_empty() {
+                    "Type after @file: to search"
+                } else {
+                    "No matching files"
+                },
+                Some("file"),
+            )]
+        } else {
+            files
+                .iter()
+                .take(10)
+                .enumerate()
+                .map(|(index, file)| {
+                    let short_path = crate::file_search::shorten_path(&file.path);
+                    let replacement = format!(
+                        "@file:{}",
+                        crate::spine::catalog_subsearch::escape_ref_component(&short_path),
+                    );
+                    SpineListRow {
+                        id: SharedString::from(format!("acp-spine:file:{index}:{}", file.path)),
+                        kind: SpineListRowKind::ContextResult {
+                            context_type: SharedString::from("file"),
+                            result_id: SharedString::from(file.path.clone()),
+                        },
+                        title: SharedString::from(file.name.clone()),
+                        subtitle: Some(SharedString::from(short_path)),
+                        meta: None,
+                        icon: Some(SharedString::from("file")),
+                        badges: Vec::new(),
+                        score: 0,
+                        is_selectable: true,
+                        action_label: Some(SharedString::from("Attach")),
+                        action: SpineListAction::ResolveSegment {
+                            segment_index,
+                            segment_byte_range: segment_byte_range.clone(),
+                            replacement: SharedString::from(replacement),
+                            resolution_id: SharedString::from(file.path.clone()),
+                            resolution_label: SharedString::from(file.name.clone()),
+                            resolution_source: SharedString::from("file"),
+                            trailing_space: true,
+                        },
+                    }
+                })
+                .collect()
+        };
+
+        SpineListSection {
+            id: SharedString::from("acp-spine-section-subsearch:file"),
+            title: SharedString::from(title),
+            subtitle: Some(SharedString::from("@file:")),
+            icon: Some(SharedString::from("file")),
+            rows,
+        }
+    }
+
+    fn acp_rich_clipboard_subsearch_section(
+        &self,
+        query: &str,
+        segment_index: usize,
+        segment_byte_range: std::ops::Range<usize>,
+        hits: &[crate::clipboard_history::ClipboardEntryMeta],
+    ) -> SpineListSection {
+        let trimmed = query.trim();
+        let title = if trimmed.is_empty() {
+            "Recent Clipboard".to_string()
+        } else {
+            format!("Clipboard matching \"{trimmed}\"")
+        };
+        let rows = if hits.is_empty() {
+            vec![Self::acp_spine_hint_row(
+                "No clipboard entries",
+                if trimmed.is_empty() {
+                    "Clipboard is empty"
+                } else {
+                    "No matching clipboard entries"
+                },
+                Some("clipboard"),
+            )]
+        } else {
+            hits.iter()
+                .take(10)
+                .enumerate()
+                .map(|(index, entry)| {
+                    let preview =
+                        crate::spine::text_preview::single_line_truncate(&entry.text_preview, 72);
+                    let replacement = format!(
+                        "@clipboard:{}",
+                        crate::spine::catalog_subsearch::escape_ref_component(&entry.id),
+                    );
+                    SpineListRow {
+                        id: SharedString::from(format!("acp-spine:clipboard:{index}:{}", entry.id)),
+                        kind: SpineListRowKind::ContextResult {
+                            context_type: SharedString::from("clipboard"),
+                            result_id: SharedString::from(entry.id.clone()),
+                        },
+                        title: SharedString::from(preview.clone()),
+                        subtitle: Some(SharedString::from("Clipboard History")),
+                        meta: None,
+                        icon: Some(SharedString::from("clipboard")),
+                        badges: Vec::new(),
+                        score: 0,
+                        is_selectable: true,
+                        action_label: Some(SharedString::from("Attach")),
+                        action: SpineListAction::ResolveSegment {
+                            segment_index,
+                            segment_byte_range: segment_byte_range.clone(),
+                            replacement: SharedString::from(replacement),
+                            resolution_id: SharedString::from(entry.id.clone()),
+                            resolution_label: SharedString::from(format!("Clipboard: {preview}")),
+                            resolution_source: SharedString::from("clipboard"),
+                            trailing_space: true,
+                        },
+                    }
+                })
+                .collect()
+        };
+
+        SpineListSection {
+            id: SharedString::from("acp-spine-section-subsearch:clipboard"),
+            title: SharedString::from(title),
+            subtitle: Some(SharedString::from("@clipboard:")),
+            icon: Some(SharedString::from("clipboard")),
+            rows,
+        }
+    }
+
+    fn acp_spine_pending_subsearch_section(
+        kind: &str,
+        prefix: &str,
+        icon: &str,
+        query: &str,
+    ) -> SpineListSection {
+        let trimmed = query.trim();
+        let title = if trimmed.is_empty() {
+            format!("{prefix} search")
+        } else {
+            format!("{prefix}{trimmed}")
+        };
+        SpineListSection {
+            id: SharedString::from(format!("acp-spine-section-subsearch:{kind}")),
+            title: SharedString::from(title),
+            subtitle: Some(SharedString::from(prefix.to_string())),
+            icon: Some(SharedString::from(icon.to_string())),
+            rows: vec![Self::acp_spine_hint_row(
+                "Coming soon",
+                "Rich search for this source is not wired yet",
+                Some(icon),
+            )],
+        }
+    }
+
+    fn acp_spine_hint_row(title: &str, subtitle: &str, icon: Option<&str>) -> SpineListRow {
+        SpineListRow {
+            id: SharedString::from(format!("acp-spine:hint:{title}:{subtitle}")),
+            kind: SpineListRowKind::Hint,
+            title: SharedString::from(title.to_string()),
+            subtitle: Some(SharedString::from(subtitle.to_string())),
+            meta: None,
+            icon: icon.map(|icon| SharedString::from(icon.to_string())),
+            badges: Vec::new(),
+            score: 0,
+            is_selectable: false,
+            action_label: None,
+            action: SpineListAction::Noop,
+        }
+    }
+
+    fn acp_spine_selectable_rows(&self) -> Vec<SpineListRow> {
+        self.acp_spine_rows()
+            .into_iter()
+            .filter(|row| row.is_selectable)
+            .collect()
+    }
+
+    pub(crate) fn move_acp_spine_selection(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let len = self.acp_spine_selectable_rows().len();
+        if len == 0 {
+            self.composer_spine.selected_index = 0;
+            self.composer_spine.visible_start = 0;
+            cx.notify();
+            return;
+        }
+        let current = self.composer_spine.selected_index.min(len - 1);
+        self.composer_spine.selected_index = if delta < 0 {
+            if current == 0 {
+                len - 1
+            } else {
+                current - 1
+            }
+        } else {
+            (current + 1) % len
+        };
+        let visible = crate::components::inline_dropdown::inline_dropdown_visible_range_from_start(
+            self.composer_spine.visible_start,
+            self.composer_spine.selected_index,
+            len,
+            8,
+        );
+        self.composer_spine.visible_start = visible.start;
+        cx.notify();
+    }
+
+    fn selected_acp_spine_row(&self) -> Option<SpineListRow> {
+        self.acp_spine_selectable_rows()
+            .get(self.composer_spine.selected_index)
+            .cloned()
+    }
+
+    pub(crate) fn accept_acp_spine_projection_row(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(row) = self.selected_acp_spine_row() else {
+            return false;
+        };
+        self.apply_acp_spine_action(row.action, window, cx)
+    }
+
+    fn apply_acp_spine_action(
+        &mut self,
+        action: SpineListAction,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        match action {
+            SpineListAction::InsertSegmentText {
+                segment_index,
+                segment_byte_range,
+                text,
+                trailing_space,
+            } => self.replace_acp_spine_segment(
+                segment_index,
+                segment_byte_range,
+                text.as_ref(),
+                trailing_space,
+                cx,
+            ),
+            SpineListAction::ResolveSegment {
+                segment_index,
+                segment_byte_range,
+                replacement,
+                resolution_id,
+                resolution_label,
+                resolution_source,
+                trailing_space,
+            } => {
+                // CWD resolution mirrors the main-menu behavior: strip the
+                // segment from the composer entirely and apply the path to
+                // the thread so the chip and next prompt run from the chosen
+                // directory. Other sources insert the resolved replacement
+                // token like normal.
+                if resolution_source.as_ref() == "cwd" {
+                    let path = std::path::PathBuf::from(resolution_id.as_ref());
+                    if let Some(thread_entity) = self.thread() {
+                        thread_entity.update(cx, |thread, cx| {
+                            thread.set_cwd(path);
+                            cx.notify();
+                        });
+                    }
+                    let ok = self.replace_acp_spine_segment(
+                        segment_index,
+                        segment_byte_range,
+                        "",
+                        false,
+                        cx,
+                    );
+                    // Bump the view so the script-app observer re-snapshots
+                    // the footer with the new thread.cwd(); otherwise the
+                    // stored snapshot keeps the prior cwd_display.
+                    cx.notify();
+                    return ok;
+                }
+                if resolution_source.as_ref() == "file" {
+                    let full_path = resolution_id.as_ref().to_string();
+                    let short_path = crate::file_search::shorten_path(&full_path);
+                    let token = format!(
+                        "@file:{}",
+                        crate::spine::catalog_subsearch::escape_ref_component(&short_path),
+                    );
+                    let part = crate::ai::message_parts::AiContextPart::FilePath {
+                        path: full_path,
+                        label: resolution_label.as_ref().to_string(),
+                    };
+                    self.typed_mention_aliases.insert(token.clone(), part);
+                    let ok = self.replace_acp_spine_segment(
+                        segment_index,
+                        segment_byte_range,
+                        &token,
+                        trailing_space,
+                        cx,
+                    );
+                    if ok {
+                        self.sync_inline_mentions(cx);
+                    }
+                    return ok;
+                }
+                if resolution_source.as_ref() == "clipboard" {
+                    let part = crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: format!("kit://clipboard-history?id={}", resolution_id.as_ref()),
+                        label: resolution_label.as_ref().to_string(),
+                    };
+                    let ok = self.replace_acp_spine_segment(
+                        segment_index,
+                        segment_byte_range,
+                        replacement.as_ref(),
+                        trailing_space,
+                        cx,
+                    );
+                    if ok {
+                        self.live_thread().update(cx, |thread, cx| {
+                            thread.add_context_part(part.clone(), cx);
+                            cx.notify();
+                        });
+                        self.sync_inline_mentions(cx);
+                    }
+                    return ok;
+                }
+                let ok = self.replace_acp_spine_segment(
+                    segment_index,
+                    segment_byte_range,
+                    replacement.as_ref(),
+                    trailing_space,
+                    cx,
+                );
+                if ok {
+                    self.sync_inline_mentions(cx);
+                }
+                ok
+            }
+            SpineListAction::OpenModeExit { .. }
+            | SpineListAction::OpenConversation { .. }
+            | SpineListAction::Noop => false,
+        }
+    }
+
+    fn replace_acp_spine_segment(
+        &mut self,
+        segment_index: usize,
+        segment_byte_range: std::ops::Range<usize>,
+        replacement: &str,
+        trailing_space: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let current = self.live_thread().read(cx).input.text().to_string();
+        if segment_byte_range.start > segment_byte_range.end
+            || segment_byte_range.end > current.len()
+        {
+            return false;
+        }
+        let Some(segment) = self.composer_spine.input.parse.segments.get(segment_index) else {
+            return false;
+        };
+        if segment.byte_range != segment_byte_range {
+            return false;
+        }
+
+        let prefix = &current[..segment_byte_range.start];
+        let suffix = &current[segment_byte_range.end..];
+        let add_space = trailing_space
+            && !replacement.ends_with(char::is_whitespace)
+            && !suffix.starts_with(char::is_whitespace);
+        let space = if add_space { " " } else { "" };
+        let next_text = format!("{prefix}{replacement}{space}{suffix}");
+        let next_cursor_byte = prefix.len() + replacement.len() + space.len();
+        let next_cursor = crate::spine::input_projection::char_cursor_for_byte_offset(
+            &next_text,
+            next_cursor_byte,
+        );
+
+        self.live_thread().update(cx, |thread, cx| {
+            thread.input.set_text(next_text);
+            thread.input.set_cursor(next_cursor);
+            cx.notify();
+        });
+        self.refresh_acp_spine_from_composer(cx);
+        true
+    }
+
+    pub(crate) fn dismiss_acp_spine_projection(&mut self, cx: &mut Context<Self>) {
+        self.composer_spine.clear();
+        self.mention_session = None;
+        self.dismissed_mention_trigger = None;
+        crate::ai::acp::picker_popup::close_mention_popup_window(cx);
+        cx.notify();
+    }
+
+    /// If the cursor sits immediately after a resolved sigil segment (with
+    /// optional trailing whitespace), remove the entire segment atomically so
+    /// Backspace doesn't peel a resolved `@clipboard ` one char at a time.
+    /// Returns `true` when an atomic removal happened.
+    pub(crate) fn try_atomic_token_backspace(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.is_setup_mode() {
+            return false;
+        }
+        let (text, cursor_chars) = {
+            let thread = self.live_thread().read(cx);
+            (thread.input.text().to_string(), thread.input.cursor())
+        };
+        let cursor_byte =
+            crate::spine::input_projection::byte_offset_for_char_cursor(&text, cursor_chars);
+        let parse = crate::spine::parse_spine(&text);
+        // Find a non-FreeText segment whose end + trailing whitespace lands
+        // exactly at the cursor.
+        let candidate = parse.segments.iter().find(|seg| {
+            if matches!(seg.kind, crate::spine::SpineSegmentKind::FreeText) {
+                return false;
+            }
+            let after = &text[seg.byte_range.end..];
+            let ws_end = seg.byte_range.end
+                + after
+                    .char_indices()
+                    .take_while(|(_, c)| c.is_whitespace())
+                    .last()
+                    .map(|(i, c)| i + c.len_utf8())
+                    .unwrap_or(0);
+            ws_end == cursor_byte && cursor_byte > seg.byte_range.start
+        });
+        let Some(seg) = candidate else {
+            return false;
+        };
+        // Only treat as atomic when the segment body has non-trivial content
+        // beyond the sigil — avoid eating a lone `@` or `/` the user is
+        // mid-typing.
+        let body_len = seg.byte_range.end - seg.byte_range.start;
+        if body_len <= 1 {
+            return false;
+        }
+        let prefix = &text[..seg.byte_range.start];
+        let suffix = &text[cursor_byte..];
+        let next_text = format!("{prefix}{suffix}");
+        let next_cursor =
+            crate::spine::input_projection::char_cursor_for_byte_offset(&next_text, prefix.len());
+        if let Some(thread_entity) = self.thread() {
+            thread_entity.update(cx, |thread, cx| {
+                thread.input.set_text(next_text);
+                thread.input.set_cursor(next_cursor);
+                cx.notify();
+            });
+        }
+        self.refresh_acp_spine_from_composer(cx);
+        true
+    }
+
+    pub(crate) fn try_submit_acp_spine_prompt_plan(&mut self, cx: &mut Context<Self>) -> bool {
+        let (text, cursor) = {
+            let thread = self.live_thread().read(cx);
+            (thread.input.text().to_string(), thread.input.cursor())
+        };
+        self.composer_spine.refresh(&text, cursor);
+        let plan =
+            crate::spine::prompt_plan::build_spine_prompt_plan(&self.composer_spine.input.parse);
+        if !plan.should_submit_to_chat() {
+            return false;
+        }
+        let prompt = plan.normalized_prompt.trim().to_string();
+        let parts = plan.context_parts.clone();
+        if prompt.is_empty() && parts.is_empty() {
+            return false;
+        }
+        self.clear_composer_picker(AcpComposerPickerDismissReason::SubmitStarted, cx);
+        if let Err(error) = self.submit_reused_entry_intent_with_host_context(
+            prompt,
+            parts,
+            "acp_spine_prompt_plan",
+            cx,
+        ) {
+            tracing::warn!(
+                target: "script_kit::spine",
+                event = "acp_spine_prompt_plan_submit_failed",
+                error = %error,
+            );
+            return false;
+        }
+        self.composer_spine.clear();
+        cx.notify();
+        true
+    }
+
+    fn handle_acp_spine_key_down(
+        &mut self,
+        event: &gpui::KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.acp_spine_owns_list() {
+            return false;
+        }
+        let key = event.keystroke.key.as_str();
+        let modifiers = &event.keystroke.modifiers;
+        if modifiers.platform && crate::ui_foundation::is_key_enter(key) {
+            let _ = self.try_submit_acp_spine_prompt_plan(cx);
+            return true;
+        }
+        if crate::ui_foundation::is_key_up(key) {
+            self.move_acp_spine_selection(-1, cx);
+            return true;
+        }
+        if crate::ui_foundation::is_key_down(key) {
+            self.move_acp_spine_selection(1, cx);
+            return true;
+        }
+        if crate::ui_foundation::is_key_enter(key)
+            || (crate::ui_foundation::is_key_tab(key) && !modifiers.shift)
+        {
+            return self.accept_acp_spine_projection_row(window, cx);
+        }
+        if crate::ui_foundation::is_key_escape(key) {
+            self.dismiss_acp_spine_projection(cx);
+            return true;
+        }
+        false
+    }
+
+    fn render_acp_spine_projection_area(
+        &mut self,
+        weak_view: WeakEntity<AcpChatView>,
+        theme: &crate::theme::Theme,
+        _cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        if !self.acp_spine_has_context_projection() {
+            return div().flex_1().min_h(px(0.0)).into_any_element();
+        }
+        if self.composer_spine.input.projection.is_none() {
+            return div().flex_1().min_h(px(0.0)).into_any_element();
+        };
+        let sections = self.acp_spine_sections();
+        let selected_index = self.composer_spine.selected_index;
+        let mut selectable_index = 0usize;
+        let mut children = Vec::new();
+
+        for section in sections {
+            children.push(
+                div()
+                    .id(SharedString::from(format!(
+                        "acp-spine-section-{}",
+                        section.id
+                    )))
+                    .px(px(8.0))
+                    .py(px(5.0))
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(theme.colors.text.muted))
+                    .child(section.title.to_string())
+                    .into_any_element(),
+            );
+            for row in section.rows {
+                let row_selectable_index = selectable_index;
+                let selected = row.is_selectable && row_selectable_index == selected_index;
+                if row.is_selectable {
+                    selectable_index += 1;
+                }
+                let row_id = row.id.to_string();
+                let title = row.title.to_string();
+                let subtitle = row.subtitle.as_ref().map(|s| s.to_string());
+                let action_label = row.action_label.as_ref().map(|s| s.to_string());
+                let action = row.action.clone();
+                let click_view = weak_view.clone();
+                children.push(
+                    div()
+                        .id(SharedString::from(format!("acp-spine-row-{row_id}")))
+                        .w_full()
+                        .px(px(10.0))
+                        .py(px(7.0))
+                        .rounded(px(6.0))
+                        .when(selected, |d| {
+                            d.bg(rgba((theme.colors.accent.selected << 8) | 0x22))
+                        })
+                        .when(row.is_selectable, |d| {
+                            d.cursor_pointer().on_click(move |_event, window, cx| {
+                                if let Some(entity) = click_view.upgrade() {
+                                    entity.update(cx, |chat, cx| {
+                                        chat.composer_spine.selected_index = row_selectable_index;
+                                        chat.apply_acp_spine_action(action.clone(), window, cx);
+                                    });
+                                }
+                            })
+                        })
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap(px(8.0))
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(rgb(theme.colors.text.primary))
+                                        .child(title),
+                                )
+                                .when_some(action_label, |d, label| {
+                                    d.child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(theme.colors.text.muted))
+                                            .child(label),
+                                    )
+                                }),
+                        )
+                        .when_some(subtitle, |d, subtitle| {
+                            d.child(
+                                div()
+                                    .pt(px(2.0))
+                                    .text_xs()
+                                    .text_color(rgb(theme.colors.text.muted))
+                                    .child(subtitle),
+                            )
+                        })
+                        .into_any_element(),
+                );
+            }
+        }
+
+        div()
+            .id("acp-spine-projection")
+            .flex_1()
+            .min_h(px(0.0))
+            .overflow_y_scrollbar()
+            .px(px(8.0))
+            .py(px(6.0))
+            .children(children)
+            .into_any_element()
+    }
+
+    fn render_acp_middle_area(
+        &mut self,
+        is_empty: bool,
+        show_sidecar: bool,
+        ui_variant: AcpChatUiVariant,
+        status_label: &'static str,
+        message_count: usize,
+        context_chip_count: usize,
+        weak_view: WeakEntity<AcpChatView>,
+        theme: &crate::theme::Theme,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        if self.acp_spine_owns_list() {
+            return self.render_acp_spine_projection_area(weak_view, theme, cx);
+        }
+        if is_empty {
+            return div()
+                .flex_grow()
+                .min_h(px(0.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(crate::components::render_acp_empty_guidance(theme))
+                .into_any_element();
+        }
+        if show_sidecar {
+            return div()
+                .flex_1()
+                .min_h(px(0.0))
+                .flex()
+                .flex_row()
+                .child(self.ensure_transcript(cx).into_any_element())
+                .child(Self::render_variant_sidecar(
+                    ui_variant,
+                    status_label,
+                    message_count,
+                    context_chip_count,
+                    theme,
+                ))
+                .into_any_element();
+        }
+        self.ensure_transcript(cx).into_any_element()
     }
 
     // Dedicated selector path retained for setup and legacy automation. Live Agent Chat
@@ -8870,6 +9777,10 @@ impl AcpChatView {
                                                 thread.input.insert_str(&text);
                                                 cx.notify();
                                             });
+                                            this.refresh_acp_spine_from_composer(cx);
+                                            if !this.acp_spine_owns_list() {
+                                                this.refresh_mention_session(cx);
+                                            }
                                             this.cursor_visible = true;
                                         }
                                     }
@@ -8905,6 +9816,10 @@ impl AcpChatView {
                                     thread.input.insert_str("What's on my screen? ");
                                     cx.notify();
                                 });
+                                this.refresh_acp_spine_from_composer(cx);
+                                if !this.acp_spine_owns_list() {
+                                    this.refresh_mention_session(cx);
+                                }
                                 this.attach_menu_open = false;
                                 this.cursor_visible = true;
                                 cx.notify();
@@ -9045,6 +9960,14 @@ impl AcpChatView {
     ///
     /// Called after every input mutation and cursor movement.
     pub(super) fn refresh_mention_session(&mut self, cx: &mut Context<Self>) {
+        if self.acp_spine_owns_list() {
+            self.mention_session = None;
+            self.dismissed_mention_trigger = None;
+            crate::ai::acp::picker_popup::close_mention_popup_window(cx);
+            cx.notify();
+            return;
+        }
+
         if self.is_setup_mode() {
             let had_picker = self.mention_session.take().is_some()
                 || self.dismissed_mention_trigger.take().is_some();
@@ -9246,7 +10169,10 @@ impl AcpChatView {
             thread.input.set_cursor(next_cursor);
             cx.notify();
         });
-        self.refresh_mention_session(cx);
+        self.refresh_acp_spine_from_composer(cx);
+        if !self.acp_spine_owns_list() {
+            self.refresh_mention_session(cx);
+        }
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_picker_hint_applied",
@@ -9282,7 +10208,10 @@ impl AcpChatView {
             prefix,
             cursor_after = next_cursor,
         );
-        self.refresh_mention_session(cx);
+        self.refresh_acp_spine_from_composer(cx);
+        if !self.acp_spine_owns_list() {
+            self.refresh_mention_session(cx);
+        }
         self.sync_inline_mentions(cx);
         self.sync_mention_popup_window_from_cached_parent(cx);
     }
@@ -9612,7 +10541,10 @@ impl AcpChatView {
                     prefix = %payload.prefix,
                     cursor_after = next_cursor,
                 );
-                self.refresh_mention_session(cx);
+                self.refresh_acp_spine_from_composer(cx);
+                if !self.acp_spine_owns_list() {
+                    self.refresh_mention_session(cx);
+                }
                 self.sync_mention_popup_window_from_cached_parent(cx);
                 return;
             }
@@ -11507,7 +12439,10 @@ impl AcpChatView {
             let should_refresh = transition.insert_slash_input;
             self.apply_composer_picker_transition(transition, cx);
             if should_refresh {
-                self.refresh_mention_session(cx);
+                self.refresh_acp_spine_from_composer(cx);
+                if !self.acp_spine_owns_list() {
+                    self.refresh_mention_session(cx);
+                }
             }
             cx.stop_propagation();
             return;
@@ -11572,6 +12507,11 @@ impl AcpChatView {
                 event = "focused_text_locked_input_key_blocked",
                 key = %key,
             );
+            cx.stop_propagation();
+            return;
+        }
+
+        if self.handle_acp_spine_key_down(event, window, cx) {
             cx.stop_propagation();
             return;
         }
@@ -11655,6 +12595,10 @@ impl AcpChatView {
                 thread.input.insert_char('\n');
                 cx.notify();
             });
+            self.refresh_acp_spine_from_composer(cx);
+            if !self.acp_spine_owns_list() {
+                self.refresh_mention_session(cx);
+            }
             cx.stop_propagation();
             return;
         }
@@ -11884,7 +12828,10 @@ impl AcpChatView {
             && key.eq_ignore_ascii_case("v")
             && (self.paste_image_from_clipboard(cx) || self.paste_text_from_clipboard(cx))
         {
-            self.refresh_mention_session(cx);
+            self.refresh_acp_spine_from_composer(cx);
+            if !self.acp_spine_owns_list() {
+                self.refresh_mention_session(cx);
+            }
             cx.stop_propagation();
             return;
         }
@@ -11911,7 +12858,10 @@ impl AcpChatView {
                     thread.input.set_cursor(next_cursor);
                     cx.notify();
                 });
-                self.refresh_mention_session(cx);
+                self.refresh_acp_spine_from_composer(cx);
+                if !self.acp_spine_owns_list() {
+                    self.refresh_mention_session(cx);
+                }
                 self.sync_pasted_clipboard_tokens(cx);
                 self.sync_inline_mentions(cx);
                 cx.notify();
@@ -11933,7 +12883,10 @@ impl AcpChatView {
                     thread.input.set_cursor(next_cursor);
                     cx.notify();
                 });
-                self.refresh_mention_session(cx);
+                self.refresh_acp_spine_from_composer(cx);
+                if !self.acp_spine_owns_list() {
+                    self.refresh_mention_session(cx);
+                }
                 self.sync_pasted_clipboard_tokens(cx);
                 self.sync_inline_mentions(cx);
                 cx.notify();
@@ -11963,7 +12916,10 @@ impl AcpChatView {
                     thread.input.set_cursor(next_cursor);
                     cx.notify();
                 });
-                self.refresh_mention_session(cx);
+                self.refresh_acp_spine_from_composer(cx);
+                if !self.acp_spine_owns_list() {
+                    self.refresh_mention_session(cx);
+                }
                 self.sync_inline_mentions(cx);
                 cx.notify();
                 self.check_for_transient_exit(window, cx);
@@ -11999,7 +12955,10 @@ impl AcpChatView {
                 cx.notify();
             });
             self.sync_pasted_clipboard_tokens(cx);
-            self.refresh_mention_session(cx);
+            self.refresh_acp_spine_from_composer(cx);
+            if !self.acp_spine_owns_list() {
+                self.refresh_mention_session(cx);
+            }
             self.sync_inline_mentions(cx);
             self.check_for_transient_exit(window, cx);
             cx.stop_propagation();
@@ -12292,37 +13251,18 @@ impl Render for AcpChatView {
                         .child(div().text_xs().opacity(0.25).child("esc \u{00d7}")),
                 )
             })
-            // ── Message list (middle, virtualized) ────────────
-            .when(is_empty, |d| {
-                d.child(
-                    div()
-                        .flex_grow()
-                        .min_h(px(0.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(crate::components::render_acp_empty_guidance(&theme)),
-                )
-            })
-            // ── Message list (middle, virtualized) ────────────
-            .child(if variant_config.show_sidecar {
-                div()
-                    .flex_1()
-                    .min_h(px(0.0))
-                    .flex()
-                    .flex_row()
-                    .child(self.ensure_transcript(cx).into_any_element())
-                    .child(Self::render_variant_sidecar(
-                        ui_variant,
-                        status_label,
-                        message_count,
-                        context_chip_count,
-                        &theme,
-                    ))
-                    .into_any_element()
-            } else {
-                self.ensure_transcript(cx).into_any_element()
-            })
+            // ── Message list / ACP Spine projection ───────────
+            .child(self.render_acp_middle_area(
+                is_empty,
+                variant_config.show_sidecar,
+                ui_variant,
+                status_label,
+                message_count,
+                context_chip_count,
+                view_entity.clone(),
+                &theme,
+                cx,
+            ))
             // ── Plan strip ────────────────────────────────────
             .when(!plan_entries.is_empty(), |d| {
                 d.child(

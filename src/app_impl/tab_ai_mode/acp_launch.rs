@@ -105,8 +105,12 @@ impl ScriptListApp {
                 &profile_ctx,
             )
         } else {
-            crate::ai::agent_chat::launch::PiAgentChatLaunch::from_profile(
+            // Apply the Spine cwd chip as the agent's working directory. The Pi
+            // runtime bakes cwd at spawn time and ignores per-turn cwd, so this
+            // must be set on the launch spec, not via AcpThread::set_cwd.
+            crate::ai::agent_chat::launch::PiAgentChatLaunch::from_profile_with_cwd_override(
                 effective_profile.clone(),
+                self.spine_cwd_for_acp_launch(),
             )
         };
         match pi_launch_result {
@@ -396,6 +400,75 @@ impl ScriptListApp {
         match (prompt_type, pending_script_list_trigger) {
             ("ScriptList", Some(trigger @ ('/' | '@' | '|'))) => Some(trigger.to_string()),
             _ => None,
+        }
+    }
+
+    /// The working directory to launch the agent in, derived from the Spine cwd
+    /// chip. Returns `None` (use the profile/default cwd) unless the user has
+    /// *explicitly* picked a cwd (revision > 0) and it is still a directory.
+    ///
+    /// The startup default (`~/.scriptkit`, revision 0) intentionally does not
+    /// override the profile's launch cwd, so default launches keep hitting the
+    /// startup-warmed session and the General profile's scratch directory.
+    pub(crate) fn spine_cwd_for_acp_launch(&self) -> Option<std::path::PathBuf> {
+        if self.spine_cwd_revision == 0 {
+            return None;
+        }
+        let cwd = self.spine_cwd.as_ref()?;
+        if cwd.is_dir() {
+            Some(cwd.clone())
+        } else {
+            tracing::warn!(
+                target: "script_kit::spine",
+                event = "spine_cwd_for_acp_launch_not_a_dir",
+                cwd = %cwd.display(),
+                "Spine cwd is not a directory; falling back to profile cwd"
+            );
+            None
+        }
+    }
+
+    /// Start warming a Pi Agent Chat session for the current Spine cwd so a
+    /// later Cmd+Enter acquires a ready warm session with the correct working
+    /// directory instead of missing (which would surface the "try again"
+    /// toast). Invoked when the user picks a cwd.
+    pub(crate) fn prewarm_acp_for_spine_cwd(&self, cx: &mut Context<Self>) {
+        let _ = cx;
+        let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+        let ai_preferences = crate::config::load_user_preferences().ai;
+        let effective_profile = crate::ai::agent_chat::profiles::resolve_effective_profile(
+            &ai_preferences,
+            &profile_ctx,
+        );
+        match crate::ai::agent_chat::launch::PiAgentChatLaunch::from_profile_with_cwd_override(
+            effective_profile,
+            self.spine_cwd_for_acp_launch(),
+        ) {
+            Ok(pi_launch) => {
+                let manager = crate::ai::agent_chat::launch::warm_session_manager();
+                if let Err(error) = manager.prepare_warm_background(pi_launch.warm_spec()) {
+                    tracing::warn!(
+                        target: "script_kit::spine",
+                        event = "prewarm_acp_for_spine_cwd_failed",
+                        warm_key = %pi_launch.warm_key,
+                        error = %error,
+                    );
+                } else {
+                    tracing::info!(
+                        target: "script_kit::spine",
+                        event = "prewarm_acp_for_spine_cwd",
+                        warm_key = %pi_launch.warm_key,
+                        cwd = %pi_launch.cwd.display(),
+                    );
+                }
+            }
+            Err(error) => {
+                tracing::debug!(
+                    target: "script_kit::spine",
+                    event = "prewarm_acp_for_spine_cwd_resolution_failed",
+                    error = %error,
+                );
+            }
         }
     }
 }

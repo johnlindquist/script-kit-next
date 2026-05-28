@@ -708,4 +708,45 @@ mod tests {
         }
         assert!(prev_end <= input.len(), "Last segment extends past input");
     }
+
+    #[test]
+    fn cwd_plus_file_plus_freetext() {
+        let input = ">:dev @file:README.md explain setup";
+        let parse = parse_spine(input);
+
+        for seg in &parse.segments {
+            assert!(
+                input.is_char_boundary(seg.byte_range.start),
+                "Invalid start boundary"
+            );
+            assert!(
+                input.is_char_boundary(seg.byte_range.end),
+                "Invalid end boundary"
+            );
+            assert_eq!(
+                &input[seg.byte_range.clone()],
+                seg.raw,
+                "Byte range doesn't match raw for {:?}",
+                seg.kind
+            );
+        }
+
+        assert!(
+            parse.segments.len() >= 3,
+            "Expected 3+ segments, got {}",
+            parse.segments.len()
+        );
+        assert!(matches!(
+            &parse.segments[0].kind,
+            SpineSegmentKind::ProjectCwd { sub_query: Some(sq) }
+            if sq == "dev"
+        ));
+        assert!(matches!(
+            &parse.segments[1].kind,
+            SpineSegmentKind::ContextMention { context_type, sub_query: Some(sq) }
+            if context_type == "file" && sq == "README.md"
+        ));
+        assert!(matches!(parse.segments[2].kind, SpineSegmentKind::FreeText));
+        assert_eq!(parse.segments[2].raw, "explain setup");
+    }
 }

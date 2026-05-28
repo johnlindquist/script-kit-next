@@ -2136,10 +2136,10 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     && view.main_window_mode == MainWindowMode::Mini
                                 {
                                     let (grouped_items, _) = view.get_grouped_results_cached();
-                                    let sizing = crate::window_resize::mini_main_window_sizing_from_grouped_items(&grouped_items);
+                                    let sizing = crate::window_resize::main_window_sizing_from_grouped_items(&grouped_items);
                                     gpui::size(
-                                        px(crate::window_resize::width_for_view(ViewType::MiniMainWindow).unwrap_or(750.0)),
-                                        crate::window_resize::height_for_mini_main_window(sizing),
+                                        px(crate::window_resize::width_for_view(ViewType::MainWindow).unwrap_or(750.0)),
+                                        crate::window_resize::height_for_main_window(sizing),
                                     )
                                 } else if let Some((view_type, item_count)) = view.calculate_window_size_params_with_app(Some(&*ctx)) {
                                     gpui::size(

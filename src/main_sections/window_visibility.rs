@@ -155,11 +155,11 @@ fn show_main_window_helper(
         {
             let (grouped_items, _) = view.get_grouped_results_cached();
             let sizing =
-                crate::window_resize::mini_main_window_sizing_from_grouped_items(&grouped_items);
-            let target = crate::window_resize::MainMenuSizingTarget::Mini(sizing);
+                crate::window_resize::main_window_sizing_from_grouped_items(&grouped_items);
+            let target = crate::window_resize::MainMenuSizingTarget(sizing);
             gpui::size(px(target.width()), target.height())
         } else if matches!(view.current_view, AppView::ScriptList) {
-            let target = crate::window_resize::MainMenuSizingTarget::Full;
+            let target = crate::window_resize::MainMenuSizingTarget(crate::window_resize::MainWindowSizing::default());
             gpui::size(px(target.width()), target.height())
         } else if let Some((view_type, item_count)) =
             view.calculate_window_size_params_with_app(Some(&*ctx))
@@ -445,7 +445,7 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     // Uses the pre-reset mini snapshot too, so Full/mini normalization inside
     // reset_to_script_list cannot skip hidden mini-bound cleanup.
     if should_reset_to_mini_bounds {
-        crate::window_resize::resize_to_mini_main_window_sync(Default::default());
+        crate::window_resize::resize_to_main_window_sync(Default::default());
         sync_main_automation_window(current_main_automation_bounds(), false, false);
     }
 

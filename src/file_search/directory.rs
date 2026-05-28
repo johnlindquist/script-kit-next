@@ -481,8 +481,19 @@ pub fn parse_directory_path(path: &str) -> Option<ParsedDirPath> {
 
     // Handle paths ending with / - they're complete directory paths
     if trimmed.ends_with('/') {
+        // Bare disk root ("/" or repeated slashes) trims to an empty string,
+        // which would fail `expand_path`. The root is always a valid directory,
+        // so recognize it explicitly (e.g. Backspace from "~/" lands here).
+        let without_trailing = trimmed.trim_end_matches('/');
+        if without_trailing.is_empty() {
+            return Some(ParsedDirPath {
+                directory: "/".to_string(),
+                filter: None,
+                show_hidden: path_requests_hidden_entries(trimmed, None),
+            });
+        }
         // Verify the directory exists
-        if let Some(expanded) = expand_path(trimmed.trim_end_matches('/')) {
+        if let Some(expanded) = expand_path(without_trailing) {
             let p = Path::new(&expanded);
             if p.is_dir() {
                 return Some(ParsedDirPath {
@@ -761,6 +772,15 @@ mod tests {
         assert_eq!(parse_directory_path("~"), parsed("~/", None, false));
         assert_eq!(parse_directory_path("~/"), parsed("~/", None, false));
         assert_eq!(parse_directory_path(" ~/ "), parsed("~/", None, false));
+    }
+
+    #[test]
+    fn parse_directory_path_recognizes_bare_disk_root() {
+        // Backspace from "~/" in the cwd picker lands on "/". The disk root is
+        // a real directory and must parse so it seeds synchronously instead of
+        // falling through to the Spotlight search path.
+        assert_eq!(parse_directory_path("/"), parsed("/", None, false));
+        assert_eq!(parse_directory_path(" / "), parsed("/", None, false));
     }
 
     #[test]

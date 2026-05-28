@@ -7,7 +7,7 @@ use super::{
     SpineCursorProjection, SpineParse, SpineSegment, SpineSegmentKind, SpineSegmentResolution,
 };
 
-pub const SPINE_LIST_MODEL_VERSION: u64 = 5;
+pub const SPINE_LIST_MODEL_VERSION: u64 = 6;
 pub const SPINE_LIST_RESOLUTION_GENERATION: u64 = 0;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -320,7 +320,7 @@ pub(crate) fn build_spine_list_sections_full(
             )]
         }
         SpineSegmentKind::FreeText if projection_is_prompt_builder_tail(parse, projection) => {
-            build_tail_history_sections(parse, projection)
+            vec![build_prompt_builder_tail_section(parse)]
         }
         SpineSegmentKind::FreeText => Vec::new(),
     }
@@ -499,6 +499,129 @@ fn build_mode_exit_section(
                 sigil,
                 rest: ss(rest.to_string()),
             },
+        }],
+    }
+}
+
+const PROMPT_BUILDER_VISIBLE_LABEL_LIMIT: usize = 4;
+
+fn prompt_builder_segment_label(segment: &SpineSegment) -> Option<String> {
+    if !is_prompt_builder_segment_kind(&segment.kind) {
+        return None;
+    }
+
+    if let SpineSegmentResolution::Resolved { label, .. } = &segment.resolution {
+        let label = normalize_prompt_builder_label(label);
+        if !label.is_empty() {
+            return Some(label);
+        }
+    }
+
+    let fallback = match &segment.kind {
+        SpineSegmentKind::ContextMention { context_type, .. } => context_type.as_str(),
+        SpineSegmentKind::SlashCommand { command } => command.as_str(),
+        SpineSegmentKind::Profile { profile_id } => profile_id.as_str(),
+        SpineSegmentKind::Style { style_id } => style_id.as_str(),
+        SpineSegmentKind::ProjectCwd { sub_query } => {
+            sub_query.as_deref().unwrap_or_else(|| segment.raw.as_str())
+        }
+        _ => return None,
+    };
+
+    let label = normalize_prompt_builder_label(fallback);
+    if label.is_empty() {
+        None
+    } else {
+        Some(label)
+    }
+}
+
+fn normalize_prompt_builder_label(raw: &str) -> String {
+    let mut value = raw.trim();
+
+    if let Some(rest) = value.strip_prefix(">:") {
+        value = rest;
+    } else if let Some(rest) = value.strip_prefix('@') {
+        value = rest;
+    } else if let Some(rest) = value.strip_prefix('/') {
+        value = rest;
+    } else if let Some(rest) = value.strip_prefix('|') {
+        value = rest;
+    } else if let Some(rest) = value.strip_prefix('.') {
+        value = rest;
+    } else if let Some(rest) = value.strip_prefix('>') {
+        value = rest;
+    }
+
+    value = value.trim_end_matches(':').trim();
+    humanize_label(value)
+}
+
+fn humanize_label(raw: &str) -> String {
+    raw.replace('-', " ")
+        .replace('_', " ")
+        .split_whitespace()
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(first) => {
+                    let mut out = String::new();
+                    out.extend(first.to_uppercase());
+                    out.push_str(chars.as_str());
+                    out
+                }
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn prompt_builder_tail_summary(labels: &[String]) -> String {
+    if labels.is_empty() {
+        return "Press Cmd+Enter to send".to_string();
+    }
+
+    let visible_count = labels.len().min(PROMPT_BUILDER_VISIBLE_LABEL_LIMIT);
+    let mut summary = labels[..visible_count].join(" · ");
+    let remaining = labels.len().saturating_sub(visible_count);
+    if remaining > 0 {
+        let noun = if remaining == 1 {
+            "more item"
+        } else {
+            "more items"
+        };
+        let _ = write!(summary, " · +{remaining} {noun}");
+    }
+    summary.push_str(" → Cmd+Enter");
+    summary
+}
+
+fn build_prompt_builder_tail_section(parse: &SpineParse) -> SpineListSection {
+    let attached_labels: Vec<String> = parse
+        .segments
+        .iter()
+        .filter_map(prompt_builder_segment_label)
+        .collect();
+    let attached_summary = prompt_builder_tail_summary(&attached_labels);
+
+    SpineListSection {
+        id: ss("spine-section-tail-ready"),
+        title: ss("Prompt Builder"),
+        subtitle: Some(ss("Review prompt context before sending")),
+        icon: Some(ss("sparkles")),
+        rows: vec![SpineListRow {
+            id: ss("spine:tail:ready"),
+            kind: SpineListRowKind::Hint,
+            title: ss("Ready to send"),
+            subtitle: Some(ss(attached_summary)),
+            meta: None,
+            icon: Some(ss("send")),
+            badges: vec![],
+            score: i32::MAX,
+            is_selectable: true,
+            action_label: Some(ss("Send")),
+            action: SpineListAction::Noop,
         }],
     }
 }
@@ -822,11 +945,8 @@ mod tests {
             .find(|row| row.id.as_ref() == "spine:@:builtin:selection")
             .expect("expected @selection row");
 
-        assert_eq!(row.title.as_ref(), "@Selection");
-        assert_eq!(
-            row.meta.as_ref().map(|meta| meta.as_ref()),
-            Some("@selection")
-        );
+        assert_eq!(row.title.as_ref(), "Selection");
+        assert!(row.meta.is_none());
 
         match &row.action {
             SpineListAction::ResolveSegment {
@@ -855,28 +975,19 @@ mod tests {
         let proj = project_cursor(&parse, parse.input.len());
         assert!(projection_is_prompt_builder_tail(&parse, &proj));
         let sections = build_spine_list_sections(&parse, &proj);
-        assert!(
-            sections
-                .iter()
-                .any(|section| section.title.as_ref() == "Recent Prompts"),
-            "expected Recent Prompts section, got: {:?}",
-            sections
-                .iter()
-                .map(|s| s.title.as_ref())
-                .collect::<Vec<_>>()
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].title.as_ref(), "Prompt Builder");
+        let row = sections[0].rows.first().expect("expected ready row");
+        assert_eq!(row.title.as_ref(), "Ready to send");
+        assert_eq!(
+            row.subtitle.as_ref().map(|s| s.as_ref()),
+            Some("Selection · Rewrite → Cmd+Enter")
         );
-        assert!(
-            sections
-                .iter()
-                .any(|section| section.title.as_ref() == "Conversations"),
-            "expected Conversations section"
-        );
+        assert!(row.meta.is_none());
     }
 
     #[test]
-    fn synthetic_tail_projection_builds_history_sections() {
-        // Simulates what force_spine_tail_projection_after_trailing_space does
-        // for "@selection /rewrite " with trailing space
+    fn synthetic_tail_projection_builds_prompt_builder_tail() {
         let parse = parse_spine("@selection /rewrite ");
         let synthetic_proj = SpineCursorProjection {
             active_segment_index: parse.segments.len(),
@@ -887,18 +998,14 @@ mod tests {
         };
         assert!(projection_is_prompt_builder_tail(&parse, &synthetic_proj));
         let sections = build_spine_list_sections(&parse, &synthetic_proj);
-        assert!(
-            sections
-                .iter()
-                .any(|section| section.title.as_ref() == "Recent Prompts"),
-            "expected Recent Prompts section"
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].title.as_ref(), "Prompt Builder");
+        let row = sections[0].rows.first().expect("expected ready row");
+        assert_eq!(
+            row.subtitle.as_ref().map(|s| s.as_ref()),
+            Some("Selection · Rewrite → Cmd+Enter")
         );
-        assert!(
-            sections
-                .iter()
-                .any(|section| section.title.as_ref() == "Conversations"),
-            "expected Conversations section"
-        );
+        assert!(row.meta.is_none());
     }
 
     #[test]
@@ -934,7 +1041,7 @@ mod tests {
             .find(|row| row.id.as_ref() == "spine:@:subsearch:file")
             .expect("expected @file: subsearch row");
 
-        assert_eq!(row.title.as_ref(), "@file:");
+        assert_eq!(row.title.as_ref(), "Files");
 
         match &row.action {
             SpineListAction::InsertSegmentText {

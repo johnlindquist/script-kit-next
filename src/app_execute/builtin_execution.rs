@@ -463,7 +463,7 @@ impl PermissionCommandBuiltinAction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum UtilityOpenBuiltinAction {
-    MiniMainWindow,
+    MainWindow,
     ScratchPad,
     QuickTerminal,
     ClaudeCode,
@@ -473,7 +473,7 @@ enum UtilityOpenBuiltinAction {
 impl UtilityOpenBuiltinAction {
     fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
         match command {
-            builtins::UtilityCommandType::MiniMainWindow => Some(Self::MiniMainWindow),
+            builtins::UtilityCommandType::MainWindow => Some(Self::MainWindow),
             builtins::UtilityCommandType::ScratchPad => Some(Self::ScratchPad),
             builtins::UtilityCommandType::QuickTerminal => Some(Self::QuickTerminal),
             builtins::UtilityCommandType::ClaudeCode => Some(Self::ClaudeCode),
@@ -488,7 +488,7 @@ impl UtilityOpenBuiltinAction {
 
     fn opening_message(self) -> Option<&'static str> {
         match self {
-            Self::MiniMainWindow => Some("Opening Mini Main Window"),
+            Self::MainWindow => Some("Opening Main Window"),
             Self::ScratchPad | Self::QuickTerminal | Self::ClaudeCode | Self::ProcessManager => {
                 None
             }
@@ -497,7 +497,7 @@ impl UtilityOpenBuiltinAction {
 
     fn success_detail(self) -> &'static str {
         match self {
-            Self::MiniMainWindow => "open_mini_main_window",
+            Self::MainWindow => "open_main_window",
             Self::ScratchPad => "open_scratch_pad",
             Self::QuickTerminal => "open_quick_terminal",
             Self::ClaudeCode => "open_claude_code_terminal",
@@ -797,7 +797,7 @@ enum UtilityCommandBuiltinAction {
 impl UtilityCommandBuiltinAction {
     fn from_command(command: builtins::UtilityCommandType) -> Self {
         match command {
-            builtins::UtilityCommandType::MiniMainWindow
+            builtins::UtilityCommandType::MainWindow
             | builtins::UtilityCommandType::ScratchPad
             | builtins::UtilityCommandType::QuickTerminal
             | builtins::UtilityCommandType::ClaudeCode
@@ -3313,7 +3313,7 @@ impl ScriptListApp {
     /// state are always set the same way.
     ///
     /// `expanded` picks the window sizing contract: `false` matches the main
-    /// menu's compact 480×440 (Mini) window for light-weight pickers like
+    /// window's 480px height for light-weight pickers like
     /// emoji / apps / browser tabs / window switcher; `true` uses the wide
     /// full-width window for info-heavy views like clipboard history while
     /// preserving the mini window height so the shared input does not shift.
@@ -3336,14 +3336,14 @@ impl ScriptListApp {
                 cx,
                 "open_builtin_filterable_view",
             );
-            resize_to_view_sync(ViewType::ExpandedMainWindow, 0);
+            resize_to_view_sync(ViewType::MainWindow, 0);
         } else {
             self.set_main_window_mode_state_only(
                 MainWindowMode::Mini,
                 cx,
                 "open_builtin_filterable_view",
             );
-            resize_to_view_sync(ViewType::MiniMainWindow, 0);
+            resize_to_view_sync(ViewType::MainWindow, 0);
         }
         self.pending_focus = Some(FocusTarget::MainFilter);
         self.focused_input = FocusedInput::MainFilter;
@@ -3375,13 +3375,13 @@ impl ScriptListApp {
             .scroll_to_reveal_item(start_index);
     }
 
-    fn open_mini_main_window(&mut self, cx: &mut Context<Self>) {
+    fn open_main_window(&mut self, cx: &mut Context<Self>) {
         self.filter_text.clear();
         self.computed_filter_text.clear();
         self.pending_filter_sync = true;
         self.pending_placeholder = Some("Search scripts, apps, and commands…".to_string());
         self.show_script_list_with_main_filter_focus();
-        self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, "open_mini_main_window");
+        self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, "open_main_window");
         self.hovered_index = None;
         self.selected_index = 0;
         self.opened_from_main_menu = true;
@@ -3394,7 +3394,7 @@ impl ScriptListApp {
             crate::list_item::GroupedListState::from_items(&grouped_items).first_selectable;
         self.selected_index = first_selectable;
         tracing::info!(
-            event = "open_mini_main_window",
+            event = "open_main_window",
             item_count = item_count,
             selected_index = self.selected_index,
             first_selectable = first_selectable,
@@ -3402,11 +3402,11 @@ impl ScriptListApp {
             computed_filter = %self.computed_filter_text,
             filter_text = %self.filter_text,
             pending_filter_sync = self.pending_filter_sync,
-            "open_mini_main_window: items={}, selected={}",
+            "open_main_window: items={}, selected={}",
             item_count,
             self.selected_index,
         );
-        resize_to_view_sync(ViewType::MiniMainWindow, item_count);
+        resize_to_view_sync(ViewType::MainWindow, item_count);
         cx.notify();
     }
 
@@ -3435,7 +3435,7 @@ impl ScriptListApp {
             cx,
             "open_ai_vault_source_filter",
         );
-        resize_to_view_sync(ViewType::MiniMainWindow, item_count);
+        resize_to_view_sync(ViewType::MainWindow, item_count);
         cx.notify();
     }
 
@@ -3473,14 +3473,14 @@ impl ScriptListApp {
                 cx,
                 "open_builtin_filterable_view_with_filter",
             );
-            resize_to_view_sync(ViewType::ExpandedMainWindow, 0);
+            resize_to_view_sync(ViewType::MainWindow, 0);
         } else {
             self.set_main_window_mode_state_only(
                 MainWindowMode::Mini,
                 cx,
                 "open_builtin_filterable_view_with_filter",
             );
-            resize_to_view_sync(ViewType::MiniMainWindow, 0);
+            resize_to_view_sync(ViewType::MainWindow, 0);
         }
         self.pending_focus = Some(FocusTarget::MainFilter);
         self.focused_input = FocusedInput::MainFilter;
@@ -5086,7 +5086,7 @@ impl ScriptListApp {
         }
 
         match action {
-            UtilityOpenBuiltinAction::MiniMainWindow => self.open_mini_main_window(cx),
+            UtilityOpenBuiltinAction::MainWindow => self.open_main_window(cx),
             UtilityOpenBuiltinAction::ScratchPad => self.open_scratch_pad(cx),
             UtilityOpenBuiltinAction::QuickTerminal => self.open_quick_terminal(None, cx),
             UtilityOpenBuiltinAction::ClaudeCode => self.open_claude_code_terminal(cx),

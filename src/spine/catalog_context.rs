@@ -90,6 +90,16 @@ const PENALTY_SUBSTRING: i32 = 1000;
 const CATEGORY_PENALTY_BUILTIN: i32 = 0;
 const CATEGORY_PENALTY_SUBSEARCH: i32 = 50;
 
+fn truncate_display(value: &str, max_chars: usize) -> String {
+    let compact: String = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    if compact.chars().count() <= max_chars {
+        return compact;
+    }
+    let mut truncated: String = compact.chars().take(max_chars.saturating_sub(1)).collect();
+    truncated.push('…');
+    truncated
+}
+
 fn normalized_context_query(query: &str) -> String {
     query
         .trim()
@@ -181,16 +191,14 @@ fn build_builtin_context_row(
 
     let slug = mention_slug(mention);
 
-    let live_title = live_preview.and_then(|lp| lp.title_for_context_kind(spec.kind));
-
-    let title = match &live_title {
-        Some(content) => format!("@{}: {content}", spec.label),
-        None => format!("@{}", spec.label),
-    };
+    let title = spec.label.to_string();
 
     let subtitle = live_preview
-        .map(|lp| lp.subtitle_for_context_kind(spec.kind))
-        .unwrap_or_else(|| spec.action_title.to_string());
+        .map(|lp| {
+            let s = lp.subtitle_for_context_kind(spec.kind);
+            truncate_display(&s, 76)
+        })
+        .unwrap_or_else(|| truncate_display(spec.action_title, 76));
 
     Some(SpineListRow {
         id: ss(format!("spine:@:builtin:{slug}")),
@@ -199,9 +207,9 @@ fn build_builtin_context_row(
         },
         title: ss(title),
         subtitle: Some(ss(subtitle)),
-        meta: Some(ss(mention)),
+        meta: None,
         icon: Some(ss(icon_for_context_kind(spec.kind))),
-        badges: vec![ss("@")],
+        badges: vec![],
         score: context_row_score(match_penalty, CATEGORY_PENALTY_BUILTIN, rank),
         is_selectable: true,
         action_label: Some(ss("Attach")),
@@ -233,11 +241,11 @@ fn build_subsearch_context_row(
         kind: SpineListRowKind::ContextSubSearch {
             context_type: ss(spec.prefix),
         },
-        title: ss(prefix_text.clone()),
+        title: ss(spec.title),
         subtitle: Some(ss(spec.subtitle)),
-        meta: Some(ss(spec.title)),
+        meta: None,
         icon: Some(ss(spec.icon)),
-        badges: vec![ss("@"), ss("search")],
+        badges: vec![],
         score: context_row_score(match_penalty, CATEGORY_PENALTY_SUBSEARCH, rank),
         is_selectable: true,
         action_label: Some(ss("Browse")),
@@ -363,7 +371,7 @@ mod tests {
         let titles: Vec<&str> = rows.iter().map(|r| r.title.as_ref()).collect();
         let file_pos = titles
             .iter()
-            .position(|t| t.contains("file"))
+            .position(|t| t.to_ascii_lowercase().contains("file"))
             .expect("@file: row missing");
         let notif_pos = titles
             .iter()

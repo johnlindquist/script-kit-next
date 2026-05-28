@@ -8,11 +8,11 @@ impl ScriptListApp {
         let layout_view_type = match &self.current_view {
             AppView::ScriptList => match self.main_window_mode {
                 MainWindowMode::Full => crate::window_resize::ViewType::ScriptList,
-                MainWindowMode::Mini => crate::window_resize::ViewType::MiniMainWindow,
+                MainWindowMode::Mini => crate::window_resize::ViewType::MainWindow,
             },
             AppView::FileSearchView { presentation, .. } => match presentation {
-                FileSearchPresentation::Full => crate::window_resize::ViewType::ExpandedMainWindow,
-                FileSearchPresentation::Mini => crate::window_resize::ViewType::MiniMainWindow,
+                FileSearchPresentation::Full => crate::window_resize::ViewType::MainWindow,
+                FileSearchPresentation::Mini => crate::window_resize::ViewType::MainWindow,
             },
             AppView::ClipboardHistoryView { .. }
             | AppView::ThemeChooserView { .. }
@@ -21,7 +21,7 @@ impl ScriptListApp {
             | AppView::AcpHistoryView { .. }
             | AppView::BrowserHistoryView { .. }
             | AppView::DictationHistoryView { .. }
-            | AppView::NotesBrowseView { .. } => crate::window_resize::ViewType::ExpandedMainWindow,
+            | AppView::NotesBrowseView { .. } => crate::window_resize::ViewType::MainWindow,
             AppView::AppLauncherView { .. }
             | AppView::WindowSwitcherView { .. }
             | AppView::BrowserTabsView { .. }
@@ -34,7 +34,7 @@ impl ScriptListApp {
             | AppView::CurrentAppCommandsView { .. }
             | AppView::SearchAiPresetsView { .. }
             | AppView::SettingsView { .. }
-            | AppView::FavoritesBrowseView { .. } => crate::window_resize::ViewType::MiniMainWindow,
+            | AppView::FavoritesBrowseView { .. } => crate::window_resize::ViewType::MainWindow,
             _ => crate::window_resize::ViewType::ScriptList,
         };
         let window_width =
@@ -42,7 +42,7 @@ impl ScriptListApp {
         let window_height = f32::from(crate::window_resize::height_for_view(layout_view_type, 0));
         let uses_split_preview = matches!(
             layout_view_type,
-            crate::window_resize::ViewType::ExpandedMainWindow
+            crate::window_resize::ViewType::MainWindow
                 | crate::window_resize::ViewType::ScriptList
         );
 
@@ -261,7 +261,7 @@ impl ScriptListApp {
             };
         }
 
-        // Script list: full width for MiniMainWindow, left panel for split-preview surfaces.
+        // Script list: full width for MainWindow, left panel for split-preview surfaces.
         components.push(
             LayoutComponentInfo::new("ScriptList", LayoutComponentType::List)
                 .with_bounds(0.0, content_top, list_width, content_height)

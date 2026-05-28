@@ -1206,7 +1206,7 @@ fn render_action_chip(label: &'static str, key: String, width: f32) -> AnyElemen
         .colors
         .text
         .primary
-        .with_opacity(crate::window_resize::mini_layout::HINT_TEXT_OPACITY)
+        .with_opacity(crate::window_resize::main_layout::HINT_TEXT_OPACITY)
         .to_rgb();
     let shortcut_colors = crate::components::hint_strip::whisper_inline_shortcut_colors(
         footer_text.into(),

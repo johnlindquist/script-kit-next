@@ -42,8 +42,8 @@ impl ScriptListApp {
 
         let (grouped_items, _) = self.get_grouped_results_cached();
         let sizing =
-            crate::window_resize::mini_main_window_sizing_from_grouped_items(&grouped_items);
-        let target = crate::window_resize::MainMenuSizingTarget::Mini(sizing);
+            crate::window_resize::main_window_sizing_from_grouped_items(&grouped_items);
+        let target = crate::window_resize::MainMenuSizingTarget(sizing);
         let window_size = size(px(target.width()), target.height());
         let bounds = calculate_eye_line_bounds_on_mouse_display(window_size);
         platform::move_first_window_to_bounds(&bounds);

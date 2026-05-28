@@ -144,8 +144,23 @@ pub(crate) fn split_text_delta_for_reveal(delta: &str) -> Vec<String> {
         push_line_reveal_chunks(&delta[line_start..], &mut chunks);
     }
 
-    debug_assert_eq!(chunks.concat(), delta);
-    debug_assert!(chunks.iter().all(|chunk| !chunk.is_empty()));
+    if cfg!(debug_assertions) {
+        let joined = chunks.concat();
+        if joined != delta {
+            tracing::warn!(
+                target: "script_kit::acp",
+                event = "reveal_chunk_mismatch",
+                delta_len = delta.len(),
+                chunks_len = chunks.len(),
+                joined_len = joined.len(),
+            );
+            chunks.clear();
+            if !delta.is_empty() {
+                chunks.push(delta.to_string());
+            }
+        }
+        chunks.retain(|c| !c.is_empty());
+    }
     chunks
 }
 

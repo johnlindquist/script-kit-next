@@ -87,6 +87,16 @@ pub struct ActiveFooterLeftInfoSnapshot {
     pub icon_token: Option<String>,
     pub action: Option<String>,
     pub selected: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cwd_chip: Option<ActiveFooterCwdChipSnapshot>,
+}
+
+/// CWD chip surfaced in the footer's left-info slot.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveFooterCwdChipSnapshot {
+    pub label: String,
+    pub icon_token: String,
 }
 
 /// Machine-readable footer button state for `getState.activeFooter`.

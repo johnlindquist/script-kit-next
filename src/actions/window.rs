@@ -2300,7 +2300,7 @@ mod actions_popup_origin_tests {
     use gpui::{px, Bounds, Point, Size};
 
     #[test]
-    fn top_center_centers_inside_mini_main_window() {
+    fn top_center_centers_inside_main_window() {
         let origin = actions_popup_origin(
             Bounds {
                 origin: Point {

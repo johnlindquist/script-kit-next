@@ -4,10 +4,10 @@ use std::sync::Once;
 static MAIN_FOOTER_ACTION_LISTENER: Once = Once::new();
 
 /// Thin wrapper delegating to the canonical implementation in `window_resize`.
-fn mini_main_window_sizing_from_grouped_items(
+fn main_window_sizing_from_grouped_items(
     grouped_items: &[GroupedListItem],
-) -> crate::window_resize::MiniMainWindowSizing {
-    crate::window_resize::mini_main_window_sizing_from_grouped_items(grouped_items)
+) -> crate::window_resize::MainWindowSizing {
+    crate::window_resize::main_window_sizing_from_grouped_items(grouped_items)
 }
 
 pub(crate) fn compact_ai_view_type_for_mode(mode: MainWindowMode) -> ViewType {
@@ -382,6 +382,35 @@ impl ScriptListApp {
                     );
                 }
             }
+            crate::footer_popup::FooterAction::Cwd => {
+                // Click on the CWD chip → open the directory picker the
+                // same way Tab does (see startup.rs tab_interceptor
+                // ScriptList arm). Works from ScriptList; from other views
+                // we first return to the launcher.
+                tracing::info!(
+                    target: "script_kit::footer_popup",
+                    event = "main_window_footer_cwd_chip_clicked",
+                    view = ?self.current_view,
+                    "Opening CWD picker from footer chip"
+                );
+                if !matches!(self.current_view, AppView::ScriptList) {
+                    self.current_view = AppView::ScriptList;
+                }
+                self.cwd_pick_mode = true;
+                self.open_file_search_view(
+                    "~/".to_string(),
+                    FileSearchPresentation::Full,
+                    cx,
+                );
+                self.suppress_filter_events = true;
+                self.gpui_input_state.update(cx, |state, cx| {
+                    state.set_value("~/".to_string(), window, cx);
+                    let len = "~/".len();
+                    state.set_selection(len, len, window, cx);
+                });
+                self.suppress_filter_events = false;
+                cx.notify();
+            }
         }
     }
 
@@ -516,9 +545,28 @@ impl ScriptListApp {
         let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
         let run_label = self.main_window_primary_action_label();
 
-        let mut buttons = vec![
+        let mut buttons = Vec::new();
+
+        // Cwd chip rendered as a regular footer button so it gets the same
+        // bordered label + bordered keycap + hover treatment as trailing
+        // buttons. Pinned to the left via `is_footer_left_pinned_cwd_button`
+        // in src/footer_popup.rs.
+        if matches!(self.current_view, AppView::ScriptList) {
+            if let Some(label) = self.spine_cwd_label.as_ref() {
+                buttons.push(
+                    FooterButtonConfig::new(
+                        FooterAction::Cwd,
+                        "⇥",
+                        label.clone(),
+                    )
+                    .enabled(!footer_disabled),
+                );
+            }
+        }
+
+        buttons.push(
             FooterButtonConfig::new(FooterAction::Run, "↵", run_label).enabled(!footer_disabled),
-        ];
+        );
 
         if self.current_view_supports_shared_actions() {
             buttons.push(
@@ -1095,8 +1143,21 @@ impl ScriptListApp {
                 ),
                 action: Some(crate::footer_popup::FooterAction::Ai),
                 selected: false,
+                cwd_chip: self.spine_cwd_label.as_ref().map(|label| {
+                    crate::footer_popup::FooterCwdChip {
+                        label: label.clone(),
+                        icon_token: "folder".to_string(),
+                        key: Some("⇥".to_string()),
+                    }
+                }),
             });
+            return;
         }
+
+        // Main menu (ScriptList): CWD is now rendered as a regular footer
+        // button (see standard_main_window_footer_buttons → FooterAction::Cwd),
+        // so it gets the same bordered chrome + hover state as Open / Actions
+        // and no longer needs the inline left_info cwd_chip path.
     }
 
     pub(crate) fn toggle_logs(&mut self, cx: &mut Context<Self>) {
@@ -1165,7 +1226,7 @@ impl ScriptListApp {
                 let count = grouped_items.len();
                 let view_type = match self.main_window_mode {
                     MainWindowMode::Full => ViewType::ScriptList,
-                    MainWindowMode::Mini => ViewType::MiniMainWindow,
+                    MainWindowMode::Mini => ViewType::MainWindow,
                 };
                 Some((view_type, count))
             }
@@ -1218,7 +1279,7 @@ impl ScriptListApp {
                         .filter(|e| e.text_preview.to_lowercase().contains(&filter_lower))
                         .count()
                 };
-                Some((ViewType::ExpandedMainWindow, filtered_count))
+                Some((ViewType::MainWindow, filtered_count))
             }
             AppView::EmojiPickerView {
                 filter,
@@ -1226,7 +1287,7 @@ impl ScriptListApp {
                 ..
             } => {
                 let row_count = crate::emoji::filtered_grid_row_count(filter, *selected_category);
-                Some((ViewType::MiniMainWindow, row_count))
+                Some((ViewType::MainWindow, row_count))
             }
             AppView::AppLauncherView { filter, .. } => {
                 let apps = &self.apps;
@@ -1238,7 +1299,7 @@ impl ScriptListApp {
                         .filter(|a| a.name.to_lowercase().contains(&filter_lower))
                         .count()
                 };
-                Some((ViewType::MiniMainWindow, filtered_count))
+                Some((ViewType::MainWindow, filtered_count))
             }
             AppView::WindowSwitcherView { filter, .. } => {
                 let windows = &self.cached_windows;
@@ -1254,14 +1315,14 @@ impl ScriptListApp {
                         })
                         .count()
                 };
-                Some((ViewType::MiniMainWindow, filtered_count))
+                Some((ViewType::MainWindow, filtered_count))
             }
             AppView::DesignGalleryView { filter, .. } => Some((
-                ViewType::MiniMainWindow,
+                ViewType::MainWindow,
                 crate::design_gallery_filtered_len(filter),
             )),
             AppView::FooterGalleryView { filter, .. } => Some((
-                ViewType::MiniMainWindow,
+                ViewType::MainWindow,
                 crate::footer_gallery_filtered_len(filter),
             )),
             AppView::NonListStatesView { .. } => Some((ViewType::DivPrompt, 0)),
@@ -1277,7 +1338,7 @@ impl ScriptListApp {
                         .filter(|p| p.script_path.to_lowercase().contains(&filter_lower))
                         .count()
                 };
-                Some((ViewType::MiniMainWindow, filtered_count))
+                Some((ViewType::MainWindow, filtered_count))
             }
             AppView::CurrentAppCommandsView { filter, .. } => {
                 let filtered_count = if filter.is_empty() {
@@ -1292,7 +1353,7 @@ impl ScriptListApp {
                         })
                         .count()
                 };
-                Some((ViewType::MiniMainWindow, filtered_count))
+                Some((ViewType::MainWindow, filtered_count))
             }
             AppView::BrowserTabsView { filter, .. } => {
                 let filtered_count = if filter.is_empty() {
@@ -1304,7 +1365,7 @@ impl ScriptListApp {
                     )
                     .len()
                 };
-                Some((ViewType::MiniMainWindow, filtered_count))
+                Some((ViewType::MainWindow, filtered_count))
             }
             AppView::ScratchPadView { .. } => Some((ViewType::EditorPrompt, 0)),
             AppView::QuickTerminalView { .. } => Some((ViewType::TermPrompt, 0)),
@@ -1325,8 +1386,8 @@ impl ScriptListApp {
                         .count()
                 };
                 let view_type = match presentation {
-                    FileSearchPresentation::Mini => ViewType::MiniMainWindow,
-                    FileSearchPresentation::Full => ViewType::ExpandedMainWindow,
+                    FileSearchPresentation::Mini => ViewType::MainWindow,
+                    FileSearchPresentation::Full => ViewType::MainWindow,
                 };
                 Some((view_type, filtered_count))
             }
@@ -1344,7 +1405,7 @@ impl ScriptListApp {
                         })
                         .count()
                 };
-                Some((ViewType::ExpandedMainWindow, filtered_count))
+                Some((ViewType::MainWindow, filtered_count))
             }
             AppView::CreationFeedback { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
             AppView::ScriptIssuesView { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
@@ -1353,7 +1414,7 @@ impl ScriptListApp {
             } => {
                 let (_, count) =
                     crate::mcp_resources::sdk_reference_dataset_and_visible_counts(entries, filter);
-                Some((ViewType::ExpandedMainWindow, count))
+                Some((ViewType::MainWindow, count))
             }
             AppView::ScriptTemplateCatalogView {
                 templates, filter, ..
@@ -1362,26 +1423,26 @@ impl ScriptListApp {
                     crate::mcp_resources::script_template_catalog_dataset_and_visible_counts(
                         templates, filter,
                     );
-                Some((ViewType::ExpandedMainWindow, count))
+                Some((ViewType::MainWindow, count))
             }
             AppView::NamingPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
             AppView::BrowseKitsView { results, .. } => {
-                Some((ViewType::MiniMainWindow, results.len()))
+                Some((ViewType::MainWindow, results.len()))
             }
-            AppView::InstalledKitsView { kits, .. } => Some((ViewType::MiniMainWindow, kits.len())),
+            AppView::InstalledKitsView { kits, .. } => Some((ViewType::MainWindow, kits.len())),
             AppView::SearchAiPresetsView { .. } => {
                 // Presets list - defaults (5) + user presets
                 let count = crate::ai::presets::load_presets()
                     .map(|p| 5 + p.len())
                     .unwrap_or(5);
-                Some((ViewType::MiniMainWindow, count))
+                Some((ViewType::MainWindow, count))
             }
             AppView::CreateAiPresetView { .. } => {
                 // Fixed-size form with 3 fields
                 Some((ViewType::ArgPromptNoChoices, 0))
             }
-            AppView::SettingsView { .. } => Some((ViewType::MiniMainWindow, 0)),
-            AppView::FavoritesBrowseView { .. } => Some((ViewType::MiniMainWindow, 0)),
+            AppView::SettingsView { .. } => Some((ViewType::MainWindow, 0)),
+            AppView::FavoritesBrowseView { .. } => Some((ViewType::MainWindow, 0)),
             AppView::AcpHistoryView { filter, .. } => {
                 let entries = crate::ai::acp::history::load_history();
                 let filtered_count = if filter.is_empty() {
@@ -1396,10 +1457,10 @@ impl ScriptListApp {
                         })
                         .count()
                 };
-                Some((ViewType::ExpandedMainWindow, filtered_count))
+                Some((ViewType::MainWindow, filtered_count))
             }
             AppView::BrowserHistoryView { filter, .. } => Some((
-                ViewType::ExpandedMainWindow,
+                ViewType::MainWindow,
                 crate::browser_history::fuzzy_search_browser_history(
                     &self.cached_browser_history,
                     filter,
@@ -1407,11 +1468,11 @@ impl ScriptListApp {
                 .len(),
             )),
             AppView::DictationHistoryView { filter, .. } => Some((
-                ViewType::ExpandedMainWindow,
+                ViewType::MainWindow,
                 crate::dictation::search_history(filter, 100).len(),
             )),
             AppView::NotesBrowseView { filter, .. } => Some((
-                ViewType::ExpandedMainWindow,
+                ViewType::MainWindow,
                 if filter.is_empty() {
                     crate::notes::get_all_notes()
                         .map(|notes| notes.len())
@@ -1591,14 +1652,14 @@ impl ScriptListApp {
             && self.main_window_mode == MainWindowMode::Mini
         {
             let (grouped_items, _) = self.get_grouped_results_cached();
-            let sizing = mini_main_window_sizing_from_grouped_items(&grouped_items);
-            let target_height = crate::window_resize::height_for_mini_main_window(sizing);
-            crate::window_resize::log_mini_window_sizing(
-                crate::window_resize::MiniResizeReason::FilterChanged,
+            let sizing = main_window_sizing_from_grouped_items(&grouped_items);
+            let target_height = crate::window_resize::height_for_main_window(sizing);
+            crate::window_resize::log_main_window_sizing(
+                crate::window_resize::ResizeReason::FilterChanged,
                 sizing,
                 f32::from(target_height),
             );
-            crate::window_resize::defer_resize_to_mini_main_window(sizing, window, &mut *cx);
+            crate::window_resize::defer_resize_to_main_window(sizing, window, &mut *cx);
             return;
         }
 
@@ -1620,14 +1681,14 @@ impl ScriptListApp {
             && self.main_window_mode == MainWindowMode::Mini
         {
             let (grouped_items, _) = self.get_grouped_results_cached();
-            let sizing = mini_main_window_sizing_from_grouped_items(&grouped_items);
-            let target_height = crate::window_resize::height_for_mini_main_window(sizing);
-            crate::window_resize::log_mini_window_sizing(
-                crate::window_resize::MiniResizeReason::GroupedResultsChanged,
+            let sizing = main_window_sizing_from_grouped_items(&grouped_items);
+            let target_height = crate::window_resize::height_for_main_window(sizing);
+            crate::window_resize::log_main_window_sizing(
+                crate::window_resize::ResizeReason::GroupedResultsChanged,
                 sizing,
                 f32::from(target_height),
             );
-            crate::window_resize::resize_to_mini_main_window_sync(sizing);
+            crate::window_resize::resize_to_main_window_sync(sizing);
             return;
         }
 
@@ -1649,15 +1710,15 @@ impl ScriptListApp {
             && self.main_window_mode == MainWindowMode::Mini
         {
             let (grouped_items, _) = self.get_grouped_results_cached();
-            let sizing = mini_main_window_sizing_from_grouped_items(&grouped_items);
-            let target_height = crate::window_resize::height_for_mini_main_window(sizing);
-            crate::window_resize::log_mini_window_sizing(
-                crate::window_resize::MiniResizeReason::GroupedResultsChanged,
+            let sizing = main_window_sizing_from_grouped_items(&grouped_items);
+            let target_height = crate::window_resize::height_for_main_window(sizing);
+            crate::window_resize::log_main_window_sizing(
+                crate::window_resize::ResizeReason::GroupedResultsChanged,
                 sizing,
                 f32::from(target_height),
             );
             let width = if self.main_window_mode == MainWindowMode::Mini {
-                crate::window_resize::width_for_view(ViewType::MiniMainWindow)
+                crate::window_resize::width_for_view(ViewType::MainWindow)
                     .unwrap_or(target_width)
             } else {
                 target_width
@@ -1669,7 +1730,7 @@ impl ScriptListApp {
         if let Some((view_type, item_count)) = self.calculate_window_size_params() {
             let target_height = crate::window_resize::height_for_view(view_type, item_count);
             let width = if self.main_window_mode == MainWindowMode::Mini {
-                crate::window_resize::width_for_view(ViewType::MiniMainWindow)
+                crate::window_resize::width_for_view(ViewType::MainWindow)
                     .unwrap_or(target_width)
             } else {
                 target_width

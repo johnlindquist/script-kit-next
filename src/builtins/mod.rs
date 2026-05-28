@@ -184,8 +184,8 @@ pub enum SettingsCommandType {
 /// Utility command types for quick access tools
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UtilityCommandType {
-    /// Open the main launcher in compact mini-window mode
-    MiniMainWindow,
+    /// Open the main launcher window
+    MainWindow,
     /// Open scratch pad - auto-saving editor
     ScratchPad,
     /// Open quick terminal for running commands
@@ -509,7 +509,7 @@ impl BuiltInEntry {
                 SettingsCommandType::ConfigureSnapMode => "Configure Snap Mode",
             },
             BuiltInFeature::UtilityCommand(action) => match action {
-                UtilityCommandType::MiniMainWindow => "Open Mini Launcher",
+                UtilityCommandType::MainWindow => "Open Launcher",
                 UtilityCommandType::ScratchPad => "Open Scratch Pad",
                 UtilityCommandType::QuickTerminal => "Open Quick Terminal",
                 UtilityCommandType::ClaudeCode => "Open Claude Code Terminal",
@@ -625,7 +625,7 @@ impl BuiltInEntry {
                 SettingsCommandType::ConfigureSnapMode => "Configure Snap",
             },
             BuiltInFeature::UtilityCommand(action) => match action {
-                UtilityCommandType::MiniMainWindow => "Mini Launcher",
+                UtilityCommandType::MainWindow => "Launcher",
                 UtilityCommandType::ScratchPad => "Scratch Pad",
                 UtilityCommandType::QuickTerminal => "Terminal",
                 UtilityCommandType::ClaudeCode => "Claude Code",
@@ -1618,20 +1618,18 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin/mini-main-window",
-            "Mini Main Window",
-            "Open a compact launcher with the same search and actions",
+            "builtin/main-window",
+            "Launcher",
+            "Open the launcher with search and actions",
             vec![
-                "mini",
-                "compact",
                 "launcher",
                 "main",
                 "window",
-                "minimal",
                 "spotlight",
                 "raycast",
+                "search",
             ],
-            BuiltInFeature::UtilityCommand(UtilityCommandType::MiniMainWindow),
+            BuiltInFeature::UtilityCommand(UtilityCommandType::MainWindow),
             "search",
         ));
 
@@ -2782,25 +2780,23 @@ mod tests {
     }
 
     #[test]
-    fn test_get_builtin_entries_includes_mini_main_window_command() {
+    fn test_get_builtin_entries_includes_main_window_command() {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
-        let mini_main_window = entries.iter().find(|e| e.id == "builtin/mini-main-window");
+        let main_window = entries.iter().find(|e| e.id == "builtin/main-window");
         assert!(
-            mini_main_window.is_some(),
-            "Mini Main Window builtin should exist in the main menu"
+            main_window.is_some(),
+            "Main Window builtin should exist in the main menu"
         );
 
-        let mini_main_window = mini_main_window.unwrap();
+        let main_window = main_window.unwrap();
         assert_eq!(
-            mini_main_window.feature,
-            BuiltInFeature::UtilityCommand(UtilityCommandType::MiniMainWindow)
+            main_window.feature,
+            BuiltInFeature::UtilityCommand(UtilityCommandType::MainWindow)
         );
-        assert_eq!(mini_main_window.icon.as_deref(), Some("search"));
-        assert!(mini_main_window.keywords.iter().any(|k| k == "mini"));
-        assert!(mini_main_window.keywords.iter().any(|k| k == "compact"));
-        assert!(mini_main_window.keywords.iter().any(|k| k == "launcher"));
+        assert_eq!(main_window.icon.as_deref(), Some("search"));
+        assert!(main_window.keywords.iter().any(|k| k == "launcher"));
     }
 
     #[test]

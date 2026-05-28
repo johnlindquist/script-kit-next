@@ -28,7 +28,7 @@ impl ScriptListApp {
         let text_primary = theme.colors.text.primary;
         let text_muted = theme.colors.text.muted;
         // Mini uses shared layout tokens from the resize contract
-        let mini_padding_x: f32 = crate::window_resize::mini_layout::HEADER_PADDING_X;
+        let mini_padding_x: f32 = crate::window_resize::main_layout::HEADER_PADDING_X;
 
         // Navigation key handler — Escape, Enter, arrows, Tab, Cmd+W
         // Text editing is handled by the Input component.
@@ -221,7 +221,7 @@ mod mini_prompt_render_tests {
     #[test]
     fn mini_prompt_has_compact_padding() {
         assert!(
-            MINI_SOURCE.contains("mini_layout::HEADER_PADDING_X"),
+            MINI_SOURCE.contains("main_layout::HEADER_PADDING_X"),
             "mini prompt should use shared mini layout horizontal padding token"
         );
         assert!(

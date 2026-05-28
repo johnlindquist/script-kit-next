@@ -141,7 +141,36 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // The filter input is single-line; GPUI's text shaper panics on
+        // newlines (`vendor/gpui/src/text_system.rs:414`). Sanitize early so
+        // pasted multi-line content cannot crash the app.
+        let text = if text.chars().any(|c| matches!(c, '\n' | '\r')) {
+            text.replace("\r\n", " ").replace(['\n', '\r'], " ")
+        } else {
+            text
+        };
+
         self.pending_menu_syntax_ai_proposal = None;
+
+        if let AppView::AcpChatView { entity } = &self.current_view {
+            self.suppress_filter_events = true;
+            self.filter_text = text.clone();
+            self.pending_programmatic_filter_echo = Some(text.clone());
+            self.gpui_input_state.update(cx, |state, cx| {
+                state.set_highlight_ranges_with_roles(Vec::new());
+                state.set_value(text.clone(), window, cx);
+                let len = text.len();
+                state.set_selection(len, len, window, cx);
+            });
+            self.suppress_filter_events = false;
+            self.pending_filter_sync = false;
+            entity.update(cx, |chat, cx| {
+                chat.set_input(text.clone(), cx);
+                chat.refresh_acp_spine_from_composer(cx);
+            });
+            cx.notify();
+            return;
+        }
 
         let input_already_matches = self.gpui_input_state.read(cx).value().to_string() == text;
         if matches!(self.current_view, AppView::ScriptList)
@@ -163,8 +192,8 @@ impl ScriptListApp {
         self.filter_text = text.clone();
         self.pending_programmatic_filter_echo = Some(text.clone());
         self.gpui_input_state.update(cx, |state, cx| {
+            state.set_highlight_ranges_with_roles(Vec::new());
             state.set_value(text.clone(), window, cx);
-            // Ensure cursor is at end with no selection after programmatic set_value
             let len = text.len();
             state.set_selection(len, len, window, cx);
         });
@@ -183,6 +212,29 @@ impl ScriptListApp {
         // Menu bar items are now pre-fetched by frontmost_app_tracker
         // No lazy loading needed - items are already in cache when we open
 
+        // stdin `setFilter` on FileSearchView needs to drive the file-search
+        // stream the same way real keystrokes do (the GPUI handler at
+        // `handle_filter_input_change` line ~511 is suppressed here). Open
+        // the view at the new query so directory navigation works under
+        // protocol automation.
+        if !handled_by_subview
+            && matches!(self.current_view, AppView::FileSearchView { .. })
+        {
+            let presentation = if let AppView::FileSearchView { presentation, .. } =
+                &self.current_view
+            {
+                *presentation
+            } else {
+                FileSearchPresentation::Full
+            };
+            self.open_file_search_view_preserving_current_results(
+                text.clone(),
+                presentation,
+                cx,
+            );
+            return;
+        }
+
         let mut handler_form_owns_input = false;
         if !handled_by_subview && matches!(self.current_view, AppView::ScriptList) {
             self.set_menu_syntax_mode_from_filter(&text);
@@ -196,11 +248,13 @@ impl ScriptListApp {
                             crate::spine::SpineSegmentResolution::Resolved { .. }
                         )
                 });
-                if !has_cwd_segment && self.spine_cwd.is_some() {
-                    self.spine_cwd = None;
-                    self.spine_cwd_revision = self.spine_cwd_revision.wrapping_add(1);
-                    self.invalidate_grouped_cache();
-                }
+                // Note: CWD is no longer auto-cleared when the parsed input
+                // lacks a `>:` segment. The CWD now lives in the footer chip
+                // (set on Enter against a directory row) and is independent
+                // of the input bar. The user changes it by typing `>` again
+                // and picking a different directory, or by clicking the
+                // chip.
+                let _ = has_cwd_segment;
             }
             handler_form_owns_input = self.menu_syntax_capture_form_owns_input_for(&text);
             self.sync_menu_syntax_form_inputs_from_filter(window, cx);
@@ -629,17 +683,29 @@ impl ScriptListApp {
                 if resolution_source.as_ref() == "cwd" {
                     let path = std::path::PathBuf::from(resolution_id.as_ref());
                     self.spine_cwd = Some(path);
+                    self.spine_cwd_label = Some(resolution_label.as_ref().to_string());
                     self.spine_cwd_revision = self.spine_cwd_revision.wrapping_add(1);
                     self.invalidate_grouped_cache();
+                    // CWD becomes a footer chip — strip the segment text from
+                    // the input bar so the user sees a clean prompt builder.
+                    self.replace_active_segment_text(
+                        segment_index,
+                        segment_byte_range,
+                        "",
+                        false,
+                        window,
+                        cx,
+                    )
+                } else {
+                    self.replace_active_segment_text(
+                        segment_index,
+                        segment_byte_range,
+                        replacement.as_ref(),
+                        trailing_space,
+                        window,
+                        cx,
+                    )
                 }
-                self.replace_active_segment_text(
-                    segment_index,
-                    segment_byte_range,
-                    replacement.as_ref(),
-                    trailing_space,
-                    window,
-                    cx,
-                )
             }
             SpineListAction::OpenModeExit { sigil, rest } => {
                 tracing::info!(

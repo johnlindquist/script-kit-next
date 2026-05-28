@@ -8,12 +8,16 @@ impl crate::ai::agent_chat::runtime::AgentChatConnection for FocusedTextFixtureC
         _request: crate::ai::agent_chat::runtime::AgentChatTurnRequest,
     ) -> anyhow::Result<crate::ai::agent_chat::events::AgentChatEventRx> {
         let (tx, rx) = async_channel::bounded(2);
-        let _ = tx.try_send(crate::ai::agent_chat::events::AgentChatEvent::AgentMessageDelta(
-            "Fixture focused text output.".to_string(),
-        ));
-        let _ = tx.try_send(crate::ai::agent_chat::events::AgentChatEvent::TurnFinished {
-            stop_reason: "fixture".to_string(),
-        });
+        let _ = tx.try_send(
+            crate::ai::agent_chat::events::AgentChatEvent::AgentMessageDelta(
+                "Fixture focused text output.".to_string(),
+            ),
+        );
+        let _ = tx.try_send(
+            crate::ai::agent_chat::events::AgentChatEvent::TurnFinished {
+                stop_reason: "fixture".to_string(),
+            },
+        );
         Ok(rx)
     }
 
@@ -258,7 +262,10 @@ impl ScriptListApp {
         self.enter_embedded_acp_chat_surface(view_entity, cx);
         self.request_focus(FocusTarget::ChatPrompt, cx);
         script_kit_gpui::request_show_main_window();
-        crate::window_resize::resize_to_view_sync(crate::window_resize::ViewType::FocusedTextMini, 0);
+        crate::window_resize::resize_to_view_sync(
+            crate::window_resize::ViewType::FocusedTextMini,
+            0,
+        );
         cx.notify();
     }
 
@@ -325,7 +332,10 @@ impl ScriptListApp {
         });
         self.request_focus(FocusTarget::ChatPrompt, cx);
         script_kit_gpui::request_show_main_window();
-        crate::window_resize::resize_to_view_sync(crate::window_resize::ViewType::FocusedTextMini, 0);
+        crate::window_resize::resize_to_view_sync(
+            crate::window_resize::ViewType::FocusedTextMini,
+            0,
+        );
         cx.notify();
     }
 
@@ -395,7 +405,10 @@ impl ScriptListApp {
         });
         self.request_focus(FocusTarget::ChatPrompt, cx);
         script_kit_gpui::request_show_main_window();
-        crate::window_resize::resize_to_view_sync(crate::window_resize::ViewType::FocusedTextMini, 0);
+        crate::window_resize::resize_to_view_sync(
+            crate::window_resize::ViewType::FocusedTextMini,
+            0,
+        );
         cx.notify();
     }
 }

@@ -601,7 +601,8 @@ impl DictationOverlay {
             | FooterAction::Append
             | FooterAction::Copy
             | FooterAction::Expand
-            | FooterAction::Retry => {}
+            | FooterAction::Retry
+            | FooterAction::Cwd => {}
         }
     }
 
@@ -1560,7 +1561,7 @@ fn native_footer_spacer() -> impl IntoElement {
 
 fn footer_action_button_height() -> f32 {
     crate::components::footer_chrome::footer_button_height(
-        crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+        crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
     )
 }
 

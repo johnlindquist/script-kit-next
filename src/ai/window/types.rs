@@ -206,7 +206,7 @@ mod ai_window_mode_tests {
     }
 
     #[test]
-    fn mini_layout_contract_uses_expected_dimensions() {
+    fn main_layout_contract_uses_expected_dimensions() {
         assert_eq!(MINI_WINDOW_DEFAULT_W, 720.0);
         assert_eq!(MINI_WINDOW_DEFAULT_H, 440.0);
         assert_eq!(MINI_TITLEBAR_H, px(44.));
@@ -298,7 +298,7 @@ pub(super) const MINI_HISTORY_OVERLAY_TOP: Pixels = MINI_TITLEBAR_H;
 pub(super) const MINI_HISTORY_OVERLAY_W: Pixels = px(380.);
 /// Derived: window height minus titlebar, so overlay never overflows the mini window.
 pub(super) const MINI_HISTORY_OVERLAY_MAX_H: Pixels = px(396.);
-// Mini layout tokens — synced with crate::window_resize::mini_layout
+// Main layout tokens — synced with crate::window_resize::layout
 pub(super) const MINI_BTN_SIZE: Pixels = px(24.);
 pub(super) const MINI_HEADER_PADDING_X: Pixels = px(12.0);
 pub(super) const MINI_HEADER_PADDING_Y: Pixels = px(10.0);

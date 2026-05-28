@@ -6,6 +6,44 @@ use super::types::{AcpDismissedMentionTrigger, AcpMentionSession};
 
 const MENTION_PICKER_MAX_VISIBLE: usize = 8;
 
+/// Surface-local Spine state for the ACP composer. Mirrors the main-menu
+/// `ScriptListApp` Spine fields but stays scoped to a single `AcpChatView`
+/// so the composer can own its own projection/selection.
+#[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
+pub(crate) struct AcpComposerSpineState {
+    pub(crate) input: crate::spine::input_projection::SpineInputProjection,
+    pub(crate) selected_index: usize,
+    pub(crate) visible_start: usize,
+}
+
+#[allow(dead_code)]
+impl AcpComposerSpineState {
+    /// Re-parse the composer text + cursor and update the projection.
+    pub(crate) fn refresh(&mut self, text: &str, cursor_chars: usize) {
+        self.input =
+            crate::spine::input_projection::project_text_at_char_cursor(text, cursor_chars);
+        if !self.owns_list() {
+            self.selected_index = 0;
+            self.visible_start = 0;
+        }
+    }
+
+    /// Does the projection currently own the conversation-area list (i.e. a
+    /// sigil segment is active or the cursor is on a prompt-builder tail with
+    /// at least one resolved segment)?
+    pub(crate) fn owns_list(&self) -> bool {
+        crate::spine::input_projection::projection_owns_prompt_builder_list(
+            self.input.projection.as_ref(),
+            &self.input.parse,
+        )
+    }
+
+    pub(crate) fn clear(&mut self) {
+        *self = Self::default();
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum AcpComposerPickerState {
     Closed,

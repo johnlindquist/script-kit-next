@@ -59,11 +59,18 @@ pub(crate) enum SpinePromptPlanBlockReason {
 
 impl SpinePromptPlan {
     pub(crate) fn should_submit_to_chat(&self) -> bool {
-        self.blocked_reason.is_none()
-            && self.prompt_builder_segment_count > 0
-            && (!self.normalized_prompt.trim().is_empty()
-                || !self.context_parts.is_empty()
-                || !self.unknown_warnings.is_empty())
+        if self.blocked_reason.is_some() || self.prompt_builder_segment_count == 0 {
+            return false;
+        }
+        // Require at least one form of substantive content. An unknown
+        // warning alone — e.g. the user pressed Cmd+Enter while mid-typing
+        // `@clip` — means we'd otherwise submit just a preflight warning
+        // to the agent, which is almost never what the user intended.
+        !self.free_text_tail.trim().is_empty()
+            || !self.context_parts.is_empty()
+            || !self.slash_commands.is_empty()
+            || self.selected_profile.is_some()
+            || self.selected_style.is_some()
     }
 }
 
@@ -328,6 +335,20 @@ mod tests {
         assert_eq!(plan.unknown_warnings.len(), 1);
         assert!(plan.normalized_prompt.contains("Preflight warning"));
         assert!(plan.normalized_prompt.contains("summarize"));
+    }
+
+    #[test]
+    fn partial_unresolved_sigil_alone_does_not_submit() {
+        // Oracle scenario #17 regression: pressing Cmd+Enter while typing
+        // `@clip` (no resolved context, no free text) used to submit a
+        // synthetic "Preflight warning" prompt to the agent. Users hit
+        // this constantly because they Cmd+Enter mid-typing.
+        let parse = parse_spine("@clip");
+        let plan = build_spine_prompt_plan(&parse);
+        assert!(!plan.should_submit_to_chat());
+        assert_eq!(plan.unknown_warnings.len(), 1);
+        assert!(plan.context_parts.is_empty());
+        assert!(plan.free_text_tail.is_empty());
     }
 
     #[test]

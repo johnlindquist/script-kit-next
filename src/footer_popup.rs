@@ -25,7 +25,7 @@ const FOOTER_HINT_ITEM_GAP: f64 =
 const FOOTER_HINT_KEY_LABEL_GAP: f64 =
     crate::components::footer_chrome::FOOTER_ACTION_CONTENT_GAP_PX as f64;
 #[cfg(target_os = "macos")]
-const FOOTER_HINT_SIDE_INSET: f64 = crate::window_resize::mini_layout::HINT_STRIP_PADDING_X as f64;
+const FOOTER_HINT_SIDE_INSET: f64 = crate::window_resize::main_layout::HINT_STRIP_PADDING_X as f64;
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_PADDING_X: f64 =
     crate::components::footer_chrome::FOOTER_ACTION_CONTENT_PADDING_X_PX as f64;
@@ -45,6 +45,10 @@ const FOOTER_HINT_BUTTON_ID_PREFIX: &str = "script-kit-footer-button-";
 const FOOTER_LEFT_INFO_ID: &str = "script-kit-footer-left-info";
 #[cfg(target_os = "macos")]
 const FOOTER_STATUS_DOT_ID: &str = "script-kit-footer-status-dot";
+const FOOTER_CWD_CHIP_ICON_ID: &str = "script-kit-footer-cwd-chip-icon";
+const FOOTER_CWD_CHIP_LABEL_ID: &str = "script-kit-footer-cwd-chip-label";
+const FOOTER_CWD_CHIP_HIT_TARGET_ID: &str = "script-kit-footer-cwd-chip-hit";
+const FOOTER_CWD_CHIP_TRAILING_GAP_PX: f64 = 12.0;
 #[cfg(target_os = "macos")]
 const FOOTER_MODEL_LABEL_ID: &str = "script-kit-footer-model-label";
 #[cfg(target_os = "macos")]
@@ -103,6 +107,9 @@ pub(crate) enum FooterAction {
     Close,
     Stop,
     PasteResponse,
+    /// Click the CWD footer chip — opens the directory picker so the user
+    /// can change their current working directory.
+    Cwd,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -188,6 +195,20 @@ pub(crate) struct FooterLeftInfo {
     pub action: Option<FooterAction>,
     /// Whether the merged left marker should render as selected/open.
     pub selected: bool,
+    /// Separate CWD chip rendered at the far left, independent of the model
+    /// marker. When set, the model marker is centered between this chip and
+    /// the trailing buttons.
+    pub cwd_chip: Option<FooterCwdChip>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct FooterCwdChip {
+    pub label: String,
+    pub icon_token: String,
+    /// Optional keycap glyph shown after the label (e.g. "⇥") so the chip
+    /// communicates the keyboard shortcut that opens the cwd picker. Renders
+    /// with the same bordered chrome as the trailing footer buttons.
+    pub key: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -318,7 +339,7 @@ impl GpuiFooterOverlay {
     }
 
     fn content_width_px(&self) -> f32 {
-        (self.overlay_width_px - crate::window_resize::mini_layout::HINT_STRIP_PADDING_X * 2.0)
+        (self.overlay_width_px - crate::window_resize::main_layout::HINT_STRIP_PADDING_X * 2.0)
             .max(0.0)
     }
 
@@ -471,10 +492,13 @@ impl GpuiFooterOverlay {
         let hover_bg = rgba(chrome.hover_rgba);
         let active_bg = rgba(chrome.selection_rgba);
         let item_height = crate::components::footer_chrome::footer_button_height(
-            crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+            crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
         );
-        let key_first = is_footer_left_pinned_mic_button(&button);
-        let justify = if key_first {
+        let key_first =
+            is_footer_left_pinned_mic_button(&button) && !matches!(action, FooterAction::Cwd);
+        let justify = if matches!(action, FooterAction::Cwd) {
+            crate::components::footer_chrome::FooterHintContentJustify::Start
+        } else if key_first {
             crate::components::footer_chrome::FooterHintContentJustify::Start
         } else if matches!(action, FooterAction::Run) {
             crate::components::footer_chrome::FooterHintContentJustify::KeyAnchored
@@ -555,7 +579,7 @@ impl Render for GpuiFooterOverlay {
             .id("gpui-footer-overlay-spike")
             .w_full()
             .h_full()
-            .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
+            .px(px(crate::window_resize::main_layout::HINT_STRIP_PADDING_X))
             .py(px(
                 crate::components::footer_chrome::FOOTER_BUTTON_VERTICAL_INSET_PX,
             ))
@@ -634,7 +658,7 @@ fn gpui_footer_overlay_spike_enabled() -> bool {
 }
 
 fn gpui_footer_overlay_bounds(parent_bounds: Bounds<Pixels>) -> Bounds<Pixels> {
-    let footer_height = crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT;
+    let footer_height = crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT;
     Bounds {
         origin: gpui::point(
             parent_bounds.origin.x,
@@ -1330,7 +1354,7 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
         }
     }
 
-    let alpha = crate::window_resize::mini_layout::HINT_TEXT_OPACITY as f64;
+    let alpha = crate::window_resize::main_layout::HINT_TEXT_OPACITY as f64;
     let text_color = ns_color_from_hex_with_alpha(theme.colors.text.primary, alpha);
 
     let hints_view = find_subview_by_identifier(footer_view, FOOTER_HINTS_ID);
@@ -1461,7 +1485,7 @@ unsafe fn find_subview_by_identifier(parent: id, identifier: &str) -> id {
 
 #[cfg(target_os = "macos")]
 fn footer_height() -> f64 {
-    crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT as f64
+    crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT as f64
 }
 
 #[cfg(target_os = "macos")]
@@ -1494,11 +1518,82 @@ unsafe fn layout_footer_left_info(
         remove_identified_subview(left_info_view, FOOTER_MODEL_LABEL_ID);
         remove_identified_subview(left_info_view, FOOTER_LEFT_PROFILE_ICON_ID);
         remove_identified_subview(left_info_view, FOOTER_LEFT_INFO_HIT_TARGET_ID);
+        remove_identified_subview(left_info_view, FOOTER_CWD_CHIP_ICON_ID);
+        remove_identified_subview(left_info_view, FOOTER_CWD_CHIP_LABEL_ID);
+        remove_identified_subview(left_info_view, FOOTER_CWD_CHIP_HIT_TARGET_ID);
         return;
     };
 
     let bounds: NSRect = msg_send![left_info_view, bounds];
     let mut x = 0.0_f64;
+
+    // ── CWD chip (always on the far left, independent of model marker) ──
+    if let Some(cwd_chip) = info.cwd_chip.as_ref() {
+        let chip_start_x = x;
+
+        // Folder icon.
+        let icon_view = ensure_footer_cwd_chip_icon_view(left_info_view);
+        if icon_view != nil {
+            let image = footer_icon_image(&cwd_chip.icon_token);
+            if image != nil {
+                let _: () = msg_send![icon_view, setImage: image];
+            }
+            let icon_y = ((bounds.size.height - FOOTER_LEFT_PROFILE_ICON_SIZE) / 2.0).round();
+            let _: () = msg_send![
+                icon_view,
+                setFrame: NSRect::new(
+                    NSPoint::new(x, icon_y),
+                    NSSize::new(FOOTER_LEFT_PROFILE_ICON_SIZE, FOOTER_LEFT_PROFILE_ICON_SIZE),
+                )
+            ];
+            let _: () = msg_send![icon_view, setHidden: NO];
+            let icon_layer: id = msg_send![icon_view, layer];
+            if icon_layer != nil {
+                update_footer_icon_layer(icon_layer, info);
+            }
+            x += FOOTER_LEFT_PROFILE_ICON_SIZE + FOOTER_LEFT_DOT_LABEL_GAP;
+        }
+
+        // Label (path + optional keycap glyph trailing, for shortcut hint).
+        // TODO: render the keycap with the same bordered chrome as trailing
+        // buttons (see make_footer_hint_button_with_label_chip's chip_view +
+        // keycap_border_color path). For now the glyph is appended to the
+        // label so the affordance is visible.
+        let label_text = if let Some(key_glyph) = cwd_chip.key.as_deref() {
+            format!("{}  {key_glyph}", cwd_chip.label)
+        } else {
+            cwd_chip.label.clone()
+        };
+        let label = ensure_footer_cwd_chip_label(left_info_view, &label_text, text_color);
+        if label != nil {
+            let label_size: NSSize = msg_send![label, fittingSize];
+            let label_y = ((bounds.size.height - label_size.height) / 2.0).round();
+            let _: () = msg_send![
+                label,
+                setFrame: NSRect::new(
+                    NSPoint::new(x, label_y),
+                    NSSize::new(label_size.width, label_size.height),
+                )
+            ];
+            x += label_size.width;
+        }
+
+        // Hit target so clicks dispatch FooterAction::Cwd.
+        layout_footer_cwd_chip_hit_target(
+            left_info_view,
+            NSRect::new(
+                NSPoint::new(chip_start_x, 0.0),
+                NSSize::new((x - chip_start_x).max(0.0), bounds.size.height),
+            ),
+        );
+
+        x += FOOTER_CWD_CHIP_TRAILING_GAP_PX;
+    } else {
+        remove_identified_subview(left_info_view, FOOTER_CWD_CHIP_ICON_ID);
+        remove_identified_subview(left_info_view, FOOTER_CWD_CHIP_LABEL_ID);
+        remove_identified_subview(left_info_view, FOOTER_CWD_CHIP_HIT_TARGET_ID);
+    }
+
     let hit_start_x = x;
 
     // ── Status dot (legacy left-info path only; ACP profile markers pulse the icon) ──
@@ -1701,6 +1796,105 @@ unsafe fn ensure_footer_left_profile_icon_view(left_info_view: id) -> id {
 }
 
 #[cfg(target_os = "macos")]
+unsafe fn ensure_footer_cwd_chip_icon_view(left_info_view: id) -> id {
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let existing = find_subview_by_identifier(left_info_view, FOOTER_CWD_CHIP_ICON_ID);
+    if existing != nil {
+        return existing;
+    }
+
+    let image_view: id = msg_send![class!(NSImageView), alloc];
+    let image_view: id = msg_send![
+        image_view,
+        initWithFrame: NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(FOOTER_LEFT_PROFILE_ICON_SIZE, FOOTER_LEFT_PROFILE_ICON_SIZE),
+        )
+    ];
+    if image_view == nil {
+        return nil;
+    }
+    let identifier = ns_string(FOOTER_CWD_CHIP_ICON_ID);
+    if identifier != nil {
+        let _: () = msg_send![image_view, setIdentifier: identifier];
+    }
+    let _: () = msg_send![image_view, setWantsLayer: YES];
+    let _: () = msg_send![left_info_view, addSubview: image_view];
+    image_view
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn ensure_footer_cwd_chip_label(left_info_view: id, text: &str, text_color: id) -> id {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let font: id = msg_send![
+        class!(NSFont),
+        systemFontOfSize: crate::components::footer_chrome::FOOTER_HINT_FONT_SIZE_PX as f64
+        weight: crate::components::footer_chrome::FOOTER_HINT_FONT_WEIGHT_APPKIT
+    ];
+    let label = find_subview_by_identifier(left_info_view, FOOTER_CWD_CHIP_LABEL_ID);
+    if label != nil {
+        let string_value = ns_string(text);
+        if string_value != nil {
+            let _: () = msg_send![label, setStringValue: string_value];
+        }
+        if font != nil {
+            let _: () = msg_send![label, setFont: font];
+        }
+        if text_color != nil {
+            let _: () = msg_send![label, setTextColor: text_color];
+        }
+        let _: () = msg_send![label, setAlignment: FOOTER_HINT_TEXT_ALIGN_LEFT];
+        let _: () = msg_send![label, sizeToFit];
+        return label;
+    }
+
+    let label = make_footer_hint_text_field(text, font, text_color, FOOTER_HINT_TEXT_ALIGN_LEFT);
+    if label != nil {
+        let identifier = ns_string(FOOTER_CWD_CHIP_LABEL_ID);
+        if identifier != nil {
+            let _: () = msg_send![label, setIdentifier: identifier];
+        }
+        let _: () = msg_send![left_info_view, addSubview: label];
+    }
+    label
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn layout_footer_cwd_chip_hit_target(left_info_view: id, frame: cocoa::foundation::NSRect) {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    if frame.size.width <= 0.0 || frame.size.height <= 0.0 {
+        remove_identified_subview(left_info_view, FOOTER_CWD_CHIP_HIT_TARGET_ID);
+        return;
+    }
+
+    let mut button = find_subview_by_identifier(left_info_view, FOOTER_CWD_CHIP_HIT_TARGET_ID);
+    if button == nil {
+        button = msg_send![class!(NSButton), alloc];
+        button = msg_send![button, initWithFrame: frame];
+        if button == nil {
+            return;
+        }
+        let identifier = ns_string(FOOTER_CWD_CHIP_HIT_TARGET_ID);
+        if identifier != nil {
+            let _: () = msg_send![button, setIdentifier: identifier];
+        }
+        let _: () = msg_send![button, setBordered: NO];
+        let _: () = msg_send![button, setBezelStyle: 0usize];
+        let _: () = msg_send![button, setButtonType: 0usize];
+        let _: () = msg_send![button, setTransparent: YES];
+        let _: () = msg_send![left_info_view, addSubview: button];
+    }
+    let _: () = msg_send![button, setFrame: frame];
+    let _: () = msg_send![button, setEnabled: YES];
+    let _: () = msg_send![button, setTarget: footer_action_target()];
+    let _: () = msg_send![button, setAction: footer_action_selector(FooterAction::Cwd)];
+}
+
+#[cfg(target_os = "macos")]
 unsafe fn layout_footer_left_info_hit_target(
     left_info_view: id,
     action: Option<FooterAction>,
@@ -1890,7 +2084,7 @@ unsafe fn recolor_footer_hint_subviews(view: id, theme: &crate::theme::Theme) {
 
     let text_color = ns_color_from_hex_with_alpha(
         theme.colors.text.primary,
-        crate::window_resize::mini_layout::HINT_TEXT_OPACITY as f64,
+        crate::window_resize::main_layout::HINT_TEXT_OPACITY as f64,
     );
     let border_color = ns_color_from_hex_with_alpha(
         theme.colors.text.primary,
@@ -2062,6 +2256,14 @@ unsafe fn layout_footer_hints(
 
 #[cfg(target_os = "macos")]
 fn is_footer_left_pinned_mic_button(button_cfg: &FooterButtonConfig) -> bool {
+    if matches!(button_cfg.action, FooterAction::Cwd) {
+        // Cwd chip is rendered as a regular footer button (bordered label +
+        // bordered keycap + hover state, parity with trailing buttons) and
+        // pinned to the far left. Shares the left-pinned helper because the
+        // layout pass already handles the splitting of left- vs right-side
+        // items via this predicate.
+        return true;
+    }
     matches!(button_cfg.action, FooterAction::Ai)
         && button_cfg.key.as_ref() == crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN
 }
@@ -2125,6 +2327,7 @@ fn footer_hint_slot_width(action: FooterAction) -> f64 {
         FooterAction::Close => FOOTER_CLOSE_SLOT_WIDTH,
         FooterAction::Stop => FOOTER_STOP_SLOT_WIDTH,
         FooterAction::PasteResponse => FOOTER_PASTE_RESPONSE_SLOT_WIDTH,
+        FooterAction::Cwd => FOOTER_AI_SLOT_WIDTH,
     }
 }
 
@@ -2160,6 +2363,18 @@ fn footer_hint_content_layout_for_button(
     label_width: f64,
     key_width: f64,
 ) -> (f64, f64, f64) {
+    if matches!(button_cfg.action, FooterAction::Cwd) {
+        // Left-pinned, but label appears LEFT of the keycap to mirror the
+        // trailing buttons' "label then key" reading order.
+        let gap_width = if label_width > 0.0 && key_width > 0.0 {
+            FOOTER_HINT_KEY_LABEL_GAP
+        } else {
+            0.0
+        };
+        let label_x = FOOTER_RUN_HINT_PADDING_X.round();
+        let key_x = (label_x + label_width + gap_width).round();
+        return (label_x, key_x, label_width + gap_width + key_width);
+    }
     if is_footer_left_pinned_mic_button(button_cfg) {
         let gap_width = if label_width > 0.0 && key_width > 0.0 {
             FOOTER_HINT_KEY_LABEL_GAP
@@ -2351,7 +2566,7 @@ unsafe fn make_footer_hint_item(
     }
 
     let chrome = crate::theme::AppChromeColors::from_theme(theme);
-    let edge_padding_x = if matches!(button_cfg.action, FooterAction::Run) {
+    let edge_padding_x = if matches!(button_cfg.action, FooterAction::Run | FooterAction::Cwd) {
         FOOTER_RUN_HINT_PADDING_X
     } else {
         FOOTER_HINT_PADDING_X
@@ -2803,11 +3018,11 @@ mod footer_layout_tests {
 
         assert_eq!(
             footer_hint_max_item_width(FooterAction::Run, 480.0, &buttons),
-            Some(172.0)
+            Some(242.0)
         );
         assert_eq!(
             footer_hint_max_item_width(FooterAction::Run, 640.0, &buttons),
-            Some(172.0)
+            Some(242.0)
         );
         assert_eq!(
             footer_hint_max_item_width(FooterAction::Run, 120.0, &buttons),
@@ -3052,6 +3267,7 @@ fn footer_action_key(action: FooterAction) -> &'static str {
         FooterAction::Close => "close",
         FooterAction::Stop => "stop",
         FooterAction::PasteResponse => "pasteResponse",
+        FooterAction::Cwd => "cwd",
     }
 }
 
@@ -3871,6 +4087,7 @@ fn footer_action_selector(action: FooterAction) -> objc::runtime::Sel {
         FooterAction::Close => sel!(closeFooterAction:),
         FooterAction::Stop => sel!(stopFooterAction:),
         FooterAction::PasteResponse => sel!(pasteResponseFooterAction:),
+        FooterAction::Cwd => sel!(cwdFooterAction:),
     }
 }
 
@@ -3938,6 +4155,10 @@ fn footer_action_target_class() -> *const objc::runtime::Class {
         decl.add_method(
             sel!(pasteResponseFooterAction:),
             footer_paste_response_action as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(cwdFooterAction:),
+            footer_cwd_action as extern "C" fn(&Object, Sel, id),
         );
         decl.register() as *const _ as usize
     }) as *const objc::runtime::Class
@@ -4033,4 +4254,9 @@ extern "C" fn footer_paste_response_action(
     sender: id,
 ) {
     send_footer_action_from_sender(sender, FooterAction::PasteResponse);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_cwd_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, sender: id) {
+    send_footer_action_from_sender(sender, FooterAction::Cwd);
 }

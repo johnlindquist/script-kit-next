@@ -40,7 +40,7 @@ pub enum TriggerBuiltin {
     Settings,
     ChooseTheme,
     ScriptKitSelfie,
-    MiniMainWindow,
+    MainWindow,
     QuickTerminal,
     Webcam,
 }
@@ -64,7 +64,7 @@ impl TriggerBuiltin {
         TriggerBuiltin::Settings,
         TriggerBuiltin::ChooseTheme,
         TriggerBuiltin::ScriptKitSelfie,
-        TriggerBuiltin::MiniMainWindow,
+        TriggerBuiltin::MainWindow,
         TriggerBuiltin::QuickTerminal,
         TriggerBuiltin::Webcam,
     ];
@@ -88,7 +88,7 @@ impl TriggerBuiltin {
             TriggerBuiltin::Settings => "builtin/settings",
             TriggerBuiltin::ChooseTheme => "builtin/choose-theme",
             TriggerBuiltin::ScriptKitSelfie => "builtin/script-kit-selfie",
-            TriggerBuiltin::MiniMainWindow => "builtin/mini-main-window",
+            TriggerBuiltin::MainWindow => "builtin/main-window",
             TriggerBuiltin::QuickTerminal => "builtin/quick-terminal",
             TriggerBuiltin::Webcam => "builtin/webcam",
         }
@@ -159,7 +159,13 @@ impl TriggerBuiltin {
                 "selfie",
                 "screenshot-selfie",
             ],
-            TriggerBuiltin::MiniMainWindow => &["mini-main-window", "mini-launcher", "mini"],
+            TriggerBuiltin::MainWindow => &[
+                "main-window",
+                "launcher",
+                "mini-main-window",
+                "mini-launcher",
+                "mini",
+            ],
             TriggerBuiltin::QuickTerminal => &["quick-terminal", "quickterminal"],
             TriggerBuiltin::Webcam => &["webcam", "camera"],
         }
@@ -256,7 +262,7 @@ pub const TRIGGER_BUILTIN_COMMAND_IDS: &[&str] = &[
     "builtin/settings",
     "builtin/choose-theme",
     "builtin/script-kit-selfie",
-    "builtin/mini-main-window",
+    "builtin/main-window",
     "builtin/quick-terminal",
     "builtin/webcam",
 ];

@@ -28,6 +28,35 @@ fn timed_root_passive_source<T>(
     rows
 }
 
+fn grouped_selectable_bounds(
+    grouped_items: &[GroupedListItem],
+    flat_results: &[scripts::SearchResult],
+) -> (Option<usize>, Option<usize>) {
+    let mut first = None;
+    let mut last = None;
+    for (index, item) in grouped_items.iter().enumerate() {
+        let GroupedListItem::Item(flat_idx) = item else {
+            continue;
+        };
+        // SpineProjection rows carry their own is_selectable flag (Empty
+        // placeholders are non-selectable but pushed as Items so they render).
+        // Exclude them from selectable bounds so selectedIndex and
+        // visibleChoiceCount don't treat them as targets.
+        if let Some(scripts::SearchResult::SpineProjection(row)) =
+            flat_results.get(*flat_idx)
+        {
+            if !row.is_selectable {
+                continue;
+            }
+        }
+        if first.is_none() {
+            first = Some(index);
+        }
+        last = Some(index);
+    }
+    (first, last)
+}
+
 fn prepend_inline_calculator_group(
     grouped_items: Vec<GroupedListItem>,
     flat_results: Vec<scripts::SearchResult>,
@@ -995,15 +1024,17 @@ impl ScriptListApp {
         // live input is owned by the trigger popup or capture composer.
         let live_filter_text = self.filter_text.as_str();
         let computed_filter_text = self.computed_filter_text.as_str();
-        let live_menu_syntax_owns_main_list =
-            self.menu_syntax_object_selector_state.owns_main_list()
+        let spine_owns_live_main_list = self.spine_projection_owns_main_list()
+            && self.spine_parse.input == live_filter_text;
+        let live_menu_syntax_owns_main_list = !spine_owns_live_main_list
+            && (self.menu_syntax_object_selector_state.owns_main_list()
                 || self.menu_syntax_trigger_popup_state.owns_main_list()
                 || self
                     .menu_syntax_mode
                     .capture_composer_owns_input_for(live_filter_text)
                 || self
                     .menu_syntax_mode
-                    .command_owns_input_for(live_filter_text);
+                    .command_owns_input_for(live_filter_text));
         if live_menu_syntax_owns_main_list && live_filter_text != computed_filter_text {
             return (
                 Arc::<[GroupedListItem]>::from(Vec::new()),
@@ -1175,12 +1206,13 @@ impl ScriptListApp {
                         }
                     };
 
+                    let (first_sel, last_sel) = grouped_selectable_bounds(&grouped_items, &flat_results);
                     self.main_menu_result_caches.store_grouped_results(
                         rich_cache_key,
                         grouped_items,
                         flat_results,
-                        None,
-                        None,
+                        first_sel,
+                        last_sel,
                     );
                     return self.main_menu_result_caches.clone_grouped_results();
                 }
@@ -1213,12 +1245,13 @@ impl ScriptListApp {
                         } else {
                             build_rich_cwd_root_rows(&recent_dirs)
                         };
+                        let (first_sel, last_sel) = grouped_selectable_bounds(&grouped_items, &flat_results);
                         self.main_menu_result_caches.store_grouped_results(
                             cwd_cache_key,
                             grouped_items,
                             flat_results,
-                            None,
-                            None,
+                            first_sel,
+                            last_sel,
                         );
                         return self.main_menu_result_caches.clone_grouped_results();
                     }
@@ -1248,10 +1281,23 @@ impl ScriptListApp {
                     ));
                     for row in section.rows {
                         if !row.is_selectable {
-                            grouped_items.push(GroupedListItem::SectionHeader(
-                                row.title.to_string(),
-                                row.icon.as_ref().map(|icon| icon.as_ref().to_string()),
-                            ));
+                            // Empty placeholders ("No matching directories",
+                            // etc.) need to be visibly rendered so the user
+                            // doesn't land on a blank list. Push as an Item
+                            // (it won't be in selectable bounds because the
+                            // SpineListRow's is_selectable is false). Other
+                            // non-selectable rows render as section headers.
+                            if matches!(row.kind, crate::spine::list::SpineListRowKind::Empty) {
+                                let flat_index = flat_results.len();
+                                flat_results
+                                    .push(scripts::SearchResult::SpineProjection(row));
+                                grouped_items.push(GroupedListItem::Item(flat_index));
+                            } else {
+                                grouped_items.push(GroupedListItem::SectionHeader(
+                                    row.title.to_string(),
+                                    row.icon.as_ref().map(|icon| icon.as_ref().to_string()),
+                                ));
+                            }
                             continue;
                         }
                         let flat_index = flat_results.len();
@@ -1261,12 +1307,13 @@ impl ScriptListApp {
                     }
                 }
 
+                let (first_sel, last_sel) = grouped_selectable_bounds(&grouped_items, &flat_results);
                 self.main_menu_result_caches.store_grouped_results(
                     spine_cache_key,
                     grouped_items,
                     flat_results,
-                    None,
-                    None,
+                    first_sel,
+                    last_sel,
                 );
                 return self.main_menu_result_caches.clone_grouped_results();
             }
@@ -1379,14 +1426,17 @@ impl ScriptListApp {
             );
         }
         let raw_filter_text = self.computed_filter_text.clone();
-        let menu_syntax_owns_main_list = self.menu_syntax_object_selector_state.owns_main_list()
-            || self.menu_syntax_trigger_popup_state.owns_main_list()
-            || self
-                .menu_syntax_mode
-                .capture_composer_owns_input_for(&raw_filter_text)
-            || self
-                .menu_syntax_mode
-                .command_owns_input_for(&raw_filter_text);
+        let spine_owns_for_computed = self.spine_projection_owns_main_list()
+            && self.spine_parse.input == raw_filter_text;
+        let menu_syntax_owns_main_list = !spine_owns_for_computed
+            && (self.menu_syntax_object_selector_state.owns_main_list()
+                || self.menu_syntax_trigger_popup_state.owns_main_list()
+                || self
+                    .menu_syntax_mode
+                    .capture_composer_owns_input_for(&raw_filter_text)
+                || self
+                    .menu_syntax_mode
+                    .command_owns_input_for(&raw_filter_text));
 
         let (grouped_items, flat_results) = if menu_syntax_owns_main_list {
             // A composer-style menu-syntax surface owns the input. Suppress

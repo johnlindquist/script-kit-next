@@ -750,7 +750,7 @@ fn audit_workflow_affordance_surface(
         }
 
         "file_search" => {
-            let has_mini_layout = combined.contains("render_minimal_list_prompt_scaffold(");
+            let has_main_layout = combined.contains("render_minimal_list_prompt_scaffold(");
             let has_expanded_layout = combined.contains("render_expanded_view_scaffold(");
             let has_layout_checkpoint = combined.contains("file_search_chrome_checkpoint");
             let has_hint_audit = combined.contains("emit_prompt_hint_audit(\"file_search\"");
@@ -763,7 +763,7 @@ fn audit_workflow_affordance_surface(
             let has_expanded_chrome_audit =
                 combined.contains("PromptChromeAudit::expanded(\"file_search\"");
 
-            if has_mini_layout
+            if has_main_layout
                 && has_expanded_layout
                 && has_layout_checkpoint
                 && has_hint_audit

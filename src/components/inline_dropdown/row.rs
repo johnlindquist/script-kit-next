@@ -579,7 +579,7 @@ pub(crate) fn render_compact_synopsis_strip(
     let border = gpui::rgba((footer_colors.border << 8) | 0x50);
     let description_height = compact_synopsis_height_for_description(description.as_ref());
     let hint_opacity_byte =
-        (crate::window_resize::mini_layout::HINT_TEXT_OPACITY * 255.0).round() as u32;
+        (crate::window_resize::main_layout::HINT_TEXT_OPACITY * 255.0).round() as u32;
     let hint_color = gpui::rgba((theme.colors.text.primary << 8) | hint_opacity_byte);
     let meta_text = meta.clone();
 
@@ -591,7 +591,7 @@ pub(crate) fn render_compact_synopsis_strip(
         .bg(footer_bg)
         .border_t_1()
         .border_color(border)
-        .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
+        .px(px(crate::window_resize::main_layout::HINT_STRIP_PADDING_X))
         .py(px(8.0))
         .flex()
         .flex_col()

@@ -847,7 +847,17 @@ struct ScriptListApp {
     spine_parse: crate::spine::SpineParse,
     spine_projection: Option<crate::spine::SpineCursorProjection>,
     spine_cwd: Option<std::path::PathBuf>,
+    /// Human-readable label for the resolved CWD (e.g. "Home", "Desktop").
+    /// Surfaced as the footer chip so the user sees their working directory
+    /// even though the `>:home` segment is stripped from the input bar.
+    spine_cwd_label: Option<String>,
     spine_cwd_revision: u64,
+    /// True while the user is inside FileSearchView for the purpose of
+    /// picking a working directory (entered by typing `>` in the main
+    /// menu). Enter on a directory in this mode sets `spine_cwd` and
+    /// returns to ScriptList instead of opening the directory with the
+    /// default app.
+    pub(crate) cwd_pick_mode: bool,
     spine_live_preview_cache: crate::spine::live_preview::SpineLivePreviewCache,
     /// Cached state for the menu-syntax trigger popup. `filter_input_change` runs
     /// `plan_trigger_popup_transition` on every filter update and keeps this

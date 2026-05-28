@@ -255,6 +255,10 @@ impl ScriptListApp {
                             }
                         }
                         "enter" => {
+                            if view.try_handle_spine_enter(window, ctx) {
+                                logging::log("STDIN", "SimulateKey: Enter - spine consumed (fallback)");
+                                return;
+                            }
                             logging::log("STDIN", "SimulateKey: Enter - execute fallback");
                             view.execute_selected_fallback(ctx);
                         }
@@ -349,6 +353,10 @@ impl ScriptListApp {
                                     logging::log("STDIN", "SimulateKey: Enter - accept menu-syntax popup");
                                     return;
                                 }
+                            }
+                            if view.try_handle_spine_enter(window, ctx) {
+                                logging::log("STDIN", "SimulateKey: Enter - spine consumed");
+                                return;
                             }
                             logging::log("STDIN", "SimulateKey: Enter - execute selected");
                             view.execute_selected(ctx);
@@ -505,6 +513,46 @@ impl ScriptListApp {
                             if let Some((_, file)) =
                                 view.selected_file_search_result_owned()
                             {
+                                if view.cwd_pick_mode {
+                                    if file.file_type
+                                        == crate::file_search::FileType::Directory
+                                    {
+                                        let label = crate::file_search::shorten_path(
+                                            &file.path,
+                                        )
+                                        .trim_end_matches('/')
+                                        .to_string();
+                                        logging::log(
+                                            "STDIN",
+                                            &format!(
+                                                "SimulateKey: Enter (cwd-pick) - set cwd to {}",
+                                                &file.path
+                                            ),
+                                        );
+                                        view.spine_cwd = Some(
+                                            std::path::PathBuf::from(&file.path),
+                                        );
+                                        view.spine_cwd_label = Some(label);
+                                        view.spine_cwd_revision =
+                                            view.spine_cwd_revision.wrapping_add(1);
+                                        view.cwd_pick_mode = false;
+                                        view.invalidate_grouped_cache();
+                                        view.prewarm_acp_for_spine_cwd(ctx);
+                                        view.reset_to_script_list(ctx);
+                                        view.clear_filter(window, ctx);
+                                        view.record_return_to_script_list_submit(
+                                            "cwd_pick",
+                                            "simulate_key_enter",
+                                            Some(&file.path),
+                                        );
+                                    } else {
+                                        logging::log(
+                                            "STDIN",
+                                            "SimulateKey: Enter (cwd-pick) - selection is a file, ignoring",
+                                        );
+                                    }
+                                    return;
+                                }
                                 logging::log(
                                     "STDIN",
                                     &format!(
@@ -1108,6 +1156,36 @@ impl ScriptListApp {
                 } else if has_cmd && key_lower == "p" {
                     logging::log("STDIN", "SimulateKey: Cmd+P - open history command from Agent Chat");
                     view.handle_action("acp_show_history".into(), window, ctx);
+                } else if {
+                    // Spine projection in ACP owns Up/Down for row selection
+                    // and Escape to dismiss. These short-circuit before the
+                    // legacy actions / cancel-streaming paths.
+                    let spine_handled = entity_clone.update(ctx, |chat, cx| {
+                        if !chat.acp_spine_owns_list() {
+                            return false;
+                        }
+                        match key_lower.as_str() {
+                            "up" | "arrowup" => {
+                                chat.move_acp_spine_selection(-1, cx);
+                                true
+                            }
+                            "down" | "arrowdown" => {
+                                chat.move_acp_spine_selection(1, cx);
+                                true
+                            }
+                            "escape" if !view.show_actions_popup => {
+                                chat.dismiss_acp_spine_projection(cx);
+                                true
+                            }
+                            _ => false,
+                        }
+                    });
+                    if spine_handled {
+                        logging::log("STDIN", &format!("SimulateKey: '{}' - spine handled (ACP)", key_lower));
+                    }
+                    spine_handled
+                } {
+                    // Spine handled it; no further action.
                 } else if view.show_actions_popup && key_lower == "escape" {
                     logging::log("STDIN", "SimulateKey: Escape - close Agent Chat actions dialog");
                     view.close_actions_popup(ActionsDialogHost::AcpChat, window, ctx);
@@ -1141,19 +1219,46 @@ impl ScriptListApp {
                     view.close_tab_ai_harness_terminal_with_window(window, ctx);
                     view.close_and_reset_window(ctx);
                 } else if has_cmd && key_lower == "enter" && !has_shift {
-                    logging::log(
-                        "STDIN",
-                        "SimulateKey: Cmd+Enter - replace focused-text mini output",
-                    );
-                    entity_clone.update(ctx, |chat, cx| {
-                        if chat.is_focused_text_mini() {
-                            chat.perform_focused_text_mini_action(
-                                crate::ai::acp::view::FocusedTextMiniAction::Replace,
-                                cx,
-                            );
+                    // Spine prompt submission takes precedence in ACP. If the
+                    // composer parses a valid prompt plan (resolved context,
+                    // free-text, etc.), submit it. Otherwise fall back to the
+                    // focused-text mini replace action.
+                    let spine_submitted = entity_clone.update(ctx, |chat, cx| {
+                        chat.try_submit_acp_spine_prompt_plan(cx)
+                    });
+                    if spine_submitted {
+                        logging::log("STDIN", "SimulateKey: Cmd+Enter - spine submitted (ACP)");
+                    } else {
+                        logging::log(
+                            "STDIN",
+                            "SimulateKey: Cmd+Enter - replace focused-text mini output",
+                        );
+                        entity_clone.update(ctx, |chat, cx| {
+                            if chat.is_focused_text_mini() {
+                                chat.perform_focused_text_mini_action(
+                                    crate::ai::acp::view::FocusedTextMiniAction::Replace,
+                                    cx,
+                                );
+                            }
+                        });
+                    }
+                } else if key_lower == "enter" && !has_shift && {
+                    // When the ACP composer's Spine projection owns the list,
+                    // Enter must accept the selected sigil row, not submit the
+                    // prompt. Protocol dispatch bypasses GPUI handle_key_down,
+                    // so we must check here too.
+                    let spine_consumed = entity_clone.update(ctx, |chat, cx| {
+                        if chat.acp_spine_owns_list() {
+                            chat.accept_acp_spine_projection_row(window, cx)
+                        } else {
+                            false
                         }
                     });
-                } else if key_lower == "enter" && !has_shift {
+                    if spine_consumed {
+                        logging::log("STDIN", "SimulateKey: Enter - spine accepted row (ACP)");
+                    }
+                    !spine_consumed
+                } {
                     logging::log("STDIN", "SimulateKey: Enter - submit ACP input");
                     entity_clone.update(ctx, |chat, cx| {
                         if chat.has_focused_text_context() {
@@ -1170,14 +1275,21 @@ impl ScriptListApp {
                         }
                     });
                 } else if key_lower == "backspace" {
-                    entity_clone.update(ctx, |chat, cx| {
-                        if let Some(thread) = chat.thread() {
-                            thread.update(cx, |thread, cx| {
-                                thread.input.backspace();
-                                cx.notify();
-                            });
-                        }
+                    let atomic = entity_clone.update(ctx, |chat, cx| {
+                        chat.try_atomic_token_backspace(cx)
                     });
+                    if !atomic {
+                        entity_clone.update(ctx, |chat, cx| {
+                            if let Some(thread) = chat.thread() {
+                                thread.update(cx, |thread, cx| {
+                                    thread.input.backspace();
+                                    cx.notify();
+                                });
+                            }
+                        });
+                    } else {
+                        logging::log("STDIN", "SimulateKey: Backspace - atomic token removed (ACP)");
+                    }
                 } else if key_lower.chars().count() == 1 {
                     let ch = key_lower.chars().next().unwrap_or(' ');
                     entity_clone.update(ctx, |chat, cx| {

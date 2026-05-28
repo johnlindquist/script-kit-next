@@ -21,6 +21,12 @@ impl ScriptListApp {
     /// snapshot tied to the current raw input instead of racing the filter
     /// coalescer's `computed_filter_text` field.
     pub(crate) fn set_menu_syntax_mode_from_filter(&mut self, raw: &str) {
+        if self.spine_enabled && raw.starts_with('>') {
+            self.menu_syntax_mode = crate::menu_syntax::MenuSyntaxMode::default();
+            self.menu_syntax_object_selector_state = Default::default();
+            self.menu_syntax_trigger_popup_state = Default::default();
+            return;
+        }
         let capture_targets =
             crate::menu_syntax::registered_capture_targets_from_scripts(&self.scripts);
         self.menu_syntax_mode = crate::menu_syntax::MenuSyntaxMode::from_input_with_capture_targets(
@@ -221,7 +227,7 @@ impl ScriptListApp {
                 category = "FILE_SEARCH",
                 query,
                 directory = %parsed.directory,
-                "Mini file-search first-paint seed found no directory rows"
+                "File-search first-paint seed found no directory rows"
             );
             return false;
         }
@@ -240,7 +246,7 @@ impl ScriptListApp {
             directory = %parsed.directory,
             cached_count = self.cached_file_results.len(),
             display_count = self.file_search_display_indices.len(),
-            "Seeded mini file-search directory rows before first paint"
+            "Seeded file-search directory rows before first paint"
         );
 
         true
@@ -329,10 +335,19 @@ impl ScriptListApp {
             self.file_search_sort_mode = crate::actions::FileSearchSortMode::default();
         }
 
-        let stabilize_fresh_mini_directory_entry = !preserve_current_results_until_first_batch
-            && !preserve_sort_mode
-            && presentation == FileSearchPresentation::Mini;
-        let seeded_initial_results = stabilize_fresh_mini_directory_entry
+        // Any non-preserving open into a concrete directory — the Mini `~`
+        // browse, the Full `~` open, the Full cwd picker opened via Tab
+        // (query "~/"), and the Backspace reseed to "/" — paints that
+        // directory's rows synchronously on the first frame instead of flashing
+        // a loading skeleton while the async stream task spawns. The
+        // synchronous listing is sub-millisecond for typical directories
+        // (~0.5 ms for a 100-entry home dir); the stream still runs afterward
+        // to reconcile. In-view subdirectory browsing/filtering uses
+        // `open_file_search_view_preserving_current_results`
+        // (preserve_current_results_until_first_batch = true), which keeps the
+        // previous rows visible and is intentionally left on the async path.
+        let fresh_directory_entry = !preserve_current_results_until_first_batch;
+        let seeded_initial_results = fresh_directory_entry
             && self.seed_file_search_directory_results_for_first_paint(&query);
         let seed_fresh_full_default = !preserve_current_results_until_first_batch
             && !preserve_sort_mode

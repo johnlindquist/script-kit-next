@@ -330,6 +330,10 @@ impl AcpThread {
         self.cwd = cwd;
     }
 
+    pub(crate) fn cwd(&self) -> &PathBuf {
+        &self.cwd
+    }
+
     /// Create a new thread entity with optional initial input.
     ///
     /// Immediately binds the permission listener. Does NOT send an ACP turn —

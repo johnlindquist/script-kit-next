@@ -179,7 +179,7 @@ pub const fn plan_trigger_builtin_route(id: TriggerBuiltin) -> AppRoute {
         TriggerBuiltin::Settings => AppRoute::ExecuteBuiltin("builtin/settings"),
         TriggerBuiltin::ChooseTheme => AppRoute::ExecuteBuiltin("builtin/choose-theme"),
         TriggerBuiltin::ScriptKitSelfie => AppRoute::ExecuteBuiltin("builtin/script-kit-selfie"),
-        TriggerBuiltin::MiniMainWindow => AppRoute::ExecuteBuiltin("builtin/mini-main-window"),
+        TriggerBuiltin::MainWindow => AppRoute::ExecuteBuiltin("builtin/main-window"),
         TriggerBuiltin::QuickTerminal => AppRoute::ExecuteBuiltin("builtin/quick-terminal"),
         TriggerBuiltin::Webcam => AppRoute::ExecuteBuiltin("builtin/webcam"),
     }
@@ -248,7 +248,7 @@ mod tests {
             ("builtin/choose-theme", 1),
             ("builtin/design-non-list-states", 1),
             ("builtin/manage-installed-kits", 1),
-            ("builtin/mini-main-window", 1),
+            ("builtin/main-window", 1),
             ("builtin/new-script", 1),
             ("builtin/quick-terminal", 1),
             ("builtin/script-kit-selfie", 1),

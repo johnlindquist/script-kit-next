@@ -83,6 +83,96 @@ impl ScriptListApp {
         }
     }
 
+    /// Exit cwd-pick mode (Tab → FileSearchView) and return to the main menu
+    /// without setting a cwd. Used by Escape and by the second Backspace at
+    /// the disk root.
+    fn exit_cwd_pick_to_main_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        tracing::info!(
+            target: "script_kit::spine",
+            event = "cwd_pick_exit_to_main_menu",
+            "Left cwd-pick FileSearchView without selecting a cwd"
+        );
+        self.cwd_pick_mode = false;
+        self.reset_to_script_list(cx);
+        self.clear_filter(window, cx);
+    }
+
+    /// Re-seed the cwd-pick FileSearchView with `query` (e.g. "/"), keeping the
+    /// shared gpui input in sync without re-triggering the filter change
+    /// handler.
+    fn reseed_cwd_pick_query(
+        &mut self,
+        query: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_file_search_view(query.to_string(), FileSearchPresentation::Full, cx);
+        self.suppress_filter_events = true;
+        self.gpui_input_state.update(cx, |state, cx| {
+            state.set_value(query.to_string(), window, cx);
+            let len = query.len();
+            state.set_selection(len, len, window, cx);
+        });
+        self.suppress_filter_events = false;
+    }
+
+    /// Handle Escape / Backspace inside the cwd-pick FileSearchView.
+    ///
+    /// - Escape: return to the main menu in one press.
+    /// - Backspace from "~/": collapse to "/" (disk root).
+    /// - Backspace from "/": return to the main menu (so two deletes from the
+    ///   initial "~/" land back on the launcher).
+    ///
+    /// Returns `true` when the key was consumed. Any other state (deeper paths,
+    /// modified keys) is left to normal input editing.
+    fn try_handle_cwd_pick_nav_key(
+        &mut self,
+        event: &gpui::KeystrokeEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.cwd_pick_mode || !matches!(self.current_view, AppView::FileSearchView { .. }) {
+            return false;
+        }
+
+        let key = event.keystroke.key.as_str();
+        let modifiers = &event.keystroke.modifiers;
+        let has_modifier =
+            modifiers.platform || modifiers.alt || modifiers.control || modifiers.shift;
+
+        if crate::ui_foundation::is_key_escape(key) && !has_modifier {
+            self.exit_cwd_pick_to_main_menu(window, cx);
+            return true;
+        }
+
+        let is_backspace =
+            key.eq_ignore_ascii_case("backspace") || key.eq_ignore_ascii_case("delete");
+        if is_backspace && !has_modifier {
+            let query = match &self.current_view {
+                AppView::FileSearchView { query, .. } => query.clone(),
+                _ => return false,
+            };
+            match query.as_str() {
+                "~/" => {
+                    tracing::info!(
+                        target: "script_kit::spine",
+                        event = "cwd_pick_backspace_to_disk_root",
+                        "Backspace collapsed cwd-pick query from ~/ to /"
+                    );
+                    self.reseed_cwd_pick_query("/", window, cx);
+                    return true;
+                }
+                "/" => {
+                    self.exit_cwd_pick_to_main_menu(window, cx);
+                    return true;
+                }
+                _ => return false,
+            }
+        }
+
+        false
+    }
+
     fn handle_main_window_actions_key_intent(
         &mut self,
         intent: MainWindowActionsKeyIntent,
@@ -837,8 +927,10 @@ impl ScriptListApp {
                 input: String::new(),
             },
             spine_projection: None,
-            spine_cwd: None,
+            spine_cwd: dirs::home_dir().map(|h| h.join(".scriptkit")),
+            spine_cwd_label: Some("~/.scriptkit".to_string()),
             spine_cwd_revision: 0,
+            cwd_pick_mode: false,
             spine_live_preview_cache: Default::default(),
             menu_syntax_trigger_popup_state:
                 crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState::default(),
@@ -1141,6 +1233,25 @@ impl ScriptListApp {
                     cx.stop_propagation();
                     return;
                 }
+
+                // cwd-pick mode (Tab → FileSearchView) owns Escape/Backspace so
+                // the launcher's progressive-escape semantics apply: one Escape
+                // returns to the main menu, Backspace from "~/" collapses to the
+                // disk root, and Backspace from "/" returns to the main menu.
+                // Must fire before the Input component eats Backspace.
+                {
+                    let mut consumed = false;
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            consumed = this.try_handle_cwd_pick_nav_key(event, window, cx);
+                        });
+                    }
+                    if consumed {
+                        cx.stop_propagation();
+                        return;
+                    }
+                }
+
                 let global_key_intent = main_window_global_key_intent(event);
                 if let Some(intent) = global_key_intent {
                     if let Some(app) = app_entity.upgrade() {
@@ -1319,6 +1430,41 @@ impl ScriptListApp {
                                 && !has_shift
                                 && this.accept_ghost_prediction(window, cx)
                             {
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            // Tab on ScriptList opens the cwd picker — the
+                            // chip-as-button affordance. Fires only when
+                            // nothing else above (menu-syntax popups, ghost
+                            // prediction, capture form, ACP/terminal locals)
+                            // claimed the keystroke. The picker is the same
+                            // FileSearchView that `>` used to open; the
+                            // user's first typed char inside it transitions
+                            // into ordinary file navigation.
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && !has_shift
+                                && this.spine_enabled
+                                && !this.show_actions_popup
+                            {
+                                tracing::info!(
+                                    target: "script_kit::spine",
+                                    event = "cwd_pick_enter_file_search_tab",
+                                    "Tab → FileSearchView (cwd pick)"
+                                );
+                                this.cwd_pick_mode = true;
+                                this.open_file_search_view(
+                                    "~/".to_string(),
+                                    FileSearchPresentation::Full,
+                                    cx,
+                                );
+                                this.suppress_filter_events = true;
+                                this.gpui_input_state.update(cx, |state, cx| {
+                                    state.set_value("~/".to_string(), window, cx);
+                                    let len = "~/".len();
+                                    state.set_selection(len, len, window, cx);
+                                });
+                                this.suppress_filter_events = false;
                                 cx.stop_propagation();
                                 return;
                             }

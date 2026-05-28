@@ -460,7 +460,7 @@ fn main_menu_story_shell_config() -> super::IntegratedSurfaceShellConfig {
         height: 480.0,
         corner_radius: 12.0,
         body_padding: 0.0,
-        footer_height: crate::window_resize::mini_layout::HINT_STRIP_HEIGHT,
+        footer_height: crate::window_resize::main_layout::HINT_STRIP_HEIGHT,
     }
 }
 
@@ -552,10 +552,10 @@ fn render_main_menu_header(live_spec: MainMenuLiveSpec, compact: bool) -> gpui::
     let mut header = gpui::div()
         .w_full()
         .px(gpui::px(
-            crate::window_resize::mini_layout::HEADER_PADDING_X,
+            crate::window_resize::main_layout::HEADER_PADDING_X,
         ))
         .py(gpui::px(
-            crate::window_resize::mini_layout::HEADER_PADDING_Y,
+            crate::window_resize::main_layout::HEADER_PADDING_Y,
         ))
         .flex()
         .flex_row()
@@ -721,7 +721,7 @@ fn render_main_menu_footer_from_snapshot(
         .colors
         .text
         .primary
-        .with_opacity(crate::window_resize::mini_layout::HINT_TEXT_OPACITY)
+        .with_opacity(crate::window_resize::main_layout::HINT_TEXT_OPACITY)
         .to_rgb();
     let shortcut_colors = crate::components::hint_strip::whisper_inline_shortcut_colors(
         footer_text.into(),
@@ -740,7 +740,7 @@ fn render_main_menu_footer_from_snapshot(
                 .w_full()
                 .h_full()
                 .px(gpui::px(
-                    crate::window_resize::mini_layout::HINT_STRIP_PADDING_X,
+                    crate::window_resize::main_layout::HINT_STRIP_PADDING_X,
                 ))
                 .flex()
                 .flex_row()
@@ -1099,7 +1099,7 @@ mod tests {
         assert_eq!(shell.height, 480.0);
         assert_eq!(
             shell.footer_height,
-            crate::window_resize::mini_layout::HINT_STRIP_HEIGHT
+            crate::window_resize::main_layout::HINT_STRIP_HEIGHT
         );
     }
 }

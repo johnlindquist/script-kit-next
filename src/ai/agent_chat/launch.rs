@@ -32,12 +32,32 @@ pub(crate) struct PiAgentChatLaunch {
 
 impl PiAgentChatLaunch {
     pub(crate) fn from_profile(profile: ResolvedAgentChatProfile) -> Result<Self> {
-        let launch_spec = PiLaunchSpec::from_profile(&profile)
+        Self::from_profile_with_cwd_override(profile, None)
+    }
+
+    /// Resolve a launch, optionally overriding the working directory the Pi
+    /// process is spawned in.
+    ///
+    /// The Pi RPC worker bakes its `current_dir` from the launch spec at spawn
+    /// time and ignores per-turn cwd, so the user's chosen working directory
+    /// (the Spine cwd chip) must be applied here — before the warm session is
+    /// keyed and spawned — not via `AcpThread::set_cwd` afterward. Because
+    /// `pi_warm_key` includes the cwd, an overridden cwd produces a distinct
+    /// warm-session key so a default-cwd warm session is never reused for a
+    /// different directory.
+    pub(crate) fn from_profile_with_cwd_override(
+        profile: ResolvedAgentChatProfile,
+        cwd_override: Option<PathBuf>,
+    ) -> Result<Self> {
+        let mut launch_spec = PiLaunchSpec::from_profile(&profile)
             .ok_or_else(|| {
                 anyhow!(
                     "Pi Agent Chat is selected, but no Pi binary was resolved. Ship Contents/MacOS/pi in the app bundle or configure ai.piBinary / SCRIPT_KIT_PI_BINARY."
                 )
             })?;
+        if let Some(cwd_override) = cwd_override {
+            launch_spec.cwd = Some(cwd_override);
+        }
         let cwd = launch_spec
             .cwd
             .clone()

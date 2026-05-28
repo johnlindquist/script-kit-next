@@ -3,8 +3,7 @@
 //! Handles window height for different view types in Script Kit GPUI.
 //!
 //! **Key Rules:**
-//! - ScriptList (main window with preview): FIXED at 500px, never resizes
-//! - Expanded main-window list/detail surfaces: standard height, wider than mini
+//! - MainWindow: FIXED at 480px, single consolidated window mode
 //! - ArgPrompt with choices: Dynamic height based on choice count (capped at 500px)
 //! - ArgPrompt without choices (input only): Compact input-only height
 //! - Editor/Div/Term: Full height 700px
@@ -25,99 +24,99 @@ use std::sync::OnceLock;
 use tracing::{debug, info, warn};
 const RESIZE_MIN_DELTA_PX: f64 = 1.0;
 const WINDOW_RESIZE_ANIMATE: bool = false;
-const MINI_MAIN_WINDOW_MIN_HEIGHT: f32 = 480.0;
-const MINI_MAIN_WINDOW_MAX_HEIGHT: f32 = 480.0;
-const MINI_MAIN_WINDOW_HEADER_HEIGHT: f32 =
+const MAIN_WINDOW_MIN_HEIGHT: f32 = 480.0;
+const MAIN_WINDOW_MAX_HEIGHT: f32 = 480.0;
+const MAIN_WINDOW_HEADER_HEIGHT: f32 =
     crate::panel::HEADER_TOTAL_HEIGHT - crate::panel::HEADER_DIVIDER_HEIGHT;
-const MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT: f32 = 30.0;
-const MINI_MAIN_WINDOW_DIVIDER_HEIGHT: f32 = crate::panel::HEADER_DIVIDER_HEIGHT;
-const MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT: f32 = 32.0;
-pub(crate) const MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS: usize = 9;
+const MAIN_WINDOW_HINT_STRIP_HEIGHT: f32 = 30.0;
+const MAIN_WINDOW_DIVIDER_HEIGHT: f32 = crate::panel::HEADER_DIVIDER_HEIGHT;
+const MAIN_WINDOW_SECTION_HEADER_HEIGHT: f32 = 32.0;
+pub(crate) const MAIN_WINDOW_MAX_VISIBLE_ROWS: usize = 9;
 
-/// Available pixel budget for list content in the mini main window.
+/// Available pixel budget for list content in the main window.
 ///
 /// Subtracts the fixed chrome (header + divider + hint strip) from `MAX_HEIGHT`.
 #[allow(dead_code)] // Called from include!()-ed code in app_impl/ui_window.rs
-pub(crate) fn mini_main_window_list_budget_height() -> f32 {
-    MINI_MAIN_WINDOW_MAX_HEIGHT
-        - MINI_MAIN_WINDOW_HEADER_HEIGHT
-        - MINI_MAIN_WINDOW_DIVIDER_HEIGHT
-        - MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT
+pub(crate) fn main_window_list_budget_height() -> f32 {
+    MAIN_WINDOW_MAX_HEIGHT
+        - MAIN_WINDOW_HEADER_HEIGHT
+        - MAIN_WINDOW_DIVIDER_HEIGHT
+        - MAIN_WINDOW_HINT_STRIP_HEIGHT
 }
 
-/// Content height for Quick Terminal inside the mini main window shell.
+/// Content height for Quick Terminal inside the main window shell.
 ///
 /// This is the *terminal-grid-only* height (panel minus footer hint strip).
 /// Use it for the initial PTY resize hint via `TermPrompt::with_height`.
 pub fn quick_terminal_content_height() -> Pixels {
-    px(MINI_MAIN_WINDOW_MAX_HEIGHT - layout::FOOTER_HEIGHT)
+    px(MAIN_WINDOW_MAX_HEIGHT - layout::FOOTER_HEIGHT)
 }
 
-/// Full panel height for Quick Terminal inside the mini main window shell.
+/// Full panel height for Quick Terminal inside the main window shell.
 ///
 /// This matches the NSPanel size and must be used as `.h()` on the render
 /// wrapper that holds *both* the terminal entity AND the footer hint strip.
 /// Using the smaller content height here leaves a visible gap of
 /// `FOOTER_HEIGHT` pixels below the footer.
 pub fn quick_terminal_panel_height() -> Pixels {
-    px(MINI_MAIN_WINDOW_MAX_HEIGHT)
+    px(MAIN_WINDOW_MAX_HEIGHT)
 }
 
 /// Maximum number of selectable rows that can fit without clipping, given
 /// `visible_section_headers` section headers that each consume
-/// `MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT` pixels of the list budget.
+/// `MAIN_WINDOW_SECTION_HEADER_HEIGHT` pixels of the list budget.
 #[allow(dead_code)] // Called from include!()-ed code in app_impl/ui_window.rs
-pub(crate) fn capped_mini_main_window_selectable_rows(visible_section_headers: usize) -> usize {
-    let remaining_list_height = mini_main_window_list_budget_height()
-        - (visible_section_headers as f32 * MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT);
+pub(crate) fn capped_main_window_selectable_rows(visible_section_headers: usize) -> usize {
+    let remaining_list_height = main_window_list_budget_height()
+        - (visible_section_headers as f32 * MAIN_WINDOW_SECTION_HEADER_HEIGHT);
 
     if remaining_list_height <= 0.0 {
         0
     } else {
         ((remaining_list_height / LIST_ITEM_HEIGHT).floor() as usize)
-            .min(MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS)
+            .min(MAIN_WINDOW_MAX_VISIBLE_ROWS)
     }
 }
 
-/// Shared layout constants for the mini main window render branch.
+/// Shared layout constants for the main window render branch.
 /// Both resize logic and render code consume these so the geometry contract stays in sync.
 /// Constants are consumed from the binary target via `include!()` render code.
 #[allow(dead_code)]
-pub(crate) mod mini_layout {
-    /// Horizontal padding for the mini header area.
+pub(crate) mod main_layout {
+    /// Horizontal padding for the header area.
     pub const HEADER_PADDING_X: f32 = 16.0;
-    /// Vertical padding for the mini header area.
+    /// Vertical padding for the header area.
     pub const HEADER_PADDING_Y: f32 = 8.0;
-    /// Horizontal padding for the mini hint strip footer.
+    /// Horizontal padding for the hint strip footer.
     pub const HINT_STRIP_PADDING_X: f32 = 14.0;
-    /// Vertical padding for the mini hint strip footer.
+    /// Vertical padding for the hint strip footer.
     pub const HINT_STRIP_PADDING_Y: f32 = 8.0;
     /// Height of the hint strip area (matches resize contract).
-    pub const HINT_STRIP_HEIGHT: f32 = super::MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT;
+    pub const HINT_STRIP_HEIGHT: f32 = super::MAIN_WINDOW_HINT_STRIP_HEIGHT;
     /// Height reserved for the native AppKit main-window footer host.
     pub const NATIVE_MAIN_WINDOW_FOOTER_HEIGHT: f32 = HINT_STRIP_HEIGHT;
     /// Height of the divider between header and list content.
-    pub const DIVIDER_HEIGHT: f32 = super::MINI_MAIN_WINDOW_DIVIDER_HEIGHT;
+    pub const DIVIDER_HEIGHT: f32 = super::MAIN_WINDOW_DIVIDER_HEIGHT;
     /// Opacity for hint strip shortcut text (uses OPACITY_TEXT_MUTED from theme/opacity).
     pub const HINT_TEXT_OPACITY: f32 = crate::theme::opacity::OPACITY_TEXT_MUTED;
 }
-/// Build a content-aware `MiniMainWindowSizing` from grouped items.
+/// Build a content-aware `MainWindowSizing` from grouped items.
 ///
 /// Walks the grouped items list, counting selectable items and section headers
 /// visible in the first page.  Uses the header-aware row cap so that section
 /// headers explicitly reduce the available selectable-row capacity instead of
 /// silently pushing the window height into the max-clamp.
 #[allow(dead_code)] // Called from include!()-ed code in app_impl/ui_window.rs
-pub(crate) fn mini_main_window_sizing_from_grouped_items(
+pub(crate) fn main_window_sizing_from_grouped_items(
     grouped_items: &[crate::list_item::GroupedListItem],
-) -> MiniMainWindowSizing {
+) -> MainWindowSizing {
     use crate::list_item::GroupedListItem;
 
     let mut selectable_items = 0usize;
     let mut visible_section_headers = 0usize;
 
     for item in grouped_items {
-        let selectable_cap = capped_mini_main_window_selectable_rows(visible_section_headers);
+        let selectable_cap = capped_main_window_selectable_rows(visible_section_headers);
 
         if selectable_items >= selectable_cap {
             break;
@@ -136,20 +135,20 @@ pub(crate) fn mini_main_window_sizing_from_grouped_items(
         }
     }
 
-    MiniMainWindowSizing {
+    MainWindowSizing {
         selectable_items,
         visible_section_headers,
         is_empty: grouped_items.is_empty(),
     }
 }
 
-/// Content-aware sizing input for the mini main window.
+/// Content-aware sizing input for the main window.
 ///
 /// Instead of passing a flat `item_count` (which conflates section headers with
 /// selectable items), callers build this struct so the height formula can account
 /// for the different row heights of headers vs items.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) struct MiniMainWindowSizing {
+pub(crate) struct MainWindowSizing {
     /// Number of selectable items visible in the first page (capped at MAX_VISIBLE_ROWS).
     pub selectable_items: usize,
     /// Number of section headers visible in the first page.
@@ -158,27 +157,27 @@ pub(crate) struct MiniMainWindowSizing {
     pub is_empty: bool,
 }
 
-/// Reason for a mini main window resize — used for structured telemetry.
+/// Reason for a main window resize — used for structured telemetry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)] // Variants used from include!()-ed code in app_impl/ui_window.rs
-pub(crate) enum MiniResizeReason {
+pub(crate) enum ResizeReason {
     /// Filter text changed → grouped results changed → resize needed.
     FilterChanged,
     /// Grouped results changed (data refresh, view transition, etc.).
     GroupedResultsChanged,
-    /// Entering mini window mode.
+    /// Entering main window mode.
     ViewModeEntered,
     /// Flat item-count fallback was used instead of content-aware sizing.
     FlatFallback,
 }
 
-/// Emit a structured sizing receipt for every mini main window resize.
+/// Emit a structured sizing receipt for every main window resize.
 ///
 /// All mini resize paths must call this so that every height decision is
 /// machine-parseable under the `MINI_WINDOW` tracing target.
-pub(crate) fn log_mini_window_sizing(
-    reason: MiniResizeReason,
-    sizing: MiniMainWindowSizing,
+pub(crate) fn log_main_window_sizing(
+    reason: ResizeReason,
+    sizing: MainWindowSizing,
     target_height_px: f32,
 ) {
     if !crate::logging::filter_perf_trace_enabled() {
@@ -186,116 +185,91 @@ pub(crate) fn log_mini_window_sizing(
     }
 
     info!(
-        target: "MINI_WINDOW",
+        target: "MAIN_WINDOW",
         ?reason,
         selectable_items = sizing.selectable_items,
         visible_section_headers = sizing.visible_section_headers,
         is_empty = sizing.is_empty,
         target_height_px,
-        min_height_px = MINI_MAIN_WINDOW_MIN_HEIGHT,
-        max_height_px = MINI_MAIN_WINDOW_MAX_HEIGHT,
-        header_height_px = MINI_MAIN_WINDOW_HEADER_HEIGHT,
-        divider_height_px = MINI_MAIN_WINDOW_DIVIDER_HEIGHT,
-        hint_strip_height_px = MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT,
-        section_header_height_px = MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT,
-        "mini window sizing receipt"
+        min_height_px = MAIN_WINDOW_MIN_HEIGHT,
+        max_height_px = MAIN_WINDOW_MAX_HEIGHT,
+        header_height_px = MAIN_WINDOW_HEADER_HEIGHT,
+        divider_height_px = MAIN_WINDOW_DIVIDER_HEIGHT,
+        hint_strip_height_px = MAIN_WINDOW_HINT_STRIP_HEIGHT,
+        section_header_height_px = MAIN_WINDOW_SECTION_HEADER_HEIGHT,
+        "main window sizing receipt"
     );
 }
 
-/// Calculate the target height for the mini main window.
+/// Calculate the target height for the main window.
 ///
-/// Returns a fixed height to eliminate resize jank. The mini window always uses
+/// Returns a fixed height to eliminate resize jank. The main window always uses
 /// the full max height so transitions between views (e.g. main menu → file search)
 /// and filter changes never cause visible resizing.
-pub(crate) fn height_for_mini_main_window(_sizing: MiniMainWindowSizing) -> Pixels {
-    px(MINI_MAIN_WINDOW_MAX_HEIGHT)
-}
-
-/// Height for wide list/detail surfaces entered from the mini launcher.
-///
-/// Split-preview surfaces need the same vertical reading space as the standard
-/// main window, while still using their distinct full-width sizing contract.
-fn height_for_expanded_main_window_with_layout(layout_config: &LayoutConfig) -> Pixels {
-    initial_window_height_with_layout(layout_config)
-}
-
-#[allow(dead_code)] // Kept as the named runtime helper for source-audit coverage.
-pub(crate) fn height_for_expanded_main_window() -> Pixels {
-    let layout_config = runtime_layout_config();
-    height_for_expanded_main_window_with_layout(&layout_config)
+pub(crate) fn height_for_main_window(_sizing: MainWindowSizing) -> Pixels {
+    px(MAIN_WINDOW_MAX_HEIGHT)
 }
 
 /// Canonical size target for the main menu.
 ///
-/// Main menu sizing is intentionally separate from prompt sizing so a compact
-/// `MiniPrompt` cannot leak its shorter height into the next `ScriptList` show.
+/// Main menu sizing is intentionally separate from prompt sizing so a prompt
+/// cannot leak its shorter height into the next main window show.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)] // Used by binary-only main-window show/reset paths.
-pub(crate) enum MainMenuSizingTarget {
-    /// Standard script list launcher height.
-    Full,
-    /// Compact script list launcher height with grouped-result context.
-    Mini(MiniMainWindowSizing),
-}
+pub(crate) struct MainMenuSizingTarget(pub MainWindowSizing);
 
 impl MainMenuSizingTarget {
     #[allow(dead_code)] // Used by binary-only main-window show/reset paths.
     pub(crate) fn width(self) -> f32 {
-        match self {
-            Self::Full => FULL_MAIN_WINDOW_WIDTH,
-            Self::Mini(_) => MINI_MAIN_WINDOW_WIDTH,
-        }
+        MAIN_WINDOW_WIDTH
     }
 
     #[allow(dead_code)] // Used by binary-only main-window show/reset paths.
     pub(crate) fn height(self) -> Pixels {
-        match self {
-            Self::Full => initial_window_height(),
-            Self::Mini(sizing) => height_for_mini_main_window(sizing),
-        }
+        height_for_main_window(self.0)
     }
 }
 
-/// Defer a mini main window resize to the end of the current effect cycle.
+/// Defer a main window resize to the end of the current effect cycle.
 #[allow(dead_code)] // Called from include!()-ed code in app_impl/ui_window.rs
-pub(crate) fn defer_resize_to_mini_main_window(
-    sizing: MiniMainWindowSizing,
+pub(crate) fn defer_resize_to_main_window(
+    sizing: MainWindowSizing,
     window: &mut gpui::Window,
     cx: &mut gpui::App,
 ) {
-    let target_height = height_for_mini_main_window(sizing);
+    let target_height = height_for_main_window(sizing);
     crate::window_ops::queue_resize_with_width(
         f32::from(target_height),
-        Some(MINI_MAIN_WINDOW_WIDTH),
+        Some(MAIN_WINDOW_WIDTH),
         window,
         cx,
     );
 }
 
-/// Resize the mini main window synchronously.
+/// Resize the main window synchronously.
 #[allow(dead_code)] // Called from include!()-ed code in app_impl/ui_window.rs
-pub(crate) fn resize_to_mini_main_window_sync(sizing: MiniMainWindowSizing) {
-    let target_height = height_for_mini_main_window(sizing);
-    resize_first_window_to_size(target_height, Some(MINI_MAIN_WINDOW_WIDTH));
+pub(crate) fn resize_to_main_window_sync(sizing: MainWindowSizing) {
+    let target_height = height_for_main_window(sizing);
+    resize_first_window_to_size(target_height, Some(MAIN_WINDOW_WIDTH));
 }
 
-/// File search mini mode has no section headers, so sizing is a straight row cap.
+/// File search mode has no section headers, so sizing is a straight row cap.
 #[allow(dead_code)] // Called from include!()-ed code in app_impl/filter_input_*.rs
-pub(crate) fn mini_file_search_sizing(result_count: usize) -> MiniMainWindowSizing {
-    MiniMainWindowSizing {
-        selectable_items: result_count.min(MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS),
+pub(crate) fn file_search_sizing(result_count: usize) -> MainWindowSizing {
+    MainWindowSizing {
+        selectable_items: result_count.min(MAIN_WINDOW_MAX_VISIBLE_ROWS),
         visible_section_headers: 0,
         is_empty: result_count == 0,
     }
 }
 
 #[allow(dead_code)] // Called from include!()-ed code in app_impl/filter_input_*.rs
-pub(crate) fn resize_to_mini_file_search_window_sync(result_count: usize) {
-    resize_to_mini_main_window_sync(mini_file_search_sizing(result_count));
+pub(crate) fn resize_to_file_search_window_sync(result_count: usize) {
+    resize_to_main_window_sync(file_search_sizing(result_count));
 }
 
-/// Width for mini main window — same as full; single-width launcher.
-const MINI_MAIN_WINDOW_WIDTH: f32 = FULL_MAIN_WINDOW_WIDTH;
+/// Width for the main window (standard launcher)
+const MAIN_WINDOW_WIDTH: f32 = 750.0;
 const FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT: f32 = crate::panel::PROMPT_INPUT_FIELD_HEIGHT;
 const FOCUSED_TEXT_MINI_STREAMING_HEIGHT: f32 = FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT;
 const FOCUSED_TEXT_MINI_RESULT_HEIGHT: f32 = 150.0;
@@ -312,8 +286,6 @@ pub(crate) fn focused_text_mini_result_height() -> f32 {
 pub(crate) fn focused_text_mini_preview_height() -> f32 {
     (FOCUSED_TEXT_MINI_RESULT_HEIGHT - FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT).max(0.0)
 }
-/// Width for full main window (standard launcher)
-const FULL_MAIN_WINDOW_WIDTH: f32 = 750.0;
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct FrameGeometry {
     x: f64,
@@ -535,7 +507,7 @@ pub mod layout {
     /// Total input-only height (header only, no list, but with footer)
     /// Uses HEADER_PADDING_Y from ui::chrome (same as render scaffold) for accurate height
     pub const ARG_HEADER_HEIGHT: f32 =
-        (super::mini_layout::HEADER_PADDING_Y * 2.0) + ARG_INPUT_LINE_HEIGHT + FOOTER_HEIGHT;
+        (super::main_layout::HEADER_PADDING_Y * 2.0) + ARG_INPUT_LINE_HEIGHT + FOOTER_HEIGHT;
 
     /// Minimum window height (input only) - for input-only prompts
     pub const MIN_HEIGHT: Pixels = px(ARG_HEADER_HEIGHT);
@@ -596,23 +568,22 @@ fn height_for_view_with_layout(
         // Views with preview panel - FIXED height, no dynamic resizing
         // DivPrompt also uses standard height to match main window
         ViewType::ScriptList | ViewType::DivPrompt => standard_height,
-        ViewType::ExpandedMainWindow => height_for_expanded_main_window_with_layout(layout_config),
-        ViewType::MiniMainWindow | ViewType::MiniAiChat => {
+        ViewType::MainWindow | ViewType::MiniAiChat => {
             // Flat item_count fallback: assumes all items are selectable (no section headers).
-            // Prefer height_for_mini_main_window(MiniMainWindowSizing) for content-aware sizing.
-            let visible_items = item_count.min(MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS);
-            let sizing = MiniMainWindowSizing {
+            // Prefer height_for_main_window(MainWindowSizing) for content-aware sizing.
+            let visible_items = item_count.min(MAIN_WINDOW_MAX_VISIBLE_ROWS);
+            let sizing = MainWindowSizing {
                 selectable_items: visible_items,
                 visible_section_headers: 0,
                 is_empty: item_count == 0,
             };
-            let height = height_for_mini_main_window(sizing);
+            let height = height_for_main_window(sizing);
             warn!(
-                target: "MINI_WINDOW",
+                target: "MAIN_WINDOW",
                 item_count,
-                "flat mini sizing fallback used; content-aware sizing should be preferred"
+                "flat sizing fallback used; content-aware sizing should be preferred"
             );
-            log_mini_window_sizing(MiniResizeReason::FlatFallback, sizing, f32::from(height));
+            log_main_window_sizing(ResizeReason::FlatFallback, sizing, f32::from(height));
             height
         }
         ViewType::FocusedTextMini => match item_count {
@@ -648,16 +619,11 @@ fn initial_window_height_with_layout(layout_config: &LayoutConfig) -> Pixels {
 pub enum ViewType {
     /// Script list view (main launcher) - has preview panel, FIXED height
     ScriptList,
-    /// Wide list/detail surface entered from the mini main window.
-    ///
-    /// Uses full width for preview/detail panes while preserving mini height so
-    /// the header/input y-position does not drift during transitions.
-    ExpandedMainWindow,
-    /// Script list in compact main-window mode - dynamic height based on item count
-    MiniMainWindow,
-    /// Mini prompt rendered in the compact main-window width.
+    /// Main window — consolidated single window mode.
+    MainWindow,
+    /// Prompt rendered in the main window width.
     MiniPrompt,
-    /// Mini inline AI chat rendered in the compact main-window width.
+    /// Inline AI chat rendered in the main window width.
     MiniAiChat,
     /// Focused-text Mini Agent rendered as a compact input/output overlay.
     FocusedTextMini,
@@ -687,16 +653,15 @@ pub fn height_for_view(view_type: ViewType, item_count: usize) -> Pixels {
 }
 /// Get the target width for a specific view type, if it differs from current.
 ///
-/// Returns `Some(width)` when the view needs a specific width (e.g. mini mode),
+/// Returns `Some(width)` when the view needs a specific width (e.g. main window mode),
 /// or `None` when the current width should be preserved.
 pub fn width_for_view(view_type: ViewType) -> Option<f32> {
     match view_type {
-        ViewType::MiniMainWindow
+        ViewType::MainWindow
         | ViewType::MiniPrompt
         | ViewType::MiniAiChat
-        | ViewType::FocusedTextMini => Some(MINI_MAIN_WINDOW_WIDTH),
-        // When leaving mini mode, restore full width
-        ViewType::ScriptList | ViewType::ExpandedMainWindow => Some(FULL_MAIN_WINDOW_WIDTH),
+        | ViewType::FocusedTextMini => Some(MAIN_WINDOW_WIDTH),
+        ViewType::ScriptList => Some(MAIN_WINDOW_WIDTH),
         _ => None,
     }
 }
@@ -746,19 +711,19 @@ pub fn resize_to_view_sync(view_type: ViewType, item_count: usize) {
     let target_width = width_for_view(view_type);
     if matches!(
         view_type,
-        ViewType::MiniMainWindow
+        ViewType::MainWindow
             | ViewType::MiniPrompt
             | ViewType::MiniAiChat
             | ViewType::FocusedTextMini
     ) {
-        let visible_rows = item_count.clamp(4, MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS);
+        let visible_rows = item_count.clamp(4, MAIN_WINDOW_MAX_VISIBLE_ROWS);
         debug!(
             view_type = ?view_type,
             width_px = target_width.unwrap_or(0.0),
             height_px = f32::from(target_height),
             item_count = item_count,
             visible_row_count = visible_rows,
-            "mini_main_window sizing selected"
+            "main_window sizing selected"
         );
     }
     if target_width.is_some() {
@@ -1010,76 +975,63 @@ mod resize_tests {
     }
 
     #[test]
-    fn test_mini_main_window_fixed_height() {
+    fn test_main_window_fixed_height() {
         let layout = default_layout();
-        // Mini main window always uses the fixed max height to prevent resize jank
+        // Main window always uses the fixed max height to prevent resize jank
         assert_eq!(
-            height_for_view_with_layout(ViewType::MiniMainWindow, 0, &layout),
-            px(MINI_MAIN_WINDOW_MAX_HEIGHT)
+            height_for_view_with_layout(ViewType::MainWindow, 0, &layout),
+            px(MAIN_WINDOW_MAX_HEIGHT)
         );
         assert_eq!(
-            height_for_view_with_layout(ViewType::MiniMainWindow, 4, &layout),
-            px(MINI_MAIN_WINDOW_MAX_HEIGHT)
+            height_for_view_with_layout(ViewType::MainWindow, 4, &layout),
+            px(MAIN_WINDOW_MAX_HEIGHT)
         );
         assert_eq!(
-            height_for_view_with_layout(ViewType::MiniMainWindow, 8, &layout),
-            px(MINI_MAIN_WINDOW_MAX_HEIGHT)
+            height_for_view_with_layout(ViewType::MainWindow, 8, &layout),
+            px(MAIN_WINDOW_MAX_HEIGHT)
         );
         assert_eq!(
-            height_for_view_with_layout(ViewType::MiniMainWindow, 100, &layout),
-            px(MINI_MAIN_WINDOW_MAX_HEIGHT)
+            height_for_view_with_layout(ViewType::MainWindow, 100, &layout),
+            px(MAIN_WINDOW_MAX_HEIGHT)
         );
     }
 
     #[test]
-    fn test_expanded_main_window_uses_standard_height() {
-        let layout = default_layout();
+    fn test_main_window_width() {
         assert_eq!(
-            height_for_view_with_layout(ViewType::ExpandedMainWindow, 0, &layout),
-            layout::STANDARD_HEIGHT
-        );
-        assert_eq!(
-            height_for_view_with_layout(ViewType::ExpandedMainWindow, 100, &layout),
-            layout::STANDARD_HEIGHT
-        );
-        assert_eq!(
-            height_for_view_with_layout(ViewType::ExpandedMainWindow, 0, &layout),
-            initial_window_height_with_layout(&layout)
-        );
-        assert_eq!(
-            width_for_view(ViewType::ExpandedMainWindow),
-            Some(FULL_MAIN_WINDOW_WIDTH)
+            width_for_view(ViewType::MainWindow),
+            Some(MAIN_WINDOW_WIDTH)
         );
     }
 
     #[test]
-    fn test_mini_height_fixed_regardless_of_content() {
+    fn test_main_window_height_fixed_regardless_of_content() {
         // All sizing configurations return the fixed max height
         assert_eq!(
-            f32::from(height_for_mini_main_window(MiniMainWindowSizing {
+            f32::from(height_for_main_window(MainWindowSizing {
                 selectable_items: 3,
                 visible_section_headers: 0,
                 is_empty: false,
             })),
-            MINI_MAIN_WINDOW_MAX_HEIGHT
+            MAIN_WINDOW_MAX_HEIGHT
         );
 
         assert_eq!(
-            f32::from(height_for_mini_main_window(MiniMainWindowSizing {
+            f32::from(height_for_main_window(MainWindowSizing {
                 selectable_items: 6,
                 visible_section_headers: 1,
                 is_empty: false,
             })),
-            MINI_MAIN_WINDOW_MAX_HEIGHT
+            MAIN_WINDOW_MAX_HEIGHT
         );
 
         assert_eq!(
-            f32::from(height_for_mini_main_window(MiniMainWindowSizing {
+            f32::from(height_for_main_window(MainWindowSizing {
                 selectable_items: 8,
                 visible_section_headers: 2,
                 is_empty: false,
             })),
-            MINI_MAIN_WINDOW_MAX_HEIGHT
+            MAIN_WINDOW_MAX_HEIGHT
         );
     }
 
@@ -1175,8 +1127,8 @@ mod resize_tests {
             px(540.0)
         );
         assert_eq!(
-            height_for_view_with_layout(ViewType::ExpandedMainWindow, 0, &custom_layout),
-            px(540.0)
+            height_for_view_with_layout(ViewType::MainWindow, 0, &custom_layout),
+            px(MAIN_WINDOW_MAX_HEIGHT)
         );
         assert_eq!(
             height_for_view_with_layout(ViewType::EditorPrompt, 0, &custom_layout),
@@ -1255,30 +1207,26 @@ mod resize_tests {
     }
 
     #[test]
-    fn test_width_for_view_mini_main_window() {
+    fn test_width_for_view_main_window() {
         assert_eq!(
-            width_for_view(ViewType::MiniMainWindow),
-            Some(MINI_MAIN_WINDOW_WIDTH)
+            width_for_view(ViewType::MainWindow),
+            Some(MAIN_WINDOW_WIDTH)
         );
         assert_eq!(
             width_for_view(ViewType::MiniPrompt),
-            Some(MINI_MAIN_WINDOW_WIDTH)
+            Some(MAIN_WINDOW_WIDTH)
         );
         assert_eq!(
             width_for_view(ViewType::MiniAiChat),
-            Some(MINI_MAIN_WINDOW_WIDTH)
+            Some(MAIN_WINDOW_WIDTH)
         );
     }
 
     #[test]
-    fn test_width_for_view_script_list_restores_full() {
+    fn test_width_for_view_script_list() {
         assert_eq!(
             width_for_view(ViewType::ScriptList),
-            Some(FULL_MAIN_WINDOW_WIDTH)
-        );
-        assert_eq!(
-            width_for_view(ViewType::ExpandedMainWindow),
-            Some(FULL_MAIN_WINDOW_WIDTH)
+            Some(MAIN_WINDOW_WIDTH)
         );
     }
 
@@ -1292,9 +1240,8 @@ mod resize_tests {
     }
 
     #[test]
-    fn test_mini_main_window_width_constant() {
-        assert_eq!(MINI_MAIN_WINDOW_WIDTH, FULL_MAIN_WINDOW_WIDTH);
-        assert_eq!(FULL_MAIN_WINDOW_WIDTH, 750.0);
+    fn test_main_window_width_constant() {
+        assert_eq!(MAIN_WINDOW_WIDTH, 750.0);
     }
 
     #[test]
@@ -1337,45 +1284,45 @@ mod resize_tests {
 }
 
 #[cfg(test)]
-mod mini_main_window_layout_tests {
+mod main_window_layout_tests {
     use super::{
-        capped_mini_main_window_selectable_rows, height_for_mini_main_window, MiniMainWindowSizing,
-        MINI_MAIN_WINDOW_MAX_HEIGHT, MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS,
+        capped_main_window_selectable_rows, height_for_main_window, MainWindowSizing,
+        MAIN_WINDOW_MAX_HEIGHT, MAIN_WINDOW_MAX_VISIBLE_ROWS,
     };
 
     #[test]
     fn capped_rows_account_for_section_headers() {
         assert_eq!(
-            capped_mini_main_window_selectable_rows(0),
-            MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS
+            capped_main_window_selectable_rows(0),
+            MAIN_WINDOW_MAX_VISIBLE_ROWS
         );
-        // With 440px max, budget = 440-56-1-30 = 353; 1 header: (353-32)/40 = 8.025 → 8
-        assert_eq!(capped_mini_main_window_selectable_rows(1), 8);
-        // 2 headers: (353-64)/40 = 7.225 → 7
-        assert_eq!(capped_mini_main_window_selectable_rows(2), 7);
+        // With 480px max, budget = 480-44-1-30 = 405; 1 header: (405-32)/40 = 9.325 → 9
+        assert_eq!(capped_main_window_selectable_rows(1), 9);
+        // 2 headers: (405-64)/40 = 8.525 → 8
+        assert_eq!(capped_main_window_selectable_rows(2), 8);
     }
 
     #[test]
     fn two_headers_and_capped_rows_return_fixed_height() {
-        let height = height_for_mini_main_window(MiniMainWindowSizing {
-            selectable_items: capped_mini_main_window_selectable_rows(2),
+        let height = height_for_main_window(MainWindowSizing {
+            selectable_items: capped_main_window_selectable_rows(2),
             visible_section_headers: 2,
             is_empty: false,
         });
 
         // Fixed height regardless of content
-        assert_eq!(f32::from(height), MINI_MAIN_WINDOW_MAX_HEIGHT);
+        assert_eq!(f32::from(height), MAIN_WINDOW_MAX_HEIGHT);
     }
 
     #[test]
     fn uncapped_two_headers_and_eight_rows_would_hit_max_clamp() {
-        let height = height_for_mini_main_window(MiniMainWindowSizing {
+        let height = height_for_main_window(MainWindowSizing {
             selectable_items: 8,
             visible_section_headers: 2,
             is_empty: false,
         });
 
-        assert_eq!(f32::from(height), MINI_MAIN_WINDOW_MAX_HEIGHT);
+        assert_eq!(f32::from(height), MAIN_WINDOW_MAX_HEIGHT);
     }
 
     // --- Source-audit regression tests ---
@@ -1383,12 +1330,12 @@ mod mini_main_window_layout_tests {
     // verification can rely on machine-parseable log lines.
 
     #[test]
-    fn source_audit_mini_resize_receipt_log_exists() {
+    fn source_audit_resize_receipt_log_exists() {
         let source = std::fs::read_to_string("src/window_resize/mod.rs")
             .expect("should read window_resize/mod.rs");
         assert!(
-            source.contains("target: \"MINI_WINDOW\""),
-            "mini resize flow should emit structured MINI_WINDOW logs"
+            source.contains("target: \"MAIN_WINDOW\""),
+            "resize flow should emit structured MAIN_WINDOW logs"
         );
     }
 
@@ -1403,12 +1350,12 @@ mod mini_main_window_layout_tests {
     }
 
     #[test]
-    fn source_audit_mini_resize_reason_enum_exists() {
+    fn source_audit_resize_reason_enum_exists() {
         let source = std::fs::read_to_string("src/window_resize/mod.rs")
             .expect("should read window_resize/mod.rs");
         assert!(
-            source.contains("MiniResizeReason"),
-            "MiniResizeReason enum should exist for structured resize receipts"
+            source.contains("ResizeReason"),
+            "ResizeReason enum should exist for structured resize receipts"
         );
     }
 }

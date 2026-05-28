@@ -759,6 +759,55 @@ impl ScriptListApp {
                                 }
                             } else {
                                 if let Some(file) = get_selected_file() {
+                                    // cwd-pick mode: Enter on a directory sets
+                                    // spine_cwd and returns to ScriptList. Enter
+                                    // on a file is a no-op so the user can keep
+                                    // navigating until they pick a directory.
+                                    if this.cwd_pick_mode {
+                                        if file.file_type == FileType::Directory {
+                                            // Footer chip shows the full path
+                                            // (~/dev rather than just "dev") so
+                                            // the user can tell sibling-named
+                                            // directories apart.
+                                            let label = file_search::shorten_path(&file.path)
+                                                .trim_end_matches('/')
+                                                .to_string();
+                                            tracing::info!(
+                                                target: "script_kit::spine",
+                                                event = "cwd_pick_resolve",
+                                                path = %file.path,
+                                                label = %label,
+                                                "Enter in cwd-pick FileSearchView set spine_cwd"
+                                            );
+                                            this.spine_cwd =
+                                                Some(std::path::PathBuf::from(&file.path));
+                                            this.spine_cwd_label = Some(label);
+                                            this.spine_cwd_revision =
+                                                this.spine_cwd_revision.wrapping_add(1);
+                                            this.cwd_pick_mode = false;
+                                            this.invalidate_grouped_cache();
+                                            // Warm a Pi session for this cwd now
+                                            // so the next Cmd+Enter launches the
+                                            // agent in the chosen directory
+                                            // without a cold-start "try again".
+                                            this.prewarm_acp_for_spine_cwd(cx);
+                                            this.reset_to_script_list(cx);
+                                            this.clear_filter(window, cx);
+                                            // Sentinel: prevents the shared
+                                            // gpui input's `InputEvent::PressEnter`
+                                            // subscriber from firing
+                                            // `execute_selected` on the freshly
+                                            // restored ScriptList view.
+                                            this.record_return_to_script_list_submit(
+                                                "cwd_pick",
+                                                "file_search_enter_keydown",
+                                                Some(&file.path),
+                                            );
+                                        }
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
                                     // Portal mode: attach file to ACP chat and return.
                                     if this.is_in_attachment_portal() {
                                         if file.file_type == FileType::Directory {

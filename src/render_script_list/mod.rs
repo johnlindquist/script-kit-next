@@ -635,7 +635,11 @@ fn spine_projection_icon_kind(
     let (_, fallback_icon) = row.kind.type_accessory_info();
     row.icon
         .as_ref()
-        .and_then(|icon: &gpui::SharedString| crate::list_item::IconKind::from_icon_hint(icon.as_ref()))
+        .and_then(|icon: &gpui::SharedString| {
+            crate::list_item::IconKind::from_icon_hint(icon.as_ref()).or_else(|| {
+                Some(crate::list_item::IconKind::Svg(icon.as_ref().to_string()))
+            })
+        })
         .or_else(|| crate::list_item::IconKind::from_icon_hint(fallback_icon))
         .or_else(|| Some(crate::list_item::IconKind::Svg(fallback_icon.to_string())))
 }
@@ -805,11 +809,14 @@ impl ScriptListApp {
         let popup_owns_main_list = !handler_form_owns_input_for_render
             && (self.menu_syntax_object_selector_state.owns_main_list()
                 || self.menu_syntax_trigger_popup_state.owns_main_list());
-        let menu_syntax_owns_main_list = handler_form_owns_input_for_render
-            || popup_owns_main_list
-            || self
-                .menu_syntax_mode
-                .command_owns_input_for(&filter_text_for_render);
+        let spine_owns_main_list_for_render = self.spine_projection_owns_main_list()
+            && self.spine_parse.input == filter_text_for_render;
+        let menu_syntax_owns_main_list = !spine_owns_main_list_for_render
+            && (handler_form_owns_input_for_render
+                || popup_owns_main_list
+                || self
+                    .menu_syntax_mode
+                    .command_owns_input_for(&filter_text_for_render));
         // Keep guide cards available for bare/partial `:` refine entry, but
         // let completed advanced queries render their filtered results first.
         // Empty-state hint cards are handled by the item-count branch below.
@@ -1532,25 +1539,7 @@ impl ScriptListApp {
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control
                 {
-                    if this.spine_projection_owns_main_list() {
-                        if let Some(row) = this.selected_spine_projection_row() {
-                            if row.is_selectable
-                                && !matches!(
-                                    row.action,
-                                    crate::spine::SpineListAction::Noop
-                                )
-                            {
-                                this.apply_spine_list_action(
-                                    row.action.clone(),
-                                    window,
-                                    cx,
-                                );
-                                cx.stop_propagation();
-                                return;
-                            }
-                        }
-                    }
-                    if this.try_submit_spine_prompt_plan_from_enter(cx) {
+                    if this.try_handle_spine_enter(window, cx) {
                         cx.stop_propagation();
                         return;
                     }
@@ -1673,8 +1662,18 @@ impl ScriptListApp {
                     &self.spine_parse,
                     spine_projection,
                 );
-                for (range, role) in spine_accent_ranges {
-                    next_highlight_ranges.push((range, accent_color, role.to_string()));
+                let gpui_input_value = self.gpui_input_state.read(cx).value().to_string();
+                if gpui_input_value == self.spine_parse.input {
+                    let input_len = gpui_input_value.len();
+                    for (range, role) in spine_accent_ranges {
+                        if range.end <= input_len
+                            && range.start <= range.end
+                            && gpui_input_value.is_char_boundary(range.start)
+                            && gpui_input_value.is_char_boundary(range.end)
+                        {
+                            next_highlight_ranges.push((range, accent_color, role.to_string()));
+                        }
+                    }
                 }
             }
 
@@ -1709,7 +1708,7 @@ impl ScriptListApp {
                 // Use shared header constants for default design, design tokens for others
                 let header_padding_x = if is_default_design {
                     if is_mini {
-                        crate::window_resize::mini_layout::HEADER_PADDING_X
+                        crate::window_resize::main_layout::HEADER_PADDING_X
                     } else {
                         HEADER_PADDING_X
                     }
@@ -1718,7 +1717,7 @@ impl ScriptListApp {
                 };
                 let header_padding_y = if is_default_design {
                     if is_mini {
-                        crate::window_resize::mini_layout::HEADER_PADDING_Y
+                        crate::window_resize::main_layout::HEADER_PADDING_Y
                     } else {
                         HEADER_PADDING_Y
                     }

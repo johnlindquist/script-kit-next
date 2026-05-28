@@ -8,6 +8,8 @@ mod catalog_slash;
 mod catalog_style;
 #[allow(dead_code)]
 pub(crate) mod catalog_subsearch;
+#[allow(dead_code)]
+pub(crate) mod input_projection;
 pub mod input_spans;
 pub mod list;
 #[allow(dead_code)]

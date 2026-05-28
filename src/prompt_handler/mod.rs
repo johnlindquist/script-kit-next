@@ -9023,6 +9023,7 @@ impl ScriptListApp {
             crate::footer_popup::FooterAction::Close => "close",
             crate::footer_popup::FooterAction::Stop => "stop",
             crate::footer_popup::FooterAction::PasteResponse => "pasteResponse",
+            crate::footer_popup::FooterAction::Cwd => "cwd",
         }
         .to_string()
     }
@@ -9085,6 +9086,12 @@ impl ScriptListApp {
                     icon_token: info.icon_token.clone(),
                     action: info.action.map(Self::footer_action_name),
                     selected: info.selected,
+                    cwd_chip: info.cwd_chip.as_ref().map(|chip| {
+                        crate::protocol::ActiveFooterCwdChipSnapshot {
+                            label: chip.label.clone(),
+                            icon_token: chip.icon_token.clone(),
+                        }
+                    }),
                 })
         });
 

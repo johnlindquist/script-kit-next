@@ -1,4 +1,4 @@
-pub use crate::window_resize::mini_layout::{
+pub use crate::window_resize::main_layout::{
     DIVIDER_HEIGHT, HEADER_PADDING_X, HEADER_PADDING_Y, HINT_STRIP_HEIGHT, HINT_STRIP_PADDING_X,
     HINT_STRIP_PADDING_Y, HINT_TEXT_OPACITY,
 };
