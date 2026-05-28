@@ -142,7 +142,12 @@ fn text_builtin_profile_builds_focused_text_only_pi_rpc_launch_spec() {
         profile.cwd.as_deref(),
         Some(Path::new("/Users/test/.scriptkit/agent-chat/text"))
     );
-    assert!(profile.tools.as_ref().is_some_and(|tools| tools.is_empty()));
+    // Exactly one read-only network tool: web_search (live-info questions).
+    assert_eq!(profile.tools, Some(vec!["web_search".to_string()]));
+    assert_eq!(
+        profile.tool_policy.as_ref().and_then(|p| p.allow.clone()),
+        Some(vec!["web_search".to_string()])
+    );
     assert_eq!(
         profile.blocked_action_message.as_deref(),
         Some(TEXT_BLOCKED_ACTION_MESSAGE)
@@ -161,7 +166,15 @@ fn text_builtin_profile_builds_focused_text_only_pi_rpc_launch_spec() {
     assert_eq!(spec.profile_id.as_deref(), Some(BUILTIN_TEXT_PROFILE_ID));
     assert_eq!(spec.profile_name.as_deref(), Some("Text"));
     assert_eq!(spec.cwd.as_deref(), profile.cwd.as_deref());
-    assert!(argv.contains(&"--no-tools".to_string()));
+    // The Text/mini profile now ships exactly one read-only network tool
+    // (web_search) so live-info questions can search the web, while staying
+    // otherwise locked down (no fs, no skills, no extensions).
+    assert!(!argv.contains(&"--no-tools".to_string()));
+    let tools_value = argv
+        .windows(2)
+        .find(|pair| pair[0] == "--tools")
+        .map(|pair| pair[1].as_str());
+    assert_eq!(tools_value, Some("web_search"));
     assert!(argv.contains(&"--no-extensions".to_string()));
     assert!(argv.contains(&"--extension-policy".to_string()));
     assert!(argv.contains(&"deny".to_string()));
@@ -173,7 +186,6 @@ fn text_builtin_profile_builds_focused_text_only_pi_rpc_launch_spec() {
     assert!(argv.contains(&TEXT_APPEND_SYSTEM_PROMPT.to_string()));
     assert!(argv.contains(&"--blocked-action-message".to_string()));
     assert!(argv.contains(&TEXT_BLOCKED_ACTION_MESSAGE.to_string()));
-    assert!(!argv.contains(&"--tools".to_string()));
     assert!(!argv.contains(&"--agent".to_string()));
     assert!(!argv.contains(&"--system-prompt".to_string()));
 }

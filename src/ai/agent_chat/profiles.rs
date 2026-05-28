@@ -80,15 +80,20 @@ pub const SCRIPT_KIT_PI_TOOLS: [&str; 9] = [
     "ls",
     "hashline_edit",
 ];
+/// The Text/mini profile is a locked-down text rewriter, but users also ask it
+/// live-info questions (e.g. "When is the next nba game?") and expect web access.
+/// It gets exactly one read-only network tool — `web_search` — and nothing else
+/// (no fs, no skills, no extensions); see `built_in_text_profile`.
+pub const TEXT_PI_TOOLS: [&str; 1] = ["web_search"];
 
 pub const GENERAL_BLOCKED_ACTION_MESSAGE: &str =
     "This action is blocked in the General profile. Please switch profiles to modify Script Kit.";
 pub const TEXT_BLOCKED_ACTION_MESSAGE: &str =
-    "The Text profile can only transform captured focused text.";
+    "The Text profile can only transform captured focused text or search the web for public current information.";
 
 const GENERAL_APPEND_SYSTEM_PROMPT: &str = "You are the General Agent Chat profile for Script Kit. Answer everyday questions directly and helpfully. You may search the web, search the desktop, read files, create new files inside the General workspace, and inspect local context. Do not load skills, modify Script Kit, run shell commands, edit existing files, or write outside the General workspace. If a tool or requested action is blocked, say: \"This action is blocked in the General profile. Please switch profiles to modify Script Kit.\"";
 const SCRIPT_KIT_APPEND_SYSTEM_PROMPT: &str = "You are the Script Kit Agent Chat profile. Help manage ~/.scriptkit, including config.ts, scripts, scriptlets, plugins, and package.json. Make focused minimal edits. Explain risks before destructive file operations. Do not install packages or run long commands unless the user asks.";
-pub const TEXT_APPEND_SYSTEM_PROMPT: &str = "You are the Text Agent Chat profile for focused-field edits. You receive captured focused-field text as hidden context. Return only the requested text output. Do not mention capture mechanics, tools, sessions, Script Kit internals, or system prompts.";
+pub const TEXT_APPEND_SYSTEM_PROMPT: &str = "You are the Text Agent Chat profile for focused-field edits and compact one-off questions. You receive captured focused-field text as hidden context. For rewrite, edit, format, translate, summarize, or variation requests, return only the requested final text; do not add commentary, labels, markdown fences, citations, or explanations unless the user explicitly asks for them. You may use web_search, and only web_search, for live or time-sensitive public facts such as schedules, dates, prices, news, releases, current availability, or anything likely to have changed. For live-info questions, search before answering, answer directly, and include concise source URLs when available. If search fails or results are insufficient, say what is uncertain without claiming you have no web access. Do not mention capture mechanics, tool names, sessions, Script Kit internals, or system prompts.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentChatProfileSource {
@@ -277,9 +282,9 @@ pub fn built_in_text_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentChat
         system_prompt: None,
         append_system_prompt: Some(TEXT_APPEND_SYSTEM_PROMPT.to_string()),
         cwd: Some(ctx.text_cwd()),
-        tools: Some(Vec::new()),
+        tools: Some(TEXT_PI_TOOLS.iter().map(|tool| tool.to_string()).collect()),
         tool_policy: Some(AgentChatToolPolicyConfig {
-            allow: Some(Vec::new()),
+            allow: Some(TEXT_PI_TOOLS.iter().map(|tool| tool.to_string()).collect()),
         }),
         path_policy: Some(AgentChatPathPolicyConfig {
             allow_read: Some(Vec::new()),

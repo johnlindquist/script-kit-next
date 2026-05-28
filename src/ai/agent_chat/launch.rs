@@ -179,12 +179,38 @@ fn inline_agent_pi_profile(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ai::agent_chat::profiles::{built_in_general_profile, built_in_script_kit_profile};
+    use crate::ai::agent_chat::profiles::{
+        built_in_general_profile, built_in_script_kit_profile, built_in_text_profile,
+    };
 
     fn ctx() -> AgentChatProfileContext {
         AgentChatProfileContext {
             kit_path: PathBuf::from("/tmp/kit"),
         }
+    }
+
+    /// Returns the value following a `--flag value` pair in an argv vector.
+    fn argv_value<'a>(argv: &'a [String], flag: &str) -> Option<&'a str> {
+        argv.windows(2)
+            .find(|pair| pair[0] == flag)
+            .map(|pair| pair[1].as_str())
+    }
+
+    #[test]
+    fn text_profile_allows_only_web_search_and_no_file_access() {
+        let profile = built_in_text_profile(&ctx());
+        assert_eq!(profile.tools, Some(vec!["web_search".to_string()]));
+        assert_eq!(
+            profile.tool_policy.as_ref().and_then(|p| p.allow.clone()),
+            Some(vec!["web_search".to_string()])
+        );
+        let path_policy = profile.path_policy.as_ref().expect("path policy");
+        assert_eq!(path_policy.allow_read.as_deref(), Some(&[][..]));
+        assert_eq!(path_policy.allow_write.as_deref(), Some(&[][..]));
+        assert_eq!(profile.disable_extensions, Some(true));
+        assert_eq!(profile.disable_skills, Some(true));
+        assert_eq!(profile.disable_prompt_templates, Some(true));
+        assert_eq!(profile.no_session, Some(true));
     }
 
     #[test]
@@ -259,7 +285,11 @@ mod tests {
             launch.selected_model_id.as_deref(),
             Some("openai-codex/gpt-5.4")
         );
-        assert!(argv.contains(&"--no-tools".to_string()));
+        // The Text/mini profile now ships exactly one read-only network tool so
+        // live-info questions can search the web; it must NOT fall back to
+        // --no-tools, and must stay otherwise locked down.
+        assert!(!argv.contains(&"--no-tools".to_string()));
+        assert_eq!(argv_value(&argv, "--tools"), Some("web_search"));
         assert!(argv.contains(&"--no-extensions".to_string()));
         assert!(argv.contains(&"--no-skills".to_string()));
         assert!(argv.contains(&"--no-prompt-templates".to_string()));
