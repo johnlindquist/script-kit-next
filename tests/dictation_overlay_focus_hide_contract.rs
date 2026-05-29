@@ -218,7 +218,7 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
         "recording footer order must keep the mic glyph button at the far left"
     );
     assert!(
-        FOOTER_POPUP.contains("fn is_footer_left_pinned_mic_button(")
+        FOOTER_POPUP.contains("fn is_footer_left_pinned_button(")
             && FOOTER_POPUP.contains("button_cfg.key.as_ref() == crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN")
             && !FOOTER_POPUP.contains("&& button_cfg.label.as_ref().is_empty()")
             && FOOTER_POPUP.contains("fn footer_hint_content_layout_for_button(")

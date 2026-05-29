@@ -41,6 +41,10 @@ const FOOTER_HINT_TEXT_ALIGN_LEFT: usize = 0;
 const FOOTER_HINT_TEXT_ALIGN_RIGHT: usize = 2;
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_BUTTON_ID_PREFIX: &str = "script-kit-footer-button-";
+/// Identifier prefix for the per-button leading status dot view, so DevTools /
+/// layout proofs can find e.g. `script-kit-footer-leading-dot-agentModel`.
+#[cfg(target_os = "macos")]
+const FOOTER_HINT_LEADING_DOT_ID_PREFIX: &str = "script-kit-footer-leading-dot-";
 #[cfg(target_os = "macos")]
 const FOOTER_LEFT_INFO_ID: &str = "script-kit-footer-left-info";
 #[cfg(target_os = "macos")]
@@ -124,6 +128,13 @@ pub(crate) struct FooterButtonConfig {
     pub selected: bool,
     pub enabled: bool,
     pub disabled_reason: Option<&'static str>,
+    /// Optional status dot rendered at the leading edge of the button, INSIDE
+    /// the chip (e.g. the ACP streaming/idle dot on the Agent·Model chip). When
+    /// `Some(_)` a fixed-width dot lane is reserved so the chip's width stays
+    /// stable as the status changes; `Some(Hidden)` reserves the lane but draws
+    /// nothing. `None` reserves no lane (the common case — keeps ScriptList and
+    /// every other button dot-free).
+    pub leading_dot: Option<FooterDotStatus>,
 }
 
 impl FooterButtonConfig {
@@ -139,11 +150,19 @@ impl FooterButtonConfig {
             selected: false,
             enabled: true,
             disabled_reason: None,
+            leading_dot: None,
         }
     }
 
     pub(crate) fn selected(mut self, selected: bool) -> Self {
         self.selected = selected;
+        self
+    }
+
+    /// Reserve a fixed-width leading dot lane inside the chip and render the dot
+    /// for `status` (`Hidden` keeps the lane but draws nothing).
+    pub(crate) fn leading_dot(mut self, status: FooterDotStatus) -> Self {
+        self.leading_dot = Some(status);
         self
     }
 
@@ -310,6 +329,11 @@ struct MainWindowFooterRefreshSignature {
     selection_rgba: u32,
     hover_rgba: u32,
     left_dot_hex: Option<u32>,
+    /// Per-button leading-dot colors (parallel to `config.buttons`). A theme
+    /// change can recolor a button's status dot without changing the config, and
+    /// the AppKit dot layer is created inside the content rebuild, so this is
+    /// folded into `footer_content_changed`.
+    button_leading_dot_hexes: Vec<Option<u32>>,
 }
 
 static MAIN_WINDOW_FOOTER_REFRESH_SIGNATURE: std::sync::Mutex<
@@ -498,7 +522,7 @@ impl GpuiFooterOverlay {
         let item_height = crate::components::footer_chrome::footer_button_height(
             crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
         );
-        let key_first = is_footer_left_pinned_mic_button(&button)
+        let key_first = is_footer_left_pinned_button(&button)
             && !matches!(action, FooterAction::Cwd | FooterAction::AgentModel);
         let justify = if matches!(action, FooterAction::Cwd | FooterAction::AgentModel) {
             crate::components::footer_chrome::FooterHintContentJustify::Start
@@ -567,14 +591,14 @@ impl Render for GpuiFooterOverlay {
             .config
             .buttons
             .iter()
-            .filter(|button| is_footer_left_pinned_mic_button(button))
+            .filter(|button| is_footer_left_pinned_button(button))
             .cloned()
             .collect();
         let trailing_buttons: Vec<_> = self
             .config
             .buttons
             .iter()
-            .filter(|button| !is_footer_left_pinned_mic_button(button))
+            .filter(|button| !is_footer_left_pinned_button(button))
             .cloned()
             .collect();
         let trailing_button_widths = self.trailing_button_widths(&trailing_buttons);
@@ -1240,6 +1264,19 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
             ))
         }
     });
+    let button_leading_dot_hexes = config
+        .buttons
+        .iter()
+        .map(|button| {
+            button.leading_dot.and_then(|status| {
+                if matches!(status, FooterDotStatus::Hidden) {
+                    None
+                } else {
+                    Some(footer_dot_hex(status, &theme, true))
+                }
+            })
+        })
+        .collect::<Vec<_>>();
     let signature = MainWindowFooterRefreshSignature {
         config: config.clone(),
         content_width_bits: content_bounds.size.width.to_bits(),
@@ -1252,6 +1289,7 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
         selection_rgba: chrome.selection_rgba,
         hover_rgba: chrome.hover_rgba,
         left_dot_hex,
+        button_leading_dot_hexes,
     };
     let (
         footer_geometry_changed,
@@ -1275,6 +1313,7 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
             .map(|previous| {
                 previous.config != signature.config
                     || previous.content_width_bits != signature.content_width_bits
+                    || previous.button_leading_dot_hexes != signature.button_leading_dot_hexes
             })
             .unwrap_or(true);
         let footer_visuals_changed = guard
@@ -1940,15 +1979,35 @@ unsafe fn layout_footer_left_info_hit_target(
 
 #[cfg(target_os = "macos")]
 unsafe fn update_footer_dot_layer(layer: id, info: &FooterLeftInfo) {
-    use objc::{msg_send, sel, sel_impl};
-
-    let theme = crate::theme::get_cached_theme();
-    let dot_hex = footer_dot_hex(
+    update_footer_dot_layer_for_status(
+        layer,
         info.dot_status,
-        &theme,
         info.prefer_accent_for_active_states,
     );
+}
+
+/// Status-driven dot layer update, shared by the legacy left-info marker and the
+/// per-button leading dot (Agent·Model chip). `Hidden` collapses the dot to fully
+/// transparent + no pulse so a reserved lane can stay width-stable without
+/// showing anything.
+#[cfg(target_os = "macos")]
+unsafe fn update_footer_dot_layer_for_status(
+    layer: id,
+    dot_status: FooterDotStatus,
+    prefer_accent_for_active_states: bool,
+) {
+    use objc::{msg_send, sel, sel_impl};
+
     let _: () = msg_send![layer, setCornerRadius: FOOTER_STREAMING_DOT_SIZE / 2.0_f64];
+
+    if matches!(dot_status, FooterDotStatus::Hidden) {
+        remove_active_dot_pulse_animation(layer);
+        let _: () = msg_send![layer, setOpacity: 0.0_f32];
+        return;
+    }
+
+    let theme = crate::theme::get_cached_theme();
+    let dot_hex = footer_dot_hex(dot_status, &theme, prefer_accent_for_active_states);
 
     let dot_ns = ns_color_from_hex_with_alpha(dot_hex, 1.0);
     if dot_ns != nil {
@@ -1959,7 +2018,7 @@ unsafe fn update_footer_dot_layer(layer: id, info: &FooterLeftInfo) {
     }
 
     let should_pulse = matches!(
-        info.dot_status,
+        dot_status,
         FooterDotStatus::Streaming | FooterDotStatus::WaitingForPermission
     );
     if should_pulse {
@@ -2205,7 +2264,7 @@ unsafe fn layout_footer_hints(
         }
         let item_frame: NSRect = msg_send![item, frame];
         let target_width = footer_hint_slot_width(button_cfg.action).max(item_frame.size.width);
-        let left_pinned = is_footer_left_pinned_mic_button(button_cfg);
+        let left_pinned = is_footer_left_pinned_button(button_cfg);
         if !left_pinned {
             if trailing_item_width > 0.0 {
                 trailing_item_width += FOOTER_HINT_ITEM_GAP;
@@ -2264,7 +2323,7 @@ unsafe fn layout_footer_hints(
 }
 
 #[cfg(target_os = "macos")]
-fn is_footer_left_pinned_mic_button(button_cfg: &FooterButtonConfig) -> bool {
+fn is_footer_left_pinned_button(button_cfg: &FooterButtonConfig) -> bool {
     if matches!(
         button_cfg.action,
         FooterAction::Cwd | FooterAction::AgentModel
@@ -2288,12 +2347,12 @@ fn footer_hint_max_item_width(
 ) -> Option<f64> {
     let mic_button = buttons
         .iter()
-        .find(|button| is_footer_left_pinned_mic_button(button));
+        .find(|button| is_footer_left_pinned_button(button));
     if let Some(mic_button) = mic_button {
-        if matches!(action, FooterAction::Ai) && is_footer_left_pinned_mic_button(mic_button) {
+        if matches!(action, FooterAction::Ai) && is_footer_left_pinned_button(mic_button) {
             let trailing_reserved_width = buttons
                 .iter()
-                .filter(|button| !is_footer_left_pinned_mic_button(button))
+                .filter(|button| !is_footer_left_pinned_button(button))
                 .map(|button| footer_hint_slot_width(button.action))
                 .sum::<f64>()
                 + buttons.len().saturating_sub(1) as f64 * FOOTER_HINT_ITEM_GAP;
@@ -2391,7 +2450,7 @@ fn footer_hint_content_layout_for_button(
         let key_x = (label_x + label_width + gap_width).round();
         return (label_x, key_x, label_width + gap_width + key_width);
     }
-    if is_footer_left_pinned_mic_button(button_cfg) {
+    if is_footer_left_pinned_button(button_cfg) {
         let gap_width = if label_width > 0.0 && key_width > 0.0 {
             FOOTER_HINT_KEY_LABEL_GAP
         } else {
@@ -2541,6 +2600,55 @@ unsafe fn footer_icon_image(token: &str) -> id {
         let _: () = msg_send![image, setTemplate: YES];
     }
     image
+}
+
+/// Build a small status-dot NSView for the leading edge of a footer button
+/// (the ACP streaming/idle dot inside the Agent·Model chip). Uses
+/// accent-preferred active states to match the legacy ACP left-info marker.
+#[cfg(target_os = "macos")]
+unsafe fn make_footer_hint_leading_dot_view(
+    action: FooterAction,
+    dot_status: FooterDotStatus,
+) -> id {
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let dot_view: id = msg_send![class!(NSView), alloc];
+    let dot_view: id = msg_send![
+        dot_view,
+        initWithFrame: NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(FOOTER_STREAMING_DOT_SIZE, FOOTER_STREAMING_DOT_SIZE),
+        )
+    ];
+    if dot_view == nil {
+        return nil;
+    }
+
+    let identifier = ns_string(&format!(
+        "{}{}",
+        FOOTER_HINT_LEADING_DOT_ID_PREFIX,
+        footer_action_key(action)
+    ));
+    if identifier != nil {
+        let _: () = msg_send![dot_view, setIdentifier: identifier];
+    }
+
+    let _: () = msg_send![dot_view, setWantsLayer: YES];
+    let layer: id = msg_send![dot_view, layer];
+    if layer != nil {
+        let _: () = msg_send![layer, setMasksToBounds: NO];
+        update_footer_dot_layer_for_status(layer, dot_status, true);
+    }
+    let _: () = msg_send![
+        dot_view,
+        setHidden: if matches!(dot_status, FooterDotStatus::Hidden) {
+            YES
+        } else {
+            NO
+        }
+    ];
+    dot_view
 }
 
 #[cfg(target_os = "macos")]
@@ -2728,13 +2836,28 @@ unsafe fn make_footer_hint_item(
 
     let label_padding_x = crate::components::footer_chrome::FOOTER_KEYCAP_PADDING_X_PX as f64;
     let label_chip_height = crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX as f64;
+
+    // Optional leading status dot (e.g. ACP streaming dot on the Agent·Model
+    // chip), rendered inside the chip ahead of the label. The lane is a FIXED
+    // width whenever `leading_dot` is `Some(_)` — including `Some(Hidden)` — so
+    // the chip's x/width never jump as the status changes during streaming.
+    let leading_dot_status = button_cfg.leading_dot;
+    let leading_dot_width = if leading_dot_status.is_some() {
+        FOOTER_STREAMING_DOT_SIZE + FOOTER_LEFT_DOT_LABEL_GAP
+    } else {
+        0.0
+    };
+    // Reserve the dot lane out of the label's width budget so a capped label
+    // truncates inside the chip instead of pushing into sibling buttons.
+    let label_max_item_width = max_item_width.map(|width| (width - leading_dot_width).max(0.0));
+
     let (label_view, label_chip_width, _label_text_width) = if has_label {
         let label_size: NSSize = msg_send![label_field, fittingSize];
         let (label_chip_width, label_text_width) = footer_hint_label_widths(
             label_size.width,
             label_padding_x,
             label_chip_height,
-            max_item_width,
+            label_max_item_width,
             keys_view_width,
             edge_padding_x,
         );
@@ -2777,7 +2900,10 @@ unsafe fn make_footer_hint_item(
         (nil, 0.0_f64, 0.0_f64)
     };
 
-    let gap_width = if has_label && keys_view_width > 0.0 {
+    // The dot + label form a single leading "label group"; the keycap lays out
+    // after it. Using the group width everywhere keeps the dot non-overlapping.
+    let label_group_width = label_chip_width + leading_dot_width;
+    let gap_width = if label_group_width > 0.0 && keys_view_width > 0.0 {
         FOOTER_HINT_KEY_LABEL_GAP
     } else {
         0.0
@@ -2788,11 +2914,11 @@ unsafe fn make_footer_hint_item(
         12.0
     };
     let min_content_width = keys_view_width
-        + label_chip_width
+        + label_group_width
         + gap_width
         + (edge_padding_x * 2.0)
         + legacy_extra_padding;
-    let content_width = label_chip_width + gap_width + keys_view_width;
+    let content_width = label_group_width + gap_width + keys_view_width;
     let intrinsic_width = content_width + (edge_padding_x * 2.0);
     let mut item_width = footer_hint_slot_width(button_cfg.action)
         .max(min_content_width)
@@ -2801,12 +2927,29 @@ unsafe fn make_footer_hint_item(
         item_width = item_width.min(max_item_width.max(min_content_width));
     }
     let label_y = ((item_height - label_chip_height) / 2.0).round();
-    let (label_x, key_x, _) = footer_hint_content_layout_for_button(
+    let (label_group_x, key_x, _) = footer_hint_content_layout_for_button(
         button_cfg,
         item_width,
-        label_chip_width,
+        label_group_width,
         keys_view_width,
     );
+    let dot_x = label_group_x;
+    let label_x = label_group_x + leading_dot_width;
+
+    if let Some(dot_status) = leading_dot_status {
+        let dot_view = make_footer_hint_leading_dot_view(button_cfg.action, dot_status);
+        if dot_view != nil {
+            let dot_y = ((item_height - FOOTER_STREAMING_DOT_SIZE) / 2.0).round();
+            let _: () = msg_send![
+                dot_view,
+                setFrame: NSRect::new(
+                    NSPoint::new(dot_x, dot_y),
+                    NSSize::new(FOOTER_STREAMING_DOT_SIZE, FOOTER_STREAMING_DOT_SIZE)
+                )
+            ];
+            let _: () = msg_send![container, addSubview: dot_view];
+        }
+    }
 
     if has_label && label_view != nil {
         let _: () = msg_send![

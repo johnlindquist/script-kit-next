@@ -1173,7 +1173,7 @@ impl ScriptListApp {
     fn global_main_window_left_chip_buttons(
         &self,
     ) -> Vec<crate::footer_popup::FooterButtonConfig> {
-        use crate::footer_popup::{FooterAction, FooterButtonConfig};
+        use crate::footer_popup::{FooterAction, FooterButtonConfig, FooterDotStatus};
 
         let enabled = !self.main_window_footer_buttons_blocked();
         let mut buttons = Vec::with_capacity(2);
@@ -1185,12 +1185,26 @@ impl ScriptListApp {
             );
         }
 
+        // The ACP streaming/idle status dot rides inside the Agent·Model chip,
+        // but ONLY in Agent Chat: reserve the dot lane whenever the surface is
+        // AcpChatView (Some(Hidden) before the first snapshot) so the chip width
+        // never jitters as the status changes. ScriptList gets `None` → no lane,
+        // staying genuinely dot-free.
+        let agent_model_dot_status = if matches!(self.current_view, AppView::AcpChatView { .. }) {
+            Some(self.acp_footer_dot_status.unwrap_or(FooterDotStatus::Hidden))
+        } else {
+            None
+        };
+
         // Agent · Model chip, pinned right of the cwd chip; opens the combined
         // Pi provider/model picker on click / Shift+Tab.
         if let Some(label) = self.agent_model_footer_label() {
-            buttons.push(
-                FooterButtonConfig::new(FooterAction::AgentModel, "⇧⇥", label).enabled(enabled),
-            );
+            let mut button =
+                FooterButtonConfig::new(FooterAction::AgentModel, "⇧⇥", label).enabled(enabled);
+            if let Some(dot_status) = agent_model_dot_status {
+                button = button.leading_dot(dot_status);
+            }
+            buttons.push(button);
         }
 
         buttons
@@ -1198,7 +1212,7 @@ impl ScriptListApp {
 
     /// Prepends the global left chips to a surface's own footer buttons. The
     /// native footer left-pins Cwd/AgentModel regardless of list position (see
-    /// `is_footer_left_pinned_mic_button` in footer_popup.rs), so surface-owned
+    /// `is_footer_left_pinned_button` in footer_popup.rs), so surface-owned
     /// buttons (Run/Send/Actions) still render trailing. Any pre-existing Cwd/
     /// AgentModel entries are stripped first so the global chips are the single
     /// source of truth and never duplicate.
@@ -1228,8 +1242,11 @@ impl ScriptListApp {
             // gap/flash/overlap when switching surfaces. So when the real chips
             // are present, suppress the left-info rail entirely.
             //
-            // (Deferred polish per Oracle: reintroduce the ACP streaming/status
-            // dot in a non-overlapping slot — e.g. inside the Agent·Model chip.)
+            // The ACP streaming/status dot now rides as a reserved leading dot
+            // INSIDE the real Agent·Model footer button (see
+            // global_main_window_left_chip_buttons + FooterButtonConfig.leading_dot),
+            // so the separate left-info rail stays suppressed and the old overlap
+            // path cannot return.
             let has_real_global_left_chips = config.buttons.iter().any(|button| {
                 matches!(
                     button.action,

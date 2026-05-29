@@ -130,10 +130,53 @@ fn acp_enrichment_suppresses_visual_cwd_when_real_chips_exist() {
 }
 
 #[test]
+fn acp_status_dot_threads_through_agent_model_chip_not_left_info() {
+    // The ACP streaming/status dot must ride as a reserved leading dot INSIDE
+    // the real Agent·Model footer button (only on Agent Chat), NOT via the old
+    // visual-only left_info rail — that rail must stay suppressed when real
+    // chips exist so the overlap/flash regression cannot return.
+    let ui = read("src/app_impl/ui_window.rs");
+    let footer = read("src/footer_popup.rs");
+
+    let global = fn_body(&ui, "fn global_main_window_left_chip_buttons(");
+    assert!(
+        global.contains("AppView::AcpChatView"),
+        "only Agent Chat receives a status dot lane (ScriptList stays dot-free)"
+    );
+    assert!(
+        global.contains("acp_footer_dot_status"),
+        "Agent·Model chip must use the host-cached ACP footer dot status"
+    );
+    assert!(
+        global.contains(".leading_dot("),
+        "ACP status must be threaded as FooterButtonConfig::leading_dot"
+    );
+
+    let enrich = fn_body(&ui, "fn enrich_footer_config_with_acp_info(");
+    assert!(
+        enrich.contains("config.left_info = None"),
+        "real global chips must still suppress the old left-info rail"
+    );
+
+    assert!(
+        footer.contains("leading_dot: Option<FooterDotStatus>"),
+        "FooterButtonConfig must carry a leading_dot field"
+    );
+    assert!(
+        footer.contains("fn make_footer_hint_leading_dot_view"),
+        "native footer must render the dot inside the button via a dedicated view"
+    );
+}
+
+#[test]
 fn native_footer_left_pins_cwd_and_agent_model() {
     // The native AppKit footer must keep recognizing Cwd + AgentModel as
     // left-pinned, otherwise prepended chips would render on the right.
     let src = read("src/footer_popup.rs");
+    assert!(
+        src.contains("fn is_footer_left_pinned_button("),
+        "footer_popup must use the generic left-pinned predicate name"
+    );
     assert!(
         src.contains("FooterAction::Cwd | FooterAction::AgentModel"),
         "footer_popup must left-pin Cwd + AgentModel"
