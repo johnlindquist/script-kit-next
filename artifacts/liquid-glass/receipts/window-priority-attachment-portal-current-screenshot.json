@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 3,
+  "status": "pass",
+  "label": "window-priority-attachment-portal-current",
+  "timestamp": "2026-05-30T07:38:56.958Z",
+  "durationMs": 2980,
+  "requiresVisionReview": false,
+  "resolvedTarget": null,
+  "captureRouting": "generic-frontmost",
+  "requestedAutomationWindowId": null,
+  "requestedOsWindowId": null,
+  "showIssuedBeforeCapture": true,
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-attachment-portal-current.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": "screencapture",
+    "windowId": 84609
+  },
+  "captureTarget": {
+    "requestedWindowId": null,
+    "actualWindowId": 84609
+  },
+  "inspection": null,
+  "popupCapture": null,
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": true,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-attachment-portal-current.png",
+    "sizeBytes": 113276,
+    "width": 3024,
+    "height": 1964,
+    "contentAudit": {
+      "sampledPixels": 5939136,
+      "nonBlackPixels": 132,
+      "nonTransparentPixels": 5939136,
+      "uniqueBucketCount": 6,
+      "meanLuma": 0.0032703785870537416,
+      "maxLuma": 172.35879999999997,
+      "nonBlackRatio": 0.000022225455015679047,
+      "blank": false
+    },
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": "screencapture",
+    "windowFrontmost": true,
+    "windowFocused": true,
+    "windowId": 84609,
+    "error": null
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: /Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-attachment-portal-current.png (113276B)"
+}

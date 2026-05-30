@@ -215,6 +215,7 @@ async function main() {
     ThemeChooser: ["theme", "choose-theme", "theme-chooser", "themechooser"],
     FileSearchMini: ["file-search-mini"],
     FileSearchFull: ["file-search-full"],
+    AttachmentPortalBrowser: ["attachment-portal", "dictation-history"],
     SdkReference: ["sdk-reference"],
     ScriptTemplateCatalog: ["script-template", "script-template-catalog"],
     NotesWindow: ["notes"],
@@ -306,6 +307,10 @@ async function main() {
     } else if (surfaceKind === "FileSearchFull") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-file-search-full-current-layout.json`,
+      ]);
+    } else if (surfaceKind === "AttachmentPortalBrowser") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-attachment-portal-current-layout.json`,
       ]);
     } else if (surfaceKind === "SdkReference") {
       await attachVisualAudit(evidence, [

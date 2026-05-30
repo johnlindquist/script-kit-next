@@ -1,0 +1,499 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.elements",
+  "command": "elements.snapshot",
+  "classification": "ok",
+  "session": "liquid-attachment-portal-current",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "AttachmentPortalBrowser"
+  },
+  "target": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "AttachmentPortalBrowser",
+    "appViewVariant": "DictationHistoryView",
+    "nativeFooterSurface": "dictation_history",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 750,
+      "height": 480,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 15396,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "semanticSurface": {
+    "surfaceKind": "AttachmentPortalBrowser",
+    "appViewVariant": "DictationHistoryView"
+  },
+  "totalCount": 19,
+  "returnedCount": 19,
+  "truncated": false,
+  "focusedSemanticId": "input:dictation-history-fi",
+  "selectedSemanticId": "choice:0:devtools-fixture-tra",
+  "duplicateSemanticIds": [],
+  "missingPrimitives": [
+    "elementBounds"
+  ],
+  "nodes": [
+    {
+      "semanticId": "input:dictation-history-fi",
+      "role": "input",
+      "type": "input",
+      "label": "",
+      "text": null,
+      "value": "",
+      "selected": null,
+      "focused": true,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "input:dictation-history-fi",
+        "type": "input",
+        "value": "",
+        "focused": true
+      }
+    },
+    {
+      "semanticId": "list:dictation-history",
+      "role": "list",
+      "type": "list",
+      "label": "14 items",
+      "text": "14 items",
+      "value": null,
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "list:dictation-history",
+        "type": "list",
+        "text": "14 items"
+      }
+    },
+    {
+      "semanticId": "choice:0:devtools-fixture-tra",
+      "role": "choice",
+      "type": "choice",
+      "label": "DevTools fixture transcript",
+      "text": "DevTools fixture transcript",
+      "value": "DevTools fixture transcript",
+      "selected": true,
+      "focused": null,
+      "index": 0,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:0:devtools-fixture-tra",
+        "type": "choice",
+        "text": "DevTools fixture transcript",
+        "value": "DevTools fixture transcript",
+        "selected": true,
+        "index": 0
+      }
+    },
+    {
+      "semanticId": "choice:1:because-i-think-that",
+      "role": "choice",
+      "type": "choice",
+      "label": "Because I think that'd be pretty neat myself, but I am not really sure how this is all gonna work out.",
+      "text": "Because I think that'd be pretty neat myself, but I am not really sure how this is all gonna work out.",
+      "value": "Because I think that'd be pretty neat myself, but I am not really sure how this is all gonna work out.",
+      "selected": false,
+      "focused": null,
+      "index": 1,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:1:because-i-think-that",
+        "type": "choice",
+        "text": "Because I think that'd be pretty neat myself, but I am not really sure how this is all gonna work out.",
+        "value": "Because I think that'd be pretty neat myself, but I am not really sure how this is all gonna work out.",
+        "selected": false,
+        "index": 1
+      }
+    },
+    {
+      "semanticId": "choice:2:because-i-think-that",
+      "role": "choice",
+      "type": "choice",
+      "label": "Because I think that'd be pretty neat myself, but I am not really sure how this is all gonna work out.",
+      "text": "Because I think that'd be pretty neat myself, but I am not really sure how this is all gonna work out.",
+      "value": "Because I think that'd be pretty neat myself, but I am not really sure how this is all gonna work out.",
+      "selected": false,
+      "focused": null,
+      "index": 2,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:2:because-i-think-that",
+        "type": "choice",
+        "text": "Because I think that'd be pretty neat myself, but I am not really sure how this is all gonna work out.",
+        "value": "Because I think that'd be pretty neat myself, but I am not really sure how this is all gonna work out.",
+        "selected": false,
+        "index": 2
+      }
+    },
+    {
+      "semanticId": "choice:3:are-you-sure-this-is",
+      "role": "choice",
+      "type": "choice",
+      "label": "Are you sure this is going to paste the frontmost app?",
+      "text": "Are you sure this is going to paste the frontmost app?",
+      "value": "Are you sure this is going to paste the frontmost app?",
+      "selected": false,
+      "focused": null,
+      "index": 3,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:3:are-you-sure-this-is",
+        "type": "choice",
+        "text": "Are you sure this is going to paste the frontmost app?",
+        "value": "Are you sure this is going to paste the frontmost app?",
+        "selected": false,
+        "index": 3
+      }
+    },
+    {
+      "semanticId": "choice:4:hello-friends-good-l",
+      "role": "choice",
+      "type": "choice",
+      "label": "Hello friends, good luck shipping.",
+      "text": "Hello friends, good luck shipping.",
+      "value": "Hello friends, good luck shipping.",
+      "selected": false,
+      "focused": null,
+      "index": 4,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:4:hello-friends-good-l",
+        "type": "choice",
+        "text": "Hello friends, good luck shipping.",
+        "value": "Hello friends, good luck shipping.",
+        "selected": false,
+        "index": 4
+      }
+    },
+    {
+      "semanticId": "choice:5:hello-there-friends",
+      "role": "choice",
+      "type": "choice",
+      "label": "Hello there friends.",
+      "text": "Hello there friends.",
+      "value": "Hello there friends.",
+      "selected": false,
+      "focused": null,
+      "index": 5,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:5:hello-there-friends",
+        "type": "choice",
+        "text": "Hello there friends.",
+        "value": "Hello there friends.",
+        "selected": false,
+        "index": 5
+      }
+    },
+    {
+      "semanticId": "choice:6:hello-there-um-and-t",
+      "role": "choice",
+      "type": "choice",
+      "label": "Hello there. Um and then",
+      "text": "Hello there. Um and then",
+      "value": "Hello there. Um and then",
+      "selected": false,
+      "focused": null,
+      "index": 6,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:6:hello-there-um-and-t",
+        "type": "choice",
+        "text": "Hello there. Um and then",
+        "value": "Hello there. Um and then",
+        "selected": false,
+        "index": 6
+      }
+    },
+    {
+      "semanticId": "choice:7:hello-how-are-you",
+      "role": "choice",
+      "type": "choice",
+      "label": "Hello, how are you?",
+      "text": "Hello, how are you?",
+      "value": "Hello, how are you?",
+      "selected": false,
+      "focused": null,
+      "index": 7,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:7:hello-how-are-you",
+        "type": "choice",
+        "text": "Hello, how are you?",
+        "value": "Hello, how are you?",
+        "selected": false,
+        "index": 7
+      }
+    },
+    {
+      "semanticId": "choice:8:hello-hello-hello",
+      "role": "choice",
+      "type": "choice",
+      "label": "Hello, hello, hello.",
+      "text": "Hello, hello, hello.",
+      "value": "Hello, hello, hello.",
+      "selected": false,
+      "focused": null,
+      "index": 8,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:8:hello-hello-hello",
+        "type": "choice",
+        "text": "Hello, hello, hello.",
+        "value": "Hello, hello, hello.",
+        "selected": false,
+        "index": 8
+      }
+    },
+    {
+      "semanticId": "choice:9:hello-everybody-how",
+      "role": "choice",
+      "type": "choice",
+      "label": "Hello, everybody. How are you doing?",
+      "text": "Hello, everybody. How are you doing?",
+      "value": "Hello, everybody. How are you doing?",
+      "selected": false,
+      "focused": null,
+      "index": 9,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:9:hello-everybody-how",
+        "type": "choice",
+        "text": "Hello, everybody. How are you doing?",
+        "value": "Hello, everybody. How are you doing?",
+        "selected": false,
+        "index": 9
+      }
+    },
+    {
+      "semanticId": "choice:10:devtools-fixture-tra",
+      "role": "choice",
+      "type": "choice",
+      "label": "DevTools fixture transcript",
+      "text": "DevTools fixture transcript",
+      "value": "DevTools fixture transcript",
+      "selected": false,
+      "focused": null,
+      "index": 10,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:10:devtools-fixture-tra",
+        "type": "choice",
+        "text": "DevTools fixture transcript",
+        "value": "DevTools fixture transcript",
+        "selected": false,
+        "index": 10
+      }
+    },
+    {
+      "semanticId": "choice:11:devtools-fixture-tra",
+      "role": "choice",
+      "type": "choice",
+      "label": "DevTools fixture transcript",
+      "text": "DevTools fixture transcript",
+      "value": "DevTools fixture transcript",
+      "selected": false,
+      "focused": null,
+      "index": 11,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:11:devtools-fixture-tra",
+        "type": "choice",
+        "text": "DevTools fixture transcript",
+        "value": "DevTools fixture transcript",
+        "selected": false,
+        "index": 11
+      }
+    },
+    {
+      "semanticId": "choice:12:devtools-fixture-tra",
+      "role": "choice",
+      "type": "choice",
+      "label": "DevTools fixture transcript",
+      "text": "DevTools fixture transcript",
+      "value": "DevTools fixture transcript",
+      "selected": false,
+      "focused": null,
+      "index": 12,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:12:devtools-fixture-tra",
+        "type": "choice",
+        "text": "DevTools fixture transcript",
+        "value": "DevTools fixture transcript",
+        "selected": false,
+        "index": 12
+      }
+    },
+    {
+      "semanticId": "choice:13:devtools-synthetic-d",
+      "role": "choice",
+      "type": "choice",
+      "label": "devtools synthetic dictation delivery probe",
+      "text": "devtools synthetic dictation delivery probe",
+      "value": "devtools synthetic dictation delivery probe",
+      "selected": false,
+      "focused": null,
+      "index": 13,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:13:devtools-synthetic-d",
+        "type": "choice",
+        "text": "devtools synthetic dictation delivery probe",
+        "value": "devtools synthetic dictation delivery probe",
+        "selected": false,
+        "index": 13
+      }
+    },
+    {
+      "semanticId": "footer:native:row",
+      "role": "footer",
+      "type": "panel",
+      "label": "native",
+      "text": "native",
+      "value": "dictation_history",
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:native:row",
+        "type": "panel",
+        "text": "native",
+        "value": "dictation_history",
+        "role": "footer",
+        "kind": "nativeFooterRow",
+        "selectable": false
+      }
+    },
+    {
+      "semanticId": "footer:native:run",
+      "role": "footer",
+      "type": "button",
+      "label": "↵ Paste into Google Chrome",
+      "text": "↵ Paste into Google Chrome",
+      "value": "run",
+      "selected": false,
+      "focused": null,
+      "index": 0,
+      "owner": "dictation_history",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:native:run",
+        "type": "button",
+        "text": "↵ Paste into Google Chrome",
+        "value": "run",
+        "selected": false,
+        "index": 0,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "dictation_history",
+        "sourceName": "dictation_history",
+        "selectable": true
+      }
+    },
+    {
+      "semanticId": "footer:native:actions",
+      "role": "footer",
+      "type": "button",
+      "label": "⌘K Actions",
+      "text": "⌘K Actions",
+      "value": "actions",
+      "selected": false,
+      "focused": null,
+      "index": 1,
+      "owner": "dictation_history",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:native:actions",
+        "type": "button",
+        "text": "⌘K Actions",
+        "value": "actions",
+        "selected": false,
+        "index": 1,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "dictation_history",
+        "sourceName": "dictation_history",
+        "selectable": true
+      }
+    }
+  ],
+  "warnings": [
+    "getElements does not expose bounds yet; use devtools.layout.measure for geometry."
+  ],
+  "errors": []
+}
