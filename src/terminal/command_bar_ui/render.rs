@@ -1,3 +1,4 @@
+use crate::theme::AppChromeColors;
 use gpui::{
     div, prelude::*, px, rgb, rgba, App, BoxShadow, Context, ElementId, FocusHandle, Focusable,
     Hsla, Render, SharedString, Window,
@@ -133,15 +134,7 @@ impl Focusable for TerminalCommandBar {
 
 impl Render for TerminalCommandBar {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let dialog_bg = {
-            let opacity = if self.theme.is_vibrancy_enabled() {
-                0.50
-            } else {
-                0.95
-            };
-            let alpha = (opacity * 255.0) as u32;
-            rgba((self.theme.colors.background.main << 8) | alpha)
-        };
+        let dialog_bg = rgba(AppChromeColors::from_theme(&self.theme).popup_surface_rgba);
 
         let border_color = rgba((self.theme.colors.ui.border << 8) | 0x80);
         let hint_text_color = rgb(self.theme.colors.text.dimmed);

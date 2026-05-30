@@ -15,6 +15,7 @@ use crate::menu_syntax_actions::{
 use crate::protocol::ProtocolAction;
 use crate::theme;
 use crate::theme::types::BackgroundOpacity;
+use crate::theme::AppChromeColors;
 use gpui::{
     div, list, prelude::*, px, rgb, rgba, svg, App, BoxShadow, Context, ElementId, FocusHandle,
     Focusable, ListAlignment, ListState, Render, SharedString, Window,
@@ -2841,18 +2842,8 @@ fn actions_dialog_container_text_color(
 }
 
 fn actions_dialog_main_window_background_alpha(theme: &theme::Theme) -> u8 {
-    let opacity = theme.get_opacity();
-    let resolved_opacity = if theme.has_dark_colors() {
-        opacity.vibrancy_background.unwrap_or(0.75)
-    } else {
-        opacity
-            .vibrancy_background
-            .map(|value| value.max(0.75))
-            .unwrap_or(0.75)
-    }
-    .clamp(0.0, 1.0);
-
-    actions_dialog_alpha_u8(resolved_opacity)
+    let popup_surface = AppChromeColors::from_theme(theme).popup_surface_rgba;
+    (popup_surface & 0xff) as u8
 }
 
 impl ActionsDialog {
@@ -3187,7 +3178,7 @@ mod actions_dialog_opacity_consistency_tests {
         actions_dialog_search_text_colors, semantic_text_rgba,
         ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA,
     };
-    use crate::theme::Theme;
+    use crate::theme::{AppChromeColors, Theme};
     use gpui::rgba;
 
     #[test]
@@ -3233,13 +3224,16 @@ mod actions_dialog_opacity_consistency_tests {
     }
 
     #[test]
-    fn test_actions_dialog_main_window_background_alpha_uses_light_window_floor() {
+    fn test_actions_dialog_main_window_background_alpha_uses_shared_popup_surface_token() {
         let mut theme = Theme::light_default();
         let mut opacity = theme.get_opacity();
         opacity.vibrancy_background = Some(0.40);
         theme.opacity = Some(opacity);
 
-        assert_eq!(actions_dialog_main_window_background_alpha(&theme), 191);
+        assert_eq!(
+            actions_dialog_main_window_background_alpha(&theme),
+            (AppChromeColors::from_theme(&theme).popup_surface_rgba & 0xff) as u8
+        );
     }
 
     #[test]

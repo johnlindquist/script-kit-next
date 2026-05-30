@@ -13,9 +13,9 @@
 
 use crate::ui_foundation::{is_key_down, is_key_enter, is_key_escape, is_key_up};
 use gpui::{
-    div, prelude::*, px, rgba, uniform_list, AnyElement, App, Context, ElementId, Entity,
-    FocusHandle, Focusable, IntoElement, KeyDownEvent, MouseButton, ParentElement, Render,
-    ScrollStrategy, SharedString, Styled, Subscription, UniformListScrollHandle, Window,
+    div, prelude::*, px, uniform_list, AnyElement, App, Context, ElementId, Entity, FocusHandle,
+    Focusable, IntoElement, KeyDownEvent, MouseButton, ParentElement, Render, ScrollStrategy,
+    SharedString, Styled, Subscription, UniformListScrollHandle, Window,
 };
 use gpui_component::{
     button::{Button, ButtonVariants},
@@ -448,12 +448,7 @@ impl BrowsePanel {
     /// Uses cached theme to avoid file I/O on every render.
     fn get_vibrancy_background(_cx: &Context<Self>) -> gpui::Rgba {
         let sk_theme = crate::theme::get_cached_theme();
-        let opacity = sk_theme.get_opacity();
-        let bg_hex = sk_theme.colors.background.main;
-        rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-            bg_hex,
-            opacity.main,
-        ))
+        crate::ui_foundation::main_window_matched_background(&sk_theme)
     }
 
     /// Render the notes list

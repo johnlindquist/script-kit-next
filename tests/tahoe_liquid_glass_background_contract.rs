@@ -11,6 +11,11 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
     let platform = read_source("src/platform/secondary_window_config.rs");
     let main_vibrancy = read_source("src/platform/vibrancy_config.rs");
     let ui_foundation = read_source("src/ui_foundation/mod.rs");
+    let actions_dialog = read_source("src/actions/dialog.rs");
+    let terminal_command_bar = read_source("src/terminal/command_bar_ui/render.rs");
+    let notes_actions_panel = read_source("src/notes/actions_panel.rs");
+    let notes_browse_panel = read_source("src/notes/browse_panel.rs");
+    let acp_chat_window = read_source("src/ai/acp/chat_window.rs");
 
     assert!(
         platform.contains("NSClassFromString")
@@ -63,6 +68,27 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
             .contains("crate::ui_foundation::main_window_matched_background_rgba(&theme)")
             && main_vibrancy.contains("material, background_tint"),
         "Main-window Liquid Glass refresh de-dupe must include the shared theme tint, not just dark/material state"
+    );
+    assert!(
+        actions_dialog.contains("AppChromeColors::from_theme(theme).popup_surface_rgba")
+            && !actions_dialog.contains("vibrancy_background.unwrap_or(0.75)"),
+        "Actions dialog background alpha must come from AppChromeColors popup_surface_rgba, not a local 0.75 fallback"
+    );
+    assert!(
+        terminal_command_bar.contains("AppChromeColors::from_theme(&self.theme).popup_surface_rgba")
+            && !terminal_command_bar.contains("let opacity = if self.theme.is_vibrancy_enabled()"),
+        "Terminal command bar must share AppChromeColors popup_surface_rgba instead of hardcoded 0.50/0.95 alpha"
+    );
+    assert!(
+        notes_actions_panel.contains("main_window_matched_background(&sk_theme)")
+            && notes_browse_panel.contains("main_window_matched_background(&sk_theme)"),
+        "Notes actions and browse panels must share the main-window matched background helper"
+    );
+    assert!(
+        acp_chat_window.contains("theme::get_cached_theme().is_vibrancy_enabled()")
+            && acp_chat_window.contains("WindowBackgroundAppearance::Opaque")
+            && acp_chat_window.contains("WindowBackgroundAppearance::Blurred"),
+        "Detached ACP window background appearance must honor vibrancy-disabled opaque mode"
     );
     for forbidden in [
         "unsafe fn configure_tahoe_liquid_glass_background",

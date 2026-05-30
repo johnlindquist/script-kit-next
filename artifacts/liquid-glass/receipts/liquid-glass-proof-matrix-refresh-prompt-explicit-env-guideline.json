@@ -5,7 +5,7 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T10:20:57.130Z",
+  "generatedAt": "2026-05-30T10:20:37.339Z",
   "summary": {
     "surfaceCount": 29,
     "strongProofSurfaceCount": 2,
@@ -848,7 +848,6 @@
       "diagnosticLimitations": [],
       "guidelineFailures": [],
       "receipts": [
-        "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-prompt-explicit-env-guideline.json",
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-prompt-explicit-env.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-current-layout-sdk.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-current-open-sdk.json",
@@ -4261,7 +4260,6 @@
       ],
       "guidelineFailures": [],
       "receipts": [
-        "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-prompt-explicit-env-guideline.json",
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-prompt-explicit-env.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-current-layout-sdk.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-current-open-sdk.json",
@@ -7879,7 +7877,6 @@
       "guidelineFailures": [],
       "recommendedNextAction": "resolve OS compositor capture blocker target-identity-blocked; current source/layout proof is not contradicted",
       "receipts": [
-        "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-prompt-explicit-env-guideline.json",
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-prompt-explicit-env.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-current-layout-sdk.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-current-open-sdk.json",
@@ -12883,7 +12880,6 @@
       },
       "evidence": {
         "receipts": [
-          "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-prompt-explicit-env-guideline.json",
           "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-prompt-explicit-env.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-current-layout-sdk.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-current-open-sdk.json",

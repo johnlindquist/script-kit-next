@@ -1126,6 +1126,7 @@ async function main() {
       ]);
     } else if (surfaceKind === "ExplicitPromptEntity") {
       await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-prompt-explicit-env-guideline-layout-sdk.json`,
         `${RECEIPT_ROOT}/window-priority-prompt-explicit-env-fixed-layout-sdk.json`,
         `${RECEIPT_ROOT}/window-priority-prompt-explicit-env-current-layout-sdk.json`,
       ]);

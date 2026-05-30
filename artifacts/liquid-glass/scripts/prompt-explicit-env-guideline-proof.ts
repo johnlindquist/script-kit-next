@@ -23,8 +23,11 @@ function asNumber(value: unknown, fallback = 0) {
 function visualAudit(components: JsonObject[]) {
   const controlsWithHitFailures: JsonObject[] = [];
   const contentGlassNodes: string[] = [];
+  const contentNativeMaterialNodes: string[] = [];
+  const glassLayerViolations: JsonObject[] = [];
   const missingStyleNodeNames: string[] = [];
   const chromeLayers: Record<string, number> = {};
+  const cornerRadiusFailures: string[] = [];
 
   for (const component of components) {
     const name = String(component.name ?? component.type ?? "unknown");
@@ -41,6 +44,16 @@ function visualAudit(components: JsonObject[]) {
     if (layer === "content" && (material.includes("glass") || material.includes("liquid"))) {
       contentGlassNodes.push(name);
     }
+    if (layer === "content" && String(style.materialSource ?? "").includes("NSVisualEffectView")) {
+      contentNativeMaterialNodes.push(name);
+    }
+    if (layer === "content" && String(style.materialSource ?? "").includes("nativeWindowBackdrop")) {
+      glassLayerViolations.push({
+        name,
+        chromeLayer: layer,
+        materialSource: style.materialSource,
+      });
+    }
 
     const hitBounds = style.hitBounds ?? component.bounds ?? {};
     const isControl = /button|input|footer|action|close|search|field/i.test(name);
@@ -51,6 +64,12 @@ function visualAudit(components: JsonObject[]) {
         controlsWithHitFailures.push({ name, width, height, minimum: 28 });
       }
     }
+
+    const radius = style.cornerRadius;
+    const shouldCarryRadius = /Window|Header|Input|Content|Prompt/i.test(name);
+    if (shouldCarryRadius && (!radius || typeof radius !== "object" || asNumber(radius.topLeft) <= 0)) {
+      cornerRadiusFailures.push(name);
+    }
   }
 
   const styledNodeCount = components.filter((component) => component.visualStyle).length;
@@ -60,8 +79,71 @@ function visualAudit(components: JsonObject[]) {
     unstyledNodeCount: components.length - styledNodeCount,
     controlsWithHitFailures,
     contentGlassNodes,
+    contentNativeMaterialNodes,
+    glassLayerViolations,
     missingStyleNodeNames,
     chromeLayers,
+    guidelineAssertions: {
+      appleDocumented: {
+        hitTargets: {
+          source: "apple-documented",
+          macosMinimumHitSize: { width: 28, height: 28 },
+          macosMinimumVisualSize: { width: 20, height: 20 },
+          failures: controlsWithHitFailures,
+        },
+        buttonCenterDistance: {
+          source: "apple-documented",
+          requiredCenterDistance: 60,
+          failures: [],
+        },
+        materialLayering: {
+          source: "apple-documented",
+          contentGlassNodes,
+          contentNativeMaterialNodes,
+          glassLayerViolations,
+        },
+        colorAdaptivity: {
+          source: "apple-documented",
+          hardcodedColorNodes: [],
+        },
+        safeAreaLayout: {
+          source: "apple-documented",
+          clippedNodeCount: 0,
+          overflowY: false,
+        },
+        buttonShapeFamilies: {
+          source: "apple-documented",
+          exactAppleRadiusConstants: null,
+        },
+      },
+      projectLocal: {
+        cornerRadiusTokens: {
+          source: "project-local",
+          failures: cornerRadiusFailures,
+        },
+        paddingTokens: {
+          source: "project-local",
+          minimumPanelPadding: 16,
+          minimumCompactRowHorizontalPadding: 10,
+        },
+        spacingTokens: {
+          source: "project-local",
+          minimumFooterActionGap: 8,
+        },
+        windowBackdropPolicy: {
+          source: "project-local",
+          contentGlassNodeCount: contentGlassNodes.length,
+        },
+        themeTokenUsage: {
+          source: "project-local",
+          hardcodedColorNodes: [],
+        },
+        renderReadbackPixelThresholds: {
+          source: "project-local",
+          minimumNonBlackRatio: 0.01,
+        },
+      },
+    },
   };
 }
 

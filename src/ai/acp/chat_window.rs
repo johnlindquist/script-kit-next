@@ -13,6 +13,7 @@ use gpui::{
 use super::thread::AcpThread;
 use super::view::AcpChatView;
 use crate::ai::window::context_picker::types::PortalKind;
+use crate::theme;
 
 /// State for the detached ACP Chat window.
 struct ChatWindowState {
@@ -154,12 +155,17 @@ pub fn set_chat_window_fixture_bounds(bounds: gpui::Bounds<gpui::Pixels>, cx: &m
 
 fn chat_window_options(inherit_bounds: Option<gpui::Bounds<gpui::Pixels>>) -> WindowOptions {
     let window_bounds = chat_window_bounds(inherit_bounds);
+    let window_background = if theme::get_cached_theme().is_vibrancy_enabled() {
+        gpui::WindowBackgroundAppearance::Blurred
+    } else {
+        gpui::WindowBackgroundAppearance::Opaque
+    };
 
     WindowOptions {
         window_bounds: Some(window_bounds),
         titlebar: None,
         is_movable: true,
-        window_background: gpui::WindowBackgroundAppearance::Blurred,
+        window_background,
         focus: true,
         show: true,
         kind: WindowKind::PopUp,
