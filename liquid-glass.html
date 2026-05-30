@@ -618,6 +618,10 @@
           <time>2026-05-29 22:59 MDT</time>
           <p>Added detached ACP window proof to the outside-in priority pass. The browser-mode Oracle batch <code>acp-window-liquid-glass</code> was started with a 526k-token bundle but ended with <code>run cancelled by client</code>; this is recorded as an Oracle blocker rather than blocking local progress. The <code>openAcpDetachedFixture</code> path now creates a deterministic no-network detached Agent Chat placeholder window, and DevTools receipts record target identity, panel-only semantics, and layout metrics for <code>acpDetached</code>: <code>window-priority-acp-detached-target-inspect-after.json</code>, <code>window-priority-acp-detached-elements-after.json</code>, and <code>window-priority-acp-detached-layout-after.json</code>. Screenshot proof is partial because strict window capture still reports the macOS <code>screencapture -l</code> blocker for detached/placeholder ACP windows in <code>window-priority-acp-detached-screenshot-after.json</code>.</p>
         </div>
+        <div class="entry">
+          <time>2026-05-29 23:09 MDT</time>
+          <p>Started the prompt DivPrompt proof slice and captured the first red receipts. <code>window-priority-prompt-div-open-after.json</code> proves the <code>run</code> command parsed, but <code>window-priority-prompt-div-target-inspect-after.json</code>, <code>window-priority-prompt-div-layout-after.json</code>, and <code>window-priority-prompt-div-screenshot-after.json</code> classify as blocked or errored with no main target resolved. This keeps PromptEntity marked as a live blocker instead of a missing artifact.</p>
+        </div>
       </div>
     </section>
   </main>
