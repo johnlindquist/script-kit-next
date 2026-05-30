@@ -154,7 +154,7 @@ async function main() {
     Dictation: ["dictation"],
   };
 
-  const surfaceContracts = asArray(inventory.surfaceContracts).map((entry) => asObject(entry));
+  const surfaceContracts = asArray(inventory.auditSurfaceContracts ?? inventory.surfaceContracts).map((entry) => asObject(entry));
   const recommendedBatches = asArray(inventory.recommendedOracleBatches).map((entry) => asObject(entry));
   const surfaces = await Promise.all(surfaceContracts.map(async (contract) => {
     const surfaceKind = String(contract.surfaceKind ?? "");

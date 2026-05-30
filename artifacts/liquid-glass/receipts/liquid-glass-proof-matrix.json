@@ -5,18 +5,51 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T03:38:50.705Z",
+  "generatedAt": "2026-05-30T03:47:59.222Z",
   "summary": {
-    "surfaceCount": 31,
+    "surfaceCount": 29,
     "strongProofSurfaceCount": 2,
     "partialProofSurfaceCount": 0,
-    "missingProofSurfaceCount": 29,
-    "batchCount": 9,
+    "missingProofSurfaceCount": 27,
+    "batchCount": 8,
     "strongProofBatchCount": 0,
     "partialProofBatchCount": 1,
-    "missingProofBatchCount": 8
+    "missingProofBatchCount": 7
   },
   "batches": [
+    {
+      "id": "platform-windowing-permissions",
+      "name": "Platform windows, containers, materials, resizing, screenshots, lifecycle",
+      "owners": [
+        "platform-windowing-macos",
+        "window-resizing",
+        "launcher-surface-contracts"
+      ],
+      "surfaceKinds": [
+        "About",
+        "Feedback"
+      ],
+      "requiredDevToolsPrimitives": [
+        "devtools.windows.inspect",
+        "devtools.permissions.inspect",
+        "devtools.visual.compare",
+        "devtools.lifecycle.trace"
+      ],
+      "proofStatus": "missing-proof",
+      "provenSurfaceCount": 0,
+      "partialSurfaceCount": 0,
+      "missingSurfaceCount": 2,
+      "surfaceStatuses": [
+        {
+          "surfaceKind": "About",
+          "proofStatus": "missing-proof"
+        },
+        {
+          "surfaceKind": "Feedback",
+          "proofStatus": "missing-proof"
+        }
+      ]
+    },
     {
       "id": "launcher-main-actions",
       "name": "Launcher, main menu, source filters, actions, shortcuts, aliases",
@@ -322,92 +355,6 @@
         },
         {
           "surfaceKind": "ClipboardHistory",
-          "proofStatus": "missing-proof"
-        }
-      ]
-    },
-    {
-      "id": "platform-windowing-permissions",
-      "name": "Platform windows, tray, permissions, screenshots, lifecycle, distribution",
-      "owners": [
-        "platform-windowing-macos",
-        "window-resizing",
-        "launcher-surface-contracts"
-      ],
-      "surfaceKinds": [
-        "About",
-        "Feedback",
-        "DesignExplorer",
-        "DesignGallery"
-      ],
-      "requiredDevToolsPrimitives": [
-        "devtools.windows.inspect",
-        "devtools.permissions.inspect",
-        "devtools.visual.compare",
-        "devtools.lifecycle.trace"
-      ],
-      "proofStatus": "missing-proof",
-      "provenSurfaceCount": 0,
-      "partialSurfaceCount": 0,
-      "missingSurfaceCount": 4,
-      "surfaceStatuses": [
-        {
-          "surfaceKind": "About",
-          "proofStatus": "missing-proof"
-        },
-        {
-          "surfaceKind": "Feedback",
-          "proofStatus": "missing-proof"
-        },
-        {
-          "surfaceKind": "DesignExplorer",
-          "proofStatus": "missing-proof"
-        },
-        {
-          "surfaceKind": "DesignGallery",
-          "proofStatus": "missing-proof"
-        }
-      ]
-    },
-    {
-      "id": "storybook-design-theme",
-      "name": "Storybook, design explorer, theme, visual state lab",
-      "owners": [
-        "storybook-design",
-        "theme-config-preferences",
-        "testing-quality-gates"
-      ],
-      "surfaceKinds": [
-        "DesignGallery",
-        "DesignExplorer",
-        "ThemeChooser",
-        "Settings"
-      ],
-      "requiredDevToolsPrimitives": [
-        "devtools.visual.compare",
-        "devtools.theme.inspect",
-        "devtools.story.snapshot",
-        "devtools.measure.contrast"
-      ],
-      "proofStatus": "missing-proof",
-      "provenSurfaceCount": 0,
-      "partialSurfaceCount": 0,
-      "missingSurfaceCount": 4,
-      "surfaceStatuses": [
-        {
-          "surfaceKind": "DesignGallery",
-          "proofStatus": "missing-proof"
-        },
-        {
-          "surfaceKind": "DesignExplorer",
-          "proofStatus": "missing-proof"
-        },
-        {
-          "surfaceKind": "ThemeChooser",
-          "proofStatus": "missing-proof"
-        },
-        {
-          "surfaceKind": "Settings",
           "proofStatus": "missing-proof"
         }
       ]
@@ -983,56 +930,6 @@
         "CurrentAppCommandsView"
       ],
       "automationSemanticSurface": "currentAppCommands",
-      "coverageAliases": [],
-      "proofStatus": "missing-proof",
-      "requiredEvidence": {
-        "screenshot": false,
-        "numericLayout": false,
-        "imageDiff": false,
-        "visualAudit": false
-      },
-      "visualAudit": null,
-      "evidence": {
-        "screenshots": [],
-        "layoutReceipts": [],
-        "inspectReceipts": [],
-        "imageDiffReceipts": [],
-        "diffMasks": [],
-        "visualAudit": null,
-        "notes": []
-      }
-    },
-    {
-      "surfaceKind": "DesignGallery",
-      "appViewVariants": [
-        "DesignGalleryView"
-      ],
-      "automationSemanticSurface": "designGallery",
-      "coverageAliases": [],
-      "proofStatus": "missing-proof",
-      "requiredEvidence": {
-        "screenshot": false,
-        "numericLayout": false,
-        "imageDiff": false,
-        "visualAudit": false
-      },
-      "visualAudit": null,
-      "evidence": {
-        "screenshots": [],
-        "layoutReceipts": [],
-        "inspectReceipts": [],
-        "imageDiffReceipts": [],
-        "diffMasks": [],
-        "visualAudit": null,
-        "notes": []
-      }
-    },
-    {
-      "surfaceKind": "DesignExplorer",
-      "appViewVariants": [
-        "DesignExplorerView"
-      ],
-      "automationSemanticSurface": "scriptList",
       "coverageAliases": [],
       "proofStatus": "missing-proof",
       "requiredEvidence": {
@@ -1637,7 +1534,7 @@
     }
   ],
   "warnings": [
-    "29 contract surfaces still lack proof artifacts",
+    "27 contract surfaces still lack proof artifacts",
     "strong-proof means current artifacts include screenshot, numeric layout visualAudit, and image diff evidence; it is not an Apple conformance claim by itself"
   ],
   "errors": []

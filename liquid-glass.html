@@ -271,20 +271,21 @@
 
     <section class="panel">
       <h2>Surface Inventory</h2>
-      <p>Source-backed inventory from <code>bun scripts/devtools/surfaces.ts</code>: 31 surface contracts, 48 AppView variants, 47 feature-map entries, 23 owner skills, 7 explicit DevTools coverage entries, and 9 recommended Oracle batches. Current receipt: <code>artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json</code>.</p>
+      <p>Source-backed inventory from <code>bun scripts/devtools/surfaces.ts</code>: 31 surface contracts, 29 active Liquid Glass audit surfaces, 48 AppView variants, 47 feature-map entries, 23 owner skills, 7 explicit DevTools coverage entries, and 8 recommended Oracle batches. Current receipt: <code>artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json</code>.</p>
+      <p>Audit priority is now outside-in: prove platform windows, containers, material/backdrop behavior, resizing, safe areas, and lifecycle before inner controls and content. <code>DesignGallery</code> and <code>DesignExplorer</code> are kept in raw source inventory but excluded from the active proof matrix because the Storybook/design-lab surfaces are outdated.</p>
       <table>
         <thead>
           <tr><th>Batch</th><th>Surface families</th><th>Status</th><th>Oracle / Evidence</th></tr>
         </thead>
         <tbody>
+          <tr><td>Platform windows</td><td>Window material, containers, resizing, safe areas, screenshots, lifecycle, About, Feedback</td><td class="todo">highest priority baseline pending</td><td>first planned Oracle batch</td></tr>
           <tr><td>Launcher main actions</td><td>ScriptList, ActionsDialog, ConfirmPrompt, footer, source filters, shortcuts, aliases</td><td class="done">Tahoe metrics slice captured</td><td><code>before-main-*.json</code>, <code>before-actions-*.json</code>, <code>tahoe-next-*.json</code>, screenshot paths below</td></tr>
           <tr><td>Prompt runtime</td><td>arg/div/form/select/path/drop/template/chat/mini/micro, terminal, editor, webcam</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
           <tr><td>Built-ins</td><td>Clipboard, App Launcher, Window Switcher, Browser Tabs, Settings, Kit Store, Process Manager, Current App, Theme, Emoji, ACP History</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
           <tr><td>Portals/resources</td><td>File search mini/full, attachment portals, SDK reference, script templates, MCP resources</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
           <tr><td>ACP/chat</td><td>ACP chat, composer, model setup/switch, history, context parts</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
           <tr><td>Notes/dictation/media</td><td>Notes window, notes ACP, dictation overlay/history, media target delivery</td><td class="done">notes before captured</td><td><code>before-notes-*.json</code>, screenshot path below</td></tr>
-          <tr><td>Platform windows</td><td>Window material, resizing, tray, permissions, screenshots, lifecycle, About, Feedback</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
-          <tr><td>Design/theme</td><td>Storybook, design gallery/explorer, theme chooser, settings visual lab</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
+          <tr><td>Observability/storage</td><td>Feedback, SDK reference, script templates, diagnostics, replay, storage/security receipts</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
         </tbody>
       </table>
     </section>
@@ -297,10 +298,11 @@
           <tr><th>Metric</th><th>Current count</th><th>Meaning</th></tr>
         </thead>
         <tbody>
-          <tr><td>Contract surfaces</td><td><span class="metric">31</span></td><td>Source-backed surface contracts from <code>surfaces.ts</code>.</td></tr>
+          <tr><td>Contract surfaces</td><td><span class="metric">31</span></td><td>Source-backed surface contracts from <code>surfaces.ts</code>; two outdated design-lab surfaces are not active proof targets.</td></tr>
+          <tr><td>Active audit surfaces</td><td><span class="metric">29</span></td><td><code>DesignGallery</code> and <code>DesignExplorer</code> are excluded from Liquid Glass proof until their Storybook/design-lab source is current.</td></tr>
           <tr><td>Strong proof surfaces</td><td><span class="metric">2</span></td><td><code>ScriptList</code> and <code>ActionsDialog</code> currently have screenshots, numeric layout visual audits, and image-diff receipts.</td></tr>
-          <tr><td>Missing proof surfaces</td><td><span class="metric">29</span></td><td>These still lack the minimum screenshot + numeric layout + image-diff evidence set.</td></tr>
-          <tr><td>Recommended Oracle batches</td><td><span class="metric">9</span></td><td>Only the launcher/actions batch is partial; the other 8 batches remain missing proof.</td></tr>
+          <tr><td>Missing proof surfaces</td><td><span class="metric">27</span></td><td>These active audit surfaces still lack the minimum screenshot + numeric layout + image-diff evidence set.</td></tr>
+          <tr><td>Recommended Oracle batches</td><td><span class="metric">8</span></td><td>Platform/windowing is now first and highest priority; only the launcher/actions batch is partial, and the other 7 batches remain missing proof.</td></tr>
           <tr><td>Practical non-contract targets</td><td><span class="metric">notes strong, dictation media proof, inline-agent numeric proof, notes-acp action proof</span></td><td>Notes now has screenshot, layout visualAudit, and image-diff receipts. Dictation has passive media readiness and synthetic delivery proof, but still lacks visual/layout proof. Inline-agent has focused-text semantic and layout visualAudit proof through the main ACP target, but screenshot capture and an independent <code>inline-agent</code> automation target are still blocked. Notes ACP has actions-panel numeric proof and a fail-closed <code>openNotesAcp</code> activation primitive; actual embedded ACP rendering is blocked by missing Anthropic/Pi warm-session credentials in this sandbox.</td></tr>
         </tbody>
       </table>
@@ -532,7 +534,7 @@
         </div>
         <div class="entry">
           <time>2026-05-29 21:10 MDT</time>
-          <p>Added <code>scripts/devtools/liquid-glass-proof.ts</code> and generated <code>liquid-glass-proof-matrix.json</code>. The current machine-readable state is intentionally incomplete: 2 of 31 contract surfaces have strong proof (<code>ScriptList</code>, <code>ActionsDialog</code>), 29 contract surfaces still lack proof artifacts, and only 1 of 9 recommended Oracle batches is partial. This is now the completion ledger for the remaining exhaustive pass.</p>
+          <p>Added <code>scripts/devtools/liquid-glass-proof.ts</code> and generated <code>liquid-glass-proof-matrix.json</code>. The current machine-readable state is intentionally incomplete: 2 of 29 active Liquid Glass audit surfaces have strong proof (<code>ScriptList</code>, <code>ActionsDialog</code>), 27 active audit surfaces still lack proof artifacts, and only 1 of 8 recommended Oracle batches is partial. This is now the completion ledger for the remaining exhaustive pass.</p>
         </div>
         <div class="entry">
           <time>2026-05-29 21:18 MDT</time>
@@ -549,6 +551,10 @@
         <div class="entry">
           <time>2026-05-29 21:46 MDT</time>
           <p>Added a target-scoped Notes DevTools primitive, <code>openNotesAcp</code>, and fail-closed receipt coverage for Notes-hosted ACP activation. <code>notes-acp-next-open-acp-failclosed-inspect.json</code> now records the sandbox blocker as an explicit failed batch result: <code>Failed to start Pi Agent Chat warm session</code>, with the app log showing the missing Anthropic API key. Captured Notes actions-panel numeric proof in <code>notes-acp-next-actions-open-inspect.json</code> and <code>notes-acp-next-actions-filter-send-inspect.json</code>, including the <code>send_to_ai</code> row and shortcut keycap measurements.</p>
+        </div>
+        <div class="entry">
+          <time>2026-05-29 22:02 MDT</time>
+          <p>Removed outdated Storybook/design-lab surfaces from active Liquid Glass testing. The raw inventory still records <code>DesignGallery</code> and <code>DesignExplorer</code>, but <code>auditSurfaceContracts</code> and the proof matrix now exclude them. Reordered recommended batches outside-in so platform windows, containers, materials, resizing, safe areas, screenshots, and lifecycle are the highest-priority proof track before inner controls and content.</p>
         </div>
       </div>
     </section>

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "tool": "script-kit-devtools.surfaces",
-  "generatedAt": "2026-05-30T02:50:39.518Z",
+  "generatedAt": "2026-05-30T03:47:55.985Z",
   "philosophy": "Inventory app surfaces first, then build protocol/MCP/CLI DevTools primitives; scripted recipes remain regression packs after direct proof exists.",
   "sourceArtifacts": [
     {
@@ -21,11 +21,12 @@
   ],
   "totals": {
     "surfaceContractCount": 31,
+    "liquidGlassAuditSurfaceCount": 29,
     "appViewVariantCount": 48,
     "featureMapCount": 47,
     "ownerSkillCount": 23,
     "currentlyCoveredSurfacesCount": 7,
-    "oracleBatchCount": 9
+    "oracleBatchCount": 8
   },
   "surfaceContracts": [
     {
@@ -924,6 +925,859 @@
       "coverageAliases": []
     }
   ],
+  "auditSurfaceContracts": [
+    {
+      "surfaceKind": "ScriptList",
+      "appViewVariants": [
+        "ScriptList"
+      ],
+      "nativeFooterSurfaces": [
+        "script_list"
+      ],
+      "vocabulary": {
+        "family": "MainMenu",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "OptionalInfoPanel"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "MainMenuActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [
+        "main"
+      ]
+    },
+    {
+      "surfaceKind": "About",
+      "appViewVariants": [
+        "About"
+      ],
+      "nativeFooterSurfaces": [],
+      "vocabulary": {
+        "family": "FeedbackSurface",
+        "inputOwnership": "NoEditableInput",
+        "previewRole": "ContentPane"
+      },
+      "focusPolicy": "NoEditableFocus",
+      "keyboardPolicy": "NoEditableKeyboard",
+      "actionsPolicy": "NoSurfaceActions",
+      "proofPolicy": "StateReceiptProof",
+      "visualPolicy": "ContentPaneVisual",
+      "dismissPolicy": {
+        "policy": "explicit",
+        "windowBlur": "Ignore",
+        "backdropClick": "Ignore",
+        "escape": "LetViewHandle",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "about",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "ActionsDialog",
+      "appViewVariants": [
+        "ActionsDialog"
+      ],
+      "nativeFooterSurfaces": [],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "ActionsDialogKeyboard",
+      "actionsPolicy": "ActionsDialogActions",
+      "proofPolicy": "PopupStateProof",
+      "visualPolicy": "PopupVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [
+        "actions-dialog"
+      ]
+    },
+    {
+      "surfaceKind": "PromptEntity",
+      "appViewVariants": [
+        "ArgPrompt",
+        "DivPrompt",
+        "FormPrompt",
+        "SelectPrompt",
+        "PathPrompt",
+        "DropPrompt",
+        "TemplatePrompt",
+        "ChatPrompt",
+        "MiniPrompt",
+        "MicroPrompt"
+      ],
+      "nativeFooterSurfaces": [
+        "arg_prompt",
+        "div_prompt",
+        "form_prompt",
+        "select_prompt",
+        "path_prompt",
+        "drop_prompt",
+        "template_prompt",
+        "chat_prompt",
+        "mini_prompt"
+      ],
+      "vocabulary": {
+        "family": "ScriptPrompt",
+        "inputOwnership": "PromptEntity",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "PromptEntityFocus",
+      "keyboardPolicy": "PromptEntityKeyboard",
+      "actionsPolicy": "PromptEntityActions",
+      "proofPolicy": "StateReceiptProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "PromptChildContent",
+      "appViewVariants": [
+        "TermPrompt",
+        "EditorPrompt"
+      ],
+      "nativeFooterSurfaces": [
+        "editor_prompt"
+      ],
+      "vocabulary": {
+        "family": "ScriptPrompt",
+        "inputOwnership": "ChildView",
+        "previewRole": "ContentPane"
+      },
+      "focusPolicy": "ChildViewFocus",
+      "keyboardPolicy": "ChildViewKeyboard",
+      "actionsPolicy": "ChildViewActions",
+      "proofPolicy": "ChildViewStateProof",
+      "visualPolicy": "ContentPaneVisual",
+      "dismissPolicy": {
+        "policy": "explicit",
+        "windowBlur": "Ignore",
+        "backdropClick": "Ignore",
+        "escape": "LetViewHandle",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "ExplicitPromptEntity",
+      "appViewVariants": [
+        "EnvPrompt",
+        "NamingPrompt",
+        "CreateAiPresetView"
+      ],
+      "nativeFooterSurfaces": [
+        "env_prompt",
+        "naming_prompt"
+      ],
+      "vocabulary": {
+        "family": "ScriptPrompt",
+        "inputOwnership": "PromptEntity",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "PromptEntityFocus",
+      "keyboardPolicy": "PromptEntityKeyboard",
+      "actionsPolicy": "PromptEntityActions",
+      "proofPolicy": "StateReceiptProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "explicit",
+        "windowBlur": "Ignore",
+        "backdropClick": "Ignore",
+        "escape": "LetViewHandle",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "Webcam",
+      "appViewVariants": [
+        "WebcamView"
+      ],
+      "nativeFooterSurfaces": [
+        "webcam_prompt"
+      ],
+      "vocabulary": {
+        "family": "ScriptPrompt",
+        "inputOwnership": "ChildView",
+        "previewRole": "ContentPane"
+      },
+      "focusPolicy": "ChildViewFocus",
+      "keyboardPolicy": "ChildViewKeyboard",
+      "actionsPolicy": "ChildViewActions",
+      "proofPolicy": "ChildViewStateProof",
+      "visualPolicy": "ContentPaneVisual",
+      "dismissPolicy": {
+        "policy": "explicit",
+        "windowBlur": "Ignore",
+        "backdropClick": "Ignore",
+        "escape": "LetViewHandle",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "ClipboardHistory",
+      "appViewVariants": [
+        "ClipboardHistoryView"
+      ],
+      "nativeFooterSurfaces": [
+        "clipboard_history"
+      ],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "RequiredSplitPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "SplitPreviewVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "clipboardHistory",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "AppLauncher",
+      "appViewVariants": [
+        "AppLauncherView"
+      ],
+      "nativeFooterSurfaces": [
+        "app_launcher"
+      ],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "appLauncher",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "WindowSwitcher",
+      "appViewVariants": [
+        "WindowSwitcherView"
+      ],
+      "nativeFooterSurfaces": [
+        "window_switcher"
+      ],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "windowSwitcher",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "BrowserTabs",
+      "appViewVariants": [
+        "BrowserTabsView"
+      ],
+      "nativeFooterSurfaces": [
+        "browser_tabs"
+      ],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "browserTabs",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "GenericFilterableList",
+      "appViewVariants": [
+        "SearchAiPresetsView",
+        "FavoritesBrowseView"
+      ],
+      "nativeFooterSurfaces": [
+        "search_ai_presets",
+        "favorites"
+      ],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "Settings",
+      "appViewVariants": [
+        "SettingsView"
+      ],
+      "nativeFooterSurfaces": [
+        "settings"
+      ],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "settings",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "KitStoreBrowse",
+      "appViewVariants": [
+        "BrowseKitsView"
+      ],
+      "nativeFooterSurfaces": [
+        "kit_store_browse"
+      ],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "kitStoreBrowse",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "KitStoreInstalled",
+      "appViewVariants": [
+        "InstalledKitsView"
+      ],
+      "nativeFooterSurfaces": [
+        "kit_store_installed"
+      ],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "kitStoreInstalled",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "ProcessManager",
+      "appViewVariants": [
+        "ProcessManagerView"
+      ],
+      "nativeFooterSurfaces": [
+        "process_manager"
+      ],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "explicit",
+        "windowBlur": "Ignore",
+        "backdropClick": "Ignore",
+        "escape": "LetViewHandle",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "processManager",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "CurrentAppCommands",
+      "appViewVariants": [
+        "CurrentAppCommandsView"
+      ],
+      "nativeFooterSurfaces": [
+        "current_app_commands"
+      ],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "explicit",
+        "windowBlur": "Ignore",
+        "backdropClick": "Ignore",
+        "escape": "LetViewHandle",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "currentAppCommands",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "UtilityChildContent",
+      "appViewVariants": [
+        "ScratchPadView",
+        "QuickTerminalView"
+      ],
+      "nativeFooterSurfaces": [
+        "scratch_pad",
+        "quick_terminal"
+      ],
+      "vocabulary": {
+        "family": "UtilityWorkspace",
+        "inputOwnership": "ChildView",
+        "previewRole": "ContentPane"
+      },
+      "focusPolicy": "ChildViewFocus",
+      "keyboardPolicy": "ChildViewKeyboard",
+      "actionsPolicy": "ChildViewActions",
+      "proofPolicy": "ChildViewStateProof",
+      "visualPolicy": "ContentPaneVisual",
+      "dismissPolicy": {
+        "policy": "explicit",
+        "windowBlur": "Ignore",
+        "backdropClick": "Ignore",
+        "escape": "LetViewHandle",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "FileSearchMini",
+      "appViewVariants": [
+        "FileSearchView"
+      ],
+      "nativeFooterSurfaces": [
+        "file_search"
+      ],
+      "vocabulary": {
+        "family": "UtilityWorkspace",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "fileSearch",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "FileSearchFull",
+      "appViewVariants": [
+        "FileSearchView"
+      ],
+      "nativeFooterSurfaces": [
+        "file_search"
+      ],
+      "vocabulary": {
+        "family": "UtilityWorkspace",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "RequiredSplitPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "SplitPreviewVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "fileSearch",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "ThemeChooser",
+      "appViewVariants": [
+        "ThemeChooserView"
+      ],
+      "nativeFooterSurfaces": [
+        "theme_chooser"
+      ],
+      "vocabulary": {
+        "family": "UtilityWorkspace",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "explicit",
+        "windowBlur": "Ignore",
+        "backdropClick": "Ignore",
+        "escape": "LetViewHandle",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "EmojiPicker",
+      "appViewVariants": [
+        "EmojiPickerView"
+      ],
+      "nativeFooterSurfaces": [
+        "emoji_picker"
+      ],
+      "vocabulary": {
+        "family": "UtilityWorkspace",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "explicit",
+        "windowBlur": "Ignore",
+        "backdropClick": "Ignore",
+        "escape": "LetViewHandle",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "emojiPicker",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "Feedback",
+      "appViewVariants": [
+        "CreationFeedback",
+        "ScriptIssuesView"
+      ],
+      "nativeFooterSurfaces": [
+        "creation_feedback"
+      ],
+      "vocabulary": {
+        "family": "FeedbackSurface",
+        "inputOwnership": "NoEditableInput",
+        "previewRole": "FeedbackPanel"
+      },
+      "focusPolicy": "NoEditableFocus",
+      "keyboardPolicy": "NoEditableKeyboard",
+      "actionsPolicy": "NoSurfaceActions",
+      "proofPolicy": "StateReceiptProof",
+      "visualPolicy": "FeedbackVisual",
+      "dismissPolicy": {
+        "policy": "explicit",
+        "windowBlur": "Ignore",
+        "backdropClick": "Ignore",
+        "escape": "LetViewHandle",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "SdkReference",
+      "appViewVariants": [
+        "SdkReferenceView"
+      ],
+      "nativeFooterSurfaces": [],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "RequiredSplitPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "SplitPreviewVisual",
+      "dismissPolicy": {
+        "policy": "explicit",
+        "windowBlur": "Ignore",
+        "backdropClick": "Ignore",
+        "escape": "LetViewHandle",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "ScriptTemplateCatalog",
+      "appViewVariants": [
+        "ScriptTemplateCatalogView"
+      ],
+      "nativeFooterSurfaces": [],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "RequiredSplitPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "SplitPreviewVisual",
+      "dismissPolicy": {
+        "policy": "explicit",
+        "windowBlur": "Ignore",
+        "backdropClick": "Ignore",
+        "escape": "LetViewHandle",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "scriptTemplateCatalog",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "AcpHistory",
+      "appViewVariants": [
+        "AcpHistoryView"
+      ],
+      "nativeFooterSurfaces": [
+        "acp_history"
+      ],
+      "vocabulary": {
+        "family": "AssistantWorkspace",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "RequiredSplitPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "SplitPreviewVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": []
+    },
+    {
+      "surfaceKind": "AttachmentPortalBrowser",
+      "appViewVariants": [
+        "BrowserHistoryView",
+        "DictationHistoryView",
+        "NotesBrowseView"
+      ],
+      "nativeFooterSurfaces": [
+        "browser_history",
+        "dictation_history"
+      ],
+      "vocabulary": {
+        "family": "AttachmentPortal",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "RequiredSplitPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "SplitPreviewVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [
+        "dictation-history"
+      ]
+    },
+    {
+      "surfaceKind": "AcpChat",
+      "appViewVariants": [
+        "AcpChatView"
+      ],
+      "nativeFooterSurfaces": [
+        "acp_chat"
+      ],
+      "vocabulary": {
+        "family": "AssistantWorkspace",
+        "inputOwnership": "ChildView",
+        "previewRole": "ContentPane"
+      },
+      "focusPolicy": "ChildViewFocus",
+      "keyboardPolicy": "ChildViewKeyboard",
+      "actionsPolicy": "ChildViewActions",
+      "proofPolicy": "ChildViewStateProof",
+      "visualPolicy": "ContentPaneVisual",
+      "dismissPolicy": {
+        "policy": "explicit",
+        "windowBlur": "Ignore",
+        "backdropClick": "Ignore",
+        "escape": "LetViewHandle",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "acpChat",
+      "coverageAliases": [
+        "notes-acp"
+      ]
+    },
+    {
+      "surfaceKind": "ConfirmPrompt",
+      "appViewVariants": [
+        "ConfirmPrompt"
+      ],
+      "nativeFooterSurfaces": [
+        "confirm_prompt"
+      ],
+      "vocabulary": {
+        "family": "FeedbackSurface",
+        "inputOwnership": "NoEditableInput",
+        "previewRole": "FeedbackPanel"
+      },
+      "focusPolicy": "NoEditableFocus",
+      "keyboardPolicy": "NoEditableKeyboard",
+      "actionsPolicy": "NoSurfaceActions",
+      "proofPolicy": "PopupStateProof",
+      "visualPolicy": "PopupVisual",
+      "dismissPolicy": {
+        "policy": "explicit",
+        "windowBlur": "Ignore",
+        "backdropClick": "Ignore",
+        "escape": "LetViewHandle",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "confirmPrompt",
+      "coverageAliases": []
+    }
+  ],
+  "liquidGlassAuditExclusions": [
+    {
+      "surfaceKind": "DesignGallery",
+      "reason": "Outdated Storybook/design-lab surface; do not use as Liquid Glass runtime proof."
+    },
+    {
+      "surfaceKind": "DesignExplorer",
+      "reason": "Outdated Storybook/design-lab surface; do not use as Liquid Glass runtime proof."
+    }
+  ],
   "featureMap": [
     {
       "id": "001",
@@ -1649,6 +2503,42 @@
   ],
   "recommendedOracleBatches": [
     {
+      "id": "platform-windowing-permissions",
+      "name": "Platform windows, containers, materials, resizing, screenshots, lifecycle",
+      "owners": [
+        "platform-windowing-macos",
+        "window-resizing",
+        "launcher-surface-contracts"
+      ],
+      "surfaceKinds": [
+        "About",
+        "Feedback"
+      ],
+      "featureIds": [
+        "006",
+        "023",
+        "024",
+        "025",
+        "026",
+        "027",
+        "028",
+        "033",
+        "034",
+        "036",
+        "040"
+      ],
+      "requiredDevToolsPrimitives": [
+        "devtools.windows.inspect",
+        "devtools.permissions.inspect",
+        "devtools.visual.compare",
+        "devtools.lifecycle.trace"
+      ],
+      "questionsForOracle": [
+        "How should Script Kit prove outer window/container material, resize, safe-area, and backdrop behavior before auditing inner controls?",
+        "Which permission and screenshot receipts stay passive and avoid changing macOS settings?"
+      ]
+    },
+    {
       "id": "launcher-main-actions",
       "name": "Launcher, main menu, source filters, actions, shortcuts, aliases",
       "owners": [
@@ -1934,85 +2824,6 @@
       ]
     },
     {
-      "id": "platform-windowing-permissions",
-      "name": "Platform windows, tray, permissions, screenshots, lifecycle, distribution",
-      "owners": [
-        "platform-windowing-macos",
-        "window-resizing",
-        "launcher-surface-contracts"
-      ],
-      "surfaceKinds": [
-        "About",
-        "Feedback",
-        "DesignExplorer",
-        "DesignGallery"
-      ],
-      "featureIds": [
-        "006",
-        "023",
-        "024",
-        "025",
-        "026",
-        "027",
-        "028",
-        "033",
-        "034",
-        "036",
-        "040"
-      ],
-      "requiredDevToolsPrimitives": [
-        "devtools.windows.inspect",
-        "devtools.permissions.inspect",
-        "devtools.visual.compare",
-        "devtools.lifecycle.trace"
-      ],
-      "questionsForOracle": [
-        "How close can Script Kit DevTools get to Chrome's Target/Page/Overlay layers for native windows?",
-        "Which permission and screenshot receipts stay passive and avoid changing macOS settings?"
-      ]
-    },
-    {
-      "id": "storybook-design-theme",
-      "name": "Storybook, design explorer, theme, visual state lab",
-      "owners": [
-        "storybook-design",
-        "theme-config-preferences",
-        "testing-quality-gates"
-      ],
-      "surfaceKinds": [
-        "DesignGallery",
-        "DesignExplorer",
-        "ThemeChooser",
-        "Settings"
-      ],
-      "featureIds": [
-        "012",
-        "022",
-        "028",
-        "032",
-        "035",
-        "036",
-        "037",
-        "039",
-        "040",
-        "042",
-        "043",
-        "044",
-        "046",
-        "047"
-      ],
-      "requiredDevToolsPrimitives": [
-        "devtools.visual.compare",
-        "devtools.theme.inspect",
-        "devtools.story.snapshot",
-        "devtools.measure.contrast"
-      ],
-      "questionsForOracle": [
-        "How should design/story surfaces become safe visual fixtures for before/after UI proof?",
-        "Which text-fit, contrast, and token receipts are needed before screenshot review is trusted?"
-      ]
-    },
-    {
       "id": "observability-security-storage",
       "name": "Observability, storage, sharing, security, diagnostics, replay",
       "owners": [
@@ -2056,6 +2867,7 @@
     }
   ],
   "recommendedNext": [
+    "Work outside-in: prove window/container material, resizing, and lifecycle before inner controls and content.",
     "Ask Oracle to turn each batch into inspect, measure, act, compare, media, resources, events, and investigate primitives.",
     "Add fail-closed CLI contracts before implementing runtime behavior so agents cannot confuse screenshots or recipes for proof.",
     "Promote recurring direct-primitive flows into agentic-testing recipes only after red/green receipts stabilize."

@@ -58,6 +58,17 @@ const coverageSurfaceAliases = [
   { alias: "notes-acp", resolvesTo: { surfaceKind: "AcpChat", hostKind: "NotesWindow" }, countsAsCoverage: false },
 ] as const;
 
+const liquidGlassAuditExclusions = [
+  {
+    surfaceKind: "DesignGallery",
+    reason: "Outdated Storybook/design-lab surface; do not use as Liquid Glass runtime proof.",
+  },
+  {
+    surfaceKind: "DesignExplorer",
+    reason: "Outdated Storybook/design-lab surface; do not use as Liquid Glass runtime proof.",
+  },
+] as const;
+
 function aliasesForSurfaceKind(surfaceKind: string) {
   return coverageSurfaceAliases.filter((alias) => alias.resolvesTo.surfaceKind === surfaceKind).map((alias) => alias.alias);
 }
@@ -125,6 +136,23 @@ function buildOracleBatches(contracts: SurfaceContract[], features: FeatureMapEn
   const keepKinds = (kinds: string[]) => kinds.filter((kind) => surfaceKinds.has(kind));
 
   return [
+    {
+      id: "platform-windowing-permissions",
+      name: "Platform windows, containers, materials, resizing, screenshots, lifecycle",
+      owners: ["platform-windowing-macos", "window-resizing", "launcher-surface-contracts"],
+      surfaceKinds: keepKinds(["About", "Feedback"]),
+      featureIds: featureIds(features, ["platform-windowing-macos", "window-resizing", "launcher-surface-contracts"], [
+        "window",
+        "permission",
+        "tray",
+        "sizing",
+      ]),
+      requiredDevToolsPrimitives: ["devtools.windows.inspect", "devtools.permissions.inspect", "devtools.visual.compare", "devtools.lifecycle.trace"],
+      questionsForOracle: [
+        "How should Script Kit prove outer window/container material, resize, safe-area, and backdrop behavior before auditing inner controls?",
+        "Which permission and screenshot receipts stay passive and avoid changing macOS settings?",
+      ],
+    },
     {
       id: "launcher-main-actions",
       name: "Launcher, main menu, source filters, actions, shortcuts, aliases",
@@ -234,40 +262,6 @@ function buildOracleBatches(contracts: SurfaceContract[], features: FeatureMapEn
       ],
     },
     {
-      id: "platform-windowing-permissions",
-      name: "Platform windows, tray, permissions, screenshots, lifecycle, distribution",
-      owners: ["platform-windowing-macos", "window-resizing", "launcher-surface-contracts"],
-      surfaceKinds: keepKinds(["About", "Feedback", "DesignExplorer", "DesignGallery"]),
-      featureIds: featureIds(features, ["platform-windowing-macos", "window-resizing", "launcher-surface-contracts"], [
-        "window",
-        "permission",
-        "tray",
-        "sizing",
-      ]),
-      requiredDevToolsPrimitives: ["devtools.windows.inspect", "devtools.permissions.inspect", "devtools.visual.compare", "devtools.lifecycle.trace"],
-      questionsForOracle: [
-        "How close can Script Kit DevTools get to Chrome's Target/Page/Overlay layers for native windows?",
-        "Which permission and screenshot receipts stay passive and avoid changing macOS settings?",
-      ],
-    },
-    {
-      id: "storybook-design-theme",
-      name: "Storybook, design explorer, theme, visual state lab",
-      owners: ["storybook-design", "theme-config-preferences", "testing-quality-gates"],
-      surfaceKinds: keepKinds(["DesignGallery", "DesignExplorer", "ThemeChooser", "Settings"]),
-      featureIds: featureIds(features, ["storybook-design", "theme-config-preferences", "testing-quality-gates"], [
-        "storybook",
-        "design",
-        "theme",
-        "visual",
-      ]),
-      requiredDevToolsPrimitives: ["devtools.visual.compare", "devtools.theme.inspect", "devtools.story.snapshot", "devtools.measure.contrast"],
-      questionsForOracle: [
-        "How should design/story surfaces become safe visual fixtures for before/after UI proof?",
-        "Which text-fit, contrast, and token receipts are needed before screenshot review is trusted?",
-      ],
-    },
-    {
       id: "observability-security-storage",
       name: "Observability, storage, sharing, security, diagnostics, replay",
       owners: ["dev-loop-observability", "storage-cache-security", "testing-quality-gates"],
@@ -298,9 +292,27 @@ function buildReport(contractsText: string, featureMapText: string, coverageText
   const coverageSurfaceIds = extractCoverageSurfaceIds(coverageText);
   const coveredNames = new Set(coverageSurfaceIds);
   const contractSurfaceKinds = contracts.entries.map((entry) => entry.surfaceKind);
+  const excludedAuditKinds = new Set(liquidGlassAuditExclusions.map((entry) => entry.surfaceKind));
+  const auditContracts = contracts.entries.filter((entry) => !excludedAuditKinds.has(entry.surfaceKind));
   const contractFamilies = [...new Set(contracts.entries.map((entry) => entry.vocabulary?.family ?? "Unknown"))].sort();
   const ownerSkills = [...new Set(featureMap.flatMap((entry) => entry.primaryOwners))].sort();
-  const batches = buildOracleBatches(contracts.entries, featureMap);
+  const batches = buildOracleBatches(auditContracts, featureMap);
+  const serializeContract = (entry: SurfaceContract) => ({
+    surfaceKind: entry.surfaceKind,
+    appViewVariants: entry.appViewVariants,
+    nativeFooterSurfaces: entry.appViewFooters
+      .map((footer) => footer.nativeFooterSurface)
+      .filter((footer): footer is string => Boolean(footer)),
+    vocabulary: entry.vocabulary,
+    focusPolicy: entry.focusPolicy,
+    keyboardPolicy: entry.keyboardPolicy,
+    actionsPolicy: entry.actionsPolicy,
+    proofPolicy: entry.proofPolicy,
+    visualPolicy: entry.visualPolicy,
+    dismissPolicy: entry.dismissPolicy ?? null,
+    automationSemanticSurface: entry.automationSemanticSurface,
+    coverageAliases: aliasesForSurfaceKind(entry.surfaceKind),
+  });
 
   return {
     schemaVersion: 1,
@@ -326,28 +338,16 @@ function buildReport(contractsText: string, featureMapText: string, coverageText
     ],
     totals: {
       surfaceContractCount: contracts.entries.length,
+      liquidGlassAuditSurfaceCount: auditContracts.length,
       appViewVariantCount: contracts.entries.reduce((count, entry) => count + entry.appViewVariants.length, 0),
       featureMapCount: featureMap.length,
       ownerSkillCount: ownerSkills.length,
       currentlyCoveredSurfacesCount: coverageSurfaceIds.length,
       oracleBatchCount: batches.length,
     },
-    surfaceContracts: contracts.entries.map((entry) => ({
-      surfaceKind: entry.surfaceKind,
-      appViewVariants: entry.appViewVariants,
-      nativeFooterSurfaces: entry.appViewFooters
-        .map((footer) => footer.nativeFooterSurface)
-        .filter((footer): footer is string => Boolean(footer)),
-      vocabulary: entry.vocabulary,
-      focusPolicy: entry.focusPolicy,
-      keyboardPolicy: entry.keyboardPolicy,
-      actionsPolicy: entry.actionsPolicy,
-      proofPolicy: entry.proofPolicy,
-      visualPolicy: entry.visualPolicy,
-      dismissPolicy: entry.dismissPolicy ?? null,
-      automationSemanticSurface: entry.automationSemanticSurface,
-      coverageAliases: aliasesForSurfaceKind(entry.surfaceKind),
-    })),
+    surfaceContracts: contracts.entries.map(serializeContract),
+    auditSurfaceContracts: auditContracts.map(serializeContract),
+    liquidGlassAuditExclusions,
     featureMap,
     existingDevToolsCoverage: {
       surfaceIds: coverageSurfaceIds,
@@ -363,6 +363,7 @@ function buildReport(contractsText: string, featureMapText: string, coverageText
     ownerSkills,
     recommendedOracleBatches: batches,
     recommendedNext: [
+      "Work outside-in: prove window/container material, resizing, and lifecycle before inner controls and content.",
       "Ask Oracle to turn each batch into inspect, measure, act, compare, media, resources, events, and investigate primitives.",
       "Add fail-closed CLI contracts before implementing runtime behavior so agents cannot confuse screenshots or recipes for proof.",
       "Promote recurring direct-primitive flows into agentic-testing recipes only after red/green receipts stabilize.",
@@ -379,6 +380,7 @@ function markdown(report: ReturnType<typeof buildReport>) {
     "## Totals",
     "",
     `- Surface contracts: ${report.totals.surfaceContractCount}`,
+    `- Liquid Glass audit surfaces: ${report.totals.liquidGlassAuditSurfaceCount}`,
     `- AppView variants: ${report.totals.appViewVariantCount}`,
     `- Feature-map entries: ${report.totals.featureMapCount}`,
     `- Owner skills: ${report.totals.ownerSkillCount}`,
@@ -392,6 +394,12 @@ function markdown(report: ReturnType<typeof buildReport>) {
     ...report.surfaceContracts.map((entry) =>
       `| ${entry.surfaceKind} | ${entry.appViewVariants.join(", ")} | ${entry.vocabulary?.family ?? ""} | ${entry.focusPolicy ?? ""} | ${entry.keyboardPolicy ?? ""} | ${entry.proofPolicy ?? ""} | ${entry.visualPolicy ?? ""} |`
     ),
+    "",
+    "## Liquid Glass Audit Exclusions",
+    "",
+    "| SurfaceKind | Reason |",
+    "| --- | --- |",
+    ...report.liquidGlassAuditExclusions.map((entry) => `| ${entry.surfaceKind} | ${entry.reason} |`),
     "",
     "## Current Explicit Coverage",
     "",
