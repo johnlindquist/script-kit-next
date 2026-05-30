@@ -23,7 +23,7 @@ type Evidence = {
 
 type ProofTiers = {
   osScreenshotProof: "pass" | "blocked" | "missing";
-  appRenderProof: "pass" | "fail" | "missing";
+  appRenderProof: "pass" | "blocked" | "fail" | "missing";
   offscreenRenderProof: "pass" | "fail" | "missing";
   numericProof: "pass" | "fail" | "missing";
   imageDiffProof: "pass" | "blocked" | "missing";
@@ -128,6 +128,12 @@ function auditFromReceipt(json: JsonObject | null): JsonObject {
 function screenshotUsability(path: string, receipts: string[]): ScreenshotUsability {
   const fileName = path.split("/").pop() ?? path;
   const baseName = fileName.replace(/\.[^.]+$/, "");
+  if (baseName.includes("render")) {
+    return {
+      usable: false,
+      note: `ignored screenshot ${path}: app-render/readback images do not count as OS screenshot evidence`,
+    };
+  }
   const matchingReceipts = receipts.filter((receipt) => {
     const receiptName = receipt.split("/").pop() ?? receipt;
     return receiptName.startsWith(baseName) && receiptName.includes("screenshot");
@@ -158,6 +164,48 @@ function screenshotUsability(path: string, receipts: string[]): ScreenshotUsabil
   }
 
   return { usable: true };
+}
+
+function usableAppRenderEvidence(renderEvidence: JsonObject) {
+  const pixelAudit = asObject(renderEvidence.pixelAudit);
+  return (
+    renderEvidence.source === "gpui-render-readback" &&
+    renderEvidence.available === true &&
+    renderEvidence.countsAsAppRenderEvidence === true &&
+    renderEvidence.countsAsOsScreenshotEvidence === false &&
+    renderEvidence.classification === "captured" &&
+    pixelAudit.blank === false
+  );
+}
+
+const APP_RENDER_BLOCKED_ERROR_CODES = new Set([
+  "runtime_unavailable",
+  "unknown_tool",
+  "gpui_readback_unavailable",
+  "unsupported_platform",
+]);
+
+const APP_RENDER_BLOCKED_REASONS = new Set([
+  "runtime_unavailable",
+  "unsupported",
+  "unsupported_platform",
+]);
+
+function appRenderReadbackBlocked(renderEvidence: JsonObject) {
+  if (renderEvidence.source !== "gpui-render-readback") {
+    return false;
+  }
+  if (renderEvidence.available === true || renderEvidence.countsAsAppRenderEvidence === true) {
+    return false;
+  }
+  if (renderEvidence.classification !== "gpui-readback-unavailable") {
+    return false;
+  }
+  return asArray(renderEvidence.attempts).map(asObject).some((attempt) =>
+    attempt.status === "unsupported" ||
+    APP_RENDER_BLOCKED_ERROR_CODES.has(String(attempt.errorCode ?? "")) ||
+    APP_RENDER_BLOCKED_REASONS.has(String(attempt.reason ?? ""))
+  );
 }
 
 function imageDiffUsability(path: string): ImageDiffUsability {
@@ -248,26 +296,41 @@ function evidenceFor(terms: string[], files: { receipts: string[]; screenshots: 
 function proofTiers(evidence: Evidence): ProofTiers {
   let osBlocked = false;
   let appRenderPass = false;
+  let appRenderBlocked = false;
   let appRenderFail = false;
   let offscreenPass = false;
   let offscreenFail = false;
   for (const receipt of evidence.receipts) {
     const json = readJsonSync(receipt);
     const visualEvidence = asObject(json?.visualEvidence);
-    if (visualEvidence.classification === "macos-windowserver-capture-blocked") {
+    if (
+      visualEvidence.source === "os-window-capture" &&
+      visualEvidence.available === false &&
+      visualEvidence.countsAsOsScreenshotEvidence !== true &&
+      typeof visualEvidence.classification === "string"
+    ) {
       osBlocked = true;
     }
     if (visualEvidence.countsAsOsScreenshotEvidence === true) {
       osBlocked = false;
     }
     const renderEvidence = asObject(json?.renderEvidence);
-    if (renderEvidence.countsAsAppRenderEvidence === true) {
+    if (usableAppRenderEvidence(renderEvidence)) {
       appRenderPass = true;
     } else if (Object.keys(renderEvidence).length > 0) {
-      appRenderFail = true;
+      if (appRenderReadbackBlocked(renderEvidence)) {
+        appRenderBlocked = true;
+      } else {
+        appRenderFail = true;
+      }
     }
-    if (String(renderEvidence.source ?? "").includes("offscreen")) {
-      if (renderEvidence.available === true) {
+    const offscreenEvidence = asObject(json?.offscreenEvidence);
+    if (Object.keys(offscreenEvidence).length > 0) {
+      if (
+        offscreenEvidence.source === "gpui-offscreen-render" &&
+        offscreenEvidence.available === true &&
+        offscreenEvidence.countsAsOffscreenRenderEvidence === true
+      ) {
         offscreenPass = true;
       } else {
         offscreenFail = true;
@@ -288,7 +351,7 @@ function proofTiers(evidence: Evidence): ProofTiers {
     asArray(audit.missingStyleNodeNames).length === 0;
   return {
     osScreenshotProof: evidence.screenshots.length > 0 ? "pass" : osBlocked ? "blocked" : "missing",
-    appRenderProof: appRenderPass ? "pass" : appRenderFail ? "fail" : "missing",
+    appRenderProof: appRenderPass ? "pass" : appRenderFail ? "fail" : appRenderBlocked ? "blocked" : "missing",
     offscreenRenderProof: offscreenPass ? "pass" : offscreenFail ? "fail" : "missing",
     numericProof: numericPass ? "pass" : evidence.layoutReceipts.length > 0 ? "fail" : "missing",
     imageDiffProof: evidence.imageDiffReceipts.length > 0 ? "pass" : osBlocked ? "blocked" : "missing",
@@ -299,6 +362,7 @@ function classify(evidence: Evidence) {
   const hasScreenshot = evidence.screenshots.length > 0;
   const hasLayout = evidence.layoutReceipts.length > 0;
   const hasImageDiff = evidence.imageDiffReceipts.length > 0;
+  const tiers = proofTiers(evidence);
   const audit = asObject(evidence.visualAudit);
   const styled = typeof audit.styledNodeCount === "number" ? audit.styledNodeCount : null;
   const nodeCount = typeof audit.nodeCount === "number" ? audit.nodeCount : null;
@@ -312,6 +376,17 @@ function classify(evidence: Evidence) {
     return "strong-proof";
   }
   if (hasLayout && nodeCount != null && styled === nodeCount && hitFailures === 0 && contentGlass === 0 && contentNativeMaterial === 0 && glassLayerViolations === 0 && missingStyle === 0) {
+    if (tiers.appRenderProof === "pass" && tiers.osScreenshotProof !== "pass") {
+      return tiers.osScreenshotProof === "blocked"
+        ? "numeric-plus-app-render-proof-os-screenshot-blocked"
+        : "numeric-plus-app-render-proof-missing-os-screenshot";
+    }
+    if (tiers.appRenderProof === "fail") {
+      return "numeric-proof-app-render-attempted-failed";
+    }
+    if (tiers.appRenderProof === "blocked") {
+      return "numeric-proof-app-render-blocked";
+    }
     return "numeric-proof-missing-visual-capture";
   }
   if (hasScreenshot && hasLayout) {
@@ -410,7 +485,7 @@ async function main() {
     KitStoreInstalled: ["kit-store-installed", "kitstoreinstalled"],
     EmojiPicker: ["emoji", "emoji-picker", "emojipicker"],
     ThemeChooser: ["theme", "choose-theme", "theme-chooser", "themechooser"],
-    FileSearchMini: ["file-search-mini"],
+    FileSearchMini: ["file-search-mini", "file-search-owned"],
     FileSearchFull: ["file-search-full"],
     AttachmentPortalBrowser: ["attachment-portal", "dictation-history"],
     SdkReference: ["sdk-reference"],
@@ -684,6 +759,7 @@ async function main() {
   const visualTierDebtSurfaces = surfaces
     .filter((surface) =>
       surface.proofTiers.osScreenshotProof === "blocked" ||
+      surface.proofTiers.appRenderProof === "blocked" ||
       surface.proofTiers.appRenderProof === "fail" ||
       surface.proofTiers.offscreenRenderProof === "fail" ||
       surface.proofTiers.numericProof === "fail" ||
@@ -695,6 +771,7 @@ async function main() {
       proofTiers: surface.proofTiers,
       failedTiers: [
         surface.proofTiers.osScreenshotProof === "blocked" ? "osScreenshotProof" : "",
+        surface.proofTiers.appRenderProof === "blocked" ? "appRenderProof" : "",
         surface.proofTiers.appRenderProof === "fail" ? "appRenderProof" : "",
         surface.proofTiers.offscreenRenderProof === "fail" ? "offscreenRenderProof" : "",
         surface.proofTiers.numericProof === "fail" ? "numericProof" : "",
@@ -715,8 +792,6 @@ async function main() {
       screenshots: surface.evidence.screenshots,
       notes: surface.evidence.notes,
     }));
-
-
   const proofDebtWorkQueue = surfaceProofDebtSurfaces.map((surface) => {
     const missingEvidence = [
       surface.requiredEvidence.osScreenshotProof !== "pass" ? "osScreenshotProof" : "",
@@ -726,6 +801,7 @@ async function main() {
       surface.requiredEvidence.imageDiffProof !== "pass" ? "imageDiffProof" : "",
     ].filter(Boolean);
     const visualCaptureBlocked = surface.proofTiers.osScreenshotProof === "blocked" ||
+      surface.proofTiers.appRenderProof === "blocked" ||
       surface.proofTiers.appRenderProof === "fail" ||
       surface.proofTiers.offscreenRenderProof === "fail" ||
       surface.proofTiers.imageDiffProof === "blocked";
@@ -758,6 +834,7 @@ async function main() {
     missingProofSurfaceCount: surfaces.filter((surface) => surface.proofStatus === "missing-proof").length,
     osScreenshotBlockedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.osScreenshotProof === "blocked").length,
     appRenderProofSurfaceCount: surfaces.filter((surface) => surface.proofTiers.appRenderProof === "pass").length,
+    appRenderBlockedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.appRenderProof === "blocked").length,
     appRenderFailedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.appRenderProof === "fail").length,
     appRenderMissingSurfaceCount: surfaces.filter((surface) => surface.proofTiers.appRenderProof === "missing").length,
     offscreenRenderFailedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.offscreenRenderProof === "fail").length,
@@ -790,7 +867,8 @@ async function main() {
       summary.missingProofSurfaceCount === 0 ? "" : `${summary.missingProofSurfaceCount} contract surfaces still lack proof artifacts`,
       summary.surfaceProofDebtCount === 0 ? "" : `${summary.surfaceProofDebtCount} contract surfaces are not yet strong-proof`,
       summary.visualTierDebtSurfaceCount === 0 ? "" : `${summary.visualTierDebtSurfaceCount} contract surfaces have explicit visual-tier debt; inspect proofTiers before claiming exhaustive Liquid Glass proof`,
-      summary.appRenderFailedSurfaceCount === 0 ? "" : `${summary.appRenderFailedSurfaceCount} contract surfaces attempted app-render proof and failed or returned unsupported`,
+      summary.appRenderFailedSurfaceCount === 0 ? "" : `${summary.appRenderFailedSurfaceCount} contract surfaces attempted app-render proof and failed`,
+      summary.appRenderBlockedSurfaceCount === 0 ? "" : `${summary.appRenderBlockedSurfaceCount} contract surfaces attempted app-render proof but GPUI render readback was unavailable or unsupported`,
       "strong-proof means current artifacts include screenshot, numeric layout visualAudit, and image diff evidence; it is not an Apple conformance claim by itself",
       "proofTiers separate OS screenshots from GPUI app-render proof so WindowServer-blocked captures cannot become false visual evidence",
     ].filter(Boolean),

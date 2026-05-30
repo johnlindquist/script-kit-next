@@ -18,11 +18,12 @@ fn proof_matrix_separates_visual_numeric_and_diff_tiers() {
 #[test]
 fn proof_matrix_does_not_promote_windowserver_blockers_to_visual_proof() {
     assert!(
-        PROOF_MATRIX.contains("macos-windowserver-capture-blocked")
+        PROOF_MATRIX.contains("visualEvidence.source === \"os-window-capture\"")
+            && PROOF_MATRIX.contains("visualEvidence.available === false")
             && PROOF_MATRIX.contains("countsAsOsScreenshotEvidence")
             && PROOF_MATRIX.contains("countsAsAppRenderEvidence")
             && PROOF_MATRIX.contains(
-                "WindowServer-blocked captures cannot become false visual evidence"
+                "proofTiers separate OS screenshots from GPUI app-render proof"
             ),
         "Liquid Glass proof matrix must classify WindowServer screenshot blockers without promoting them to visual proof"
     );
@@ -32,13 +33,14 @@ fn proof_matrix_does_not_promote_windowserver_blockers_to_visual_proof() {
 fn proof_matrix_summary_reports_visual_tier_debt() {
     assert!(
         PROOF_MATRIX.contains("appRenderFailedSurfaceCount")
+            && PROOF_MATRIX.contains("appRenderBlockedSurfaceCount")
             && PROOF_MATRIX.contains("appRenderMissingSurfaceCount")
             && PROOF_MATRIX.contains("offscreenRenderFailedSurfaceCount")
             && PROOF_MATRIX.contains("offscreenRenderMissingSurfaceCount")
             && PROOF_MATRIX.contains("visualTierDebtSurfaceCount")
             && PROOF_MATRIX.contains("explicit visual-tier debt")
-            && PROOF_MATRIX.contains("attempted app-render proof and failed or returned unsupported"),
-        "Liquid Glass proof matrix summary must expose failed or missing visual proof tiers instead of hiding them behind overall surface status"
+            && PROOF_MATRIX.contains("attempted app-render proof but GPUI render readback was unavailable or unsupported"),
+        "Liquid Glass proof matrix summary must expose blocked, failed, or missing visual proof tiers instead of hiding them behind overall surface status"
     );
 }
 
@@ -78,5 +80,26 @@ fn proof_matrix_emits_ordered_debt_work_queue() {
             && PROOF_MATRIX.contains("capture-blocker")
             && PROOF_MATRIX.contains("missing-proof-tier"),
         "Liquid Glass proof matrix must emit an outside-in ordered work queue for remaining surface proof debt"
+    );
+}
+
+#[test]
+fn proof_matrix_has_numeric_plus_app_render_status_without_strong_promotion() {
+    assert!(
+        PROOF_MATRIX.contains("numeric-plus-app-render-proof-os-screenshot-blocked")
+            && PROOF_MATRIX.contains("numeric-plus-app-render-proof-missing-os-screenshot")
+            && PROOF_MATRIX.contains("numeric-proof-app-render-attempted-failed")
+            && PROOF_MATRIX.contains("numeric-proof-app-render-blocked"),
+        "app-render proof must create an intermediate status instead of promoting to strong-proof"
+    );
+    assert!(
+        PROOF_MATRIX.contains("function usableAppRenderEvidence")
+            && PROOF_MATRIX.contains("countsAsOsScreenshotEvidence === false")
+            && PROOF_MATRIX.contains("pixelAudit.blank === false"),
+        "app-render evidence must be nonblank and must not count as OS screenshot evidence"
+    );
+    assert!(
+        PROOF_MATRIX.contains("app-render/readback images do not count as OS screenshot evidence"),
+        "app-render PNGs must not be counted as OS screenshot artifacts"
     );
 }
