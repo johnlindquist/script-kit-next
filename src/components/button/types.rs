@@ -21,7 +21,9 @@ pub const BUTTON_CONTENT_GAP_PX: f32 = 2.0;
 /// Canonical margin between the main label and shortcut text.
 pub const BUTTON_SHORTCUT_MARGIN_LEFT_PX: f32 = 4.0;
 /// Canonical button corner radius.
-pub const BUTTON_RADIUS_PX: f32 = 6.0;
+pub const BUTTON_RADIUS_PX: f32 = crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX;
+/// Canonical button border width for unfocused/focused states.
+pub const BUTTON_BORDER_WIDTH_PX: f32 = 1.0;
 /// Light-mode hover overlay alpha for ghost/icon buttons.
 const BUTTON_HOVER_OVERLAY_ALPHA_LIGHT: u8 = 0x2e;
 /// Dark-mode hover overlay alpha for ghost/icon buttons.

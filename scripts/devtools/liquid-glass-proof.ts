@@ -148,6 +148,7 @@ async function main() {
     ActionsDialog: ["actions"],
     ConfirmPrompt: ["confirm"],
     About: ["about"],
+    Feedback: ["feedback", "creation-feedback", "creationFeedback"],
     AcpChat: ["acp"],
     AcpHistory: ["acp-history"],
     ClipboardHistory: ["clipboard"],
@@ -174,6 +175,10 @@ async function main() {
     } else if (surfaceKind === "About") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-about-layout-after.json`,
+      ]);
+    } else if (surfaceKind === "Feedback") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-feedback-layout-after.json`,
       ]);
     }
     const status = classify(evidence);

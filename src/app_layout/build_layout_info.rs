@@ -15,6 +15,7 @@ impl ScriptListApp {
                 FileSearchPresentation::Mini => crate::window_resize::ViewType::MainWindow,
             },
             AppView::About { .. } => crate::window_resize::ViewType::ScriptList,
+            AppView::CreationFeedback { .. } => crate::window_resize::ViewType::DivPrompt,
             AppView::ClipboardHistoryView { .. }
             | AppView::ThemeChooserView { .. }
             | AppView::SdkReferenceView { .. }
@@ -367,6 +368,155 @@ impl ScriptListApp {
                     .with_parent("AboutContentStack")
                     .with_explanation("Collapsed acknowledgements panel with compact 10px radius."),
             );
+
+            return LayoutInfo {
+                window_width,
+                window_height,
+                prompt_type: prompt_type.to_string(),
+                components,
+                handler_form: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            };
+        }
+
+        if matches!(self.current_view, AppView::CreationFeedback { .. }) {
+            const FEEDBACK_PADDING_X: f32 = 24.0;
+            const FEEDBACK_PADDING_Y: f32 = 18.0;
+            const FEEDBACK_STACK_GAP: f32 = 16.0;
+            const FEEDBACK_INTRO_HEIGHT: f32 = 58.0;
+            const FEEDBACK_SECTION_LABEL_HEIGHT: f32 = 17.0;
+            const FEEDBACK_SECTION_GAP: f32 = 8.0;
+            const FEEDBACK_PATH_HEIGHT: f32 = 42.0;
+            const FEEDBACK_BUTTON_HEIGHT: f32 = 28.0;
+            const FEEDBACK_BUTTON_GAP: f32 = 8.0;
+            const FEEDBACK_REVEAL_WIDTH: f32 = 128.0;
+            const FEEDBACK_COPY_WIDTH: f32 = 92.0;
+            const FEEDBACK_OPEN_WIDTH: f32 = 58.0;
+
+            let panel_x = FEEDBACK_PADDING_X;
+            let panel_y = FEEDBACK_PADDING_Y;
+            let panel_width = window_width - FEEDBACK_PADDING_X * 2.0;
+            let panel_height = window_height - FEEDBACK_PADDING_Y * 2.0;
+            let mut cursor_y = panel_y;
+
+            components.push(
+                LayoutComponentInfo::new("CreationFeedbackPanel", LayoutComponentType::Panel)
+                    .with_bounds(panel_x, panel_y, panel_width, panel_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("feedback.creationPanel")
+                    .with_padding(
+                        FEEDBACK_PADDING_Y,
+                        FEEDBACK_PADDING_X,
+                        FEEDBACK_PADDING_Y,
+                        FEEDBACK_PADDING_X,
+                    )
+                    .with_gap(FEEDBACK_STACK_GAP)
+                    .with_flex_column()
+                    .with_depth(1)
+                    .with_parent("Window")
+                    .with_explanation("CreationFeedback fills the standard-height window with a padded Liquid Glass content panel."),
+            );
+
+            components.push(
+                LayoutComponentInfo::new("CreationFeedbackIntro", LayoutComponentType::Header)
+                    .with_bounds(panel_x, cursor_y, panel_width, FEEDBACK_INTRO_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("feedback.intro")
+                    .with_depth(2)
+                    .with_parent("CreationFeedbackPanel")
+                    .with_explanation("Title and supporting copy for the created-file confirmation."),
+            );
+            cursor_y += FEEDBACK_INTRO_HEIGHT + FEEDBACK_STACK_GAP;
+
+            let section_height =
+                FEEDBACK_SECTION_LABEL_HEIGHT + FEEDBACK_SECTION_GAP + FEEDBACK_PATH_HEIGHT;
+            components.push(
+                LayoutComponentInfo::new("CreationFeedbackPathSection", LayoutComponentType::Container)
+                    .with_bounds(panel_x, cursor_y, panel_width, section_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("feedback.pathSection")
+                    .with_gap(FEEDBACK_SECTION_GAP)
+                    .with_flex_column()
+                    .with_depth(2)
+                    .with_parent("CreationFeedbackPanel")
+                    .with_explanation("Path section owns the read-only path surface and label spacing."),
+            );
+            components.push(
+                LayoutComponentInfo::new("CreationFeedbackPathSurface", LayoutComponentType::Input)
+                    .with_bounds(
+                        panel_x,
+                        cursor_y + FEEDBACK_SECTION_LABEL_HEIGHT + FEEDBACK_SECTION_GAP,
+                        panel_width,
+                        FEEDBACK_PATH_HEIGHT,
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
+                    )
+                    .with_visual_token("feedback.pathSurface")
+                    .with_padding(10.0, 12.0, 10.0, 12.0)
+                    .with_depth(3)
+                    .with_parent("CreationFeedbackPathSection")
+                    .with_explanation("Read-only path surface uses a 14px control radius and 42px height for long-path scrolling."),
+            );
+            cursor_y += section_height + FEEDBACK_STACK_GAP;
+
+            let button_widths = [
+                ("CreationFeedbackRevealButton", FEEDBACK_REVEAL_WIDTH),
+                ("CreationFeedbackCopyButton", FEEDBACK_COPY_WIDTH),
+                ("CreationFeedbackOpenButton", FEEDBACK_OPEN_WIDTH),
+            ];
+            let action_row_width = FEEDBACK_REVEAL_WIDTH
+                + FEEDBACK_COPY_WIDTH
+                + FEEDBACK_OPEN_WIDTH
+                + FEEDBACK_BUTTON_GAP * 2.0;
+            components.push(
+                LayoutComponentInfo::new("CreationFeedbackActions", LayoutComponentType::Container)
+                    .with_bounds(panel_x, cursor_y, action_row_width, FEEDBACK_BUTTON_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("feedback.actions")
+                    .with_gap(FEEDBACK_BUTTON_GAP)
+                    .with_flex_row()
+                    .with_depth(2)
+                    .with_parent("CreationFeedbackPanel")
+                    .with_explanation("Action row keeps three 28px-tall controls on an 8px rhythm."),
+            );
+
+            let mut button_x = panel_x;
+            for (name, width) in button_widths {
+                components.push(
+                    LayoutComponentInfo::new(name, LayoutComponentType::Button)
+                        .with_bounds(button_x, cursor_y, width, FEEDBACK_BUTTON_HEIGHT)
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                        )
+                        .with_visual_token("feedback.actionButton")
+                        .with_hit_bounds(button_x, cursor_y, width, FEEDBACK_BUTTON_HEIGHT)
+                        .with_depth(3)
+                        .with_parent("CreationFeedbackActions")
+                        .with_explanation("Compact ghost button uses the shared 10px Liquid Glass button radius and 28px minimum hit height."),
+                );
+                button_x += width + FEEDBACK_BUTTON_GAP;
+            }
 
             return LayoutInfo {
                 window_width,

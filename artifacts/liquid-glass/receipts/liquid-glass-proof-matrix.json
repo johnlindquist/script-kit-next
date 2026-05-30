@@ -5,16 +5,16 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T04:01:13.576Z",
+  "generatedAt": "2026-05-30T04:15:22.274Z",
   "summary": {
     "surfaceCount": 29,
-    "strongProofSurfaceCount": 3,
+    "strongProofSurfaceCount": 4,
     "partialProofSurfaceCount": 0,
-    "missingProofSurfaceCount": 26,
+    "missingProofSurfaceCount": 25,
     "batchCount": 8,
-    "strongProofBatchCount": 0,
+    "strongProofBatchCount": 1,
     "partialProofBatchCount": 2,
-    "missingProofBatchCount": 6
+    "missingProofBatchCount": 5
   },
   "batches": [
     {
@@ -35,10 +35,10 @@
         "devtools.visual.compare",
         "devtools.lifecycle.trace"
       ],
-      "proofStatus": "partial-proof",
-      "provenSurfaceCount": 1,
+      "proofStatus": "strong-proof",
+      "provenSurfaceCount": 2,
       "partialSurfaceCount": 0,
-      "missingSurfaceCount": 1,
+      "missingSurfaceCount": 0,
       "surfaceStatuses": [
         {
           "surfaceKind": "About",
@@ -46,7 +46,7 @@
         },
         {
           "surfaceKind": "Feedback",
-          "proofStatus": "missing-proof"
+          "proofStatus": "strong-proof"
         }
       ]
     },
@@ -378,14 +378,14 @@
         "devtools.security.inspect",
         "devtools.investigate"
       ],
-      "proofStatus": "missing-proof",
-      "provenSurfaceCount": 0,
+      "proofStatus": "partial-proof",
+      "provenSurfaceCount": 1,
       "partialSurfaceCount": 0,
-      "missingSurfaceCount": 3,
+      "missingSurfaceCount": 2,
       "surfaceStatuses": [
         {
           "surfaceKind": "Feedback",
-          "proofStatus": "missing-proof"
+          "proofStatus": "strong-proof"
         },
         {
           "surfaceKind": "SdkReference",
@@ -1131,24 +1131,66 @@
       ],
       "automationSemanticSurface": "scriptList",
       "coverageAliases": [],
-      "proofStatus": "missing-proof",
+      "proofStatus": "strong-proof",
       "requiredEvidence": {
-        "screenshot": false,
-        "numericLayout": false,
-        "imageDiff": false,
-        "visualAudit": false
+        "screenshot": true,
+        "numericLayout": true,
+        "imageDiff": true,
+        "visualAudit": true
       },
-      "visualAudit": null,
+      "visualAudit": {
+        "nodeCount": 9,
+        "styledNodeCount": 9,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 4,
+          "functionalChrome": 5
+        }
+      },
       "evidence": {
-        "screenshots": [],
-        "layoutReceipts": [],
-        "inspectReceipts": [
-          "artifacts/liquid-glass/receipts/window-priority-feedback-surface-inspect.json"
+        "screenshots": [
+          "artifacts/liquid-glass/screenshots/window-priority-feedback-after.png",
+          "artifacts/liquid-glass/screenshots/window-priority-feedback-before.png"
         ],
-        "imageDiffReceipts": [],
-        "diffMasks": [],
-        "visualAudit": null,
-        "notes": []
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-feedback-layout-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-layout-before.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/image-diff-window-priority-feedback-before-to-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-elements-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-isolated-build.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-layout-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-layout-before.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-open-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-screenshot-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-surface-inspect.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-target-inspect-after.json"
+        ],
+        "imageDiffReceipts": [
+          "artifacts/liquid-glass/receipts/image-diff-window-priority-feedback-before-to-after.json"
+        ],
+        "diffMasks": [
+          "artifacts/liquid-glass/diffs/image-diff-window-priority-feedback-before-to-after.png"
+        ],
+        "visualAudit": {
+          "nodeCount": 9,
+          "styledNodeCount": 9,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 4,
+            "functionalChrome": 5
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-feedback-layout-after.json"
+        ]
       }
     },
     {
@@ -1584,7 +1626,7 @@
     }
   ],
   "warnings": [
-    "26 contract surfaces still lack proof artifacts",
+    "25 contract surfaces still lack proof artifacts",
     "strong-proof means current artifacts include screenshot, numeric layout visualAudit, and image diff evidence; it is not an Apple conformance claim by itself"
   ],
   "errors": []

@@ -1565,7 +1565,7 @@ impl ScriptListApp {
                 };
                 Some((ViewType::MainWindow, filtered_count))
             }
-            AppView::CreationFeedback { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
+            AppView::CreationFeedback { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::ScriptIssuesView { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
             AppView::SdkReferenceView {
                 entries, filter, ..

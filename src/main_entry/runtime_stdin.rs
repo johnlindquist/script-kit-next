@@ -422,6 +422,15 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     ctx,
                                 );
                             }
+                            ExternalCommand::OpenCreationFeedback { path, request_id: _ } => {
+                                logging::log("STDIN", "Opening CreationFeedback surface via stdin command");
+                                script_kit_gpui::set_main_window_visible(true);
+                                script_kit_gpui::mark_window_shown();
+                                platform::show_main_window_without_activation();
+                                window.activate_window();
+                                sync_main_automation_window(current_main_automation_bounds(), true, true);
+                                view.open_creation_feedback_surface(path.map(std::path::PathBuf::from), ctx);
+                            }
                             ExternalCommand::OpenAi => {
                                 logging::log("STDIN", "Opening Agent Chat via openAi compatibility alias");
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);

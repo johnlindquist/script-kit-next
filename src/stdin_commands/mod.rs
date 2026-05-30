@@ -428,6 +428,13 @@ pub enum ExternalCommand {
     OpenNotes,
     /// Open the About surface in the main window (for testing)
     OpenAbout,
+    /// Open the CreationFeedback surface with a deterministic local path fixture.
+    OpenCreationFeedback {
+        #[serde(default)]
+        path: Option<String>,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Open the Agent Chat window (for testing)
     OpenAi,
     /// Open the Mini Agent Chat window (for testing)
@@ -769,7 +776,8 @@ impl ExternalCommand {
             | Self::OpenFocusedTextAgentChatWithMockData { request_id, .. }
             | Self::OpenFocusedTextAgentChatWithPiData { request_id, .. }
             | Self::OpenInlineAgentWithMockData { request_id, .. }
-            | Self::OpenInlineAgentWithPiData { request_id, .. } => {
+            | Self::OpenInlineAgentWithPiData { request_id, .. }
+            | Self::OpenCreationFeedback { request_id, .. } => {
                 request_id.as_ref().map(ExternalCommandRequestId::as_str)
             }
             _ => None,
@@ -787,6 +795,7 @@ impl ExternalCommand {
             Self::SimulateKey { .. } => "simulateKey",
             Self::OpenNotes => "openNotes",
             Self::OpenAbout => "openAbout",
+            Self::OpenCreationFeedback { .. } => "openCreationFeedback",
             Self::OpenAi => "openAi",
             Self::OpenMiniAi => "openMiniAi",
             Self::OpenAiWithMockData => "openAiWithMockData",
@@ -839,6 +848,7 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "simulateKey",
     "openNotes",
     "openAbout",
+    "openCreationFeedback",
     "openAi",
     "openMiniAi",
     "openAiWithMockData",
@@ -1934,6 +1944,19 @@ mod tests {
         let json = r#"{"type": "openAbout"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         assert!(matches!(cmd, ExternalCommand::OpenAbout));
+        Ok(())
+    }
+
+    #[test]
+    fn test_external_command_open_creation_feedback_deserialization() -> anyhow::Result<()> {
+        let json = r#"{"type": "openCreationFeedback", "path": "/tmp/fixture.ts"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        match cmd {
+            ExternalCommand::OpenCreationFeedback { path, .. } => {
+                assert_eq!(path.as_deref(), Some("/tmp/fixture.ts"));
+            }
+            other => panic!("Expected OpenCreationFeedback, got: {:?}", other),
+        }
         Ok(())
     }
 

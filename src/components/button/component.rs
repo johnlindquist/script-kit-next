@@ -7,8 +7,8 @@ use super::{
         BUTTON_PRIMARY_PADDING_X, BUTTON_PRIMARY_PADDING_Y, BUTTON_RADIUS_PX,
         BUTTON_SHORTCUT_MARGIN_LEFT_PX,
     },
-    ButtonColors, ButtonVariant, BUTTON_GHOST_HEIGHT, BUTTON_GHOST_PADDING_X,
-    BUTTON_GHOST_PADDING_Y,
+    ButtonColors, ButtonVariant, BUTTON_BORDER_WIDTH_PX, BUTTON_GHOST_HEIGHT,
+    BUTTON_GHOST_PADDING_X, BUTTON_GHOST_PADDING_Y,
 };
 
 /// Callback type for button click events
@@ -176,8 +176,6 @@ impl Button {
     }
 }
 
-/// Focus ring border width
-const FOCUS_BORDER_WIDTH: f32 = 2.0;
 pub(crate) const TRANSPARENT: u32 = 0x00000000;
 
 impl RenderOnce for Button {
@@ -327,9 +325,9 @@ impl RenderOnce for Button {
             button = button.child(div().text_xs().opacity(0.7).child("…"));
         }
 
-        // Apply border — consistent 2px width to prevent layout shift on focus change
+        // Apply border at a constant width to prevent layout shift on focus change.
         button = button
-            .border(px(FOCUS_BORDER_WIDTH))
+            .border(px(BUTTON_BORDER_WIDTH_PX))
             .border_color(border_color);
 
         // Apply hover styles unless disabled

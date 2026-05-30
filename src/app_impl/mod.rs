@@ -42,6 +42,8 @@ mod ui_window;
 mod actions_toggle;
 #[path = "about_route.rs"]
 mod about_route;
+#[path = "feedback_route.rs"]
+mod feedback_route;
 #[path = "chat_actions.rs"]
 mod chat_actions;
 #[path = "webcam_actions.rs"]

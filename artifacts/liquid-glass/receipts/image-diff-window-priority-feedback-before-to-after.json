@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.image-diff",
+  "command": "image-diff.compare",
+  "classification": "ok",
+  "label": "image-diff",
+  "redPath": "artifacts/liquid-glass/screenshots/window-priority-feedback-before.png",
+  "greenPath": "artifacts/liquid-glass/screenshots/window-priority-feedback-after.png",
+  "diffPath": "artifacts/liquid-glass/diffs/image-diff-window-priority-feedback-before-to-after.png",
+  "fuzz": "0%",
+  "crop": {
+    "red": null,
+    "green": null,
+    "redSource": null,
+    "greenSource": null
+  },
+  "dimensions": {
+    "red": {
+      "width": 1724,
+      "height": 1224
+    },
+    "green": {
+      "width": 1724,
+      "height": 1224
+    },
+    "comparisonCanvas": {
+      "width": 1724,
+      "height": 1224
+    },
+    "sameSize": true,
+    "widthDelta": 0,
+    "heightDelta": 0
+  },
+  "changedPixels": 12199,
+  "totalPixels": 2110176,
+  "changedPixelRatio": 0.00578103437817509,
+  "changedPixelPercent": 0.5781034378175091,
+  "diffBoundingBox": {
+    "width": 574,
+    "height": 70,
+    "x": 0,
+    "y": 0
+  },
+  "assertions": {
+    "diffMaskWritten": true,
+    "changedPixelsMeasured": true,
+    "dimensionsMeasured": true
+  },
+  "warnings": [],
+  "errors": [],
+  "timestamp": "2026-05-30T04:15:01.548Z"
+}
