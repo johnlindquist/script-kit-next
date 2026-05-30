@@ -20,6 +20,8 @@ impl ScriptListApp {
             AppView::NamingPrompt { .. } | AppView::CreateAiPresetView { .. } => {
                 crate::window_resize::ViewType::ArgPromptNoChoices
             }
+            AppView::ScratchPadView { .. } => crate::window_resize::ViewType::EditorPrompt,
+            AppView::QuickTerminalView { .. } => crate::window_resize::ViewType::TermPrompt,
             AppView::ClipboardHistoryView { .. }
             | AppView::ThemeChooserView { .. }
             | AppView::SdkReferenceView { .. }
@@ -739,6 +741,7 @@ impl ScriptListApp {
             AppView::DivPrompt { .. }
                 | AppView::EditorPrompt { .. }
                 | AppView::TermPrompt { .. }
+                | AppView::ScratchPadView { .. }
                 | AppView::QuickTerminalView { .. }
         ) {
             let (component_name, explanation) = match &self.current_view {
@@ -753,6 +756,10 @@ impl ScriptListApp {
                 AppView::QuickTerminalView { .. } => (
                     "TerminalContent",
                     "QuickTerminalView fills the compact content area and reserves native-footer space through the shared main-window footer slot.",
+                ),
+                AppView::ScratchPadView { .. } => (
+                    "ScratchPadContent",
+                    "ScratchPadView fills the editor-height utility content area with an auto-saving editor and prompt-owned footer handling.",
                 ),
                 _ => (
                     "TerminalContent",

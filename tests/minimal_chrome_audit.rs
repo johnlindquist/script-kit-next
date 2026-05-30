@@ -255,9 +255,19 @@ fn terminal_layout_info_has_terminal_content_branch() {
     assert!(
         prompt_branch.contains("AppView::TermPrompt")
             && prompt_branch.contains("AppView::QuickTerminalView")
+            && prompt_branch.contains("AppView::ScratchPadView")
             && prompt_branch.contains("TerminalContent")
+            && prompt_branch.contains("ScratchPadContent")
             && prompt_branch.contains("LayoutComponentType::Prompt"),
-        "terminal layout info should expose TerminalContent for SDK and quick terminal views"
+        "terminal/editor utility layout info should expose prompt-owned content for SDK, scratch pad, and quick terminal views"
+    );
+    assert!(
+        source.contains(
+            "AppView::ScratchPadView { .. } => crate::window_resize::ViewType::EditorPrompt"
+        ) && source.contains(
+            "AppView::QuickTerminalView { .. } => crate::window_resize::ViewType::TermPrompt"
+        ),
+        "utility child content layout receipts should use the same sizing as runtime resize paths"
     );
     assert!(
         prompt_branch.contains("return LayoutInfo"),
