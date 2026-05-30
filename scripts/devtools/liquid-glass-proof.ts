@@ -37,9 +37,9 @@ type GuidanceProofStatus =
   | "source-ui-gap"
   | "missing-guidance-proof";
 
-const RECEIPT_ROOT = "artifacts/liquid-glass/receipts";
-const SCREENSHOT_ROOT = "artifacts/liquid-glass/screenshots";
-const DIFF_ROOT = "artifacts/liquid-glass/diffs";
+let RECEIPT_ROOT = "artifacts/liquid-glass/receipts";
+let SCREENSHOT_ROOT = "artifacts/liquid-glass/screenshots";
+let DIFF_ROOT = "artifacts/liquid-glass/diffs";
 
 function usage() {
   return [
@@ -77,6 +77,55 @@ function asObject(value: unknown): JsonObject {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function hasPositiveRadius(value: unknown) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0;
+  }
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const radii = Object.values(value as JsonObject).filter(
+    (entry): entry is number => typeof entry === "number" && Number.isFinite(entry),
+  );
+  return radii.length > 0 && radii.every((entry) => entry > 0);
+}
+
+function nodesWithMissingPositiveRadius(receipt: JsonObject) {
+  return asArray(receipt.nodes)
+    .map(asObject)
+    .filter((node) => {
+      const style = asObject(node.visualStyle);
+      if (Object.keys(style).length === 0) return false;
+      return !hasPositiveRadius(style.cornerRadius) && !hasPositiveRadius(style.radius);
+    })
+    .map((node) => String(node.name ?? node.type ?? "unknown"));
+}
+
+function mergeCornerRadiusFailures(audit: JsonObject, failures: string[]) {
+  if (failures.length === 0) return audit;
+  const assertions = asObject(audit.guidelineAssertions);
+  const projectLocal = asObject(assertions.projectLocal);
+  const cornerRadiusTokens = asObject(projectLocal.cornerRadiusTokens);
+  const existing = asArray(cornerRadiusTokens.failures)
+    .map((entry) => String(asObject(entry).name ?? entry))
+    .filter(Boolean);
+  const merged = Array.from(new Set([...existing, ...failures])).sort();
+  return {
+    ...audit,
+    guidelineAssertions: {
+      ...assertions,
+      projectLocal: {
+        ...projectLocal,
+        cornerRadiusTokens: {
+          ...cornerRadiusTokens,
+          source: cornerRadiusTokens.source ?? "project-local",
+          failures: merged,
+        },
+      },
+    },
+  };
 }
 
 async function listFiles(dir: string) {
@@ -529,6 +578,7 @@ function proofTiers(evidence: Evidence): ProofTiers {
   const numericPass =
     evidence.layoutReceipts.length > 0 &&
     nodeCount != null &&
+    nodeCount > 0 &&
     styled === nodeCount &&
     asArray(audit.controlsWithHitFailures).length === 0 &&
     asArray(audit.contentGlassNodes).length === 0 &&
@@ -560,10 +610,10 @@ function classify(evidence: Evidence) {
   const glassLayerViolations = asArray(audit.glassLayerViolations).length;
   const missingStyle = asArray(audit.missingStyleNodeNames).length;
 
-  if (hasScreenshot && hasLayout && hasImageDiff && tiers.guidelineProof === "pass" && nodeCount != null && styled === nodeCount && hitFailures === 0 && contentGlass === 0 && contentNativeMaterial === 0 && glassLayerViolations === 0 && missingStyle === 0) {
+  if (hasScreenshot && hasLayout && hasImageDiff && tiers.guidelineProof === "pass" && nodeCount != null && nodeCount > 0 && styled === nodeCount && hitFailures === 0 && contentGlass === 0 && contentNativeMaterial === 0 && glassLayerViolations === 0 && missingStyle === 0) {
     return "strong-proof";
   }
-  if (hasLayout && nodeCount != null && styled === nodeCount && hitFailures === 0 && contentGlass === 0 && contentNativeMaterial === 0 && glassLayerViolations === 0 && missingStyle === 0) {
+  if (hasLayout && nodeCount != null && nodeCount > 0 && styled === nodeCount && hitFailures === 0 && contentGlass === 0 && contentNativeMaterial === 0 && glassLayerViolations === 0 && missingStyle === 0) {
     if (tiers.guidelineProof === "fail") {
       return "numeric-proof-guideline-failed";
     }
@@ -631,7 +681,10 @@ async function attachVisualAudit(evidence: Evidence, preferred: string[]) {
       ? asObject(json?.visualAudit)
       : asObject(asObject(asObject(json?.receipts).layout).visualAudit);
     if (Object.keys(audit).length > 0) {
-      evidence.visualAudit = audit;
+      evidence.visualAudit = mergeCornerRadiusFailures(
+        audit,
+        nodesWithMissingPositiveRadius(asObject(json)),
+      );
       evidence.notes.push(`visualAudit: ${path}`);
       return;
     }
@@ -640,6 +693,9 @@ async function attachVisualAudit(evidence: Evidence, preferred: string[]) {
 
 async function main() {
   const args = parseArgs(Bun.argv.slice(2));
+  RECEIPT_ROOT = `${args.artifactRoot}/receipts`;
+  SCREENSHOT_ROOT = `${args.artifactRoot}/screenshots`;
+  DIFF_ROOT = `${args.artifactRoot}/diffs`;
   const inventory = JSON.parse(await Bun.file(args.inventory).text()) as JsonObject;
   const files = {
     receipts: await listFiles(`${args.artifactRoot}/receipts`),
@@ -651,7 +707,7 @@ async function main() {
     ScriptList: ["main"],
     ActionsDialog: ["actions"],
     ConfirmPrompt: ["confirm"],
-    PromptEntity: ["prompt-div", "promptentity"],
+    PromptEntity: ["prompt-div", "promptentity", "prompt-entity"],
     PromptChildContent: ["prompt-child", "promptchildcontent"],
     ExplicitPromptEntity: ["prompt-explicit", "explicitpromptentity"],
     UtilityChildContent: ["utility-quick", "utilitychildcontent"],
@@ -815,6 +871,7 @@ async function main() {
       ]);
     } else if (surfaceKind === "PromptEntity") {
       await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-prompt-div-fixed-layout-devtools.json`,
         `${RECEIPT_ROOT}/window-priority-prompt-div-guideline-layout.json`,
         `${RECEIPT_ROOT}/window-priority-prompt-div-fixed-layout-sdk.json`,
         `${RECEIPT_ROOT}/window-priority-prompt-div-current-layout-sdk.json`,

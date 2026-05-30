@@ -10,6 +10,7 @@ type ProofFixture = {
   term?: string;
   renderEvidence?: RenderEvidence;
   visualAudit?: Record<string, unknown>;
+  nodes?: Array<Record<string, unknown>>;
   screenshotReceipt?: Record<string, unknown>;
   screenshotFile?: boolean;
   imageDiffReceipt?: Record<string, unknown>;
@@ -57,6 +58,7 @@ function runProofFixture(fixture: ProofFixture) {
     if (fixture.visualAudit) {
       writeFileSync(join(receipts, `fixture-${term}-layout.json`), JSON.stringify({
         visualAudit: fixture.visualAudit,
+        nodes: fixture.nodes ?? [],
       }));
     }
     if (fixture.screenshotReceipt) {
@@ -221,6 +223,50 @@ describe("liquid-glass-proof guidance domain split", () => {
     expect(queueEntry.blockingClass).toBe("source-ui-gap");
   });
 
+  test("rejects stale zero-radius layout receipts as guideline failures", () => {
+    const matrix = runProofFixture({
+      surfaceKind: "FixtureSurface",
+      visualAudit: passingVisualAudit(),
+      nodes: [
+        {
+          name: "ContentArea",
+          visualStyle: {
+            chromeLayer: "content",
+            cornerRadius: {
+              topLeft: 0,
+              topRight: 0,
+              bottomRight: 0,
+              bottomLeft: 0,
+            },
+          },
+        },
+      ],
+    });
+    const surface = matrix.surfaces[0];
+    const queueEntry = matrix.proofDebtWorkQueue[0];
+
+    expect(surface.proofTiers.guidelineProof).toBe("fail");
+    expect(queueEntry.guidelineFailures).toContain("projectLocal.cornerRadiusTokens: ContentArea");
+    expect(queueEntry.blockingClass).toBe("source-ui-gap");
+  });
+
+  test("does not treat empty timeout layout receipts as numeric proof", () => {
+    const matrix = runProofFixture({
+      surfaceKind: "FixtureSurface",
+      visualAudit: passingVisualAudit({
+        nodeCount: 0,
+        styledNodeCount: 0,
+        guidelineAssertions: { layering: { failures: [] } },
+      }),
+      nodes: [],
+    });
+    const surface = matrix.surfaces[0];
+
+    expect(surface.proofTiers.numericProof).toBe("fail");
+    expect(surface.proofStatus).not.toBe("numeric-proof-missing-visual-capture");
+    expect(surface.proofStatus).not.toBe("strong-proof");
+  });
+
   test("keeps absent screenshot attempts as missing guidance visual evidence", () => {
     const matrix = runProofFixture({
       surfaceKind: "FixtureSurface",
@@ -232,5 +278,56 @@ describe("liquid-glass-proof guidance domain split", () => {
     expect(surface.proofTiers.osScreenshotProof).toBe("missing");
     expect(surface.guidanceProofStatus).toBe("numeric-guidance-proof-missing-os-visual");
     expect(queueEntry.blockingClass).toBe("missing-guidance-visual-evidence");
+  });
+});
+
+describe("liquid-glass-proof PromptEntity render tier", () => {
+  test("classifies unavailable PromptEntity app render as diagnostic readback limitation", () => {
+    const matrix = runProofFixture({
+      surfaceKind: "PromptEntity",
+      visualAudit: passingVisualAudit(),
+      renderEvidence: {
+        source: "gpui-render-readback",
+        available: false,
+        countsAsOsScreenshotEvidence: false,
+        countsAsAppRenderEvidence: false,
+        countsAsOffscreenRenderEvidence: false,
+        classification: "gpui-readback-unavailable",
+        attempts: [{ status: "unsupported", errorCode: "gpui_readback_unavailable" }],
+      },
+    });
+    const surface = matrix.surfaces[0];
+
+    expect(surface.surfaceKind).toBe("PromptEntity");
+    expect(surface.proofTiers.numericProof).toBe("pass");
+    expect(surface.proofTiers.appRenderProof).toBe("blocked");
+    expect(surface.proofTiers.osScreenshotProof).toBe("missing");
+    expect(surface.proofStatus).toBe("numeric-proof-app-render-blocked");
+    expect(surface.diagnosticLimitations).toContain("appRenderProof:blocked");
+    expect(surface.guidanceProofStatus).toBe("numeric-guidance-proof-missing-os-visual");
+  });
+
+  test("keeps captured PromptEntity app render separate from OS screenshot proof", () => {
+    const matrix = runProofFixture({
+      surfaceKind: "PromptEntity",
+      visualAudit: passingVisualAudit(),
+      renderEvidence: {
+        source: "gpui-render-readback",
+        available: true,
+        countsAsOsScreenshotEvidence: false,
+        countsAsAppRenderEvidence: true,
+        countsAsOffscreenRenderEvidence: false,
+        classification: "captured",
+        attempts: [{ status: "captured" }],
+        pixelAudit: { blank: false },
+        path: "artifacts/liquid-glass/screenshots/window-priority-prompt-div-fixed-render.png",
+      },
+    });
+    const surface = matrix.surfaces[0];
+
+    expect(surface.proofTiers.appRenderProof).toBe("pass");
+    expect(surface.proofTiers.osScreenshotProof).not.toBe("pass");
+    expect(surface.proofStatus).toBe("numeric-plus-app-render-proof-missing-os-screenshot");
+    expect(surface.guidanceProofStatus).toBe("numeric-guidance-proof-missing-os-visual");
   });
 });
