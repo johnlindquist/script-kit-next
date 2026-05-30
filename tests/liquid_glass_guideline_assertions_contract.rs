@@ -114,6 +114,60 @@ fn apple_guideline_constants_are_provenance_tagged_and_documented() {
     }
 }
 
+/// Slice 2 (Oracle session `tahoe-apple-guideline-metrics`): the conformance
+/// engine must compare against REAL macOS 26 control geometry, captured by a
+/// re-runnable Swift probe and persisted as a receipt — not guessed soft bands.
+/// This pins the probe, the receipt's measured numbers, and the measuredNative
+/// metrics that cite them so they cannot drift apart silently.
+#[test]
+fn measured_native_baselines_are_probe_backed_and_pinned() {
+    let probe = fs::read_to_string("scripts/devtools/tahoe_native_baseline.swift")
+        .expect("native baseline swift probe must exist");
+    assert!(
+        probe.contains("NSTextField") && probe.contains("NSGlassEffectView"),
+        "probe must measure native NSTextField + NSGlassEffectView geometry"
+    );
+    assert!(
+        probe.contains("contentHorizontalInsetPt") && probe.contains("defaultCornerRadiusPt"),
+        "probe must emit the inset + glass radius fields the engine pins against"
+    );
+
+    let receipt = fs::read_to_string("artifacts/liquid-glass/receipts/tahoe-native-baseline.json")
+        .expect("native baseline receipt must be committed");
+    for needle in [
+        "\"controlSize\" : \"regular\"",
+        "\"contentHorizontalInsetPt\" : 9",
+        "\"contentVerticalInsetPt\" : 3",
+        "\"defaultCornerRadiusPt\" : 8",
+        "26.5",
+    ] {
+        assert!(
+            receipt.contains(needle),
+            "native baseline receipt must record measured value {needle}"
+        );
+    }
+
+    let constants = fs::read_to_string("scripts/devtools/apple-guideline-constants.ts")
+        .expect("failed to read apple-guideline-constants.ts");
+    for metric in [
+        "control.searchField.textInset.horizontal",
+        "control.searchField.textInset.vertical",
+        "control.regular.height",
+        "macos.glassEffectView.defaultRadius",
+    ] {
+        assert!(
+            constants.contains(metric),
+            "constants must encode measured-native metric {metric}"
+        );
+    }
+    assert!(
+        constants.contains("nativeMeasurement")
+            && constants.contains("tahoe_native_baseline.swift")
+            && constants.contains("tahoe-native-baseline.json"),
+        "measuredNative metrics must cite the swift probe + receipt as provenance"
+    );
+}
+
 #[test]
 fn layout_visual_audit_rejects_zero_radius_placeholders() {
     let layout =

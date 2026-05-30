@@ -1,0 +1,234 @@
+{
+  "glassEffectView" : {
+    "available" : true,
+    "defaultCornerRadiusPt" : 8
+  },
+  "ok" : true,
+  "osVersion" : "Version 26.5 (Build 25F71)",
+  "platform" : "macOS",
+  "searchFields" : [
+    {
+      "bounds" : {
+        "h" : 17,
+        "w" : 320,
+        "x" : 0,
+        "y" : 0
+      },
+      "controlSize" : "mini",
+      "drawingRect" : {
+        "h" : 16,
+        "w" : 274,
+        "x" : 25,
+        "y" : 1
+      },
+      "intrinsicHeightPt" : 17,
+      "leadingBezelInsetPt" : 2,
+      "searchButtonRect" : {
+        "h" : 19,
+        "w" : 24,
+        "x" : 2,
+        "y" : -1
+      },
+      "searchTextRect" : {
+        "h" : 16,
+        "w" : 274,
+        "x" : 25,
+        "y" : 1
+      },
+      "textTrailingInsetPt" : 21,
+      "textVerticalInsetPt" : 0.5
+    },
+    {
+      "bounds" : {
+        "h" : 19,
+        "w" : 320,
+        "x" : 0,
+        "y" : 0
+      },
+      "controlSize" : "small",
+      "drawingRect" : {
+        "h" : 16,
+        "w" : 274,
+        "x" : 25,
+        "y" : 2
+      },
+      "intrinsicHeightPt" : 19,
+      "leadingBezelInsetPt" : 2,
+      "searchButtonRect" : {
+        "h" : 19,
+        "w" : 24,
+        "x" : 2,
+        "y" : 0
+      },
+      "searchTextRect" : {
+        "h" : 16,
+        "w" : 274,
+        "x" : 25,
+        "y" : 2
+      },
+      "textTrailingInsetPt" : 21,
+      "textVerticalInsetPt" : 1.5
+    },
+    {
+      "bounds" : {
+        "h" : 22,
+        "w" : 320,
+        "x" : 0,
+        "y" : 0
+      },
+      "controlSize" : "regular",
+      "drawingRect" : {
+        "h" : 16,
+        "w" : 270,
+        "x" : 26,
+        "y" : 3
+      },
+      "intrinsicHeightPt" : 22,
+      "leadingBezelInsetPt" : 2,
+      "searchButtonRect" : {
+        "h" : 22,
+        "w" : 25,
+        "x" : 2,
+        "y" : 0
+      },
+      "searchTextRect" : {
+        "h" : 16,
+        "w" : 270,
+        "x" : 26,
+        "y" : 3
+      },
+      "textTrailingInsetPt" : 24,
+      "textVerticalInsetPt" : 3
+    },
+    {
+      "bounds" : {
+        "h" : 30,
+        "w" : 320,
+        "x" : 0,
+        "y" : 0
+      },
+      "controlSize" : "large",
+      "drawingRect" : {
+        "h" : 16,
+        "w" : 270,
+        "x" : 26,
+        "y" : 7
+      },
+      "intrinsicHeightPt" : 30,
+      "leadingBezelInsetPt" : 2,
+      "searchButtonRect" : {
+        "h" : 22,
+        "w" : 25,
+        "x" : 2,
+        "y" : 4
+      },
+      "searchTextRect" : {
+        "h" : 16,
+        "w" : 270,
+        "x" : 26,
+        "y" : 7
+      },
+      "textTrailingInsetPt" : 24,
+      "textVerticalInsetPt" : 7
+    }
+  ],
+  "source" : "native-appkit-baseline",
+  "textFields" : [
+    {
+      "bounds" : {
+        "h" : 17,
+        "w" : 320,
+        "x" : 0,
+        "y" : 0
+      },
+      "contentHorizontalInsetPt" : 6,
+      "contentVerticalInsetPt" : 0.5,
+      "controlSize" : "mini",
+      "drawingRect" : {
+        "h" : 16,
+        "w" : 308,
+        "x" : 6,
+        "y" : 1
+      },
+      "intrinsicHeightPt" : 17,
+      "titleRect" : {
+        "h" : 16,
+        "w" : 320,
+        "x" : 0,
+        "y" : 1
+      }
+    },
+    {
+      "bounds" : {
+        "h" : 19,
+        "w" : 320,
+        "x" : 0,
+        "y" : 0
+      },
+      "contentHorizontalInsetPt" : 7,
+      "contentVerticalInsetPt" : 1.5,
+      "controlSize" : "small",
+      "drawingRect" : {
+        "h" : 16,
+        "w" : 306,
+        "x" : 7,
+        "y" : 2
+      },
+      "intrinsicHeightPt" : 19,
+      "titleRect" : {
+        "h" : 16,
+        "w" : 320,
+        "x" : 0,
+        "y" : 2
+      }
+    },
+    {
+      "bounds" : {
+        "h" : 22,
+        "w" : 320,
+        "x" : 0,
+        "y" : 0
+      },
+      "contentHorizontalInsetPt" : 9,
+      "contentVerticalInsetPt" : 3,
+      "controlSize" : "regular",
+      "drawingRect" : {
+        "h" : 16,
+        "w" : 302,
+        "x" : 9,
+        "y" : 3
+      },
+      "intrinsicHeightPt" : 22,
+      "titleRect" : {
+        "h" : 16,
+        "w" : 320,
+        "x" : 0,
+        "y" : 3
+      }
+    },
+    {
+      "bounds" : {
+        "h" : 30,
+        "w" : 320,
+        "x" : 0,
+        "y" : 0
+      },
+      "contentHorizontalInsetPt" : 9,
+      "contentVerticalInsetPt" : 7,
+      "controlSize" : "large",
+      "drawingRect" : {
+        "h" : 16,
+        "w" : 302,
+        "x" : 9,
+        "y" : 7
+      },
+      "intrinsicHeightPt" : 30,
+      "titleRect" : {
+        "h" : 16,
+        "w" : 320,
+        "x" : 0,
+        "y" : 7
+      }
+    }
+  ]
+}

@@ -58,6 +58,19 @@ export type GuidelineTarget =
   | { kind: "formula"; expression: string }
   | { kind: "nativeProbe"; probeId: string };
 
+// Provenance for a `measuredNative` metric: the exact AppKit control geometry
+// probe that produced the value, captured on a real Tahoe machine. The receipt
+// path lets a reviewer re-run `tahoe_native_baseline.swift` and diff the number.
+export interface NativeMeasurement {
+  probeId: string;
+  probeSource: string;
+  receiptPath: string;
+  osVersion: string;
+  measuredAt: string;
+  control: string;
+  field: string;
+}
+
 export interface GuidelineMetric {
   id: string;
   category: "cornerRadius" | "concentricity" | "controlSize" | "padding" | "spacing" | "hitTarget";
@@ -67,6 +80,7 @@ export interface GuidelineMetric {
   tolerance: GuidelineTolerance;
   appleReference?: AppleReference;
   derivation?: { fromMetricIds: string[]; formula: string; notes: string };
+  nativeMeasurement?: NativeMeasurement;
   copyrightSafeSummary: string;
 }
 
@@ -162,16 +176,84 @@ export const APPLE_GUIDELINE_METRICS: GuidelineMetric[] = [
   {
     id: "control.searchField.textInset.horizontal",
     category: "padding",
-    confidence: "derived",
-    normativeStrength: "soft",
-    target: { kind: "range", minPt: 8, maxPt: 12 },
+    confidence: "measuredNative",
+    normativeStrength: "hard",
+    target: { kind: "constant", valuePt: 9 },
     tolerance: { absPt: 1, nearAbsPt: 2 },
+    nativeMeasurement: {
+      probeId: "macos26-nstextfield-regular-content-inset",
+      probeSource: "scripts/devtools/tahoe_native_baseline.swift",
+      receiptPath: "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+      osVersion: "26.5",
+      measuredAt: "2026-05-30",
+      control: "NSTextField (regular, rounded bezel)",
+      field: "contentHorizontalInsetPt",
+    },
     derivation: {
       fromMetricIds: ["layout.bezelElement.padding"],
-      formula: "textInsetX in [8,12]pt derived from bezel-padding heuristic for a compact search lane",
-      notes: "Hard value requires a native NSSearchField cell/text-rect probe (roadmap); soft until then.",
+      formula: "textInsetX = NSTextField regular drawingRect.minX − bounds.minX = 9pt (measured)",
+      notes: "A plain input lane should match the native regular NSTextField horizontal inset (9pt); within the ~12pt bezel-padding soft band.",
     },
-    copyrightSafeSummary: "Derived: a compact search field should inset its text ~8–12pt horizontally.",
+    copyrightSafeSummary: "Native regular NSTextField insets its text 9pt horizontally on macOS 26.5 (measured).",
+  },
+  {
+    id: "control.searchField.textInset.vertical",
+    category: "padding",
+    confidence: "measuredNative",
+    normativeStrength: "hard",
+    target: { kind: "constant", valuePt: 3 },
+    tolerance: { absPt: 1, nearAbsPt: 2 },
+    nativeMeasurement: {
+      probeId: "macos26-nstextfield-regular-content-inset-vertical",
+      probeSource: "scripts/devtools/tahoe_native_baseline.swift",
+      receiptPath: "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+      osVersion: "26.5",
+      measuredAt: "2026-05-30",
+      control: "NSTextField (regular, rounded bezel)",
+      field: "contentVerticalInsetPt",
+    },
+    copyrightSafeSummary: "Native regular NSTextField insets its text 3pt vertically on macOS 26.5 (measured).",
+  },
+  {
+    id: "control.regular.height",
+    category: "controlSize",
+    confidence: "measuredNative",
+    normativeStrength: "hard",
+    target: { kind: "constant", valuePt: 22 },
+    tolerance: { absPt: 1, nearAbsPt: 3 },
+    nativeMeasurement: {
+      probeId: "macos26-control-regular-height",
+      probeSource: "scripts/devtools/tahoe_native_baseline.swift",
+      receiptPath: "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+      osVersion: "26.5",
+      measuredAt: "2026-05-30",
+      control: "NSTextField / NSSearchField (regular)",
+      field: "intrinsicHeightPt",
+    },
+    copyrightSafeSummary: "Native regular text/search fields are 22pt tall on macOS 26.5 (mini 17, small 19, large 30).",
+  },
+  {
+    id: "macos.glassEffectView.defaultRadius",
+    category: "cornerRadius",
+    confidence: "measuredNative",
+    normativeStrength: "soft",
+    target: { kind: "constant", valuePt: 8 },
+    tolerance: { absPt: 1, pct: 0.05, nearAbsPt: 2 },
+    nativeMeasurement: {
+      probeId: "macos26-nsglasseffectview-default-radius",
+      probeSource: "scripts/devtools/tahoe_native_baseline.swift",
+      receiptPath: "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+      osVersion: "26.5",
+      measuredAt: "2026-05-30",
+      control: "NSGlassEffectView",
+      field: "defaultCornerRadiusPt",
+    },
+    derivation: {
+      fromMetricIds: ["shape.concentric.childRadius"],
+      formula: "NSGlassEffectView().cornerRadius default = 8pt (measured)",
+      notes: "A free-standing glass element's default radius; NOT the launcher window/panel mask radius, which remains a separate native probe.",
+    },
+    copyrightSafeSummary: "A default NSGlassEffectView rounds to 8pt on macOS 26.5 (measured); a free element default, not the window mask.",
   },
   {
     id: "macos.window.toolbarRadius.nativeBaseline",
@@ -432,6 +514,9 @@ export function concentricRadiusDeviations(nodes: NodeLike[], scale: number | nu
 // `unmeasured` gap (the user's "input lacks padding" concern, honestly stated).
 export function searchPaddingDeviations(nodes: NodeLike[], scale: number | null): GuidelineDeviation[] {
   const m = metric("control.searchField.textInset.horizontal");
+  // Measured-native anchor: native regular NSTextField insets text 9pt (macOS 26.5).
+  // Soft band context retained (8–12pt) for `minPt`/`maxPt` reporting.
+  const nativeTargetPt = m.target.kind === "constant" ? m.target.valuePt : 9;
   const out: GuidelineDeviation[] = [];
   for (const node of nodes) {
     if (String(node.type ?? "").toLowerCase() !== "input") continue;
@@ -465,7 +550,7 @@ export function searchPaddingDeviations(nodes: NodeLike[], scale: number | null)
       });
       continue;
     }
-    const classification = classifyMinimum(observed, 8, m.tolerance, scale);
+    const classification = classifyMinimum(observed, nativeTargetPt, m.tolerance, scale);
     out.push({
       metricId: m.id,
       source: sourceFor(m.confidence),
@@ -474,11 +559,11 @@ export function searchPaddingDeviations(nodes: NodeLike[], scale: number | null)
       nodeName: String(node.name ?? ""),
       nodeType: "input",
       observedPt: observed,
-      targetPt: 8,
+      targetPt: nativeTargetPt,
       minPt: 8,
       maxPt: 12,
-      deltaPt: observed - 8,
-      deltaPct: (observed - 8) / 8,
+      deltaPt: observed - nativeTargetPt,
+      deltaPct: (observed - nativeTargetPt) / nativeTargetPt,
       tolerance: m.tolerance,
       classification,
     });

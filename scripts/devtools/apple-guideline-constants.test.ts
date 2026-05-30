@@ -6,6 +6,7 @@
 
 import { expect, test } from "bun:test";
 import {
+  APPLE_GUIDELINE_METRICS,
   appleGuidelineConformance,
   classifyDeviation,
   classifyMinimum,
@@ -13,6 +14,7 @@ import {
   searchPaddingDeviations,
   type NodeLike,
 } from "./apple-guideline-constants";
+import nativeBaseline from "../../artifacts/liquid-glass/receipts/tahoe-native-baseline.json";
 
 const CONCENTRIC_FIXTURE: NodeLike[] = [
   {
@@ -91,6 +93,55 @@ test("classifyDeviation respects retina pixel-quantization tolerance", () => {
 test("classifyMinimum treats a value below the floor as outOfBand", () => {
   expect(classifyMinimum(12, 12, { absPt: 1 }, 2)).toBe("withinBand");
   expect(classifyMinimum(6, 12, { absPt: 1, nearAbsPt: 3 }, 2)).toBe("outOfBand");
+});
+
+test("measured-native metrics are pinned to the on-disk native baseline receipt (re-measure if these drift)", () => {
+  const regularText = (nativeBaseline.textFields as Array<Record<string, number | string>>).find(
+    (f) => f.controlSize === "regular",
+  );
+  expect(regularText).toBeTruthy();
+  expect(regularText!.contentHorizontalInsetPt).toBe(9);
+  expect(regularText!.contentVerticalInsetPt).toBe(3);
+  expect(regularText!.intrinsicHeightPt).toBe(22);
+  expect((nativeBaseline.glassEffectView as Record<string, unknown>).defaultCornerRadiusPt).toBe(8);
+
+  const byId = (id: string) => {
+    const m = APPLE_GUIDELINE_METRICS.find((entry) => entry.id === id);
+    expect(m, `metric ${id} must exist`).toBeTruthy();
+    return m!;
+  };
+  // Each measured-native constant must equal the number in the receipt.
+  const hInset = byId("control.searchField.textInset.horizontal");
+  expect(hInset.confidence).toBe("measuredNative");
+  expect(hInset.target).toEqual({ kind: "constant", valuePt: 9 });
+  expect(hInset.nativeMeasurement?.receiptPath).toContain("tahoe-native-baseline.json");
+
+  const vInset = byId("control.searchField.textInset.vertical");
+  expect(vInset.target).toEqual({ kind: "constant", valuePt: 3 });
+
+  const height = byId("control.regular.height");
+  expect(height.target).toEqual({ kind: "constant", valuePt: 22 });
+
+  const glass = byId("macos.glassEffectView.defaultRadius");
+  expect(glass.confidence).toBe("measuredNative");
+  expect(glass.target).toEqual({ kind: "constant", valuePt: 8 });
+
+  // Every measuredNative metric must cite a re-runnable swift probe + receipt.
+  for (const m of APPLE_GUIDELINE_METRICS.filter((e) => e.confidence === "measuredNative" && e.target.kind === "constant")) {
+    expect(m.nativeMeasurement, `${m.id} must carry native-measurement provenance`).toBeTruthy();
+    expect(m.nativeMeasurement!.probeSource).toContain("tahoe_native_baseline.swift");
+    expect(m.nativeMeasurement!.osVersion).toBe("26.5");
+  }
+});
+
+test("a regular input measured at the native 9pt inset is withinBand; below it is outOfBand", () => {
+  const aligned: NodeLike[] = [
+    { name: "SearchInput", type: "input", parent: "Header", bounds: { x: 16, y: 11, width: 498, height: 22 }, visualStyle: { cornerRadius: 14, contentInsets: { left: 9, right: 9, top: 3, bottom: 3 } } },
+  ];
+  const a = searchPaddingDeviations(aligned, 2)[0];
+  expect(a.observedPt).toBe(9);
+  expect(a.targetPt).toBe(9);
+  expect(a.classification).toBe("withinBand");
 });
 
 test("conformance rollup surfaces a hard failure and never reports hardPass when one exists", () => {
