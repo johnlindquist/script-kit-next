@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.elements",
+  "command": "elements.snapshot",
+  "classification": "ok",
+  "session": "liquid-kit-store-browse-proof",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "KitStoreBrowse"
+  },
+  "target": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "KitStoreBrowse",
+    "appViewVariant": "BrowseKitsView",
+    "nativeFooterSurface": "kit_store_browse",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 750,
+      "height": 480,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 56853,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "semanticSurface": {
+    "surfaceKind": "KitStoreBrowse",
+    "appViewVariant": "BrowseKitsView"
+  },
+  "totalCount": 5,
+  "returnedCount": 5,
+  "truncated": false,
+  "focusedSemanticId": "input:kit-search",
+  "selectedSemanticId": null,
+  "duplicateSemanticIds": [],
+  "missingPrimitives": [
+    "elementBounds"
+  ],
+  "nodes": [
+    {
+      "semanticId": "input:kit-search",
+      "role": "input",
+      "type": "input",
+      "label": "",
+      "text": null,
+      "value": "",
+      "selected": null,
+      "focused": true,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "input:kit-search",
+        "type": "input",
+        "value": "",
+        "focused": true
+      }
+    },
+    {
+      "semanticId": "list:kit-results",
+      "role": "list",
+      "type": "list",
+      "label": "0 items",
+      "text": "0 items",
+      "value": null,
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "list:kit-results",
+        "type": "list",
+        "text": "0 items"
+      }
+    },
+    {
+      "semanticId": "footer:native:row",
+      "role": "footer",
+      "type": "panel",
+      "label": "native",
+      "text": "native",
+      "value": "kit_store_browse",
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:native:row",
+        "type": "panel",
+        "text": "native",
+        "value": "kit_store_browse",
+        "role": "footer",
+        "kind": "nativeFooterRow",
+        "selectable": false
+      }
+    },
+    {
+      "semanticId": "footer:native:run",
+      "role": "footer",
+      "type": "button",
+      "label": "↵ Install",
+      "text": "↵ Install",
+      "value": "run",
+      "selected": false,
+      "focused": null,
+      "index": 0,
+      "owner": "kit_store_browse",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:native:run",
+        "type": "button",
+        "text": "↵ Install",
+        "value": "run",
+        "selected": false,
+        "index": 0,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "kit_store_browse",
+        "sourceName": "kit_store_browse",
+        "selectable": false
+      }
+    },
+    {
+      "semanticId": "footer:native:close",
+      "role": "footer",
+      "type": "button",
+      "label": "Esc Back",
+      "text": "Esc Back",
+      "value": "close",
+      "selected": false,
+      "focused": null,
+      "index": 1,
+      "owner": "kit_store_browse",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:native:close",
+        "type": "button",
+        "text": "Esc Back",
+        "value": "close",
+        "selected": false,
+        "index": 1,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "kit_store_browse",
+        "sourceName": "kit_store_browse",
+        "selectable": true
+      }
+    }
+  ],
+  "warnings": [
+    "getElements does not expose bounds yet; use devtools.layout.measure for geometry."
+  ],
+  "errors": []
+}

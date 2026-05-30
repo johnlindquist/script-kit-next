@@ -281,7 +281,7 @@ impl ScriptListApp {
         results
     }
 
-    fn kit_store_list_installed() -> Vec<script_kit_gpui::kit_store::InstalledKit> {
+    pub(crate) fn kit_store_list_installed() -> Vec<script_kit_gpui::kit_store::InstalledKit> {
         script_kit_gpui::kit_store::storage::list_installed_kits().unwrap_or_else(|error| {
             tracing::warn!("Kit Store list installed kits failed: {}", error);
             Vec::new()

@@ -38,6 +38,8 @@ pub enum TriggerBuiltin {
     SdkReference,
     AiVault,
     Settings,
+    BrowseKitStore,
+    ManageInstalledKits,
     ChooseTheme,
     ScriptKitSelfie,
     MainWindow,
@@ -62,6 +64,8 @@ impl TriggerBuiltin {
         TriggerBuiltin::SdkReference,
         TriggerBuiltin::AiVault,
         TriggerBuiltin::Settings,
+        TriggerBuiltin::BrowseKitStore,
+        TriggerBuiltin::ManageInstalledKits,
         TriggerBuiltin::ChooseTheme,
         TriggerBuiltin::ScriptKitSelfie,
         TriggerBuiltin::MainWindow,
@@ -86,6 +90,8 @@ impl TriggerBuiltin {
             TriggerBuiltin::SdkReference => "builtin/sdk-reference",
             TriggerBuiltin::AiVault => "builtin/vault",
             TriggerBuiltin::Settings => "builtin/settings",
+            TriggerBuiltin::BrowseKitStore => "builtin/browse-kit-store",
+            TriggerBuiltin::ManageInstalledKits => "builtin/manage-installed-kits",
             TriggerBuiltin::ChooseTheme => "builtin/choose-theme",
             TriggerBuiltin::ScriptKitSelfie => "builtin/script-kit-selfie",
             TriggerBuiltin::MainWindow => "builtin/main-window",
@@ -122,6 +128,9 @@ impl TriggerBuiltin {
             // Collapsed into `builtin/do-in-current-app` — see
             // `current_app_commands_builtin_is_no_longer_registered`.
             TriggerBuiltin::CurrentAppCommands => false,
+            // Kit Store launcher stubs are intentionally pruned, but
+            // triggerBuiltin still needs deterministic proof entry points.
+            TriggerBuiltin::BrowseKitStore | TriggerBuiltin::ManageInstalledKits => false,
             _ => true,
         }
     }
@@ -152,6 +161,15 @@ impl TriggerBuiltin {
             TriggerBuiltin::SdkReference => &["sdk-reference", "sdkreference", "sdk-docs"],
             TriggerBuiltin::AiVault => &["vault", "ai-vault", "aivault"],
             TriggerBuiltin::Settings => &["settings", "kit-settings", "script-kit-settings"],
+            TriggerBuiltin::BrowseKitStore => {
+                &["browse-kit-store", "kit-store", "kit-store-browse", "kits"]
+            }
+            TriggerBuiltin::ManageInstalledKits => &[
+                "manage-installed-kits",
+                "installed-kits",
+                "kit-store-installed",
+                "manage-kits",
+            ],
             TriggerBuiltin::ChooseTheme => &["choose-theme", "theme", "theme-designer"],
             TriggerBuiltin::ScriptKitSelfie => &[
                 "script-kit-selfie",
@@ -260,6 +278,8 @@ pub const TRIGGER_BUILTIN_COMMAND_IDS: &[&str] = &[
     "builtin/sdk-reference",
     "builtin/vault",
     "builtin/settings",
+    "builtin/browse-kit-store",
+    "builtin/manage-installed-kits",
     "builtin/choose-theme",
     "builtin/script-kit-selfie",
     "builtin/main-window",

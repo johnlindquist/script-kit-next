@@ -365,6 +365,29 @@ impl ScriptListApp {
                     resize: true,
                 }
             }
+            FilterableView::KitStoreBrowse => FilterableRoutePlan {
+                next_view: AppView::BrowseKitsView {
+                    query: String::new(),
+                    selected_index: 0,
+                    results: Vec::new(),
+                },
+                reset_shared_filter: true,
+                pending_placeholder: Some("Search Kit Store..."),
+                pending_focus: Some(FocusTarget::MainFilter),
+                clear_hover: true,
+                resize: true,
+            },
+            FilterableView::KitStoreInstalled => FilterableRoutePlan {
+                next_view: AppView::InstalledKitsView {
+                    selected_index: 0,
+                    kits: Self::kit_store_list_installed(),
+                },
+                reset_shared_filter: true,
+                pending_placeholder: Some("Search installed kits..."),
+                pending_focus: Some(FocusTarget::MainFilter),
+                clear_hover: true,
+                resize: true,
+            },
         };
         Ok(plan)
     }

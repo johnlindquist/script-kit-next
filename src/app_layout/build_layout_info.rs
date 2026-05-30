@@ -666,6 +666,261 @@ impl ScriptListApp {
             };
         }
 
+        if let AppView::BrowseKitsView { results, .. } = &self.current_view {
+            const KIT_STORE_HEADER_HEIGHT: f32 = 44.0;
+            const KIT_STORE_HEADER_PADDING_X: f32 = 16.0;
+            const KIT_STORE_HEADER_PADDING_Y: f32 = 8.0;
+            const KIT_STORE_HEADER_GAP: f32 = 12.0;
+            const KIT_STORE_TITLE_WIDTH: f32 = 132.0;
+            const KIT_STORE_COUNT_WIDTH: f32 = 68.0;
+            const KIT_STORE_INPUT_HEIGHT: f32 = 28.0;
+            const KIT_STORE_DIVIDER_HEIGHT: f32 = 1.0;
+            const KIT_STORE_LIST_PADDING_Y: f32 = 4.0;
+            const KIT_STORE_ROW_HEIGHT: f32 = 72.0;
+            const KIT_STORE_ROW_PADDING_X: f32 = 12.0;
+            const KIT_STORE_ROW_PADDING_Y: f32 = 8.0;
+            const KIT_STORE_ROW_GAP: f32 = 12.0;
+            const KIT_STORE_INSTALL_WIDTH: f32 = 62.0;
+            const KIT_STORE_INSTALL_HEIGHT: f32 = 28.0;
+            const KIT_STORE_FOOTER_HEIGHT: f32 = 34.0;
+
+            let divider_y = KIT_STORE_HEADER_HEIGHT;
+            let list_top =
+                divider_y + KIT_STORE_DIVIDER_HEIGHT + KIT_STORE_LIST_PADDING_Y;
+            let footer_y = window_height - KIT_STORE_FOOTER_HEIGHT;
+            let list_height =
+                (footer_y - list_top - KIT_STORE_LIST_PADDING_Y).max(0.0);
+            let input_x =
+                KIT_STORE_HEADER_PADDING_X + KIT_STORE_TITLE_WIDTH + KIT_STORE_HEADER_GAP;
+            let input_width = (window_width
+                - input_x
+                - KIT_STORE_HEADER_GAP
+                - KIT_STORE_COUNT_WIDTH
+                - KIT_STORE_HEADER_PADDING_X)
+                .max(0.0);
+            let input_y =
+                KIT_STORE_HEADER_PADDING_Y + (KIT_STORE_INPUT_HEIGHT - 28.0) / 2.0;
+            let count_x = input_x + input_width + KIT_STORE_HEADER_GAP;
+
+            components.push(
+                LayoutComponentInfo::new("KitStoreBrowseSurface", LayoutComponentType::Panel)
+                    .with_bounds(0.0, 0.0, window_width, window_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("kitStoreBrowse.surface")
+                    .with_flex_column()
+                    .with_depth(1)
+                    .with_parent("Window")
+                    .with_explanation("Browse Kit Store owns a custom full-window surface instead of the generic launcher split shell."),
+            );
+            components.push(
+                LayoutComponentInfo::new("KitStoreBrowseHeader", LayoutComponentType::Header)
+                    .with_bounds(0.0, 0.0, window_width, KIT_STORE_HEADER_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("kitStoreBrowse.header")
+                    .with_padding(
+                        KIT_STORE_HEADER_PADDING_Y,
+                        KIT_STORE_HEADER_PADDING_X,
+                        KIT_STORE_HEADER_PADDING_Y,
+                        KIT_STORE_HEADER_PADDING_X,
+                    )
+                    .with_gap(KIT_STORE_HEADER_GAP)
+                    .with_flex_row()
+                    .with_depth(2)
+                    .with_parent("KitStoreBrowseSurface")
+                    .with_explanation("Custom browse header: title, pseudo-search input, and result count on a 12px gap."),
+            );
+            components.push(
+                LayoutComponentInfo::new("KitStoreBrowseTitle", LayoutComponentType::Other)
+                    .with_bounds(
+                        KIT_STORE_HEADER_PADDING_X,
+                        KIT_STORE_HEADER_PADDING_Y,
+                        KIT_STORE_TITLE_WIDTH,
+                        28.0,
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("kitStoreBrowse.title")
+                    .with_depth(3)
+                    .with_parent("KitStoreBrowseHeader")
+                    .with_explanation("Static Browse Kit Store title in the custom header."),
+            );
+            components.push(
+                LayoutComponentInfo::new("KitStoreBrowseSearch", LayoutComponentType::Input)
+                    .with_bounds(input_x, input_y, input_width, 22.0)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
+                    )
+                    .with_visual_token("kitStoreBrowse.search")
+                    .with_hit_bounds(input_x, KIT_STORE_HEADER_PADDING_Y, input_width, 28.0)
+                    .with_depth(3)
+                    .with_parent("KitStoreBrowseHeader")
+                    .with_explanation("Pseudo-search input keeps a 22px visual text lane with a 28px minimum hit target."),
+            );
+            components.push(
+                LayoutComponentInfo::new("KitStoreBrowseCount", LayoutComponentType::Other)
+                    .with_bounds(
+                        count_x,
+                        KIT_STORE_HEADER_PADDING_Y,
+                        KIT_STORE_COUNT_WIDTH,
+                        28.0,
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("kitStoreBrowse.count")
+                    .with_depth(3)
+                    .with_parent("KitStoreBrowseHeader")
+                    .with_explanation("Result count text remains in the functional header chrome."),
+            );
+            components.push(
+                LayoutComponentInfo::new("KitStoreBrowseDivider", LayoutComponentType::Other)
+                    .with_bounds(
+                        KIT_STORE_HEADER_PADDING_X,
+                        divider_y,
+                        window_width - KIT_STORE_HEADER_PADDING_X * 2.0,
+                        KIT_STORE_DIVIDER_HEIGHT,
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("kitStoreBrowse.divider")
+                    .with_depth(2)
+                    .with_parent("KitStoreBrowseSurface")
+                    .with_explanation("One-pixel divider inset to the same 16px horizontal header padding."),
+            );
+            components.push(
+                LayoutComponentInfo::new("KitStoreBrowseList", LayoutComponentType::List)
+                    .with_bounds(0.0, list_top, window_width, list_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("kitStoreBrowse.list")
+                    .with_flex_column()
+                    .with_depth(2)
+                    .with_parent("KitStoreBrowseSurface")
+                    .with_explanation("Custom kit-store list region uses full width and 72px browse rows."),
+            );
+
+            let visible_rows = ((list_height / KIT_STORE_ROW_HEIGHT) as usize)
+                .min(results.len())
+                .min(5);
+            if visible_rows == 0 {
+                components.push(
+                    LayoutComponentInfo::new("KitStoreBrowseEmptyState", LayoutComponentType::Panel)
+                        .with_bounds(0.0, list_top, window_width, list_height)
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_CONTENT,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                        )
+                        .with_visual_token("kitStoreBrowse.emptyState")
+                        .with_depth(3)
+                        .with_parent("KitStoreBrowseList")
+                        .with_explanation("Centered empty state occupies the browse list when no remote rows are available."),
+                );
+            } else {
+                for i in 0..visible_rows {
+                    let row_y = list_top + i as f32 * KIT_STORE_ROW_HEIGHT;
+                    let install_x =
+                        window_width - KIT_STORE_ROW_PADDING_X - KIT_STORE_INSTALL_WIDTH;
+                    let install_y = row_y + (KIT_STORE_ROW_HEIGHT - KIT_STORE_INSTALL_HEIGHT) / 2.0;
+                    components.push(
+                        LayoutComponentInfo::new(
+                            format!("KitStoreBrowseRow[{}]", i),
+                            LayoutComponentType::ListItem,
+                        )
+                        .with_bounds(0.0, row_y, window_width, KIT_STORE_ROW_HEIGHT)
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_CONTENT,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                        )
+                        .with_visual_token("kitStoreBrowse.row")
+                        .with_padding(
+                            KIT_STORE_ROW_PADDING_Y,
+                            KIT_STORE_ROW_PADDING_X,
+                            KIT_STORE_ROW_PADDING_Y,
+                            KIT_STORE_ROW_PADDING_X,
+                        )
+                        .with_gap(KIT_STORE_ROW_GAP)
+                        .with_flex_row()
+                        .with_depth(3)
+                        .with_parent("KitStoreBrowseList")
+                        .with_explanation("Browse rows are 72px tall with 12px horizontal padding, 8px vertical padding, and a 12px text/action gap."),
+                    );
+                    components.push(
+                        LayoutComponentInfo::new(
+                            format!("KitStoreBrowseInstallButton[{}]", i),
+                            LayoutComponentType::Button,
+                        )
+                        .with_bounds(
+                            install_x,
+                            install_y,
+                            KIT_STORE_INSTALL_WIDTH,
+                            KIT_STORE_INSTALL_HEIGHT,
+                        )
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                        )
+                        .with_visual_token("kitStoreBrowse.installButton")
+                        .with_hit_bounds(
+                            install_x,
+                            install_y,
+                            KIT_STORE_INSTALL_WIDTH,
+                            KIT_STORE_INSTALL_HEIGHT,
+                        )
+                        .with_depth(4)
+                        .with_parent(format!("KitStoreBrowseRow[{}]", i))
+                        .with_explanation("Inline Install action keeps the renderer's badge-sized visual with a 28px minimum hit target."),
+                    );
+                }
+            }
+
+            components.push(
+                LayoutComponentInfo::new("KitStoreBrowseFooter", LayoutComponentType::Container)
+                    .with_bounds(0.0, footer_y, window_width, KIT_STORE_FOOTER_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                    )
+                    .with_visual_token("kitStoreBrowse.footer")
+                    .with_depth(2)
+                    .with_parent("KitStoreBrowseSurface")
+                    .with_explanation("Native footer slot for Install and Back/Clear Search hints; it must not overlap the list viewport."),
+            );
+
+            return LayoutInfo {
+                window_width,
+                window_height,
+                prompt_type: prompt_type.to_string(),
+                components,
+                handler_form: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            };
+        }
+
         // Header
         components.push(
             LayoutComponentInfo::new("Header", LayoutComponentType::Header)
@@ -686,11 +941,22 @@ impl ScriptListApp {
                 )),
         );
 
+        // Header controls, right-to-left. Keep these before SearchInput so the
+        // measured input width is derived from the real button group edge.
+        let button_y = HEADER_PADDING_Y;
+        let button_height = BUTTON_HEIGHT;
+        let logo_x = window_width - HEADER_PADDING_X - 20.0;
+        let actions_width = 85.0;
+        let actions_x = logo_x - 24.0 - actions_width;
+        let run_width = 55.0;
+        let run_x = actions_x - 24.0 - run_width;
+        let input_to_run_gap = 12.0;
+
         // Search input in header
         const INPUT_HEIGHT: f32 = 22.0;
         let input_y = HEADER_PADDING_Y + (BUTTON_HEIGHT - INPUT_HEIGHT) / 2.0;
-        let buttons_area_width = 200.0;
-        let input_width = window_width - HEADER_PADDING_X - buttons_area_width;
+        let input_width = (run_x - input_to_run_gap - HEADER_PADDING_X).max(0.0);
+        let buttons_area_width = window_width - HEADER_PADDING_X - input_width;
 
         components.push(
             LayoutComponentInfo::new("SearchInput", LayoutComponentType::Input)
@@ -969,11 +1235,8 @@ impl ScriptListApp {
         }
 
         // Button group in header
-        let button_y = HEADER_PADDING_Y;
-        let button_height = BUTTON_HEIGHT;
 
         // Logo button (rightmost)
-        let logo_x = window_width - HEADER_PADDING_X - 20.0;
         components.push(
             LayoutComponentInfo::new("LogoButton", LayoutComponentType::Button)
                 .with_bounds(logo_x, button_y, 20.0, button_height)
@@ -997,8 +1260,6 @@ impl ScriptListApp {
         );
 
         // Actions button
-        let actions_width = 85.0;
-        let actions_x = logo_x - 24.0 - actions_width;
         components.push(
             LayoutComponentInfo::new("ActionsButton", LayoutComponentType::Button)
                 .with_bounds(actions_x, button_y, actions_width, button_height)
@@ -1018,8 +1279,6 @@ impl ScriptListApp {
         );
 
         // Run button
-        let run_width = 55.0;
-        let run_x = actions_x - 24.0 - run_width;
         components.push(
             LayoutComponentInfo::new("RunButton", LayoutComponentType::Button)
                 .with_bounds(run_x, button_y, run_width, button_height)

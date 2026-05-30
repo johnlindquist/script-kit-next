@@ -379,6 +379,27 @@ fn mini_component_bounds_do_not_emit_preview_panel() {
 }
 
 #[test]
+fn header_layout_measurement_keeps_search_input_before_run_button() {
+    let layout_info = include_str!("../src/app_layout/build_layout_info.rs");
+    assert!(
+        layout_info.contains("let run_x = actions_x - 24.0 - run_width;")
+            && layout_info
+                .contains("let input_width = (run_x - input_to_run_gap - HEADER_PADDING_X).max(0.0);"),
+        "layout info must derive SearchInput width from the RunButton edge so overlap receipts stay meaningful"
+    );
+
+    let component_bounds = include_str!("../src/app_layout/build_component_bounds.rs");
+    assert!(
+        component_bounds.contains("let run_x = actions_x - px(24.) - run_width;")
+            && component_bounds
+                .contains("let input_width = (run_x - input_to_run_gap - input_x).max(px(0.));"),
+        "debug component bounds must derive SearchInput width from the Run button edge"
+    );
+
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"header_layout\",\"search_run_overlap\":false,\"status\":\"pass\"}}");
+}
+
+#[test]
 fn form_prompt_wrapper_has_no_prompt_footer_or_hardcoded_hex() {
     let source = include_str!("../src/render_prompts/form/render.rs");
     assert!(

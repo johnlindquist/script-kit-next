@@ -64,6 +64,8 @@ pub enum FilterableView {
     EmojiPicker,
     WindowSwitcher,
     ProcessManager,
+    KitStoreBrowse,
+    KitStoreInstalled,
 }
 
 impl FilterableView {
@@ -77,6 +79,8 @@ impl FilterableView {
         FilterableView::EmojiPicker,
         FilterableView::WindowSwitcher,
         FilterableView::ProcessManager,
+        FilterableView::KitStoreBrowse,
+        FilterableView::KitStoreInstalled,
     ];
 
     /// Stable variant name used by the golden-JSONL fixture. Keep
@@ -92,6 +96,8 @@ impl FilterableView {
             FilterableView::EmojiPicker => "EmojiPicker",
             FilterableView::WindowSwitcher => "WindowSwitcher",
             FilterableView::ProcessManager => "ProcessManager",
+            FilterableView::KitStoreBrowse => "KitStoreBrowse",
+            FilterableView::KitStoreInstalled => "KitStoreInstalled",
         }
     }
 }
@@ -177,6 +183,12 @@ pub const fn plan_trigger_builtin_route(id: TriggerBuiltin) -> AppRoute {
         TriggerBuiltin::SdkReference => AppRoute::ExecuteBuiltin("builtin/sdk-reference"),
         TriggerBuiltin::AiVault => AppRoute::ExecuteBuiltin("builtin/vault"),
         TriggerBuiltin::Settings => AppRoute::ExecuteBuiltin("builtin/settings"),
+        TriggerBuiltin::BrowseKitStore => {
+            AppRoute::ShowFilterableView(FilterableView::KitStoreBrowse)
+        }
+        TriggerBuiltin::ManageInstalledKits => {
+            AppRoute::ShowFilterableView(FilterableView::KitStoreInstalled)
+        }
         TriggerBuiltin::ChooseTheme => AppRoute::ExecuteBuiltin("builtin/choose-theme"),
         TriggerBuiltin::ScriptKitSelfie => AppRoute::ExecuteBuiltin("builtin/script-kit-selfie"),
         TriggerBuiltin::MainWindow => AppRoute::ExecuteBuiltin("builtin/main-window"),
@@ -244,10 +256,7 @@ mod tests {
             ("OpenFileSearch", 1usize),
             ("OpenTabAi", 1),
             ("OpenCurrentAppCommands", 1),
-            ("builtin/browse-kit-store", 1),
             ("builtin/choose-theme", 1),
-            ("builtin/design-non-list-states", 1),
-            ("builtin/manage-installed-kits", 1),
             ("builtin/main-window", 1),
             ("builtin/new-script", 1),
             ("builtin/quick-terminal", 1),

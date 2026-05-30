@@ -1,0 +1,1540 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.layout",
+  "command": "layout.measure",
+  "classification": "ok",
+  "session": "liquid-kit-store-browse-current",
+  "include": [
+    "nodes",
+    "regions",
+    "scroll",
+    "anchors",
+    "resize",
+    "overlaps"
+  ],
+  "limit": 500,
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "KitStoreBrowse"
+  },
+  "target": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "KitStoreBrowse",
+    "appViewVariant": "BrowseKitsView",
+    "nativeFooterSurface": "kit_store_browse",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 750,
+      "height": 480,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 56958,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "promptType": "browseKits",
+  "timestamp": "2026-05-30T06:48:10.688190+00:00",
+  "componentCount": 10,
+  "window": {
+    "rect": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "visible": null,
+    "focused": null
+  },
+  "viewport": {
+    "clientWidth": 750,
+    "clientHeight": 480,
+    "contentWidth": 750,
+    "contentHeight": 480,
+    "scrollWidth": 750,
+    "scrollHeight": 480,
+    "canScrollX": false,
+    "canScrollY": false,
+    "scrollTop": null,
+    "maxScrollTop": 0,
+    "overflowPolicyY": "hidden"
+  },
+  "pressure": {
+    "overflowY": false,
+    "hiddenContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "footerOverlapCount": 0,
+    "inputOverlapCount": 0,
+    "pressureScore": 0
+  },
+  "viewportRect": {
+    "x": 0,
+    "y": 0,
+    "width": 750,
+    "height": 480
+  },
+  "windowRect": {
+    "x": 585,
+    "y": 177,
+    "width": 750,
+    "height": 480
+  },
+  "regions": [
+    {
+      "name": "Window",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      }
+    },
+    {
+      "name": "KitStoreBrowseSurface",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      }
+    },
+    {
+      "name": "KitStoreBrowseHeader",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 44
+      }
+    },
+    {
+      "name": "KitStoreBrowseTitle",
+      "type": "other",
+      "bounds": {
+        "x": 16,
+        "y": 8,
+        "width": 132,
+        "height": 28
+      }
+    },
+    {
+      "name": "KitStoreBrowseSearch",
+      "type": "input",
+      "bounds": {
+        "x": 160,
+        "y": 8,
+        "width": 494,
+        "height": 22
+      }
+    },
+    {
+      "name": "KitStoreBrowseCount",
+      "type": "other",
+      "bounds": {
+        "x": 666,
+        "y": 8,
+        "width": 68,
+        "height": 28
+      }
+    },
+    {
+      "name": "KitStoreBrowseDivider",
+      "type": "other",
+      "bounds": {
+        "x": 16,
+        "y": 44,
+        "width": 718,
+        "height": 1
+      }
+    },
+    {
+      "name": "KitStoreBrowseList",
+      "type": "list",
+      "bounds": {
+        "x": 0,
+        "y": 49,
+        "width": 750,
+        "height": 393
+      }
+    },
+    {
+      "name": "KitStoreBrowseEmptyState",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 49,
+        "width": 750,
+        "height": 393
+      }
+    },
+    {
+      "name": "KitStoreBrowseFooter",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 446,
+        "width": 750,
+        "height": 34
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Window",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "depth": 0,
+      "parent": null,
+      "children": [],
+      "explanation": "Root window container. Uses flex-column layout.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "NSVisualEffectView",
+        "tokenSource": "window.vibrancy",
+        "cornerRadius": {
+          "topLeft": 22,
+          "topRight": 22,
+          "bottomRight": 22,
+          "bottomLeft": 22
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "hitWidth": 750,
+        "hitHeight": 480,
+        "visualWidth": 750,
+        "visualHeight": 480,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "Window",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Root window container. Uses flex-column layout.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "NSVisualEffectView",
+          "tokenSource": "window.vibrancy",
+          "cornerRadius": {
+            "topLeft": 22,
+            "topRight": 22,
+            "bottomRight": 22,
+            "bottomLeft": 22
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          }
+        }
+      }
+    },
+    {
+      "name": "KitStoreBrowseSurface",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "depth": 1,
+      "parent": "Window",
+      "children": [],
+      "explanation": "Browse Kit Store owns a custom full-window surface instead of the generic launcher split shell.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "kitStoreBrowse.surface",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "hitWidth": 750,
+        "hitHeight": 480,
+        "visualWidth": 750,
+        "visualHeight": 480,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "KitStoreBrowseSurface",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Browse Kit Store owns a custom full-window surface instead of the generic launcher split shell.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.surface",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          }
+        }
+      }
+    },
+    {
+      "name": "KitStoreBrowseHeader",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 44
+      },
+      "depth": 2,
+      "parent": "KitStoreBrowseSurface",
+      "children": [],
+      "explanation": "Custom browse header: title, pseudo-search input, and result count on a 12px gap.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "kitStoreBrowse.header",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 44
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 44
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 44
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 44
+        },
+        "hitWidth": 750,
+        "hitHeight": 44,
+        "visualWidth": 750,
+        "visualHeight": 44,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "KitStoreBrowseHeader",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 44
+        },
+        "boxModel": {
+          "padding": {
+            "top": 8,
+            "right": 16,
+            "bottom": 8,
+            "left": 16
+          },
+          "gap": 12
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 2,
+        "parent": "KitStoreBrowseSurface",
+        "explanation": "Custom browse header: title, pseudo-search input, and result count on a 12px gap.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.header",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 44
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 44
+          }
+        }
+      }
+    },
+    {
+      "name": "KitStoreBrowseTitle",
+      "type": "other",
+      "bounds": {
+        "x": 16,
+        "y": 8,
+        "width": 132,
+        "height": 28
+      },
+      "depth": 3,
+      "parent": "KitStoreBrowseHeader",
+      "children": [],
+      "explanation": "Static Browse Kit Store title in the custom header.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "kitStoreBrowse.title",
+        "visualBounds": {
+          "x": 16,
+          "y": 8,
+          "width": 132,
+          "height": 28
+        },
+        "hitBounds": {
+          "x": 16,
+          "y": 8,
+          "width": 132,
+          "height": 28
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 16,
+          "y": 8,
+          "width": 132,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 16,
+          "y": 8,
+          "width": 132,
+          "height": 28
+        },
+        "hitWidth": 132,
+        "hitHeight": 28,
+        "visualWidth": 132,
+        "visualHeight": 28,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "KitStoreBrowseTitle",
+        "type": "other",
+        "bounds": {
+          "x": 16,
+          "y": 8,
+          "width": 132,
+          "height": 28
+        },
+        "depth": 3,
+        "parent": "KitStoreBrowseHeader",
+        "explanation": "Static Browse Kit Store title in the custom header.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.title",
+          "visualBounds": {
+            "x": 16,
+            "y": 8,
+            "width": 132,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 16,
+            "y": 8,
+            "width": 132,
+            "height": 28
+          }
+        }
+      }
+    },
+    {
+      "name": "KitStoreBrowseSearch",
+      "type": "input",
+      "bounds": {
+        "x": 160,
+        "y": 8,
+        "width": 494,
+        "height": 22
+      },
+      "depth": 3,
+      "parent": "KitStoreBrowseHeader",
+      "children": [],
+      "explanation": "Pseudo-search input keeps a 22px visual text lane with a 28px minimum hit target.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "kitStoreBrowse.search",
+        "cornerRadius": {
+          "topLeft": 14,
+          "topRight": 14,
+          "bottomRight": 14,
+          "bottomLeft": 14
+        },
+        "visualBounds": {
+          "x": 160,
+          "y": 8,
+          "width": 494,
+          "height": 22
+        },
+        "hitBounds": {
+          "x": 160,
+          "y": 8,
+          "width": 494,
+          "height": 28
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 160,
+          "y": 8,
+          "width": 494,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 160,
+          "y": 8,
+          "width": 494,
+          "height": 22
+        },
+        "hitWidth": 494,
+        "hitHeight": 28,
+        "visualWidth": 494,
+        "visualHeight": 22,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "KitStoreBrowseSearch",
+        "type": "input",
+        "bounds": {
+          "x": 160,
+          "y": 8,
+          "width": 494,
+          "height": 22
+        },
+        "depth": 3,
+        "parent": "KitStoreBrowseHeader",
+        "explanation": "Pseudo-search input keeps a 22px visual text lane with a 28px minimum hit target.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.search",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 160,
+            "y": 8,
+            "width": 494,
+            "height": 22
+          },
+          "hitBounds": {
+            "x": 160,
+            "y": 8,
+            "width": 494,
+            "height": 28
+          }
+        }
+      }
+    },
+    {
+      "name": "KitStoreBrowseCount",
+      "type": "other",
+      "bounds": {
+        "x": 666,
+        "y": 8,
+        "width": 68,
+        "height": 28
+      },
+      "depth": 3,
+      "parent": "KitStoreBrowseHeader",
+      "children": [],
+      "explanation": "Result count text remains in the functional header chrome.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "kitStoreBrowse.count",
+        "visualBounds": {
+          "x": 666,
+          "y": 8,
+          "width": 68,
+          "height": 28
+        },
+        "hitBounds": {
+          "x": 666,
+          "y": 8,
+          "width": 68,
+          "height": 28
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 666,
+          "y": 8,
+          "width": 68,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 666,
+          "y": 8,
+          "width": 68,
+          "height": 28
+        },
+        "hitWidth": 68,
+        "hitHeight": 28,
+        "visualWidth": 68,
+        "visualHeight": 28,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "KitStoreBrowseCount",
+        "type": "other",
+        "bounds": {
+          "x": 666,
+          "y": 8,
+          "width": 68,
+          "height": 28
+        },
+        "depth": 3,
+        "parent": "KitStoreBrowseHeader",
+        "explanation": "Result count text remains in the functional header chrome.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.count",
+          "visualBounds": {
+            "x": 666,
+            "y": 8,
+            "width": 68,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 666,
+            "y": 8,
+            "width": 68,
+            "height": 28
+          }
+        }
+      }
+    },
+    {
+      "name": "KitStoreBrowseDivider",
+      "type": "other",
+      "bounds": {
+        "x": 16,
+        "y": 44,
+        "width": 718,
+        "height": 1
+      },
+      "depth": 2,
+      "parent": "KitStoreBrowseSurface",
+      "children": [],
+      "explanation": "One-pixel divider inset to the same 16px horizontal header padding.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "kitStoreBrowse.divider",
+        "visualBounds": {
+          "x": 16,
+          "y": 44,
+          "width": 718,
+          "height": 1
+        },
+        "hitBounds": {
+          "x": 16,
+          "y": 44,
+          "width": 718,
+          "height": 1
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 16,
+          "y": 44,
+          "width": 718,
+          "height": 1
+        },
+        "visualBounds": {
+          "x": 16,
+          "y": 44,
+          "width": 718,
+          "height": 1
+        },
+        "hitWidth": 718,
+        "hitHeight": 1,
+        "visualWidth": 718,
+        "visualHeight": 1,
+        "minHitPass": false,
+        "minVisualPass": false,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "KitStoreBrowseDivider",
+        "type": "other",
+        "bounds": {
+          "x": 16,
+          "y": 44,
+          "width": 718,
+          "height": 1
+        },
+        "depth": 2,
+        "parent": "KitStoreBrowseSurface",
+        "explanation": "One-pixel divider inset to the same 16px horizontal header padding.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.divider",
+          "visualBounds": {
+            "x": 16,
+            "y": 44,
+            "width": 718,
+            "height": 1
+          },
+          "hitBounds": {
+            "x": 16,
+            "y": 44,
+            "width": 718,
+            "height": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "KitStoreBrowseList",
+      "type": "list",
+      "bounds": {
+        "x": 0,
+        "y": 49,
+        "width": 750,
+        "height": 393
+      },
+      "depth": 2,
+      "parent": "KitStoreBrowseSurface",
+      "children": [],
+      "explanation": "Custom kit-store list region uses full width and 72px browse rows.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "kitStoreBrowse.list",
+        "visualBounds": {
+          "x": 0,
+          "y": 49,
+          "width": 750,
+          "height": 393
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 49,
+          "width": 750,
+          "height": 393
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 49,
+          "width": 750,
+          "height": 393
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 49,
+          "width": 750,
+          "height": 393
+        },
+        "hitWidth": 750,
+        "hitHeight": 393,
+        "visualWidth": 750,
+        "visualHeight": 393,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "KitStoreBrowseList",
+        "type": "list",
+        "bounds": {
+          "x": 0,
+          "y": 49,
+          "width": 750,
+          "height": 393
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 2,
+        "parent": "KitStoreBrowseSurface",
+        "explanation": "Custom kit-store list region uses full width and 72px browse rows.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.list",
+          "visualBounds": {
+            "x": 0,
+            "y": 49,
+            "width": 750,
+            "height": 393
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 49,
+            "width": 750,
+            "height": 393
+          }
+        }
+      }
+    },
+    {
+      "name": "KitStoreBrowseEmptyState",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 49,
+        "width": 750,
+        "height": 393
+      },
+      "depth": 3,
+      "parent": "KitStoreBrowseList",
+      "children": [],
+      "explanation": "Centered empty state occupies the browse list when no remote rows are available.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "kitStoreBrowse.emptyState",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 49,
+          "width": 750,
+          "height": 393
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 49,
+          "width": 750,
+          "height": 393
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 49,
+          "width": 750,
+          "height": 393
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 49,
+          "width": 750,
+          "height": 393
+        },
+        "hitWidth": 750,
+        "hitHeight": 393,
+        "visualWidth": 750,
+        "visualHeight": 393,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "KitStoreBrowseEmptyState",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 49,
+          "width": 750,
+          "height": 393
+        },
+        "depth": 3,
+        "parent": "KitStoreBrowseList",
+        "explanation": "Centered empty state occupies the browse list when no remote rows are available.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.emptyState",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 49,
+            "width": 750,
+            "height": 393
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 49,
+            "width": 750,
+            "height": 393
+          }
+        }
+      }
+    },
+    {
+      "name": "KitStoreBrowseFooter",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 446,
+        "width": 750,
+        "height": 34
+      },
+      "depth": 2,
+      "parent": "KitStoreBrowseSurface",
+      "children": [],
+      "explanation": "Native footer slot for Install and Back/Clear Search hints; it must not overlap the list viewport.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "kitStoreBrowse.footer",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 446,
+          "width": 750,
+          "height": 34
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 446,
+          "width": 750,
+          "height": 34
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 446,
+          "width": 750,
+          "height": 34
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 446,
+          "width": 750,
+          "height": 34
+        },
+        "hitWidth": 750,
+        "hitHeight": 34,
+        "visualWidth": 750,
+        "visualHeight": 34,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "KitStoreBrowseFooter",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 446,
+          "width": 750,
+          "height": 34
+        },
+        "depth": 2,
+        "parent": "KitStoreBrowseSurface",
+        "explanation": "Native footer slot for Install and Back/Clear Search hints; it must not overlap the list viewport.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.footer",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 446,
+            "width": 750,
+            "height": 34
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 446,
+            "width": 750,
+            "height": 34
+          }
+        }
+      }
+    }
+  ],
+  "overlaps": [],
+  "resizePressure": {
+    "windowCanGrow": null,
+    "overflowY": false,
+    "desiredContentHeight": 480,
+    "measuredContentHeight": 480,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "pressureScore": 0
+  },
+  "visualAudit": {
+    "nodeCount": 10,
+    "styledNodeCount": 10,
+    "unstyledNodeCount": 0,
+    "controlsWithHitFailures": [],
+    "contentGlassNodes": [],
+    "missingStyleNodeNames": [],
+    "chromeLayers": {
+      "content": 4,
+      "functionalChrome": 6
+    }
+  },
+  "handlerForm": null,
+  "missingPrimitives": [],
+  "warnings": [],
+  "errors": [],
+  "rawLayout": {
+    "type": "layoutInfoResult",
+    "requestId": "devtools-layout-measure-1780123688001-4bd8d1",
+    "windowWidth": 750,
+    "windowHeight": 480,
+    "promptType": "browseKits",
+    "components": [
+      {
+        "name": "Window",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Root window container. Uses flex-column layout.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "NSVisualEffectView",
+          "tokenSource": "window.vibrancy",
+          "cornerRadius": {
+            "topLeft": 22,
+            "topRight": 22,
+            "bottomRight": 22,
+            "bottomLeft": 22
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          }
+        }
+      },
+      {
+        "name": "KitStoreBrowseSurface",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Browse Kit Store owns a custom full-window surface instead of the generic launcher split shell.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.surface",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          }
+        }
+      },
+      {
+        "name": "KitStoreBrowseHeader",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 44
+        },
+        "boxModel": {
+          "padding": {
+            "top": 8,
+            "right": 16,
+            "bottom": 8,
+            "left": 16
+          },
+          "gap": 12
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 2,
+        "parent": "KitStoreBrowseSurface",
+        "explanation": "Custom browse header: title, pseudo-search input, and result count on a 12px gap.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.header",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 44
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 44
+          }
+        }
+      },
+      {
+        "name": "KitStoreBrowseTitle",
+        "type": "other",
+        "bounds": {
+          "x": 16,
+          "y": 8,
+          "width": 132,
+          "height": 28
+        },
+        "depth": 3,
+        "parent": "KitStoreBrowseHeader",
+        "explanation": "Static Browse Kit Store title in the custom header.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.title",
+          "visualBounds": {
+            "x": 16,
+            "y": 8,
+            "width": 132,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 16,
+            "y": 8,
+            "width": 132,
+            "height": 28
+          }
+        }
+      },
+      {
+        "name": "KitStoreBrowseSearch",
+        "type": "input",
+        "bounds": {
+          "x": 160,
+          "y": 8,
+          "width": 494,
+          "height": 22
+        },
+        "depth": 3,
+        "parent": "KitStoreBrowseHeader",
+        "explanation": "Pseudo-search input keeps a 22px visual text lane with a 28px minimum hit target.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.search",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 160,
+            "y": 8,
+            "width": 494,
+            "height": 22
+          },
+          "hitBounds": {
+            "x": 160,
+            "y": 8,
+            "width": 494,
+            "height": 28
+          }
+        }
+      },
+      {
+        "name": "KitStoreBrowseCount",
+        "type": "other",
+        "bounds": {
+          "x": 666,
+          "y": 8,
+          "width": 68,
+          "height": 28
+        },
+        "depth": 3,
+        "parent": "KitStoreBrowseHeader",
+        "explanation": "Result count text remains in the functional header chrome.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.count",
+          "visualBounds": {
+            "x": 666,
+            "y": 8,
+            "width": 68,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 666,
+            "y": 8,
+            "width": 68,
+            "height": 28
+          }
+        }
+      },
+      {
+        "name": "KitStoreBrowseDivider",
+        "type": "other",
+        "bounds": {
+          "x": 16,
+          "y": 44,
+          "width": 718,
+          "height": 1
+        },
+        "depth": 2,
+        "parent": "KitStoreBrowseSurface",
+        "explanation": "One-pixel divider inset to the same 16px horizontal header padding.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.divider",
+          "visualBounds": {
+            "x": 16,
+            "y": 44,
+            "width": 718,
+            "height": 1
+          },
+          "hitBounds": {
+            "x": 16,
+            "y": 44,
+            "width": 718,
+            "height": 1
+          }
+        }
+      },
+      {
+        "name": "KitStoreBrowseList",
+        "type": "list",
+        "bounds": {
+          "x": 0,
+          "y": 49,
+          "width": 750,
+          "height": 393
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 2,
+        "parent": "KitStoreBrowseSurface",
+        "explanation": "Custom kit-store list region uses full width and 72px browse rows.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.list",
+          "visualBounds": {
+            "x": 0,
+            "y": 49,
+            "width": 750,
+            "height": 393
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 49,
+            "width": 750,
+            "height": 393
+          }
+        }
+      },
+      {
+        "name": "KitStoreBrowseEmptyState",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 49,
+          "width": 750,
+          "height": 393
+        },
+        "depth": 3,
+        "parent": "KitStoreBrowseList",
+        "explanation": "Centered empty state occupies the browse list when no remote rows are available.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.emptyState",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 49,
+            "width": 750,
+            "height": 393
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 49,
+            "width": 750,
+            "height": 393
+          }
+        }
+      },
+      {
+        "name": "KitStoreBrowseFooter",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 446,
+          "width": 750,
+          "height": 34
+        },
+        "depth": 2,
+        "parent": "KitStoreBrowseSurface",
+        "explanation": "Native footer slot for Install and Back/Clear Search hints; it must not overlap the list viewport.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "kitStoreBrowse.footer",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 446,
+            "width": 750,
+            "height": 34
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 446,
+            "width": 750,
+            "height": 34
+          }
+        }
+      }
+    ],
+    "timestamp": "2026-05-30T06:48:10.688190+00:00"
+  }
+}

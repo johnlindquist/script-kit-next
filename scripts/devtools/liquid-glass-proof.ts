@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+import { readFileSync } from "node:fs";
+
 type JsonObject = Record<string, unknown>;
 
 type Args = {
@@ -84,10 +86,41 @@ function includesAny(path: string, terms: string[]) {
   return terms.some((term) => lower.includes(term.toLowerCase()));
 }
 
+function readJsonSync(path: string): JsonObject | null {
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as JsonObject;
+  } catch {
+    return null;
+  }
+}
+
+function usableScreenshot(path: string, receipts: string[]) {
+  const fileName = path.split("/").pop() ?? path;
+  const baseName = fileName.replace(/\.[^.]+$/, "");
+  const matchingReceipts = receipts.filter((receipt) => {
+    const receiptName = receipt.split("/").pop() ?? receipt;
+    return receiptName.startsWith(baseName) && receiptName.includes("screenshot");
+  });
+
+  for (const receipt of matchingReceipts) {
+    const json = readJsonSync(receipt);
+    if (json?.status === "error" || json?.classification === "error") {
+      return false;
+    }
+    const contentAudit = asObject(json?.contentAudit ?? asObject(json?.screenshot).contentAudit);
+    const nonBlackRatio = contentAudit.nonBlackRatio;
+    if (typeof nonBlackRatio === "number" && nonBlackRatio < 0.01) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function evidenceFor(terms: string[], files: { receipts: string[]; screenshots: string[]; diffs: string[] }, visualAuditPath?: string): Evidence {
   const receipts = files.receipts.filter((path) => includesAny(path, terms));
   return {
-    screenshots: files.screenshots.filter((path) => includesAny(path, terms)),
+    screenshots: files.screenshots.filter((path) => includesAny(path, terms) && usableScreenshot(path, files.receipts)),
     layoutReceipts: receipts.filter((path) => path.includes("layout")),
     inspectReceipts: receipts.filter((path) => path.includes("inspect") || path.includes("window")),
     imageDiffReceipts: receipts.filter((path) => path.includes("image-diff")),
@@ -166,6 +199,8 @@ async function main() {
     ProcessManager: ["process-manager", "processmanager"],
     CurrentAppCommands: ["current-app", "current-app-commands", "currentappcommands"],
     Settings: ["settings"],
+    KitStoreBrowse: ["kit-store-browse", "kitstorebrowse"],
+    KitStoreInstalled: ["kit-store-installed", "kitstoreinstalled"],
     EmojiPicker: ["emoji", "emoji-picker", "emojipicker"],
     ThemeChooser: ["theme", "choose-theme", "theme-chooser", "themechooser"],
     NotesWindow: ["notes"],
@@ -231,6 +266,14 @@ async function main() {
     } else if (surfaceKind === "Settings") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-settings-current-layout.json`,
+      ]);
+    } else if (surfaceKind === "KitStoreBrowse") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-kit-store-browse-current-layout.json`,
+      ]);
+    } else if (surfaceKind === "KitStoreInstalled") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-kit-store-installed-current-layout.json`,
       ]);
     } else if (surfaceKind === "EmojiPicker") {
       await attachVisualAudit(evidence, [

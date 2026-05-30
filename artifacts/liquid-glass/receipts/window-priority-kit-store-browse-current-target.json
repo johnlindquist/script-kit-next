@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.inspect",
+  "session": "liquid-kit-store-browse-current",
+  "classification": "ok",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "KitStoreBrowse"
+  },
+  "resolvedTarget": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "KitStoreBrowse",
+    "appViewVariant": "BrowseKitsView",
+    "nativeFooterSurface": "kit_store_browse",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 750,
+      "height": 480,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 56958,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "windows": [
+    {
+      "index": 0,
+      "automationId": "main",
+      "windowKind": "Main",
+      "title": "Script Kit",
+      "visible": true,
+      "focused": false,
+      "bounds": {
+        "x": 585,
+        "y": 177,
+        "width": 750,
+        "height": 480
+      },
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "parentAutomationId": null,
+      "parentKind": null,
+      "pid": 56958
+    }
+  ],
+  "rawInspect": {
+    "type": "automationInspectResult",
+    "requestId": "devtools-targets-inspect-1780123738092-59e6c0",
+    "schemaVersion": 3,
+    "windowId": "main",
+    "windowKind": "Main",
+    "surfaceKind": "KitStoreBrowse",
+    "appViewVariant": "BrowseKitsView",
+    "nativeFooterSurface": "kit_store_browse",
+    "title": "Script Kit",
+    "resolvedBounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 750,
+      "height": 480
+    },
+    "surfaceHitPoint": {
+      "x": 375,
+      "y": 240
+    },
+    "suggestedHitPoints": [
+      {
+        "semanticId": "panel:window",
+        "x": 375,
+        "y": 240,
+        "reason": "surface_center"
+      }
+    ],
+    "elements": [
+      {
+        "semanticId": "input:kit-search",
+        "type": "input",
+        "value": "",
+        "focused": true
+      },
+      {
+        "semanticId": "list:kit-results",
+        "type": "list",
+        "text": "0 items"
+      },
+      {
+        "semanticId": "footer:native:row",
+        "type": "panel",
+        "text": "native",
+        "value": "kit_store_browse",
+        "role": "footer",
+        "kind": "nativeFooterRow",
+        "selectable": false
+      },
+      {
+        "semanticId": "footer:native:run",
+        "type": "button",
+        "text": "↵ Install",
+        "value": "run",
+        "selected": false,
+        "index": 0,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "kit_store_browse",
+        "sourceName": "kit_store_browse",
+        "selectable": false
+      },
+      {
+        "semanticId": "footer:native:close",
+        "type": "button",
+        "text": "Esc Back",
+        "value": "close",
+        "selected": false,
+        "index": 1,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "kit_store_browse",
+        "sourceName": "kit_store_browse",
+        "selectable": true
+      }
+    ],
+    "totalCount": 5,
+    "focusedSemanticId": "input:kit-search",
+    "screenshotWidth": 750,
+    "screenshotHeight": 480,
+    "osWindowId": 84357,
+    "semanticQuality": "full",
+    "pid": 56958
+  },
+  "sessionLifecycle": [],
+  "errors": []
+}

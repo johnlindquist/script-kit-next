@@ -315,6 +315,23 @@ impl ScriptListApp {
             let uses_split_preview = matches!(self.main_window_mode, MainWindowMode::Full);
             let list_width = if uses_split_preview { width * 0.5 } else { width };
 
+            // Header buttons (right side)
+            // Buttons are h(28px) positioned at top of content area (after top padding)
+            let button_height = px(BUTTON_HEIGHT);
+            let button_y = px(HEADER_PADDING_Y); // Buttons at top of content area
+
+            // Buttons layout from right to left:
+            // [SearchInput flex-1] [Run ~55px] [|] [Actions ~85px] [|] [Logo 16px] [padding 16px]
+            // Spacing: gap=12 before Run, divider groups use 24px between controls.
+            let logo_size = px(16.);
+            let right_padding = px(content_padding);
+            let logo_x = width - right_padding - logo_size;
+            let actions_width = px(85.);
+            let actions_x = logo_x - px(24.) - actions_width;
+            let run_width = px(55.);
+            let run_x = actions_x - px(24.) - run_width;
+            let input_to_run_gap = px(12.);
+
             // Input field in header
             // Positioned at: px(HEADER_PADDING_X) = 16, py(HEADER_PADDING_Y) = 8
             // The input is vertically centered in the header (which has 28px content height)
@@ -322,10 +339,7 @@ impl ScriptListApp {
             const INPUT_HEIGHT: f32 = 22.0;
             let input_x = px(content_padding);
             let input_y = px(HEADER_PADDING_Y + (BUTTON_HEIGHT - INPUT_HEIGHT) / 2.0); // Vertically centered
-                                                                                       // Input takes flex-1, estimate it takes most of the header width before buttons
-                                                                                       // Buttons area is roughly: Run(50) + divider(20) + Actions(70) + divider(20) + Logo(16) + padding(16) = ~192px
-            let buttons_area_width = px(200.);
-            let input_width = width - px(content_padding) - buttons_area_width;
+            let input_width = (run_x - input_to_run_gap - input_x).max(px(0.));
 
             bounds.push(
                 ComponentBounds::new(
@@ -339,19 +353,7 @@ impl ScriptListApp {
                 .with_padding(BoxModel::symmetric(0.0, 0.0)),
             );
 
-            // Header buttons (right side)
-            // Buttons are h(28px) positioned at top of content area (after top padding)
-            let button_height = px(BUTTON_HEIGHT);
-            let button_y = px(HEADER_PADDING_Y); // Buttons at top of content area
-
-            // Buttons layout from right to left:
-            // [SearchInput flex-1] [Run ~45px] [|] [Actions ~70px] [|] [Logo 16px] [padding 16px]
-            // Spacing: gap=12, divider ~8px each side = ~20px between groups
-            let logo_size = px(16.);
-            let right_padding = px(content_padding);
-
             // Logo (Script Kit icon) - rightmost, 16x16 vertically centered in button area
-            let logo_x = width - right_padding - logo_size;
             let logo_y = px(HEADER_PADDING_Y + (BUTTON_HEIGHT - 16.0) / 2.0); // Vertically centered
             bounds.push(
                 ComponentBounds::new(
@@ -367,8 +369,6 @@ impl ScriptListApp {
 
             // Actions button - left of divider, left of logo
             // Actual button text "Actions ⌘K" is roughly 80-90px wide
-            let actions_width = px(85.);
-            let actions_x = logo_x - px(24.) - actions_width; // ~24px for divider + spacing
 
             bounds.push(
                 ComponentBounds::new(
@@ -384,8 +384,6 @@ impl ScriptListApp {
 
             // Run button - left of divider, left of Actions
             // Actual button text "Run ↵" is roughly 50-60px wide
-            let run_width = px(55.);
-            let run_x = actions_x - px(24.) - run_width; // ~24px for divider + spacing
 
             bounds.push(
                 ComponentBounds::new(

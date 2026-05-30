@@ -20,3 +20,7 @@
 {"input":{"name":"current-app"},"expected":"Resolved::CurrentAppCommands::NameAlias"}
 {"input":{"name":"current-app-commands"},"expected":"Resolved::CurrentAppCommands::NameAsCommandId"}
 {"input":{"builtinId":"builtin/current-app-commands"},"expected":"Resolved::CurrentAppCommands::BuiltinIdField"}
+{"input":{"name":"kit-store"},"expected":"Resolved::BrowseKitStore::NameAlias"}
+{"input":{"builtinId":"builtin/browse-kit-store"},"expected":"Resolved::BrowseKitStore::BuiltinIdField"}
+{"input":{"name":"installed-kits"},"expected":"Resolved::ManageInstalledKits::NameAlias"}
+{"input":{"builtinId":"builtin/manage-installed-kits"},"expected":"Resolved::ManageInstalledKits::BuiltinIdField"}
