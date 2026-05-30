@@ -28,7 +28,13 @@ const MAIN_WINDOW_MIN_HEIGHT: f32 = 480.0;
 const MAIN_WINDOW_MAX_HEIGHT: f32 = 480.0;
 const MAIN_WINDOW_HEADER_HEIGHT: f32 =
     crate::panel::HEADER_TOTAL_HEIGHT - crate::panel::HEADER_DIVIDER_HEIGHT;
-const MAIN_WINDOW_HINT_STRIP_HEIGHT: f32 = 30.0;
+// Main-window footer (hint strip) height. Raised 30 -> 36 to give the footer
+// action buttons more vertical breathing room (button height = footer - 2*inset,
+// so 26 -> 32; the 22pt keycaps now sit with ~5pt above/below instead of ~2pt).
+// The window stays fixed at 480pt: this height is SUBTRACTED from the list budget
+// (see `main_window_list_budget_height`), so it costs list space, not window growth.
+// Row math stays at the 9-row cap: budget 480-44-1-36=399 -> floor(399/40)=9.
+const MAIN_WINDOW_HINT_STRIP_HEIGHT: f32 = 36.0;
 const MAIN_WINDOW_DIVIDER_HEIGHT: f32 = crate::panel::HEADER_DIVIDER_HEIGHT;
 const MAIN_WINDOW_SECTION_HEADER_HEIGHT: f32 = 32.0;
 pub(crate) const MAIN_WINDOW_MAX_VISIBLE_ROWS: usize = 9;

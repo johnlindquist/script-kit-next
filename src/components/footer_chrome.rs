@@ -10,7 +10,12 @@ use crate::ui_foundation::HexColorExt;
 
 pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.0;
 pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.14;
-pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight(560.0);
+// Footer action/keycap text weight. Lowered 560 -> 500 (Medium) so the footer
+// buttons no longer read as bold/semibold. Apple's macOS type system uses Regular
+// for ordinary control labels and reserves Semibold for emphasis; Medium keeps the
+// hints legible over the translucent Liquid Glass footer without the bold look.
+// Roughly matches the non-bold AppKit weight trait (0.14) used by the native footer.
+pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight(500.0);
 pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 22.0;
 pub(crate) const FOOTER_KEYCAP_PADDING_X_PX: f32 = 5.0;
 pub(crate) const FOOTER_KEYCAP_RADIUS_PX: f32 = 6.0;
