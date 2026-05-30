@@ -605,6 +605,10 @@
           <time>2026-05-29 22:22 MDT</time>
           <p>Completed the Feedback window/container proof slice. Added deterministic <code>openCreationFeedback</code>, fixed <code>CreationFeedback</code> sizing from compact input-only to standard-height <code>DivPrompt</code>, added Feedback-specific layout geometry, moved shared button radius/border to 10px/1px Liquid Glass tokens, captured before/after screenshots, generated <code>image-diff-window-priority-feedback-before-to-after.json</code>, and regenerated the proof matrix. Feedback now has strong proof; the platform/windowing batch is strong. Shared <code>dev-watch</code> kept relaunching from stale <code>target/debug</code> and panicking on debug panel invariants, so the final visual proof used staged session <code>liquid-feedback</code>.</p>
         </div>
+        <div class="entry">
+          <time>2026-05-29 22:30 MDT</time>
+          <p>Added ConfirmPrompt DevTools coverage for the launcher main-actions batch. The new <code>openConfirmPrompt</code> fixture exposes a deterministic in-window confirm surface, <code>getLayoutInfo</code> now reports content, stack, title, body, footer, and footer-button Liquid Glass metrics, and <code>getElements</code> exposes confirm/cancel footer actions. Generated <code>window-priority-confirm-layout-after.json</code>, <code>window-priority-confirm-elements-after.json</code>, <code>window-priority-confirm-target-inspect-after.json</code>, and refreshed the proof matrix. ConfirmPrompt is now numeric-proof coverage; screenshot/image-diff proof remains partial because strict capture hit the recorded macOS window-capture blocker.</p>
+        </div>
       </div>
     </section>
   </main>

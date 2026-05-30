@@ -5,16 +5,16 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T04:15:22.274Z",
+  "generatedAt": "2026-05-30T04:26:06.082Z",
   "summary": {
     "surfaceCount": 29,
     "strongProofSurfaceCount": 4,
-    "partialProofSurfaceCount": 0,
-    "missingProofSurfaceCount": 25,
+    "partialProofSurfaceCount": 1,
+    "missingProofSurfaceCount": 24,
     "batchCount": 8,
     "strongProofBatchCount": 1,
-    "partialProofBatchCount": 2,
-    "missingProofBatchCount": 5
+    "partialProofBatchCount": 3,
+    "missingProofBatchCount": 4
   },
   "batches": [
     {
@@ -71,8 +71,8 @@
       ],
       "proofStatus": "partial-proof",
       "provenSurfaceCount": 2,
-      "partialSurfaceCount": 0,
-      "missingSurfaceCount": 1,
+      "partialSurfaceCount": 1,
+      "missingSurfaceCount": 0,
       "surfaceStatuses": [
         {
           "surfaceKind": "ScriptList",
@@ -84,7 +84,7 @@
         },
         {
           "surfaceKind": "ConfirmPrompt",
-          "proofStatus": "missing-proof"
+          "proofStatus": "numeric-proof-no-image-diff"
         }
       ]
     },
@@ -111,10 +111,10 @@
         "devtools.measure.selection",
         "devtools.act.safeSubmit"
       ],
-      "proofStatus": "missing-proof",
+      "proofStatus": "partial-proof",
       "provenSurfaceCount": 0,
-      "partialSurfaceCount": 0,
-      "missingSurfaceCount": 6,
+      "partialSurfaceCount": 1,
+      "missingSurfaceCount": 5,
       "surfaceStatuses": [
         {
           "surfaceKind": "PromptEntity",
@@ -138,7 +138,7 @@
         },
         {
           "surfaceKind": "ConfirmPrompt",
-          "proofStatus": "missing-proof"
+          "proofStatus": "numeric-proof-no-image-diff"
         }
       ]
     },
@@ -1351,19 +1351,34 @@
       ],
       "automationSemanticSurface": "confirmPrompt",
       "coverageAliases": [],
-      "proofStatus": "missing-proof",
+      "proofStatus": "numeric-proof-no-image-diff",
       "requiredEvidence": {
-        "screenshot": false,
-        "numericLayout": false,
-        "imageDiff": false,
+        "screenshot": true,
+        "numericLayout": true,
+        "imageDiff": true,
         "visualAudit": false
       },
       "visualAudit": null,
       "evidence": {
-        "screenshots": [],
-        "layoutReceipts": [],
-        "inspectReceipts": [],
-        "imageDiffReceipts": [],
+        "screenshots": [
+          "artifacts/liquid-glass/screenshots/window-priority-confirm-before.png"
+        ],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-confirm-layout-after.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/image-diff-window-priority-confirm-before-to-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-confirm-elements-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-confirm-isolated-build.json",
+          "artifacts/liquid-glass/receipts/window-priority-confirm-layout-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-confirm-open-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-confirm-screenshot-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-confirm-show-before-capture.json",
+          "artifacts/liquid-glass/receipts/window-priority-confirm-target-inspect-after.json"
+        ],
+        "imageDiffReceipts": [
+          "artifacts/liquid-glass/receipts/image-diff-window-priority-confirm-before-to-after.json"
+        ],
         "diffMasks": [],
         "visualAudit": null,
         "notes": []
@@ -1626,7 +1641,7 @@
     }
   ],
   "warnings": [
-    "25 contract surfaces still lack proof artifacts",
+    "24 contract surfaces still lack proof artifacts",
     "strong-proof means current artifacts include screenshot, numeric layout visualAudit, and image diff evidence; it is not an Apple conformance claim by itself"
   ],
   "errors": []
