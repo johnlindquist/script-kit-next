@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 3,
+  "status": "error",
+  "label": "tahoe-native-capture-smoke",
+  "timestamp": "2026-05-30T07:49:30.585Z",
+  "durationMs": 6306,
+  "requiresVisionReview": false,
+  "resolvedTarget": null,
+  "captureRouting": "cli-window-id",
+  "requestedAutomationWindowId": null,
+  "requestedOsWindowId": 84616,
+  "showIssuedBeforeCapture": true,
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-capture-smoke.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowId": null
+  },
+  "captureTarget": {
+    "requestedWindowId": 84616,
+    "actualWindowId": null
+  },
+  "inspection": null,
+  "popupCapture": null,
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": false,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-capture-smoke.png",
+    "sizeBytes": null,
+    "width": null,
+    "height": null,
+    "contentAudit": null,
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowFrontmost": null,
+    "windowFocused": null,
+    "windowId": null,
+    "error": "Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T07:49:28.947Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-capture-smoke.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84616}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T07:49:28.947Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T07:49:29.568Z\",\"attempt\":1,\"windowId\":84094}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T07:49:29.656Z\",\"attempt\":1,\"windowId\":84616,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T07:49:29.858Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-capture-smoke.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84616}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T07:49:29.858Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T07:49:30.495Z\",\"attempt\":1,\"windowId\":84094}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T07:49:30.584Z\",\"attempt\":2,\"windowId\":84616,\"exitCode\":1,\"stderr\":\"could not create image from window\"}"
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: FAILED (Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T07:49:28.947Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-capture-smoke.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84616}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T07:49:28.947Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T07:49:29.568Z\",\"attempt\":1,\"windowId\":84094}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T07:49:29.656Z\",\"attempt\":1,\"windowId\":84616,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T07:49:29.858Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-capture-smoke.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84616}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T07:49:29.858Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T07:49:30.495Z\",\"attempt\":1,\"windowId\":84094}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T07:49:30.584Z\",\"attempt\":2,\"windowId\":84616,\"exitCode\":1,\"stderr\":\"could not create image from window\"})"
+}

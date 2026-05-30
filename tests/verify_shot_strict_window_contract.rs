@@ -56,6 +56,27 @@ fn strict_window_cannot_use_runtime_capture_fallback() {
 }
 
 #[test]
+fn strict_window_prefers_exact_native_mcp_capture_before_screencapture() {
+    let native_route = VERIFY_SHOT
+        .find("captureNativeWindowViaMcp")
+        .expect("verify-shot must have a native MCP capture helper");
+    let window_helper = VERIFY_SHOT
+        .find("scripts/agentic/window.ts")
+        .expect("verify-shot must keep the window.ts fallback");
+
+    assert!(
+        native_route < window_helper,
+        "exact native MCP capture should be attempted before the screencapture/window.ts path"
+    );
+    assert!(
+        VERIFY_SHOT.contains("computer/capture_native_window")
+            && VERIFY_SHOT.contains("native-window-mcp")
+            && VERIFY_SHOT.contains("native-xcap"),
+        "native capture receipts must preserve route and method identity"
+    );
+}
+
+#[test]
 fn strict_window_keeps_blank_png_audit_as_infra_failure() {
     assert!(
         VERIFY_SHOT.contains("contentAudit.blank"),

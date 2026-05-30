@@ -62,7 +62,7 @@
  *   2 = infrastructure error (session dead, capture failed, etc.)
  */
 
-import { existsSync, mkdirSync, readFileSync, statSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import { inflateSync } from "node:zlib";
 
@@ -81,6 +81,7 @@ interface CaptureTarget {
 type CaptureRouting =
   | "cli-window-id"
   | "inspection-os-window-id"
+  | "native-window-mcp"
   | "runtime-capture-window"
   | "generic-frontmost";
 
@@ -199,8 +200,12 @@ interface ScreenshotResult {
   width: number | null;
   height: number | null;
   contentAudit: ScreenshotContentAudit | null;
-  captureMethod: "window.ts" | "captureWindow" | null;
-  windowCaptureMethod: "quartz" | "screencapture" | null;
+  captureMethod:
+    | "computer/capture_native_window"
+    | "window.ts"
+    | "captureWindow"
+    | null;
+  windowCaptureMethod: "native-xcap" | "quartz" | "screencapture" | null;
   windowFrontmost: boolean | null;
   windowFocused: boolean | null;
   windowId: number | null;
@@ -308,6 +313,122 @@ async function sendSessionCommand(
   const stderr = await new Response(proc.stderr).text();
   const code = await proc.exited;
   return { ok: code === 0, stdout: stdout.trim(), stderr: stderr.trim() };
+}
+
+function readMcpServer(): { endpoint: string; token: string } | null {
+  const serverPath = `${process.env.HOME}/.scriptkit/server.json`;
+  if (!existsSync(serverPath)) return null;
+
+  try {
+    const parsed = JSON.parse(readFileSync(serverPath, "utf8"));
+    const token =
+      parsed.token ??
+      readFileSync(`${process.env.HOME}/.scriptkit/agent-token`, "utf8").trim();
+    const baseUrl = String(
+      parsed.url ?? `http://127.0.0.1:${parsed.port ?? 43210}`
+    ).replace("http://localhost:", "http://127.0.0.1:");
+    return {
+      endpoint: baseUrl.endsWith("/rpc") ? baseUrl : `${baseUrl.replace(/\/$/, "")}/rpc`,
+      token,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function callMcpTool(
+  name: string,
+  args: Record<string, unknown>
+): Promise<Record<string, any>> {
+  const server = readMcpServer();
+  if (!server) {
+    throw new Error("MCP discovery file is unavailable");
+  }
+
+  const response = await fetch(server.endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${server.token}`,
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: `verify-shot-native-capture-${Date.now()}-${Math.random()}`,
+      method: "tools/call",
+      params: { name, arguments: args },
+    }),
+  });
+
+  const json = await response.json();
+  if (json.error) {
+    throw new Error(JSON.stringify(json.error));
+  }
+  const text = json.result?.content?.find(
+    (item: Record<string, unknown>) => item.type === "text"
+  )?.text;
+  if (typeof text !== "string" || text.length === 0) {
+    throw new Error(`MCP tool ${name} returned no text content`);
+  }
+  return JSON.parse(text);
+}
+
+async function captureNativeWindowViaMcp(
+  nativeWindowId: number,
+  outPath: string
+): Promise<{
+  windowId: number;
+  frontmost: boolean | null;
+  focused: boolean | null;
+  sizeBytes: number;
+} | null> {
+  const list = await callMcpTool("computer/list_native_windows", {
+    includeHidden: true,
+    includeBackground: true,
+  });
+
+  const rows: Array<{ app: Record<string, any>; window: Record<string, any> }> =
+    [];
+  for (const appEntry of list.apps ?? []) {
+    const app = appEntry.app ?? appEntry;
+    for (const window of appEntry.windows ?? []) {
+      if (window.nativeWindowId === nativeWindowId) {
+        rows.push({ app, window });
+      }
+    }
+  }
+
+  const selected =
+    rows.find(
+      ({ window }) =>
+        window.observation?.captureSelectionCandidate?.status === "candidate"
+    ) ?? rows[0];
+  if (!selected) {
+    throw new Error(
+      `Native window ${nativeWindowId} was not listed by computer/list_native_windows`
+    );
+  }
+
+  const capture = await callMcpTool("computer/capture_native_window", {
+    pid: selected.app.pid,
+    nativeWindowId,
+    expectedBundleId: selected.app.bundleId,
+    includeImage: true,
+    hiDpi: false,
+  });
+  if (capture.status !== "captured" || !capture.capture?.pngBase64) {
+    throw new Error(
+      `computer/capture_native_window did not return image data: status=${capture.status ?? "unknown"} error=${capture.error?.code ?? "none"}`
+    );
+  }
+
+  const decoded = Buffer.from(capture.capture.pngBase64, "base64");
+  writeFileSync(outPath, decoded);
+  return {
+    windowId: nativeWindowId,
+    frontmost: selected.window.observation?.frontmost ?? null,
+    focused: selected.window.observation?.focused ?? null,
+    sizeBytes: decoded.byteLength,
+  };
 }
 
 async function queryAcpState(
@@ -768,8 +889,12 @@ async function captureScreenshot(
   targetJson?: Record<string, unknown>,
   captureWindowId?: number
 ): Promise<{ result: ScreenshotResult; plan: CapturePlan }> {
-  let captureMethod: "window.ts" | "captureWindow" | null = null;
-  let windowCaptureMethod: "quartz" | "screencapture" | null = null;
+  let captureMethod:
+    | "computer/capture_native_window"
+    | "window.ts"
+    | "captureWindow"
+    | null = null;
+  let windowCaptureMethod: "native-xcap" | "quartz" | "screencapture" | null = null;
   let windowFrontmost: boolean | null = null;
   let windowFocused: boolean | null = null;
   let windowId: number | null = null;
@@ -911,35 +1036,65 @@ async function captureScreenshot(
     await Bun.sleep(500);
   }
 
-  // Use the window.ts helper for reliable capture
-  const windowScript = join(PROJECT_ROOT, "scripts/agentic/window.ts");
-  const captureArgs = [
-    "bun",
-    windowScript,
-    "capture",
-    outPath,
-    "--activate-first",
-    "--retry",
-    "2",
-    "--settle-ms",
-    "200",
-  ];
-  // Thread exact window ID when provided
-  if (requestedOsWindowId && requestedOsWindowId > 0) {
-    captureArgs.push("--window-id", String(requestedOsWindowId));
-  }
-  const proc = Bun.spawn(
-    captureArgs,
-    {
-      stdout: "pipe",
-      stderr: "pipe",
+  if (requestedOsWindowId != null && requestedOsWindowId > 0) {
+    try {
+      const nativeCapture = await captureNativeWindowViaMcp(
+        requestedOsWindowId,
+        outPath
+      );
+      if (nativeCapture) {
+        captureRouting = "native-window-mcp";
+        captureMethod = "computer/capture_native_window";
+        windowCaptureMethod = "native-xcap";
+        windowFrontmost = nativeCapture.frontmost;
+        windowFocused = nativeCapture.focused;
+        windowId = nativeCapture.windowId;
+      }
+    } catch (error) {
+      diag("verify_shot_native_capture_fallback", {
+        label,
+        requestedOsWindowId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
-  );
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-  const code = await proc.exited;
+  }
 
-  if (code === 0) {
+  // Use the window.ts helper for reliable capture
+  let stdout = "";
+  let stderr = "";
+  let code = captureMethod === "computer/capture_native_window" ? 0 : 1;
+  if (captureMethod !== "computer/capture_native_window") {
+    const windowScript = join(PROJECT_ROOT, "scripts/agentic/window.ts");
+    const captureArgs = [
+      "bun",
+      windowScript,
+      "capture",
+      outPath,
+      "--activate-first",
+      "--retry",
+      "2",
+      "--settle-ms",
+      "200",
+    ];
+    // Thread exact window ID when provided
+    if (requestedOsWindowId && requestedOsWindowId > 0) {
+      captureArgs.push("--window-id", String(requestedOsWindowId));
+    }
+    const proc = Bun.spawn(
+      captureArgs,
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+      }
+    );
+    stdout = await new Response(proc.stdout).text();
+    stderr = await new Response(proc.stderr).text();
+    code = await proc.exited;
+  }
+
+  if (captureMethod === "computer/capture_native_window") {
+    // Exact native capture already wrote outPath and populated identity fields.
+  } else if (code === 0) {
     captureMethod = "window.ts";
     try {
       const envelope = JSON.parse(stdout) as {
@@ -1044,8 +1199,8 @@ async function captureScreenshot(
   // Strict window proof: require quartz method, frontmost, and valid windowId
   if (
     strictWindowProof &&
-    (windowCaptureMethod !== "quartz" ||
-      windowFrontmost !== true ||
+    ((windowCaptureMethod !== "quartz" && windowCaptureMethod !== "native-xcap") ||
+      (windowCaptureMethod !== "native-xcap" && windowFrontmost !== true) ||
       windowId == null ||
       windowId <= 0)
   ) {

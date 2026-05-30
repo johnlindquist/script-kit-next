@@ -443,6 +443,14 @@ fn window_capture_selection_candidate_v1(
     window: &WindowCaptureSelectionObservationInputV1,
 ) -> WindowCaptureSelectionCandidateV1 {
     let reason = match window.capture_candidate_status {
+        WindowCaptureCandidateStatus::Disqualified
+            if window.capture_candidate_reason
+                == Some(WindowDisqualificationReason::LayerNonZero)
+                && window.own_process_window_policy_status
+                    == Some(WindowOwnProcessPolicyStatus::IncludedInWindowsMenu) =>
+        {
+            window_capture_selection_reason_after_base_candidate(window)
+        }
         WindowCaptureCandidateStatus::Disqualified => window
             .capture_candidate_reason
             .clone()
@@ -454,29 +462,7 @@ fn window_capture_selection_candidate_v1(
             Some(WindowCaptureSelectionDisqualificationReason::MetadataIncomplete)
         }
         WindowCaptureCandidateStatus::Candidate => {
-            if window.duplicate_group_status == Some(WindowDuplicateGroupStatus::Duplicate) {
-                Some(WindowCaptureSelectionDisqualificationReason::DuplicateWindow)
-            } else if window.title_fallback_status
-                == Some(WindowTitleFallbackStatus::EmptyTitleAmongMultipleCandidates)
-            {
-                Some(
-                    WindowCaptureSelectionDisqualificationReason::EmptyTitleAmongMultipleCandidates,
-                )
-            } else if window.own_process_window_policy_status
-                == Some(WindowOwnProcessPolicyStatus::ExcludedFromWindowsMenu)
-            {
-                Some(
-                    WindowCaptureSelectionDisqualificationReason::OwnProcessExcludedFromWindowsMenu,
-                )
-            } else if window.own_process_window_policy_status
-                == Some(WindowOwnProcessPolicyStatus::Unknown)
-            {
-                Some(WindowCaptureSelectionDisqualificationReason::OwnProcessPolicyUnknown)
-            } else if window.title_fallback_status.is_none() {
-                Some(WindowCaptureSelectionDisqualificationReason::SelectionMetadataIncomplete)
-            } else {
-                None
-            }
+            window_capture_selection_reason_after_base_candidate(window)
         }
     };
 
@@ -495,6 +481,29 @@ fn window_capture_selection_candidate_v1(
         reason,
         selection_basis:
             WindowCaptureSelectionBasis::CaptureCandidateThenPreferredDuplicateThenTitleFallbackThenOwnProcessPolicy,
+    }
+}
+
+fn window_capture_selection_reason_after_base_candidate(
+    window: &WindowCaptureSelectionObservationInputV1,
+) -> Option<WindowCaptureSelectionDisqualificationReason> {
+    if window.duplicate_group_status == Some(WindowDuplicateGroupStatus::Duplicate) {
+        Some(WindowCaptureSelectionDisqualificationReason::DuplicateWindow)
+    } else if window.title_fallback_status
+        == Some(WindowTitleFallbackStatus::EmptyTitleAmongMultipleCandidates)
+    {
+        Some(WindowCaptureSelectionDisqualificationReason::EmptyTitleAmongMultipleCandidates)
+    } else if window.own_process_window_policy_status
+        == Some(WindowOwnProcessPolicyStatus::ExcludedFromWindowsMenu)
+    {
+        Some(WindowCaptureSelectionDisqualificationReason::OwnProcessExcludedFromWindowsMenu)
+    } else if window.own_process_window_policy_status == Some(WindowOwnProcessPolicyStatus::Unknown)
+    {
+        Some(WindowCaptureSelectionDisqualificationReason::OwnProcessPolicyUnknown)
+    } else if window.title_fallback_status.is_none() {
+        Some(WindowCaptureSelectionDisqualificationReason::SelectionMetadataIncomplete)
+    } else {
+        None
     }
 }
 
@@ -898,6 +907,43 @@ mod tests {
             );
             assert_eq!(candidates[0].reason, Some(selection_reason));
         }
+    }
+
+    #[test]
+    fn window_capture_selection_candidate_allows_own_process_panel_layer() {
+        let candidates = window_capture_selection_candidates_v1(&[capture_selection_input(
+            WindowCaptureCandidateStatus::Disqualified,
+            Some(WindowDisqualificationReason::LayerNonZero),
+            None,
+            Some(WindowTitleFallbackStatus::EmptyTitleSoleCandidate),
+            Some(WindowOwnProcessPolicyStatus::IncludedInWindowsMenu),
+        )]);
+
+        assert_eq!(
+            candidates[0].status,
+            WindowCaptureSelectionCandidateStatus::Candidate
+        );
+        assert_eq!(candidates[0].reason, None);
+    }
+
+    #[test]
+    fn window_capture_selection_candidate_keeps_third_party_panel_layer_rejected() {
+        let candidates = window_capture_selection_candidates_v1(&[capture_selection_input(
+            WindowCaptureCandidateStatus::Disqualified,
+            Some(WindowDisqualificationReason::LayerNonZero),
+            None,
+            Some(WindowTitleFallbackStatus::EmptyTitleSoleCandidate),
+            None,
+        )]);
+
+        assert_eq!(
+            candidates[0].status,
+            WindowCaptureSelectionCandidateStatus::Disqualified
+        );
+        assert_eq!(
+            candidates[0].reason,
+            Some(WindowCaptureSelectionDisqualificationReason::LayerNonZero)
+        );
     }
 
     #[test]
