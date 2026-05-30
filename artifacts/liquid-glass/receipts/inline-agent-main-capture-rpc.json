@@ -1,0 +1,1 @@
+{"schemaVersion":1,"status":"error","session":"liquid-glass-inline-next","requestId":"inline-agent-main-capture","error":{"code":"response_timeout","message":"No response matching requestId 'inline-agent-main-capture' and type 'screenshotResult' within 8000ms"}}

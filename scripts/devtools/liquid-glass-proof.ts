@@ -198,6 +198,10 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/notes-next-layout.json`,
       ]);
+    } else if (target.id === "inline-agent") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/inline-agent-main-layout.json`,
+      ]);
     }
     const dictationMedia = target.id === "dictation"
       ? await readJsonIfExists(`${RECEIPT_ROOT}/dictation-next-post-delivery-media.json`)
@@ -208,7 +212,9 @@ async function main() {
     const baseStatus = classify(evidence);
     const proofStatus = target.id === "dictation" && dictationMedia
       ? "media-proof-missing-visual"
-      : baseStatus;
+      : target.id === "inline-agent" && evidence.visualAudit && evidence.layoutReceipts.length > 0
+        ? "numeric-proof-missing-visual-capture"
+        : baseStatus;
     return {
       id: target.id,
       proofStatus,

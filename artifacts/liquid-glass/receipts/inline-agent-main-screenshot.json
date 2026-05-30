@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 3,
+  "status": "error",
+  "label": "inline-agent-main",
+  "timestamp": "2026-05-30T03:13:45.184Z",
+  "durationMs": 2324,
+  "requiresVisionReview": false,
+  "resolvedTarget": null,
+  "captureRouting": "cli-window-id",
+  "requestedAutomationWindowId": null,
+  "requestedOsWindowId": 83497,
+  "showIssuedBeforeCapture": true,
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/inline-agent-main.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowId": null
+  },
+  "captureTarget": {
+    "requestedWindowId": 83497,
+    "actualWindowId": null
+  },
+  "inspection": null,
+  "popupCapture": null,
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": false,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/inline-agent-main.png",
+    "sizeBytes": null,
+    "width": null,
+    "height": null,
+    "contentAudit": null,
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowFrontmost": null,
+    "windowFocused": null,
+    "windowId": null,
+    "error": "Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T03:13:43.415Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/inline-agent-main.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":83497}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T03:13:43.416Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T03:13:44.144Z\",\"attempt\":1,\"windowId\":83497}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T03:13:44.237Z\",\"attempt\":1,\"windowId\":83497,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T03:13:44.445Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/inline-agent-main.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":83497}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T03:13:44.445Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T03:13:45.101Z\",\"attempt\":1,\"windowId\":83497}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T03:13:45.183Z\",\"attempt\":2,\"windowId\":83497,\"exitCode\":1,\"stderr\":\"could not create image from window\"}"
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: FAILED (Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T03:13:43.415Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/inline-agent-main.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":83497}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T03:13:43.416Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T03:13:44.144Z\",\"attempt\":1,\"windowId\":83497}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T03:13:44.237Z\",\"attempt\":1,\"windowId\":83497,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T03:13:44.445Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/inline-agent-main.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":83497}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T03:13:44.445Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T03:13:45.101Z\",\"attempt\":1,\"windowId\":83497}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T03:13:45.183Z\",\"attempt\":2,\"windowId\":83497,\"exitCode\":1,\"stderr\":\"could not create image from window\"})"
+}

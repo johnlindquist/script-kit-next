@@ -5,7 +5,7 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T03:08:47.512Z",
+  "generatedAt": "2026-05-30T03:16:18.089Z",
   "summary": {
     "surfaceCount": 31,
     "strongProofSurfaceCount": 2,
@@ -492,6 +492,7 @@
           "artifacts/liquid-glass/receipts/before-main-layout.json",
           "artifacts/liquid-glass/receipts/compare-main-layout-visual-style.json",
           "artifacts/liquid-glass/receipts/compare-tahoe-next-main-layout.json",
+          "artifacts/liquid-glass/receipts/inline-agent-main-layout.json",
           "artifacts/liquid-glass/receipts/tahoe-next-main-layout.json"
         ],
         "inspectReceipts": [
@@ -500,6 +501,7 @@
           "artifacts/liquid-glass/receipts/after-main-only-window-inspect.json",
           "artifacts/liquid-glass/receipts/after-main-window-inspect.json",
           "artifacts/liquid-glass/receipts/before-main-inspect.json",
+          "artifacts/liquid-glass/receipts/inline-agent-main-target-inspect.json",
           "artifacts/liquid-glass/receipts/tahoe-next-main-inspect.json",
           "artifacts/liquid-glass/receipts/tahoe-next-main-window-inspect.json"
         ],
@@ -1489,12 +1491,12 @@
     },
     {
       "id": "inline-agent",
-      "proofStatus": "missing-proof",
+      "proofStatus": "numeric-proof-missing-visual-capture",
       "requiredEvidence": {
         "screenshot": false,
-        "numericLayout": false,
+        "numericLayout": true,
         "imageDiff": false,
-        "visualAudit": false,
+        "visualAudit": true,
         "mediaProof": false,
         "syntheticDelivery": false
       },
@@ -1502,12 +1504,33 @@
       "syntheticDelivery": null,
       "evidence": {
         "screenshots": [],
-        "layoutReceipts": [],
-        "inspectReceipts": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/inline-agent-main-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/inline-agent-ai-target-inspect.json",
+          "artifacts/liquid-glass/receipts/inline-agent-capture-window-allowed-send.json",
+          "artifacts/liquid-glass/receipts/inline-agent-capture-window-send.json",
+          "artifacts/liquid-glass/receipts/inline-agent-main-target-inspect.json",
+          "artifacts/liquid-glass/receipts/inline-agent-target-inspect.json"
+        ],
         "imageDiffReceipts": [],
         "diffMasks": [],
-        "visualAudit": null,
-        "notes": []
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 9,
+            "functionalChrome": 5
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/inline-agent-main-layout.json"
+        ]
       }
     },
     {

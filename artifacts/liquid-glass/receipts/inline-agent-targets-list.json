@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.list",
+  "session": "liquid-glass-inline-next",
+  "classification": "blocked-by-timeout",
+  "targetCount": 0,
+  "targets": [],
+  "sessionLifecycle": [],
+  "errors": [
+    {
+      "status": "error",
+      "label": "listAutomationWindows",
+      "exitCode": 1,
+      "stdout": "{\"schemaVersion\":1,\"status\":\"error\",\"session\":\"liquid-glass-inline-next\",\"requestId\":\"devtools-targets-list-1780110635925-87bad7\",\"error\":{\"code\":\"response_timeout\",\"message\":\"No response matching requestId 'devtools-targets-list-1780110635925-87bad7' and type 'automationWindowListResult' within 20000ms\"}}",
+      "stderr": "",
+      "parsedError": {
+        "schemaVersion": 1,
+        "status": "error",
+        "session": "liquid-glass-inline-next",
+        "requestId": "devtools-targets-list-1780110635925-87bad7",
+        "error": {
+          "code": "response_timeout",
+          "message": "No response matching requestId 'devtools-targets-list-1780110635925-87bad7' and type 'automationWindowListResult' within 20000ms"
+        }
+      },
+      "lifecycle": null
+    }
+  ]
+}
