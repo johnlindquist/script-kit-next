@@ -206,6 +206,8 @@ async function main() {
     KitStoreInstalled: ["kit-store-installed", "kitstoreinstalled"],
     EmojiPicker: ["emoji", "emoji-picker", "emojipicker"],
     ThemeChooser: ["theme", "choose-theme", "theme-chooser", "themechooser"],
+    FileSearchMini: ["file-search-mini"],
+    FileSearchFull: ["file-search-full"],
     NotesWindow: ["notes"],
     Dictation: ["dictation"],
   };
@@ -286,6 +288,14 @@ async function main() {
     } else if (surfaceKind === "AcpHistory") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-acp-history-current-layout.json`,
+      ]);
+    } else if (surfaceKind === "FileSearchMini") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-file-search-mini-current-layout.json`,
+      ]);
+    } else if (surfaceKind === "FileSearchFull") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-file-search-full-current-layout.json`,
       ]);
     } else if (surfaceKind === "EmojiPicker") {
       await attachVisualAudit(evidence, [

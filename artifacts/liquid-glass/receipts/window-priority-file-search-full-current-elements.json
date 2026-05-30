@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.elements",
+  "command": "elements.snapshot",
+  "classification": "ok",
+  "session": "liquid-file-search-current",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "FileSearchFull"
+  },
+  "target": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "FileSearchFull",
+    "appViewVariant": "FileSearchView",
+    "nativeFooterSurface": "file_search",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 750,
+      "height": 480,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 11615,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "semanticSurface": {
+    "surfaceKind": "FileSearchFull",
+    "appViewVariant": "FileSearchView"
+  },
+  "totalCount": 5,
+  "returnedCount": 5,
+  "truncated": false,
+  "focusedSemanticId": "input:file-search-input",
+  "selectedSemanticId": null,
+  "duplicateSemanticIds": [],
+  "missingPrimitives": [
+    "elementBounds"
+  ],
+  "nodes": [
+    {
+      "semanticId": "input:file-search-input",
+      "role": "input",
+      "type": "input",
+      "label": "",
+      "text": null,
+      "value": "",
+      "selected": null,
+      "focused": true,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "input:file-search-input",
+        "type": "input",
+        "value": "",
+        "focused": true
+      }
+    },
+    {
+      "semanticId": "list:file-results",
+      "role": "list",
+      "type": "list",
+      "label": "0 items",
+      "text": "0 items",
+      "value": null,
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "list:file-results",
+        "type": "list",
+        "text": "0 items"
+      }
+    },
+    {
+      "semanticId": "footer:native:row",
+      "role": "footer",
+      "type": "panel",
+      "label": "native",
+      "text": "native",
+      "value": "file_search",
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:native:row",
+        "type": "panel",
+        "text": "native",
+        "value": "file_search",
+        "role": "footer",
+        "kind": "nativeFooterRow",
+        "selectable": false
+      }
+    },
+    {
+      "semanticId": "footer:native:run",
+      "role": "footer",
+      "type": "button",
+      "label": "↵ Run",
+      "text": "↵ Run",
+      "value": "run",
+      "selected": false,
+      "focused": null,
+      "index": 0,
+      "owner": "file_search",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:native:run",
+        "type": "button",
+        "text": "↵ Run",
+        "value": "run",
+        "selected": false,
+        "index": 0,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "file_search",
+        "sourceName": "file_search",
+        "selectable": true
+      }
+    },
+    {
+      "semanticId": "footer:native:actions",
+      "role": "footer",
+      "type": "button",
+      "label": "⌘K Actions",
+      "text": "⌘K Actions",
+      "value": "actions",
+      "selected": false,
+      "focused": null,
+      "index": 1,
+      "owner": "file_search",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:native:actions",
+        "type": "button",
+        "text": "⌘K Actions",
+        "value": "actions",
+        "selected": false,
+        "index": 1,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "file_search",
+        "sourceName": "file_search",
+        "selectable": true
+      }
+    }
+  ],
+  "warnings": [
+    "getElements does not expose bounds yet; use devtools.layout.measure for geometry."
+  ],
+  "errors": []
+}
