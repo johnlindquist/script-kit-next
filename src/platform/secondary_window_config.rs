@@ -56,6 +56,8 @@ unsafe fn configure_window_vibrancy_common(
         );
     }
 
+    configure_tahoe_liquid_glass_background(window, log_target, window_name);
+
     let appearance_name = if is_dark {
         "VibrantDark"
     } else {
@@ -85,6 +87,132 @@ fn current_window_material_name(material: crate::theme::VibrancyMaterial) -> &'s
         crate::theme::VibrancyMaterial::Sidebar => "SIDEBAR",
         crate::theme::VibrancyMaterial::Content => "CONTENT_BACKGROUND",
     }
+}
+
+#[cfg(target_os = "macos")]
+fn tahoe_liquid_glass_class() -> Option<id> {
+    // NSGlassEffectView is the AppKit Liquid Glass API introduced in macOS 26
+    // Tahoe, so class availability is the capability gate.
+    #[link(name = "Foundation", kind = "framework")]
+    extern "C" {
+        fn NSClassFromString(a_class_name: id) -> id;
+    }
+
+    let glass_class_name: id = unsafe {
+        msg_send![class!(NSString), stringWithUTF8String: c"NSGlassEffectView".as_ptr()]
+    };
+    let glass_class = if glass_class_name.is_null() {
+        cocoa::base::nil
+    } else {
+        unsafe { NSClassFromString(glass_class_name) }
+    };
+    if glass_class.is_null() {
+        None
+    } else {
+        Some(glass_class)
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn find_existing_liquid_glass_background(content_view: id, glass_class: id) -> Option<id> {
+    let subviews: id = msg_send![content_view, subviews];
+    if subviews.is_null() {
+        return None;
+    }
+
+    let subview_count: usize = msg_send![subviews, count];
+    for i in 0..subview_count {
+        let subview: id = msg_send![subviews, objectAtIndex: i];
+        if subview.is_null() {
+            continue;
+        }
+        let is_glass: bool = msg_send![subview, isKindOfClass: glass_class];
+        if is_glass {
+            return Some(subview);
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn liquid_glass_tint_color() -> id {
+    let theme = crate::theme::get_cached_theme();
+    let rgba = crate::ui_foundation::main_window_matched_background_rgba(&theme);
+    let red = ((rgba >> 24) & 0xff) as f64 / 255.0;
+    let green = ((rgba >> 16) & 0xff) as f64 / 255.0;
+    let blue = ((rgba >> 8) & 0xff) as f64 / 255.0;
+    let alpha = (rgba & 0xff) as f64 / 255.0;
+    msg_send![
+        class!(NSColor),
+        colorWithCalibratedRed: red
+        green: green
+        blue: blue
+        alpha: alpha
+    ]
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn configure_tahoe_liquid_glass_background(
+    window: id,
+    log_target: &str,
+    window_name: &str,
+) {
+    if window.is_null() {
+        return;
+    }
+
+    let Some(glass_class) = tahoe_liquid_glass_class() else {
+        return;
+    };
+
+    let content_view: id = msg_send![window, contentView];
+    if content_view.is_null() {
+        return;
+    }
+
+    let frame: cocoa::foundation::NSRect = msg_send![content_view, bounds];
+    let glass_view = match find_existing_liquid_glass_background(content_view, glass_class) {
+        Some(existing) => existing,
+        None => {
+            let view: id = msg_send![glass_class, alloc];
+            let view: id = msg_send![view, initWithFrame: frame];
+            if view.is_null() {
+                return;
+            }
+            // NSViewWidthSizable | NSViewHeightSizable keeps the glass background
+            // fitted to GPUI content without participating in app layout.
+            let autoresizing_mask: u64 = (1 << 1) | (1 << 4);
+            let _: () = msg_send![view, setAutoresizingMask: autoresizing_mask];
+            let _: () = msg_send![content_view, addSubview: view positioned: -1isize relativeTo: cocoa::base::nil];
+            view
+        }
+    };
+
+    let tint_color = liquid_glass_tint_color();
+    if !tint_color.is_null() {
+        let _: () = msg_send![glass_view, setTintColor: tint_color];
+    }
+    let _: () = msg_send![glass_view, setFrame: frame];
+    let _: () = msg_send![glass_view, setStyle: 0isize]; // NSGlassEffectViewStyleRegular
+    let _: () = msg_send![glass_view, setCornerRadius: 12.0_f64];
+    let _: () = msg_send![glass_view, setHidden: false];
+
+    logging::log(
+        log_target,
+        &format!(
+            "{}: Tahoe Liquid Glass background configured with shared theme tint",
+            window_name
+        ),
+    );
+}
+
+#[cfg(not(target_os = "macos"))]
+fn configure_tahoe_liquid_glass_background(
+    _window: *mut std::ffi::c_void,
+    _log_target: &str,
+    _window_name: &str,
+) {
 }
 
 /// Configure the actions popup window as a non-movable child window with vibrancy.
@@ -504,6 +632,11 @@ pub fn update_all_secondary_windows_appearance(is_dark: bool) {
                         &mut vev_count,
                         is_dark,
                         material,
+                    );
+                    configure_tahoe_liquid_glass_background(
+                        window,
+                        "APPEARANCE",
+                        &title_string,
                     );
                     logging::log(
                         "APPEARANCE",

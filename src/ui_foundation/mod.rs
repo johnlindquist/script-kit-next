@@ -152,17 +152,19 @@ pub fn get_window_vibrancy_background() -> Rgba {
 /// This intentionally uses the same opacity fallback as the HUD/main-window
 /// matched path: `vibrancy_background` when set, otherwise `main`.
 #[inline]
-pub fn main_window_matched_background(theme: &Theme) -> Rgba {
+pub fn main_window_matched_background_rgba(theme: &Theme) -> u32 {
     let opacity = theme.get_opacity();
     let background_alpha = opacity
         .vibrancy_background
         .unwrap_or(opacity.main)
         .clamp(0.0, 1.0);
 
-    gpui::rgba(hex_to_rgba_with_opacity(
-        theme.colors.background.main,
-        background_alpha,
-    ))
+    hex_to_rgba_with_opacity(theme.colors.background.main, background_alpha)
+}
+
+#[inline]
+pub fn main_window_matched_background(theme: &Theme) -> Rgba {
+    gpui::rgba(main_window_matched_background_rgba(theme))
 }
 
 /// Lighter vibrancy background for floating surfaces (dialogs, notifications).

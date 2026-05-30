@@ -18,7 +18,7 @@
 /// Uses Objective-C message sending internally.
 #[cfg(target_os = "macos")]
 static LAST_MAIN_WINDOW_VIBRANCY_SIGNATURE: std::sync::Mutex<
-    Option<(usize, bool, crate::theme::VibrancyMaterial)>,
+    Option<(usize, bool, crate::theme::VibrancyMaterial, u32)>,
 > = std::sync::Mutex::new(None);
 
 #[cfg(target_os = "macos")]
@@ -51,7 +51,9 @@ pub fn configure_window_vibrancy_material_for_appearance(
             return;
         }
 
-        let signature = (window as usize, is_dark, material);
+        let theme = crate::theme::get_cached_theme();
+        let background_tint = crate::ui_foundation::main_window_matched_background_rgba(&theme);
+        let signature = (window as usize, is_dark, material, background_tint);
         {
             let mut guard = LAST_MAIN_WINDOW_VIBRANCY_SIGNATURE
                 .lock()
@@ -100,6 +102,7 @@ pub fn configure_window_vibrancy_material_for_appearance(
         // Expert feedback: GPUI may nest effect views, so we need to walk the whole tree
         let mut count = 0;
         configure_visual_effect_views_recursive(content_view, &mut count, is_dark, material);
+        configure_tahoe_liquid_glass_background(window, "PANEL", "Main window");
 
         let material_name = vibrancy_material_name(material);
         if count == 0 {
