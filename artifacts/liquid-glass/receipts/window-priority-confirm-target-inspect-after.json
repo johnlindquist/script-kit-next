@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.inspect",
+  "session": "liquid-confirm",
+  "classification": "ok",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ConfirmPrompt"
+  },
+  "resolvedTarget": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "ConfirmPrompt",
+    "appViewVariant": "ConfirmPrompt",
+    "nativeFooterSurface": "confirm_prompt",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 500
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 750,
+      "height": 500,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 500
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 39926,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "windows": [
+    {
+      "index": 0,
+      "automationId": "main",
+      "windowKind": "Main",
+      "title": "Script Kit",
+      "visible": true,
+      "focused": false,
+      "bounds": {
+        "x": 585,
+        "y": 177,
+        "width": 750,
+        "height": 500
+      },
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "parentAutomationId": null,
+      "parentKind": null,
+      "pid": 39926
+    }
+  ],
+  "rawInspect": {
+    "type": "automationInspectResult",
+    "requestId": "devtools-targets-inspect-1780115194767-ec7be3",
+    "schemaVersion": 3,
+    "windowId": "main",
+    "windowKind": "Main",
+    "surfaceKind": "ConfirmPrompt",
+    "appViewVariant": "ConfirmPrompt",
+    "nativeFooterSurface": "confirm_prompt",
+    "title": "Script Kit",
+    "resolvedBounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 500
+    },
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 750,
+      "height": 500
+    },
+    "surfaceHitPoint": {
+      "x": 375,
+      "y": 250
+    },
+    "suggestedHitPoints": [
+      {
+        "semanticId": "panel:window",
+        "x": 375,
+        "y": 250,
+        "reason": "surface_center"
+      }
+    ],
+    "elements": [
+      {
+        "semanticId": "panel:confirm-prompt",
+        "type": "panel"
+      },
+      {
+        "semanticId": "button:0:delete",
+        "type": "button",
+        "text": "Delete",
+        "selected": true,
+        "index": 0,
+        "role": "footer",
+        "kind": "confirm",
+        "selectable": true
+      },
+      {
+        "semanticId": "button:1:cancel",
+        "type": "button",
+        "text": "Cancel",
+        "selected": false,
+        "index": 1,
+        "role": "footer",
+        "kind": "cancel",
+        "selectable": true
+      },
+      {
+        "semanticId": "footer:native:row",
+        "type": "panel",
+        "text": "native",
+        "value": "confirm_prompt",
+        "role": "footer",
+        "kind": "nativeFooterRow",
+        "selectable": false
+      },
+      {
+        "semanticId": "footer:native:apply",
+        "type": "button",
+        "text": "↵ Delete",
+        "value": "apply",
+        "selected": true,
+        "index": 0,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "confirm_prompt",
+        "sourceName": "confirm_prompt",
+        "selectable": true
+      },
+      {
+        "semanticId": "footer:native:close",
+        "type": "button",
+        "text": "Esc Cancel",
+        "value": "close",
+        "selected": false,
+        "index": 1,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "confirm_prompt",
+        "sourceName": "confirm_prompt",
+        "selectable": true
+      }
+    ],
+    "totalCount": 6,
+    "selectedSemanticId": "button:0:delete",
+    "screenshotWidth": 750,
+    "screenshotHeight": 500,
+    "osWindowId": 84071,
+    "semanticQuality": "full",
+    "pid": 39926
+  },
+  "sessionLifecycle": [],
+  "errors": []
+}

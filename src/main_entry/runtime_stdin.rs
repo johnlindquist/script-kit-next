@@ -437,6 +437,20 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 script_kit_gpui::mark_window_shown();
                                 platform::show_main_window_without_activation();
                                 window.activate_window();
+                                window_ops::queue_move(
+                                    gpui::Bounds {
+                                        origin: gpui::point(gpui::px(585.), gpui::px(177.)),
+                                        size: gpui::size(
+                                            gpui::px(750.),
+                                            crate::window_resize::height_for_view(
+                                                crate::window_resize::ViewType::DivPrompt,
+                                                0,
+                                            ),
+                                        ),
+                                    },
+                                    window,
+                                    ctx,
+                                );
                                 sync_main_automation_window(current_main_automation_bounds(), true, true);
                                 let (sender, _receiver) = async_channel::bounded(1);
                                 let options = crate::confirm::ParentConfirmOptions {
