@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "status": "pass",
+  "outputDir": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/verify-shot-blank-rejection-matrix",
+  "results": [
+    {
+      "name": "transparent",
+      "path": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/verify-shot-blank-rejection-matrix/transparent.png",
+      "expectedBlank": true,
+      "status": "pass",
+      "audit": {
+        "sampledPixels": 256,
+        "nonBlackPixels": 0,
+        "nonTransparentPixels": 0,
+        "uniqueBucketCount": 1,
+        "meanLuma": 0,
+        "maxLuma": 0,
+        "nonBlackRatio": 0,
+        "blank": true
+      }
+    },
+    {
+      "name": "solid-black",
+      "path": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/verify-shot-blank-rejection-matrix/solid-black.png",
+      "expectedBlank": true,
+      "status": "pass",
+      "audit": {
+        "sampledPixels": 256,
+        "nonBlackPixels": 0,
+        "nonTransparentPixels": 256,
+        "uniqueBucketCount": 1,
+        "meanLuma": 0,
+        "maxLuma": 0,
+        "nonBlackRatio": 0,
+        "blank": true
+      }
+    },
+    {
+      "name": "solid-white",
+      "path": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/verify-shot-blank-rejection-matrix/solid-white.png",
+      "expectedBlank": true,
+      "status": "pass",
+      "audit": {
+        "sampledPixels": 256,
+        "nonBlackPixels": 256,
+        "nonTransparentPixels": 256,
+        "uniqueBucketCount": 1,
+        "meanLuma": 254.99999999999997,
+        "maxLuma": 254.99999999999997,
+        "nonBlackRatio": 1,
+        "blank": true
+      }
+    },
+    {
+      "name": "solid-gray",
+      "path": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/verify-shot-blank-rejection-matrix/solid-gray.png",
+      "expectedBlank": true,
+      "status": "pass",
+      "audit": {
+        "sampledPixels": 256,
+        "nonBlackPixels": 256,
+        "nonTransparentPixels": 256,
+        "uniqueBucketCount": 1,
+        "meanLuma": 96,
+        "maxLuma": 96,
+        "nonBlackRatio": 1,
+        "blank": true
+      }
+    },
+    {
+      "name": "valid-dark-ui",
+      "path": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/verify-shot-blank-rejection-matrix/valid-dark-ui.png",
+      "expectedBlank": false,
+      "status": "pass",
+      "audit": {
+        "sampledPixels": 256,
+        "nonBlackPixels": 8,
+        "nonTransparentPixels": 256,
+        "uniqueBucketCount": 2,
+        "meanLuma": 1.2499999999999998,
+        "maxLuma": 39.99999999999999,
+        "nonBlackRatio": 0.03125,
+        "blank": false
+      }
+    },
+    {
+      "name": "sparse-bright-window-capture",
+      "path": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/verify-shot-blank-rejection-matrix/sparse-bright-window-capture.png",
+      "expectedBlank": true,
+      "status": "pass",
+      "audit": {
+        "sampledPixels": 65536,
+        "nonBlackPixels": 32,
+        "nonTransparentPixels": 65536,
+        "uniqueBucketCount": 2,
+        "meanLuma": 0.08398437499999999,
+        "maxLuma": 171.99999999999997,
+        "nonBlackRatio": 0.00048828125,
+        "blank": true
+      }
+    }
+  ]
+}

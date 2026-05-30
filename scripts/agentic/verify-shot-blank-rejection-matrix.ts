@@ -163,11 +163,14 @@ function auditPngContent(filePath: string): ScreenshotContentAudit {
   const nonBlackRatio =
     sampledPixels > 0 ? nonBlackPixels / sampledPixels : 0;
   const solidLike = uniqueBucketCount <= 1;
+  const sparseDarkCaptureLike =
+    meanLuma < 5.0 &&
+    nonBlackRatio < 0.001;
   const darkEmptyLike =
-    uniqueBucketCount <= 2 &&
+    (uniqueBucketCount <= 2 || sparseDarkCaptureLike) &&
     meanLuma < 5.0 &&
     nonBlackRatio < 0.001 &&
-    maxLuma < 16.0;
+    (maxLuma < 16.0 || sparseDarkCaptureLike);
   const blank =
     sampledPixels === 0 ||
     nonTransparentPixels === 0 ||
@@ -223,6 +226,13 @@ const fixtures: FixtureCase[] = [
     height: 16,
     pixelAt: (x, y) => (y === 8 && x >= 4 && x < 12 ? [40, 40, 40, 255] : [0, 0, 0, 255]),
     expectedBlank: false,
+  },
+  {
+    name: "sparse-bright-window-capture",
+    width: 256,
+    height: 256,
+    pixelAt: (x, y) => (x === y && x < 32 ? [172, 172, 172, 255] : [0, 0, 0, 255]),
+    expectedBlank: true,
   },
 ];
 

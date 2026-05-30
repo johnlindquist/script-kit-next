@@ -733,11 +733,14 @@ function auditPngContent(filePath: string): ScreenshotContentAudit {
   const nonBlackRatio =
     sampledPixels > 0 ? nonBlackPixels / sampledPixels : 0;
   const solidLike = uniqueBucketCount <= 1;
+  const sparseDarkCaptureLike =
+    meanLuma < 5.0 &&
+    nonBlackRatio < 0.001;
   const darkEmptyLike =
-    uniqueBucketCount <= 2 &&
+    (uniqueBucketCount <= 2 || sparseDarkCaptureLike) &&
     meanLuma < 5.0 &&
     nonBlackRatio < 0.001 &&
-    maxLuma < 16.0;
+    (maxLuma < 16.0 || sparseDarkCaptureLike);
   const blank =
     sampledPixels === 0 ||
     nonTransparentPixels === 0 ||
