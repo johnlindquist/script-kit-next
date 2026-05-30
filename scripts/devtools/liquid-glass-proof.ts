@@ -30,6 +30,13 @@ type ProofTiers = {
   imageDiffProof: "pass" | "blocked" | "missing";
 };
 
+type GuidanceProofStatus =
+  | "strong-guidance-proof"
+  | "numeric-guidance-proof-missing-os-visual"
+  | "guidance-proof-capture-blocked"
+  | "source-ui-gap"
+  | "missing-guidance-proof";
+
 const RECEIPT_ROOT = "artifacts/liquid-glass/receipts";
 const SCREENSHOT_ROOT = "artifacts/liquid-glass/screenshots";
 const DIFF_ROOT = "artifacts/liquid-glass/diffs";
@@ -165,6 +172,42 @@ function screenshotUsability(path: string, receipts: string[]): ScreenshotUsabil
   }
 
   return { usable: true };
+}
+
+function osScreenshotAttemptBlocked(receiptPath: string) {
+  const name = receiptPath.split("/").pop() ?? receiptPath;
+  if (!name.includes("screenshot") && !name.includes("capture")) {
+    return null;
+  }
+  const json = readJsonSync(receiptPath);
+  if (!json) {
+    return null;
+  }
+  const visualEvidence = asObject(json.visualEvidence);
+  if (
+    visualEvidence.source === "os-window-capture" &&
+    visualEvidence.available === false &&
+    visualEvidence.countsAsOsScreenshotEvidence !== true
+  ) {
+    return String(visualEvidence.classification ?? "os-window-capture-blocked");
+  }
+  const screenshotReceipt = asObject(json.screenshotReceipt);
+  const nestedScreenshotReceipt = asObject(asObject(json.screenshot).receipt);
+  const receipt = Object.keys(screenshotReceipt).length > 0 ? screenshotReceipt : nestedScreenshotReceipt;
+  if (json.status === "error" || json.classification === "error") {
+    return "screenshot-receipt-error";
+  }
+  if (receipt.captured === false || typeof receipt.error === "string") {
+    return "screenshot-capture-failed";
+  }
+  const audit = auditFromReceipt(json);
+  if (audit.blank === true) {
+    return "blank-image-rejected";
+  }
+  if (typeof audit.nonBlackRatio === "number" && audit.nonBlackRatio < 0.01) {
+    return "low-content-capture-rejected";
+  }
+  return null;
 }
 
 function usableAppRenderEvidence(renderEvidence: JsonObject) {
@@ -334,6 +377,67 @@ function guidelineProof(audit: JsonObject): ProofTiers["guidelineProof"] {
   return guidelineAssertionFailureCount(assertions) === 0 ? "pass" : "fail";
 }
 
+function sourceUiGapsFromAudit(audit: JsonObject) {
+  const gaps: string[] = [];
+  if (asArray(audit.controlsWithHitFailures).length > 0) gaps.push("controlsWithHitFailures");
+  if (asArray(audit.contentGlassNodes).length > 0) gaps.push("contentGlassNodes");
+  if (asArray(audit.contentNativeMaterialNodes).length > 0) gaps.push("contentNativeMaterialNodes");
+  if (asArray(audit.glassLayerViolations).length > 0) gaps.push("glassLayerViolations");
+  if (asArray(audit.missingStyleNodeNames).length > 0) gaps.push("missingStyleNodeNames");
+  if (guidelineProof(audit) === "fail") gaps.push("guidelineAssertions");
+  return gaps;
+}
+
+function devtoolsCaptureLimitations(tiers: ProofTiers) {
+  return [
+    tiers.osScreenshotProof === "blocked" ? "osScreenshotProof:blocked" : "",
+    tiers.imageDiffProof === "blocked" ? "imageDiffProof:blocked" : "",
+    tiers.appRenderProof === "blocked" ? "appRenderProof:blocked" : "",
+    tiers.offscreenRenderProof === "fail" ? "offscreenRenderProof:fail" : "",
+  ].filter(Boolean);
+}
+
+function diagnosticLimitations(tiers: ProofTiers) {
+  return [
+    tiers.appRenderProof === "blocked" ? "appRenderProof:blocked" : "",
+    tiers.appRenderProof === "fail" ? "appRenderProof:fail" : "",
+    tiers.offscreenRenderProof === "fail" ? "offscreenRenderProof:fail" : "",
+  ].filter(Boolean);
+}
+
+function guidanceProofStatus(evidence: Evidence, tiers: ProofTiers): GuidanceProofStatus {
+  const audit = asObject(evidence.visualAudit);
+  const sourceGaps = sourceUiGapsFromAudit(audit);
+  if (tiers.numericProof === "fail" || sourceGaps.length > 0) {
+    return "source-ui-gap";
+  }
+  if (tiers.numericProof !== "pass") {
+    return "missing-guidance-proof";
+  }
+  if (tiers.osScreenshotProof === "pass" && tiers.imageDiffProof === "pass") {
+    return "strong-guidance-proof";
+  }
+  if (tiers.osScreenshotProof === "blocked" || tiers.imageDiffProof === "blocked") {
+    return "guidance-proof-capture-blocked";
+  }
+  return "numeric-guidance-proof-missing-os-visual";
+}
+
+function guidanceEvidenceNeeded(requiredEvidence: JsonObject) {
+  return [
+    requiredEvidence.numericProof !== "pass" ? "numericProof" : "",
+    requiredEvidence.osScreenshotProof !== "pass" ? "osScreenshotProof" : "",
+    requiredEvidence.imageDiffProof !== "pass" ? "imageDiffProof" : "",
+  ].filter(Boolean);
+}
+
+function diagnosticEvidenceNeeded(requiredEvidence: JsonObject) {
+  return [
+    requiredEvidence.appRenderProof !== "pass" ? "appRenderProof" : "",
+    requiredEvidence.offscreenRenderProof !== "pass" ? "offscreenRenderProof" : "",
+  ].filter(Boolean);
+}
+
 function evidenceFor(terms: string[], files: { receipts: string[]; screenshots: string[]; diffs: string[] }, visualAuditPath?: string): Evidence {
   const receipts = files.receipts.filter((path) => includesAny(path, terms));
   const screenshots: string[] = [];
@@ -381,6 +485,9 @@ function proofTiers(evidence: Evidence): ProofTiers {
   let offscreenFail = false;
   for (const receipt of evidence.receipts) {
     const json = readJsonSync(receipt);
+    if (osScreenshotAttemptBlocked(receipt)) {
+      osBlocked = true;
+    }
     const visualEvidence = asObject(json?.visualEvidence);
     if (
       visualEvidence.source === "os-window-capture" &&
@@ -518,7 +625,7 @@ function outsideInPriority(surfaceKind: unknown) {
 }
 
 async function attachVisualAudit(evidence: Evidence, preferred: string[]) {
-  for (const path of preferred) {
+  for (const path of [...preferred, ...evidence.layoutReceipts]) {
     const json = await readJsonIfExists(path);
     const audit = Object.keys(asObject(json?.visualAudit)).length > 0
       ? asObject(json?.visualAudit)
@@ -708,6 +815,7 @@ async function main() {
       ]);
     } else if (surfaceKind === "PromptEntity") {
       await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-prompt-div-guideline-layout.json`,
         `${RECEIPT_ROOT}/window-priority-prompt-div-fixed-layout-sdk.json`,
         `${RECEIPT_ROOT}/window-priority-prompt-div-current-layout-sdk.json`,
       ]);
@@ -731,26 +839,40 @@ async function main() {
         `${RECEIPT_ROOT}/window-priority-webcam-current-layout.json`,
       ]);
     }
+    if (evidence.visualAudit == null) {
+      await attachVisualAudit(evidence, []);
+    }
     const status = classify(evidence);
     const tiers = proofTiers(evidence);
+    const guidanceStatus = guidanceProofStatus(evidence, tiers);
+    const sourceGaps = sourceUiGapsFromAudit(asObject(evidence.visualAudit));
+    const captureLimitations = devtoolsCaptureLimitations(tiers);
+    const diagnostics = diagnosticLimitations(tiers);
+    const requiredEvidence = {
+      screenshot: evidence.screenshots.length > 0,
+      osScreenshotProof: tiers.osScreenshotProof,
+      appRenderProof: tiers.appRenderProof,
+      offscreenRenderProof: tiers.offscreenRenderProof,
+      numericLayout: evidence.layoutReceipts.length > 0,
+      numericProof: tiers.numericProof,
+      guidelineProof: tiers.guidelineProof,
+      imageDiff: evidence.imageDiffReceipts.length > 0,
+      imageDiffProof: tiers.imageDiffProof,
+      visualAudit: evidence.visualAudit != null,
+    };
     return {
       surfaceKind,
       appViewVariants: contract.appViewVariants ?? [],
       automationSemanticSurface: contract.automationSemanticSurface ?? null,
       coverageAliases: contract.coverageAliases ?? [],
       proofStatus: status,
-      requiredEvidence: {
-        screenshot: evidence.screenshots.length > 0,
-        osScreenshotProof: tiers.osScreenshotProof,
-        appRenderProof: tiers.appRenderProof,
-        offscreenRenderProof: tiers.offscreenRenderProof,
-        numericLayout: evidence.layoutReceipts.length > 0,
-        numericProof: tiers.numericProof,
-        guidelineProof: tiers.guidelineProof,
-        imageDiff: evidence.imageDiffReceipts.length > 0,
-        imageDiffProof: tiers.imageDiffProof,
-        visualAudit: evidence.visualAudit != null,
-      },
+      guidanceProofStatus: guidanceStatus,
+      sourceUiGaps: sourceGaps,
+      devtoolsCaptureLimitations: captureLimitations,
+      diagnosticLimitations: diagnostics,
+      guidanceEvidenceNeeded: guidanceEvidenceNeeded(requiredEvidence),
+      diagnosticEvidenceNeeded: diagnosticEvidenceNeeded(requiredEvidence),
+      requiredEvidence,
       proofTiers: tiers,
       visualAudit: evidence.visualAudit,
       evidence,
@@ -867,26 +989,27 @@ async function main() {
   const visualTierDebtSurfaces = surfaces
     .filter((surface) =>
       surface.proofTiers.osScreenshotProof === "blocked" ||
-      surface.proofTiers.appRenderProof === "blocked" ||
-      surface.proofTiers.appRenderProof === "fail" ||
-      surface.proofTiers.offscreenRenderProof === "fail" ||
       surface.proofTiers.numericProof === "fail" ||
       surface.proofTiers.guidelineProof === "fail" ||
-      surface.proofTiers.imageDiffProof === "blocked"
+      surface.proofTiers.imageDiffProof === "blocked" ||
+      surface.guidanceProofStatus === "source-ui-gap" ||
+      surface.guidanceProofStatus === "guidance-proof-capture-blocked"
     )
     .map((surface) => ({
       surfaceKind: surface.surfaceKind,
       proofStatus: surface.proofStatus,
+      guidanceProofStatus: surface.guidanceProofStatus,
       proofTiers: surface.proofTiers,
       failedTiers: [
         surface.proofTiers.osScreenshotProof === "blocked" ? "osScreenshotProof" : "",
-        surface.proofTiers.appRenderProof === "blocked" ? "appRenderProof" : "",
-        surface.proofTiers.appRenderProof === "fail" ? "appRenderProof" : "",
-        surface.proofTiers.offscreenRenderProof === "fail" ? "offscreenRenderProof" : "",
         surface.proofTiers.numericProof === "fail" ? "numericProof" : "",
         surface.proofTiers.guidelineProof === "fail" ? "guidelineProof" : "",
         surface.proofTiers.imageDiffProof === "blocked" ? "imageDiffProof" : "",
       ].filter(Boolean),
+      sourceUiGaps: surface.sourceUiGaps,
+      devtoolsCaptureLimitations: surface.devtoolsCaptureLimitations,
+      guidanceEvidenceNeeded: surface.guidanceEvidenceNeeded,
+      diagnosticLimitations: surface.diagnosticLimitations,
       guidelineFailures: guidelineFailureDetails(asObject(surface.visualAudit).guidelineAssertions),
       receipts: surface.evidence.receipts,
       screenshots: surface.evidence.screenshots,
@@ -897,40 +1020,64 @@ async function main() {
     .map((surface) => ({
       surfaceKind: surface.surfaceKind,
       proofStatus: surface.proofStatus,
+      guidanceProofStatus: surface.guidanceProofStatus,
       proofTiers: surface.proofTiers,
       requiredEvidence: surface.requiredEvidence,
+      sourceUiGaps: surface.sourceUiGaps,
+      devtoolsCaptureLimitations: surface.devtoolsCaptureLimitations,
+      diagnosticLimitations: surface.diagnosticLimitations,
+      guidanceEvidenceNeeded: surface.guidanceEvidenceNeeded,
+      diagnosticEvidenceNeeded: surface.diagnosticEvidenceNeeded,
       guidelineFailures: guidelineFailureDetails(asObject(surface.visualAudit).guidelineAssertions),
       receipts: surface.evidence.receipts,
       screenshots: surface.evidence.screenshots,
       notes: surface.evidence.notes,
     }));
   const proofDebtWorkQueue = surfaceProofDebtSurfaces.map((surface) => {
-    const missingEvidence = [
-      surface.requiredEvidence.osScreenshotProof !== "pass" ? "osScreenshotProof" : "",
-      surface.requiredEvidence.appRenderProof !== "pass" ? "appRenderProof" : "",
-      surface.requiredEvidence.offscreenRenderProof !== "pass" ? "offscreenRenderProof" : "",
-      surface.requiredEvidence.numericProof !== "pass" ? "numericProof" : "",
-      surface.requiredEvidence.guidelineProof !== "pass" ? "guidelineProof" : "",
-      surface.requiredEvidence.imageDiffProof !== "pass" ? "imageDiffProof" : "",
-    ].filter(Boolean);
-    const visualCaptureBlocked = surface.proofTiers.osScreenshotProof === "blocked" ||
-      surface.proofTiers.appRenderProof === "blocked" ||
-      surface.proofTiers.appRenderProof === "fail" ||
-      surface.proofTiers.offscreenRenderProof === "fail" ||
-      surface.proofTiers.guidelineProof === "fail" ||
+    const guidanceNeeded = guidanceEvidenceNeeded(surface.requiredEvidence);
+    const diagnosticNeeded = diagnosticEvidenceNeeded(surface.requiredEvidence);
+    const sourceUiGap = surface.guidanceProofStatus === "source-ui-gap";
+    const compositorCaptureBlocked = surface.proofTiers.osScreenshotProof === "blocked" ||
       surface.proofTiers.imageDiffProof === "blocked";
+    const diagnosticOnlyBlocked = surface.proofTiers.appRenderProof === "blocked" ||
+      surface.proofTiers.appRenderProof === "fail" ||
+      surface.proofTiers.offscreenRenderProof === "fail";
+    const blockingClass = sourceUiGap
+      ? "source-ui-gap"
+      : compositorCaptureBlocked
+        ? "devtools-capture-limitation"
+        : guidanceNeeded.length > 0
+          ? "missing-guidance-visual-evidence"
+          : diagnosticOnlyBlocked
+            ? "diagnostic-readback-limitation"
+            : "none";
     return {
       rank: 0,
       surfaceKind: surface.surfaceKind,
       outsideInPriority: outsideInPriority(surface.surfaceKind),
       priorityGroup: outsideInPriority(surface.surfaceKind) < 30 ? "window-container" : "surface-content",
       proofStatus: surface.proofStatus,
-      priority: visualCaptureBlocked ? "capture-blocker" : "missing-proof-tier",
-      nextEvidenceNeeded: missingEvidence,
+      guidanceProofStatus: surface.guidanceProofStatus,
+      blockingClass,
+      priority: blockingClass === "source-ui-gap" || blockingClass === "devtools-capture-limitation"
+        ? "capture-blocker"
+        : "missing-proof-tier",
+      nextEvidenceNeeded: guidanceNeeded,
+      guidanceEvidenceNeeded: guidanceNeeded,
+      diagnosticEvidenceNeeded: diagnosticNeeded,
+      sourceUiGaps: surface.sourceUiGaps,
+      devtoolsCaptureLimitations: surface.devtoolsCaptureLimitations,
+      diagnosticLimitations: surface.diagnosticLimitations,
       guidelineFailures: surface.guidelineFailures,
-      recommendedNextAction: visualCaptureBlocked
-        ? "fix capture/readback blocker, then rerun screenshot/layout/image-diff proof"
-        : "capture missing screenshot/app-render/offscreen/image-diff evidence, then rerun proof matrix",
+      recommendedNextAction: blockingClass === "source-ui-gap"
+        ? "fix UI/source layout/style gap, then rerun layout + OS visual proof"
+        : blockingClass === "devtools-capture-limitation"
+          ? "fix OS/window capture limitation or permissions; do not treat this as a UI source gap"
+          : blockingClass === "missing-guidance-visual-evidence"
+            ? "run strict OS screenshot capture and image diff for this surface"
+            : blockingClass === "diagnostic-readback-limitation"
+              ? "record GPUI readback limitation as diagnostic only; do not block Apple compositor proof"
+              : "no action",
       receipts: surface.receipts,
       screenshots: surface.screenshots,
       notes: surface.notes,
@@ -957,6 +1104,12 @@ async function main() {
     guidelineProofSurfaceCount: surfaces.filter((surface) => surface.proofTiers.guidelineProof === "pass").length,
     guidelineFailedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.guidelineProof === "fail").length,
     guidelineMissingSurfaceCount: surfaces.filter((surface) => surface.proofTiers.guidelineProof === "missing").length,
+    strongGuidanceProofSurfaceCount: surfaces.filter((surface) => surface.guidanceProofStatus === "strong-guidance-proof").length,
+    sourceUiGapSurfaceCount: surfaces.filter((surface) => surface.guidanceProofStatus === "source-ui-gap").length,
+    guidanceCaptureBlockedSurfaceCount: surfaces.filter((surface) => surface.guidanceProofStatus === "guidance-proof-capture-blocked").length,
+    numericGuidanceMissingOsVisualSurfaceCount: surfaces.filter((surface) => surface.guidanceProofStatus === "numeric-guidance-proof-missing-os-visual").length,
+    missingGuidanceProofSurfaceCount: surfaces.filter((surface) => surface.guidanceProofStatus === "missing-guidance-proof").length,
+    diagnosticReadbackLimitationSurfaceCount: surfaces.filter((surface) => asArray(surface.diagnosticLimitations).length > 0).length,
     visualTierDebtSurfaceCount: visualTierDebtSurfaces.length,
     surfaceProofDebtCount: surfaceProofDebtSurfaces.length,
     proofDebtWorkQueueCount: proofDebtWorkQueue.length,
@@ -989,7 +1142,8 @@ async function main() {
       summary.guidelineMissingSurfaceCount === 0 ? "" : `${summary.guidelineMissingSurfaceCount} contract surfaces are missing Tahoe guideline assertions`,
       summary.appRenderFailedSurfaceCount === 0 ? "" : `${summary.appRenderFailedSurfaceCount} contract surfaces attempted app-render proof and failed`,
       summary.appRenderBlockedSurfaceCount === 0 ? "" : `${summary.appRenderBlockedSurfaceCount} contract surfaces attempted app-render proof but GPUI render readback was unavailable or unsupported`,
-      "strong-proof means current artifacts include screenshot, numeric layout visualAudit, and image diff evidence; it is not an Apple conformance claim by itself",
+      "strong-guidance-proof means current artifacts include OS screenshot, numeric layout visualAudit, guideline assertions, and image diff evidence; GPUI readback is diagnostic only",
+      "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor output or native Liquid Glass blur",
       "proofTiers separate OS screenshots from GPUI app-render proof so WindowServer-blocked captures cannot become false visual evidence",
     ].filter(Boolean),
     errors: [],

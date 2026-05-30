@@ -96,6 +96,7 @@ fn proof_matrix_emits_ordered_debt_work_queue() {
             && PROOF_MATRIX.contains("guidelineProof")
             && PROOF_MATRIX.contains("guidelineFailures")
             && PROOF_MATRIX.contains("guidelineFailureDetails")
+            && PROOF_MATRIX.contains("blockingClass")
             && PROOF_MATRIX.contains("recommendedNextAction")
             && PROOF_MATRIX.contains("capture-blocker")
             && PROOF_MATRIX.contains("missing-proof-tier"),
@@ -121,5 +122,24 @@ fn proof_matrix_has_numeric_plus_app_render_status_without_strong_promotion() {
     assert!(
         PROOF_MATRIX.contains("app-render/readback images do not count as OS screenshot evidence"),
         "app-render PNGs must not be counted as OS screenshot artifacts"
+    );
+}
+
+#[test]
+fn proof_matrix_splits_guidance_proof_from_diagnostics() {
+    assert!(
+        PROOF_MATRIX.contains("type GuidanceProofStatus")
+            && PROOF_MATRIX.contains("guidanceProofStatus")
+            && PROOF_MATRIX.contains("strong-guidance-proof")
+            && PROOF_MATRIX.contains("sourceUiGaps")
+            && PROOF_MATRIX.contains("devtoolsCaptureLimitations")
+            && PROOF_MATRIX.contains("diagnosticLimitations")
+            && PROOF_MATRIX.contains("guidanceEvidenceNeeded")
+            && PROOF_MATRIX.contains("diagnosticEvidenceNeeded")
+            && PROOF_MATRIX.contains("diagnostic-readback-limitation")
+            && PROOF_MATRIX.contains(
+                "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor",
+            ),
+        "Liquid Glass proof matrix must separate Apple guidance evidence from diagnostic GPUI readback limitations"
     );
 }

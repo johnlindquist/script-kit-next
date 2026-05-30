@@ -171,6 +171,19 @@ function asNumber(value: unknown, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+function hasPositiveRadius(value: unknown) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0;
+  }
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const radii = Object.values(value as JsonObject).filter(
+    (entry): entry is number => typeof entry === "number" && Number.isFinite(entry),
+  );
+  return radii.length > 0 && radii.every((entry) => entry > 0);
+}
+
 function rectFrom(value: unknown): Rect {
   const object =
     value && typeof value === "object" ? (value as JsonObject) : {};
@@ -369,7 +382,7 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
   });
   const cornerRadiusFailures = nodesWithVisualStyle.filter((node) => {
     const style = node.visualStyle as JsonObject;
-    return style.cornerRadius == null && style.radius == null;
+    return !hasPositiveRadius(style.cornerRadius) && !hasPositiveRadius(style.radius);
   });
   return {
     promptType: info.promptType ?? null,

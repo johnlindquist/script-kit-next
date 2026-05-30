@@ -1659,7 +1659,7 @@ impl ScriptListApp {
                 .with_visual_style(
                     chrome_tokens::CHROME_LAYER_CONTENT,
                     chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                    None,
+                    Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                 )
                 .with_visual_token("content.background")
                 .with_flex_grow(1.0)
@@ -1725,7 +1725,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
                     .with_visual_token(token)
                     .with_flex_column()
@@ -1768,7 +1768,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
                     .with_visual_token(match &self.current_view {
                         AppView::SelectPrompt { .. } => "content.promptChoices",
@@ -1821,7 +1821,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
                     .with_visual_token(token)
                     .with_flex_column()
@@ -1848,7 +1848,7 @@ impl ScriptListApp {
                 .with_visual_style(
                     chrome_tokens::CHROME_LAYER_CONTENT,
                     chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                    None,
+                    Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                 )
                 .with_visual_token("content.list")
                 .with_flex_column()
@@ -1869,7 +1869,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
                     .with_visual_token("content.previewPanel")
                     .with_padding(16.0, 16.0, 16.0, 16.0)
