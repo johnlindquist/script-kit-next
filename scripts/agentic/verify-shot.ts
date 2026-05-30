@@ -876,6 +876,8 @@ async function captureRenderReadbackViaMcp(
       hiDpi: false,
     });
     const status = String(capture.status ?? "unknown");
+    const errorCode = capture.error?.code ?? capture.errorCode ?? null;
+    const message = capture.error?.message ?? capture.message ?? null;
     const image = capture.capture?.pngBase64;
     if (status === "captured" && typeof image === "string" && image.length > 0) {
       const decoded = Buffer.from(image, "base64");
@@ -889,11 +891,15 @@ async function captureRenderReadbackViaMcp(
       classification: status === "captured" ? "captured" : "gpui-readback-unavailable",
       attempts: [{
         source: "gpui-render-readback",
-        status: status === "captured" ? "captured" : status === "unsupported" ? "unsupported" : "failed",
+        status: status === "captured"
+          ? "captured"
+          : status === "unsupported" || errorCode === "runtime_unavailable" || errorCode === "unknown_tool"
+            ? "unsupported"
+            : "failed",
         requestedWindowId: null,
         actualWindowId: null,
-        errorCode: capture.error?.code ?? null,
-        message: capture.error?.message ?? null,
+        errorCode,
+        message,
       }],
       path: status === "captured" ? outPath : null,
       sha256: capture.capture?.sha256 ?? null,

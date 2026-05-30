@@ -133,6 +133,12 @@ fn render_readback_is_not_os_screenshot_proof() {
             && VERIFY_SHOT.contains("App-rendered GPUI pixels only"),
         "app-render readback must not be counted as OS screenshot/native compositor proof"
     );
+    assert!(
+        VERIFY_SHOT.contains("capture.errorCode")
+            && VERIFY_SHOT.contains("runtime_unavailable")
+            && VERIFY_SHOT.contains("unknown_tool"),
+        "render readback receipts must preserve top-level tool errors as unsupported proof, not null failures"
+    );
 }
 
 #[test]
