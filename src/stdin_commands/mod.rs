@@ -448,6 +448,14 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
+    /// Open a deterministic detached ACP placeholder window for visual/layout proof.
+    ///
+    /// This fixture does not start an agent, acquire provider credentials, submit
+    /// prompts, or mutate chat history. It only opens the detached window shell.
+    OpenAcpDetachedFixture {
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Open the Agent Chat window (for testing)
     OpenAi,
     /// Open the Mini Agent Chat window (for testing)
@@ -800,7 +808,8 @@ impl ExternalCommand {
             | Self::OpenInlineAgentWithMockData { request_id, .. }
             | Self::OpenInlineAgentWithPiData { request_id, .. }
             | Self::OpenCreationFeedback { request_id, .. }
-            | Self::OpenConfirmPrompt { request_id, .. } => {
+            | Self::OpenConfirmPrompt { request_id, .. }
+            | Self::OpenAcpDetachedFixture { request_id, .. } => {
                 request_id.as_ref().map(ExternalCommandRequestId::as_str)
             }
             _ => None,
@@ -820,6 +829,7 @@ impl ExternalCommand {
             Self::OpenAbout => "openAbout",
             Self::OpenCreationFeedback { .. } => "openCreationFeedback",
             Self::OpenConfirmPrompt { .. } => "openConfirmPrompt",
+            Self::OpenAcpDetachedFixture { .. } => "openAcpDetachedFixture",
             Self::OpenAi => "openAi",
             Self::OpenMiniAi => "openMiniAi",
             Self::OpenAiWithMockData => "openAiWithMockData",
@@ -875,6 +885,7 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "openAbout",
     "openCreationFeedback",
     "openConfirmPrompt",
+    "openAcpDetachedFixture",
     "openAi",
     "openMiniAi",
     "openAiWithMockData",

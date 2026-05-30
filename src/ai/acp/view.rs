@@ -1271,6 +1271,220 @@ impl AcpChatView {
         }
     }
 
+    pub(crate) fn automation_layout_info(
+        &self,
+        target: &crate::protocol::AutomationWindowInfo,
+    ) -> crate::protocol::LayoutInfo {
+        use crate::protocol::{LayoutComponentInfo, LayoutComponentType, LayoutInfo};
+        use crate::ui::chrome as chrome_tokens;
+
+        let (window_width, window_height) = target
+            .bounds
+            .as_ref()
+            .map(|bounds| (bounds.width as f32, bounds.height as f32))
+            .unwrap_or((480.0, 440.0));
+        let composer_height = (Self::ACP_INPUT_PADDING_Y * 2.0) + Self::ACP_INPUT_LINE_HEIGHT;
+        let footer_height = self.inline_footer_height();
+        let message_height = (window_height - composer_height - footer_height).max(0.0);
+        let composer_y = message_height;
+        let footer_y = (window_height - footer_height).max(composer_y + composer_height);
+        let mut components = Vec::new();
+
+        components.push(
+            LayoutComponentInfo::new("AcpDetachedWindow", LayoutComponentType::Container)
+                .with_bounds(0.0, 0.0, window_width, window_height)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FLOATING,
+                    chrome_tokens::MATERIAL_NS_VISUAL_EFFECT,
+                    Some(chrome_tokens::LIQUID_GLASS_WINDOW_RADIUS_PX),
+                )
+                .with_visual_token("chrome.acpDetachedWindow")
+                .with_flex_column()
+                .with_depth(0)
+                .with_explanation(
+                    "Detached ACP chat OS window root measured from the resolved automation target bounds.",
+                ),
+        );
+
+        components.push(
+            LayoutComponentInfo::new("AcpMessageViewport", LayoutComponentType::List)
+                .with_bounds(0.0, 0.0, window_width, message_height)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_CONTENT,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    None,
+                )
+                .with_visual_token("content.acpMessages")
+                .with_flex_grow(1.0)
+                .with_depth(1)
+                .with_parent("AcpDetachedWindow")
+                .with_explanation(
+                    "Scrollable ACP transcript region above the composer and optional hint footer.",
+                ),
+        );
+
+        components.push(
+            LayoutComponentInfo::new("AcpComposerBar", LayoutComponentType::Input)
+                .with_bounds(0.0, composer_y, window_width, composer_height)
+                .with_padding(
+                    Self::ACP_INPUT_PADDING_Y,
+                    Self::ACP_INPUT_PADDING_X,
+                    Self::ACP_INPUT_PADDING_Y,
+                    Self::ACP_INPUT_PADDING_X,
+                )
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                )
+                .with_visual_token("chrome.acpComposer")
+                .with_depth(1)
+                .with_parent("AcpDetachedWindow")
+                .with_explanation(
+                    "ACP composer row: vertical padding plus the measured single-line input height.",
+                ),
+        );
+
+        if footer_height > 0.0 {
+            components.push(
+                LayoutComponentInfo::new("AcpFooterRail", LayoutComponentType::Panel)
+                    .with_bounds(0.0, footer_y, window_width, footer_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                    )
+                    .with_visual_token("chrome.acpFooterRail")
+                    .with_depth(1)
+                    .with_parent("AcpDetachedWindow")
+                    .with_explanation(
+                        "Inline hint/footer rail shown when ACP owns its footer inside the detached window.",
+                    ),
+            );
+        }
+
+        if matches!(
+            self.composer_picker_state(),
+            crate::ai::acp::composer_state::AcpComposerPickerState::Open(_)
+        ) {
+            let picker_width = Self::mention_picker_width_for_window(window_width);
+            components.push(
+                LayoutComponentInfo::new("AcpComposerPicker", LayoutComponentType::Panel)
+                    .with_bounds(
+                        Self::ACP_INPUT_PADDING_X,
+                        (composer_y + composer_height + Self::ACP_MENTION_PICKER_OFFSET_Y)
+                            .min(window_height),
+                        picker_width,
+                        220.0_f32.min(window_height),
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FLOATING,
+                        chrome_tokens::MATERIAL_NS_VISUAL_EFFECT,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("chrome.acpComposerPicker")
+                    .with_depth(2)
+                    .with_parent("AcpDetachedWindow")
+                    .with_explanation(
+                        "Composer mention/slash picker floating from the detached ACP composer.",
+                    ),
+            );
+        }
+
+        LayoutInfo {
+            window_width,
+            window_height,
+            prompt_type: "acpDetached".to_string(),
+            components,
+            handler_form: None,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    pub(crate) fn placeholder_automation_layout_info(
+        target: &crate::protocol::AutomationWindowInfo,
+    ) -> crate::protocol::LayoutInfo {
+        use crate::protocol::{LayoutComponentInfo, LayoutComponentType, LayoutInfo};
+        use crate::ui::chrome as chrome_tokens;
+
+        let (window_width, window_height) = target
+            .bounds
+            .as_ref()
+            .map(|bounds| (bounds.width as f32, bounds.height as f32))
+            .unwrap_or((480.0, 440.0));
+        let composer_height = (Self::ACP_INPUT_PADDING_Y * 2.0) + Self::ACP_INPUT_LINE_HEIGHT;
+        let footer_height = crate::window_resize::main_layout::HINT_STRIP_HEIGHT;
+        let message_height = (window_height - composer_height - footer_height).max(0.0);
+        let footer_y = (window_height - footer_height).max(message_height + composer_height);
+
+        LayoutInfo {
+            window_width,
+            window_height,
+            prompt_type: "acpDetached".to_string(),
+            components: vec![
+                LayoutComponentInfo::new("AcpDetachedWindow", LayoutComponentType::Container)
+                    .with_bounds(0.0, 0.0, window_width, window_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FLOATING,
+                        chrome_tokens::MATERIAL_NS_VISUAL_EFFECT,
+                        Some(chrome_tokens::LIQUID_GLASS_WINDOW_RADIUS_PX),
+                    )
+                    .with_visual_token("chrome.acpDetachedWindow")
+                    .with_flex_column()
+                    .with_depth(0)
+                    .with_explanation(
+                        "Detached ACP placeholder window root measured from the resolved automation target bounds.",
+                    ),
+                LayoutComponentInfo::new("AcpMessageViewport", LayoutComponentType::List)
+                    .with_bounds(0.0, 0.0, window_width, message_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("content.acpMessages")
+                    .with_flex_grow(1.0)
+                    .with_depth(1)
+                    .with_parent("AcpDetachedWindow")
+                    .with_explanation(
+                        "Placeholder ACP transcript region above the composer and footer.",
+                    ),
+                LayoutComponentInfo::new("AcpComposerBar", LayoutComponentType::Input)
+                    .with_bounds(0.0, message_height, window_width, composer_height)
+                    .with_padding(
+                        Self::ACP_INPUT_PADDING_Y,
+                        Self::ACP_INPUT_PADDING_X,
+                        Self::ACP_INPUT_PADDING_Y,
+                        Self::ACP_INPUT_PADDING_X,
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("chrome.acpComposer")
+                    .with_depth(1)
+                    .with_parent("AcpDetachedWindow")
+                    .with_explanation(
+                        "ACP composer row: vertical padding plus the measured single-line input height.",
+                    ),
+                LayoutComponentInfo::new("AcpFooterRail", LayoutComponentType::Panel)
+                    .with_bounds(0.0, footer_y, window_width, footer_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                    )
+                    .with_visual_token("chrome.acpFooterRail")
+                    .with_depth(1)
+                    .with_parent("AcpDetachedWindow")
+                    .with_explanation("Placeholder ACP footer rail for window-shell proof."),
+            ],
+            handler_form: None,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
     pub(crate) fn footer_snapshot(&self, cx: &App) -> AcpFooterSnapshot {
         if self.is_setup_mode() {
             tracing::info!(

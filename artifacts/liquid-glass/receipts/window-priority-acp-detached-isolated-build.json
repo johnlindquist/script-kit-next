@@ -1,0 +1,23 @@
+{"schemaVersion":1,"tool":"build-isolated-binary","status":"error","phase":"build","agentId":"dt-agent-build","pool":"agent-debug","targetDir":"target-agent/pools/agent-debug","elapsedSec":120,"log":"/tmp/sk-isolated-build-dt-agent-build.log","error":{"code":"build_timeout","message":"cargo build exceeded 120s"}}
+{
+  "surface": "acpDetached",
+  "status": "passed",
+  "receipts": [
+    {
+      "command": "./scripts/agentic/agent-cargo.sh test --test acp_detached_liquid_glass_window_contract",
+      "result": "4 passed; 0 failed"
+    },
+    {
+      "command": "./scripts/agentic/agent-cargo.sh fmt --check",
+      "result": "passed"
+    },
+    {
+      "command": "./scripts/agentic/agent-cargo.sh check --lib",
+      "result": "passed"
+    },
+    {
+      "command": "./scripts/agentic/agent-cargo.sh check --bin script-kit-gpui",
+      "result": "passed"
+    }
+  ]
+}

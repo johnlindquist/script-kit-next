@@ -51,6 +51,7 @@ pub fn clear_chat_window_handle() {
         if let Some(state) = g.take() {
             if let Some(ref id) = state.automation_id {
                 crate::windows::remove_runtime_window_handle(id);
+                crate::windows::remove_automation_window(id);
             }
         }
     }
@@ -60,32 +61,99 @@ pub fn clear_chat_window_handle() {
 ///
 /// If `inherit_bounds` is Some, the detached window uses those bounds
 /// (offset slightly right so it doesn't overlap the main panel).
-fn chat_window_options(inherit_bounds: Option<gpui::Bounds<gpui::Pixels>>) -> WindowOptions {
-    let window_bounds = if let Some(bounds) = inherit_bounds {
+fn chat_window_bounds(inherit_bounds: Option<gpui::Bounds<gpui::Pixels>>) -> WindowBounds {
+    if let Some(bounds) = inherit_bounds {
         // Offset 20px right from the main window so both are visible
-        WindowBounds::Windowed(gpui::Bounds {
+        return WindowBounds::Windowed(gpui::Bounds {
             origin: gpui::Point {
                 x: bounds.origin.x + px(20.0),
                 y: bounds.origin.y + px(20.0),
             },
             size: bounds.size,
-        })
-    } else {
-        crate::window_state::load_window_bounds(crate::window_state::WindowRole::AcpChat)
-            .map(|persisted| persisted.to_gpui())
-            .unwrap_or_else(|| {
-                WindowBounds::Windowed(gpui::Bounds {
-                    origin: gpui::Point {
-                        x: px(100.0),
-                        y: px(100.0),
-                    },
-                    size: gpui::Size {
-                        width: px(480.0),
-                        height: px(440.0),
-                    },
-                })
+        });
+    }
+
+    crate::window_state::load_window_bounds(crate::window_state::WindowRole::AcpChat)
+        .map(|persisted| persisted.to_gpui())
+        .unwrap_or_else(|| {
+            WindowBounds::Windowed(gpui::Bounds {
+                origin: gpui::Point {
+                    x: px(100.0),
+                    y: px(100.0),
+                },
+                size: gpui::Size {
+                    width: px(480.0),
+                    height: px(440.0),
+                },
             })
+        })
+}
+
+fn automation_bounds_from_window_bounds(
+    bounds: WindowBounds,
+) -> Option<crate::protocol::AutomationWindowBounds> {
+    let bounds = match bounds {
+        WindowBounds::Windowed(bounds)
+        | WindowBounds::Maximized(bounds)
+        | WindowBounds::Fullscreen(bounds) => bounds,
     };
+    Some(crate::protocol::AutomationWindowBounds {
+        x: f32::from(bounds.origin.x) as f64,
+        y: f32::from(bounds.origin.y) as f64,
+        width: f32::from(bounds.size.width) as f64,
+        height: f32::from(bounds.size.height) as f64,
+    })
+}
+
+fn upsert_acp_detached_automation_window(
+    automation_id: &str,
+    bounds: Option<crate::protocol::AutomationWindowBounds>,
+) {
+    crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
+        id: automation_id.to_string(),
+        kind: crate::protocol::AutomationWindowKind::AcpDetached,
+        title: Some("Script Kit Agent Chat".to_string()),
+        focused: true,
+        visible: true,
+        semantic_surface: Some("acpChat".to_string()),
+        bounds,
+        parent_window_id: None,
+        parent_kind: None,
+        pid: Some(std::process::id()),
+    });
+}
+
+/// Move the detached ACP window to deterministic bounds for visual proof.
+pub fn set_chat_window_fixture_bounds(bounds: gpui::Bounds<gpui::Pixels>, cx: &mut App) -> bool {
+    let (handle, automation_id) = {
+        let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+        let guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(state) = guard.as_ref() else {
+            return false;
+        };
+        let Some(id) = state.automation_id.clone() else {
+            return false;
+        };
+        (state.handle, id)
+    };
+
+    let _ = handle.update(cx, |_root, window, cx| {
+        crate::components::inline_popup_window::set_inline_popup_window_bounds(window, bounds, cx);
+    });
+    crate::windows::set_automation_bounds(
+        &automation_id,
+        Some(crate::protocol::AutomationWindowBounds {
+            x: f32::from(bounds.origin.x) as f64,
+            y: f32::from(bounds.origin.y) as f64,
+            width: f32::from(bounds.size.width) as f64,
+            height: f32::from(bounds.size.height) as f64,
+        }),
+    );
+    true
+}
+
+fn chat_window_options(inherit_bounds: Option<gpui::Bounds<gpui::Pixels>>) -> WindowOptions {
+    let window_bounds = chat_window_bounds(inherit_bounds);
 
     WindowOptions {
         window_bounds: Some(window_bounds),
@@ -112,6 +180,8 @@ pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
         return Ok(());
     }
 
+    let window_bounds = chat_window_bounds(None);
+    let automation_bounds = automation_bounds_from_window_bounds(window_bounds);
     let handle = cx.open_window(chat_window_options(None), |window, cx| {
         window.on_window_should_close(cx, |window, _cx| {
             let wb = window.window_bounds();
@@ -124,6 +194,7 @@ pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
                 if let Some(state) = g.take() {
                     if let Some(ref id) = state.automation_id {
                         crate::windows::remove_runtime_window_handle(id);
+                        crate::windows::remove_automation_window(id);
                     }
                 }
             }
@@ -150,6 +221,7 @@ pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
     // Register the exact runtime handle so simulateGpuiEvent can target
     // this window by its automation ID without collapsing to WindowRole.
     crate::windows::upsert_runtime_window_handle(&automation_id, any_handle);
+    upsert_acp_detached_automation_window(&automation_id, automation_bounds);
 
     tracing::info!("acp_chat_window_opened");
     Ok(())
@@ -180,6 +252,8 @@ pub fn open_chat_window_with_thread(
     let view_entity_slot_inner = view_entity_slot.clone();
     let view_entity_slot_on_close = view_entity_slot.clone();
 
+    let window_bounds = chat_window_bounds(inherit_bounds);
+    let automation_bounds = automation_bounds_from_window_bounds(window_bounds);
     let handle = cx.open_window(chat_window_options(inherit_bounds), |window, cx| {
         // Save bounds and clear handle when window closes
         window.on_window_should_close(cx, move |window, cx| {
@@ -287,24 +361,7 @@ pub fn open_chat_window_with_thread(
     // find it. Runtime handle registry and metadata registry are separate —
     // a missing metadata entry makes the window invisible to discovery even
     // when the runtime handle exists.
-    let detached_bounds = inherit_bounds.map(|b| crate::protocol::AutomationWindowBounds {
-        x: f32::from(b.origin.x) as f64,
-        y: f32::from(b.origin.y) as f64,
-        width: f32::from(b.size.width) as f64,
-        height: f32::from(b.size.height) as f64,
-    });
-    crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
-        id: automation_id.clone(),
-        kind: crate::protocol::AutomationWindowKind::AcpDetached,
-        title: Some("Script Kit".to_string()),
-        focused: true,
-        visible: true,
-        semantic_surface: Some("acpChat".to_string()),
-        bounds: detached_bounds,
-        parent_window_id: None,
-        parent_kind: None,
-        pid: Some(std::process::id()),
-    });
+    upsert_acp_detached_automation_window(&automation_id, automation_bounds);
 
     // Activate the detached window so it gets keyboard focus immediately.
     activate_chat_window(cx);

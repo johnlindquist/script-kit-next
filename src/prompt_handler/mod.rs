@@ -4949,6 +4949,29 @@ impl ScriptListApp {
                         }
                         Ok(resolved)
                             if resolved.kind
+                                == crate::protocol::AutomationWindowKind::AcpDetached =>
+                        {
+                            if let Some(entity) =
+                                crate::ai::acp::chat_window::get_detached_acp_view_entity()
+                            {
+                                let layout_info = entity.read(cx).automation_layout_info(&resolved);
+                                let response =
+                                    Message::layout_info_result(request_id.clone(), layout_info);
+                                if let Some(ref sender) = self.response_sender {
+                                    let _ = sender.try_send(response);
+                                }
+                            } else {
+                                let layout_info = crate::ai::acp::view::AcpChatView::placeholder_automation_layout_info(&resolved);
+                                let response =
+                                    Message::layout_info_result(request_id.clone(), layout_info);
+                                if let Some(ref sender) = self.response_sender {
+                                    let _ = sender.try_send(response);
+                                }
+                            }
+                            return;
+                        }
+                        Ok(resolved)
+                            if resolved.kind
                                 == crate::protocol::AutomationWindowKind::ActionsDialog =>
                         {
                             if let Some(entity) = crate::actions::get_actions_dialog_entity(cx) {

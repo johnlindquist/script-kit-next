@@ -63,6 +63,28 @@
                                 logging::log("STDIN", "Opening Agent Chat via openAi compatibility alias");
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
+                            ExternalCommand::OpenAcpDetachedFixture { ref request_id } => {
+                                let rid = request_id.as_ref().map(|id| id.as_str());
+                                let result = crate::ai::acp::chat_window::open_chat_window(ctx)
+                                    .map(|_| {
+                                        crate::ai::acp::chat_window::set_chat_window_fixture_bounds(
+                                            gpui::Bounds {
+                                                origin: gpui::point(gpui::px(585.0), gpui::px(177.0)),
+                                                size: gpui::size(gpui::px(640.0), gpui::px(520.0)),
+                                            },
+                                            ctx,
+                                        )
+                                    });
+                                tracing::info!(
+                                    category = "STDIN",
+                                    event = "acp_detached_fixture_opened",
+                                    command = "openAcpDetachedFixture",
+                                    request_id = ?rid,
+                                    ok = result.as_ref().map(|moved| *moved).unwrap_or(false),
+                                    error = result.err().map(|err| err.to_string()),
+                                    "Detached ACP fixture open result"
+                                );
+                            }
                             ExternalCommand::OpenMiniAi => {
                                 logging::log("STDIN", "Opening Agent Chat via openMiniAi compatibility alias");
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);
