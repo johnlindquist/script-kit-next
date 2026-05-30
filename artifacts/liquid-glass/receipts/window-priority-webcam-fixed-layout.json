@@ -3,7 +3,7 @@
   "tool": "script-kit-devtools.layout",
   "command": "layout.measure",
   "classification": "ok",
-  "session": "liquid-webcam-fixed",
+  "session": "liquid-stale-batch",
   "include": [
     "nodes",
     "regions",
@@ -37,8 +37,8 @@
     "surfaceGeneration": null,
     "dataGeneration": null,
     "bounds": {
-      "x": 585,
-      "y": 177,
+      "x": 1962,
+      "y": 598,
       "width": 750,
       "height": 500
     },
@@ -48,8 +48,8 @@
     "frontmost": null,
     "focused": null,
     "screenshotIdentity": {
-      "width": 750,
-      "height": 500,
+      "width": null,
+      "height": null,
       "targetBoundsInScreenshot": {
         "x": 0,
         "y": 0,
@@ -58,17 +58,45 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 8001,
+    "pid": 9646,
     "strictTargetMatch": true,
     "ambiguity": []
   },
+  "layoutEvidenceFreshness": {
+    "schemaVersion": 1,
+    "generatedAt": "2026-05-30T13:26:12.280Z",
+    "auditSchema": "panel-radius-v2",
+    "requiredPanelRadiusNodes": [
+      "ContentArea",
+      "ScriptList",
+      "PreviewPanel"
+    ],
+    "sourceFingerprint": {
+      "schemaVersion": 1,
+      "algorithm": "sha256",
+      "files": [
+        {
+          "path": "src/app_layout/build_layout_info.rs",
+          "sha256": "d0cdc414765c7b39f1df9ebc44e47153fb429f17800c6a7c2e7478fedd9216c7"
+        },
+        {
+          "path": "scripts/devtools/layout.ts",
+          "sha256": "10fc886f0677c720d31e020a1afce824008c8767aaf451d427ae4f259469257e"
+        },
+        {
+          "path": "src/ui/chrome/tokens.rs",
+          "sha256": "42e274081636cb27743c06ddd80e7142fd3110e5462851b0998e885968a22220"
+        }
+      ]
+    }
+  },
   "promptType": "webcam",
-  "timestamp": "2026-05-30T05:56:36.643518+00:00",
+  "timestamp": "2026-05-30T13:26:12.260560+00:00",
   "componentCount": 5,
   "window": {
     "rect": {
-      "x": 585,
-      "y": 177,
+      "x": 1962,
+      "y": 598,
       "width": 750,
       "height": 500
     },
@@ -104,8 +132,8 @@
     "height": 500
   },
   "windowRect": {
-    "x": 585,
-    "y": 177,
+    "x": 1962,
+    "y": 598,
     "width": 750,
     "height": 500
   },
@@ -136,7 +164,7 @@
       "bounds": {
         "x": 16,
         "y": 11,
-        "width": 534,
+        "width": 498,
         "height": 22
       }
     },
@@ -174,11 +202,11 @@
       "depth": 0,
       "parent": null,
       "children": [],
-      "explanation": "Root window container. Uses flex-column layout.",
+      "explanation": "Root native window backdrop. Not a content layer or Liquid Glass content surface.",
       "visualStyle": {
-        "chromeLayer": "content",
-        "materialSource": "NSVisualEffectView",
-        "tokenSource": "window.vibrancy",
+        "chromeLayer": "windowBackdrop",
+        "materialSource": "nativeWindowBackdrop",
+        "tokenSource": "window.backdrop",
         "cornerRadius": {
           "topLeft": 22,
           "topRight": 22,
@@ -234,11 +262,11 @@
           "direction": "column"
         },
         "depth": 0,
-        "explanation": "Root window container. Uses flex-column layout.",
+        "explanation": "Root native window backdrop. Not a content layer or Liquid Glass content surface.",
         "visualStyle": {
-          "chromeLayer": "content",
-          "materialSource": "NSVisualEffectView",
-          "tokenSource": "window.vibrancy",
+          "chromeLayer": "windowBackdrop",
+          "materialSource": "nativeWindowBackdrop",
+          "tokenSource": "window.backdrop",
           "cornerRadius": {
             "topLeft": 22,
             "topRight": 22,
@@ -373,13 +401,13 @@
       "bounds": {
         "x": 16,
         "y": 11,
-        "width": 534,
+        "width": 498,
         "height": 22
       },
       "depth": 2,
       "parent": "Header",
       "children": [],
-      "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(200) = 534px. Vertically centered in header.",
+      "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(236) = 498px. Vertically centered in header.",
       "visualStyle": {
         "chromeLayer": "functionalChrome",
         "materialSource": "solidThemeToken",
@@ -393,13 +421,13 @@
         "visualBounds": {
           "x": 16,
           "y": 11,
-          "width": 534,
+          "width": 498,
           "height": 22
         },
         "hitBounds": {
           "x": 16,
           "y": 8,
-          "width": 534,
+          "width": 498,
           "height": 28
         }
       },
@@ -407,18 +435,18 @@
         "hitBounds": {
           "x": 16,
           "y": 8,
-          "width": 534,
+          "width": 498,
           "height": 28
         },
         "visualBounds": {
           "x": 16,
           "y": 11,
-          "width": 534,
+          "width": 498,
           "height": 22
         },
-        "hitWidth": 534,
+        "hitWidth": 498,
         "hitHeight": 28,
-        "visualWidth": 534,
+        "visualWidth": 498,
         "visualHeight": 22,
         "minHitPass": true,
         "minVisualPass": true,
@@ -432,7 +460,7 @@
         "bounds": {
           "x": 16,
           "y": 11,
-          "width": 534,
+          "width": 498,
           "height": 22
         },
         "flex": {
@@ -440,7 +468,7 @@
         },
         "depth": 2,
         "parent": "Header",
-        "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(200) = 534px. Vertically centered in header.",
+        "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(236) = 498px. Vertically centered in header.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
@@ -454,13 +482,13 @@
           "visualBounds": {
             "x": 16,
             "y": 11,
-            "width": 534,
+            "width": 498,
             "height": 22
           },
           "hitBounds": {
             "x": 16,
             "y": 8,
-            "width": 534,
+            "width": 498,
             "height": 28
           }
         }
@@ -483,6 +511,12 @@
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
         "tokenSource": "content.background",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
         "visualBounds": {
           "x": 0,
           "y": 45,
@@ -539,6 +573,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.background",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -571,6 +611,12 @@
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
         "tokenSource": "content.webcamPreview",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
         "visualBounds": {
           "x": 0,
           "y": 45,
@@ -627,6 +673,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.webcamPreview",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -659,10 +711,80 @@
     "unstyledNodeCount": 0,
     "controlsWithHitFailures": [],
     "contentGlassNodes": [],
+    "contentNativeMaterialNodes": [],
+    "glassLayerViolations": [],
     "missingStyleNodeNames": [],
     "chromeLayers": {
-      "content": 3,
-      "functionalChrome": 2
+      "content": 2,
+      "functionalChrome": 2,
+      "windowBackdrop": 1
+    },
+    "guidelineAssertions": {
+      "appleDocumented": {
+        "hitTargets": {
+          "source": "apple-documented",
+          "macosMinimumHitSize": {
+            "width": 28,
+            "height": 28
+          },
+          "macosMinimumVisualSize": {
+            "width": 20,
+            "height": 20
+          },
+          "failures": []
+        },
+        "buttonCenterDistance": {
+          "source": "apple-documented",
+          "requiredCenterDistance": 60,
+          "failures": []
+        },
+        "materialLayering": {
+          "source": "apple-documented",
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": []
+        },
+        "colorAdaptivity": {
+          "source": "apple-documented",
+          "hardcodedColorNodes": []
+        },
+        "safeAreaLayout": {
+          "source": "apple-documented",
+          "clippedNodeCount": 0,
+          "overflowY": false
+        },
+        "buttonShapeFamilies": {
+          "source": "apple-documented",
+          "exactAppleRadiusConstants": null
+        }
+      },
+      "projectLocal": {
+        "cornerRadiusTokens": {
+          "source": "project-local",
+          "failures": []
+        },
+        "paddingTokens": {
+          "source": "project-local",
+          "minimumPanelPadding": 16,
+          "minimumCompactRowHorizontalPadding": 10
+        },
+        "spacingTokens": {
+          "source": "project-local",
+          "minimumFooterActionGap": 8
+        },
+        "windowBackdropPolicy": {
+          "source": "project-local",
+          "contentGlassNodeCount": 0
+        },
+        "themeTokenUsage": {
+          "source": "project-local",
+          "hardcodedColorNodes": []
+        },
+        "renderReadbackPixelThresholds": {
+          "source": "project-local",
+          "minimumNonBlackRatio": 0.01
+        }
+      }
     }
   },
   "handlerForm": null,
@@ -671,7 +793,7 @@
   "errors": [],
   "rawLayout": {
     "type": "layoutInfoResult",
-    "requestId": "devtools-layout-measure-1780120596619-46fe19",
+    "requestId": "devtools-layout-measure-1780147572232-df88ed",
     "windowWidth": 750,
     "windowHeight": 500,
     "promptType": "webcam",
@@ -689,11 +811,11 @@
           "direction": "column"
         },
         "depth": 0,
-        "explanation": "Root window container. Uses flex-column layout.",
+        "explanation": "Root native window backdrop. Not a content layer or Liquid Glass content surface.",
         "visualStyle": {
-          "chromeLayer": "content",
-          "materialSource": "NSVisualEffectView",
-          "tokenSource": "window.vibrancy",
+          "chromeLayer": "windowBackdrop",
+          "materialSource": "nativeWindowBackdrop",
+          "tokenSource": "window.backdrop",
           "cornerRadius": {
             "topLeft": 22,
             "topRight": 22,
@@ -767,7 +889,7 @@
         "bounds": {
           "x": 16,
           "y": 11,
-          "width": 534,
+          "width": 498,
           "height": 22
         },
         "flex": {
@@ -775,7 +897,7 @@
         },
         "depth": 2,
         "parent": "Header",
-        "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(200) = 534px. Vertically centered in header.",
+        "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(236) = 498px. Vertically centered in header.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
@@ -789,13 +911,13 @@
           "visualBounds": {
             "x": 16,
             "y": 11,
-            "width": 534,
+            "width": 498,
             "height": 22
           },
           "hitBounds": {
             "x": 16,
             "y": 8,
-            "width": 534,
+            "width": 498,
             "height": 28
           }
         }
@@ -820,6 +942,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.background",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -854,6 +982,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.webcamPreview",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -869,6 +1003,6 @@
         }
       }
     ],
-    "timestamp": "2026-05-30T05:56:36.643518+00:00"
+    "timestamp": "2026-05-30T13:26:12.260560+00:00"
   }
 }
