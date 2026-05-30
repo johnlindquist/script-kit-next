@@ -216,6 +216,7 @@ async function main() {
     FileSearchMini: ["file-search-mini"],
     FileSearchFull: ["file-search-full"],
     SdkReference: ["sdk-reference"],
+    ScriptTemplateCatalog: ["script-template", "script-template-catalog"],
     NotesWindow: ["notes"],
     Dictation: ["dictation"],
   };
@@ -309,6 +310,10 @@ async function main() {
     } else if (surfaceKind === "SdkReference") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-sdk-reference-current-layout.json`,
+      ]);
+    } else if (surfaceKind === "ScriptTemplateCatalog") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-script-template-current-layout.json`,
       ]);
     } else if (surfaceKind === "EmojiPicker") {
       await attachVisualAudit(evidence, [

@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.elements",
+  "command": "elements.snapshot",
+  "classification": "ok",
+  "session": "liquid-script-template-current",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ScriptTemplateCatalog"
+  },
+  "target": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "ScriptTemplateCatalog",
+    "appViewVariant": "ScriptTemplateCatalogView",
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 750,
+      "height": 480,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 95116,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "semanticSurface": {
+    "surfaceKind": "ScriptTemplateCatalog",
+    "appViewVariant": "ScriptTemplateCatalogView"
+  },
+  "totalCount": 7,
+  "returnedCount": 7,
+  "truncated": false,
+  "focusedSemanticId": "input:script-template-filt",
+  "selectedSemanticId": "choice:0:blank-starter",
+  "duplicateSemanticIds": [],
+  "missingPrimitives": [
+    "elementBounds"
+  ],
+  "nodes": [
+    {
+      "semanticId": "input:script-template-filt",
+      "role": "input",
+      "type": "input",
+      "label": "",
+      "text": null,
+      "value": "",
+      "selected": null,
+      "focused": true,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "input:script-template-filt",
+        "type": "input",
+        "value": "",
+        "focused": true
+      }
+    },
+    {
+      "semanticId": "list:script-templates",
+      "role": "list",
+      "type": "list",
+      "label": "2 items",
+      "text": "2 items",
+      "value": null,
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "list:script-templates",
+        "type": "list",
+        "text": "2 items"
+      }
+    },
+    {
+      "semanticId": "choice:0:blank-starter",
+      "role": "choice",
+      "type": "choice",
+      "label": "Blank Starter",
+      "text": "Blank Starter",
+      "value": "Blank Starter",
+      "selected": true,
+      "focused": null,
+      "index": 0,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:0:blank-starter",
+        "type": "choice",
+        "text": "Blank Starter",
+        "value": "Blank Starter",
+        "selected": true,
+        "index": 0
+      }
+    },
+    {
+      "semanticId": "choice:1:choice-list",
+      "role": "choice",
+      "type": "choice",
+      "label": "Choice List",
+      "text": "Choice List",
+      "value": "Choice List",
+      "selected": false,
+      "focused": null,
+      "index": 1,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:1:choice-list",
+        "type": "choice",
+        "text": "Choice List",
+        "value": "Choice List",
+        "selected": false,
+        "index": 1
+      }
+    },
+    {
+      "semanticId": "footer:prompt:row",
+      "role": "footer",
+      "type": "panel",
+      "label": "prompt",
+      "text": "prompt",
+      "value": null,
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:prompt:row",
+        "type": "panel",
+        "text": "prompt",
+        "role": "footer",
+        "kind": "promptFooterRow",
+        "selectable": false
+      }
+    },
+    {
+      "semanticId": "footer:prompt:actions",
+      "role": "footer",
+      "type": "button",
+      "label": "⌘K Actions",
+      "text": "⌘K Actions",
+      "value": "actions",
+      "selected": false,
+      "focused": null,
+      "index": 0,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:prompt:actions",
+        "type": "button",
+        "text": "⌘K Actions",
+        "value": "actions",
+        "selected": false,
+        "index": 0,
+        "role": "footer",
+        "kind": "promptFooterButton",
+        "selectable": true
+      }
+    },
+    {
+      "semanticId": "footer:prompt:close",
+      "role": "footer",
+      "type": "button",
+      "label": "Esc Close",
+      "text": "Esc Close",
+      "value": "close",
+      "selected": false,
+      "focused": null,
+      "index": 1,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:prompt:close",
+        "type": "button",
+        "text": "Esc Close",
+        "value": "close",
+        "selected": false,
+        "index": 1,
+        "role": "footer",
+        "kind": "promptFooterButton",
+        "selectable": true
+      }
+    }
+  ],
+  "warnings": [
+    "getElements does not expose bounds yet; use devtools.layout.measure for geometry."
+  ],
+  "errors": []
+}
