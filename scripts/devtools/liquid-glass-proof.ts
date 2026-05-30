@@ -139,12 +139,13 @@ function classify(evidence: Evidence) {
   const nodeCount = typeof audit.nodeCount === "number" ? audit.nodeCount : null;
   const hitFailures = asArray(audit.controlsWithHitFailures).length;
   const contentGlass = asArray(audit.contentGlassNodes).length;
+  const glassLayerViolations = asArray(audit.glassLayerViolations).length;
   const missingStyle = asArray(audit.missingStyleNodeNames).length;
 
-  if (hasScreenshot && hasLayout && hasImageDiff && nodeCount != null && styled === nodeCount && hitFailures === 0 && contentGlass === 0 && missingStyle === 0) {
+  if (hasScreenshot && hasLayout && hasImageDiff && nodeCount != null && styled === nodeCount && hitFailures === 0 && contentGlass === 0 && glassLayerViolations === 0 && missingStyle === 0) {
     return "strong-proof";
   }
-  if (hasLayout && nodeCount != null && styled === nodeCount && hitFailures === 0 && contentGlass === 0 && missingStyle === 0) {
+  if (hasLayout && nodeCount != null && styled === nodeCount && hitFailures === 0 && contentGlass === 0 && glassLayerViolations === 0 && missingStyle === 0) {
     return "numeric-proof-missing-visual-capture";
   }
   if (hasScreenshot && hasLayout) {
@@ -196,6 +197,7 @@ async function main() {
     AppLauncher: ["app-launcher", "applauncher"],
     WindowSwitcher: ["window-switcher", "windowswitcher"],
     BrowserTabs: ["browser-tabs", "browsertabs"],
+    GenericFilterableList: ["generic-filterable", "generic-filterable-list", "favorites", "search-ai-presets"],
     ProcessManager: ["process-manager", "processmanager"],
     CurrentAppCommands: ["current-app", "current-app-commands", "currentappcommands"],
     Settings: ["settings"],
@@ -254,6 +256,10 @@ async function main() {
     } else if (surfaceKind === "BrowserTabs") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-browser-tabs-current-layout.json`,
+      ]);
+    } else if (surfaceKind === "GenericFilterableList") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-generic-filterable-favorites-current-layout.json`,
       ]);
     } else if (surfaceKind === "ProcessManager") {
       await attachVisualAudit(evidence, [

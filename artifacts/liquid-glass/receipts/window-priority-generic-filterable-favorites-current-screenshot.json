@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 3,
+  "status": "error",
+  "label": "window-priority-generic-filterable-favorites-current",
+  "timestamp": "2026-05-30T07:07:47.299Z",
+  "durationMs": 27,
+  "requiresVisionReview": false,
+  "resolvedTarget": null,
+  "captureRouting": "generic-frontmost",
+  "requestedAutomationWindowId": null,
+  "requestedOsWindowId": null,
+  "showIssuedBeforeCapture": false,
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-generic-filterable-favorites-current.png",
+    "captureMethod": null,
+    "windowCaptureMethod": null,
+    "windowId": null
+  },
+  "captureTarget": {
+    "requestedWindowId": null,
+    "actualWindowId": null
+  },
+  "inspection": null,
+  "popupCapture": null,
+  "visionCrops": [],
+  "stateReceipt": {
+    "queried": true,
+    "snapshot": null,
+    "error": "Failed to query getAcpState: Session 'liquid-generic-filterable-current' not found or input FIFO missing."
+  },
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": false,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-generic-filterable-favorites-current.png",
+    "sizeBytes": null,
+    "width": null,
+    "height": null,
+    "contentAudit": null,
+    "captureMethod": null,
+    "windowCaptureMethod": null,
+    "windowFrontmost": null,
+    "windowFocused": null,
+    "windowId": null,
+    "error": "Failed to send show before capture: {\"schemaVersion\":1,\"status\":\"error\",\"error\":{\"code\":\"no_session\",\"message\":\"Session 'liquid-generic-filterable-current' not found or input FIFO missing.\"}}"
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "state: ERROR (Failed to query getAcpState: Session 'liquid-generic-filterable-current' not found or input FIFO missing.) | screenshot: FAILED (Failed to send show before capture: {\"schemaVersion\":1,\"status\":\"error\",\"error\":{\"code\":\"no_session\",\"message\":\"Session 'liquid-generic-filterable-current' not found or input FIFO missing.\"}})"
+}
