@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "label": "window-priority-prompt-div-fixed",
+  "command": "prompt-div.open-render-fixture",
+  "target": {
+    "surfaceKind": "PromptEntity",
+    "appViewVariant": "DivPrompt"
+  },
+  "fixture": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/fixtures/prompt-div-liquid-glass.ts",
+  "receipt": {
+    "schemaVersion": 1,
+    "status": "ok",
+    "session": "liquid-glass-promptentity-render",
+    "sent": true,
+    "_command": [
+      "bash",
+      "scripts/agentic/session.sh",
+      "send",
+      "liquid-glass-promptentity-render",
+      "{\"type\":\"div\",\"id\":\"liquid-glass-promptentity-render\",\"html\":\"\\n<main class=\\\"p-6 space-y-4\\\">\\n  <section class=\\\"space-y-2\\\">\\n    <h1 class=\\\"text-xl font-semibold\\\">PromptEntity Liquid Glass Fixture</h1>\\n    <p class=\\\"text-sm opacity-80\\\">\\n      Deterministic DivPrompt content for PromptEntity shell proof.\\n    </p>\\n  </section>\\n  <section class=\\\"rounded-lg border p-4\\\">\\n    <p>Content layer stays inside DivContent; prompt chrome owns the functional layer.</p>\\n  </section>\\n</main>\\n\",\"requestId\":\"window-priority-prompt-div-fixed-open-render\"}"
+    ],
+    "_exitCode": 0,
+    "_stderr": ""
+  }
+}

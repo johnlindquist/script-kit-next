@@ -2,11 +2,13 @@
   "schemaVersion": 1,
   "tool": "script-kit-devtools.layout",
   "command": "layout.measure",
-  "classification": "ok",
+  "classification": "blocked-by-timeout",
   "session": "liquid-file-search-refresh",
   "include": [
     "nodes",
     "regions",
+    "scroll",
+    "anchors",
     "resize",
     "overlaps"
   ],
@@ -16,30 +18,25 @@
       "type": "main"
     },
     "strict": true,
-    "expectedSurfaceKind": "ScriptList"
+    "expectedSurfaceKind": "PromptEntity"
   },
   "target": {
-    "automationId": "main",
-    "stableTargetId": "main",
-    "targetKind": "Main",
+    "automationId": null,
+    "stableTargetId": null,
+    "targetKind": null,
     "hostKind": null,
     "parentAutomationId": null,
     "openerAutomationId": null,
-    "surfaceKind": "ScriptList",
-    "appViewVariant": "ScriptList",
-    "nativeFooterSurface": "script_list",
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
     "surfaceFamily": null,
     "routeId": null,
     "routeStack": [],
     "targetGeneration": null,
     "surfaceGeneration": null,
     "dataGeneration": null,
-    "bounds": {
-      "x": 585,
-      "y": 177,
-      "width": 750,
-      "height": 480
-    },
+    "bounds": null,
     "screenId": null,
     "zOrder": null,
     "visible": null,
@@ -48,27 +45,22 @@
     "screenshotIdentity": {
       "width": null,
       "height": null,
-      "targetBoundsInScreenshot": {
-        "x": 0,
-        "y": 0,
-        "width": 750,
-        "height": 480
-      },
+      "targetBoundsInScreenshot": null,
       "nonBlankRatio": null
     },
-    "pid": 52036,
-    "strictTargetMatch": true,
+    "pid": null,
+    "strictTargetMatch": false,
     "ambiguity": []
   },
   "promptType": "mainMenu",
-  "timestamp": "2026-05-30T09:31:32.900666+00:00",
+  "timestamp": "2026-05-30T09:35:15.742941+00:00",
   "componentCount": 14,
   "window": {
     "rect": {
-      "x": 585,
-      "y": 177,
-      "width": 750,
-      "height": 480
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0
     },
     "visible": null,
     "focused": null
@@ -102,10 +94,10 @@
     "height": 480
   },
   "windowRect": {
-    "x": 585,
-    "y": 177,
-    "width": 750,
-    "height": 480
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0
   },
   "regions": [
     {
@@ -1808,12 +1800,14 @@
     }
   },
   "handlerForm": null,
-  "missingPrimitives": [],
+  "missingPrimitives": [
+    "strictTargetIdentity"
+  ],
   "warnings": [],
   "errors": [],
   "rawLayout": {
     "type": "layoutInfoResult",
-    "requestId": "devtools-layout-measure-1780133492859-1607cd",
+    "requestId": "devtools-layout-measure-1780133715719-6806a7",
     "windowWidth": 750,
     "windowHeight": 480,
     "promptType": "mainMenu",
@@ -2442,6 +2436,6 @@
         }
       }
     ],
-    "timestamp": "2026-05-30T09:31:32.900666+00:00"
+    "timestamp": "2026-05-30T09:35:15.742941+00:00"
   }
 }

@@ -5,7 +5,7 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T09:36:45.052Z",
+  "generatedAt": "2026-05-30T09:35:22.335Z",
   "summary": {
     "surfaceCount": 29,
     "strongProofSurfaceCount": 0,
@@ -19,11 +19,11 @@
     "offscreenRenderFailedSurfaceCount": 0,
     "offscreenRenderMissingSurfaceCount": 29,
     "guidelineProofSurfaceCount": 2,
-    "guidelineFailedSurfaceCount": 26,
-    "guidelineMissingSurfaceCount": 1,
+    "guidelineFailedSurfaceCount": 27,
+    "guidelineMissingSurfaceCount": 0,
     "strongGuidanceProofSurfaceCount": 0,
-    "sourceUiGapSurfaceCount": 26,
-    "guidanceCaptureBlockedSurfaceCount": 3,
+    "sourceUiGapSurfaceCount": 27,
+    "guidanceCaptureBlockedSurfaceCount": 2,
     "numericGuidanceMissingOsVisualSurfaceCount": 0,
     "missingGuidanceProofSurfaceCount": 0,
     "diagnosticReadbackLimitationSurfaceCount": 3,
@@ -324,7 +324,7 @@
       "surfaceStatuses": [
         {
           "surfaceKind": "AcpChat",
-          "proofStatus": "numeric-proof-missing-guideline-assertions"
+          "proofStatus": "numeric-proof-guideline-failed"
         },
         {
           "surfaceKind": "AcpHistory",
@@ -366,7 +366,7 @@
       "surfaceStatuses": [
         {
           "surfaceKind": "AcpChat",
-          "proofStatus": "numeric-proof-missing-guideline-assertions"
+          "proofStatus": "numeric-proof-guideline-failed"
         },
         {
           "surfaceKind": "AcpHistory",
@@ -518,7 +518,11 @@
       "diagnosticLimitations": [],
       "guidelineFailures": [
         "projectLocal.cornerRadiusTokens: AboutContentStack",
-        "projectLocal.cornerRadiusTokens: AboutQuickActions"
+        "projectLocal.cornerRadiusTokens: AboutCreatorRow",
+        "projectLocal.cornerRadiusTokens: AboutQuickActions",
+        "projectLocal.cornerRadiusTokens: AboutScrollContainer",
+        "projectLocal.cornerRadiusTokens: AboutTagline",
+        "projectLocal.cornerRadiusTokens: AboutTitle"
       ],
       "receipts": [
         "artifacts/liquid-glass/receipts/image-diff-window-priority-about-before-to-after.json",
@@ -679,9 +683,6 @@
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-guideline-wait.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-layout-after.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-open-after.json",
-        "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-layout.json",
-        "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-open.json",
-        "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-state.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-screenshot-after.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-inspect-after.json"
       ],
@@ -1098,6 +1099,8 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [
+        "projectLocal.cornerRadiusTokens: GenericFilterableCount",
+        "projectLocal.cornerRadiusTokens: GenericFilterableDivider",
         "projectLocal.cornerRadiusTokens: GenericFilterableList"
       ],
       "receipts": [
@@ -1209,7 +1212,10 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [
-        "projectLocal.cornerRadiusTokens: KitStoreBrowseList"
+        "projectLocal.cornerRadiusTokens: KitStoreBrowseCount",
+        "projectLocal.cornerRadiusTokens: KitStoreBrowseDivider",
+        "projectLocal.cornerRadiusTokens: KitStoreBrowseList",
+        "projectLocal.cornerRadiusTokens: KitStoreBrowseTitle"
       ],
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-kit-store-browse.json",
@@ -1262,7 +1268,10 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [
-        "projectLocal.cornerRadiusTokens: KitStoreInstalledList"
+        "projectLocal.cornerRadiusTokens: KitStoreInstalledCount",
+        "projectLocal.cornerRadiusTokens: KitStoreInstalledDivider",
+        "projectLocal.cornerRadiusTokens: KitStoreInstalledList",
+        "projectLocal.cornerRadiusTokens: KitStoreInstalledTitle"
       ],
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-kit-store-installed.json",
@@ -1656,7 +1665,9 @@
       "guidanceEvidenceNeeded": [],
       "diagnosticLimitations": [],
       "guidelineFailures": [
-        "projectLocal.cornerRadiusTokens: CreationFeedbackActions"
+        "projectLocal.cornerRadiusTokens: CreationFeedbackActions",
+        "projectLocal.cornerRadiusTokens: CreationFeedbackIntro",
+        "projectLocal.cornerRadiusTokens: CreationFeedbackPathSection"
       ],
       "receipts": [
         "artifacts/liquid-glass/receipts/image-diff-window-priority-feedback-before-to-after.json",
@@ -1866,7 +1877,8 @@
       "diagnosticLimitations": [],
       "guidelineFailures": [
         "projectLocal.cornerRadiusTokens: AttachmentPortalContent",
-        "projectLocal.cornerRadiusTokens: AttachmentPortalList"
+        "projectLocal.cornerRadiusTokens: AttachmentPortalList",
+        "projectLocal.cornerRadiusTokens: AttachmentPortalPreview"
       ],
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-attachment-portal.json",
@@ -1893,21 +1905,24 @@
     },
     {
       "surfaceKind": "AcpChat",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "guidance-proof-capture-blocked",
+      "proofStatus": "numeric-proof-guideline-failed",
+      "guidanceProofStatus": "source-ui-gap",
       "proofTiers": {
         "osScreenshotProof": "blocked",
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "fail",
         "imageDiffProof": "blocked"
       },
       "failedTiers": [
         "osScreenshotProof",
+        "guidelineProof",
         "imageDiffProof"
       ],
-      "sourceUiGaps": [],
+      "sourceUiGaps": [
+        "guidelineAssertions"
+      ],
       "devtoolsCaptureLimitations": [
         "osScreenshotProof:blocked",
         "imageDiffProof:blocked"
@@ -1917,7 +1932,9 @@
         "imageDiffProof"
       ],
       "diagnosticLimitations": [],
-      "guidelineFailures": [],
+      "guidelineFailures": [
+        "projectLocal.cornerRadiusTokens: AcpMessageViewport"
+      ],
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-acp-detached.json",
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-acp-history.json",
@@ -2009,6 +2026,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [
+        "projectLocal.cornerRadiusTokens: ConfirmPromptBody",
         "projectLocal.cornerRadiusTokens: ConfirmPromptStack",
         "projectLocal.cornerRadiusTokens: ConfirmPromptTitle"
       ],
@@ -2158,7 +2176,11 @@
       ],
       "guidelineFailures": [
         "projectLocal.cornerRadiusTokens: AboutContentStack",
-        "projectLocal.cornerRadiusTokens: AboutQuickActions"
+        "projectLocal.cornerRadiusTokens: AboutCreatorRow",
+        "projectLocal.cornerRadiusTokens: AboutQuickActions",
+        "projectLocal.cornerRadiusTokens: AboutScrollContainer",
+        "projectLocal.cornerRadiusTokens: AboutTagline",
+        "projectLocal.cornerRadiusTokens: AboutTitle"
       ],
       "receipts": [
         "artifacts/liquid-glass/receipts/image-diff-window-priority-about-before-to-after.json",
@@ -2344,9 +2366,6 @@
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-guideline-wait.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-layout-after.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-open-after.json",
-        "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-layout.json",
-        "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-open.json",
-        "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-state.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-screenshot-after.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-inspect-after.json"
       ],
@@ -2851,6 +2870,8 @@
         "offscreenRenderProof"
       ],
       "guidelineFailures": [
+        "projectLocal.cornerRadiusTokens: GenericFilterableCount",
+        "projectLocal.cornerRadiusTokens: GenericFilterableDivider",
         "projectLocal.cornerRadiusTokens: GenericFilterableList"
       ],
       "receipts": [
@@ -2984,7 +3005,10 @@
         "offscreenRenderProof"
       ],
       "guidelineFailures": [
-        "projectLocal.cornerRadiusTokens: KitStoreBrowseList"
+        "projectLocal.cornerRadiusTokens: KitStoreBrowseCount",
+        "projectLocal.cornerRadiusTokens: KitStoreBrowseDivider",
+        "projectLocal.cornerRadiusTokens: KitStoreBrowseList",
+        "projectLocal.cornerRadiusTokens: KitStoreBrowseTitle"
       ],
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-kit-store-browse.json",
@@ -3048,7 +3072,10 @@
         "offscreenRenderProof"
       ],
       "guidelineFailures": [
-        "projectLocal.cornerRadiusTokens: KitStoreInstalledList"
+        "projectLocal.cornerRadiusTokens: KitStoreInstalledCount",
+        "projectLocal.cornerRadiusTokens: KitStoreInstalledDivider",
+        "projectLocal.cornerRadiusTokens: KitStoreInstalledList",
+        "projectLocal.cornerRadiusTokens: KitStoreInstalledTitle"
       ],
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-kit-store-installed.json",
@@ -3533,7 +3560,9 @@
         "offscreenRenderProof"
       ],
       "guidelineFailures": [
-        "projectLocal.cornerRadiusTokens: CreationFeedbackActions"
+        "projectLocal.cornerRadiusTokens: CreationFeedbackActions",
+        "projectLocal.cornerRadiusTokens: CreationFeedbackIntro",
+        "projectLocal.cornerRadiusTokens: CreationFeedbackPathSection"
       ],
       "receipts": [
         "artifacts/liquid-glass/receipts/image-diff-window-priority-feedback-before-to-after.json",
@@ -3787,7 +3816,8 @@
       ],
       "guidelineFailures": [
         "projectLocal.cornerRadiusTokens: AttachmentPortalContent",
-        "projectLocal.cornerRadiusTokens: AttachmentPortalList"
+        "projectLocal.cornerRadiusTokens: AttachmentPortalList",
+        "projectLocal.cornerRadiusTokens: AttachmentPortalPreview"
       ],
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-attachment-portal.json",
@@ -3814,14 +3844,14 @@
     },
     {
       "surfaceKind": "AcpChat",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "guidance-proof-capture-blocked",
+      "proofStatus": "numeric-proof-guideline-failed",
+      "guidanceProofStatus": "source-ui-gap",
       "proofTiers": {
         "osScreenshotProof": "blocked",
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "fail",
         "imageDiffProof": "blocked"
       },
       "requiredEvidence": {
@@ -3831,12 +3861,14 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "fail",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true
       },
-      "sourceUiGaps": [],
+      "sourceUiGaps": [
+        "guidelineAssertions"
+      ],
       "devtoolsCaptureLimitations": [
         "osScreenshotProof:blocked",
         "imageDiffProof:blocked"
@@ -3850,7 +3882,9 @@
         "appRenderProof",
         "offscreenRenderProof"
       ],
-      "guidelineFailures": [],
+      "guidelineFailures": [
+        "projectLocal.cornerRadiusTokens: AcpMessageViewport"
+      ],
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-acp-detached.json",
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-acp-history.json",
@@ -3953,6 +3987,7 @@
         "offscreenRenderProof"
       ],
       "guidelineFailures": [
+        "projectLocal.cornerRadiusTokens: ConfirmPromptBody",
         "projectLocal.cornerRadiusTokens: ConfirmPromptStack",
         "projectLocal.cornerRadiusTokens: ConfirmPromptTitle"
       ],
@@ -4042,9 +4077,6 @@
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-guideline-wait.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-layout-after.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-open-after.json",
-        "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-layout.json",
-        "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-open.json",
-        "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-state.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-screenshot-after.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-inspect-after.json"
       ],
@@ -4211,9 +4243,9 @@
       "surfaceKind": "AcpChat",
       "outsideInPriority": 14,
       "priorityGroup": "window-container",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "guidance-proof-capture-blocked",
-      "blockingClass": "devtools-capture-limitation",
+      "proofStatus": "numeric-proof-guideline-failed",
+      "guidanceProofStatus": "source-ui-gap",
+      "blockingClass": "source-ui-gap",
       "priority": "capture-blocker",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
@@ -4227,14 +4259,18 @@
         "appRenderProof",
         "offscreenRenderProof"
       ],
-      "sourceUiGaps": [],
+      "sourceUiGaps": [
+        "guidelineAssertions"
+      ],
       "devtoolsCaptureLimitations": [
         "osScreenshotProof:blocked",
         "imageDiffProof:blocked"
       ],
       "diagnosticLimitations": [],
-      "guidelineFailures": [],
-      "recommendedNextAction": "fix OS/window capture limitation or permissions; do not treat this as a UI source gap",
+      "guidelineFailures": [
+        "projectLocal.cornerRadiusTokens: AcpMessageViewport"
+      ],
+      "recommendedNextAction": "fix UI/source layout/style gap, then rerun layout + OS visual proof",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-acp-detached.json",
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-acp-history.json",
@@ -4428,7 +4464,8 @@
       "diagnosticLimitations": [],
       "guidelineFailures": [
         "projectLocal.cornerRadiusTokens: AttachmentPortalContent",
-        "projectLocal.cornerRadiusTokens: AttachmentPortalList"
+        "projectLocal.cornerRadiusTokens: AttachmentPortalList",
+        "projectLocal.cornerRadiusTokens: AttachmentPortalPreview"
       ],
       "recommendedNextAction": "fix UI/source layout/style gap, then rerun layout + OS visual proof",
       "receipts": [
@@ -4484,6 +4521,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [
+        "projectLocal.cornerRadiusTokens: ConfirmPromptBody",
         "projectLocal.cornerRadiusTokens: ConfirmPromptStack",
         "projectLocal.cornerRadiusTokens: ConfirmPromptTitle"
       ],
@@ -4818,6 +4856,8 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [
+        "projectLocal.cornerRadiusTokens: GenericFilterableCount",
+        "projectLocal.cornerRadiusTokens: GenericFilterableDivider",
         "projectLocal.cornerRadiusTokens: GenericFilterableList"
       ],
       "recommendedNextAction": "fix UI/source layout/style gap, then rerun layout + OS visual proof",
@@ -5035,7 +5075,10 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [
-        "projectLocal.cornerRadiusTokens: KitStoreBrowseList"
+        "projectLocal.cornerRadiusTokens: KitStoreBrowseCount",
+        "projectLocal.cornerRadiusTokens: KitStoreBrowseDivider",
+        "projectLocal.cornerRadiusTokens: KitStoreBrowseList",
+        "projectLocal.cornerRadiusTokens: KitStoreBrowseTitle"
       ],
       "recommendedNextAction": "fix UI/source layout/style gap, then rerun layout + OS visual proof",
       "receipts": [
@@ -5089,7 +5132,10 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [
-        "projectLocal.cornerRadiusTokens: KitStoreInstalledList"
+        "projectLocal.cornerRadiusTokens: KitStoreInstalledCount",
+        "projectLocal.cornerRadiusTokens: KitStoreInstalledDivider",
+        "projectLocal.cornerRadiusTokens: KitStoreInstalledList",
+        "projectLocal.cornerRadiusTokens: KitStoreInstalledTitle"
       ],
       "recommendedNextAction": "fix UI/source layout/style gap, then rerun layout + OS visual proof",
       "receipts": [
@@ -5398,7 +5444,11 @@
       "diagnosticLimitations": [],
       "guidelineFailures": [
         "projectLocal.cornerRadiusTokens: AboutContentStack",
-        "projectLocal.cornerRadiusTokens: AboutQuickActions"
+        "projectLocal.cornerRadiusTokens: AboutCreatorRow",
+        "projectLocal.cornerRadiusTokens: AboutQuickActions",
+        "projectLocal.cornerRadiusTokens: AboutScrollContainer",
+        "projectLocal.cornerRadiusTokens: AboutTagline",
+        "projectLocal.cornerRadiusTokens: AboutTitle"
       ],
       "recommendedNextAction": "fix UI/source layout/style gap, then rerun layout + OS visual proof",
       "receipts": [
@@ -5517,7 +5567,9 @@
       "devtoolsCaptureLimitations": [],
       "diagnosticLimitations": [],
       "guidelineFailures": [
-        "projectLocal.cornerRadiusTokens: CreationFeedbackActions"
+        "projectLocal.cornerRadiusTokens: CreationFeedbackActions",
+        "projectLocal.cornerRadiusTokens: CreationFeedbackIntro",
+        "projectLocal.cornerRadiusTokens: CreationFeedbackPathSection"
       ],
       "recommendedNextAction": "fix UI/source layout/style gap, then rerun layout + OS visual proof",
       "receipts": [
@@ -5855,7 +5907,11 @@
               "source": "project-local",
               "failures": [
                 "AboutContentStack",
-                "AboutQuickActions"
+                "AboutCreatorRow",
+                "AboutQuickActions",
+                "AboutScrollContainer",
+                "AboutTagline",
+                "AboutTitle"
               ]
             }
           }
@@ -5923,7 +5979,11 @@
                 "source": "project-local",
                 "failures": [
                   "AboutContentStack",
-                  "AboutQuickActions"
+                  "AboutCreatorRow",
+                  "AboutQuickActions",
+                  "AboutScrollContainer",
+                  "AboutTagline",
+                  "AboutTitle"
                 ]
               }
             }
@@ -6274,9 +6334,6 @@
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-guideline-wait.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-layout-after.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-open-after.json",
-          "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-layout.json",
-          "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-open.json",
-          "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-state.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-screenshot-after.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-inspect-after.json"
         ],
@@ -6288,8 +6345,7 @@
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-fixed-layout-devtools.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-fixed-layout-sdk.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-guideline-layout.json",
-          "artifacts/liquid-glass/receipts/window-priority-prompt-div-layout-after.json",
-          "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-layout.json"
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-layout-after.json"
         ],
         "inspectReceipts": [
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-bus-probe.json",
@@ -6323,9 +6379,6 @@
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-guideline-wait.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-layout-after.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-open-after.json",
-          "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-layout.json",
-          "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-open.json",
-          "artifacts/liquid-glass/receipts/window-priority-prompt-div-radius-state.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-screenshot-after.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-inspect-after.json"
         ],
@@ -7412,6 +7465,8 @@
             "cornerRadiusTokens": {
               "source": "project-local",
               "failures": [
+                "GenericFilterableCount",
+                "GenericFilterableDivider",
                 "GenericFilterableList"
               ]
             }
@@ -7490,6 +7545,8 @@
               "cornerRadiusTokens": {
                 "source": "project-local",
                 "failures": [
+                  "GenericFilterableCount",
+                  "GenericFilterableDivider",
                   "GenericFilterableList"
                 ]
               }
@@ -7690,7 +7747,10 @@
             "cornerRadiusTokens": {
               "source": "project-local",
               "failures": [
-                "KitStoreBrowseList"
+                "KitStoreBrowseCount",
+                "KitStoreBrowseDivider",
+                "KitStoreBrowseList",
+                "KitStoreBrowseTitle"
               ]
             }
           }
@@ -7748,7 +7808,10 @@
               "cornerRadiusTokens": {
                 "source": "project-local",
                 "failures": [
-                  "KitStoreBrowseList"
+                  "KitStoreBrowseCount",
+                  "KitStoreBrowseDivider",
+                  "KitStoreBrowseList",
+                  "KitStoreBrowseTitle"
                 ]
               }
             }
@@ -7821,7 +7884,10 @@
             "cornerRadiusTokens": {
               "source": "project-local",
               "failures": [
-                "KitStoreInstalledList"
+                "KitStoreInstalledCount",
+                "KitStoreInstalledDivider",
+                "KitStoreInstalledList",
+                "KitStoreInstalledTitle"
               ]
             }
           }
@@ -7877,7 +7943,10 @@
               "cornerRadiusTokens": {
                 "source": "project-local",
                 "failures": [
-                  "KitStoreInstalledList"
+                  "KitStoreInstalledCount",
+                  "KitStoreInstalledDivider",
+                  "KitStoreInstalledList",
+                  "KitStoreInstalledTitle"
                 ]
               }
             }
@@ -8960,7 +9029,9 @@
             "cornerRadiusTokens": {
               "source": "project-local",
               "failures": [
-                "CreationFeedbackActions"
+                "CreationFeedbackActions",
+                "CreationFeedbackIntro",
+                "CreationFeedbackPathSection"
               ]
             }
           }
@@ -9019,7 +9090,9 @@
               "cornerRadiusTokens": {
                 "source": "project-local",
                 "failures": [
-                  "CreationFeedbackActions"
+                  "CreationFeedbackActions",
+                  "CreationFeedbackIntro",
+                  "CreationFeedbackPathSection"
                 ]
               }
             }
@@ -9508,7 +9581,8 @@
               "source": "project-local",
               "failures": [
                 "AttachmentPortalContent",
-                "AttachmentPortalList"
+                "AttachmentPortalList",
+                "AttachmentPortalPreview"
               ]
             }
           }
@@ -9574,7 +9648,8 @@
                 "source": "project-local",
                 "failures": [
                   "AttachmentPortalContent",
-                  "AttachmentPortalList"
+                  "AttachmentPortalList",
+                  "AttachmentPortalPreview"
                 ]
               }
             }
@@ -9595,9 +9670,11 @@
       "coverageAliases": [
         "notes-acp"
       ],
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "guidance-proof-capture-blocked",
-      "sourceUiGaps": [],
+      "proofStatus": "numeric-proof-guideline-failed",
+      "guidanceProofStatus": "source-ui-gap",
+      "sourceUiGaps": [
+        "guidelineAssertions"
+      ],
       "devtoolsCaptureLimitations": [
         "osScreenshotProof:blocked",
         "imageDiffProof:blocked"
@@ -9618,7 +9695,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "fail",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true
@@ -9628,7 +9705,7 @@
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "fail",
         "imageDiffProof": "blocked"
       },
       "visualAudit": {
@@ -9642,6 +9719,16 @@
           "content": 1,
           "floatingTransient": 1,
           "functionalChrome": 2
+        },
+        "guidelineAssertions": {
+          "projectLocal": {
+            "cornerRadiusTokens": {
+              "source": "project-local",
+              "failures": [
+                "AcpMessageViewport"
+              ]
+            }
+          }
         }
       },
       "evidence": {
@@ -9754,6 +9841,16 @@
             "content": 1,
             "floatingTransient": 1,
             "functionalChrome": 2
+          },
+          "guidelineAssertions": {
+            "projectLocal": {
+              "cornerRadiusTokens": {
+                "source": "project-local",
+                "failures": [
+                  "AcpMessageViewport"
+                ]
+              }
+            }
           }
         },
         "notes": [
@@ -9823,6 +9920,7 @@
             "cornerRadiusTokens": {
               "source": "project-local",
               "failures": [
+                "ConfirmPromptBody",
                 "ConfirmPromptStack",
                 "ConfirmPromptTitle"
               ]
@@ -9874,6 +9972,7 @@
               "cornerRadiusTokens": {
                 "source": "project-local",
                 "failures": [
+                  "ConfirmPromptBody",
                   "ConfirmPromptStack",
                   "ConfirmPromptTitle"
                 ]
@@ -9892,7 +9991,7 @@
   "practicalTargets": [
     {
       "id": "notes",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
+      "proofStatus": "numeric-proof-guideline-failed",
       "requiredEvidence": {
         "screenshot": true,
         "osScreenshotProof": "pass",
@@ -9900,7 +9999,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "fail",
         "imageDiff": true,
         "imageDiffProof": "pass",
         "visualAudit": true,
@@ -9912,7 +10011,7 @@
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "fail",
         "imageDiffProof": "pass"
       },
       "mediaProof": null,
@@ -10011,6 +10110,16 @@
             "content": 1,
             "floatingTransient": 1,
             "functionalChrome": 2
+          },
+          "guidelineAssertions": {
+            "projectLocal": {
+              "cornerRadiusTokens": {
+                "source": "project-local",
+                "failures": [
+                  "NotesEditor"
+                ]
+              }
+            }
           }
         },
         "notes": [
@@ -10028,7 +10137,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "fail",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true,
@@ -10040,7 +10149,7 @@
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "fail",
         "imageDiffProof": "blocked"
       },
       "mediaProof": {
@@ -10146,6 +10255,16 @@
             "content": 2,
             "floatingTransient": 1,
             "functionalChrome": 3
+          },
+          "guidelineAssertions": {
+            "projectLocal": {
+              "cornerRadiusTokens": {
+                "source": "project-local",
+                "failures": [
+                  "DictationTimerSlot"
+                ]
+              }
+            }
           }
         },
         "notes": [
@@ -10163,7 +10282,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "fail",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true,
@@ -10175,7 +10294,7 @@
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "fail",
         "imageDiffProof": "blocked"
       },
       "mediaProof": null,
@@ -10215,6 +10334,16 @@
             "content": 1,
             "floatingTransient": 1,
             "functionalChrome": 2
+          },
+          "guidelineAssertions": {
+            "projectLocal": {
+              "cornerRadiusTokens": {
+                "source": "project-local",
+                "failures": [
+                  "AcpMessageViewport"
+                ]
+              }
+            }
           }
         },
         "notes": [
@@ -10419,12 +10548,19 @@
   "warnings": [
     "29 contract surfaces are not yet strong-proof",
     "29 contract surfaces have explicit visual-tier debt; inspect proofTiers before claiming exhaustive Liquid Glass proof",
-    "26 contract surfaces have failing Tahoe guideline assertions",
-    "1 contract surfaces are missing Tahoe guideline assertions",
+    "27 contract surfaces have failing Tahoe guideline assertions",
     "3 contract surfaces attempted app-render proof but GPUI render readback was unavailable or unsupported",
     "strong-guidance-proof means current artifacts include OS screenshot, numeric layout visualAudit, guideline assertions, and image diff evidence; GPUI readback is diagnostic only",
     "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor output or native Liquid Glass blur",
     "proofTiers separate OS screenshots from GPUI app-render proof so WindowServer-blocked captures cannot become false visual evidence"
   ],
-  "errors": []
+  "errors": [],
+  "_command": [
+    "bun",
+    "scripts/devtools/liquid-glass-proof.ts",
+    "--out",
+    "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix.json"
+  ],
+  "_exitCode": 0,
+  "_stderr": ""
 }

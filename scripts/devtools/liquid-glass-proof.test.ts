@@ -250,6 +250,40 @@ describe("liquid-glass-proof guidance domain split", () => {
     expect(queueEntry.blockingClass).toBe("source-ui-gap");
   });
 
+  test("does not require radii on non-panel styled nodes", () => {
+    const matrix = runProofFixture({
+      surfaceKind: "FixtureSurface",
+      visualAudit: passingVisualAudit(),
+      nodes: [
+        {
+          name: "AboutTitle",
+          type: "other",
+          visualStyle: {
+            chromeLayer: "content",
+            tokenSource: "about.titleVersion",
+          },
+        },
+        {
+          name: "ContentArea",
+          visualStyle: {
+            chromeLayer: "content",
+            cornerRadius: {
+              topLeft: 16,
+              topRight: 16,
+              bottomRight: 16,
+              bottomLeft: 16,
+            },
+          },
+        },
+      ],
+    });
+    const surface = matrix.surfaces[0];
+
+    expect(surface.proofTiers.guidelineProof).toBe("pass");
+    expect(surface.sourceUiGaps).toEqual([]);
+    expect(matrix.proofDebtWorkQueue[0]?.blockingClass).not.toBe("source-ui-gap");
+  });
+
   test("does not treat empty timeout layout receipts as numeric proof", () => {
     const matrix = runProofFixture({
       surfaceKind: "FixtureSurface",

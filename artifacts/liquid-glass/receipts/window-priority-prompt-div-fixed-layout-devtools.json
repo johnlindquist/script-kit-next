@@ -1,0 +1,996 @@
+{
+  "schemaVersion": 1,
+  "label": "window-priority-prompt-div-fixed",
+  "command": "layout.measure",
+  "target": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "PromptEntity",
+    "appViewVariant": "DivPrompt",
+    "nativeFooterSurface": "div_prompt",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 2097,
+      "y": -903,
+      "width": 750,
+      "height": 500
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 750,
+      "height": 500,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 500
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 96916,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "tool": "script-kit-devtools.layout",
+  "classification": "ok",
+  "session": "liquid-glass-promptentity-render",
+  "include": [
+    "nodes",
+    "regions",
+    "scroll",
+    "anchors",
+    "resize",
+    "overlaps"
+  ],
+  "limit": 200,
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "PromptEntity"
+  },
+  "promptType": "div",
+  "timestamp": "2026-05-30T09:35:19.894691+00:00",
+  "componentCount": 5,
+  "window": {
+    "rect": {
+      "x": 2097,
+      "y": -903,
+      "width": 750,
+      "height": 500
+    },
+    "visible": null,
+    "focused": null
+  },
+  "viewport": {
+    "clientWidth": 750,
+    "clientHeight": 500,
+    "contentWidth": 750,
+    "contentHeight": 500,
+    "scrollWidth": 750,
+    "scrollHeight": 500,
+    "canScrollX": false,
+    "canScrollY": false,
+    "scrollTop": null,
+    "maxScrollTop": 0,
+    "overflowPolicyY": "hidden"
+  },
+  "pressure": {
+    "overflowY": false,
+    "hiddenContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "footerOverlapCount": 0,
+    "inputOverlapCount": 0,
+    "pressureScore": 0
+  },
+  "viewportRect": {
+    "x": 0,
+    "y": 0,
+    "width": 750,
+    "height": 500
+  },
+  "windowRect": {
+    "x": 2097,
+    "y": -903,
+    "width": 750,
+    "height": 500
+  },
+  "regions": [
+    {
+      "name": "Window",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 500
+      }
+    },
+    {
+      "name": "Header",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 45
+      }
+    },
+    {
+      "name": "SearchInput",
+      "type": "input",
+      "bounds": {
+        "x": 16,
+        "y": 11,
+        "width": 498,
+        "height": 22
+      }
+    },
+    {
+      "name": "ContentArea",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 45,
+        "width": 750,
+        "height": 455
+      }
+    },
+    {
+      "name": "DivContent",
+      "type": "prompt",
+      "bounds": {
+        "x": 0,
+        "y": 45,
+        "width": 750,
+        "height": 455
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Window",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 500
+      },
+      "depth": 0,
+      "parent": null,
+      "children": [],
+      "explanation": "Root native window backdrop. Not a content layer or Liquid Glass content surface.",
+      "visualStyle": {
+        "chromeLayer": "windowBackdrop",
+        "materialSource": "nativeWindowBackdrop",
+        "tokenSource": "window.backdrop",
+        "cornerRadius": {
+          "topLeft": 22,
+          "topRight": 22,
+          "bottomRight": 22,
+          "bottomLeft": 22
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "hitWidth": 750,
+        "hitHeight": 500,
+        "visualWidth": 750,
+        "visualHeight": 500,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "Window",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Root native window backdrop. Not a content layer or Liquid Glass content surface.",
+        "visualStyle": {
+          "chromeLayer": "windowBackdrop",
+          "materialSource": "nativeWindowBackdrop",
+          "tokenSource": "window.backdrop",
+          "cornerRadius": {
+            "topLeft": 22,
+            "topRight": 22,
+            "bottomRight": 22,
+            "bottomLeft": 22
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 500
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 500
+          }
+        }
+      }
+    },
+    {
+      "name": "Header",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 45
+      },
+      "depth": 1,
+      "parent": "Window",
+      "children": [],
+      "explanation": "Height = padding(8) + content(28) + padding(8) + divider(1) = 45px. Uses flex-row with items-center.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.header",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        },
+        "hitWidth": 750,
+        "hitHeight": 45,
+        "visualWidth": 750,
+        "visualHeight": 45,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "Header",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        },
+        "boxModel": {
+          "padding": {
+            "top": 8,
+            "right": 16,
+            "bottom": 8,
+            "left": 16
+          }
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Height = padding(8) + content(28) + padding(8) + divider(1) = 45px. Uses flex-row with items-center.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.header",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 45
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 45
+          }
+        }
+      }
+    },
+    {
+      "name": "SearchInput",
+      "type": "input",
+      "bounds": {
+        "x": 16,
+        "y": 11,
+        "width": 498,
+        "height": 22
+      },
+      "depth": 2,
+      "parent": "Header",
+      "children": [],
+      "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(236) = 498px. Vertically centered in header.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.searchInput",
+        "cornerRadius": {
+          "topLeft": 14,
+          "topRight": 14,
+          "bottomRight": 14,
+          "bottomLeft": 14
+        },
+        "visualBounds": {
+          "x": 16,
+          "y": 11,
+          "width": 498,
+          "height": 22
+        },
+        "hitBounds": {
+          "x": 16,
+          "y": 8,
+          "width": 498,
+          "height": 28
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 16,
+          "y": 8,
+          "width": 498,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 16,
+          "y": 11,
+          "width": 498,
+          "height": 22
+        },
+        "hitWidth": 498,
+        "hitHeight": 28,
+        "visualWidth": 498,
+        "visualHeight": 22,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "SearchInput",
+        "type": "input",
+        "bounds": {
+          "x": 16,
+          "y": 11,
+          "width": 498,
+          "height": 22
+        },
+        "flex": {
+          "grow": 1
+        },
+        "depth": 2,
+        "parent": "Header",
+        "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(236) = 498px. Vertically centered in header.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.searchInput",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 16,
+            "y": 11,
+            "width": 498,
+            "height": 22
+          },
+          "hitBounds": {
+            "x": 16,
+            "y": 8,
+            "width": 498,
+            "height": 28
+          }
+        }
+      }
+    },
+    {
+      "name": "ContentArea",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 45,
+        "width": 750,
+        "height": 455
+      },
+      "depth": 1,
+      "parent": "Window",
+      "children": [],
+      "explanation": "flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.background",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        },
+        "hitWidth": 750,
+        "hitHeight": 455,
+        "visualWidth": 750,
+        "visualHeight": 455,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ContentArea",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        },
+        "flex": {
+          "direction": "row",
+          "grow": 1
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.background",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 455
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 455
+          }
+        }
+      }
+    },
+    {
+      "name": "DivContent",
+      "type": "prompt",
+      "bounds": {
+        "x": 0,
+        "y": 45,
+        "width": 750,
+        "height": 455
+      },
+      "depth": 2,
+      "parent": "ContentArea",
+      "children": [],
+      "explanation": "DivPrompt fills the content area with scrollable HTML content and footer ownership routed through the shared main-window footer slot.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.promptBody",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        },
+        "hitWidth": 750,
+        "hitHeight": 455,
+        "visualWidth": 750,
+        "visualHeight": 455,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "DivContent",
+        "type": "prompt",
+        "bounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        },
+        "flex": {
+          "direction": "column",
+          "grow": 1
+        },
+        "depth": 2,
+        "parent": "ContentArea",
+        "explanation": "DivPrompt fills the content area with scrollable HTML content and footer ownership routed through the shared main-window footer slot.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.promptBody",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 455
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 455
+          }
+        }
+      }
+    }
+  ],
+  "overlaps": [],
+  "resizePressure": {
+    "windowCanGrow": null,
+    "overflowY": false,
+    "desiredContentHeight": 500,
+    "measuredContentHeight": 500,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "pressureScore": 0
+  },
+  "visualAudit": {
+    "nodeCount": 5,
+    "styledNodeCount": 5,
+    "unstyledNodeCount": 0,
+    "controlsWithHitFailures": [],
+    "contentGlassNodes": [],
+    "contentNativeMaterialNodes": [],
+    "glassLayerViolations": [],
+    "missingStyleNodeNames": [],
+    "chromeLayers": {
+      "content": 2,
+      "functionalChrome": 2,
+      "windowBackdrop": 1
+    },
+    "guidelineAssertions": {
+      "appleDocumented": {
+        "hitTargets": {
+          "source": "apple-documented",
+          "macosMinimumHitSize": {
+            "width": 28,
+            "height": 28
+          },
+          "macosMinimumVisualSize": {
+            "width": 20,
+            "height": 20
+          },
+          "failures": []
+        },
+        "buttonCenterDistance": {
+          "source": "apple-documented",
+          "requiredCenterDistance": 60,
+          "failures": []
+        },
+        "materialLayering": {
+          "source": "apple-documented",
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": []
+        },
+        "colorAdaptivity": {
+          "source": "apple-documented",
+          "hardcodedColorNodes": []
+        },
+        "safeAreaLayout": {
+          "source": "apple-documented",
+          "clippedNodeCount": 0,
+          "overflowY": false
+        },
+        "buttonShapeFamilies": {
+          "source": "apple-documented",
+          "exactAppleRadiusConstants": null
+        }
+      },
+      "projectLocal": {
+        "cornerRadiusTokens": {
+          "source": "project-local",
+          "failures": []
+        },
+        "paddingTokens": {
+          "source": "project-local",
+          "minimumPanelPadding": 16,
+          "minimumCompactRowHorizontalPadding": 10
+        },
+        "spacingTokens": {
+          "source": "project-local",
+          "minimumFooterActionGap": 8
+        },
+        "windowBackdropPolicy": {
+          "source": "project-local",
+          "contentGlassNodeCount": 0
+        },
+        "themeTokenUsage": {
+          "source": "project-local",
+          "hardcodedColorNodes": []
+        },
+        "renderReadbackPixelThresholds": {
+          "source": "project-local",
+          "minimumNonBlackRatio": 0.01
+        }
+      }
+    }
+  },
+  "handlerForm": null,
+  "missingPrimitives": [],
+  "warnings": [],
+  "errors": [],
+  "rawLayout": {
+    "type": "layoutInfoResult",
+    "requestId": "devtools-layout-measure-1780133719870-651b8e",
+    "windowWidth": 750,
+    "windowHeight": 500,
+    "promptType": "div",
+    "components": [
+      {
+        "name": "Window",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Root native window backdrop. Not a content layer or Liquid Glass content surface.",
+        "visualStyle": {
+          "chromeLayer": "windowBackdrop",
+          "materialSource": "nativeWindowBackdrop",
+          "tokenSource": "window.backdrop",
+          "cornerRadius": {
+            "topLeft": 22,
+            "topRight": 22,
+            "bottomRight": 22,
+            "bottomLeft": 22
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 500
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 500
+          }
+        }
+      },
+      {
+        "name": "Header",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        },
+        "boxModel": {
+          "padding": {
+            "top": 8,
+            "right": 16,
+            "bottom": 8,
+            "left": 16
+          }
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Height = padding(8) + content(28) + padding(8) + divider(1) = 45px. Uses flex-row with items-center.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.header",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 45
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 45
+          }
+        }
+      },
+      {
+        "name": "SearchInput",
+        "type": "input",
+        "bounds": {
+          "x": 16,
+          "y": 11,
+          "width": 498,
+          "height": 22
+        },
+        "flex": {
+          "grow": 1
+        },
+        "depth": 2,
+        "parent": "Header",
+        "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(236) = 498px. Vertically centered in header.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.searchInput",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 16,
+            "y": 11,
+            "width": 498,
+            "height": 22
+          },
+          "hitBounds": {
+            "x": 16,
+            "y": 8,
+            "width": 498,
+            "height": 28
+          }
+        }
+      },
+      {
+        "name": "ContentArea",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        },
+        "flex": {
+          "direction": "row",
+          "grow": 1
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.background",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 455
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 455
+          }
+        }
+      },
+      {
+        "name": "DivContent",
+        "type": "prompt",
+        "bounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        },
+        "flex": {
+          "direction": "column",
+          "grow": 1
+        },
+        "depth": 2,
+        "parent": "ContentArea",
+        "explanation": "DivPrompt fills the content area with scrollable HTML content and footer ownership routed through the shared main-window footer slot.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.promptBody",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 455
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 455
+          }
+        }
+      }
+    ],
+    "timestamp": "2026-05-30T09:35:19.894691+00:00"
+  },
+  "_command": [
+    "bun",
+    "scripts/devtools/layout.ts",
+    "measure",
+    "--session",
+    "liquid-glass-promptentity-render",
+    "--main",
+    "--strict",
+    "--surface",
+    "PromptEntity",
+    "--include",
+    "nodes,regions,scroll,anchors,resize,overlaps"
+  ],
+  "_exitCode": 0,
+  "_stderr": ""
+}
