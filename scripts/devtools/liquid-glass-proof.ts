@@ -111,6 +111,9 @@ function classify(evidence: Evidence) {
   if (hasScreenshot && hasLayout && hasImageDiff && nodeCount != null && styled === nodeCount && hitFailures === 0 && contentGlass === 0 && missingStyle === 0) {
     return "strong-proof";
   }
+  if (hasLayout && nodeCount != null && styled === nodeCount && hitFailures === 0 && contentGlass === 0 && missingStyle === 0) {
+    return "numeric-proof-missing-visual-capture";
+  }
   if (hasScreenshot && hasLayout) {
     return "numeric-proof-no-image-diff";
   }
@@ -147,6 +150,7 @@ async function main() {
     ScriptList: ["main", "launcher"],
     ActionsDialog: ["actions"],
     ConfirmPrompt: ["confirm"],
+    PromptEntity: ["prompt-div", "promptentity"],
     About: ["about"],
     Feedback: ["feedback", "creation-feedback", "creationFeedback"],
     AcpChat: ["acp"],
@@ -187,6 +191,11 @@ async function main() {
     } else if (surfaceKind === "AcpChat") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-acp-detached-layout-after.json`,
+      ]);
+    } else if (surfaceKind === "PromptEntity") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-prompt-div-fixed-layout-sdk.json`,
+        `${RECEIPT_ROOT}/window-priority-prompt-div-current-layout-sdk.json`,
       ]);
     }
     const status = classify(evidence);

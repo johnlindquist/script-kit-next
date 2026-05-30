@@ -223,7 +223,7 @@ fn div_layout_info_has_div_content_branch() {
         "build_layout_info should expose a DivContent prompt branch"
     );
     let branch_start = source
-        .find("AppView::DivPrompt")
+        .find("AppView::DivPrompt { .. } => (\n                    \"DivContent\"")
         .expect("DivPrompt layout branch exists");
     let prompt_branch = &source[branch_start..];
     let return_idx = prompt_branch
@@ -235,6 +235,12 @@ fn div_layout_info_has_div_content_branch() {
     assert!(
         return_idx < script_list_idx,
         "DivPrompt layout info must return before adding launcher ScriptList/PreviewPanel components"
+    );
+    assert!(
+        prompt_branch[..return_idx].contains("content.promptBody")
+            && prompt_branch[..return_idx].contains("MATERIAL_SOLID_THEME_TOKEN")
+            && prompt_branch[..return_idx].contains("CHROME_LAYER_CONTENT"),
+        "DivPrompt content must carry Liquid Glass content-layer visual metadata before returning"
     );
     eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"div_layout_info\",\"div_content_branch\":true,\"status\":\"pass\"}}");
 }
