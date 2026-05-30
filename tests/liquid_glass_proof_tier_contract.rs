@@ -10,8 +10,9 @@ fn proof_matrix_separates_visual_numeric_and_diff_tiers() {
             && PROOF_MATRIX.contains("appRenderProof")
             && PROOF_MATRIX.contains("offscreenRenderProof")
             && PROOF_MATRIX.contains("numericProof")
+            && PROOF_MATRIX.contains("guidelineProof")
             && PROOF_MATRIX.contains("imageDiffProof"),
-        "Liquid Glass proof matrix must separate OS screenshot, app-render, offscreen, numeric, and image-diff proof tiers"
+        "Liquid Glass proof matrix must separate OS screenshot, app-render, offscreen, numeric, guideline, and image-diff proof tiers"
     );
 }
 
@@ -37,10 +38,25 @@ fn proof_matrix_summary_reports_visual_tier_debt() {
             && PROOF_MATRIX.contains("appRenderMissingSurfaceCount")
             && PROOF_MATRIX.contains("offscreenRenderFailedSurfaceCount")
             && PROOF_MATRIX.contains("offscreenRenderMissingSurfaceCount")
+            && PROOF_MATRIX.contains("guidelineFailedSurfaceCount")
+            && PROOF_MATRIX.contains("guidelineMissingSurfaceCount")
             && PROOF_MATRIX.contains("visualTierDebtSurfaceCount")
             && PROOF_MATRIX.contains("explicit visual-tier debt")
+            && PROOF_MATRIX.contains("failing Tahoe guideline assertions")
             && PROOF_MATRIX.contains("attempted app-render proof but GPUI render readback was unavailable or unsupported"),
         "Liquid Glass proof matrix summary must expose blocked, failed, or missing visual proof tiers instead of hiding them behind overall surface status"
+    );
+}
+
+#[test]
+fn proof_matrix_guideline_assertions_gate_strong_proof() {
+    assert!(
+        PROOF_MATRIX.contains("function guidelineProof")
+            && PROOF_MATRIX.contains("guidelineAssertionFailureCount")
+            && PROOF_MATRIX.contains("numeric-proof-guideline-failed")
+            && PROOF_MATRIX.contains("numeric-proof-missing-guideline-assertions")
+            && PROOF_MATRIX.contains("tiers.guidelineProof === \"pass\""),
+        "Liquid Glass strong-proof must require passing Tahoe guideline assertions"
     );
 }
 
@@ -76,6 +92,7 @@ fn proof_matrix_emits_ordered_debt_work_queue() {
             && PROOF_MATRIX.contains("priorityGroup")
             && PROOF_MATRIX.contains("window-container")
             && PROOF_MATRIX.contains("nextEvidenceNeeded")
+            && PROOF_MATRIX.contains("guidelineProof")
             && PROOF_MATRIX.contains("recommendedNextAction")
             && PROOF_MATRIX.contains("capture-blocker")
             && PROOF_MATRIX.contains("missing-proof-tier"),

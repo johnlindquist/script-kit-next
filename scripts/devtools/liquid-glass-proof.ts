@@ -26,6 +26,7 @@ type ProofTiers = {
   appRenderProof: "pass" | "blocked" | "fail" | "missing";
   offscreenRenderProof: "pass" | "fail" | "missing";
   numericProof: "pass" | "fail" | "missing";
+  guidelineProof: "pass" | "fail" | "missing";
   imageDiffProof: "pass" | "blocked" | "missing";
 };
 
@@ -255,6 +256,47 @@ function imageDiffUsability(path: string): ImageDiffUsability {
   return { usable: true };
 }
 
+function guidelineAssertionFailureCount(value: unknown): number {
+  if (Array.isArray(value)) {
+    return value.length;
+  }
+  if (typeof value !== "object" || value === null) {
+    return 0;
+  }
+  const object = value as JsonObject;
+  let count = 0;
+  for (const [key, child] of Object.entries(object)) {
+    if (
+      key === "failures" ||
+      key === "contentGlassNodes" ||
+      key === "contentNativeMaterialNodes" ||
+      key === "glassLayerViolations" ||
+      key === "hardcodedColorNodes"
+    ) {
+      count += asArray(child).length;
+      continue;
+    }
+    if (key === "clippedNodeCount" && typeof child === "number") {
+      count += child;
+      continue;
+    }
+    if (key === "overflowY" && child === true) {
+      count += 1;
+      continue;
+    }
+    count += guidelineAssertionFailureCount(child);
+  }
+  return count;
+}
+
+function guidelineProof(audit: JsonObject): ProofTiers["guidelineProof"] {
+  const assertions = asObject(audit.guidelineAssertions);
+  if (Object.keys(assertions).length === 0) {
+    return "missing";
+  }
+  return guidelineAssertionFailureCount(assertions) === 0 ? "pass" : "fail";
+}
+
 function evidenceFor(terms: string[], files: { receipts: string[]; screenshots: string[]; diffs: string[] }, visualAuditPath?: string): Evidence {
   const receipts = files.receipts.filter((path) => includesAny(path, terms));
   const screenshots: string[] = [];
@@ -349,11 +391,13 @@ function proofTiers(evidence: Evidence): ProofTiers {
     asArray(audit.contentNativeMaterialNodes).length === 0 &&
     asArray(audit.glassLayerViolations).length === 0 &&
     asArray(audit.missingStyleNodeNames).length === 0;
+  const guidelines = guidelineProof(audit);
   return {
     osScreenshotProof: evidence.screenshots.length > 0 ? "pass" : osBlocked ? "blocked" : "missing",
     appRenderProof: appRenderPass ? "pass" : appRenderFail ? "fail" : appRenderBlocked ? "blocked" : "missing",
     offscreenRenderProof: offscreenPass ? "pass" : offscreenFail ? "fail" : "missing",
     numericProof: numericPass ? "pass" : evidence.layoutReceipts.length > 0 ? "fail" : "missing",
+    guidelineProof: guidelines,
     imageDiffProof: evidence.imageDiffReceipts.length > 0 ? "pass" : osBlocked ? "blocked" : "missing",
   };
 }
@@ -372,10 +416,16 @@ function classify(evidence: Evidence) {
   const glassLayerViolations = asArray(audit.glassLayerViolations).length;
   const missingStyle = asArray(audit.missingStyleNodeNames).length;
 
-  if (hasScreenshot && hasLayout && hasImageDiff && nodeCount != null && styled === nodeCount && hitFailures === 0 && contentGlass === 0 && contentNativeMaterial === 0 && glassLayerViolations === 0 && missingStyle === 0) {
+  if (hasScreenshot && hasLayout && hasImageDiff && tiers.guidelineProof === "pass" && nodeCount != null && styled === nodeCount && hitFailures === 0 && contentGlass === 0 && contentNativeMaterial === 0 && glassLayerViolations === 0 && missingStyle === 0) {
     return "strong-proof";
   }
   if (hasLayout && nodeCount != null && styled === nodeCount && hitFailures === 0 && contentGlass === 0 && contentNativeMaterial === 0 && glassLayerViolations === 0 && missingStyle === 0) {
+    if (tiers.guidelineProof === "fail") {
+      return "numeric-proof-guideline-failed";
+    }
+    if (tiers.guidelineProof === "missing") {
+      return "numeric-proof-missing-guideline-assertions";
+    }
     if (tiers.appRenderProof === "pass" && tiers.osScreenshotProof !== "pass") {
       return tiers.osScreenshotProof === "blocked"
         ? "numeric-plus-app-render-proof-os-screenshot-blocked"
@@ -659,6 +709,7 @@ async function main() {
         offscreenRenderProof: tiers.offscreenRenderProof,
         numericLayout: evidence.layoutReceipts.length > 0,
         numericProof: tiers.numericProof,
+        guidelineProof: tiers.guidelineProof,
         imageDiff: evidence.imageDiffReceipts.length > 0,
         imageDiffProof: tiers.imageDiffProof,
         visualAudit: evidence.visualAudit != null,
@@ -728,6 +779,7 @@ async function main() {
         offscreenRenderProof: tiers.offscreenRenderProof,
         numericLayout: evidence.layoutReceipts.length > 0,
         numericProof: tiers.numericProof,
+        guidelineProof: tiers.guidelineProof,
         imageDiff: evidence.imageDiffReceipts.length > 0,
         imageDiffProof: tiers.imageDiffProof,
         visualAudit: evidence.visualAudit != null,
@@ -782,6 +834,7 @@ async function main() {
       surface.proofTiers.appRenderProof === "fail" ||
       surface.proofTiers.offscreenRenderProof === "fail" ||
       surface.proofTiers.numericProof === "fail" ||
+      surface.proofTiers.guidelineProof === "fail" ||
       surface.proofTiers.imageDiffProof === "blocked"
     )
     .map((surface) => ({
@@ -794,6 +847,7 @@ async function main() {
         surface.proofTiers.appRenderProof === "fail" ? "appRenderProof" : "",
         surface.proofTiers.offscreenRenderProof === "fail" ? "offscreenRenderProof" : "",
         surface.proofTiers.numericProof === "fail" ? "numericProof" : "",
+        surface.proofTiers.guidelineProof === "fail" ? "guidelineProof" : "",
         surface.proofTiers.imageDiffProof === "blocked" ? "imageDiffProof" : "",
       ].filter(Boolean),
       receipts: surface.evidence.receipts,
@@ -817,12 +871,14 @@ async function main() {
       surface.requiredEvidence.appRenderProof !== "pass" ? "appRenderProof" : "",
       surface.requiredEvidence.offscreenRenderProof !== "pass" ? "offscreenRenderProof" : "",
       surface.requiredEvidence.numericProof !== "pass" ? "numericProof" : "",
+      surface.requiredEvidence.guidelineProof !== "pass" ? "guidelineProof" : "",
       surface.requiredEvidence.imageDiffProof !== "pass" ? "imageDiffProof" : "",
     ].filter(Boolean);
     const visualCaptureBlocked = surface.proofTiers.osScreenshotProof === "blocked" ||
       surface.proofTiers.appRenderProof === "blocked" ||
       surface.proofTiers.appRenderProof === "fail" ||
       surface.proofTiers.offscreenRenderProof === "fail" ||
+      surface.proofTiers.guidelineProof === "fail" ||
       surface.proofTiers.imageDiffProof === "blocked";
     return {
       rank: 0,
@@ -858,6 +914,9 @@ async function main() {
     appRenderMissingSurfaceCount: surfaces.filter((surface) => surface.proofTiers.appRenderProof === "missing").length,
     offscreenRenderFailedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.offscreenRenderProof === "fail").length,
     offscreenRenderMissingSurfaceCount: surfaces.filter((surface) => surface.proofTiers.offscreenRenderProof === "missing").length,
+    guidelineProofSurfaceCount: surfaces.filter((surface) => surface.proofTiers.guidelineProof === "pass").length,
+    guidelineFailedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.guidelineProof === "fail").length,
+    guidelineMissingSurfaceCount: surfaces.filter((surface) => surface.proofTiers.guidelineProof === "missing").length,
     visualTierDebtSurfaceCount: visualTierDebtSurfaces.length,
     surfaceProofDebtCount: surfaceProofDebtSurfaces.length,
     proofDebtWorkQueueCount: proofDebtWorkQueue.length,
@@ -886,6 +945,8 @@ async function main() {
       summary.missingProofSurfaceCount === 0 ? "" : `${summary.missingProofSurfaceCount} contract surfaces still lack proof artifacts`,
       summary.surfaceProofDebtCount === 0 ? "" : `${summary.surfaceProofDebtCount} contract surfaces are not yet strong-proof`,
       summary.visualTierDebtSurfaceCount === 0 ? "" : `${summary.visualTierDebtSurfaceCount} contract surfaces have explicit visual-tier debt; inspect proofTiers before claiming exhaustive Liquid Glass proof`,
+      summary.guidelineFailedSurfaceCount === 0 ? "" : `${summary.guidelineFailedSurfaceCount} contract surfaces have failing Tahoe guideline assertions`,
+      summary.guidelineMissingSurfaceCount === 0 ? "" : `${summary.guidelineMissingSurfaceCount} contract surfaces are missing Tahoe guideline assertions`,
       summary.appRenderFailedSurfaceCount === 0 ? "" : `${summary.appRenderFailedSurfaceCount} contract surfaces attempted app-render proof and failed`,
       summary.appRenderBlockedSurfaceCount === 0 ? "" : `${summary.appRenderBlockedSurfaceCount} contract surfaces attempted app-render proof but GPUI render readback was unavailable or unsupported`,
       "strong-proof means current artifacts include screenshot, numeric layout visualAudit, and image diff evidence; it is not an Apple conformance claim by itself",
