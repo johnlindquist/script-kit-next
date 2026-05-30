@@ -13,9 +13,11 @@ import {
   concentricRadiusDeviations,
   footerSpacingDeviations,
   searchPaddingDeviations,
+  windowRadiusDeviations,
   type NodeLike,
 } from "./apple-guideline-constants";
 import nativeBaseline from "../../artifacts/liquid-glass/receipts/tahoe-native-baseline.json";
+import windowMaskBaseline from "../../artifacts/liquid-glass/receipts/tahoe-window-mask-baseline.json";
 
 const CONCENTRIC_FIXTURE: NodeLike[] = [
   {
@@ -140,6 +142,33 @@ test("a footer with a roomy 14pt gap is withinBand (refutes 'cramped' once spaci
     { name: "MainFooter", type: "panel", parent: "Window", bounds: { x: 0, y: 458, width: 750, height: 22 }, boxModel: { gap: 14 } },
   ];
   expect(footerSpacingDeviations(footer, 2)[0].classification).toBe("withinBand");
+});
+
+test("our 22pt window radius is withinBand vs the measured 15pt native floor (REFUTES 'not round enough')", () => {
+  const window: NodeLike[] = [
+    { name: "Window", type: "window", parent: null, bounds: { x: 0, y: 0, width: 750, height: 480 }, visualStyle: { cornerRadius: 22 } },
+  ];
+  const d = windowRadiusDeviations(window, 2)[0];
+  expect(d.observedPt).toBe(22);
+  expect(d.targetPt).toBe(15);
+  expect(d.deltaPt).toBe(7); // 7pt rounder than native
+  expect(d.classification).toBe("withinBand");
+  expect(d.derivation?.inputs.direction).toBe("atOrAboveNative");
+});
+
+test("a hypothetical 8pt window radius WOULD be outOfBand (the check can still fail below native)", () => {
+  const window: NodeLike[] = [
+    { name: "Window", type: "window", parent: null, bounds: { x: 0, y: 0, width: 750, height: 480 }, visualStyle: { cornerRadius: 8 } },
+  ];
+  expect(windowRadiusDeviations(window, 2)[0].classification).toBe("outOfBand");
+});
+
+test("the window-mask native baseline receipt pins native Tahoe windows at 15pt", () => {
+  const titled = (windowMaskBaseline.styles as Array<Record<string, unknown>>).find(
+    (s) => s.style === "titledStandardWindow",
+  );
+  expect(titled?.cornerRadiusPt).toBe(15);
+  expect(windowMaskBaseline.ourWindowRadiusTokenPt).toBe(22);
 });
 
 test("classifyDeviation respects retina pixel-quantization tolerance", () => {

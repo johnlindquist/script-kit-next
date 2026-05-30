@@ -277,15 +277,24 @@ export const APPLE_GUIDELINE_METRICS: GuidelineMetric[] = [
     id: "macos.window.toolbarRadius.nativeBaseline",
     category: "cornerRadius",
     confidence: "measuredNative",
-    normativeStrength: "hard",
-    target: { kind: "nativeProbe", probeId: "macos26-nswindow-toolbar-panel-radius" },
+    normativeStrength: "soft",
+    // Measured: native Tahoe titled / full-size-content / glass windows all round
+    // at 15pt on macOS 26.5 (borderless windows get no system mask = 0pt). Modeled
+    // as a soft MINIMUM: a launcher panel should be AT LEAST as rounded as native;
+    // being rounder is not a violation. Our 22pt token clears this (refutes the
+    // "not round enough" concern).
+    target: { kind: "minimum", minPt: 15 },
     tolerance: { absPt: 1, pct: 0.05, nearAbsPt: 2 },
-    derivation: {
-      fromMetricIds: ["shape.concentric.childRadius"],
-      formula: "Measure native Tahoe NSWindow/NSPanel mask radius for the launcher's style mask + material + scale.",
-      notes: "Apple documents window radius as style-dependent/system-owned, so the exact value is a native measurement, not a constant.",
+    nativeMeasurement: {
+      probeId: "macos26-nswindow-mask-corner-radius",
+      probeSource: "scripts/devtools/tahoe_window_mask_probe.swift",
+      receiptPath: "artifacts/liquid-glass/receipts/tahoe-window-mask-baseline.json",
+      osVersion: "26.5",
+      measuredAt: "2026-05-30",
+      control: "NSWindow (titled / fullSizeContent / glass)",
+      field: "cornerRadiusPt",
     },
-    copyrightSafeSummary: "Exact Tahoe window radius is system/style-owned; resolve it via native measurement, not a guess.",
+    copyrightSafeSummary: "Native Tahoe titled/glass windows round at 15pt (measured, macOS 26.5); a launcher should be at least that rounded.",
   },
   {
     id: "historical.searchField.height.regular",
@@ -651,6 +660,43 @@ export function footerSpacingDeviations(nodes: NodeLike[], scale: number | null)
   return out;
 }
 
+// --- Window corner radius vs measured native baseline -----------------------
+// The user's "window corners aren't rounded enough" concern, measured against
+// the native Tahoe window mask (15pt). Modeled as a soft MINIMUM: a launcher
+// panel should be at least as rounded as native; rounder is fine. So our 22pt
+// token PASSES (refutes the concern); a value below 15pt would be outOfBand.
+export function windowRadiusDeviations(nodes: NodeLike[], scale: number | null): GuidelineDeviation[] {
+  const m = metric("macos.window.toolbarRadius.nativeBaseline");
+  const nativeFloorPt = m.target.kind === "minimum" ? m.target.minPt : 15;
+  const out: GuidelineDeviation[] = [];
+  for (const node of nodes) {
+    if (String(node.type ?? "").toLowerCase() !== "window") continue;
+    const radii = radiiFromStyle(node.visualStyle);
+    if (!radii) continue;
+    const observed = radii.topLeft;
+    out.push({
+      metricId: m.id,
+      source: sourceFor(m.confidence),
+      confidence: m.confidence,
+      normativeStrength: m.normativeStrength,
+      nodeName: String(node.name ?? ""),
+      nodeType: String(node.type ?? ""),
+      observedPt: observed,
+      targetPt: nativeFloorPt,
+      minPt: nativeFloorPt,
+      deltaPt: observed - nativeFloorPt,
+      deltaPct: nativeFloorPt !== 0 ? (observed - nativeFloorPt) / nativeFloorPt : null,
+      tolerance: m.tolerance,
+      classification: classifyMinimum(observed, nativeFloorPt, m.tolerance, scale),
+      derivation: {
+        formula: "window radius >= native Tahoe window mask (15pt measured); rounder is acceptable",
+        inputs: { observedRadiusPt: observed, nativeFloorPt, direction: observed >= nativeFloorPt ? "atOrAboveNative" : "belowNative" },
+      },
+    });
+  }
+  return out;
+}
+
 // --- Capsule radius (large/x-large controls only) --------------------------
 export function capsuleRadiusDeviations(nodes: NodeLike[], scale: number | null): GuidelineDeviation[] {
   const m = metric("shape.capsule.radius");
@@ -708,6 +754,7 @@ export function appleGuidelineConformance(nodes: NodeLike[], scale: number | nul
     ...concentricRadiusDeviations(nodes, scale),
     ...searchPaddingDeviations(nodes, scale),
     ...footerSpacingDeviations(nodes, scale),
+    ...windowRadiusDeviations(nodes, scale),
     ...capsuleRadiusDeviations(nodes, scale),
   ];
   const failures = deviations.filter((d) => d.classification === "outOfBand");

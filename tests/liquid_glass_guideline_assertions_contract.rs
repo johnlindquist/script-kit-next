@@ -258,6 +258,60 @@ fn main_footer_emits_measured_item_gap_for_soft_conformance() {
     );
 }
 
+/// Slice 3c (Oracle session `tahoe-apple-guideline-metrics`): the window-radius
+/// concern (#1) must be measured against a REAL native Tahoe window mask, not a
+/// placeholder probe. The native window-mask probe measured titled/glass windows
+/// at 15pt; our token is 22pt, so the concern is REFUTED (we are rounder than
+/// native). This pins the probe, the receipt (15pt native), and the metric
+/// modeled as a soft minimum so "rounder than native" is not a failure.
+#[test]
+fn window_radius_is_measured_against_native_mask_baseline() {
+    let probe = fs::read_to_string("scripts/devtools/tahoe_window_mask_probe.swift")
+        .expect("native window-mask probe must exist");
+    assert!(
+        probe.contains("screencapture") && probe.contains("measureCornerRadiusPx"),
+        "probe must screenshot native windows and measure their corner mask"
+    );
+
+    let receipt = fs::read_to_string("artifacts/liquid-glass/receipts/tahoe-window-mask-baseline.json")
+        .expect("window-mask baseline receipt must be committed");
+    for needle in [
+        "\"cornerRadiusPt\" : 15",
+        "titledStandardWindow",
+        "\"ourWindowRadiusTokenPt\" : 22",
+    ] {
+        assert!(
+            receipt.contains(needle),
+            "window-mask receipt must record measured value {needle}"
+        );
+    }
+
+    let constants = fs::read_to_string("scripts/devtools/apple-guideline-constants.ts")
+        .expect("failed to read apple-guideline-constants.ts");
+    assert!(
+        constants.contains("windowRadiusDeviations")
+            && constants.contains("...windowRadiusDeviations(nodes, scale)"),
+        "windowRadiusDeviations must be wired into the conformance rollup"
+    );
+    // The window metric must be a soft minimum (rounder-than-native is allowed),
+    // and must cite the window-mask probe + receipt.
+    let metric_block = constants
+        .split("id: \"macos.window.toolbarRadius.nativeBaseline\"")
+        .nth(1)
+        .and_then(|tail| tail.get(..1100))
+        .unwrap_or("");
+    assert!(
+        metric_block.contains("kind: \"minimum\", minPt: 15")
+            && metric_block.contains("normativeStrength: \"soft\""),
+        "window-radius metric must be a soft 15pt minimum (measured native floor)"
+    );
+    assert!(
+        metric_block.contains("tahoe_window_mask_probe.swift")
+            && metric_block.contains("tahoe-window-mask-baseline.json"),
+        "window-radius metric must cite the window-mask probe + receipt"
+    );
+}
+
 #[test]
 fn layout_visual_audit_rejects_zero_radius_placeholders() {
     let layout =
