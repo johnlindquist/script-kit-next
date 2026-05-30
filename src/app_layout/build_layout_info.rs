@@ -1381,6 +1381,220 @@ impl ScriptListApp {
             };
         }
 
+        if matches!(
+            self.current_view,
+            AppView::DictationHistoryView { .. } | AppView::NotesBrowseView { .. }
+        ) {
+            const PORTAL_HEADER_HEIGHT: f32 = 45.0;
+            const PORTAL_HEADER_PADDING_X: f32 = 16.0;
+            const PORTAL_HEADER_PADDING_Y: f32 = 8.0;
+            const PORTAL_BUTTON_HEIGHT: f32 = 28.0;
+            const PORTAL_INPUT_VISUAL_HEIGHT: f32 = 22.0;
+            const PORTAL_INPUT_TO_RUN_GAP: f32 = 12.0;
+            const PORTAL_BUTTON_GAP: f32 = 24.0;
+            const PORTAL_ROW_HEIGHT: f32 = LIST_ITEM_HEIGHT;
+
+            let (variant, list_count) = match &self.current_view {
+                AppView::DictationHistoryView { filter, .. } => (
+                    "dictationHistory",
+                    Self::dictation_history_visible_row_labels(filter).len(),
+                ),
+                AppView::NotesBrowseView { filter, .. } => (
+                    "notesBrowse",
+                    Self::notes_browse_visible_row_labels(filter).len(),
+                ),
+                _ => unreachable!("attachment portal branch is guarded by current_view match"),
+            };
+            let content_height = window_height - PORTAL_HEADER_HEIGHT;
+            let list_width = window_width * 0.5;
+            let preview_width = window_width - list_width;
+            let button_y = PORTAL_HEADER_PADDING_Y;
+            let logo_x = window_width - PORTAL_HEADER_PADDING_X - 20.0;
+            let actions_width = 85.0;
+            let actions_x = logo_x - PORTAL_BUTTON_GAP - actions_width;
+            let run_width = 55.0;
+            let run_x = actions_x - PORTAL_BUTTON_GAP - run_width;
+            let input_width = (run_x - PORTAL_INPUT_TO_RUN_GAP - PORTAL_HEADER_PADDING_X).max(0.0);
+            let input_y = PORTAL_HEADER_PADDING_Y
+                + (PORTAL_BUTTON_HEIGHT - PORTAL_INPUT_VISUAL_HEIGHT) / 2.0;
+
+            components.push(
+                LayoutComponentInfo::new("AttachmentPortalSurface", LayoutComponentType::Panel)
+                    .with_bounds(0.0, 0.0, window_width, window_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token(format!("attachmentPortal.{variant}.surface"))
+                    .with_flex_column()
+                    .with_depth(1)
+                    .with_parent("Window")
+                    .with_explanation(format!(
+                        "AttachmentPortalBrowser {variant} owns the split attachment browser shell; receipts must not fall back to the generic ScriptList surface."
+                    )),
+            );
+            components.push(
+                LayoutComponentInfo::new("AttachmentPortalHeader", LayoutComponentType::Header)
+                    .with_bounds(0.0, 0.0, window_width, PORTAL_HEADER_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token(format!("attachmentPortal.{variant}.header"))
+                    .with_padding(
+                        PORTAL_HEADER_PADDING_Y,
+                        PORTAL_HEADER_PADDING_X,
+                        PORTAL_HEADER_PADDING_Y,
+                        PORTAL_HEADER_PADDING_X,
+                    )
+                    .with_flex_row()
+                    .with_depth(2)
+                    .with_parent("AttachmentPortalSurface")
+                    .with_explanation("Functional portal header contains search and right-aligned attachment actions."),
+            );
+            components.push(
+                LayoutComponentInfo::new("AttachmentPortalSearch", LayoutComponentType::Input)
+                    .with_bounds(
+                        PORTAL_HEADER_PADDING_X,
+                        input_y,
+                        input_width,
+                        PORTAL_INPUT_VISUAL_HEIGHT,
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
+                    )
+                    .with_visual_token(format!("attachmentPortal.{variant}.search"))
+                    .with_hit_bounds(
+                        PORTAL_HEADER_PADDING_X,
+                        PORTAL_HEADER_PADDING_Y,
+                        input_width,
+                        PORTAL_BUTTON_HEIGHT,
+                    )
+                    .with_depth(3)
+                    .with_parent("AttachmentPortalHeader")
+                    .with_explanation("Search keeps the 22px visual lane inside a 28px minimum hit target."),
+            );
+            components.push(
+                LayoutComponentInfo::new("AttachmentPortalContent", LayoutComponentType::Container)
+                    .with_bounds(0.0, PORTAL_HEADER_HEIGHT, window_width, content_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token(format!("attachmentPortal.{variant}.content"))
+                    .with_flex_row()
+                    .with_flex_grow(1.0)
+                    .with_depth(2)
+                    .with_parent("AttachmentPortalSurface")
+                    .with_explanation("Attachment portal content is a required split browser with list and preview panes."),
+            );
+            components.push(
+                LayoutComponentInfo::new("AttachmentPortalList", LayoutComponentType::List)
+                    .with_bounds(0.0, PORTAL_HEADER_HEIGHT, list_width, content_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token(format!("attachmentPortal.{variant}.list"))
+                    .with_flex_column()
+                    .with_depth(3)
+                    .with_parent("AttachmentPortalContent")
+                    .with_explanation(format!(
+                        "Attachment list uses the left 50% split pane with {}px dense rows.",
+                        PORTAL_ROW_HEIGHT
+                    )),
+            );
+            components.push(
+                LayoutComponentInfo::new("AttachmentPortalPreview", LayoutComponentType::Panel)
+                    .with_bounds(list_width, PORTAL_HEADER_HEIGHT, preview_width, content_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token(format!("attachmentPortal.{variant}.preview"))
+                    .with_padding(16.0, 16.0, 16.0, 16.0)
+                    .with_flex_column()
+                    .with_depth(3)
+                    .with_parent("AttachmentPortalContent")
+                    .with_explanation("Preview pane uses 16px inset content spacing and remains content-layer solid theme material."),
+            );
+
+            let visible_rows = ((content_height / PORTAL_ROW_HEIGHT) as usize)
+                .min(list_count)
+                .min(5);
+            for i in 0..visible_rows {
+                let item_top = PORTAL_HEADER_HEIGHT + (i as f32 * PORTAL_ROW_HEIGHT);
+                components.push(
+                    LayoutComponentInfo::new(
+                        format!("AttachmentPortalRow[{}]", i),
+                        LayoutComponentType::ListItem,
+                    )
+                    .with_bounds(0.0, item_top, list_width, PORTAL_ROW_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                    )
+                    .with_visual_token(format!("attachmentPortal.{variant}.row"))
+                    .with_padding(12.0, 16.0, 12.0, 16.0)
+                    .with_gap(8.0)
+                    .with_flex_row()
+                    .with_depth(4)
+                    .with_parent("AttachmentPortalList")
+                    .with_explanation(format!(
+                        "{variant} attachment rows mirror the shared {}px dense-row hit contract with 16px horizontal padding.",
+                        PORTAL_ROW_HEIGHT
+                    )),
+                );
+            }
+
+            for (name, x, width) in [
+                ("AttachmentPortalLogoButton", logo_x, 20.0),
+                ("AttachmentPortalActionsButton", actions_x, actions_width),
+                ("AttachmentPortalRunButton", run_x, run_width),
+            ] {
+                let mut component = LayoutComponentInfo::new(name, LayoutComponentType::Button)
+                    .with_bounds(x, button_y, width, PORTAL_BUTTON_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(PORTAL_BUTTON_HEIGHT / 2.0),
+                    )
+                    .with_visual_token(format!("attachmentPortal.{variant}.headerButton"))
+                    .with_hit_bounds(
+                        x,
+                        button_y,
+                        width.max(chrome_tokens::LIQUID_GLASS_MIN_HIT_PX),
+                        PORTAL_BUTTON_HEIGHT,
+                    )
+                    .with_padding(4.0, 4.0, 4.0, 4.0)
+                    .with_depth(3)
+                    .with_parent("AttachmentPortalHeader");
+                if name == "AttachmentPortalLogoButton" {
+                    component = component.with_visual_exception("compactIconButton");
+                }
+                components.push(component.with_explanation(
+                    "Portal header action keeps a compact 28px tall functional chrome hit target.",
+                ));
+            }
+
+            return LayoutInfo {
+                window_width,
+                window_height,
+                prompt_type: prompt_type.to_string(),
+                components,
+                handler_form: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            };
+        }
+
         // Header
         components.push(
             LayoutComponentInfo::new("Header", LayoutComponentType::Header)

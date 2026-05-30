@@ -500,6 +500,10 @@ fn window_capture_selection_reason_after_base_candidate(
     } else if window.own_process_window_policy_status == Some(WindowOwnProcessPolicyStatus::Unknown)
     {
         Some(WindowCaptureSelectionDisqualificationReason::OwnProcessPolicyUnknown)
+    } else if window.own_process_window_policy_status
+        == Some(WindowOwnProcessPolicyStatus::IncludedInWindowsMenu)
+    {
+        None
     } else if window.title_fallback_status.is_none() {
         Some(WindowCaptureSelectionDisqualificationReason::SelectionMetadataIncomplete)
     } else {
@@ -916,6 +920,23 @@ mod tests {
             Some(WindowDisqualificationReason::LayerNonZero),
             None,
             Some(WindowTitleFallbackStatus::EmptyTitleSoleCandidate),
+            Some(WindowOwnProcessPolicyStatus::IncludedInWindowsMenu),
+        )]);
+
+        assert_eq!(
+            candidates[0].status,
+            WindowCaptureSelectionCandidateStatus::Candidate
+        );
+        assert_eq!(candidates[0].reason, None);
+    }
+
+    #[test]
+    fn window_capture_selection_candidate_allows_own_process_panel_without_title_metadata() {
+        let candidates = window_capture_selection_candidates_v1(&[capture_selection_input(
+            WindowCaptureCandidateStatus::Disqualified,
+            Some(WindowDisqualificationReason::LayerNonZero),
+            None,
+            None,
             Some(WindowOwnProcessPolicyStatus::IncludedInWindowsMenu),
         )]);
 

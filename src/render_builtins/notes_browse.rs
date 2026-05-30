@@ -50,7 +50,7 @@ impl ScriptListApp {
         }
     }
 
-    fn notes_browse_visible_rows(filter: &str) -> Vec<crate::notes::Note> {
+    pub(crate) fn notes_browse_visible_rows(filter: &str) -> Vec<crate::notes::Note> {
         Self::notes_browse_filtered_notes(filter)
     }
 
@@ -70,7 +70,7 @@ impl ScriptListApp {
         )
     }
 
-    fn notes_browse_visible_row_labels(filter: &str) -> Vec<String> {
+    pub(crate) fn notes_browse_visible_row_labels(filter: &str) -> Vec<String> {
         Self::notes_browse_visible_rows(filter)
             .into_iter()
             .map(|note| Self::notes_browse_display_title(&note))

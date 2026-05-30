@@ -94,7 +94,24 @@ function readJsonSync(path: string): JsonObject | null {
   }
 }
 
-function usableScreenshot(path: string, receipts: string[]) {
+type ScreenshotUsability = {
+  usable: boolean;
+  note?: string;
+};
+
+function auditFromReceipt(json: JsonObject | null): JsonObject {
+  const screenshot = asObject(json?.screenshot);
+  const screenshotReceipt = asObject(json?.screenshotReceipt);
+  const screenshotReceiptNested = asObject(screenshot.receipt);
+  return asObject(
+    json?.contentAudit
+      ?? screenshot.contentAudit
+      ?? screenshotReceipt.contentAudit
+      ?? screenshotReceiptNested.contentAudit,
+  );
+}
+
+function screenshotUsability(path: string, receipts: string[]): ScreenshotUsability {
   const fileName = path.split("/").pop() ?? path;
   const baseName = fileName.replace(/\.[^.]+$/, "");
   const matchingReceipts = receipts.filter((receipt) => {
@@ -105,28 +122,47 @@ function usableScreenshot(path: string, receipts: string[]) {
   for (const receipt of matchingReceipts) {
     const json = readJsonSync(receipt);
     if (json?.status === "error" || json?.classification === "error") {
-      return false;
+      return {
+        usable: false,
+        note: `ignored screenshot ${path}: receipt ${receipt} is classified as an error`,
+      };
     }
-    const contentAudit = asObject(json?.contentAudit ?? asObject(json?.screenshot).contentAudit);
+    const contentAudit = auditFromReceipt(json);
     const nonBlackRatio = contentAudit.nonBlackRatio;
     if (typeof nonBlackRatio === "number" && nonBlackRatio < 0.01) {
-      return false;
+      return {
+        usable: false,
+        note: `ignored screenshot ${path}: receipt ${receipt} nonBlackRatio ${nonBlackRatio} is below 0.01 usable-capture threshold`,
+      };
     }
   }
 
-  return true;
+  return { usable: true };
 }
 
 function evidenceFor(terms: string[], files: { receipts: string[]; screenshots: string[]; diffs: string[] }, visualAuditPath?: string): Evidence {
   const receipts = files.receipts.filter((path) => includesAny(path, terms));
+  const screenshots: string[] = [];
+  const screenshotNotes: string[] = [];
+  for (const path of files.screenshots.filter((screenshotPath) => includesAny(screenshotPath, terms))) {
+    const usability = screenshotUsability(path, files.receipts);
+    if (usability.usable) {
+      screenshots.push(path);
+    } else if (usability.note) {
+      screenshotNotes.push(usability.note);
+    }
+  }
   return {
-    screenshots: files.screenshots.filter((path) => includesAny(path, terms) && usableScreenshot(path, files.receipts)),
+    screenshots,
     layoutReceipts: receipts.filter((path) => path.includes("layout")),
     inspectReceipts: receipts.filter((path) => path.includes("inspect") || path.includes("window")),
     imageDiffReceipts: receipts.filter((path) => path.includes("image-diff")),
     diffMasks: files.diffs.filter((path) => includesAny(path, terms)),
     visualAudit: null,
-    notes: visualAuditPath ? [`visualAudit sourced from ${visualAuditPath}`] : [],
+    notes: [
+      ...screenshotNotes,
+      ...(visualAuditPath ? [`visualAudit sourced from ${visualAuditPath}`] : []),
+    ],
   };
 }
 

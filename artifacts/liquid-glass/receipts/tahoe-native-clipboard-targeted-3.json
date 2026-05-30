@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 3,
+  "status": "error",
+  "label": "tahoe-native-clipboard-targeted-3",
+  "timestamp": "2026-05-30T08:10:12.572Z",
+  "durationMs": 10283,
+  "requiresVisionReview": false,
+  "resolvedTarget": {
+    "windowId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "surfaceId": null
+  },
+  "dispatchPath": "window_role_fallback",
+  "resolvedWindowId": "main",
+  "osWindowId": 84630,
+  "inspectionOsWindowId": 84630,
+  "captureRouting": "inspection-os-window-id",
+  "requestedAutomationWindowId": "main",
+  "requestedOsWindowId": 84630,
+  "showIssuedBeforeCapture": true,
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-clipboard-targeted-3.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowId": null
+  },
+  "captureTarget": {
+    "requestedWindowId": 84630,
+    "actualWindowId": null
+  },
+  "inspection": {
+    "automationWindowId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "osWindowId": 84630,
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 750,
+      "height": 480
+    },
+    "resolvedBounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenshotWidth": 750,
+    "screenshotHeight": 480,
+    "pixelProbes": [],
+    "warnings": []
+  },
+  "popupCapture": {
+    "strategy": "not_applicable",
+    "windowKind": "Main",
+    "targetBounds": null,
+    "semanticReceiptsArePrimary": false
+  },
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": false,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-clipboard-targeted-3.png",
+    "sizeBytes": null,
+    "width": null,
+    "height": null,
+    "contentAudit": null,
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowFrontmost": null,
+    "windowFocused": null,
+    "windowId": null,
+    "error": "Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:10:10.475Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-clipboard-targeted-3.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84630}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:10:10.475Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:10:11.234Z\",\"attempt\":1,\"windowId\":84630}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:10:11.334Z\",\"attempt\":1,\"windowId\":84630,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:10:11.536Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-clipboard-targeted-3.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84630}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:10:11.536Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:10:12.216Z\",\"attempt\":1,\"windowId\":84630}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:10:12.299Z\",\"attempt\":2,\"windowId\":84630,\"exitCode\":1,\"stderr\":\"could not create image from window\"}"
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: FAILED (Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:10:10.475Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-clipboard-targeted-3.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84630}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:10:10.475Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:10:11.234Z\",\"attempt\":1,\"windowId\":84630}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:10:11.334Z\",\"attempt\":1,\"windowId\":84630,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:10:11.536Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-clipboard-targeted-3.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84630}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:10:11.536Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:10:12.216Z\",\"attempt\":1,\"windowId\":84630}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:10:12.299Z\",\"attempt\":2,\"windowId\":84630,\"exitCode\":1,\"stderr\":\"could not create image from window\"})"
+}

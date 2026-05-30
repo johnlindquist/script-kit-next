@@ -82,20 +82,24 @@ type CaptureRouting =
   | "cli-window-id"
   | "inspection-os-window-id"
   | "native-window-mcp"
+  | "screen-rect-from-inspection"
   | "runtime-capture-window"
   | "generic-frontmost";
+
+interface WindowBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 interface InspectionReceipt {
   automationWindowId: string;
   windowKind: string;
   title?: string | null;
   osWindowId?: number | null;
-  targetBoundsInScreenshot?: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  } | null;
+  targetBoundsInScreenshot?: WindowBounds | null;
+  resolvedBounds?: WindowBounds | null;
   screenshotWidth?: number | null;
   screenshotHeight?: number | null;
   pixelProbes: Array<{ x: number; y: number; r: number; g: number; b: number; a: number }>;
@@ -431,6 +435,72 @@ async function captureNativeWindowViaMcp(
   };
 }
 
+function inspectionScreenRect(inspection: InspectionReceipt | null): WindowBounds | null {
+  const bounds = inspection?.resolvedBounds;
+  if (
+    !bounds ||
+    !Number.isFinite(bounds.x) ||
+    !Number.isFinite(bounds.y) ||
+    !Number.isFinite(bounds.width) ||
+    !Number.isFinite(bounds.height) ||
+    bounds.width <= 0 ||
+    bounds.height <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    x: Math.floor(bounds.x),
+    y: Math.floor(bounds.y),
+    width: Math.max(1, Math.round(bounds.width)),
+    height: Math.max(1, Math.round(bounds.height)),
+  };
+}
+
+async function captureScreenRectFromInspection(
+  inspection: InspectionReceipt | null,
+  outPath: string,
+  settleMs: number
+): Promise<{ ok: true; bounds: WindowBounds } | { ok: false; error: string }> {
+  const bounds = inspectionScreenRect(inspection);
+  if (!bounds) {
+    return {
+      ok: false,
+      error: "inspection did not include usable resolvedBounds",
+    };
+  }
+
+  if (settleMs > 0) {
+    await Bun.sleep(settleMs);
+  }
+
+  const proc = Bun.spawn(
+    [
+      "screencapture",
+      "-x",
+      "-o",
+      "-R",
+      `${bounds.x},${bounds.y},${bounds.width},${bounds.height}`,
+      outPath,
+    ],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+    }
+  );
+  const stdout = await new Response(proc.stdout).text();
+  const stderr = await new Response(proc.stderr).text();
+  const code = await proc.exited;
+  if (code !== 0 || !existsSync(outPath)) {
+    return {
+      ok: false,
+      error: stderr.trim() || stdout.trim() || `screencapture -R exited ${code}`,
+    };
+  }
+
+  return { ok: true, bounds };
+}
+
 async function queryAcpState(
   session: string,
   requestId: string,
@@ -655,6 +725,8 @@ async function queryInspection(
     osWindowId: (response.osWindowId as number) ?? null,
     targetBoundsInScreenshot:
       (response.targetBoundsInScreenshot as InspectionReceipt["targetBoundsInScreenshot"]) ?? null,
+    resolvedBounds:
+      (response.resolvedBounds as InspectionReceipt["resolvedBounds"]) ?? null,
     screenshotWidth: (response.screenshotWidth as number) ?? null,
     screenshotHeight: (response.screenshotHeight as number) ?? null,
     pixelProbes: (response.pixelProbes as InspectionReceipt["pixelProbes"]) ?? [],
@@ -1161,30 +1233,45 @@ async function captureScreenshot(
       };
     }
   } else {
-    // Strict mode: window.ts failed and we have ACP assertions — do not fall back
-    return {
-      result: {
-        captured: false,
-        path: outPath,
-        sizeBytes: null,
-        width: null,
-        height: null,
-        contentAudit: null,
-        captureMethod: "window.ts",
-        windowCaptureMethod,
-        windowFrontmost,
-        windowFocused,
-        windowId,
-        error: `Strict window capture failed: ${stderr.trim() || stdout.trim() || "window.ts capture failed"}`,
-      },
-      plan: {
-        routing: captureRouting,
-        requestedAutomationWindowId,
+    const rectCapture = await captureScreenRectFromInspection(inspection, outPath, 200);
+    if (rectCapture.ok && inspectionOsWindowId != null) {
+      captureRouting = "screen-rect-from-inspection";
+      captureMethod = "window.ts";
+      windowCaptureMethod = "screencapture";
+      windowId = inspectionOsWindowId;
+      diag("verify_shot_screen_rect_fallback", {
+        label,
+        reason: "strict-window-helper-failed",
         requestedOsWindowId,
         inspectionOsWindowId,
-        showIssuedBeforeCapture,
-      },
-    };
+        bounds: rectCapture.bounds,
+      });
+    } else {
+      // Strict mode: window.ts failed and we have ACP assertions — do not fall back to generic frontmost capture.
+      return {
+        result: {
+          captured: false,
+          path: outPath,
+          sizeBytes: null,
+          width: null,
+          height: null,
+          contentAudit: null,
+          captureMethod: "window.ts",
+          windowCaptureMethod,
+          windowFrontmost,
+          windowFocused,
+          windowId,
+          error: `Strict window capture failed: ${stderr.trim() || stdout.trim() || (rectCapture.ok ? "screen-rect fallback lacked inspection osWindowId" : rectCapture.error) || "window.ts capture failed"}`,
+        },
+        plan: {
+          routing: captureRouting,
+          requestedAutomationWindowId,
+          requestedOsWindowId,
+          inspectionOsWindowId,
+          showIssuedBeforeCapture,
+        },
+      };
+    }
   }
 
   diag("verify_shot_capture_receipt", {
@@ -1199,10 +1286,12 @@ async function captureScreenshot(
   // Strict window proof: require quartz method, frontmost, and valid windowId
   if (
     strictWindowProof &&
-    ((windowCaptureMethod !== "quartz" && windowCaptureMethod !== "native-xcap") ||
-      (windowCaptureMethod !== "native-xcap" && windowFrontmost !== true) ||
-      windowId == null ||
-      windowId <= 0)
+    (captureRouting === "screen-rect-from-inspection"
+      ? windowId == null || windowId <= 0
+      : (windowCaptureMethod !== "quartz" && windowCaptureMethod !== "native-xcap") ||
+        (windowCaptureMethod !== "native-xcap" && windowFrontmost !== true) ||
+        windowId == null ||
+        windowId <= 0)
   ) {
     return {
       result: {
@@ -1289,8 +1378,8 @@ async function captureScreenshot(
     };
   }
 
-  const stats = statSync(outPath);
-  const dims = await getImageDimensions(outPath);
+  let stats = statSync(outPath);
+  let dims = await getImageDimensions(outPath);
   let contentAudit: ScreenshotContentAudit;
   try {
     contentAudit = auditPngContent(outPath);
@@ -1325,6 +1414,59 @@ async function captureScreenshot(
     label,
     ...contentAudit,
   });
+
+  if (
+    contentAudit.blank &&
+    strictWindowProof &&
+    captureRouting !== "screen-rect-from-inspection" &&
+    inspectionOsWindowId != null
+  ) {
+    const rectCapture = await captureScreenRectFromInspection(inspection, outPath, 200);
+    if (rectCapture.ok) {
+      captureRouting = "screen-rect-from-inspection";
+      captureMethod = "window.ts";
+      windowCaptureMethod = "screencapture";
+      windowId = inspectionOsWindowId;
+      stats = statSync(outPath);
+      dims = await getImageDimensions(outPath);
+      try {
+        contentAudit = auditPngContent(outPath);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        return {
+          result: {
+            captured: false,
+            path: outPath,
+            sizeBytes: stats.size,
+            width: dims.width,
+            height: dims.height,
+            contentAudit: null,
+            captureMethod,
+            windowCaptureMethod,
+            windowFrontmost,
+            windowFocused,
+            windowId,
+            error: `Screenshot pixel audit failed after screen-rect fallback: ${reason}`,
+          },
+          plan: {
+            routing: captureRouting,
+            requestedAutomationWindowId,
+            requestedOsWindowId,
+            inspectionOsWindowId,
+            showIssuedBeforeCapture,
+          },
+        };
+      }
+      diag("verify_shot_screen_rect_fallback", {
+        label,
+        reason: "blank-primary-capture",
+        requestedOsWindowId,
+        inspectionOsWindowId,
+        bounds: rectCapture.bounds,
+        contentAudit,
+      });
+    }
+  }
 
   if (contentAudit.blank) {
     return {

@@ -39,8 +39,8 @@
     "frontmost": null,
     "focused": null,
     "screenshotIdentity": {
-      "width": 750,
-      "height": 480,
+      "width": null,
+      "height": null,
       "targetBoundsInScreenshot": {
         "x": 0,
         "y": 0,
@@ -49,7 +49,7 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 15396,
+    "pid": 73119,
     "strictTargetMatch": true,
     "ambiguity": []
   },
@@ -71,12 +71,12 @@
       "appViewVariant": null,
       "parentAutomationId": null,
       "parentKind": null,
-      "pid": 15396
+      "pid": 73119
     }
   ],
   "rawInspect": {
     "type": "automationInspectResult",
-    "requestId": "devtools-targets-inspect-1780126726886-cdc3f1",
+    "requestId": "devtools-targets-inspect-1780128348526-e20c8c",
     "schemaVersion": 3,
     "windowId": "main",
     "windowKind": "Main",
@@ -271,11 +271,11 @@
     "totalCount": 19,
     "focusedSemanticId": "input:dictation-history-fi",
     "selectedSemanticId": "choice:0:devtools-fixture-tra",
-    "screenshotWidth": 750,
-    "screenshotHeight": 480,
-    "osWindowId": 84609,
     "semanticQuality": "full",
-    "pid": 15396
+    "warnings": [
+      "screenshot_capture_failed: Ambiguous OS window match for automation target main (Main); '' and '' tied at score 5100"
+    ],
+    "pid": 73119
   },
   "sessionLifecycle": [],
   "errors": []

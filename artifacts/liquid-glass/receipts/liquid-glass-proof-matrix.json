@@ -3,9 +3,9 @@
   "tool": "script-kit-devtools.liquid-glass-proof",
   "command": "proof.matrix",
   "classification": "ok",
-  "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-latest.json",
+  "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T07:41:02.261Z",
+  "generatedAt": "2026-05-30T08:08:00.269Z",
   "summary": {
     "surfaceCount": 29,
     "strongProofSurfaceCount": 4,
@@ -1377,6 +1377,7 @@
           }
         },
         "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-kit-store-browse-current.png: receipt artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-screenshot.json is classified as an error",
           "visualAudit: artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-layout.json"
         ]
       }
@@ -1637,7 +1638,7 @@
       "coverageAliases": [],
       "proofStatus": "numeric-proof-missing-visual-capture",
       "requiredEvidence": {
-        "screenshot": true,
+        "screenshot": false,
         "numericLayout": true,
         "imageDiff": false,
         "visualAudit": true
@@ -1658,9 +1659,7 @@
         }
       },
       "evidence": {
-        "screenshots": [
-          "artifacts/liquid-glass/screenshots/window-priority-file-search-mini-current.png"
-        ],
+        "screenshots": [],
         "layoutReceipts": [
           "artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-layout.json"
         ],
@@ -1692,6 +1691,7 @@
           }
         },
         "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-file-search-mini-current.png: receipt artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
           "visualAudit: artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-layout.json"
         ]
       }
@@ -1705,7 +1705,7 @@
       "coverageAliases": [],
       "proofStatus": "numeric-proof-missing-visual-capture",
       "requiredEvidence": {
-        "screenshot": true,
+        "screenshot": false,
         "numericLayout": true,
         "imageDiff": false,
         "visualAudit": true
@@ -1726,9 +1726,7 @@
         }
       },
       "evidence": {
-        "screenshots": [
-          "artifacts/liquid-glass/screenshots/window-priority-file-search-full-current.png"
-        ],
+        "screenshots": [],
         "layoutReceipts": [
           "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json"
         ],
@@ -1759,6 +1757,7 @@
           }
         },
         "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-file-search-full-current.png: receipt artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
           "visualAudit: artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json"
         ]
       }
@@ -1964,7 +1963,7 @@
       "coverageAliases": [],
       "proofStatus": "numeric-proof-missing-visual-capture",
       "requiredEvidence": {
-        "screenshot": true,
+        "screenshot": false,
         "numericLayout": true,
         "imageDiff": false,
         "visualAudit": true
@@ -1985,9 +1984,7 @@
         }
       },
       "evidence": {
-        "screenshots": [
-          "artifacts/liquid-glass/screenshots/window-priority-sdk-reference-current.png"
-        ],
+        "screenshots": [],
         "layoutReceipts": [
           "artifacts/liquid-glass/receipts/window-priority-sdk-reference-current-layout.json"
         ],
@@ -2018,6 +2015,7 @@
           }
         },
         "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-sdk-reference-current.png: receipt artifacts/liquid-glass/receipts/window-priority-sdk-reference-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
           "visualAudit: artifacts/liquid-glass/receipts/window-priority-sdk-reference-current-layout.json"
         ]
       }
@@ -2031,7 +2029,7 @@
       "coverageAliases": [],
       "proofStatus": "numeric-proof-missing-visual-capture",
       "requiredEvidence": {
-        "screenshot": true,
+        "screenshot": false,
         "numericLayout": true,
         "imageDiff": false,
         "visualAudit": true
@@ -2052,9 +2050,7 @@
         }
       },
       "evidence": {
-        "screenshots": [
-          "artifacts/liquid-glass/screenshots/window-priority-script-template-current.png"
-        ],
+        "screenshots": [],
         "layoutReceipts": [
           "artifacts/liquid-glass/receipts/window-priority-script-template-current-layout.json"
         ],
@@ -2090,6 +2086,7 @@
           }
         },
         "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-script-template-current.png: receipt artifacts/liquid-glass/receipts/window-priority-script-template-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
           "visualAudit: artifacts/liquid-glass/receipts/window-priority-script-template-current-layout.json"
         ]
       }
@@ -2103,7 +2100,7 @@
       "coverageAliases": [],
       "proofStatus": "numeric-proof-missing-visual-capture",
       "requiredEvidence": {
-        "screenshot": true,
+        "screenshot": false,
         "numericLayout": true,
         "imageDiff": false,
         "visualAudit": true
@@ -2124,9 +2121,7 @@
         "contentNativeMaterialNodes": []
       },
       "evidence": {
-        "screenshots": [
-          "artifacts/liquid-glass/screenshots/window-priority-acp-history-current.png"
-        ],
+        "screenshots": [],
         "layoutReceipts": [
           "artifacts/liquid-glass/receipts/window-priority-acp-history-current-layout.json"
         ],
@@ -2160,6 +2155,7 @@
           "contentNativeMaterialNodes": []
         },
         "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-acp-history-current.png: receipt artifacts/liquid-glass/receipts/window-priority-acp-history-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
           "visualAudit: artifacts/liquid-glass/receipts/window-priority-acp-history-current-layout.json"
         ]
       }
@@ -2177,14 +2173,14 @@
       ],
       "proofStatus": "numeric-proof-missing-visual-capture",
       "requiredEvidence": {
-        "screenshot": true,
+        "screenshot": false,
         "numericLayout": true,
         "imageDiff": false,
         "visualAudit": true
       },
       "visualAudit": {
-        "nodeCount": 14,
-        "styledNodeCount": 14,
+        "nodeCount": 15,
+        "styledNodeCount": 15,
         "unstyledNodeCount": 0,
         "controlsWithHitFailures": [],
         "contentGlassNodes": [],
@@ -2192,15 +2188,13 @@
         "glassLayerViolations": [],
         "missingStyleNodeNames": [],
         "chromeLayers": {
-          "content": 8,
+          "content": 9,
           "functionalChrome": 5,
           "windowBackdrop": 1
         }
       },
       "evidence": {
-        "screenshots": [
-          "artifacts/liquid-glass/screenshots/window-priority-attachment-portal-current.png"
-        ],
+        "screenshots": [],
         "layoutReceipts": [
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-layout.json"
         ],
@@ -2216,13 +2210,15 @@
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-show.json",
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-state.json",
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-target.json",
-          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-trigger.json"
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-trigger.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-window-find.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-window-inspect.json"
         ],
         "imageDiffReceipts": [],
         "diffMasks": [],
         "visualAudit": {
-          "nodeCount": 14,
-          "styledNodeCount": 14,
+          "nodeCount": 15,
+          "styledNodeCount": 15,
           "unstyledNodeCount": 0,
           "controlsWithHitFailures": [],
           "contentGlassNodes": [],
@@ -2230,12 +2226,13 @@
           "glassLayerViolations": [],
           "missingStyleNodeNames": [],
           "chromeLayers": {
-            "content": 8,
+            "content": 9,
             "functionalChrome": 5,
             "windowBackdrop": 1
           }
         },
         "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-attachment-portal-current.png: receipt artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-screenshot.json is classified as an error",
           "visualAudit: artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-layout.json"
         ]
       }
@@ -2251,7 +2248,7 @@
       ],
       "proofStatus": "numeric-proof-missing-visual-capture",
       "requiredEvidence": {
-        "screenshot": true,
+        "screenshot": false,
         "numericLayout": true,
         "imageDiff": false,
         "visualAudit": true
@@ -2270,9 +2267,7 @@
         }
       },
       "evidence": {
-        "screenshots": [
-          "artifacts/liquid-glass/screenshots/window-priority-acp-history-current.png"
-        ],
+        "screenshots": [],
         "layoutReceipts": [
           "artifacts/liquid-glass/receipts/notes-acp-after-open-layout.json",
           "artifacts/liquid-glass/receipts/window-priority-acp-detached-layout-after.json",
@@ -2329,6 +2324,7 @@
           }
         },
         "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-acp-history-current.png: receipt artifacts/liquid-glass/receipts/window-priority-acp-history-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
           "visualAudit: artifacts/liquid-glass/receipts/window-priority-acp-detached-layout-after.json"
         ]
       }

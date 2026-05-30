@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "data": {
+    "jsonrpc": "2.0",
+    "id": "script-kit-mcp-cli-1780128552853",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"schemaVersion\":1,\"permissions\":[{\"id\":\"accessibility\",\"name\":\"Accessibility\",\"granted\":true,\"status\":\"granted\"},{\"id\":\"screenRecording\",\"name\":\"Screen Recording\",\"granted\":true,\"status\":\"granted\"},{\"id\":\"eventSynthesizing\",\"name\":\"Event Synthesizing\",\"granted\":true,\"status\":\"granted\"}]}"
+        }
+      ]
+    }
+  }
+}

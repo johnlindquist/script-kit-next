@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 3,
+  "status": "error",
+  "label": "tahoe-native-clipboard",
+  "timestamp": "2026-05-30T08:02:25.971Z",
+  "durationMs": 6237,
+  "requiresVisionReview": false,
+  "resolvedTarget": null,
+  "captureRouting": "cli-window-id",
+  "requestedAutomationWindowId": null,
+  "requestedOsWindowId": 84623,
+  "showIssuedBeforeCapture": true,
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-clipboard.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowId": null
+  },
+  "captureTarget": {
+    "requestedWindowId": 84623,
+    "actualWindowId": null
+  },
+  "inspection": null,
+  "popupCapture": null,
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": false,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-clipboard.png",
+    "sizeBytes": null,
+    "width": null,
+    "height": null,
+    "contentAudit": null,
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowFrontmost": null,
+    "windowFocused": null,
+    "windowId": null,
+    "error": "Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:02:24.263Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-clipboard.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84623}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:02:24.263Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:02:24.933Z\",\"attempt\":1,\"windowId\":84623}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:02:25.029Z\",\"attempt\":1,\"windowId\":84623,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:02:25.231Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-clipboard.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84623}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:02:25.231Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:02:25.874Z\",\"attempt\":1,\"windowId\":84623}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:02:25.969Z\",\"attempt\":2,\"windowId\":84623,\"exitCode\":1,\"stderr\":\"could not create image from window\"}"
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: FAILED (Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:02:24.263Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-clipboard.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84623}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:02:24.263Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:02:24.933Z\",\"attempt\":1,\"windowId\":84623}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:02:25.029Z\",\"attempt\":1,\"windowId\":84623,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:02:25.231Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-clipboard.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84623}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:02:25.231Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:02:25.874Z\",\"attempt\":1,\"windowId\":84623}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:02:25.969Z\",\"attempt\":2,\"windowId\":84623,\"exitCode\":1,\"stderr\":\"could not create image from window\"})"
+}

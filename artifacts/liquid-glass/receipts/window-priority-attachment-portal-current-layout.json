@@ -10,7 +10,7 @@
     "resize",
     "overlaps"
   ],
-  "limit": 200,
+  "limit": 500,
   "requestedTarget": {
     "selector": {
       "type": "main"
@@ -46,8 +46,8 @@
     "frontmost": null,
     "focused": null,
     "screenshotIdentity": {
-      "width": 750,
-      "height": 480,
+      "width": null,
+      "height": null,
       "targetBoundsInScreenshot": {
         "x": 0,
         "y": 0,
@@ -56,13 +56,13 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 15396,
+    "pid": 73119,
     "strictTargetMatch": true,
     "ambiguity": []
   },
   "promptType": "dictationHistory",
-  "timestamp": "2026-05-30T07:38:51.567637+00:00",
-  "componentCount": 14,
+  "timestamp": "2026-05-30T08:05:51.844125+00:00",
+  "componentCount": 15,
   "window": {
     "rect": {
       "x": 585,
@@ -119,7 +119,17 @@
       }
     },
     {
-      "name": "Header",
+      "name": "AttachmentPortalSurface",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      }
+    },
+    {
+      "name": "AttachmentPortalHeader",
       "type": "header",
       "bounds": {
         "x": 0,
@@ -129,7 +139,7 @@
       }
     },
     {
-      "name": "SearchInput",
+      "name": "AttachmentPortalSearch",
       "type": "input",
       "bounds": {
         "x": 16,
@@ -139,7 +149,7 @@
       }
     },
     {
-      "name": "ContentArea",
+      "name": "AttachmentPortalContent",
       "type": "container",
       "bounds": {
         "x": 0,
@@ -149,7 +159,7 @@
       }
     },
     {
-      "name": "ScriptList",
+      "name": "AttachmentPortalList",
       "type": "list",
       "bounds": {
         "x": 0,
@@ -159,7 +169,7 @@
       }
     },
     {
-      "name": "PreviewPanel",
+      "name": "AttachmentPortalPreview",
       "type": "panel",
       "bounds": {
         "x": 375,
@@ -169,7 +179,7 @@
       }
     },
     {
-      "name": "ListItem[0]",
+      "name": "AttachmentPortalRow[0]",
       "type": "listItem",
       "bounds": {
         "x": 0,
@@ -179,7 +189,7 @@
       }
     },
     {
-      "name": "ListItem[1]",
+      "name": "AttachmentPortalRow[1]",
       "type": "listItem",
       "bounds": {
         "x": 0,
@@ -189,7 +199,7 @@
       }
     },
     {
-      "name": "ListItem[2]",
+      "name": "AttachmentPortalRow[2]",
       "type": "listItem",
       "bounds": {
         "x": 0,
@@ -199,7 +209,7 @@
       }
     },
     {
-      "name": "ListItem[3]",
+      "name": "AttachmentPortalRow[3]",
       "type": "listItem",
       "bounds": {
         "x": 0,
@@ -209,7 +219,7 @@
       }
     },
     {
-      "name": "ListItem[4]",
+      "name": "AttachmentPortalRow[4]",
       "type": "listItem",
       "bounds": {
         "x": 0,
@@ -219,7 +229,7 @@
       }
     },
     {
-      "name": "LogoButton",
+      "name": "AttachmentPortalLogoButton",
       "type": "button",
       "bounds": {
         "x": 714,
@@ -229,7 +239,7 @@
       }
     },
     {
-      "name": "ActionsButton",
+      "name": "AttachmentPortalActionsButton",
       "type": "button",
       "bounds": {
         "x": 605,
@@ -239,7 +249,7 @@
       }
     },
     {
-      "name": "RunButton",
+      "name": "AttachmentPortalRunButton",
       "type": "button",
       "bounds": {
         "x": 526,
@@ -349,7 +359,106 @@
       }
     },
     {
-      "name": "Header",
+      "name": "AttachmentPortalSurface",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "depth": 1,
+      "parent": "Window",
+      "children": [],
+      "explanation": "AttachmentPortalBrowser dictationHistory owns the split attachment browser shell; receipts must not fall back to the generic ScriptList surface.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "attachmentPortal.dictationHistory.surface",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "hitWidth": 750,
+        "hitHeight": 480,
+        "visualWidth": 750,
+        "visualHeight": 480,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AttachmentPortalSurface",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "AttachmentPortalBrowser dictationHistory owns the split attachment browser shell; receipts must not fall back to the generic ScriptList surface.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "attachmentPortal.dictationHistory.surface",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          }
+        }
+      }
+    },
+    {
+      "name": "AttachmentPortalHeader",
       "type": "header",
       "bounds": {
         "x": 0,
@@ -357,14 +466,14 @@
         "width": 750,
         "height": 45
       },
-      "depth": 1,
-      "parent": "Window",
+      "depth": 2,
+      "parent": "AttachmentPortalSurface",
       "children": [],
-      "explanation": "Height = padding(8) + content(28) + padding(8) + divider(1) = 45px. Uses flex-row with items-center.",
+      "explanation": "Functional portal header contains search and right-aligned attachment actions.",
       "visualStyle": {
         "chromeLayer": "functionalChrome",
         "materialSource": "solidThemeToken",
-        "tokenSource": "chrome.header",
+        "tokenSource": "attachmentPortal.dictationHistory.header",
         "cornerRadius": {
           "topLeft": 16,
           "topRight": 16,
@@ -408,7 +517,7 @@
       },
       "clipped": false,
       "raw": {
-        "name": "Header",
+        "name": "AttachmentPortalHeader",
         "type": "header",
         "bounds": {
           "x": 0,
@@ -427,13 +536,13 @@
         "flex": {
           "direction": "row"
         },
-        "depth": 1,
-        "parent": "Window",
-        "explanation": "Height = padding(8) + content(28) + padding(8) + divider(1) = 45px. Uses flex-row with items-center.",
+        "depth": 2,
+        "parent": "AttachmentPortalSurface",
+        "explanation": "Functional portal header contains search and right-aligned attachment actions.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "chrome.header",
+          "tokenSource": "attachmentPortal.dictationHistory.header",
           "cornerRadius": {
             "topLeft": 16,
             "topRight": 16,
@@ -456,7 +565,7 @@
       }
     },
     {
-      "name": "SearchInput",
+      "name": "AttachmentPortalSearch",
       "type": "input",
       "bounds": {
         "x": 16,
@@ -464,14 +573,14 @@
         "width": 498,
         "height": 22
       },
-      "depth": 2,
-      "parent": "Header",
+      "depth": 3,
+      "parent": "AttachmentPortalHeader",
       "children": [],
-      "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(236) = 498px. Vertically centered in header.",
+      "explanation": "Search keeps the 22px visual lane inside a 28px minimum hit target.",
       "visualStyle": {
         "chromeLayer": "functionalChrome",
         "materialSource": "solidThemeToken",
-        "tokenSource": "chrome.searchInput",
+        "tokenSource": "attachmentPortal.dictationHistory.search",
         "cornerRadius": {
           "topLeft": 14,
           "topRight": 14,
@@ -515,7 +624,7 @@
       },
       "clipped": false,
       "raw": {
-        "name": "SearchInput",
+        "name": "AttachmentPortalSearch",
         "type": "input",
         "bounds": {
           "x": 16,
@@ -523,16 +632,13 @@
           "width": 498,
           "height": 22
         },
-        "flex": {
-          "grow": 1
-        },
-        "depth": 2,
-        "parent": "Header",
-        "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(236) = 498px. Vertically centered in header.",
+        "depth": 3,
+        "parent": "AttachmentPortalHeader",
+        "explanation": "Search keeps the 22px visual lane inside a 28px minimum hit target.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "chrome.searchInput",
+          "tokenSource": "attachmentPortal.dictationHistory.search",
           "cornerRadius": {
             "topLeft": 14,
             "topRight": 14,
@@ -555,7 +661,7 @@
       }
     },
     {
-      "name": "ContentArea",
+      "name": "AttachmentPortalContent",
       "type": "container",
       "bounds": {
         "x": 0,
@@ -563,14 +669,14 @@
         "width": 750,
         "height": 435
       },
-      "depth": 1,
-      "parent": "Window",
+      "depth": 2,
+      "parent": "AttachmentPortalSurface",
       "children": [],
-      "explanation": "flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.",
+      "explanation": "Attachment portal content is a required split browser with list and preview panes.",
       "visualStyle": {
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
-        "tokenSource": "content.background",
+        "tokenSource": "attachmentPortal.dictationHistory.content",
         "visualBounds": {
           "x": 0,
           "y": 45,
@@ -608,7 +714,7 @@
       },
       "clipped": false,
       "raw": {
-        "name": "ContentArea",
+        "name": "AttachmentPortalContent",
         "type": "container",
         "bounds": {
           "x": 0,
@@ -620,13 +726,13 @@
           "direction": "row",
           "grow": 1
         },
-        "depth": 1,
-        "parent": "Window",
-        "explanation": "flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.",
+        "depth": 2,
+        "parent": "AttachmentPortalSurface",
+        "explanation": "Attachment portal content is a required split browser with list and preview panes.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.background",
+          "tokenSource": "attachmentPortal.dictationHistory.content",
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -643,7 +749,7 @@
       }
     },
     {
-      "name": "ScriptList",
+      "name": "AttachmentPortalList",
       "type": "list",
       "bounds": {
         "x": 0,
@@ -651,14 +757,14 @@
         "width": 375,
         "height": 435
       },
-      "depth": 2,
-      "parent": "ContentArea",
+      "depth": 3,
+      "parent": "AttachmentPortalContent",
       "children": [],
-      "explanation": "Width = 375px. Uses uniform_list for virtualized scrolling with 40px item height.",
+      "explanation": "Attachment list uses the left 50% split pane with 40px dense rows.",
       "visualStyle": {
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
-        "tokenSource": "content.list",
+        "tokenSource": "attachmentPortal.dictationHistory.list",
         "visualBounds": {
           "x": 0,
           "y": 45,
@@ -696,7 +802,7 @@
       },
       "clipped": false,
       "raw": {
-        "name": "ScriptList",
+        "name": "AttachmentPortalList",
         "type": "list",
         "bounds": {
           "x": 0,
@@ -707,13 +813,13 @@
         "flex": {
           "direction": "column"
         },
-        "depth": 2,
-        "parent": "ContentArea",
-        "explanation": "Width = 375px. Uses uniform_list for virtualized scrolling with 40px item height.",
+        "depth": 3,
+        "parent": "AttachmentPortalContent",
+        "explanation": "Attachment list uses the left 50% split pane with 40px dense rows.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.list",
+          "tokenSource": "attachmentPortal.dictationHistory.list",
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -730,7 +836,7 @@
       }
     },
     {
-      "name": "PreviewPanel",
+      "name": "AttachmentPortalPreview",
       "type": "panel",
       "bounds": {
         "x": 375,
@@ -738,14 +844,14 @@
         "width": 375,
         "height": 435
       },
-      "depth": 2,
-      "parent": "ContentArea",
+      "depth": 3,
+      "parent": "AttachmentPortalContent",
       "children": [],
-      "explanation": "Width = remaining 50% = 375px. Has 16px padding on all sides.",
+      "explanation": "Preview pane uses 16px inset content spacing and remains content-layer solid theme material.",
       "visualStyle": {
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
-        "tokenSource": "content.previewPanel",
+        "tokenSource": "attachmentPortal.dictationHistory.preview",
         "visualBounds": {
           "x": 375,
           "y": 45,
@@ -783,7 +889,7 @@
       },
       "clipped": false,
       "raw": {
-        "name": "PreviewPanel",
+        "name": "AttachmentPortalPreview",
         "type": "panel",
         "bounds": {
           "x": 375,
@@ -802,13 +908,13 @@
         "flex": {
           "direction": "column"
         },
-        "depth": 2,
-        "parent": "ContentArea",
-        "explanation": "Width = remaining 50% = 375px. Has 16px padding on all sides.",
+        "depth": 3,
+        "parent": "AttachmentPortalContent",
+        "explanation": "Preview pane uses 16px inset content spacing and remains content-layer solid theme material.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.previewPanel",
+          "tokenSource": "attachmentPortal.dictationHistory.preview",
           "visualBounds": {
             "x": 375,
             "y": 45,
@@ -825,7 +931,7 @@
       }
     },
     {
-      "name": "ListItem[0]",
+      "name": "AttachmentPortalRow[0]",
       "type": "listItem",
       "bounds": {
         "x": 0,
@@ -833,14 +939,14 @@
         "width": 375,
         "height": 40
       },
-      "depth": 3,
-      "parent": "ScriptList",
+      "depth": 4,
+      "parent": "AttachmentPortalList",
       "children": [],
-      "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+      "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
       "visualStyle": {
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
-        "tokenSource": "content.listItem",
+        "tokenSource": "attachmentPortal.dictationHistory.row",
         "cornerRadius": {
           "topLeft": 10,
           "topRight": 10,
@@ -884,7 +990,7 @@
       },
       "clipped": false,
       "raw": {
-        "name": "ListItem[0]",
+        "name": "AttachmentPortalRow[0]",
         "type": "listItem",
         "bounds": {
           "x": 0,
@@ -904,13 +1010,13 @@
         "flex": {
           "direction": "row"
         },
-        "depth": 3,
-        "parent": "ScriptList",
-        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "depth": 4,
+        "parent": "AttachmentPortalList",
+        "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.listItem",
+          "tokenSource": "attachmentPortal.dictationHistory.row",
           "cornerRadius": {
             "topLeft": 10,
             "topRight": 10,
@@ -933,7 +1039,7 @@
       }
     },
     {
-      "name": "ListItem[1]",
+      "name": "AttachmentPortalRow[1]",
       "type": "listItem",
       "bounds": {
         "x": 0,
@@ -941,14 +1047,14 @@
         "width": 375,
         "height": 40
       },
-      "depth": 3,
-      "parent": "ScriptList",
+      "depth": 4,
+      "parent": "AttachmentPortalList",
       "children": [],
-      "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+      "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
       "visualStyle": {
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
-        "tokenSource": "content.listItem",
+        "tokenSource": "attachmentPortal.dictationHistory.row",
         "cornerRadius": {
           "topLeft": 10,
           "topRight": 10,
@@ -992,7 +1098,7 @@
       },
       "clipped": false,
       "raw": {
-        "name": "ListItem[1]",
+        "name": "AttachmentPortalRow[1]",
         "type": "listItem",
         "bounds": {
           "x": 0,
@@ -1012,13 +1118,13 @@
         "flex": {
           "direction": "row"
         },
-        "depth": 3,
-        "parent": "ScriptList",
-        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "depth": 4,
+        "parent": "AttachmentPortalList",
+        "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.listItem",
+          "tokenSource": "attachmentPortal.dictationHistory.row",
           "cornerRadius": {
             "topLeft": 10,
             "topRight": 10,
@@ -1041,7 +1147,7 @@
       }
     },
     {
-      "name": "ListItem[2]",
+      "name": "AttachmentPortalRow[2]",
       "type": "listItem",
       "bounds": {
         "x": 0,
@@ -1049,14 +1155,14 @@
         "width": 375,
         "height": 40
       },
-      "depth": 3,
-      "parent": "ScriptList",
+      "depth": 4,
+      "parent": "AttachmentPortalList",
       "children": [],
-      "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+      "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
       "visualStyle": {
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
-        "tokenSource": "content.listItem",
+        "tokenSource": "attachmentPortal.dictationHistory.row",
         "cornerRadius": {
           "topLeft": 10,
           "topRight": 10,
@@ -1100,7 +1206,7 @@
       },
       "clipped": false,
       "raw": {
-        "name": "ListItem[2]",
+        "name": "AttachmentPortalRow[2]",
         "type": "listItem",
         "bounds": {
           "x": 0,
@@ -1120,13 +1226,13 @@
         "flex": {
           "direction": "row"
         },
-        "depth": 3,
-        "parent": "ScriptList",
-        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "depth": 4,
+        "parent": "AttachmentPortalList",
+        "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.listItem",
+          "tokenSource": "attachmentPortal.dictationHistory.row",
           "cornerRadius": {
             "topLeft": 10,
             "topRight": 10,
@@ -1149,7 +1255,7 @@
       }
     },
     {
-      "name": "ListItem[3]",
+      "name": "AttachmentPortalRow[3]",
       "type": "listItem",
       "bounds": {
         "x": 0,
@@ -1157,14 +1263,14 @@
         "width": 375,
         "height": 40
       },
-      "depth": 3,
-      "parent": "ScriptList",
+      "depth": 4,
+      "parent": "AttachmentPortalList",
       "children": [],
-      "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+      "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
       "visualStyle": {
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
-        "tokenSource": "content.listItem",
+        "tokenSource": "attachmentPortal.dictationHistory.row",
         "cornerRadius": {
           "topLeft": 10,
           "topRight": 10,
@@ -1208,7 +1314,7 @@
       },
       "clipped": false,
       "raw": {
-        "name": "ListItem[3]",
+        "name": "AttachmentPortalRow[3]",
         "type": "listItem",
         "bounds": {
           "x": 0,
@@ -1228,13 +1334,13 @@
         "flex": {
           "direction": "row"
         },
-        "depth": 3,
-        "parent": "ScriptList",
-        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "depth": 4,
+        "parent": "AttachmentPortalList",
+        "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.listItem",
+          "tokenSource": "attachmentPortal.dictationHistory.row",
           "cornerRadius": {
             "topLeft": 10,
             "topRight": 10,
@@ -1257,7 +1363,7 @@
       }
     },
     {
-      "name": "ListItem[4]",
+      "name": "AttachmentPortalRow[4]",
       "type": "listItem",
       "bounds": {
         "x": 0,
@@ -1265,14 +1371,14 @@
         "width": 375,
         "height": 40
       },
-      "depth": 3,
-      "parent": "ScriptList",
+      "depth": 4,
+      "parent": "AttachmentPortalList",
       "children": [],
-      "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+      "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
       "visualStyle": {
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
-        "tokenSource": "content.listItem",
+        "tokenSource": "attachmentPortal.dictationHistory.row",
         "cornerRadius": {
           "topLeft": 10,
           "topRight": 10,
@@ -1316,7 +1422,7 @@
       },
       "clipped": false,
       "raw": {
-        "name": "ListItem[4]",
+        "name": "AttachmentPortalRow[4]",
         "type": "listItem",
         "bounds": {
           "x": 0,
@@ -1336,13 +1442,13 @@
         "flex": {
           "direction": "row"
         },
-        "depth": 3,
-        "parent": "ScriptList",
-        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "depth": 4,
+        "parent": "AttachmentPortalList",
+        "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.listItem",
+          "tokenSource": "attachmentPortal.dictationHistory.row",
           "cornerRadius": {
             "topLeft": 10,
             "topRight": 10,
@@ -1365,7 +1471,7 @@
       }
     },
     {
-      "name": "LogoButton",
+      "name": "AttachmentPortalLogoButton",
       "type": "button",
       "bounds": {
         "x": 714,
@@ -1373,14 +1479,14 @@
         "width": 20,
         "height": 28
       },
-      "depth": 2,
-      "parent": "Header",
+      "depth": 3,
+      "parent": "AttachmentPortalHeader",
       "children": [],
-      "explanation": "Fixed 20px width. Positioned at right edge with 16px margin.",
+      "explanation": "Portal header action keeps a compact 28px tall functional chrome hit target.",
       "visualStyle": {
         "chromeLayer": "functionalChrome",
         "materialSource": "solidThemeToken",
-        "tokenSource": "chrome.headerButton",
+        "tokenSource": "attachmentPortal.dictationHistory.headerButton",
         "cornerRadius": {
           "topLeft": 14,
           "topRight": 14,
@@ -1425,7 +1531,7 @@
       },
       "clipped": false,
       "raw": {
-        "name": "LogoButton",
+        "name": "AttachmentPortalLogoButton",
         "type": "button",
         "bounds": {
           "x": 714,
@@ -1441,13 +1547,13 @@
             "left": 4
           }
         },
-        "depth": 2,
-        "parent": "Header",
-        "explanation": "Fixed 20px width. Positioned at right edge with 16px margin.",
+        "depth": 3,
+        "parent": "AttachmentPortalHeader",
+        "explanation": "Portal header action keeps a compact 28px tall functional chrome hit target.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "chrome.headerButton",
+          "tokenSource": "attachmentPortal.dictationHistory.headerButton",
           "cornerRadius": {
             "topLeft": 14,
             "topRight": 14,
@@ -1471,7 +1577,7 @@
       }
     },
     {
-      "name": "ActionsButton",
+      "name": "AttachmentPortalActionsButton",
       "type": "button",
       "bounds": {
         "x": 605,
@@ -1479,14 +1585,14 @@
         "width": 85,
         "height": 28
       },
-      "depth": 2,
-      "parent": "Header",
+      "depth": 3,
+      "parent": "AttachmentPortalHeader",
       "children": [],
-      "explanation": "Width = 85px. Positioned left of logo with 24px spacing (includes divider).",
+      "explanation": "Portal header action keeps a compact 28px tall functional chrome hit target.",
       "visualStyle": {
         "chromeLayer": "functionalChrome",
         "materialSource": "solidThemeToken",
-        "tokenSource": "chrome.headerButton",
+        "tokenSource": "attachmentPortal.dictationHistory.headerButton",
         "cornerRadius": {
           "topLeft": 14,
           "topRight": 14,
@@ -1530,7 +1636,7 @@
       },
       "clipped": false,
       "raw": {
-        "name": "ActionsButton",
+        "name": "AttachmentPortalActionsButton",
         "type": "button",
         "bounds": {
           "x": 605,
@@ -1541,18 +1647,18 @@
         "boxModel": {
           "padding": {
             "top": 4,
-            "right": 8,
+            "right": 4,
             "bottom": 4,
-            "left": 8
+            "left": 4
           }
         },
-        "depth": 2,
-        "parent": "Header",
-        "explanation": "Width = 85px. Positioned left of logo with 24px spacing (includes divider).",
+        "depth": 3,
+        "parent": "AttachmentPortalHeader",
+        "explanation": "Portal header action keeps a compact 28px tall functional chrome hit target.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "chrome.headerButton",
+          "tokenSource": "attachmentPortal.dictationHistory.headerButton",
           "cornerRadius": {
             "topLeft": 14,
             "topRight": 14,
@@ -1575,7 +1681,7 @@
       }
     },
     {
-      "name": "RunButton",
+      "name": "AttachmentPortalRunButton",
       "type": "button",
       "bounds": {
         "x": 526,
@@ -1583,14 +1689,14 @@
         "width": 55,
         "height": 28
       },
-      "depth": 2,
-      "parent": "Header",
+      "depth": 3,
+      "parent": "AttachmentPortalHeader",
       "children": [],
-      "explanation": "Width = 55px. Positioned left of Actions with 24px spacing.",
+      "explanation": "Portal header action keeps a compact 28px tall functional chrome hit target.",
       "visualStyle": {
         "chromeLayer": "functionalChrome",
         "materialSource": "solidThemeToken",
-        "tokenSource": "chrome.headerButton",
+        "tokenSource": "attachmentPortal.dictationHistory.headerButton",
         "cornerRadius": {
           "topLeft": 14,
           "topRight": 14,
@@ -1634,7 +1740,7 @@
       },
       "clipped": false,
       "raw": {
-        "name": "RunButton",
+        "name": "AttachmentPortalRunButton",
         "type": "button",
         "bounds": {
           "x": 526,
@@ -1645,18 +1751,18 @@
         "boxModel": {
           "padding": {
             "top": 4,
-            "right": 8,
+            "right": 4,
             "bottom": 4,
-            "left": 8
+            "left": 4
           }
         },
-        "depth": 2,
-        "parent": "Header",
-        "explanation": "Width = 55px. Positioned left of Actions with 24px spacing.",
+        "depth": 3,
+        "parent": "AttachmentPortalHeader",
+        "explanation": "Portal header action keeps a compact 28px tall functional chrome hit target.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "chrome.headerButton",
+          "tokenSource": "attachmentPortal.dictationHistory.headerButton",
           "cornerRadius": {
             "topLeft": 14,
             "topRight": 14,
@@ -1690,8 +1796,8 @@
     "pressureScore": 0
   },
   "visualAudit": {
-    "nodeCount": 14,
-    "styledNodeCount": 14,
+    "nodeCount": 15,
+    "styledNodeCount": 15,
     "unstyledNodeCount": 0,
     "controlsWithHitFailures": [],
     "contentGlassNodes": [],
@@ -1699,7 +1805,7 @@
     "glassLayerViolations": [],
     "missingStyleNodeNames": [],
     "chromeLayers": {
-      "content": 8,
+      "content": 9,
       "functionalChrome": 5,
       "windowBackdrop": 1
     }
@@ -1710,7 +1816,7 @@
   "errors": [],
   "rawLayout": {
     "type": "layoutInfoResult",
-    "requestId": "devtools-layout-measure-1780126731542-c65f71",
+    "requestId": "devtools-layout-measure-1780128351813-35b682",
     "windowWidth": 750,
     "windowHeight": 480,
     "promptType": "dictationHistory",
@@ -1754,7 +1860,46 @@
         }
       },
       {
-        "name": "Header",
+        "name": "AttachmentPortalSurface",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "AttachmentPortalBrowser dictationHistory owns the split attachment browser shell; receipts must not fall back to the generic ScriptList surface.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "attachmentPortal.dictationHistory.surface",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          }
+        }
+      },
+      {
+        "name": "AttachmentPortalHeader",
         "type": "header",
         "bounds": {
           "x": 0,
@@ -1773,13 +1918,13 @@
         "flex": {
           "direction": "row"
         },
-        "depth": 1,
-        "parent": "Window",
-        "explanation": "Height = padding(8) + content(28) + padding(8) + divider(1) = 45px. Uses flex-row with items-center.",
+        "depth": 2,
+        "parent": "AttachmentPortalSurface",
+        "explanation": "Functional portal header contains search and right-aligned attachment actions.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "chrome.header",
+          "tokenSource": "attachmentPortal.dictationHistory.header",
           "cornerRadius": {
             "topLeft": 16,
             "topRight": 16,
@@ -1801,7 +1946,7 @@
         }
       },
       {
-        "name": "SearchInput",
+        "name": "AttachmentPortalSearch",
         "type": "input",
         "bounds": {
           "x": 16,
@@ -1809,16 +1954,13 @@
           "width": 498,
           "height": 22
         },
-        "flex": {
-          "grow": 1
-        },
-        "depth": 2,
-        "parent": "Header",
-        "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(236) = 498px. Vertically centered in header.",
+        "depth": 3,
+        "parent": "AttachmentPortalHeader",
+        "explanation": "Search keeps the 22px visual lane inside a 28px minimum hit target.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "chrome.searchInput",
+          "tokenSource": "attachmentPortal.dictationHistory.search",
           "cornerRadius": {
             "topLeft": 14,
             "topRight": 14,
@@ -1840,7 +1982,7 @@
         }
       },
       {
-        "name": "ContentArea",
+        "name": "AttachmentPortalContent",
         "type": "container",
         "bounds": {
           "x": 0,
@@ -1852,13 +1994,13 @@
           "direction": "row",
           "grow": 1
         },
-        "depth": 1,
-        "parent": "Window",
-        "explanation": "flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.",
+        "depth": 2,
+        "parent": "AttachmentPortalSurface",
+        "explanation": "Attachment portal content is a required split browser with list and preview panes.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.background",
+          "tokenSource": "attachmentPortal.dictationHistory.content",
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -1874,7 +2016,7 @@
         }
       },
       {
-        "name": "ScriptList",
+        "name": "AttachmentPortalList",
         "type": "list",
         "bounds": {
           "x": 0,
@@ -1885,13 +2027,13 @@
         "flex": {
           "direction": "column"
         },
-        "depth": 2,
-        "parent": "ContentArea",
-        "explanation": "Width = 375px. Uses uniform_list for virtualized scrolling with 40px item height.",
+        "depth": 3,
+        "parent": "AttachmentPortalContent",
+        "explanation": "Attachment list uses the left 50% split pane with 40px dense rows.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.list",
+          "tokenSource": "attachmentPortal.dictationHistory.list",
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -1907,7 +2049,7 @@
         }
       },
       {
-        "name": "PreviewPanel",
+        "name": "AttachmentPortalPreview",
         "type": "panel",
         "bounds": {
           "x": 375,
@@ -1926,13 +2068,13 @@
         "flex": {
           "direction": "column"
         },
-        "depth": 2,
-        "parent": "ContentArea",
-        "explanation": "Width = remaining 50% = 375px. Has 16px padding on all sides.",
+        "depth": 3,
+        "parent": "AttachmentPortalContent",
+        "explanation": "Preview pane uses 16px inset content spacing and remains content-layer solid theme material.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.previewPanel",
+          "tokenSource": "attachmentPortal.dictationHistory.preview",
           "visualBounds": {
             "x": 375,
             "y": 45,
@@ -1948,7 +2090,7 @@
         }
       },
       {
-        "name": "ListItem[0]",
+        "name": "AttachmentPortalRow[0]",
         "type": "listItem",
         "bounds": {
           "x": 0,
@@ -1968,13 +2110,13 @@
         "flex": {
           "direction": "row"
         },
-        "depth": 3,
-        "parent": "ScriptList",
-        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "depth": 4,
+        "parent": "AttachmentPortalList",
+        "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.listItem",
+          "tokenSource": "attachmentPortal.dictationHistory.row",
           "cornerRadius": {
             "topLeft": 10,
             "topRight": 10,
@@ -1996,7 +2138,7 @@
         }
       },
       {
-        "name": "ListItem[1]",
+        "name": "AttachmentPortalRow[1]",
         "type": "listItem",
         "bounds": {
           "x": 0,
@@ -2016,13 +2158,13 @@
         "flex": {
           "direction": "row"
         },
-        "depth": 3,
-        "parent": "ScriptList",
-        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "depth": 4,
+        "parent": "AttachmentPortalList",
+        "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.listItem",
+          "tokenSource": "attachmentPortal.dictationHistory.row",
           "cornerRadius": {
             "topLeft": 10,
             "topRight": 10,
@@ -2044,7 +2186,7 @@
         }
       },
       {
-        "name": "ListItem[2]",
+        "name": "AttachmentPortalRow[2]",
         "type": "listItem",
         "bounds": {
           "x": 0,
@@ -2064,13 +2206,13 @@
         "flex": {
           "direction": "row"
         },
-        "depth": 3,
-        "parent": "ScriptList",
-        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "depth": 4,
+        "parent": "AttachmentPortalList",
+        "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.listItem",
+          "tokenSource": "attachmentPortal.dictationHistory.row",
           "cornerRadius": {
             "topLeft": 10,
             "topRight": 10,
@@ -2092,7 +2234,7 @@
         }
       },
       {
-        "name": "ListItem[3]",
+        "name": "AttachmentPortalRow[3]",
         "type": "listItem",
         "bounds": {
           "x": 0,
@@ -2112,13 +2254,13 @@
         "flex": {
           "direction": "row"
         },
-        "depth": 3,
-        "parent": "ScriptList",
-        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "depth": 4,
+        "parent": "AttachmentPortalList",
+        "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.listItem",
+          "tokenSource": "attachmentPortal.dictationHistory.row",
           "cornerRadius": {
             "topLeft": 10,
             "topRight": 10,
@@ -2140,7 +2282,7 @@
         }
       },
       {
-        "name": "ListItem[4]",
+        "name": "AttachmentPortalRow[4]",
         "type": "listItem",
         "bounds": {
           "x": 0,
@@ -2160,13 +2302,13 @@
         "flex": {
           "direction": "row"
         },
-        "depth": 3,
-        "parent": "ScriptList",
-        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "depth": 4,
+        "parent": "AttachmentPortalList",
+        "explanation": "dictationHistory attachment rows mirror the shared 40px dense-row hit contract with 16px horizontal padding.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "content.listItem",
+          "tokenSource": "attachmentPortal.dictationHistory.row",
           "cornerRadius": {
             "topLeft": 10,
             "topRight": 10,
@@ -2188,7 +2330,7 @@
         }
       },
       {
-        "name": "LogoButton",
+        "name": "AttachmentPortalLogoButton",
         "type": "button",
         "bounds": {
           "x": 714,
@@ -2204,13 +2346,13 @@
             "left": 4
           }
         },
-        "depth": 2,
-        "parent": "Header",
-        "explanation": "Fixed 20px width. Positioned at right edge with 16px margin.",
+        "depth": 3,
+        "parent": "AttachmentPortalHeader",
+        "explanation": "Portal header action keeps a compact 28px tall functional chrome hit target.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "chrome.headerButton",
+          "tokenSource": "attachmentPortal.dictationHistory.headerButton",
           "cornerRadius": {
             "topLeft": 14,
             "topRight": 14,
@@ -2233,7 +2375,7 @@
         }
       },
       {
-        "name": "ActionsButton",
+        "name": "AttachmentPortalActionsButton",
         "type": "button",
         "bounds": {
           "x": 605,
@@ -2244,18 +2386,18 @@
         "boxModel": {
           "padding": {
             "top": 4,
-            "right": 8,
+            "right": 4,
             "bottom": 4,
-            "left": 8
+            "left": 4
           }
         },
-        "depth": 2,
-        "parent": "Header",
-        "explanation": "Width = 85px. Positioned left of logo with 24px spacing (includes divider).",
+        "depth": 3,
+        "parent": "AttachmentPortalHeader",
+        "explanation": "Portal header action keeps a compact 28px tall functional chrome hit target.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "chrome.headerButton",
+          "tokenSource": "attachmentPortal.dictationHistory.headerButton",
           "cornerRadius": {
             "topLeft": 14,
             "topRight": 14,
@@ -2277,7 +2419,7 @@
         }
       },
       {
-        "name": "RunButton",
+        "name": "AttachmentPortalRunButton",
         "type": "button",
         "bounds": {
           "x": 526,
@@ -2288,18 +2430,18 @@
         "boxModel": {
           "padding": {
             "top": 4,
-            "right": 8,
+            "right": 4,
             "bottom": 4,
-            "left": 8
+            "left": 4
           }
         },
-        "depth": 2,
-        "parent": "Header",
-        "explanation": "Width = 55px. Positioned left of Actions with 24px spacing.",
+        "depth": 3,
+        "parent": "AttachmentPortalHeader",
+        "explanation": "Portal header action keeps a compact 28px tall functional chrome hit target.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "chrome.headerButton",
+          "tokenSource": "attachmentPortal.dictationHistory.headerButton",
           "cornerRadius": {
             "topLeft": 14,
             "topRight": 14,
@@ -2321,6 +2463,6 @@
         }
       }
     ],
-    "timestamp": "2026-05-30T07:38:51.567637+00:00"
+    "timestamp": "2026-05-30T08:05:51.844125+00:00"
   }
 }

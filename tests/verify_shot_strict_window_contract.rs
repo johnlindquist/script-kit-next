@@ -89,6 +89,33 @@ fn strict_window_keeps_blank_png_audit_as_infra_failure() {
 }
 
 #[test]
+fn strict_window_has_target_bound_screen_rect_fallback() {
+    assert!(
+        VERIFY_SHOT.contains("\"screen-rect-from-inspection\""),
+        "strict fallback route must be explicitly receipted"
+    );
+    assert!(
+        VERIFY_SHOT.contains("resolvedBounds"),
+        "inspection must preserve screen-space resolvedBounds for target-bound fallback"
+    );
+    assert!(
+        VERIFY_SHOT.contains("captureScreenRectFromInspection"),
+        "verify-shot must isolate screen-rect fallback behind inspection geometry"
+    );
+    assert!(
+        VERIFY_SHOT.contains("\"screencapture\"")
+            && VERIFY_SHOT.contains("\"-R\"")
+            && VERIFY_SHOT.contains("strict-window-helper-failed")
+            && VERIFY_SHOT.contains("blank-primary-capture"),
+        "screen-rect fallback must use screencapture -R and receipt both failure paths"
+    );
+    assert!(
+        VERIFY_SHOT.contains("captureRouting !== \"screen-rect-from-inspection\""),
+        "blank primary captures should attempt the screen-rect fallback only once"
+    );
+}
+
+#[test]
 fn strict_window_skips_show_for_attached_popup_exact_capture() {
     assert!(
         VERIFY_SHOT.contains("function isAttachedPopupWindowKind"),

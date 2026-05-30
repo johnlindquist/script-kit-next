@@ -22,7 +22,9 @@ impl DictationHistoryEmptyState {
 }
 
 impl ScriptListApp {
-    fn dictation_history_visible_rows(filter: &str) -> Vec<crate::dictation::DictationHistoryEntry> {
+    pub(crate) fn dictation_history_visible_rows(
+        filter: &str,
+    ) -> Vec<crate::dictation::DictationHistoryEntry> {
         crate::dictation::search_history(filter, 100)
             .into_iter()
             .map(|hit| hit.entry)
@@ -45,7 +47,7 @@ impl ScriptListApp {
         )
     }
 
-    fn dictation_history_visible_row_labels(filter: &str) -> Vec<String> {
+    pub(crate) fn dictation_history_visible_row_labels(filter: &str) -> Vec<String> {
         Self::dictation_history_visible_rows(filter)
             .into_iter()
             .map(|entry| entry.preview)

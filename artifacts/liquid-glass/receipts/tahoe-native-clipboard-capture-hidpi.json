@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "data": {
+    "jsonrpc": "2.0",
+    "id": "script-kit-mcp-cli-1780128298818",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"schemaVersion\":1,\"source\":\"coreGraphicsWindowList+xcap\",\"scope\":\"runningAppPidNativeWindowIdCapture\",\"status\":\"blankImageRejected\",\"correlationId\":\"mcp-computer-capture-native-window:e7e940e5-72cb-4445-9ff3-732c7a53390b\",\"app\":{\"pid\":68634,\"bundleId\":null,\"name\":\"script-kit-gpui\",\"isActive\":false,\"isHidden\":false,\"activationPolicy\":\"accessory\"},\"window\":{\"nativeWindowId\":84630,\"title\":\"\",\"bounds\":{\"x\":2097,\"y\":-903,\"width\":750,\"height\":480},\"isOnScreen\":true,\"layer\":101,\"zOrder\":0,\"observation\":{\"schemaVersion\":1,\"source\":\"coreGraphicsWindowList\",\"metadataQuality\":\"full\",\"alpha\":1.0,\"sharingState\":1,\"captureCandidate\":{\"status\":\"disqualified\",\"reason\":\"layerNonZero\",\"thresholds\":{\"requiredLayer\":0,\"minAlpha\":0.01,\"minWidth\":120,\"minHeight\":90}},\"ownProcessWindowPolicy\":{\"source\":\"nsWindow\",\"status\":\"includedInWindowsMenu\",\"isExcludedFromWindowsMenu\":false},\"listCandidate\":{\"status\":\"disqualified\",\"reason\":\"layerNonZero\",\"thresholds\":{\"requiredLayer\":0,\"minAlpha\":0.0,\"minWidth\":60,\"minHeight\":60}},\"captureSelectionCandidate\":{\"status\":\"candidate\",\"reason\":null,\"selectionBasis\":\"captureCandidateThenPreferredDuplicateThenTitleFallbackThenOwnProcessPolicy\"},\"enumerationContext\":{\"source\":\"coreGraphicsWindowList\",\"mode\":\"onScreenOnly\",\"relativeToWindow\":0,\"rawOptions\":{\"optionOnScreenOnly\":true,\"optionAll\":false,\"optionExcludeDesktopElements\":false},\"offscreenCoverage\":\"notEnumerated\",\"desktopElementPolicy\":\"notExcludedByOption\"}}},\"error\":{\"code\":\"blank_image_rejected\",\"message\":\"Screenshot capture returned a blank/black image. Check macOS Screen Recording permission for this binary and retry with a reviewable capture.\",\"pixelAudit\":{\"sampled\":1440000,\"nonBlack\":0,\"nonTransparent\":0,\"uniqueBucketCount\":1,\"meanLuma\":0.0,\"blankLike\":true}},\"warnings\":[]}"
+        }
+      ]
+    }
+  }
+}
