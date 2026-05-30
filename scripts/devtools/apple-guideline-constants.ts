@@ -73,7 +73,7 @@ export interface NativeMeasurement {
 
 export interface GuidelineMetric {
   id: string;
-  category: "cornerRadius" | "concentricity" | "controlSize" | "padding" | "spacing" | "hitTarget";
+  category: "cornerRadius" | "concentricity" | "controlSize" | "padding" | "spacing" | "hitTarget" | "typography";
   confidence: GuidelineConfidence;
   normativeStrength: NormativeStrength;
   target: GuidelineTarget;
@@ -312,6 +312,68 @@ export const APPLE_GUIDELINE_METRICS: GuidelineMetric[] = [
       osVersion: "26",
     },
     copyrightSafeSummary: "Historical Aqua-era regular search/text field height was 22pt (small 19, mini 15) — not a Tahoe hard target.",
+  },
+  {
+    id: "typography.native.body.fontSize",
+    category: "typography",
+    confidence: "measuredNative",
+    // SOFT: macOS Body / regular control-content text is 13pt, but a launcher's
+    // hero search field intentionally runs larger (Spotlight-style). So divergence
+    // above 13pt is reported, not a hard failure. Result-row body text (a later
+    // slice) is where 13pt should hold tightly.
+    normativeStrength: "soft",
+    target: { kind: "constant", valuePt: 13 },
+    tolerance: { absPt: 1, nearAbsPt: 2 },
+    nativeMeasurement: {
+      probeId: "macos26-regular-control-content-font-size",
+      probeSource: "scripts/devtools/tahoe_native_baseline.swift",
+      receiptPath: "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+      osVersion: "26.5",
+      measuredAt: "2026-05-30",
+      control: "NSFont.controlContentFont(.regular) / NSSearchField regular",
+      field: "fontMetrics.regularControlContentFont.pointSizePt",
+    },
+    copyrightSafeSummary: "Native regular macOS control/body text is 13pt (measured, macOS 26.5); a launcher hero search field may run larger by design.",
+  },
+  {
+    id: "typography.native.body.lineHeight",
+    category: "typography",
+    confidence: "measuredNative",
+    normativeStrength: "soft",
+    target: { kind: "constant", valuePt: 16 },
+    tolerance: { absPt: 1, nearAbsPt: 3 },
+    nativeMeasurement: {
+      probeId: "macos26-regular-control-content-font-lineheight",
+      probeSource: "scripts/devtools/tahoe_native_baseline.swift",
+      receiptPath: "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+      osVersion: "26.5",
+      measuredAt: "2026-05-30",
+      control: "NSLayoutManager.defaultLineHeight(for: regular control content font)",
+      field: "fontMetrics.regularControlContentFont.defaultLineHeightPt",
+    },
+    copyrightSafeSummary: "Native default line height for 13pt regular control/body text is 16pt (measured, macOS 26.5).",
+  },
+  {
+    id: "typography.native.input.fontWeight",
+    category: "typography",
+    confidence: "measuredNative",
+    // HARD: native search/input text is Regular (weight trait 0 ~= 400). Apple
+    // reserves Semibold for emphasis, not for ordinary editable field text. Our
+    // launcher search input must NOT render bold/semibold. Compared in GPUI
+    // numeric weight space (Regular=400, Medium=500, Semibold=600).
+    normativeStrength: "hard",
+    target: { kind: "constant", valuePt: 400 },
+    tolerance: { absPt: 50, nearAbsPt: 150 },
+    nativeMeasurement: {
+      probeId: "macos26-regular-control-content-font-weight",
+      probeSource: "scripts/devtools/tahoe_native_baseline.swift",
+      receiptPath: "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+      osVersion: "26.5",
+      measuredAt: "2026-05-30",
+      control: "NSSearchField / NSTextField regular font",
+      field: "fontMetrics.regularControlContentFont.weightTrait (0 == Regular == 400)",
+    },
+    copyrightSafeSummary: "Native regular search/input text is Regular weight (trait 0 == 400); Semibold is reserved for emphasis, so input text must not be bold.",
   },
 ];
 
@@ -734,6 +796,105 @@ export function capsuleRadiusDeviations(nodes: NodeLike[], scale: number | null)
   return out;
 }
 
+// --- Typography deviations --------------------------------------------------
+// For nodes that emit `visualStyle.typography`, classify rendered text against
+// the measured-native macOS baselines. The launcher's hero search input is
+// expected to satisfy the HARD weight metric (input text must be Regular, not
+// bold) while diverging on the SOFT size/line-height metrics (a Spotlight-style
+// hero field legitimately runs larger than 13pt body). Honest by construction:
+// the size divergence is surfaced as a soft finding, never silently passed.
+export interface TypographyStyle {
+  role?: string;
+  fontFamily?: string;
+  fontSizePt?: number;
+  fontWeight?: string;
+  fontWeightNumeric?: number;
+  lineHeightPt?: number;
+  textAlign?: string;
+}
+
+export function typographyFromStyle(style: unknown): TypographyStyle | null {
+  if (!style || typeof style !== "object") return null;
+  const raw = (style as Record<string, unknown>).typography;
+  if (!raw || typeof raw !== "object") return null;
+  return raw as TypographyStyle;
+}
+
+// Map a GPUI/CSS-ish weight name to its numeric weight when the explicit numeric
+// field is absent. Regular=400, Medium=500, Semibold=600, Bold=700.
+function weightNumeric(typo: TypographyStyle): number | null {
+  if (typeof typo.fontWeightNumeric === "number") return typo.fontWeightNumeric;
+  const byName: Record<string, number> = {
+    thin: 100, extralight: 200, light: 300, normal: 400, regular: 400,
+    medium: 500, semibold: 600, bold: 700, extrabold: 800, black: 900,
+  };
+  const key = String(typo.fontWeight ?? "").toLowerCase();
+  return key in byName ? byName[key] : null;
+}
+
+export function typographyDeviations(nodes: NodeLike[], scale: number | null): GuidelineDeviation[] {
+  const out: GuidelineDeviation[] = [];
+  for (const node of nodes) {
+    const typo = typographyFromStyle(node.visualStyle);
+    if (!typo) continue;
+    const nodeName = String(node.name ?? "");
+    const nodeType = String(node.type ?? "");
+
+    const push = (
+      m: GuidelineMetric,
+      observed: number | null,
+      target: number,
+      classification: GuidelineClassification,
+      failureReason?: string,
+    ) => {
+      out.push({
+        metricId: m.id,
+        source: sourceFor(m.confidence),
+        confidence: m.confidence,
+        normativeStrength: m.normativeStrength,
+        nodeName,
+        nodeType,
+        observedPt: observed,
+        targetPt: target,
+        deltaPt: observed == null ? null : observed - target,
+        deltaPct: observed == null ? null : (observed - target) / target,
+        tolerance: m.tolerance,
+        classification,
+        ...(failureReason ? { failureReason } : {}),
+      });
+    };
+
+    // HARD: input/search text must be Regular weight (not bold/semibold).
+    const wMetric = metric("typography.native.input.fontWeight");
+    const wTarget = wMetric.target.kind === "constant" ? wMetric.target.valuePt : 400;
+    const wObserved = weightNumeric(typo);
+    if (wObserved == null) {
+      push(wMetric, null, wTarget, "unmeasured", "node typography lacks fontWeight/fontWeightNumeric evidence");
+    } else {
+      push(wMetric, wObserved, wTarget, classifyDeviation(wObserved - wTarget, wTarget, wMetric.tolerance, scale));
+    }
+
+    // SOFT: body/control font size baseline 13pt; a hero search input may exceed it.
+    const sMetric = metric("typography.native.body.fontSize");
+    const sTarget = sMetric.target.kind === "constant" ? sMetric.target.valuePt : 13;
+    if (typeof typo.fontSizePt === "number") {
+      push(sMetric, typo.fontSizePt, sTarget, classifyDeviation(typo.fontSizePt - sTarget, sTarget, sMetric.tolerance, scale));
+    } else {
+      push(sMetric, null, sTarget, "unmeasured", "node typography lacks fontSizePt evidence");
+    }
+
+    // SOFT: body/control line height baseline 16pt.
+    const lMetric = metric("typography.native.body.lineHeight");
+    const lTarget = lMetric.target.kind === "constant" ? lMetric.target.valuePt : 16;
+    if (typeof typo.lineHeightPt === "number") {
+      push(lMetric, typo.lineHeightPt, lTarget, classifyDeviation(typo.lineHeightPt - lTarget, lTarget, lMetric.tolerance, scale));
+    } else {
+      push(lMetric, null, lTarget, "unmeasured", "node typography lacks lineHeightPt evidence");
+    }
+  }
+  return out;
+}
+
 export interface AppleGuidelineConformanceBlock {
   schemaVersion: 1;
   unit: "pt";
@@ -760,6 +921,7 @@ export function appleGuidelineConformance(nodes: NodeLike[], scale: number | nul
     ...footerSpacingDeviations(nodes, scale),
     ...windowRadiusDeviations(nodes, scale),
     ...capsuleRadiusDeviations(nodes, scale),
+    ...typographyDeviations(nodes, scale),
   ];
   const failures = deviations.filter((d) => d.classification === "outOfBand");
   const nearMisses = deviations.filter((d) => d.classification === "nearBand");

@@ -570,6 +570,14 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
             constants: appleConformance.constants.filter((m) => m.category === "spacing"),
             buttonCenterDistance,
           },
+          typography: {
+            source: "apple-documented-and-measured-native",
+            constants: appleConformance.constants.filter((m) => m.category === "typography"),
+            deviations: appleConformance.deviations.filter((d) => d.metricId.startsWith("typography.")),
+            unmeasured: appleConformance.unmeasured.filter((d) => d.metricId.startsWith("typography.")),
+            failures: appleConformance.failures.filter((d) => d.metricId.startsWith("typography.")),
+            nearMisses: appleConformance.nearMisses.filter((d) => d.metricId.startsWith("typography.")),
+          },
           conformanceScore: appleConformance.score,
         },
         projectLocal: {

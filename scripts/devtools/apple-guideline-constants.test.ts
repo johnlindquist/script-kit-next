@@ -13,6 +13,7 @@ import {
   concentricRadiusDeviations,
   footerSpacingDeviations,
   searchPaddingDeviations,
+  typographyDeviations,
   windowRadiusDeviations,
   type NodeLike,
 } from "./apple-guideline-constants";
@@ -296,4 +297,78 @@ test("conformance rollup surfaces a hard failure and never reports hardPass when
   expect(block.score.hardPass).toBe(false);
   expect(block.unit).toBe("pt");
   expect(block.backingScaleFactor).toBe(2);
+});
+
+// --- Typography (fonts slice, Oracle session tahoe-fonts-typography-slice) ---
+
+test("the native baseline receipt now pins the measured system font metrics (13pt / 16pt / Regular)", () => {
+  const fm = (nativeBaseline as any).fontMetrics;
+  expect(fm, "probe must emit fontMetrics").toBeTruthy();
+  expect(fm.regularControlContentFont.pointSizePt).toBe(13);
+  expect(fm.regularControlContentFont.defaultLineHeightPt).toBe(16);
+  expect(fm.regularControlContentFont.weightTrait).toBe(0); // Regular
+  expect(fm.systemFontSizePt).toBe(13);
+});
+
+// The hero search input renders Regular (400) — Apple reserves Semibold for
+// emphasis, so this is the meaningful GREEN measured-native proof.
+const HERO_SEARCH_INPUT: NodeLike[] = [
+  {
+    name: "SearchInput",
+    type: "input",
+    parent: "Header",
+    bounds: { x: 16, y: 11, width: 498, height: 22 },
+    visualStyle: {
+      // 9pt inset from the prior slice so searchPaddingDeviations stays measured;
+      // isolates the typography behavior under test.
+      contentInsets: { left: 9, right: 9, top: 3, bottom: 3 },
+      typography: {
+        role: "searchInput",
+        fontFamily: ".AppleSystemUIFont",
+        fontSizePt: 20,
+        fontWeight: "regular",
+        fontWeightNumeric: 400,
+        lineHeightPt: 18,
+        textAlign: "left",
+      },
+    },
+  },
+];
+
+test("GREEN: the search input's Regular weight matches the measured-native input weight (HARD, withinBand)", () => {
+  const devs = typographyDeviations(HERO_SEARCH_INPUT, 2);
+  const weight = devs.find((d) => d.metricId === "typography.native.input.fontWeight");
+  expect(weight?.normativeStrength).toBe("hard");
+  expect(weight?.observedPt).toBe(400);
+  expect(weight?.classification).toBe("withinBand");
+});
+
+test("HONEST: the 20pt hero search input diverges from 13pt body but only as a SOFT finding (no hard fail)", () => {
+  const block = appleGuidelineConformance(HERO_SEARCH_INPUT, 2);
+  const size = block.deviations.find((d) => d.metricId === "typography.native.body.fontSize");
+  expect(size?.observedPt).toBe(20);
+  expect(size?.classification).toBe("outOfBand"); // 20 vs 13 is a real divergence
+  expect(size?.normativeStrength).toBe("soft"); // ...but soft: launcher hero field by design
+  // The hero input must NOT break hard conformance just for being large.
+  expect(block.score.hardPass).toBe(true);
+  expect(block.score.softFailureCount).toBeGreaterThan(0); // surfaced, not hidden
+});
+
+test("RED: a bold/semibold search input IS a hard failure (the weight check can fail)", () => {
+  const bold: NodeLike[] = [
+    {
+      name: "SearchInput",
+      type: "input",
+      parent: "Header",
+      bounds: { x: 16, y: 11, width: 498, height: 22 },
+      visualStyle: {
+        contentInsets: { left: 9, right: 9, top: 3, bottom: 3 },
+        typography: { role: "searchInput", fontSizePt: 13, fontWeight: "semibold", fontWeightNumeric: 600, lineHeightPt: 16 },
+      },
+    },
+  ];
+  const block = appleGuidelineConformance(bold, 2);
+  const weight = block.deviations.find((d) => d.metricId === "typography.native.input.fontWeight");
+  expect(weight?.classification).toBe("outOfBand"); // 600 vs 400 target
+  expect(block.score.hardPass).toBe(false); // bold input breaks hard conformance
 });

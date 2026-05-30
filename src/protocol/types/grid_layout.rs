@@ -333,8 +333,35 @@ pub struct LayoutVisualStyle {
     /// instead of reporting it as an `unmeasured` gap. Serialized as `contentInsets`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content_insets: Option<BoxModelSides>,
+    /// Rendered text metrics for text-bearing nodes (e.g. the search input). Lets
+    /// the Apple-guideline conformance engine classify font size/weight/line-height
+    /// against the measured-native macOS baseline (13pt Regular / 16pt line height)
+    /// instead of guessing. Emitted from the SAME accessors the renderer uses, so
+    /// the receipt cannot drift from what is actually drawn. Serialized as `typography`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub typography: Option<LayoutTypographyInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exception: Option<String>,
+}
+
+/// Rendered typography metrics for a text-bearing layout node.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutTypographyInfo {
+    /// Semantic role: searchInput, resultPrimary, resultSecondary, resultMeta.
+    pub role: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font_size_pt: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font_weight: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font_weight_numeric: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line_height_pt: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_align: Option<String>,
 }
 
 /// Component type for categorization
@@ -503,7 +530,36 @@ impl LayoutComponentInfo {
             visual_bounds: Some(self.bounds.clone()),
             hit_bounds: Some(self.bounds.clone()),
             content_insets: None,
+            typography: None,
             exception: None,
+        });
+        self
+    }
+
+    /// Declare the rendered typography for a text-bearing node so the Apple-guideline
+    /// conformance engine can classify it against the measured-native baseline.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_typography(
+        mut self,
+        role: impl Into<String>,
+        font_family: Option<String>,
+        font_size_pt: f32,
+        font_weight: impl Into<String>,
+        font_weight_numeric: f32,
+        line_height_pt: f32,
+        text_align: impl Into<String>,
+    ) -> Self {
+        let style = self
+            .visual_style
+            .get_or_insert_with(LayoutVisualStyle::default);
+        style.typography = Some(LayoutTypographyInfo {
+            role: role.into(),
+            font_family,
+            font_size_pt: Some(font_size_pt),
+            font_weight: Some(font_weight.into()),
+            font_weight_numeric: Some(font_weight_numeric),
+            line_height_pt: Some(line_height_pt),
+            text_align: Some(text_align.into()),
         });
         self
     }

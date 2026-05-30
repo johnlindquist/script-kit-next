@@ -1,0 +1,3161 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.layout",
+  "command": "layout.measure",
+  "classification": "ok",
+  "session": "tahoe-typo",
+  "include": [
+    "nodes"
+  ],
+  "limit": 200,
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ScriptList"
+  },
+  "target": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "ScriptList",
+    "appViewVariant": "ScriptList",
+    "nativeFooterSurface": "script_list",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 2097,
+      "y": -903,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": null,
+      "height": null,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 45607,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "layoutEvidenceFreshness": {
+    "schemaVersion": 1,
+    "generatedAt": "2026-05-30T19:21:22.104Z",
+    "auditSchema": "panel-radius-v2",
+    "requiredPanelRadiusNodes": [
+      "ContentArea",
+      "ScriptList",
+      "PreviewPanel"
+    ],
+    "sourceFingerprint": {
+      "schemaVersion": 1,
+      "algorithm": "sha256",
+      "files": [
+        {
+          "path": "src/app_layout/build_layout_info.rs",
+          "sha256": "6fe642b8b2cea5df82c904be8982126806580b5746cda96454f11e0e1a680f52"
+        },
+        {
+          "path": "scripts/devtools/layout.ts",
+          "sha256": "accc5e635e0c789c182a4b148b269dccc63c8de8352e2242694b804525277b33"
+        },
+        {
+          "path": "src/ui/chrome/tokens.rs",
+          "sha256": "5dfd2cf41e1ec9ea3ac122a41ea3f6e7cce2a133c0f25c0fd0592f3455658eaa"
+        }
+      ]
+    }
+  },
+  "promptType": "mainMenu",
+  "timestamp": "2026-05-30T19:21:22.061737+00:00",
+  "componentCount": 15,
+  "window": {
+    "rect": {
+      "x": 2097,
+      "y": -903,
+      "width": 750,
+      "height": 480
+    },
+    "visible": null,
+    "focused": null
+  },
+  "viewport": {
+    "clientWidth": 750,
+    "clientHeight": 480,
+    "contentWidth": 750,
+    "contentHeight": 480,
+    "scrollWidth": 750,
+    "scrollHeight": 480,
+    "canScrollX": false,
+    "canScrollY": false,
+    "scrollTop": null,
+    "maxScrollTop": 0,
+    "overflowPolicyY": "hidden"
+  },
+  "pressure": {
+    "overflowY": false,
+    "hiddenContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "footerOverlapCount": 0,
+    "inputOverlapCount": 0,
+    "pressureScore": 0
+  },
+  "viewportRect": {
+    "x": 0,
+    "y": 0,
+    "width": 750,
+    "height": 480
+  },
+  "windowRect": {
+    "x": 2097,
+    "y": -903,
+    "width": 750,
+    "height": 480
+  },
+  "regions": [
+    {
+      "name": "Window",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      }
+    },
+    {
+      "name": "Header",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 45
+      }
+    },
+    {
+      "name": "SearchInput",
+      "type": "input",
+      "bounds": {
+        "x": 16,
+        "y": 11,
+        "width": 498,
+        "height": 22
+      }
+    },
+    {
+      "name": "ContentArea",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 45,
+        "width": 750,
+        "height": 435
+      }
+    },
+    {
+      "name": "ScriptList",
+      "type": "list",
+      "bounds": {
+        "x": 0,
+        "y": 45,
+        "width": 375,
+        "height": 435
+      }
+    },
+    {
+      "name": "PreviewPanel",
+      "type": "panel",
+      "bounds": {
+        "x": 375,
+        "y": 45,
+        "width": 375,
+        "height": 435
+      }
+    },
+    {
+      "name": "ListItem[0]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 45,
+        "width": 375,
+        "height": 40
+      }
+    },
+    {
+      "name": "ListItem[1]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 85,
+        "width": 375,
+        "height": 40
+      }
+    },
+    {
+      "name": "ListItem[2]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 125,
+        "width": 375,
+        "height": 40
+      }
+    },
+    {
+      "name": "ListItem[3]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 165,
+        "width": 375,
+        "height": 40
+      }
+    },
+    {
+      "name": "ListItem[4]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 205,
+        "width": 375,
+        "height": 40
+      }
+    },
+    {
+      "name": "LogoButton",
+      "type": "button",
+      "bounds": {
+        "x": 714,
+        "y": 8,
+        "width": 20,
+        "height": 28
+      }
+    },
+    {
+      "name": "ActionsButton",
+      "type": "button",
+      "bounds": {
+        "x": 605,
+        "y": 8,
+        "width": 85,
+        "height": 28
+      }
+    },
+    {
+      "name": "RunButton",
+      "type": "button",
+      "bounds": {
+        "x": 526,
+        "y": 8,
+        "width": 55,
+        "height": 28
+      }
+    },
+    {
+      "name": "MainFooter",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 444,
+        "width": 750,
+        "height": 36
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Window",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "depth": 0,
+      "parent": null,
+      "children": [],
+      "explanation": "Root native window backdrop. Not a content layer or Liquid Glass content surface.",
+      "visualStyle": {
+        "chromeLayer": "windowBackdrop",
+        "materialSource": "nativeWindowBackdrop",
+        "tokenSource": "window.backdrop",
+        "cornerRadius": {
+          "topLeft": 22,
+          "topRight": 22,
+          "bottomRight": 22,
+          "bottomLeft": 22
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "hitWidth": 750,
+        "hitHeight": 480,
+        "visualWidth": 750,
+        "visualHeight": 480,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "Window",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Root native window backdrop. Not a content layer or Liquid Glass content surface.",
+        "visualStyle": {
+          "chromeLayer": "windowBackdrop",
+          "materialSource": "nativeWindowBackdrop",
+          "tokenSource": "window.backdrop",
+          "cornerRadius": {
+            "topLeft": 22,
+            "topRight": 22,
+            "bottomRight": 22,
+            "bottomLeft": 22
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          }
+        }
+      }
+    },
+    {
+      "name": "Header",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 45
+      },
+      "depth": 1,
+      "parent": "Window",
+      "children": [],
+      "explanation": "Height = padding(8) + content(28) + padding(8) + divider(1) = 45px. Uses flex-row with items-center.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.header",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        },
+        "hitWidth": 750,
+        "hitHeight": 45,
+        "visualWidth": 750,
+        "visualHeight": 45,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "Header",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        },
+        "boxModel": {
+          "padding": {
+            "top": 8,
+            "right": 16,
+            "bottom": 8,
+            "left": 16
+          }
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Height = padding(8) + content(28) + padding(8) + divider(1) = 45px. Uses flex-row with items-center.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.header",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 45
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 45
+          }
+        }
+      }
+    },
+    {
+      "name": "SearchInput",
+      "type": "input",
+      "bounds": {
+        "x": 16,
+        "y": 11,
+        "width": 498,
+        "height": 22
+      },
+      "depth": 2,
+      "parent": "Header",
+      "children": [],
+      "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(236) = 498px. Vertically centered in header.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.searchInput",
+        "cornerRadius": {
+          "topLeft": 14,
+          "topRight": 14,
+          "bottomRight": 14,
+          "bottomLeft": 14
+        },
+        "visualBounds": {
+          "x": 16,
+          "y": 11,
+          "width": 498,
+          "height": 22
+        },
+        "hitBounds": {
+          "x": 16,
+          "y": 8,
+          "width": 498,
+          "height": 28
+        },
+        "contentInsets": {
+          "top": 2,
+          "right": 9,
+          "bottom": 2,
+          "left": 9
+        },
+        "typography": {
+          "role": "searchInput",
+          "fontFamily": ".SystemUIFont",
+          "fontSizePt": 20,
+          "fontWeight": "regular",
+          "fontWeightNumeric": 400,
+          "lineHeightPt": 18,
+          "textAlign": "left"
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 16,
+          "y": 8,
+          "width": 498,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 16,
+          "y": 11,
+          "width": 498,
+          "height": 22
+        },
+        "hitWidth": 498,
+        "hitHeight": 28,
+        "visualWidth": 498,
+        "visualHeight": 22,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "SearchInput",
+        "type": "input",
+        "bounds": {
+          "x": 16,
+          "y": 11,
+          "width": 498,
+          "height": 22
+        },
+        "flex": {
+          "grow": 1
+        },
+        "depth": 2,
+        "parent": "Header",
+        "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(236) = 498px. Vertically centered in header.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.searchInput",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 16,
+            "y": 11,
+            "width": 498,
+            "height": 22
+          },
+          "hitBounds": {
+            "x": 16,
+            "y": 8,
+            "width": 498,
+            "height": 28
+          },
+          "contentInsets": {
+            "top": 2,
+            "right": 9,
+            "bottom": 2,
+            "left": 9
+          },
+          "typography": {
+            "role": "searchInput",
+            "fontFamily": ".SystemUIFont",
+            "fontSizePt": 20,
+            "fontWeight": "regular",
+            "fontWeightNumeric": 400,
+            "lineHeightPt": 18,
+            "textAlign": "left"
+          }
+        }
+      }
+    },
+    {
+      "name": "ContentArea",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 45,
+        "width": 750,
+        "height": 435
+      },
+      "depth": 1,
+      "parent": "Window",
+      "children": [],
+      "explanation": "flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.background",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 435
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 435
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 435
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 435
+        },
+        "hitWidth": 750,
+        "hitHeight": 435,
+        "visualWidth": 750,
+        "visualHeight": 435,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ContentArea",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 435
+        },
+        "flex": {
+          "direction": "row",
+          "grow": 1
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.background",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 435
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 435
+          }
+        }
+      }
+    },
+    {
+      "name": "ScriptList",
+      "type": "list",
+      "bounds": {
+        "x": 0,
+        "y": 45,
+        "width": 375,
+        "height": 435
+      },
+      "depth": 2,
+      "parent": "ContentArea",
+      "children": [],
+      "explanation": "Width = 375px. Uses uniform_list for virtualized scrolling with 40px item height.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.list",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 435
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 435
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 435
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 435
+        },
+        "hitWidth": 375,
+        "hitHeight": 435,
+        "visualWidth": 375,
+        "visualHeight": 435,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ScriptList",
+        "type": "list",
+        "bounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 435
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 2,
+        "parent": "ContentArea",
+        "explanation": "Width = 375px. Uses uniform_list for virtualized scrolling with 40px item height.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.list",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 375,
+            "height": 435
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 375,
+            "height": 435
+          }
+        }
+      }
+    },
+    {
+      "name": "PreviewPanel",
+      "type": "panel",
+      "bounds": {
+        "x": 375,
+        "y": 45,
+        "width": 375,
+        "height": 435
+      },
+      "depth": 2,
+      "parent": "ContentArea",
+      "children": [],
+      "explanation": "Width = remaining 50% = 375px. Has 16px padding on all sides.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.previewPanel",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 375,
+          "y": 45,
+          "width": 375,
+          "height": 435
+        },
+        "hitBounds": {
+          "x": 375,
+          "y": 45,
+          "width": 375,
+          "height": 435
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 375,
+          "y": 45,
+          "width": 375,
+          "height": 435
+        },
+        "visualBounds": {
+          "x": 375,
+          "y": 45,
+          "width": 375,
+          "height": 435
+        },
+        "hitWidth": 375,
+        "hitHeight": 435,
+        "visualWidth": 375,
+        "visualHeight": 435,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "PreviewPanel",
+        "type": "panel",
+        "bounds": {
+          "x": 375,
+          "y": 45,
+          "width": 375,
+          "height": 435
+        },
+        "boxModel": {
+          "padding": {
+            "top": 16,
+            "right": 16,
+            "bottom": 16,
+            "left": 16
+          }
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 2,
+        "parent": "ContentArea",
+        "explanation": "Width = remaining 50% = 375px. Has 16px padding on all sides.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.previewPanel",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 375,
+            "y": 45,
+            "width": 375,
+            "height": 435
+          },
+          "hitBounds": {
+            "x": 375,
+            "y": 45,
+            "width": 375,
+            "height": 435
+          }
+        }
+      }
+    },
+    {
+      "name": "ListItem[0]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 45,
+        "width": 375,
+        "height": 40
+      },
+      "depth": 3,
+      "parent": "ScriptList",
+      "children": [],
+      "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.listItem",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 40
+        },
+        "hitWidth": 375,
+        "hitHeight": 40,
+        "visualWidth": 375,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ListItem[0]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 12,
+            "right": 16,
+            "bottom": 12,
+            "left": 16
+          },
+          "gap": 8
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 3,
+        "parent": "ScriptList",
+        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.listItem",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 375,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 375,
+            "height": 40
+          }
+        }
+      }
+    },
+    {
+      "name": "ListItem[1]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 85,
+        "width": 375,
+        "height": 40
+      },
+      "depth": 3,
+      "parent": "ScriptList",
+      "children": [],
+      "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.listItem",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 85,
+          "width": 375,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 85,
+          "width": 375,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 85,
+          "width": 375,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 85,
+          "width": 375,
+          "height": 40
+        },
+        "hitWidth": 375,
+        "hitHeight": 40,
+        "visualWidth": 375,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ListItem[1]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 85,
+          "width": 375,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 12,
+            "right": 16,
+            "bottom": 12,
+            "left": 16
+          },
+          "gap": 8
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 3,
+        "parent": "ScriptList",
+        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.listItem",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 85,
+            "width": 375,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 85,
+            "width": 375,
+            "height": 40
+          }
+        }
+      }
+    },
+    {
+      "name": "ListItem[2]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 125,
+        "width": 375,
+        "height": 40
+      },
+      "depth": 3,
+      "parent": "ScriptList",
+      "children": [],
+      "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.listItem",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 125,
+          "width": 375,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 125,
+          "width": 375,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 125,
+          "width": 375,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 125,
+          "width": 375,
+          "height": 40
+        },
+        "hitWidth": 375,
+        "hitHeight": 40,
+        "visualWidth": 375,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ListItem[2]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 125,
+          "width": 375,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 12,
+            "right": 16,
+            "bottom": 12,
+            "left": 16
+          },
+          "gap": 8
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 3,
+        "parent": "ScriptList",
+        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.listItem",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 125,
+            "width": 375,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 125,
+            "width": 375,
+            "height": 40
+          }
+        }
+      }
+    },
+    {
+      "name": "ListItem[3]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 165,
+        "width": 375,
+        "height": 40
+      },
+      "depth": 3,
+      "parent": "ScriptList",
+      "children": [],
+      "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.listItem",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 165,
+          "width": 375,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 165,
+          "width": 375,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 165,
+          "width": 375,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 165,
+          "width": 375,
+          "height": 40
+        },
+        "hitWidth": 375,
+        "hitHeight": 40,
+        "visualWidth": 375,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ListItem[3]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 165,
+          "width": 375,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 12,
+            "right": 16,
+            "bottom": 12,
+            "left": 16
+          },
+          "gap": 8
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 3,
+        "parent": "ScriptList",
+        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.listItem",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 165,
+            "width": 375,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 165,
+            "width": 375,
+            "height": 40
+          }
+        }
+      }
+    },
+    {
+      "name": "ListItem[4]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 205,
+        "width": 375,
+        "height": 40
+      },
+      "depth": 3,
+      "parent": "ScriptList",
+      "children": [],
+      "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.listItem",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 205,
+          "width": 375,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 205,
+          "width": 375,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 205,
+          "width": 375,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 205,
+          "width": 375,
+          "height": 40
+        },
+        "hitWidth": 375,
+        "hitHeight": 40,
+        "visualWidth": 375,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ListItem[4]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 205,
+          "width": 375,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 12,
+            "right": 16,
+            "bottom": 12,
+            "left": 16
+          },
+          "gap": 8
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 3,
+        "parent": "ScriptList",
+        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.listItem",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 205,
+            "width": 375,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 205,
+            "width": 375,
+            "height": 40
+          }
+        }
+      }
+    },
+    {
+      "name": "LogoButton",
+      "type": "button",
+      "bounds": {
+        "x": 714,
+        "y": 8,
+        "width": 20,
+        "height": 28
+      },
+      "depth": 2,
+      "parent": "Header",
+      "children": [],
+      "explanation": "Fixed 20px width. Positioned at right edge with 16px margin.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.headerButton",
+        "cornerRadius": {
+          "topLeft": 14,
+          "topRight": 14,
+          "bottomRight": 14,
+          "bottomLeft": 14
+        },
+        "visualBounds": {
+          "x": 714,
+          "y": 8,
+          "width": 20,
+          "height": 28
+        },
+        "hitBounds": {
+          "x": 714,
+          "y": 8,
+          "width": 28,
+          "height": 28
+        },
+        "exception": "compactIconButton"
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 714,
+          "y": 8,
+          "width": 28,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 714,
+          "y": 8,
+          "width": 20,
+          "height": 28
+        },
+        "hitWidth": 28,
+        "hitHeight": 28,
+        "visualWidth": 20,
+        "visualHeight": 28,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": "compactIconButton"
+      },
+      "clipped": false,
+      "raw": {
+        "name": "LogoButton",
+        "type": "button",
+        "bounds": {
+          "x": 714,
+          "y": 8,
+          "width": 20,
+          "height": 28
+        },
+        "boxModel": {
+          "padding": {
+            "top": 4,
+            "right": 4,
+            "bottom": 4,
+            "left": 4
+          }
+        },
+        "depth": 2,
+        "parent": "Header",
+        "explanation": "Fixed 20px width. Positioned at right edge with 16px margin.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.headerButton",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 714,
+            "y": 8,
+            "width": 20,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 714,
+            "y": 8,
+            "width": 28,
+            "height": 28
+          },
+          "exception": "compactIconButton"
+        }
+      }
+    },
+    {
+      "name": "ActionsButton",
+      "type": "button",
+      "bounds": {
+        "x": 605,
+        "y": 8,
+        "width": 85,
+        "height": 28
+      },
+      "depth": 2,
+      "parent": "Header",
+      "children": [],
+      "explanation": "Width = 85px. Positioned left of logo with 24px spacing (includes divider).",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.headerButton",
+        "cornerRadius": {
+          "topLeft": 14,
+          "topRight": 14,
+          "bottomRight": 14,
+          "bottomLeft": 14
+        },
+        "visualBounds": {
+          "x": 605,
+          "y": 8,
+          "width": 85,
+          "height": 28
+        },
+        "hitBounds": {
+          "x": 605,
+          "y": 8,
+          "width": 85,
+          "height": 28
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 605,
+          "y": 8,
+          "width": 85,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 605,
+          "y": 8,
+          "width": 85,
+          "height": 28
+        },
+        "hitWidth": 85,
+        "hitHeight": 28,
+        "visualWidth": 85,
+        "visualHeight": 28,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ActionsButton",
+        "type": "button",
+        "bounds": {
+          "x": 605,
+          "y": 8,
+          "width": 85,
+          "height": 28
+        },
+        "boxModel": {
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          }
+        },
+        "depth": 2,
+        "parent": "Header",
+        "explanation": "Width = 85px. Positioned left of logo with 24px spacing (includes divider).",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.headerButton",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 605,
+            "y": 8,
+            "width": 85,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 605,
+            "y": 8,
+            "width": 85,
+            "height": 28
+          }
+        }
+      }
+    },
+    {
+      "name": "RunButton",
+      "type": "button",
+      "bounds": {
+        "x": 526,
+        "y": 8,
+        "width": 55,
+        "height": 28
+      },
+      "depth": 2,
+      "parent": "Header",
+      "children": [],
+      "explanation": "Width = 55px. Positioned left of Actions with 24px spacing.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.headerButton",
+        "cornerRadius": {
+          "topLeft": 14,
+          "topRight": 14,
+          "bottomRight": 14,
+          "bottomLeft": 14
+        },
+        "visualBounds": {
+          "x": 526,
+          "y": 8,
+          "width": 55,
+          "height": 28
+        },
+        "hitBounds": {
+          "x": 526,
+          "y": 8,
+          "width": 55,
+          "height": 28
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 526,
+          "y": 8,
+          "width": 55,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 526,
+          "y": 8,
+          "width": 55,
+          "height": 28
+        },
+        "hitWidth": 55,
+        "hitHeight": 28,
+        "visualWidth": 55,
+        "visualHeight": 28,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "RunButton",
+        "type": "button",
+        "bounds": {
+          "x": 526,
+          "y": 8,
+          "width": 55,
+          "height": 28
+        },
+        "boxModel": {
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          }
+        },
+        "depth": 2,
+        "parent": "Header",
+        "explanation": "Width = 55px. Positioned left of Actions with 24px spacing.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.headerButton",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 526,
+            "y": 8,
+            "width": 55,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 526,
+            "y": 8,
+            "width": 55,
+            "height": 28
+          }
+        }
+      }
+    },
+    {
+      "name": "MainFooter",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 444,
+        "width": 750,
+        "height": 36
+      },
+      "depth": 1,
+      "parent": "Window",
+      "children": [],
+      "explanation": "Floating hint-strip footer overlay (absolute; the list safe-viewport is inset by its height). Side inset 14px; inter-item gap 12px (boxModel.gap = FOOTER_ACTION_ITEM_GAP_PX) now meets Apple's soft ~12pt bezel-padding floor (raised from 6px, the prior 'footer lacks padding' signal).",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.mainFooter",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 444,
+          "width": 750,
+          "height": 36
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 444,
+          "width": 750,
+          "height": 36
+        },
+        "contentInsets": {
+          "top": 2,
+          "right": 14,
+          "bottom": 2,
+          "left": 14
+        },
+        "exception": "floatingFooterOverlay"
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 444,
+          "width": 750,
+          "height": 36
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 444,
+          "width": 750,
+          "height": 36
+        },
+        "hitWidth": 750,
+        "hitHeight": 36,
+        "visualWidth": 750,
+        "visualHeight": 36,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": "floatingFooterOverlay"
+      },
+      "clipped": false,
+      "raw": {
+        "name": "MainFooter",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 444,
+          "width": 750,
+          "height": 36
+        },
+        "boxModel": {
+          "gap": 12
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Floating hint-strip footer overlay (absolute; the list safe-viewport is inset by its height). Side inset 14px; inter-item gap 12px (boxModel.gap = FOOTER_ACTION_ITEM_GAP_PX) now meets Apple's soft ~12pt bezel-padding floor (raised from 6px, the prior 'footer lacks padding' signal).",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.mainFooter",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 444,
+            "width": 750,
+            "height": 36
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 444,
+            "width": 750,
+            "height": 36
+          },
+          "contentInsets": {
+            "top": 2,
+            "right": 14,
+            "bottom": 2,
+            "left": 14
+          },
+          "exception": "floatingFooterOverlay"
+        }
+      }
+    }
+  ],
+  "overlaps": [],
+  "resizePressure": {
+    "windowCanGrow": null,
+    "overflowY": false,
+    "desiredContentHeight": 480,
+    "measuredContentHeight": 480,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "pressureScore": 0
+  },
+  "visualAudit": {
+    "nodeCount": 15,
+    "styledNodeCount": 15,
+    "unstyledNodeCount": 0,
+    "controlsWithHitFailures": [],
+    "contentGlassNodes": [],
+    "contentNativeMaterialNodes": [],
+    "glassLayerViolations": [],
+    "missingStyleNodeNames": [],
+    "chromeLayers": {
+      "content": 8,
+      "functionalChrome": 6,
+      "windowBackdrop": 1
+    },
+    "guidelineAssertions": {
+      "appleDocumented": {
+        "hitTargets": {
+          "source": "apple-documented",
+          "macosMinimumHitSize": {
+            "width": 28,
+            "height": 28
+          },
+          "macosMinimumVisualSize": {
+            "width": 20,
+            "height": 20
+          },
+          "failures": []
+        },
+        "buttonCenterDistance": {
+          "source": "apple-documented",
+          "requiredCenterDistance": 60,
+          "failures": []
+        },
+        "materialLayering": {
+          "source": "apple-documented",
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": []
+        },
+        "colorAdaptivity": {
+          "source": "apple-documented",
+          "hardcodedColorNodes": []
+        },
+        "safeAreaLayout": {
+          "source": "apple-documented",
+          "clippedNodeCount": 0,
+          "overflowY": false
+        },
+        "cornerGeometry": {
+          "source": "apple-documented-and-derived",
+          "backingScaleFactor": null,
+          "constants": [
+            {
+              "id": "shape.capsule.radius",
+              "category": "cornerRadius",
+              "confidence": "documented",
+              "normativeStrength": "hard",
+              "target": {
+                "kind": "formula",
+                "expression": "radiusPt = heightPt / 2"
+              },
+              "tolerance": {
+                "absPt": 0.5,
+                "nearAbsPt": 1
+              },
+              "appleReference": {
+                "referenceId": "apple-wwdc25-new-design-system-shapes",
+                "title": "Get to know the new design system",
+                "section": "Shape types and concentric layouts",
+                "retrievedAt": "2026-05-30",
+                "platform": "macOS",
+                "osVersion": "26"
+              },
+              "copyrightSafeSummary": "Apple defines a capsule's curvature as half the control height."
+            },
+            {
+              "id": "shape.concentric.childRadius",
+              "category": "concentricity",
+              "confidence": "documented",
+              "normativeStrength": "hard",
+              "target": {
+                "kind": "formula",
+                "expression": "childRadiusPt = max(0, parentRadiusPt - separationPt)"
+              },
+              "tolerance": {
+                "absPt": 1,
+                "pct": 0.05,
+                "nearAbsPt": 2,
+                "nearPct": 0.1
+              },
+              "appleReference": {
+                "referenceId": "apple-wwdc25-new-design-system-shapes",
+                "title": "Get to know the new design system",
+                "section": "Concentricity",
+                "retrievedAt": "2026-05-30",
+                "platform": "macOS",
+                "osVersion": "26"
+              },
+              "copyrightSafeSummary": "Apple says nested rounded shapes should preserve concentric radii (inner = outer − inset)."
+            },
+            {
+              "id": "macos.glassEffectView.defaultRadius",
+              "category": "cornerRadius",
+              "confidence": "measuredNative",
+              "normativeStrength": "soft",
+              "target": {
+                "kind": "constant",
+                "valuePt": 8
+              },
+              "tolerance": {
+                "absPt": 1,
+                "pct": 0.05,
+                "nearAbsPt": 2
+              },
+              "nativeMeasurement": {
+                "probeId": "macos26-nsglasseffectview-default-radius",
+                "probeSource": "scripts/devtools/tahoe_native_baseline.swift",
+                "receiptPath": "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+                "osVersion": "26.5",
+                "measuredAt": "2026-05-30",
+                "control": "NSGlassEffectView",
+                "field": "defaultCornerRadiusPt"
+              },
+              "derivation": {
+                "fromMetricIds": [
+                  "shape.concentric.childRadius"
+                ],
+                "formula": "NSGlassEffectView().cornerRadius default = 8pt (measured)",
+                "notes": "A free-standing glass element's default radius; NOT the launcher window/panel mask radius, which remains a separate native probe."
+              },
+              "copyrightSafeSummary": "A default NSGlassEffectView rounds to 8pt on macOS 26.5 (measured); a free element default, not the window mask."
+            },
+            {
+              "id": "macos.window.toolbarRadius.nativeBaseline",
+              "category": "cornerRadius",
+              "confidence": "measuredNative",
+              "normativeStrength": "soft",
+              "target": {
+                "kind": "minimum",
+                "minPt": 15
+              },
+              "tolerance": {
+                "absPt": 1,
+                "pct": 0.05,
+                "nearAbsPt": 2
+              },
+              "nativeMeasurement": {
+                "probeId": "macos26-nswindow-mask-corner-radius",
+                "probeSource": "scripts/devtools/tahoe_window_mask_probe.swift",
+                "receiptPath": "artifacts/liquid-glass/receipts/tahoe-window-mask-baseline.json",
+                "osVersion": "26.5",
+                "measuredAt": "2026-05-30",
+                "control": "NSWindow (titled / fullSizeContent / glass)",
+                "field": "cornerRadiusPt"
+              },
+              "copyrightSafeSummary": "Native Tahoe titled/glass windows round at 15pt (measured, macOS 26.5); a launcher should be at least that rounded."
+            }
+          ],
+          "deviations": [],
+          "failures": [],
+          "nearMisses": []
+        },
+        "padding": {
+          "source": "apple-documented-and-derived",
+          "constants": [
+            {
+              "id": "layout.bezelElement.padding",
+              "category": "padding",
+              "confidence": "documented",
+              "normativeStrength": "soft",
+              "target": {
+                "kind": "minimum",
+                "minPt": 12
+              },
+              "tolerance": {
+                "absPt": 2,
+                "nearAbsPt": 4
+              },
+              "appleReference": {
+                "referenceId": "apple-hig-accessibility-layout",
+                "title": "Accessibility",
+                "section": "Layout and spacing",
+                "retrievedAt": "2026-05-30",
+                "platform": "macOS",
+                "osVersion": "26"
+              },
+              "copyrightSafeSummary": "Apple accessibility guidance recommends ~12pt padding around bezeled elements (~24pt without a bezel)."
+            },
+            {
+              "id": "control.searchField.textInset.horizontal",
+              "category": "padding",
+              "confidence": "measuredNative",
+              "normativeStrength": "hard",
+              "target": {
+                "kind": "constant",
+                "valuePt": 9
+              },
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 2
+              },
+              "nativeMeasurement": {
+                "probeId": "macos26-nstextfield-regular-content-inset",
+                "probeSource": "scripts/devtools/tahoe_native_baseline.swift",
+                "receiptPath": "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+                "osVersion": "26.5",
+                "measuredAt": "2026-05-30",
+                "control": "NSTextField (regular, rounded bezel)",
+                "field": "contentHorizontalInsetPt"
+              },
+              "derivation": {
+                "fromMetricIds": [
+                  "layout.bezelElement.padding"
+                ],
+                "formula": "textInsetX = NSTextField regular drawingRect.minX − bounds.minX = 9pt (measured)",
+                "notes": "A plain input lane should match the native regular NSTextField horizontal inset (9pt); within the ~12pt bezel-padding soft band."
+              },
+              "copyrightSafeSummary": "Native regular NSTextField insets its text 9pt horizontally on macOS 26.5 (measured)."
+            },
+            {
+              "id": "control.searchField.textInset.vertical",
+              "category": "padding",
+              "confidence": "measuredNative",
+              "normativeStrength": "hard",
+              "target": {
+                "kind": "constant",
+                "valuePt": 3
+              },
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 2
+              },
+              "nativeMeasurement": {
+                "probeId": "macos26-nstextfield-regular-content-inset-vertical",
+                "probeSource": "scripts/devtools/tahoe_native_baseline.swift",
+                "receiptPath": "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+                "osVersion": "26.5",
+                "measuredAt": "2026-05-30",
+                "control": "NSTextField (regular, rounded bezel)",
+                "field": "contentVerticalInsetPt"
+              },
+              "copyrightSafeSummary": "Native regular NSTextField insets its text 3pt vertically on macOS 26.5 (measured)."
+            }
+          ],
+          "deviations": [
+            {
+              "metricId": "control.searchField.textInset.horizontal",
+              "source": "apple-measured-native",
+              "confidence": "measuredNative",
+              "normativeStrength": "hard",
+              "nodeName": "SearchInput",
+              "nodeType": "input",
+              "observedPt": 9,
+              "targetPt": 9,
+              "minPt": 8,
+              "maxPt": 12,
+              "deltaPt": 0,
+              "deltaPct": 0,
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 2
+              },
+              "classification": "withinBand"
+            }
+          ],
+          "unmeasured": [
+            {
+              "metricId": "layout.footer.itemGap",
+              "source": "apple-derived",
+              "confidence": "derived",
+              "normativeStrength": "soft",
+              "nodeName": "MainFooter",
+              "nodeType": "panel",
+              "observedPt": null,
+              "targetPt": 12,
+              "minPt": 12,
+              "deltaPt": null,
+              "deltaPct": null,
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 3
+              },
+              "classification": "unmeasured",
+              "failureReason": "footer node lacks boxModel.gap; cannot measure inter-item spacing"
+            }
+          ],
+          "failures": []
+        },
+        "spacing": {
+          "source": "apple-documented",
+          "constants": [
+            {
+              "id": "layout.regularButton.centerDistance",
+              "category": "spacing",
+              "confidence": "documented",
+              "normativeStrength": "hard",
+              "target": {
+                "kind": "minimum",
+                "minPt": 60
+              },
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 4
+              },
+              "appleReference": {
+                "referenceId": "apple-hig-spatial-layout",
+                "title": "Layout",
+                "section": "Spatial layout — control spacing",
+                "retrievedAt": "2026-05-30",
+                "platform": "macOS",
+                "osVersion": "26"
+              },
+              "copyrightSafeSummary": "Apple spatial-layout guidance gives a 60pt minimum center distance for regular buttons."
+            },
+            {
+              "id": "layout.regularButton.minimumGap",
+              "category": "spacing",
+              "confidence": "documented",
+              "normativeStrength": "hard",
+              "target": {
+                "kind": "minimum",
+                "minPt": 16
+              },
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 4
+              },
+              "appleReference": {
+                "referenceId": "apple-hig-spatial-layout",
+                "title": "Layout",
+                "section": "Spatial layout — control spacing",
+                "retrievedAt": "2026-05-30",
+                "platform": "macOS",
+                "osVersion": "26"
+              },
+              "copyrightSafeSummary": "Apple recommends 16pt or more of visible gap between regular buttons."
+            },
+            {
+              "id": "layout.footer.itemGap",
+              "category": "spacing",
+              "confidence": "derived",
+              "normativeStrength": "soft",
+              "target": {
+                "kind": "minimum",
+                "minPt": 12
+              },
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 3
+              },
+              "derivation": {
+                "fromMetricIds": [
+                  "layout.regularButton.minimumGap",
+                  "layout.bezelElement.padding"
+                ],
+                "formula": "footer item gap should be >= ~12pt (bezel-padding floor); Apple's hard regular-control gap is 16pt",
+                "notes": "Soft because footer hint chips are compact, non-bezeled controls Apple's HIG does not size explicitly."
+              },
+              "copyrightSafeSummary": "Derived (soft): adjacent compact footer controls should keep ~12pt+ of gap; 6pt reads as cramped vs Apple's 16pt regular-control gap."
+            }
+          ],
+          "buttonCenterDistance": {
+            "source": "apple-documented",
+            "requiredCenterDistance": 60,
+            "failures": []
+          }
+        },
+        "typography": {
+          "source": "apple-documented-and-measured-native",
+          "constants": [
+            {
+              "id": "typography.native.body.fontSize",
+              "category": "typography",
+              "confidence": "measuredNative",
+              "normativeStrength": "soft",
+              "target": {
+                "kind": "constant",
+                "valuePt": 13
+              },
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 2
+              },
+              "nativeMeasurement": {
+                "probeId": "macos26-regular-control-content-font-size",
+                "probeSource": "scripts/devtools/tahoe_native_baseline.swift",
+                "receiptPath": "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+                "osVersion": "26.5",
+                "measuredAt": "2026-05-30",
+                "control": "NSFont.controlContentFont(.regular) / NSSearchField regular",
+                "field": "fontMetrics.regularControlContentFont.pointSizePt"
+              },
+              "copyrightSafeSummary": "Native regular macOS control/body text is 13pt (measured, macOS 26.5); a launcher hero search field may run larger by design."
+            },
+            {
+              "id": "typography.native.body.lineHeight",
+              "category": "typography",
+              "confidence": "measuredNative",
+              "normativeStrength": "soft",
+              "target": {
+                "kind": "constant",
+                "valuePt": 16
+              },
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 3
+              },
+              "nativeMeasurement": {
+                "probeId": "macos26-regular-control-content-font-lineheight",
+                "probeSource": "scripts/devtools/tahoe_native_baseline.swift",
+                "receiptPath": "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+                "osVersion": "26.5",
+                "measuredAt": "2026-05-30",
+                "control": "NSLayoutManager.defaultLineHeight(for: regular control content font)",
+                "field": "fontMetrics.regularControlContentFont.defaultLineHeightPt"
+              },
+              "copyrightSafeSummary": "Native default line height for 13pt regular control/body text is 16pt (measured, macOS 26.5)."
+            },
+            {
+              "id": "typography.native.input.fontWeight",
+              "category": "typography",
+              "confidence": "measuredNative",
+              "normativeStrength": "hard",
+              "target": {
+                "kind": "constant",
+                "valuePt": 400
+              },
+              "tolerance": {
+                "absPt": 50,
+                "nearAbsPt": 150
+              },
+              "nativeMeasurement": {
+                "probeId": "macos26-regular-control-content-font-weight",
+                "probeSource": "scripts/devtools/tahoe_native_baseline.swift",
+                "receiptPath": "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+                "osVersion": "26.5",
+                "measuredAt": "2026-05-30",
+                "control": "NSSearchField / NSTextField regular font",
+                "field": "fontMetrics.regularControlContentFont.weightTrait (0 == Regular == 400)"
+              },
+              "copyrightSafeSummary": "Native regular search/input text is Regular weight (trait 0 == 400); Semibold is reserved for emphasis, so input text must not be bold."
+            }
+          ],
+          "deviations": [
+            {
+              "metricId": "typography.native.input.fontWeight",
+              "source": "apple-measured-native",
+              "confidence": "measuredNative",
+              "normativeStrength": "hard",
+              "nodeName": "SearchInput",
+              "nodeType": "input",
+              "observedPt": 400,
+              "targetPt": 400,
+              "deltaPt": 0,
+              "deltaPct": 0,
+              "tolerance": {
+                "absPt": 50,
+                "nearAbsPt": 150
+              },
+              "classification": "withinBand"
+            },
+            {
+              "metricId": "typography.native.body.fontSize",
+              "source": "apple-measured-native",
+              "confidence": "measuredNative",
+              "normativeStrength": "soft",
+              "nodeName": "SearchInput",
+              "nodeType": "input",
+              "observedPt": 20,
+              "targetPt": 13,
+              "deltaPt": 7,
+              "deltaPct": 0.5384615384615384,
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 2
+              },
+              "classification": "outOfBand"
+            },
+            {
+              "metricId": "typography.native.body.lineHeight",
+              "source": "apple-measured-native",
+              "confidence": "measuredNative",
+              "normativeStrength": "soft",
+              "nodeName": "SearchInput",
+              "nodeType": "input",
+              "observedPt": 18,
+              "targetPt": 16,
+              "deltaPt": 2,
+              "deltaPct": 0.125,
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 3
+              },
+              "classification": "withinBand"
+            }
+          ],
+          "unmeasured": [],
+          "failures": [
+            {
+              "metricId": "typography.native.body.fontSize",
+              "source": "apple-measured-native",
+              "confidence": "measuredNative",
+              "normativeStrength": "soft",
+              "nodeName": "SearchInput",
+              "nodeType": "input",
+              "observedPt": 20,
+              "targetPt": 13,
+              "deltaPt": 7,
+              "deltaPct": 0.5384615384615384,
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 2
+              },
+              "classification": "outOfBand"
+            }
+          ],
+          "nearMisses": []
+        },
+        "conformanceScore": {
+          "weightedScore": 0.625,
+          "hardPass": true,
+          "hardFailureCount": 0,
+          "softFailureCount": 1,
+          "measuredNodeCount": 4,
+          "unmeasuredCount": 1
+        }
+      },
+      "projectLocal": {
+        "cornerRadiusTokens": {
+          "source": "project-local",
+          "note": "smoke-only: positive-radius presence; numeric Apple comparison is appleDocumented.cornerGeometry",
+          "failures": []
+        },
+        "paddingTokens": {
+          "source": "project-local",
+          "minimumPanelPadding": 16,
+          "minimumCompactRowHorizontalPadding": 10
+        },
+        "spacingTokens": {
+          "source": "project-local",
+          "minimumFooterActionGap": 8
+        },
+        "windowBackdropPolicy": {
+          "source": "project-local",
+          "contentGlassNodeCount": 0
+        },
+        "themeTokenUsage": {
+          "source": "project-local",
+          "hardcodedColorNodes": []
+        },
+        "renderReadbackPixelThresholds": {
+          "source": "project-local",
+          "minimumNonBlackRatio": 0.01
+        }
+      }
+    }
+  },
+  "handlerForm": null,
+  "missingPrimitives": [],
+  "warnings": [],
+  "errors": [],
+  "rawLayout": {
+    "type": "layoutInfoResult",
+    "requestId": "devtools-layout-measure-1780168882002-867784",
+    "windowWidth": 750,
+    "windowHeight": 480,
+    "promptType": "mainMenu",
+    "components": [
+      {
+        "name": "Window",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Root native window backdrop. Not a content layer or Liquid Glass content surface.",
+        "visualStyle": {
+          "chromeLayer": "windowBackdrop",
+          "materialSource": "nativeWindowBackdrop",
+          "tokenSource": "window.backdrop",
+          "cornerRadius": {
+            "topLeft": 22,
+            "topRight": 22,
+            "bottomRight": 22,
+            "bottomLeft": 22
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          }
+        }
+      },
+      {
+        "name": "Header",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        },
+        "boxModel": {
+          "padding": {
+            "top": 8,
+            "right": 16,
+            "bottom": 8,
+            "left": 16
+          }
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Height = padding(8) + content(28) + padding(8) + divider(1) = 45px. Uses flex-row with items-center.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.header",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 45
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 45
+          }
+        }
+      },
+      {
+        "name": "SearchInput",
+        "type": "input",
+        "bounds": {
+          "x": 16,
+          "y": 11,
+          "width": 498,
+          "height": 22
+        },
+        "flex": {
+          "grow": 1
+        },
+        "depth": 2,
+        "parent": "Header",
+        "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(236) = 498px. Vertically centered in header.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.searchInput",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 16,
+            "y": 11,
+            "width": 498,
+            "height": 22
+          },
+          "hitBounds": {
+            "x": 16,
+            "y": 8,
+            "width": 498,
+            "height": 28
+          },
+          "contentInsets": {
+            "top": 2,
+            "right": 9,
+            "bottom": 2,
+            "left": 9
+          },
+          "typography": {
+            "role": "searchInput",
+            "fontFamily": ".SystemUIFont",
+            "fontSizePt": 20,
+            "fontWeight": "regular",
+            "fontWeightNumeric": 400,
+            "lineHeightPt": 18,
+            "textAlign": "left"
+          }
+        }
+      },
+      {
+        "name": "ContentArea",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 435
+        },
+        "flex": {
+          "direction": "row",
+          "grow": 1
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.background",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 435
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 435
+          }
+        }
+      },
+      {
+        "name": "ScriptList",
+        "type": "list",
+        "bounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 435
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 2,
+        "parent": "ContentArea",
+        "explanation": "Width = 375px. Uses uniform_list for virtualized scrolling with 40px item height.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.list",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 375,
+            "height": 435
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 375,
+            "height": 435
+          }
+        }
+      },
+      {
+        "name": "PreviewPanel",
+        "type": "panel",
+        "bounds": {
+          "x": 375,
+          "y": 45,
+          "width": 375,
+          "height": 435
+        },
+        "boxModel": {
+          "padding": {
+            "top": 16,
+            "right": 16,
+            "bottom": 16,
+            "left": 16
+          }
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 2,
+        "parent": "ContentArea",
+        "explanation": "Width = remaining 50% = 375px. Has 16px padding on all sides.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.previewPanel",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 375,
+            "y": 45,
+            "width": 375,
+            "height": 435
+          },
+          "hitBounds": {
+            "x": 375,
+            "y": 45,
+            "width": 375,
+            "height": 435
+          }
+        }
+      },
+      {
+        "name": "ListItem[0]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 12,
+            "right": 16,
+            "bottom": 12,
+            "left": 16
+          },
+          "gap": 8
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 3,
+        "parent": "ScriptList",
+        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.listItem",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 375,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 375,
+            "height": 40
+          }
+        }
+      },
+      {
+        "name": "ListItem[1]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 85,
+          "width": 375,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 12,
+            "right": 16,
+            "bottom": 12,
+            "left": 16
+          },
+          "gap": 8
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 3,
+        "parent": "ScriptList",
+        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.listItem",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 85,
+            "width": 375,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 85,
+            "width": 375,
+            "height": 40
+          }
+        }
+      },
+      {
+        "name": "ListItem[2]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 125,
+          "width": 375,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 12,
+            "right": 16,
+            "bottom": 12,
+            "left": 16
+          },
+          "gap": 8
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 3,
+        "parent": "ScriptList",
+        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.listItem",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 125,
+            "width": 375,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 125,
+            "width": 375,
+            "height": 40
+          }
+        }
+      },
+      {
+        "name": "ListItem[3]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 165,
+          "width": 375,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 12,
+            "right": 16,
+            "bottom": 12,
+            "left": 16
+          },
+          "gap": 8
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 3,
+        "parent": "ScriptList",
+        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.listItem",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 165,
+            "width": 375,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 165,
+            "width": 375,
+            "height": 40
+          }
+        }
+      },
+      {
+        "name": "ListItem[4]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 205,
+          "width": 375,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 12,
+            "right": 16,
+            "bottom": 12,
+            "left": 16
+          },
+          "gap": 8
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 3,
+        "parent": "ScriptList",
+        "explanation": "Fixed height = 40px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.listItem",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 205,
+            "width": 375,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 205,
+            "width": 375,
+            "height": 40
+          }
+        }
+      },
+      {
+        "name": "LogoButton",
+        "type": "button",
+        "bounds": {
+          "x": 714,
+          "y": 8,
+          "width": 20,
+          "height": 28
+        },
+        "boxModel": {
+          "padding": {
+            "top": 4,
+            "right": 4,
+            "bottom": 4,
+            "left": 4
+          }
+        },
+        "depth": 2,
+        "parent": "Header",
+        "explanation": "Fixed 20px width. Positioned at right edge with 16px margin.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.headerButton",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 714,
+            "y": 8,
+            "width": 20,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 714,
+            "y": 8,
+            "width": 28,
+            "height": 28
+          },
+          "exception": "compactIconButton"
+        }
+      },
+      {
+        "name": "ActionsButton",
+        "type": "button",
+        "bounds": {
+          "x": 605,
+          "y": 8,
+          "width": 85,
+          "height": 28
+        },
+        "boxModel": {
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          }
+        },
+        "depth": 2,
+        "parent": "Header",
+        "explanation": "Width = 85px. Positioned left of logo with 24px spacing (includes divider).",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.headerButton",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 605,
+            "y": 8,
+            "width": 85,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 605,
+            "y": 8,
+            "width": 85,
+            "height": 28
+          }
+        }
+      },
+      {
+        "name": "RunButton",
+        "type": "button",
+        "bounds": {
+          "x": 526,
+          "y": 8,
+          "width": 55,
+          "height": 28
+        },
+        "boxModel": {
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          }
+        },
+        "depth": 2,
+        "parent": "Header",
+        "explanation": "Width = 55px. Positioned left of Actions with 24px spacing.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.headerButton",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 526,
+            "y": 8,
+            "width": 55,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 526,
+            "y": 8,
+            "width": 55,
+            "height": 28
+          }
+        }
+      },
+      {
+        "name": "MainFooter",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 444,
+          "width": 750,
+          "height": 36
+        },
+        "boxModel": {
+          "gap": 12
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Floating hint-strip footer overlay (absolute; the list safe-viewport is inset by its height). Side inset 14px; inter-item gap 12px (boxModel.gap = FOOTER_ACTION_ITEM_GAP_PX) now meets Apple's soft ~12pt bezel-padding floor (raised from 6px, the prior 'footer lacks padding' signal).",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.mainFooter",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 444,
+            "width": 750,
+            "height": 36
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 444,
+            "width": 750,
+            "height": 36
+          },
+          "contentInsets": {
+            "top": 2,
+            "right": 14,
+            "bottom": 2,
+            "left": 14
+          },
+          "exception": "floatingFooterOverlay"
+        }
+      }
+    ],
+    "timestamp": "2026-05-30T19:21:22.061737+00:00"
+  }
+}

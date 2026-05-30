@@ -1,4 +1,106 @@
 {
+  "fontMetrics" : {
+    "controlSystemFontSizeByControlSizePt" : {
+      "large" : 13,
+      "mini" : 9,
+      "regular" : 13,
+      "small" : 11
+    },
+    "labelFont" : {
+      "ascenderPt" : 9.66796875,
+      "capHeightPt" : 7.0458984375,
+      "defaultLineHeightPt" : 12,
+      "descenderPt" : -2.109375,
+      "familyName" : ".AppleSystemUIFont",
+      "fontName" : ".AppleSystemUIFont",
+      "leadingPt" : 0,
+      "pointSizePt" : 10,
+      "weightTrait" : 0,
+      "widthTrait" : 0,
+      "xHeightPt" : 5.263671875
+    },
+    "labelFontSizePt" : 10,
+    "menuFontDefault" : {
+      "ascenderPt" : 12.568359375,
+      "capHeightPt" : 9.15966796875,
+      "defaultLineHeightPt" : 16,
+      "descenderPt" : -2.7421875,
+      "familyName" : ".AppleSystemUIFont",
+      "fontName" : ".AppleSystemUIFont",
+      "leadingPt" : 0,
+      "pointSizePt" : 13,
+      "weightTrait" : 0,
+      "widthTrait" : 0,
+      "xHeightPt" : 6.8427734375
+    },
+    "regularControlContentFont" : {
+      "ascenderPt" : 12.568359375,
+      "capHeightPt" : 9.15966796875,
+      "defaultLineHeightPt" : 16,
+      "descenderPt" : -2.7421875,
+      "familyName" : ".AppleSystemUIFont",
+      "fontName" : ".AppleSystemUIFont",
+      "leadingPt" : 0,
+      "pointSizePt" : 13,
+      "weightTrait" : 0,
+      "widthTrait" : 0,
+      "xHeightPt" : 6.8427734375
+    },
+    "smallSystemFontSizePt" : 11,
+    "smallSystemRegular" : {
+      "ascenderPt" : 10.634765625,
+      "capHeightPt" : 7.75048828125,
+      "defaultLineHeightPt" : 13,
+      "descenderPt" : -2.3203125,
+      "familyName" : ".AppleSystemUIFont",
+      "fontName" : ".AppleSystemUIFont",
+      "leadingPt" : 0,
+      "pointSizePt" : 11,
+      "weightTrait" : 0,
+      "widthTrait" : 0,
+      "xHeightPt" : 5.7900390625
+    },
+    "systemBody" : {
+      "ascenderPt" : 12.568359375,
+      "capHeightPt" : 9.15966796875,
+      "defaultLineHeightPt" : 16,
+      "descenderPt" : -2.7421875,
+      "familyName" : ".AppleSystemUIFont",
+      "fontName" : ".SFNS-Regular",
+      "leadingPt" : 0.68945312500000089,
+      "pointSizePt" : 13,
+      "weightTrait" : 0,
+      "widthTrait" : 0,
+      "xHeightPt" : 6.8427734375
+    },
+    "systemBodyEmphasizedApprox" : {
+      "ascenderPt" : 12.568359375,
+      "capHeightPt" : 9.15966796875,
+      "defaultLineHeightPt" : 16,
+      "descenderPt" : -2.7421875,
+      "familyName" : ".AppleSystemUIFont",
+      "fontName" : ".AppleSystemUIFontDemi",
+      "leadingPt" : 0,
+      "pointSizePt" : 13,
+      "weightTrait" : 0.30000001192092896,
+      "widthTrait" : 0,
+      "xHeightPt" : 6.93798828125
+    },
+    "systemFontSizePt" : 13,
+    "systemRegular" : {
+      "ascenderPt" : 12.568359375,
+      "capHeightPt" : 9.15966796875,
+      "defaultLineHeightPt" : 16,
+      "descenderPt" : -2.7421875,
+      "familyName" : ".AppleSystemUIFont",
+      "fontName" : ".AppleSystemUIFont",
+      "leadingPt" : 0,
+      "pointSizePt" : 13,
+      "weightTrait" : 0,
+      "widthTrait" : 0,
+      "xHeightPt" : 6.8427734375
+    }
+  },
   "glassEffectView" : {
     "available" : true,
     "defaultCornerRadiusPt" : 8
@@ -20,6 +122,19 @@
         "w" : 274,
         "x" : 25,
         "y" : 1
+      },
+      "font" : {
+        "ascenderPt" : 12.568359375,
+        "capHeightPt" : 9.15966796875,
+        "defaultLineHeightPt" : 16,
+        "descenderPt" : -2.7421875,
+        "familyName" : ".AppleSystemUIFont",
+        "fontName" : ".AppleSystemUIFont",
+        "leadingPt" : 0,
+        "pointSizePt" : 13,
+        "weightTrait" : 0,
+        "widthTrait" : 0,
+        "xHeightPt" : 6.8427734375
       },
       "intrinsicHeightPt" : 17,
       "leadingBezelInsetPt" : 2,
@@ -52,6 +167,19 @@
         "x" : 25,
         "y" : 2
       },
+      "font" : {
+        "ascenderPt" : 12.568359375,
+        "capHeightPt" : 9.15966796875,
+        "defaultLineHeightPt" : 16,
+        "descenderPt" : -2.7421875,
+        "familyName" : ".AppleSystemUIFont",
+        "fontName" : ".AppleSystemUIFont",
+        "leadingPt" : 0,
+        "pointSizePt" : 13,
+        "weightTrait" : 0,
+        "widthTrait" : 0,
+        "xHeightPt" : 6.8427734375
+      },
       "intrinsicHeightPt" : 19,
       "leadingBezelInsetPt" : 2,
       "searchButtonRect" : {
@@ -83,6 +211,19 @@
         "x" : 26,
         "y" : 3
       },
+      "font" : {
+        "ascenderPt" : 12.568359375,
+        "capHeightPt" : 9.15966796875,
+        "defaultLineHeightPt" : 16,
+        "descenderPt" : -2.7421875,
+        "familyName" : ".AppleSystemUIFont",
+        "fontName" : ".AppleSystemUIFont",
+        "leadingPt" : 0,
+        "pointSizePt" : 13,
+        "weightTrait" : 0,
+        "widthTrait" : 0,
+        "xHeightPt" : 6.8427734375
+      },
       "intrinsicHeightPt" : 22,
       "leadingBezelInsetPt" : 2,
       "searchButtonRect" : {
@@ -113,6 +254,19 @@
         "w" : 270,
         "x" : 26,
         "y" : 7
+      },
+      "font" : {
+        "ascenderPt" : 12.568359375,
+        "capHeightPt" : 9.15966796875,
+        "defaultLineHeightPt" : 16,
+        "descenderPt" : -2.7421875,
+        "familyName" : ".AppleSystemUIFont",
+        "fontName" : ".AppleSystemUIFont",
+        "leadingPt" : 0,
+        "pointSizePt" : 13,
+        "weightTrait" : 0,
+        "widthTrait" : 0,
+        "xHeightPt" : 6.8427734375
       },
       "intrinsicHeightPt" : 30,
       "leadingBezelInsetPt" : 2,
@@ -150,6 +304,19 @@
         "x" : 6,
         "y" : 1
       },
+      "font" : {
+        "ascenderPt" : 12.568359375,
+        "capHeightPt" : 9.15966796875,
+        "defaultLineHeightPt" : 16,
+        "descenderPt" : -2.7421875,
+        "familyName" : ".AppleSystemUIFont",
+        "fontName" : ".AppleSystemUIFont",
+        "leadingPt" : 0,
+        "pointSizePt" : 13,
+        "weightTrait" : 0,
+        "widthTrait" : 0,
+        "xHeightPt" : 6.8427734375
+      },
       "intrinsicHeightPt" : 17,
       "titleRect" : {
         "h" : 16,
@@ -173,6 +340,19 @@
         "w" : 306,
         "x" : 7,
         "y" : 2
+      },
+      "font" : {
+        "ascenderPt" : 12.568359375,
+        "capHeightPt" : 9.15966796875,
+        "defaultLineHeightPt" : 16,
+        "descenderPt" : -2.7421875,
+        "familyName" : ".AppleSystemUIFont",
+        "fontName" : ".AppleSystemUIFont",
+        "leadingPt" : 0,
+        "pointSizePt" : 13,
+        "weightTrait" : 0,
+        "widthTrait" : 0,
+        "xHeightPt" : 6.8427734375
       },
       "intrinsicHeightPt" : 19,
       "titleRect" : {
@@ -198,6 +378,19 @@
         "x" : 9,
         "y" : 3
       },
+      "font" : {
+        "ascenderPt" : 12.568359375,
+        "capHeightPt" : 9.15966796875,
+        "defaultLineHeightPt" : 16,
+        "descenderPt" : -2.7421875,
+        "familyName" : ".AppleSystemUIFont",
+        "fontName" : ".AppleSystemUIFont",
+        "leadingPt" : 0,
+        "pointSizePt" : 13,
+        "weightTrait" : 0,
+        "widthTrait" : 0,
+        "xHeightPt" : 6.8427734375
+      },
       "intrinsicHeightPt" : 22,
       "titleRect" : {
         "h" : 16,
@@ -221,6 +414,19 @@
         "w" : 302,
         "x" : 9,
         "y" : 7
+      },
+      "font" : {
+        "ascenderPt" : 12.568359375,
+        "capHeightPt" : 9.15966796875,
+        "defaultLineHeightPt" : 16,
+        "descenderPt" : -2.7421875,
+        "familyName" : ".AppleSystemUIFont",
+        "fontName" : ".AppleSystemUIFont",
+        "leadingPt" : 0,
+        "pointSizePt" : 13,
+        "weightTrait" : 0,
+        "widthTrait" : 0,
+        "xHeightPt" : 6.8427734375
       },
       "intrinsicHeightPt" : 30,
       "titleRect" : {

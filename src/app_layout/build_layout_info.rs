@@ -1653,6 +1653,23 @@ impl ScriptListApp {
                     crate::panel::CURSOR_MARGIN_Y,
                     chrome_tokens::SEARCH_INPUT_TEXT_INSET_X_PX,
                 )
+                // Rendered typography, sourced from the SAME accessors the renderer
+                // uses (render_search_input: .with_size(theme_font_size_xl) +
+                // .line_height(CURSOR_HEIGHT_LG); the input sets no font weight, so it
+                // draws Regular/400 and is left-aligned). This lets the Apple-guideline
+                // engine classify it against the measured-native baseline (13pt Regular
+                // / 16pt line). The launcher's hero search field runs larger than 13pt
+                // BODY by design (Spotlight-style), which the engine reports as a SOFT
+                // divergence; the HARD check is that input text stays Regular, not bold.
+                .with_typography(
+                    "searchInput",
+                    Some(self.theme_font_family()),
+                    self.theme_font_size_xl(),
+                    "regular",
+                    400.0,
+                    crate::panel::CURSOR_HEIGHT_LG,
+                    "left",
+                )
                 .with_visual_token("chrome.searchInput")
                 .with_hit_bounds(HEADER_PADDING_X, HEADER_PADDING_Y, input_width, BUTTON_HEIGHT)
                 .with_flex_grow(1.0)
