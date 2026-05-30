@@ -46,8 +46,20 @@ fn proof_matrix_summary_reports_visual_tier_debt() {
 fn proof_matrix_classification_fails_when_visual_tier_debt_remains() {
     assert!(
         PROOF_MATRIX.contains(
-            "summary.missingProofSurfaceCount === 0 && summary.visualTierDebtSurfaceCount === 0 ? \"ok\" : \"incomplete\"",
+            "summary.missingProofSurfaceCount === 0 && summary.visualTierDebtSurfaceCount === 0 && summary.surfaceProofDebtCount === 0 ? \"ok\" : \"incomplete\"",
         ),
-        "Liquid Glass proof matrix classification must stay incomplete while explicit visual-tier debt remains"
+        "Liquid Glass proof matrix classification must stay incomplete while any contract surface is not strong-proof or explicit visual-tier debt remains"
+    );
+}
+
+#[test]
+fn proof_matrix_lists_surface_and_visual_tier_debt() {
+    assert!(
+        PROOF_MATRIX.contains("visualTierDebtSurfaces")
+            && PROOF_MATRIX.contains("surfaceProofDebtSurfaces")
+            && PROOF_MATRIX.contains("surfaceProofDebtCount")
+            && PROOF_MATRIX.contains("failedTiers")
+            && PROOF_MATRIX.contains("contract surfaces are not yet strong-proof"),
+        "Liquid Glass proof matrix must list exact surfaces and tiers that still block exhaustive proof"
     );
 }

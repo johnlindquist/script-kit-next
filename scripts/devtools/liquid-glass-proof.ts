@@ -649,6 +649,41 @@ async function main() {
     };
   });
 
+  const visualTierDebtSurfaces = surfaces
+    .filter((surface) =>
+      surface.proofTiers.osScreenshotProof === "blocked" ||
+      surface.proofTiers.appRenderProof === "fail" ||
+      surface.proofTiers.offscreenRenderProof === "fail" ||
+      surface.proofTiers.numericProof === "fail" ||
+      surface.proofTiers.imageDiffProof === "blocked"
+    )
+    .map((surface) => ({
+      surfaceKind: surface.surfaceKind,
+      proofStatus: surface.proofStatus,
+      proofTiers: surface.proofTiers,
+      failedTiers: [
+        surface.proofTiers.osScreenshotProof === "blocked" ? "osScreenshotProof" : "",
+        surface.proofTiers.appRenderProof === "fail" ? "appRenderProof" : "",
+        surface.proofTiers.offscreenRenderProof === "fail" ? "offscreenRenderProof" : "",
+        surface.proofTiers.numericProof === "fail" ? "numericProof" : "",
+        surface.proofTiers.imageDiffProof === "blocked" ? "imageDiffProof" : "",
+      ].filter(Boolean),
+      receipts: surface.evidence.receipts,
+      screenshots: surface.evidence.screenshots,
+      notes: surface.evidence.notes,
+    }));
+  const surfaceProofDebtSurfaces = surfaces
+    .filter((surface) => surface.proofStatus !== "strong-proof")
+    .map((surface) => ({
+      surfaceKind: surface.surfaceKind,
+      proofStatus: surface.proofStatus,
+      proofTiers: surface.proofTiers,
+      requiredEvidence: surface.requiredEvidence,
+      receipts: surface.evidence.receipts,
+      screenshots: surface.evidence.screenshots,
+      notes: surface.evidence.notes,
+    }));
+
   const summary = {
     surfaceCount: surfaces.length,
     strongProofSurfaceCount: surfaces.filter((surface) => surface.proofStatus === "strong-proof").length,
@@ -660,13 +695,8 @@ async function main() {
     appRenderMissingSurfaceCount: surfaces.filter((surface) => surface.proofTiers.appRenderProof === "missing").length,
     offscreenRenderFailedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.offscreenRenderProof === "fail").length,
     offscreenRenderMissingSurfaceCount: surfaces.filter((surface) => surface.proofTiers.offscreenRenderProof === "missing").length,
-    visualTierDebtSurfaceCount: surfaces.filter((surface) =>
-      surface.proofTiers.osScreenshotProof === "blocked" ||
-      surface.proofTiers.appRenderProof === "fail" ||
-      surface.proofTiers.offscreenRenderProof === "fail" ||
-      surface.proofTiers.numericProof === "fail" ||
-      surface.proofTiers.imageDiffProof === "blocked"
-    ).length,
+    visualTierDebtSurfaceCount: visualTierDebtSurfaces.length,
+    surfaceProofDebtCount: surfaceProofDebtSurfaces.length,
     batchCount: batches.length,
     strongProofBatchCount: batches.filter((batch) => batch.proofStatus === "strong-proof").length,
     partialProofBatchCount: batches.filter((batch) => batch.proofStatus === "partial-proof").length,
@@ -677,16 +707,19 @@ async function main() {
     schemaVersion: 1,
     tool: "script-kit-devtools.liquid-glass-proof",
     command: "proof.matrix",
-    classification: summary.missingProofSurfaceCount === 0 && summary.visualTierDebtSurfaceCount === 0 ? "ok" : "incomplete",
+    classification: summary.missingProofSurfaceCount === 0 && summary.visualTierDebtSurfaceCount === 0 && summary.surfaceProofDebtCount === 0 ? "ok" : "incomplete",
     inventoryPath: args.inventory,
     artifactRoot: args.artifactRoot,
     generatedAt: new Date().toISOString(),
     summary,
     batches,
+    visualTierDebtSurfaces,
+    surfaceProofDebtSurfaces,
     surfaces,
     practicalTargets,
     warnings: [
       summary.missingProofSurfaceCount === 0 ? "" : `${summary.missingProofSurfaceCount} contract surfaces still lack proof artifacts`,
+      summary.surfaceProofDebtCount === 0 ? "" : `${summary.surfaceProofDebtCount} contract surfaces are not yet strong-proof`,
       summary.visualTierDebtSurfaceCount === 0 ? "" : `${summary.visualTierDebtSurfaceCount} contract surfaces have explicit visual-tier debt; inspect proofTiers before claiming exhaustive Liquid Glass proof`,
       summary.appRenderFailedSurfaceCount === 0 ? "" : `${summary.appRenderFailedSurfaceCount} contract surfaces attempted app-render proof and failed or returned unsupported`,
       "strong-proof means current artifacts include screenshot, numeric layout visualAudit, and image diff evidence; it is not an Apple conformance claim by itself",
