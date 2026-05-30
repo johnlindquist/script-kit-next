@@ -431,6 +431,24 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 sync_main_automation_window(current_main_automation_bounds(), true, true);
                                 view.open_creation_feedback_surface(path.map(std::path::PathBuf::from), ctx);
                             }
+                            ExternalCommand::OpenConfirmPrompt { title, body, confirm_text, cancel_text, request_id: _ } => {
+                                logging::log("STDIN", "Opening ConfirmPrompt surface via stdin command");
+                                script_kit_gpui::set_main_window_visible(true);
+                                script_kit_gpui::mark_window_shown();
+                                platform::show_main_window_without_activation();
+                                window.activate_window();
+                                sync_main_automation_window(current_main_automation_bounds(), true, true);
+                                let (sender, _receiver) = async_channel::bounded(1);
+                                let options = crate::confirm::ParentConfirmOptions {
+                                    title: title.unwrap_or_else(|| "Delete saved item?".to_string()).into(),
+                                    body: body.unwrap_or_else(|| "This action changes local Script Kit state. Confirm to continue or cancel to return to the launcher.".to_string()).into(),
+                                    confirm_text: confirm_text.unwrap_or_else(|| "Delete".to_string()).into(),
+                                    cancel_text: cancel_text.unwrap_or_else(|| "Cancel".to_string()).into(),
+                                    confirm_variant: gpui_component::button::ButtonVariant::Danger,
+                                    width: gpui::px(448.),
+                                };
+                                view.open_confirm_prompt(options, sender, ctx);
+                            }
                             ExternalCommand::OpenAi => {
                                 logging::log("STDIN", "Opening Agent Chat via openAi compatibility alias");
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);

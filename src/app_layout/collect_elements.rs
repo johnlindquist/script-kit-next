@@ -1133,6 +1133,37 @@ impl ScriptListApp {
                     .with_warning("panel_only_creation_feedback")
             }
 
+            AppView::ConfirmPrompt {
+                options,
+                focused_button,
+                ..
+            } => {
+                let confirm_selected = matches!(focused_button, ConfirmFocusedButton::Confirm);
+                let cancel_selected = matches!(focused_button, ConfirmFocusedButton::Cancel);
+                let mut confirm_button =
+                    protocol::ElementInfo::button(0, &options.confirm_text.to_string());
+                confirm_button.selected = Some(confirm_selected);
+                confirm_button.role = Some("footer".to_string());
+                confirm_button.kind = Some("confirm".to_string());
+                confirm_button.selectable = Some(true);
+                let mut cancel_button =
+                    protocol::ElementInfo::button(1, &options.cancel_text.to_string());
+                cancel_button.selected = Some(cancel_selected);
+                cancel_button.role = Some("footer".to_string());
+                cancel_button.kind = Some("cancel".to_string());
+                cancel_button.selectable = Some(true);
+
+                let elements: Vec<protocol::ElementInfo> = vec![
+                    protocol::ElementInfo::panel("confirm-prompt"),
+                    confirm_button,
+                    cancel_button,
+                ]
+                .into_iter()
+                .take(limit)
+                .collect();
+                ElementCollectionOutcome::new(elements, 3)
+            }
+
             AppView::WebcamView { .. } => {
                 let total_count = 1;
                 let elements: Vec<protocol::ElementInfo> =

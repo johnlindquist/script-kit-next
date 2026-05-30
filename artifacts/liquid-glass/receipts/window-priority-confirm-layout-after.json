@@ -1,0 +1,1278 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.layout",
+  "command": "layout.measure",
+  "classification": "ok",
+  "session": "liquid-confirm",
+  "include": [
+    "nodes",
+    "regions",
+    "scroll",
+    "anchors",
+    "resize",
+    "overlaps"
+  ],
+  "limit": 200,
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ConfirmPrompt"
+  },
+  "target": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "ConfirmPrompt",
+    "appViewVariant": "ConfirmPrompt",
+    "nativeFooterSurface": "confirm_prompt",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 2097,
+      "y": -903,
+      "width": 750,
+      "height": 500
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 750,
+      "height": 500,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 500
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 20355,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "promptType": "confirmPrompt",
+  "timestamp": "2026-05-30T04:23:39.925385+00:00",
+  "componentCount": 8,
+  "window": {
+    "rect": {
+      "x": 2097,
+      "y": -903,
+      "width": 750,
+      "height": 500
+    },
+    "visible": null,
+    "focused": null
+  },
+  "viewport": {
+    "clientWidth": 750,
+    "clientHeight": 500,
+    "contentWidth": 750,
+    "contentHeight": 500,
+    "scrollWidth": 750,
+    "scrollHeight": 500,
+    "canScrollX": false,
+    "canScrollY": false,
+    "scrollTop": null,
+    "maxScrollTop": 0,
+    "overflowPolicyY": "hidden"
+  },
+  "pressure": {
+    "overflowY": false,
+    "hiddenContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "footerOverlapCount": 0,
+    "inputOverlapCount": 0,
+    "pressureScore": 0
+  },
+  "viewportRect": {
+    "x": 0,
+    "y": 0,
+    "width": 750,
+    "height": 500
+  },
+  "windowRect": {
+    "x": 2097,
+    "y": -903,
+    "width": 750,
+    "height": 500
+  },
+  "regions": [
+    {
+      "name": "Window",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 500
+      }
+    },
+    {
+      "name": "ConfirmPromptContent",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 462
+      }
+    },
+    {
+      "name": "ConfirmPromptStack",
+      "type": "container",
+      "bounds": {
+        "x": 95,
+        "y": 189,
+        "width": 560,
+        "height": 84
+      }
+    },
+    {
+      "name": "ConfirmPromptTitle",
+      "type": "header",
+      "bounds": {
+        "x": 95,
+        "y": 189,
+        "width": 560,
+        "height": 28
+      }
+    },
+    {
+      "name": "ConfirmPromptBody",
+      "type": "other",
+      "bounds": {
+        "x": 95,
+        "y": 233,
+        "width": 560,
+        "height": 40
+      }
+    },
+    {
+      "name": "ConfirmPromptFooter",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 462,
+        "width": 750,
+        "height": 38
+      }
+    },
+    {
+      "name": "ConfirmPromptConfirmButton",
+      "type": "button",
+      "bounds": {
+        "x": 570,
+        "y": 467,
+        "width": 78,
+        "height": 28
+      }
+    },
+    {
+      "name": "ConfirmPromptCancelButton",
+      "type": "button",
+      "bounds": {
+        "x": 656,
+        "y": 467,
+        "width": 78,
+        "height": 28
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Window",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 500
+      },
+      "depth": 0,
+      "parent": null,
+      "children": [],
+      "explanation": "Root window container. Uses flex-column layout.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "NSVisualEffectView",
+        "tokenSource": "window.vibrancy",
+        "cornerRadius": {
+          "topLeft": 22,
+          "topRight": 22,
+          "bottomRight": 22,
+          "bottomLeft": 22
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "hitWidth": 750,
+        "hitHeight": 500,
+        "visualWidth": 750,
+        "visualHeight": 500,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "Window",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Root window container. Uses flex-column layout.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "NSVisualEffectView",
+          "tokenSource": "window.vibrancy",
+          "cornerRadius": {
+            "topLeft": 22,
+            "topRight": 22,
+            "bottomRight": 22,
+            "bottomLeft": 22
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 500
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 500
+          }
+        }
+      }
+    },
+    {
+      "name": "ConfirmPromptContent",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 462
+      },
+      "depth": 1,
+      "parent": "Window",
+      "children": [],
+      "explanation": "ConfirmPrompt content fills the standard-height window above the native footer.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "confirm.content",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 462
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 462
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 462
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 462
+        },
+        "hitWidth": 750,
+        "hitHeight": 462,
+        "visualWidth": 750,
+        "visualHeight": 462,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ConfirmPromptContent",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 462
+        },
+        "boxModel": {
+          "padding": {
+            "top": 24,
+            "right": 24,
+            "bottom": 24,
+            "left": 24
+          }
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "ConfirmPrompt content fills the standard-height window above the native footer.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "confirm.content",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 462
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 462
+          }
+        }
+      }
+    },
+    {
+      "name": "ConfirmPromptStack",
+      "type": "container",
+      "bounds": {
+        "x": 95,
+        "y": 189,
+        "width": 560,
+        "height": 84
+      },
+      "depth": 2,
+      "parent": "ConfirmPromptContent",
+      "children": [],
+      "explanation": "Centered title/body stack with 560px maximum text width.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "confirm.stack",
+        "visualBounds": {
+          "x": 95,
+          "y": 189,
+          "width": 560,
+          "height": 84
+        },
+        "hitBounds": {
+          "x": 95,
+          "y": 189,
+          "width": 560,
+          "height": 84
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 95,
+          "y": 189,
+          "width": 560,
+          "height": 84
+        },
+        "visualBounds": {
+          "x": 95,
+          "y": 189,
+          "width": 560,
+          "height": 84
+        },
+        "hitWidth": 560,
+        "hitHeight": 84,
+        "visualWidth": 560,
+        "visualHeight": 84,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ConfirmPromptStack",
+        "type": "container",
+        "bounds": {
+          "x": 95,
+          "y": 189,
+          "width": 560,
+          "height": 84
+        },
+        "boxModel": {
+          "gap": 16
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 2,
+        "parent": "ConfirmPromptContent",
+        "explanation": "Centered title/body stack with 560px maximum text width.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "confirm.stack",
+          "visualBounds": {
+            "x": 95,
+            "y": 189,
+            "width": 560,
+            "height": 84
+          },
+          "hitBounds": {
+            "x": 95,
+            "y": 189,
+            "width": 560,
+            "height": 84
+          }
+        }
+      }
+    },
+    {
+      "name": "ConfirmPromptTitle",
+      "type": "header",
+      "bounds": {
+        "x": 95,
+        "y": 189,
+        "width": 560,
+        "height": 28
+      },
+      "depth": 3,
+      "parent": "ConfirmPromptStack",
+      "children": [],
+      "explanation": "20px semibold title centered in the confirm prompt.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "confirm.title",
+        "visualBounds": {
+          "x": 95,
+          "y": 189,
+          "width": 560,
+          "height": 28
+        },
+        "hitBounds": {
+          "x": 95,
+          "y": 189,
+          "width": 560,
+          "height": 28
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 95,
+          "y": 189,
+          "width": 560,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 95,
+          "y": 189,
+          "width": 560,
+          "height": 28
+        },
+        "hitWidth": 560,
+        "hitHeight": 28,
+        "visualWidth": 560,
+        "visualHeight": 28,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ConfirmPromptTitle",
+        "type": "header",
+        "bounds": {
+          "x": 95,
+          "y": 189,
+          "width": 560,
+          "height": 28
+        },
+        "depth": 3,
+        "parent": "ConfirmPromptStack",
+        "explanation": "20px semibold title centered in the confirm prompt.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "confirm.title",
+          "visualBounds": {
+            "x": 95,
+            "y": 189,
+            "width": 560,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 95,
+            "y": 189,
+            "width": 560,
+            "height": 28
+          }
+        }
+      }
+    },
+    {
+      "name": "ConfirmPromptBody",
+      "type": "other",
+      "bounds": {
+        "x": 95,
+        "y": 233,
+        "width": 560,
+        "height": 40
+      },
+      "depth": 3,
+      "parent": "ConfirmPromptStack",
+      "children": [],
+      "explanation": "Centered body copy is bounded to 560px to avoid edge-to-edge reading lines.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "confirm.body",
+        "visualBounds": {
+          "x": 95,
+          "y": 233,
+          "width": 560,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 95,
+          "y": 233,
+          "width": 560,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 95,
+          "y": 233,
+          "width": 560,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 95,
+          "y": 233,
+          "width": 560,
+          "height": 40
+        },
+        "hitWidth": 560,
+        "hitHeight": 40,
+        "visualWidth": 560,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ConfirmPromptBody",
+        "type": "other",
+        "bounds": {
+          "x": 95,
+          "y": 233,
+          "width": 560,
+          "height": 40
+        },
+        "depth": 3,
+        "parent": "ConfirmPromptStack",
+        "explanation": "Centered body copy is bounded to 560px to avoid edge-to-edge reading lines.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "confirm.body",
+          "visualBounds": {
+            "x": 95,
+            "y": 233,
+            "width": 560,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 95,
+            "y": 233,
+            "width": 560,
+            "height": 40
+          }
+        }
+      }
+    },
+    {
+      "name": "ConfirmPromptFooter",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 462,
+        "width": 750,
+        "height": 38
+      },
+      "depth": 1,
+      "parent": "Window",
+      "children": [],
+      "explanation": "Native footer region owns confirm/cancel button affordances.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "confirm.footer",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 462,
+          "width": 750,
+          "height": 38
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 462,
+          "width": 750,
+          "height": 38
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 462,
+          "width": 750,
+          "height": 38
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 462,
+          "width": 750,
+          "height": 38
+        },
+        "hitWidth": 750,
+        "hitHeight": 38,
+        "visualWidth": 750,
+        "visualHeight": 38,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ConfirmPromptFooter",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 462,
+          "width": 750,
+          "height": 38
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Native footer region owns confirm/cancel button affordances.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "confirm.footer",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 462,
+            "width": 750,
+            "height": 38
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 462,
+            "width": 750,
+            "height": 38
+          }
+        }
+      }
+    },
+    {
+      "name": "ConfirmPromptConfirmButton",
+      "type": "button",
+      "bounds": {
+        "x": 570,
+        "y": 467,
+        "width": 78,
+        "height": 28
+      },
+      "depth": 2,
+      "parent": "ConfirmPromptFooter",
+      "children": [],
+      "explanation": "Footer button is 28px tall with the shared 10px compact Liquid Glass radius.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "confirm.footerButton",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 570,
+          "y": 467,
+          "width": 78,
+          "height": 28
+        },
+        "hitBounds": {
+          "x": 570,
+          "y": 467,
+          "width": 78,
+          "height": 28
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 570,
+          "y": 467,
+          "width": 78,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 570,
+          "y": 467,
+          "width": 78,
+          "height": 28
+        },
+        "hitWidth": 78,
+        "hitHeight": 28,
+        "visualWidth": 78,
+        "visualHeight": 28,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ConfirmPromptConfirmButton",
+        "type": "button",
+        "bounds": {
+          "x": 570,
+          "y": 467,
+          "width": 78,
+          "height": 28
+        },
+        "depth": 2,
+        "parent": "ConfirmPromptFooter",
+        "explanation": "Footer button is 28px tall with the shared 10px compact Liquid Glass radius.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "confirm.footerButton",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 570,
+            "y": 467,
+            "width": 78,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 570,
+            "y": 467,
+            "width": 78,
+            "height": 28
+          }
+        }
+      }
+    },
+    {
+      "name": "ConfirmPromptCancelButton",
+      "type": "button",
+      "bounds": {
+        "x": 656,
+        "y": 467,
+        "width": 78,
+        "height": 28
+      },
+      "depth": 2,
+      "parent": "ConfirmPromptFooter",
+      "children": [],
+      "explanation": "Footer button is 28px tall with the shared 10px compact Liquid Glass radius.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "confirm.footerButton",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 656,
+          "y": 467,
+          "width": 78,
+          "height": 28
+        },
+        "hitBounds": {
+          "x": 656,
+          "y": 467,
+          "width": 78,
+          "height": 28
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 656,
+          "y": 467,
+          "width": 78,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 656,
+          "y": 467,
+          "width": 78,
+          "height": 28
+        },
+        "hitWidth": 78,
+        "hitHeight": 28,
+        "visualWidth": 78,
+        "visualHeight": 28,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "ConfirmPromptCancelButton",
+        "type": "button",
+        "bounds": {
+          "x": 656,
+          "y": 467,
+          "width": 78,
+          "height": 28
+        },
+        "depth": 2,
+        "parent": "ConfirmPromptFooter",
+        "explanation": "Footer button is 28px tall with the shared 10px compact Liquid Glass radius.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "confirm.footerButton",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 656,
+            "y": 467,
+            "width": 78,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 656,
+            "y": 467,
+            "width": 78,
+            "height": 28
+          }
+        }
+      }
+    }
+  ],
+  "overlaps": [],
+  "resizePressure": {
+    "windowCanGrow": null,
+    "overflowY": false,
+    "desiredContentHeight": 500,
+    "measuredContentHeight": 500,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "pressureScore": 0
+  },
+  "visualAudit": {
+    "nodeCount": 8,
+    "styledNodeCount": 8,
+    "unstyledNodeCount": 0,
+    "controlsWithHitFailures": [],
+    "contentGlassNodes": [],
+    "missingStyleNodeNames": [],
+    "chromeLayers": {
+      "content": 5,
+      "functionalChrome": 3
+    }
+  },
+  "handlerForm": null,
+  "missingPrimitives": [],
+  "warnings": [],
+  "errors": [],
+  "rawLayout": {
+    "type": "layoutInfoResult",
+    "requestId": "devtools-layout-measure-1780115019898-80488d",
+    "windowWidth": 750,
+    "windowHeight": 500,
+    "promptType": "confirmPrompt",
+    "components": [
+      {
+        "name": "Window",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Root window container. Uses flex-column layout.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "NSVisualEffectView",
+          "tokenSource": "window.vibrancy",
+          "cornerRadius": {
+            "topLeft": 22,
+            "topRight": 22,
+            "bottomRight": 22,
+            "bottomLeft": 22
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 500
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 500
+          }
+        }
+      },
+      {
+        "name": "ConfirmPromptContent",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 462
+        },
+        "boxModel": {
+          "padding": {
+            "top": 24,
+            "right": 24,
+            "bottom": 24,
+            "left": 24
+          }
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "ConfirmPrompt content fills the standard-height window above the native footer.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "confirm.content",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 462
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 462
+          }
+        }
+      },
+      {
+        "name": "ConfirmPromptStack",
+        "type": "container",
+        "bounds": {
+          "x": 95,
+          "y": 189,
+          "width": 560,
+          "height": 84
+        },
+        "boxModel": {
+          "gap": 16
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 2,
+        "parent": "ConfirmPromptContent",
+        "explanation": "Centered title/body stack with 560px maximum text width.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "confirm.stack",
+          "visualBounds": {
+            "x": 95,
+            "y": 189,
+            "width": 560,
+            "height": 84
+          },
+          "hitBounds": {
+            "x": 95,
+            "y": 189,
+            "width": 560,
+            "height": 84
+          }
+        }
+      },
+      {
+        "name": "ConfirmPromptTitle",
+        "type": "header",
+        "bounds": {
+          "x": 95,
+          "y": 189,
+          "width": 560,
+          "height": 28
+        },
+        "depth": 3,
+        "parent": "ConfirmPromptStack",
+        "explanation": "20px semibold title centered in the confirm prompt.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "confirm.title",
+          "visualBounds": {
+            "x": 95,
+            "y": 189,
+            "width": 560,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 95,
+            "y": 189,
+            "width": 560,
+            "height": 28
+          }
+        }
+      },
+      {
+        "name": "ConfirmPromptBody",
+        "type": "other",
+        "bounds": {
+          "x": 95,
+          "y": 233,
+          "width": 560,
+          "height": 40
+        },
+        "depth": 3,
+        "parent": "ConfirmPromptStack",
+        "explanation": "Centered body copy is bounded to 560px to avoid edge-to-edge reading lines.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "confirm.body",
+          "visualBounds": {
+            "x": 95,
+            "y": 233,
+            "width": 560,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 95,
+            "y": 233,
+            "width": 560,
+            "height": 40
+          }
+        }
+      },
+      {
+        "name": "ConfirmPromptFooter",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 462,
+          "width": 750,
+          "height": 38
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Native footer region owns confirm/cancel button affordances.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "confirm.footer",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 462,
+            "width": 750,
+            "height": 38
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 462,
+            "width": 750,
+            "height": 38
+          }
+        }
+      },
+      {
+        "name": "ConfirmPromptConfirmButton",
+        "type": "button",
+        "bounds": {
+          "x": 570,
+          "y": 467,
+          "width": 78,
+          "height": 28
+        },
+        "depth": 2,
+        "parent": "ConfirmPromptFooter",
+        "explanation": "Footer button is 28px tall with the shared 10px compact Liquid Glass radius.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "confirm.footerButton",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 570,
+            "y": 467,
+            "width": 78,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 570,
+            "y": 467,
+            "width": 78,
+            "height": 28
+          }
+        }
+      },
+      {
+        "name": "ConfirmPromptCancelButton",
+        "type": "button",
+        "bounds": {
+          "x": 656,
+          "y": 467,
+          "width": 78,
+          "height": 28
+        },
+        "depth": 2,
+        "parent": "ConfirmPromptFooter",
+        "explanation": "Footer button is 28px tall with the shared 10px compact Liquid Glass radius.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "confirm.footerButton",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 656,
+            "y": 467,
+            "width": 78,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 656,
+            "y": 467,
+            "width": 78,
+            "height": 28
+          }
+        }
+      }
+    ],
+    "timestamp": "2026-05-30T04:23:39.925385+00:00"
+  }
+}

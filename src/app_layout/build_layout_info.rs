@@ -528,6 +528,137 @@ impl ScriptListApp {
             };
         }
 
+        if matches!(self.current_view, AppView::ConfirmPrompt { .. }) {
+            const CONFIRM_CONTENT_PADDING_X: f32 = 24.0;
+            const CONFIRM_CONTENT_PADDING_Y: f32 = 24.0;
+            const CONFIRM_FOOTER_HEIGHT: f32 = 38.0;
+            const CONFIRM_STACK_WIDTH: f32 = 560.0;
+            const CONFIRM_TITLE_HEIGHT: f32 = 28.0;
+            const CONFIRM_BODY_HEIGHT: f32 = 40.0;
+            const CONFIRM_STACK_GAP: f32 = 16.0;
+            const CONFIRM_BUTTON_HEIGHT: f32 = 28.0;
+            const CONFIRM_BUTTON_WIDTH: f32 = 78.0;
+            const CONFIRM_BUTTON_GAP: f32 = 8.0;
+
+            let content_height = window_height - CONFIRM_FOOTER_HEIGHT;
+            let stack_width = CONFIRM_STACK_WIDTH.min(window_width - CONFIRM_CONTENT_PADDING_X * 2.0);
+            let stack_height = CONFIRM_TITLE_HEIGHT + CONFIRM_STACK_GAP + CONFIRM_BODY_HEIGHT;
+            let stack_x = (window_width - stack_width) / 2.0;
+            let stack_y = (content_height - stack_height) / 2.0;
+            let footer_y = window_height - CONFIRM_FOOTER_HEIGHT;
+            let cancel_x = window_width - 16.0 - CONFIRM_BUTTON_WIDTH;
+            let confirm_x = cancel_x - CONFIRM_BUTTON_GAP - CONFIRM_BUTTON_WIDTH;
+
+            components.push(
+                LayoutComponentInfo::new("ConfirmPromptContent", LayoutComponentType::Panel)
+                    .with_bounds(0.0, 0.0, window_width, content_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("confirm.content")
+                    .with_padding(
+                        CONFIRM_CONTENT_PADDING_Y,
+                        CONFIRM_CONTENT_PADDING_X,
+                        CONFIRM_CONTENT_PADDING_Y,
+                        CONFIRM_CONTENT_PADDING_X,
+                    )
+                    .with_flex_column()
+                    .with_depth(1)
+                    .with_parent("Window")
+                    .with_explanation("ConfirmPrompt content fills the standard-height window above the native footer."),
+            );
+            components.push(
+                LayoutComponentInfo::new("ConfirmPromptStack", LayoutComponentType::Container)
+                    .with_bounds(stack_x, stack_y, stack_width, stack_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("confirm.stack")
+                    .with_gap(CONFIRM_STACK_GAP)
+                    .with_flex_column()
+                    .with_depth(2)
+                    .with_parent("ConfirmPromptContent")
+                    .with_explanation("Centered title/body stack with 560px maximum text width."),
+            );
+            components.push(
+                LayoutComponentInfo::new("ConfirmPromptTitle", LayoutComponentType::Header)
+                    .with_bounds(stack_x, stack_y, stack_width, CONFIRM_TITLE_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("confirm.title")
+                    .with_depth(3)
+                    .with_parent("ConfirmPromptStack")
+                    .with_explanation("20px semibold title centered in the confirm prompt."),
+            );
+            components.push(
+                LayoutComponentInfo::new("ConfirmPromptBody", LayoutComponentType::Other)
+                    .with_bounds(
+                        stack_x,
+                        stack_y + CONFIRM_TITLE_HEIGHT + CONFIRM_STACK_GAP,
+                        stack_width,
+                        CONFIRM_BODY_HEIGHT,
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("confirm.body")
+                    .with_depth(3)
+                    .with_parent("ConfirmPromptStack")
+                    .with_explanation("Centered body copy is bounded to 560px to avoid edge-to-edge reading lines."),
+            );
+            components.push(
+                LayoutComponentInfo::new("ConfirmPromptFooter", LayoutComponentType::Panel)
+                    .with_bounds(0.0, footer_y, window_width, CONFIRM_FOOTER_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("confirm.footer")
+                    .with_flex_row()
+                    .with_depth(1)
+                    .with_parent("Window")
+                    .with_explanation("Native footer region owns confirm/cancel button affordances."),
+            );
+            for (name, x) in [
+                ("ConfirmPromptConfirmButton", confirm_x),
+                ("ConfirmPromptCancelButton", cancel_x),
+            ] {
+                components.push(
+                    LayoutComponentInfo::new(name, LayoutComponentType::Button)
+                        .with_bounds(x, footer_y + 5.0, CONFIRM_BUTTON_WIDTH, CONFIRM_BUTTON_HEIGHT)
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                        )
+                        .with_visual_token("confirm.footerButton")
+                        .with_hit_bounds(x, footer_y + 5.0, CONFIRM_BUTTON_WIDTH, CONFIRM_BUTTON_HEIGHT)
+                        .with_depth(2)
+                        .with_parent("ConfirmPromptFooter")
+                        .with_explanation("Footer button is 28px tall with the shared 10px compact Liquid Glass radius."),
+                );
+            }
+
+            return LayoutInfo {
+                window_width,
+                window_height,
+                prompt_type: prompt_type.to_string(),
+                components,
+                handler_form: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            };
+        }
+
         // Header
         components.push(
             LayoutComponentInfo::new("Header", LayoutComponentType::Header)

@@ -435,6 +435,19 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
+    /// Open a deterministic in-window ConfirmPrompt fixture for visual/layout proof.
+    OpenConfirmPrompt {
+        #[serde(default)]
+        title: Option<String>,
+        #[serde(default)]
+        body: Option<String>,
+        #[serde(default, rename = "confirmText")]
+        confirm_text: Option<String>,
+        #[serde(default, rename = "cancelText")]
+        cancel_text: Option<String>,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Open the Agent Chat window (for testing)
     OpenAi,
     /// Open the Mini Agent Chat window (for testing)
@@ -777,7 +790,8 @@ impl ExternalCommand {
             | Self::OpenFocusedTextAgentChatWithPiData { request_id, .. }
             | Self::OpenInlineAgentWithMockData { request_id, .. }
             | Self::OpenInlineAgentWithPiData { request_id, .. }
-            | Self::OpenCreationFeedback { request_id, .. } => {
+            | Self::OpenCreationFeedback { request_id, .. }
+            | Self::OpenConfirmPrompt { request_id, .. } => {
                 request_id.as_ref().map(ExternalCommandRequestId::as_str)
             }
             _ => None,
@@ -796,6 +810,7 @@ impl ExternalCommand {
             Self::OpenNotes => "openNotes",
             Self::OpenAbout => "openAbout",
             Self::OpenCreationFeedback { .. } => "openCreationFeedback",
+            Self::OpenConfirmPrompt { .. } => "openConfirmPrompt",
             Self::OpenAi => "openAi",
             Self::OpenMiniAi => "openMiniAi",
             Self::OpenAiWithMockData => "openAiWithMockData",
@@ -849,6 +864,7 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "openNotes",
     "openAbout",
     "openCreationFeedback",
+    "openConfirmPrompt",
     "openAi",
     "openMiniAi",
     "openAiWithMockData",
@@ -1956,6 +1972,28 @@ mod tests {
                 assert_eq!(path.as_deref(), Some("/tmp/fixture.ts"));
             }
             other => panic!("Expected OpenCreationFeedback, got: {:?}", other),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_external_command_open_confirm_prompt_deserialization() -> anyhow::Result<()> {
+        let json = r#"{"type": "openConfirmPrompt", "title": "Delete?", "body": "This cannot be undone.", "confirmText": "Delete", "cancelText": "Keep"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        match cmd {
+            ExternalCommand::OpenConfirmPrompt {
+                title,
+                body,
+                confirm_text,
+                cancel_text,
+                ..
+            } => {
+                assert_eq!(title.as_deref(), Some("Delete?"));
+                assert_eq!(body.as_deref(), Some("This cannot be undone."));
+                assert_eq!(confirm_text.as_deref(), Some("Delete"));
+                assert_eq!(cancel_text.as_deref(), Some("Keep"));
+            }
+            other => panic!("Expected OpenConfirmPrompt, got: {:?}", other),
         }
         Ok(())
     }
