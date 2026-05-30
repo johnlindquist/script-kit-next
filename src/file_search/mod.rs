@@ -915,16 +915,17 @@ impl gpui::Render for FileDragPayload {
         _window: &mut gpui::Window,
         _cx: &mut gpui::Context<Self>,
     ) -> impl gpui::IntoElement {
-        use gpui::{div, px, rgb, ParentElement, Styled};
+        use gpui::{div, px, rgb, rgba, ParentElement, Styled};
 
         let theme = crate::theme::get_cached_theme();
+        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
         div()
             .px(px(8.))
             .py(px(4.))
             .rounded(px(6.))
-            .bg(rgb(theme.colors.background.title_bar))
+            .bg(rgba(chrome.popup_surface_rgba))
             .border_1()
-            .border_color(rgb(theme.colors.ui.border))
+            .border_color(rgba(chrome.border_rgba))
             .text_sm()
             .text_color(rgb(theme.colors.text.primary))
             .child(self.name.clone())

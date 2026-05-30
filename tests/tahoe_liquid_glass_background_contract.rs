@@ -16,6 +16,7 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
     let notes_actions_panel = read_source("src/notes/actions_panel.rs");
     let notes_browse_panel = read_source("src/notes/browse_panel.rs");
     let acp_chat_window = read_source("src/ai/acp/chat_window.rs");
+    let file_search = read_source("src/file_search/mod.rs");
 
     assert!(
         platform.contains("NSClassFromString")
@@ -89,6 +90,12 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
             && acp_chat_window.contains("WindowBackgroundAppearance::Opaque")
             && acp_chat_window.contains("WindowBackgroundAppearance::Blurred"),
         "Detached ACP window background appearance must honor vibrancy-disabled opaque mode"
+    );
+    assert!(
+        file_search.contains("AppChromeColors::from_theme(&theme)")
+            && file_search.contains("chrome.popup_surface_rgba")
+            && !file_search.contains(".bg(rgb(theme.colors.background.title_bar))"),
+        "File-search drag preview must use shared popup chrome tokens instead of painting title_bar directly"
     );
     for forbidden in [
         "unsafe fn configure_tahoe_liquid_glass_background",
