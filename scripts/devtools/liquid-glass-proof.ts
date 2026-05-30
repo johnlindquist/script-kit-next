@@ -162,6 +162,7 @@ async function main() {
     ClipboardHistory: ["clipboard"],
     AppLauncher: ["app-launcher", "applauncher"],
     WindowSwitcher: ["window-switcher", "windowswitcher"],
+    BrowserTabs: ["browser-tabs", "browsertabs"],
     NotesWindow: ["notes"],
     Dictation: ["dictation"],
   };
@@ -209,6 +210,10 @@ async function main() {
     } else if (surfaceKind === "WindowSwitcher") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-window-switcher-current-layout.json`,
+      ]);
+    } else if (surfaceKind === "BrowserTabs") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-browser-tabs-current-layout.json`,
       ]);
     } else if (surfaceKind === "PromptEntity") {
       await attachVisualAudit(evidence, [
