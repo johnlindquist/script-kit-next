@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.inspect",
+  "session": "liquid-prompt-div",
+  "classification": "blocked-by-timeout",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "PromptEntity"
+  },
+  "resolvedTarget": {
+    "automationId": null,
+    "stableTargetId": null,
+    "targetKind": null,
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": null,
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": null,
+      "height": null,
+      "targetBoundsInScreenshot": null,
+      "nonBlankRatio": null
+    },
+    "pid": null,
+    "strictTargetMatch": false,
+    "ambiguity": []
+  },
+  "windows": [],
+  "rawInspect": {
+    "status": "error",
+    "label": "inspectAutomationWindow",
+    "exitCode": 1,
+    "stdout": "{\"schemaVersion\":1,\"status\":\"error\",\"session\":\"liquid-prompt-div\",\"requestId\":\"devtools-targets-inspect-1780117478335-1d5475\",\"error\":{\"code\":\"response_timeout\",\"message\":\"No response matching requestId 'devtools-targets-inspect-1780117478335-1d5475' and type 'automationInspectResult' within 15000ms\"}}",
+    "stderr": "",
+    "parsedError": {
+      "schemaVersion": 1,
+      "status": "error",
+      "session": "liquid-prompt-div",
+      "requestId": "devtools-targets-inspect-1780117478335-1d5475",
+      "error": {
+        "code": "response_timeout",
+        "message": "No response matching requestId 'devtools-targets-inspect-1780117478335-1d5475' and type 'automationInspectResult' within 15000ms"
+      }
+    },
+    "lifecycle": null
+  },
+  "sessionLifecycle": [],
+  "errors": [
+    {
+      "status": "error",
+      "label": "listAutomationWindows",
+      "exitCode": 1,
+      "stdout": "{\"schemaVersion\":1,\"status\":\"error\",\"session\":\"liquid-prompt-div\",\"requestId\":\"devtools-targets-list-1780117463262-a500db\",\"error\":{\"code\":\"response_timeout\",\"message\":\"No response matching requestId 'devtools-targets-list-1780117463262-a500db' and type 'automationWindowListResult' within 15000ms\"}}",
+      "stderr": "",
+      "parsedError": {
+        "schemaVersion": 1,
+        "status": "error",
+        "session": "liquid-prompt-div",
+        "requestId": "devtools-targets-list-1780117463262-a500db",
+        "error": {
+          "code": "response_timeout",
+          "message": "No response matching requestId 'devtools-targets-list-1780117463262-a500db' and type 'automationWindowListResult' within 15000ms"
+        }
+      },
+      "lifecycle": null
+    },
+    {
+      "status": "error",
+      "label": "inspectAutomationWindow",
+      "exitCode": 1,
+      "stdout": "{\"schemaVersion\":1,\"status\":\"error\",\"session\":\"liquid-prompt-div\",\"requestId\":\"devtools-targets-inspect-1780117478335-1d5475\",\"error\":{\"code\":\"response_timeout\",\"message\":\"No response matching requestId 'devtools-targets-inspect-1780117478335-1d5475' and type 'automationInspectResult' within 15000ms\"}}",
+      "stderr": "",
+      "parsedError": {
+        "schemaVersion": 1,
+        "status": "error",
+        "session": "liquid-prompt-div",
+        "requestId": "devtools-targets-inspect-1780117478335-1d5475",
+        "error": {
+          "code": "response_timeout",
+          "message": "No response matching requestId 'devtools-targets-inspect-1780117478335-1d5475' and type 'automationInspectResult' within 15000ms"
+        }
+      },
+      "lifecycle": null
+    }
+  ]
+}

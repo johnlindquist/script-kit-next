@@ -2536,8 +2536,7 @@ pub fn automation_layout_info(
         crate::components::footer_chrome::footer_rail_chrome(&get_cached_theme()).height_px;
     let signal_height = (height - footer_height).max(0.0);
 
-    let mut components = Vec::new();
-    components.push(
+    let components = vec![
         LayoutComponentInfo::new("DictationOverlayWindow", LayoutComponentType::Container)
             .with_bounds(0.0, 0.0, width, height)
             .with_visual_style(
@@ -2547,8 +2546,6 @@ pub fn automation_layout_info(
             )
             .with_hit_bounds(0.0, 0.0, width, height)
             .with_padding(0.0, 0.0, 0.0, 0.0),
-    );
-    components.push(
         LayoutComponentInfo::new("DictationSignalBand", LayoutComponentType::Container)
             .with_bounds(0.0, 0.0, width, signal_height)
             .with_visual_style(
@@ -2563,8 +2560,6 @@ pub fn automation_layout_info(
                 6.0,
                 OVERLAY_HORIZONTAL_PADDING_PX,
             ),
-    );
-    components.push(
         LayoutComponentInfo::new("DictationTimerSlot", LayoutComponentType::Other)
             .with_bounds(
                 OVERLAY_HORIZONTAL_PADDING_PX,
@@ -2578,8 +2573,6 @@ pub fn automation_layout_info(
                 None,
             )
             .with_padding(0.0, 0.0, 0.0, 0.0),
-    );
-    components.push(
         LayoutComponentInfo::new("DictationWaveform", LayoutComponentType::Container)
             .with_bounds((width - 48.0) / 2.0, 12.0, 48.0, WAVEFORM_BAR_MAX_HEIGHT_PX)
             .with_visual_style(
@@ -2588,8 +2581,6 @@ pub fn automation_layout_info(
                 Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
             )
             .with_gap(WAVEFORM_BAR_GAP_PX),
-    );
-    components.push(
         LayoutComponentInfo::new("DictationTargetBadge", LayoutComponentType::Button)
             .with_bounds(
                 width - TARGET_BADGE_SLOT_WIDTH_PX - OVERLAY_HORIZONTAL_PADDING_PX,
@@ -2609,8 +2600,6 @@ pub fn automation_layout_info(
                 28.0,
             )
             .with_padding(2.0, 8.0, 2.0, 8.0),
-    );
-    components.push(
         LayoutComponentInfo::new("DictationFooterRail", LayoutComponentType::Panel)
             .with_bounds(0.0, signal_height, width, footer_height)
             .with_visual_style(
@@ -2620,7 +2609,7 @@ pub fn automation_layout_info(
             )
             .with_hit_bounds(0.0, signal_height, width, footer_height)
             .with_padding(0.0, 0.0, 0.0, 0.0),
-    );
+    ];
 
     LayoutInfo {
         window_width: width,
