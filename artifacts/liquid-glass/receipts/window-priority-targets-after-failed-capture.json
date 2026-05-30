@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.list",
+  "session": "dev-watch",
+  "classification": "blocked-by-session-lifecycle",
+  "targetCount": 0,
+  "targets": [],
+  "sessionLifecycle": [
+    {
+      "label": "listAutomationWindows",
+      "code": "app_process_dead_before_rpc",
+      "lifecycle": "/private/tmp/sk-agentic-sessions/dev-watch/lifecycle.ndjson",
+      "keepActionsWindowOpen": false,
+      "sessionLifecycle": {
+        "schemaVersion": 1,
+        "event": "session_lifecycle_error",
+        "code": "app_process_dead_before_rpc",
+        "message": "Session 'dev-watch' app process (pid 68737) is not running.",
+        "keepActionsWindowOpen": false,
+        "timestamp": "2026-05-30T03:56:39Z"
+      },
+      "message": "Session 'dev-watch' app process (pid 68737) is not running."
+    }
+  ],
+  "errors": [
+    {
+      "status": "error",
+      "label": "listAutomationWindows",
+      "exitCode": 1,
+      "stdout": "{\"schemaVersion\":1,\"status\":\"error\",\"session\":\"dev-watch\",\"keepActionsWindowOpen\":false,\"lifecycle\":\"/private/tmp/sk-agentic-sessions/dev-watch/lifecycle.ndjson\",\"sessionLifecycle\":{\"schemaVersion\":1,\"event\":\"session_lifecycle_error\",\"code\":\"app_process_dead_before_rpc\",\"message\":\"Session 'dev-watch' app process (pid 68737) is not running.\",\"keepActionsWindowOpen\":false,\"timestamp\":\"2026-05-30T03:56:39Z\"},\"error\":{\"code\":\"app_process_dead_before_rpc\",\"message\":\"Session 'dev-watch' app process (pid 68737) is not running.\"}}",
+      "stderr": "",
+      "parsedError": {
+        "schemaVersion": 1,
+        "status": "error",
+        "session": "dev-watch",
+        "keepActionsWindowOpen": false,
+        "lifecycle": "/private/tmp/sk-agentic-sessions/dev-watch/lifecycle.ndjson",
+        "sessionLifecycle": {
+          "schemaVersion": 1,
+          "event": "session_lifecycle_error",
+          "code": "app_process_dead_before_rpc",
+          "message": "Session 'dev-watch' app process (pid 68737) is not running.",
+          "keepActionsWindowOpen": false,
+          "timestamp": "2026-05-30T03:56:39Z"
+        },
+        "error": {
+          "code": "app_process_dead_before_rpc",
+          "message": "Session 'dev-watch' app process (pid 68737) is not running."
+        }
+      },
+      "lifecycle": "/private/tmp/sk-agentic-sessions/dev-watch/lifecycle.ndjson"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.window-priority",
+  "command": "about.open.runtime-blocker",
+  "classification": "blocked-by-debug-panel-invariants",
+  "surfaceKind": "About",
+  "session": "dev-watch",
+  "attempt": {
+    "command": "openAbout",
+    "receipt": "artifacts/liquid-glass/receipts/window-priority-about-target-inspect-after.json",
+    "appLog": "/tmp/sk-agentic-sessions/dev-watch/app.log"
+  },
+  "observed": {
+    "panic": "panel_invariants: FAIL context=visibility_focus::show_main_window_without_activation/pre_show phase=PreShow mismatches=3",
+    "mismatches": [
+      "collectionBehavior expected FullScreenAuxiliary|IgnoresCycle plus MoveToActiveSpace and not CanJoinAllSpaces, actual 0x101",
+      "animationBehavior expected None(2), actual 4",
+      "restorable expected false, actual true"
+    ]
+  },
+  "workaroundForVisualProof": {
+    "env": "SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH=1",
+    "command": "bash scripts/agentic/dev-relaunch.sh dev-watch",
+    "reason": "The guard is debug-only and blocks visual capture before About can render. The mismatch remains recorded as a platform/windowing follow-up."
+  },
+  "status": "recorded"
+}

@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 3,
+  "status": "pass",
+  "label": "verify",
+  "timestamp": "2026-05-30T03:58:26.606Z",
+  "durationMs": 2916,
+  "requiresVisionReview": false,
+  "resolvedTarget": {
+    "windowId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "surfaceId": null
+  },
+  "dispatchPath": "window_role_fallback",
+  "resolvedWindowId": "main",
+  "osWindowId": 83974,
+  "inspectionOsWindowId": 83974,
+  "captureRouting": "inspection-os-window-id",
+  "requestedAutomationWindowId": "main",
+  "requestedOsWindowId": 83974,
+  "showIssuedBeforeCapture": true,
+  "state": {
+    "type": "acpStateResult",
+    "requestId": "verify-verify-1780113503690",
+    "schemaVersion": 2,
+    "resolvedTarget": {
+      "windowId": "main",
+      "windowKind": "main",
+      "title": "Script Kit"
+    },
+    "status": "notAcp",
+    "uiVariant": "standard",
+    "inputText": "",
+    "cursorIndex": 0,
+    "hasSelection": false,
+    "messageCount": 0,
+    "awaitingFirstAssistantText": false,
+    "contextChipCount": 0,
+    "contextReady": true,
+    "hasPendingPermission": false
+  },
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-about-after.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": "quartz",
+    "windowId": 83974
+  },
+  "captureTarget": {
+    "requestedWindowId": 83974,
+    "actualWindowId": 83974
+  },
+  "inspection": {
+    "automationWindowId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "osWindowId": 83974,
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 750,
+      "height": 500
+    },
+    "screenshotWidth": 750,
+    "screenshotHeight": 500,
+    "pixelProbes": [],
+    "warnings": [
+      "collector_used_current_view_fallback"
+    ]
+  },
+  "popupCapture": {
+    "strategy": "not_applicable",
+    "windowKind": "Main",
+    "targetBounds": null,
+    "semanticReceiptsArePrimary": false
+  },
+  "visionCrops": [],
+  "stateReceipt": {
+    "queried": true,
+    "snapshot": {
+      "type": "acpStateResult",
+      "requestId": "verify-verify-1780113503690",
+      "schemaVersion": 2,
+      "resolvedTarget": {
+        "windowId": "main",
+        "windowKind": "main",
+        "title": "Script Kit"
+      },
+      "status": "notAcp",
+      "uiVariant": "standard",
+      "inputText": "",
+      "cursorIndex": 0,
+      "hasSelection": false,
+      "messageCount": 0,
+      "awaitingFirstAssistantText": false,
+      "contextChipCount": 0,
+      "contextReady": true,
+      "hasPendingPermission": false
+    },
+    "error": null
+  },
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": true,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-about-after.png",
+    "sizeBytes": 357754,
+    "width": 1724,
+    "height": 1224,
+    "contentAudit": {
+      "sampledPixels": 2110176,
+      "nonBlackPixels": 1499548,
+      "nonTransparentPixels": 2021117,
+      "uniqueBucketCount": 33,
+      "meanLuma": 16.26585407653331,
+      "maxLuma": 254.99999999999997,
+      "nonBlackRatio": 0.7106269808774245,
+      "blank": false
+    },
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": "quartz",
+    "windowFrontmost": true,
+    "windowFocused": true,
+    "windowId": 83974,
+    "error": null
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "state: queried | screenshot: /Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-about-after.png (357754B)"
+}

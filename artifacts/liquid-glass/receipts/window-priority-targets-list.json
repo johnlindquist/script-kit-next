@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.list",
+  "session": "dev-watch",
+  "classification": "ok",
+  "targetCount": 1,
+  "targets": [
+    {
+      "index": 0,
+      "automationId": "main",
+      "windowKind": "Main",
+      "title": "Script Kit",
+      "visible": true,
+      "focused": true,
+      "bounds": {
+        "x": 585,
+        "y": 177,
+        "width": 750,
+        "height": 480
+      },
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "parentAutomationId": null,
+      "parentKind": null,
+      "pid": 90776
+    }
+  ],
+  "sessionLifecycle": [],
+  "errors": []
+}

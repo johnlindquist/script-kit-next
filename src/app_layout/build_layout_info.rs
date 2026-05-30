@@ -14,6 +14,7 @@ impl ScriptListApp {
                 FileSearchPresentation::Full => crate::window_resize::ViewType::MainWindow,
                 FileSearchPresentation::Mini => crate::window_resize::ViewType::MainWindow,
             },
+            AppView::About { .. } => crate::window_resize::ViewType::ScriptList,
             AppView::ClipboardHistoryView { .. }
             | AppView::ThemeChooserView { .. }
             | AppView::SdkReferenceView { .. }
@@ -131,6 +132,251 @@ impl ScriptListApp {
                 .with_depth(0)
                 .with_explanation("Root window container. Uses flex-column layout."),
         );
+
+        if matches!(self.current_view, AppView::About { .. }) {
+            const ABOUT_HEADER_HEIGHT: f32 = 52.0;
+            const ABOUT_SCROLL_PADDING_X: f32 = 32.0;
+            const ABOUT_SCROLL_PADDING_Y: f32 = 14.0;
+            const ABOUT_STACK_WIDTH: f32 = 560.0;
+            const ABOUT_LOGO_SIZE: f32 = 56.0;
+            const ABOUT_LOGO_ICON_SIZE: f32 = 36.0;
+            const ABOUT_TITLE_HEIGHT: f32 = 34.0;
+            const ABOUT_BADGE_HEIGHT: f32 = 20.0;
+            const ABOUT_TAGLINE_HEIGHT: f32 = 19.0;
+            const ABOUT_CREATOR_HEIGHT: f32 = 32.0;
+            const ABOUT_BUTTON_HEIGHT: f32 = 34.0;
+            const ABOUT_BUTTON_WIDTH: f32 = 128.0;
+            const ABOUT_BUTTON_GAP: f32 = 8.0;
+            const ABOUT_CARD_HEIGHT: f32 = 60.0;
+            const ABOUT_ACK_HEIGHT: f32 = 34.0;
+            const ABOUT_ITEM_GAP: f32 = 10.0;
+
+            let content_height = window_height - ABOUT_HEADER_HEIGHT;
+            let stack_width = ABOUT_STACK_WIDTH.min(window_width - ABOUT_SCROLL_PADDING_X * 2.0);
+            let stack_x = (window_width - stack_width) / 2.0;
+            let mut cursor_y = ABOUT_HEADER_HEIGHT + ABOUT_SCROLL_PADDING_Y;
+
+            components.push(
+                LayoutComponentInfo::new("AboutHeader", LayoutComponentType::Header)
+                    .with_bounds(0.0, 0.0, window_width, ABOUT_HEADER_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("about.header")
+                    .with_padding(0.0, 16.0, 0.0, 16.0)
+                    .with_flex_row()
+                    .with_depth(1)
+                    .with_parent("Window")
+                    .with_explanation("About header is 52px tall and owns only title and close control."),
+            );
+            components.push(
+                LayoutComponentInfo::new("AboutCloseButton", LayoutComponentType::Button)
+                    .with_bounds(window_width - 44.0, 12.0, 28.0, 28.0)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
+                    )
+                    .with_visual_token("about.closeButton")
+                    .with_hit_bounds(window_width - 44.0, 12.0, 28.0, 28.0)
+                    .with_depth(2)
+                    .with_parent("AboutHeader")
+                    .with_explanation("28x28 minimum macOS hit target; rounded as a circular icon control."),
+            );
+            components.push(
+                LayoutComponentInfo::new("AboutScrollContainer", LayoutComponentType::Container)
+                    .with_bounds(0.0, ABOUT_HEADER_HEIGHT, window_width, content_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("about.scrollContainer")
+                    .with_padding(
+                        ABOUT_SCROLL_PADDING_Y,
+                        ABOUT_SCROLL_PADDING_X,
+                        ABOUT_SCROLL_PADDING_Y,
+                        ABOUT_SCROLL_PADDING_X,
+                    )
+                    .with_flex_column()
+                    .with_depth(1)
+                    .with_parent("Window")
+                    .with_explanation("Scrollable content region below the About header."),
+            );
+            components.push(
+                LayoutComponentInfo::new("AboutContentStack", LayoutComponentType::Container)
+                    .with_bounds(stack_x, cursor_y, stack_width, content_height - ABOUT_SCROLL_PADDING_Y * 2.0)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("about.contentStack")
+                    .with_gap(ABOUT_ITEM_GAP)
+                    .with_flex_column()
+                    .with_depth(2)
+                    .with_parent("AboutScrollContainer")
+                    .with_explanation("Centered 560px max-width content stack with 10px item rhythm."),
+            );
+
+            let centered_x = |width: f32| stack_x + (stack_width - width) / 2.0;
+            components.push(
+                LayoutComponentInfo::new("AboutLogoTile", LayoutComponentType::Container)
+                    .with_bounds(centered_x(ABOUT_LOGO_SIZE), cursor_y, ABOUT_LOGO_SIZE, ABOUT_LOGO_SIZE)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                    )
+                    .with_visual_token("about.logoTile")
+                    .with_depth(3)
+                    .with_parent("AboutContentStack")
+                    .with_explanation(format!(
+                        "56px logo tile with {}px icon and compact Liquid Glass radius.",
+                        ABOUT_LOGO_ICON_SIZE
+                    )),
+            );
+            cursor_y += ABOUT_LOGO_SIZE + ABOUT_ITEM_GAP;
+
+            components.push(
+                LayoutComponentInfo::new("AboutTitle", LayoutComponentType::Other)
+                    .with_bounds(stack_x, cursor_y, stack_width, ABOUT_TITLE_HEIGHT + 6.0 + ABOUT_BADGE_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("about.titleVersion")
+                    .with_depth(3)
+                    .with_parent("AboutContentStack")
+                    .with_explanation("Product title plus version badge block."),
+            );
+            cursor_y += ABOUT_TITLE_HEIGHT + 6.0 + ABOUT_BADGE_HEIGHT + ABOUT_ITEM_GAP;
+
+            components.push(
+                LayoutComponentInfo::new("AboutTagline", LayoutComponentType::Other)
+                    .with_bounds(centered_x(440.0), cursor_y, 440.0_f32.min(stack_width), ABOUT_TAGLINE_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("about.tagline")
+                    .with_depth(3)
+                    .with_parent("AboutContentStack")
+                    .with_explanation("Centered tagline text with bounded width."),
+            );
+            cursor_y += ABOUT_TAGLINE_HEIGHT + ABOUT_ITEM_GAP;
+
+            components.push(
+                LayoutComponentInfo::new("AboutCreatorRow", LayoutComponentType::Other)
+                    .with_bounds(centered_x(260.0), cursor_y, 260.0_f32.min(stack_width), ABOUT_CREATOR_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("about.creatorRow")
+                    .with_depth(3)
+                    .with_parent("AboutContentStack")
+                    .with_explanation("Creator avatar and label row."),
+            );
+            cursor_y += ABOUT_CREATOR_HEIGHT + ABOUT_ITEM_GAP;
+
+            let quick_actions_width = ABOUT_BUTTON_WIDTH * 3.0 + ABOUT_BUTTON_GAP * 2.0;
+            components.push(
+                LayoutComponentInfo::new("AboutQuickActions", LayoutComponentType::Container)
+                    .with_bounds(centered_x(quick_actions_width), cursor_y, quick_actions_width.min(stack_width), ABOUT_BUTTON_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("about.quickActions")
+                    .with_gap(ABOUT_BUTTON_GAP)
+                    .with_flex_row()
+                    .with_depth(3)
+                    .with_parent("AboutContentStack")
+                    .with_explanation("Three compact action controls with 8px gap."),
+            );
+            for (index, name) in ["AboutOpenGithub", "AboutOpenDiscord", "AboutFollowX"]
+                .into_iter()
+                .enumerate()
+            {
+                let x = centered_x(quick_actions_width) + index as f32 * (ABOUT_BUTTON_WIDTH + ABOUT_BUTTON_GAP);
+                components.push(
+                    LayoutComponentInfo::new(name, LayoutComponentType::Button)
+                        .with_bounds(x, cursor_y, ABOUT_BUTTON_WIDTH, ABOUT_BUTTON_HEIGHT)
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                        )
+                        .with_visual_token("about.actionButton")
+                        .with_hit_bounds(x, cursor_y, ABOUT_BUTTON_WIDTH, ABOUT_BUTTON_HEIGHT)
+                        .with_depth(4)
+                        .with_parent("AboutQuickActions")
+                        .with_explanation("34px tall compact text button; hit target exceeds 28px."),
+                );
+            }
+            cursor_y += ABOUT_BUTTON_HEIGHT + ABOUT_ITEM_GAP;
+
+            components.push(
+                LayoutComponentInfo::new("AboutUpdateCard", LayoutComponentType::Panel)
+                    .with_bounds(stack_x, cursor_y, 500.0_f32.min(stack_width), ABOUT_CARD_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                    )
+                    .with_visual_token("about.updateCard")
+                    .with_padding(14.0, 16.0, 14.0, 16.0)
+                    .with_flex_row()
+                    .with_depth(3)
+                    .with_parent("AboutContentStack")
+                    .with_explanation("Update card uses compact 10px radius and content-layer material."),
+            );
+            components.push(
+                LayoutComponentInfo::new("AboutUpdateButton", LayoutComponentType::Button)
+                    .with_bounds(stack_x + 500.0_f32.min(stack_width) - 16.0 - 142.0, cursor_y + 13.0, 142.0, ABOUT_BUTTON_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                    )
+                    .with_visual_token("about.actionButton")
+                    .with_hit_bounds(stack_x + 500.0_f32.min(stack_width) - 16.0 - 142.0, cursor_y + 13.0, 142.0, ABOUT_BUTTON_HEIGHT)
+                    .with_depth(4)
+                    .with_parent("AboutUpdateCard")
+                    .with_explanation("Update action is 34px high with 142px minimum width."),
+            );
+            cursor_y += ABOUT_CARD_HEIGHT + ABOUT_ITEM_GAP;
+
+            components.push(
+                LayoutComponentInfo::new("AboutAcknowledgementsCard", LayoutComponentType::Panel)
+                    .with_bounds(stack_x, cursor_y, 500.0_f32.min(stack_width), ABOUT_ACK_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                    )
+                    .with_visual_token("about.acknowledgementsCard")
+                    .with_depth(3)
+                    .with_parent("AboutContentStack")
+                    .with_explanation("Collapsed acknowledgements panel with compact 10px radius."),
+            );
+
+            return LayoutInfo {
+                window_width,
+                window_height,
+                prompt_type: prompt_type.to_string(),
+                components,
+                handler_form: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            };
+        }
 
         // Header
         components.push(

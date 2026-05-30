@@ -147,6 +147,7 @@ async function main() {
     ScriptList: ["main", "launcher"],
     ActionsDialog: ["actions"],
     ConfirmPrompt: ["confirm"],
+    About: ["about"],
     AcpChat: ["acp"],
     AcpHistory: ["acp-history"],
     ClipboardHistory: ["clipboard"],
@@ -169,6 +170,10 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/tahoe-next-actions-layout.json`,
         `${RECEIPT_ROOT}/after-actions-layout-visual-style.json`,
+      ]);
+    } else if (surfaceKind === "About") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-about-layout-after.json`,
       ]);
     }
     const status = classify(evidence);

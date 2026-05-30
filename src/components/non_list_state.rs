@@ -11,6 +11,7 @@ use gpui::{
 };
 
 use crate::theme::{self, AppChromeColors};
+use crate::ui::chrome;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NonListDensity {
@@ -54,7 +55,7 @@ pub(crate) fn non_list_metrics(density: NonListDensity) -> NonListMetrics {
     match density {
         NonListDensity::Compact => NonListMetrics {
             max_width: 420.0,
-            card_radius: 8.0,
+            card_radius: chrome::LIQUID_GLASS_COMPACT_RADIUS_PX,
             card_padding_x: 12.0,
             card_padding_y: 10.0,
             block_gap: 12.0,
@@ -67,7 +68,7 @@ pub(crate) fn non_list_metrics(density: NonListDensity) -> NonListMetrics {
         },
         NonListDensity::Comfortable => NonListMetrics {
             max_width: 500.0,
-            card_radius: 9.0,
+            card_radius: chrome::LIQUID_GLASS_COMPACT_RADIUS_PX,
             card_padding_x: 16.0,
             card_padding_y: 14.0,
             block_gap: 16.0,

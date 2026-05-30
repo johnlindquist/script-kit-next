@@ -139,6 +139,7 @@
     }
 
     .todo { color: var(--warn); }
+    .doing { color: var(--accent); }
     .done { color: var(--ok); }
 
     table {
@@ -278,7 +279,7 @@
           <tr><th>Batch</th><th>Surface families</th><th>Status</th><th>Oracle / Evidence</th></tr>
         </thead>
         <tbody>
-          <tr><td>Platform windows</td><td>Window material, containers, resizing, safe areas, screenshots, lifecycle, About, Feedback</td><td class="todo">highest priority baseline pending</td><td>first planned Oracle batch</td></tr>
+          <tr><td>Platform windows</td><td>Window material, containers, resizing, safe areas, screenshots, lifecycle, About, Feedback</td><td class="doing">About strong; Feedback pending</td><td><code>window-priority-about-*.json</code>, screenshot/diff paths below</td></tr>
           <tr><td>Launcher main actions</td><td>ScriptList, ActionsDialog, ConfirmPrompt, footer, source filters, shortcuts, aliases</td><td class="done">Tahoe metrics slice captured</td><td><code>before-main-*.json</code>, <code>before-actions-*.json</code>, <code>tahoe-next-*.json</code>, screenshot paths below</td></tr>
           <tr><td>Prompt runtime</td><td>arg/div/form/select/path/drop/template/chat/mini/micro, terminal, editor, webcam</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
           <tr><td>Built-ins</td><td>Clipboard, App Launcher, Window Switcher, Browser Tabs, Settings, Kit Store, Process Manager, Current App, Theme, Emoji, ACP History</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
@@ -300,9 +301,9 @@
         <tbody>
           <tr><td>Contract surfaces</td><td><span class="metric">31</span></td><td>Source-backed surface contracts from <code>surfaces.ts</code>; two outdated design-lab surfaces are not active proof targets.</td></tr>
           <tr><td>Active audit surfaces</td><td><span class="metric">29</span></td><td><code>DesignGallery</code> and <code>DesignExplorer</code> are excluded from Liquid Glass proof until their Storybook/design-lab source is current.</td></tr>
-          <tr><td>Strong proof surfaces</td><td><span class="metric">2</span></td><td><code>ScriptList</code> and <code>ActionsDialog</code> currently have screenshots, numeric layout visual audits, and image-diff receipts.</td></tr>
-          <tr><td>Missing proof surfaces</td><td><span class="metric">27</span></td><td>These active audit surfaces still lack the minimum screenshot + numeric layout + image-diff evidence set.</td></tr>
-          <tr><td>Recommended Oracle batches</td><td><span class="metric">8</span></td><td>Platform/windowing is now first and highest priority; only the launcher/actions batch is partial, and the other 7 batches remain missing proof.</td></tr>
+          <tr><td>Strong proof surfaces</td><td><span class="metric">3</span></td><td><code>ScriptList</code>, <code>ActionsDialog</code>, and <code>About</code> currently have screenshots, numeric layout visual audits, and image-diff receipts.</td></tr>
+          <tr><td>Missing proof surfaces</td><td><span class="metric">26</span></td><td>These active audit surfaces still lack the minimum screenshot + numeric layout + image-diff evidence set.</td></tr>
+          <tr><td>Recommended Oracle batches</td><td><span class="metric">8</span></td><td>Platform/windowing and launcher/actions are now partial; the other 6 batches remain missing proof.</td></tr>
           <tr><td>Practical non-contract targets</td><td><span class="metric">notes strong, dictation media proof, inline-agent numeric proof, notes-acp action proof</span></td><td>Notes now has screenshot, layout visualAudit, and image-diff receipts. Dictation has passive media readiness and synthetic delivery proof, but still lacks visual/layout proof. Inline-agent has focused-text semantic and layout visualAudit proof through the main ACP target, but screenshot capture and an independent <code>inline-agent</code> automation target are still blocked. Notes ACP has actions-panel numeric proof and a fail-closed <code>openNotesAcp</code> activation primitive; actual embedded ACP rendering is blocked by missing Anthropic/Pi warm-session credentials in this sandbox.</td></tr>
         </tbody>
       </table>
@@ -327,6 +328,10 @@
           <a href="artifacts/liquid-glass/screenshots/before-notes.png"><img src="artifacts/liquid-glass/screenshots/before-notes.png" alt="Before screenshot of the notes window" style="display:block;width:100%;height:auto"></a>
           <figcaption>Notes before: <code>artifacts/liquid-glass/screenshots/before-notes.png</code>. Receipt: <code>artifacts/liquid-glass/receipts/before-notes-screenshot.json</code>.</figcaption>
         </figure>
+        <figure>
+          <a href="artifacts/liquid-glass/screenshots/window-priority-about.png"><img src="artifacts/liquid-glass/screenshots/window-priority-about.png" alt="Before screenshot of the About window surface" style="display:block;width:100%;height:auto"></a>
+          <figcaption>About before window-priority slice: <code>artifacts/liquid-glass/screenshots/window-priority-about.png</code>. Initial layout receipt still exposed generic ScriptList regions, which drove the instrumentation fix.</figcaption>
+        </figure>
       </div>
     </section>
 
@@ -339,6 +344,7 @@
         <tbody>
           <tr><td>Main launcher</td><td><code>layout.ts measure</code>, <code>inspect.ts</code>, <code>verify-shot.ts</code></td><td>Window 750x480; Header 45 high; SearchInput 534x22 at 16,11; list rows 40 high; LogoButton 20x28; ActionsButton 85x28; RunButton 55x28; screenshot nonblack ratio 0.705</td><td><code>after-main-layout-visual-style.json</code>: 14/14 styled nodes, layers content=9 and functionalChrome=5, no hit failures, no content glass nodes. SearchInput hitBounds now 534x28 while visualBounds remain 534x22.</td><td>Corner/material/hit metadata now exists for main layout; contrast and center-distance still missing.</td></tr>
           <tr><td>Actions dialog</td><td><code>actions.ts inspect</code>, <code>layout.ts measure</code>, <code>automation-window.ts inspect</code>, <code>verify-shot.ts</code></td><td>Original target 320x338 at 800,221; screenshot nonblack ratio 0.803; action rows 30 high; search 36 high; popup corners sharp in render and 16px in earlier style receipt.</td><td><code>tahoe-next-actions-layout.json</code>: target 340x402, popup corner radius 18, search 340x40 with 14px radius, action rows 340x36 with 10px radius, section headers 22 high, shortcuts 22 high, 21/21 styled nodes, no content glass nodes. Screenshot <code>tahoe-next-actions.png</code> nonblack ratio 0.705.</td><td>Section headers and shortcut keycaps intentionally have visual heights under 28; DevTools records shortcut exception <code>denseKeyboardHint</code>. Need explicit section-header semantic exception or separate hit bounds, plus popup placement deltas.</td></tr>
+          <tr><td>About</td><td><code>openAbout</code>, <code>targets.ts inspect</code>, <code>layout.ts measure</code>, <code>elements.ts snapshot</code>, <code>verify-shot.ts</code>, <code>image-diff.ts</code></td><td><code>window-priority-about.png</code> was captured, but <code>window-priority-about-layout.json</code> still reported generic <code>ScriptList</code>/<code>SearchInput</code>/<code>ListItem</code> regions for an About target.</td><td><code>window-priority-about-layout-after.json</code>: 16/16 styled About-specific nodes, layers content=9 and functionalChrome=7, no hit failures, no content glass, no missing style nodes, no overlap warnings. Key bounds: window 750x500 radius 22, header 750x52 radius 16, close button 28x28 radius 14, action buttons 128x34 radius 10, update button 142x34 radius 10, content cards radius 10. Same-size image diff <code>image-diff-window-priority-about-before-to-after.json</code>: 2,080 / 2,110,176 changed pixels = 0.10%.</td><td>About now has strong proof and moved the platform/windowing batch to partial. Runtime recapture required <code>SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH=1</code> because debug pre-show panel invariants currently panic on collectionBehavior/animation/restorable mismatches; this blocker is recorded in failed after receipts and app log.</td></tr>
           <tr><td>Notes</td><td><code>notes.ts inspect</code>, <code>layout.ts measure</code>, <code>verify-shot.ts</code>, <code>image-diff.ts</code></td><td>Target 350x280 at 1112,50; screenshot nonblack ratio 0.673; layout visualAudit previously had 0/4 styled nodes.</td><td><code>notes-next-layout.json</code>: 4/4 styled nodes, layers content=1, floatingTransient=1, functionalChrome=2, no hit failures, no content glass nodes. NotesWindow radius 22, titlebar radius 16, footer radius 10. Same-size image diff <code>image-diff-notes-before-to-next.json</code>: 7,875 / 581,856 changed pixels = 1.35%.</td><td>Notes base window now has strong proof; notes ACP, actions panel, browse panel, search, and toolbar states still need state-specific captures.</td></tr>
           <tr><td>Dictation</td><td><code>dictation.ts inspect</code>, <code>dictation.ts deliver-fixture</code>, <code>media.ts</code></td><td>pending visual proof</td><td><code>dictation-next-post-delivery-inspect.json</code>: passive setup ready, model available, microphone permission granted, redacted device snapshot available, hotkey ready, no microphone capture, no System Settings/TCC mutation. <code>dictation-next-deliver-fixture.json</code>: synthetic delivery ok, generation 0 -> 1, redacted transcript fingerprint present, insertion range available. <code>dictation-next-post-delivery-media.json</code>: all passive media fields present except wrong-target refusal.</td><td>Visual proof remains blocked: <code>automation-window.ts --kind dictation</code> fails because <code>dictation</code> is not a supported automation target kind. Need visual/layout target for the overlay and wrong-target refusal receipt.</td></tr>
           <tr><td>Inline agent / focused-text mini</td><td><code>openInlineAgentWithMockData</code>, <code>targets.ts</code>, <code>elements.ts</code>, <code>layout.ts</code>, <code>verify-shot.ts</code>, <code>captureWindow</code></td><td>Dedicated <code>inline-agent</code> target lookup failed in the stale session; after restart the mock path registered <code>main</code> plus child <code>ai</code>, not <code>inline-agent</code>.</td><td><code>inline-agent-main-target-inspect.json</code>: main target resolves to <code>AcpChat</code>/<code>AcpChatView</code> with focused-text semantic nodes. <code>inline-agent-main-elements.json</code>: 16 nodes, focused id <code>focused-text-input</code>, action buttons for replace/append/copy/chat/stop/retry and native footer buttons. <code>inline-agent-main-layout.json</code>: 14/14 styled layout nodes, no hit failures, no content glass nodes, window radius 22, header radius 16, search/header buttons radius 14, row radius 10.</td><td>Visual screenshot proof is blocked. Strict capture for OS window <code>83497</code> failed with <code>could not create image from window</code>; allowed <code>captureWindow</code> wrote no file because the runtime blank-image audit rejected an all-black capture. The <code>ai</code> child target also lacks bounds/elements and reports ambiguous screenshot matching. Need either a nonblank target capture primitive for focused-text mini or an independent <code>inline-agent</code> automation target with bounds.</td></tr>
@@ -408,6 +414,13 @@
             <td><code>image-diff-notes-before-to-next.json</code></td>
             <td>Same-size Notes pair. The small diff reflects proof metadata/runtime recapture rather than a large visual redesign; layout receipts carry the material/radius proof.</td>
           </tr>
+          <tr>
+            <td>About before to window-priority proof slice</td>
+            <td><span class="metric">1724x1224 -> 1724x1224</span></td>
+            <td><span class="metric">2,080 / 2,110,176 = 0.10%</span></td>
+            <td><code>image-diff-window-priority-about-before-to-after.json</code></td>
+            <td>Same-size About pair. The visible delta is intentionally tiny: close/action/card radii moved to 14/10px tokens while layout receipts changed from generic ScriptList placeholders to About-specific window/container/control geometry.</td>
+          </tr>
         </tbody>
       </table>
       <div class="shot-grid" style="margin-top:14px">
@@ -434,6 +447,10 @@
         <figure>
           <a href="artifacts/liquid-glass/diffs/notes-before-to-next.png"><img src="artifacts/liquid-glass/diffs/notes-before-to-next.png" alt="Diff mask for Notes before to current proof slice"></a>
           <figcaption>Notes diff mask: <code>artifacts/liquid-glass/diffs/notes-before-to-next.png</code>. Receipt: <code>image-diff-notes-before-to-next.json</code>.</figcaption>
+        </figure>
+        <figure>
+          <a href="artifacts/liquid-glass/diffs/image-diff-window-priority-about-before-to-after.png"><img src="artifacts/liquid-glass/diffs/image-diff-window-priority-about-before-to-after.png" alt="Diff mask for About before to window-priority proof slice"></a>
+          <figcaption>About diff mask: <code>artifacts/liquid-glass/diffs/image-diff-window-priority-about-before-to-after.png</code>. Receipt: <code>image-diff-window-priority-about-before-to-after.json</code>.</figcaption>
         </figure>
       </div>
     </section>
@@ -473,6 +490,10 @@
         <figure>
           <a href="artifacts/liquid-glass/screenshots/notes-next.png"><img src="artifacts/liquid-glass/screenshots/notes-next.png" alt="Notes window after Liquid Glass visual audit metadata"></a>
           <figcaption>Notes after proof slice: <code>artifacts/liquid-glass/screenshots/notes-next.png</code>. Receipts: <code>notes-next-layout.json</code>, <code>notes-next-key-metrics.json</code>.</figcaption>
+        </figure>
+        <figure>
+          <a href="artifacts/liquid-glass/screenshots/window-priority-about-after.png"><img src="artifacts/liquid-glass/screenshots/window-priority-about-after.png" alt="About window after Liquid Glass window-priority proof slice"></a>
+          <figcaption>About after window-priority slice: <code>artifacts/liquid-glass/screenshots/window-priority-about-after.png</code>. Receipts: <code>window-priority-about-layout-after.json</code>, <code>window-priority-about-screenshot-after.json</code>.</figcaption>
         </figure>
         <figure>
           <div class="placeholder">Inline-agent screenshot blocked by nonblank capture failure</div>
@@ -555,6 +576,10 @@
         <div class="entry">
           <time>2026-05-29 22:02 MDT</time>
           <p>Removed outdated Storybook/design-lab surfaces from active Liquid Glass testing. The raw inventory still records <code>DesignGallery</code> and <code>DesignExplorer</code>, but <code>auditSurfaceContracts</code> and the proof matrix now exclude them. Reordered recommended batches outside-in so platform windows, containers, materials, resizing, safe areas, screenshots, and lifecycle are the highest-priority proof track before inner controls and content.</p>
+        </div>
+        <div class="entry">
+          <time>2026-05-29 22:12 MDT</time>
+          <p>Completed the first outside-in window/container proof slice for About. Updated About close/action/card radii to Liquid Glass control/compact tokens, added About-specific <code>getLayoutInfo</code> geometry, captured before/after screenshots, generated <code>image-diff-window-priority-about-before-to-after.json</code>, and regenerated the proof matrix. About now has strong proof; the platform/windowing batch is partial with Feedback still missing. Runtime proof also recorded a debug-only panel-invariant pre-show panic, then recaptured with <code>SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH=1</code>.</p>
         </div>
       </div>
     </section>

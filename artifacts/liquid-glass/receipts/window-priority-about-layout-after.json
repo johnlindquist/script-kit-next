@@ -1,0 +1,2409 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.layout",
+  "command": "layout.measure",
+  "classification": "ok",
+  "session": "dev-watch",
+  "include": [
+    "nodes",
+    "regions",
+    "scroll",
+    "resize",
+    "overlaps"
+  ],
+  "limit": 300,
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "About"
+  },
+  "target": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "About",
+    "appViewVariant": "About",
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 500
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 750,
+      "height": 500,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 500
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 82905,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "promptType": "about",
+  "timestamp": "2026-05-30T03:58:22.387467+00:00",
+  "componentCount": 16,
+  "window": {
+    "rect": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 500
+    },
+    "visible": null,
+    "focused": null
+  },
+  "viewport": {
+    "clientWidth": 750,
+    "clientHeight": 500,
+    "contentWidth": 750,
+    "contentHeight": 500,
+    "scrollWidth": 750,
+    "scrollHeight": 500,
+    "canScrollX": false,
+    "canScrollY": false,
+    "scrollTop": null,
+    "maxScrollTop": 0,
+    "overflowPolicyY": "hidden"
+  },
+  "pressure": {
+    "overflowY": false,
+    "hiddenContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "footerOverlapCount": 0,
+    "inputOverlapCount": 0,
+    "pressureScore": 0
+  },
+  "viewportRect": {
+    "x": 0,
+    "y": 0,
+    "width": 750,
+    "height": 500
+  },
+  "windowRect": {
+    "x": 585,
+    "y": 177,
+    "width": 750,
+    "height": 500
+  },
+  "regions": [
+    {
+      "name": "Window",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 500
+      }
+    },
+    {
+      "name": "AboutHeader",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 52
+      }
+    },
+    {
+      "name": "AboutCloseButton",
+      "type": "button",
+      "bounds": {
+        "x": 706,
+        "y": 12,
+        "width": 28,
+        "height": 28
+      }
+    },
+    {
+      "name": "AboutScrollContainer",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 52,
+        "width": 750,
+        "height": 448
+      }
+    },
+    {
+      "name": "AboutContentStack",
+      "type": "container",
+      "bounds": {
+        "x": 95,
+        "y": 66,
+        "width": 560,
+        "height": 420
+      }
+    },
+    {
+      "name": "AboutLogoTile",
+      "type": "container",
+      "bounds": {
+        "x": 347,
+        "y": 66,
+        "width": 56,
+        "height": 56
+      }
+    },
+    {
+      "name": "AboutTitle",
+      "type": "other",
+      "bounds": {
+        "x": 95,
+        "y": 132,
+        "width": 560,
+        "height": 60
+      }
+    },
+    {
+      "name": "AboutTagline",
+      "type": "other",
+      "bounds": {
+        "x": 155,
+        "y": 202,
+        "width": 440,
+        "height": 19
+      }
+    },
+    {
+      "name": "AboutCreatorRow",
+      "type": "other",
+      "bounds": {
+        "x": 245,
+        "y": 231,
+        "width": 260,
+        "height": 32
+      }
+    },
+    {
+      "name": "AboutQuickActions",
+      "type": "container",
+      "bounds": {
+        "x": 175,
+        "y": 273,
+        "width": 400,
+        "height": 34
+      }
+    },
+    {
+      "name": "AboutOpenGithub",
+      "type": "button",
+      "bounds": {
+        "x": 175,
+        "y": 273,
+        "width": 128,
+        "height": 34
+      }
+    },
+    {
+      "name": "AboutOpenDiscord",
+      "type": "button",
+      "bounds": {
+        "x": 311,
+        "y": 273,
+        "width": 128,
+        "height": 34
+      }
+    },
+    {
+      "name": "AboutFollowX",
+      "type": "button",
+      "bounds": {
+        "x": 447,
+        "y": 273,
+        "width": 128,
+        "height": 34
+      }
+    },
+    {
+      "name": "AboutUpdateCard",
+      "type": "panel",
+      "bounds": {
+        "x": 95,
+        "y": 317,
+        "width": 500,
+        "height": 60
+      }
+    },
+    {
+      "name": "AboutUpdateButton",
+      "type": "button",
+      "bounds": {
+        "x": 437,
+        "y": 330,
+        "width": 142,
+        "height": 34
+      }
+    },
+    {
+      "name": "AboutAcknowledgementsCard",
+      "type": "panel",
+      "bounds": {
+        "x": 95,
+        "y": 387,
+        "width": 500,
+        "height": 34
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Window",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 500
+      },
+      "depth": 0,
+      "parent": null,
+      "children": [],
+      "explanation": "Root window container. Uses flex-column layout.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "NSVisualEffectView",
+        "tokenSource": "window.vibrancy",
+        "cornerRadius": {
+          "topLeft": 22,
+          "topRight": 22,
+          "bottomRight": 22,
+          "bottomLeft": 22
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "hitWidth": 750,
+        "hitHeight": 500,
+        "visualWidth": 750,
+        "visualHeight": 500,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "Window",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Root window container. Uses flex-column layout.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "NSVisualEffectView",
+          "tokenSource": "window.vibrancy",
+          "cornerRadius": {
+            "topLeft": 22,
+            "topRight": 22,
+            "bottomRight": 22,
+            "bottomLeft": 22
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 500
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 500
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutHeader",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 52
+      },
+      "depth": 1,
+      "parent": "Window",
+      "children": [],
+      "explanation": "About header is 52px tall and owns only title and close control.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.header",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 52
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 52
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 52
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 52
+        },
+        "hitWidth": 750,
+        "hitHeight": 52,
+        "visualWidth": 750,
+        "visualHeight": 52,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutHeader",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 52
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 16,
+            "bottom": 0,
+            "left": 16
+          }
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "About header is 52px tall and owns only title and close control.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.header",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 52
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 52
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutCloseButton",
+      "type": "button",
+      "bounds": {
+        "x": 706,
+        "y": 12,
+        "width": 28,
+        "height": 28
+      },
+      "depth": 2,
+      "parent": "AboutHeader",
+      "children": [],
+      "explanation": "28x28 minimum macOS hit target; rounded as a circular icon control.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.closeButton",
+        "cornerRadius": {
+          "topLeft": 14,
+          "topRight": 14,
+          "bottomRight": 14,
+          "bottomLeft": 14
+        },
+        "visualBounds": {
+          "x": 706,
+          "y": 12,
+          "width": 28,
+          "height": 28
+        },
+        "hitBounds": {
+          "x": 706,
+          "y": 12,
+          "width": 28,
+          "height": 28
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 706,
+          "y": 12,
+          "width": 28,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 706,
+          "y": 12,
+          "width": 28,
+          "height": 28
+        },
+        "hitWidth": 28,
+        "hitHeight": 28,
+        "visualWidth": 28,
+        "visualHeight": 28,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutCloseButton",
+        "type": "button",
+        "bounds": {
+          "x": 706,
+          "y": 12,
+          "width": 28,
+          "height": 28
+        },
+        "depth": 2,
+        "parent": "AboutHeader",
+        "explanation": "28x28 minimum macOS hit target; rounded as a circular icon control.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.closeButton",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 706,
+            "y": 12,
+            "width": 28,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 706,
+            "y": 12,
+            "width": 28,
+            "height": 28
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutScrollContainer",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 52,
+        "width": 750,
+        "height": 448
+      },
+      "depth": 1,
+      "parent": "Window",
+      "children": [],
+      "explanation": "Scrollable content region below the About header.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.scrollContainer",
+        "visualBounds": {
+          "x": 0,
+          "y": 52,
+          "width": 750,
+          "height": 448
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 52,
+          "width": 750,
+          "height": 448
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 52,
+          "width": 750,
+          "height": 448
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 52,
+          "width": 750,
+          "height": 448
+        },
+        "hitWidth": 750,
+        "hitHeight": 448,
+        "visualWidth": 750,
+        "visualHeight": 448,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutScrollContainer",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 52,
+          "width": 750,
+          "height": 448
+        },
+        "boxModel": {
+          "padding": {
+            "top": 14,
+            "right": 32,
+            "bottom": 14,
+            "left": 32
+          }
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Scrollable content region below the About header.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.scrollContainer",
+          "visualBounds": {
+            "x": 0,
+            "y": 52,
+            "width": 750,
+            "height": 448
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 52,
+            "width": 750,
+            "height": 448
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutContentStack",
+      "type": "container",
+      "bounds": {
+        "x": 95,
+        "y": 66,
+        "width": 560,
+        "height": 420
+      },
+      "depth": 2,
+      "parent": "AboutScrollContainer",
+      "children": [],
+      "explanation": "Centered 560px max-width content stack with 10px item rhythm.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.contentStack",
+        "visualBounds": {
+          "x": 95,
+          "y": 66,
+          "width": 560,
+          "height": 420
+        },
+        "hitBounds": {
+          "x": 95,
+          "y": 66,
+          "width": 560,
+          "height": 420
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 95,
+          "y": 66,
+          "width": 560,
+          "height": 420
+        },
+        "visualBounds": {
+          "x": 95,
+          "y": 66,
+          "width": 560,
+          "height": 420
+        },
+        "hitWidth": 560,
+        "hitHeight": 420,
+        "visualWidth": 560,
+        "visualHeight": 420,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutContentStack",
+        "type": "container",
+        "bounds": {
+          "x": 95,
+          "y": 66,
+          "width": 560,
+          "height": 420
+        },
+        "boxModel": {
+          "gap": 10
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 2,
+        "parent": "AboutScrollContainer",
+        "explanation": "Centered 560px max-width content stack with 10px item rhythm.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.contentStack",
+          "visualBounds": {
+            "x": 95,
+            "y": 66,
+            "width": 560,
+            "height": 420
+          },
+          "hitBounds": {
+            "x": 95,
+            "y": 66,
+            "width": 560,
+            "height": 420
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutLogoTile",
+      "type": "container",
+      "bounds": {
+        "x": 347,
+        "y": 66,
+        "width": 56,
+        "height": 56
+      },
+      "depth": 3,
+      "parent": "AboutContentStack",
+      "children": [],
+      "explanation": "56px logo tile with 36px icon and compact Liquid Glass radius.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.logoTile",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 347,
+          "y": 66,
+          "width": 56,
+          "height": 56
+        },
+        "hitBounds": {
+          "x": 347,
+          "y": 66,
+          "width": 56,
+          "height": 56
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 347,
+          "y": 66,
+          "width": 56,
+          "height": 56
+        },
+        "visualBounds": {
+          "x": 347,
+          "y": 66,
+          "width": 56,
+          "height": 56
+        },
+        "hitWidth": 56,
+        "hitHeight": 56,
+        "visualWidth": 56,
+        "visualHeight": 56,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutLogoTile",
+        "type": "container",
+        "bounds": {
+          "x": 347,
+          "y": 66,
+          "width": 56,
+          "height": 56
+        },
+        "depth": 3,
+        "parent": "AboutContentStack",
+        "explanation": "56px logo tile with 36px icon and compact Liquid Glass radius.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.logoTile",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 347,
+            "y": 66,
+            "width": 56,
+            "height": 56
+          },
+          "hitBounds": {
+            "x": 347,
+            "y": 66,
+            "width": 56,
+            "height": 56
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutTitle",
+      "type": "other",
+      "bounds": {
+        "x": 95,
+        "y": 132,
+        "width": 560,
+        "height": 60
+      },
+      "depth": 3,
+      "parent": "AboutContentStack",
+      "children": [],
+      "explanation": "Product title plus version badge block.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.titleVersion",
+        "visualBounds": {
+          "x": 95,
+          "y": 132,
+          "width": 560,
+          "height": 60
+        },
+        "hitBounds": {
+          "x": 95,
+          "y": 132,
+          "width": 560,
+          "height": 60
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 95,
+          "y": 132,
+          "width": 560,
+          "height": 60
+        },
+        "visualBounds": {
+          "x": 95,
+          "y": 132,
+          "width": 560,
+          "height": 60
+        },
+        "hitWidth": 560,
+        "hitHeight": 60,
+        "visualWidth": 560,
+        "visualHeight": 60,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutTitle",
+        "type": "other",
+        "bounds": {
+          "x": 95,
+          "y": 132,
+          "width": 560,
+          "height": 60
+        },
+        "depth": 3,
+        "parent": "AboutContentStack",
+        "explanation": "Product title plus version badge block.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.titleVersion",
+          "visualBounds": {
+            "x": 95,
+            "y": 132,
+            "width": 560,
+            "height": 60
+          },
+          "hitBounds": {
+            "x": 95,
+            "y": 132,
+            "width": 560,
+            "height": 60
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutTagline",
+      "type": "other",
+      "bounds": {
+        "x": 155,
+        "y": 202,
+        "width": 440,
+        "height": 19
+      },
+      "depth": 3,
+      "parent": "AboutContentStack",
+      "children": [],
+      "explanation": "Centered tagline text with bounded width.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.tagline",
+        "visualBounds": {
+          "x": 155,
+          "y": 202,
+          "width": 440,
+          "height": 19
+        },
+        "hitBounds": {
+          "x": 155,
+          "y": 202,
+          "width": 440,
+          "height": 19
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 155,
+          "y": 202,
+          "width": 440,
+          "height": 19
+        },
+        "visualBounds": {
+          "x": 155,
+          "y": 202,
+          "width": 440,
+          "height": 19
+        },
+        "hitWidth": 440,
+        "hitHeight": 19,
+        "visualWidth": 440,
+        "visualHeight": 19,
+        "minHitPass": false,
+        "minVisualPass": false,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutTagline",
+        "type": "other",
+        "bounds": {
+          "x": 155,
+          "y": 202,
+          "width": 440,
+          "height": 19
+        },
+        "depth": 3,
+        "parent": "AboutContentStack",
+        "explanation": "Centered tagline text with bounded width.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.tagline",
+          "visualBounds": {
+            "x": 155,
+            "y": 202,
+            "width": 440,
+            "height": 19
+          },
+          "hitBounds": {
+            "x": 155,
+            "y": 202,
+            "width": 440,
+            "height": 19
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutCreatorRow",
+      "type": "other",
+      "bounds": {
+        "x": 245,
+        "y": 231,
+        "width": 260,
+        "height": 32
+      },
+      "depth": 3,
+      "parent": "AboutContentStack",
+      "children": [],
+      "explanation": "Creator avatar and label row.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.creatorRow",
+        "visualBounds": {
+          "x": 245,
+          "y": 231,
+          "width": 260,
+          "height": 32
+        },
+        "hitBounds": {
+          "x": 245,
+          "y": 231,
+          "width": 260,
+          "height": 32
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 245,
+          "y": 231,
+          "width": 260,
+          "height": 32
+        },
+        "visualBounds": {
+          "x": 245,
+          "y": 231,
+          "width": 260,
+          "height": 32
+        },
+        "hitWidth": 260,
+        "hitHeight": 32,
+        "visualWidth": 260,
+        "visualHeight": 32,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutCreatorRow",
+        "type": "other",
+        "bounds": {
+          "x": 245,
+          "y": 231,
+          "width": 260,
+          "height": 32
+        },
+        "depth": 3,
+        "parent": "AboutContentStack",
+        "explanation": "Creator avatar and label row.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.creatorRow",
+          "visualBounds": {
+            "x": 245,
+            "y": 231,
+            "width": 260,
+            "height": 32
+          },
+          "hitBounds": {
+            "x": 245,
+            "y": 231,
+            "width": 260,
+            "height": 32
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutQuickActions",
+      "type": "container",
+      "bounds": {
+        "x": 175,
+        "y": 273,
+        "width": 400,
+        "height": 34
+      },
+      "depth": 3,
+      "parent": "AboutContentStack",
+      "children": [],
+      "explanation": "Three compact action controls with 8px gap.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.quickActions",
+        "visualBounds": {
+          "x": 175,
+          "y": 273,
+          "width": 400,
+          "height": 34
+        },
+        "hitBounds": {
+          "x": 175,
+          "y": 273,
+          "width": 400,
+          "height": 34
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 175,
+          "y": 273,
+          "width": 400,
+          "height": 34
+        },
+        "visualBounds": {
+          "x": 175,
+          "y": 273,
+          "width": 400,
+          "height": 34
+        },
+        "hitWidth": 400,
+        "hitHeight": 34,
+        "visualWidth": 400,
+        "visualHeight": 34,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutQuickActions",
+        "type": "container",
+        "bounds": {
+          "x": 175,
+          "y": 273,
+          "width": 400,
+          "height": 34
+        },
+        "boxModel": {
+          "gap": 8
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 3,
+        "parent": "AboutContentStack",
+        "explanation": "Three compact action controls with 8px gap.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.quickActions",
+          "visualBounds": {
+            "x": 175,
+            "y": 273,
+            "width": 400,
+            "height": 34
+          },
+          "hitBounds": {
+            "x": 175,
+            "y": 273,
+            "width": 400,
+            "height": 34
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutOpenGithub",
+      "type": "button",
+      "bounds": {
+        "x": 175,
+        "y": 273,
+        "width": 128,
+        "height": 34
+      },
+      "depth": 4,
+      "parent": "AboutQuickActions",
+      "children": [],
+      "explanation": "34px tall compact text button; hit target exceeds 28px.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.actionButton",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 175,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "hitBounds": {
+          "x": 175,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 175,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "visualBounds": {
+          "x": 175,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "hitWidth": 128,
+        "hitHeight": 34,
+        "visualWidth": 128,
+        "visualHeight": 34,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutOpenGithub",
+        "type": "button",
+        "bounds": {
+          "x": 175,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "depth": 4,
+        "parent": "AboutQuickActions",
+        "explanation": "34px tall compact text button; hit target exceeds 28px.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.actionButton",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 175,
+            "y": 273,
+            "width": 128,
+            "height": 34
+          },
+          "hitBounds": {
+            "x": 175,
+            "y": 273,
+            "width": 128,
+            "height": 34
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutOpenDiscord",
+      "type": "button",
+      "bounds": {
+        "x": 311,
+        "y": 273,
+        "width": 128,
+        "height": 34
+      },
+      "depth": 4,
+      "parent": "AboutQuickActions",
+      "children": [],
+      "explanation": "34px tall compact text button; hit target exceeds 28px.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.actionButton",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 311,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "hitBounds": {
+          "x": 311,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 311,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "visualBounds": {
+          "x": 311,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "hitWidth": 128,
+        "hitHeight": 34,
+        "visualWidth": 128,
+        "visualHeight": 34,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutOpenDiscord",
+        "type": "button",
+        "bounds": {
+          "x": 311,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "depth": 4,
+        "parent": "AboutQuickActions",
+        "explanation": "34px tall compact text button; hit target exceeds 28px.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.actionButton",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 311,
+            "y": 273,
+            "width": 128,
+            "height": 34
+          },
+          "hitBounds": {
+            "x": 311,
+            "y": 273,
+            "width": 128,
+            "height": 34
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutFollowX",
+      "type": "button",
+      "bounds": {
+        "x": 447,
+        "y": 273,
+        "width": 128,
+        "height": 34
+      },
+      "depth": 4,
+      "parent": "AboutQuickActions",
+      "children": [],
+      "explanation": "34px tall compact text button; hit target exceeds 28px.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.actionButton",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 447,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "hitBounds": {
+          "x": 447,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 447,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "visualBounds": {
+          "x": 447,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "hitWidth": 128,
+        "hitHeight": 34,
+        "visualWidth": 128,
+        "visualHeight": 34,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutFollowX",
+        "type": "button",
+        "bounds": {
+          "x": 447,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "depth": 4,
+        "parent": "AboutQuickActions",
+        "explanation": "34px tall compact text button; hit target exceeds 28px.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.actionButton",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 447,
+            "y": 273,
+            "width": 128,
+            "height": 34
+          },
+          "hitBounds": {
+            "x": 447,
+            "y": 273,
+            "width": 128,
+            "height": 34
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutUpdateCard",
+      "type": "panel",
+      "bounds": {
+        "x": 95,
+        "y": 317,
+        "width": 500,
+        "height": 60
+      },
+      "depth": 3,
+      "parent": "AboutContentStack",
+      "children": [],
+      "explanation": "Update card uses compact 10px radius and content-layer material.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.updateCard",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 95,
+          "y": 317,
+          "width": 500,
+          "height": 60
+        },
+        "hitBounds": {
+          "x": 95,
+          "y": 317,
+          "width": 500,
+          "height": 60
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 95,
+          "y": 317,
+          "width": 500,
+          "height": 60
+        },
+        "visualBounds": {
+          "x": 95,
+          "y": 317,
+          "width": 500,
+          "height": 60
+        },
+        "hitWidth": 500,
+        "hitHeight": 60,
+        "visualWidth": 500,
+        "visualHeight": 60,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutUpdateCard",
+        "type": "panel",
+        "bounds": {
+          "x": 95,
+          "y": 317,
+          "width": 500,
+          "height": 60
+        },
+        "boxModel": {
+          "padding": {
+            "top": 14,
+            "right": 16,
+            "bottom": 14,
+            "left": 16
+          }
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 3,
+        "parent": "AboutContentStack",
+        "explanation": "Update card uses compact 10px radius and content-layer material.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.updateCard",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 95,
+            "y": 317,
+            "width": 500,
+            "height": 60
+          },
+          "hitBounds": {
+            "x": 95,
+            "y": 317,
+            "width": 500,
+            "height": 60
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutUpdateButton",
+      "type": "button",
+      "bounds": {
+        "x": 437,
+        "y": 330,
+        "width": 142,
+        "height": 34
+      },
+      "depth": 4,
+      "parent": "AboutUpdateCard",
+      "children": [],
+      "explanation": "Update action is 34px high with 142px minimum width.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.actionButton",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 437,
+          "y": 330,
+          "width": 142,
+          "height": 34
+        },
+        "hitBounds": {
+          "x": 437,
+          "y": 330,
+          "width": 142,
+          "height": 34
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 437,
+          "y": 330,
+          "width": 142,
+          "height": 34
+        },
+        "visualBounds": {
+          "x": 437,
+          "y": 330,
+          "width": 142,
+          "height": 34
+        },
+        "hitWidth": 142,
+        "hitHeight": 34,
+        "visualWidth": 142,
+        "visualHeight": 34,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutUpdateButton",
+        "type": "button",
+        "bounds": {
+          "x": 437,
+          "y": 330,
+          "width": 142,
+          "height": 34
+        },
+        "depth": 4,
+        "parent": "AboutUpdateCard",
+        "explanation": "Update action is 34px high with 142px minimum width.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.actionButton",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 437,
+            "y": 330,
+            "width": 142,
+            "height": 34
+          },
+          "hitBounds": {
+            "x": 437,
+            "y": 330,
+            "width": 142,
+            "height": 34
+          }
+        }
+      }
+    },
+    {
+      "name": "AboutAcknowledgementsCard",
+      "type": "panel",
+      "bounds": {
+        "x": 95,
+        "y": 387,
+        "width": 500,
+        "height": 34
+      },
+      "depth": 3,
+      "parent": "AboutContentStack",
+      "children": [],
+      "explanation": "Collapsed acknowledgements panel with compact 10px radius.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "about.acknowledgementsCard",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 95,
+          "y": 387,
+          "width": 500,
+          "height": 34
+        },
+        "hitBounds": {
+          "x": 95,
+          "y": 387,
+          "width": 500,
+          "height": 34
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 95,
+          "y": 387,
+          "width": 500,
+          "height": 34
+        },
+        "visualBounds": {
+          "x": 95,
+          "y": 387,
+          "width": 500,
+          "height": 34
+        },
+        "hitWidth": 500,
+        "hitHeight": 34,
+        "visualWidth": 500,
+        "visualHeight": 34,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AboutAcknowledgementsCard",
+        "type": "panel",
+        "bounds": {
+          "x": 95,
+          "y": 387,
+          "width": 500,
+          "height": 34
+        },
+        "depth": 3,
+        "parent": "AboutContentStack",
+        "explanation": "Collapsed acknowledgements panel with compact 10px radius.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.acknowledgementsCard",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 95,
+            "y": 387,
+            "width": 500,
+            "height": 34
+          },
+          "hitBounds": {
+            "x": 95,
+            "y": 387,
+            "width": 500,
+            "height": 34
+          }
+        }
+      }
+    }
+  ],
+  "overlaps": [],
+  "resizePressure": {
+    "windowCanGrow": null,
+    "overflowY": false,
+    "desiredContentHeight": 500,
+    "measuredContentHeight": 500,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "pressureScore": 0
+  },
+  "visualAudit": {
+    "nodeCount": 16,
+    "styledNodeCount": 16,
+    "unstyledNodeCount": 0,
+    "controlsWithHitFailures": [],
+    "contentGlassNodes": [],
+    "missingStyleNodeNames": [],
+    "chromeLayers": {
+      "content": 9,
+      "functionalChrome": 7
+    }
+  },
+  "handlerForm": null,
+  "missingPrimitives": [],
+  "warnings": [],
+  "errors": [],
+  "rawLayout": {
+    "type": "layoutInfoResult",
+    "requestId": "devtools-layout-measure-1780113502363-062b43",
+    "windowWidth": 750,
+    "windowHeight": 500,
+    "promptType": "about",
+    "components": [
+      {
+        "name": "Window",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Root window container. Uses flex-column layout.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "NSVisualEffectView",
+          "tokenSource": "window.vibrancy",
+          "cornerRadius": {
+            "topLeft": 22,
+            "topRight": 22,
+            "bottomRight": 22,
+            "bottomLeft": 22
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 500
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 500
+          }
+        }
+      },
+      {
+        "name": "AboutHeader",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 52
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 16,
+            "bottom": 0,
+            "left": 16
+          }
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "About header is 52px tall and owns only title and close control.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.header",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 52
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 52
+          }
+        }
+      },
+      {
+        "name": "AboutCloseButton",
+        "type": "button",
+        "bounds": {
+          "x": 706,
+          "y": 12,
+          "width": 28,
+          "height": 28
+        },
+        "depth": 2,
+        "parent": "AboutHeader",
+        "explanation": "28x28 minimum macOS hit target; rounded as a circular icon control.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.closeButton",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 706,
+            "y": 12,
+            "width": 28,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 706,
+            "y": 12,
+            "width": 28,
+            "height": 28
+          }
+        }
+      },
+      {
+        "name": "AboutScrollContainer",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 52,
+          "width": 750,
+          "height": 448
+        },
+        "boxModel": {
+          "padding": {
+            "top": 14,
+            "right": 32,
+            "bottom": 14,
+            "left": 32
+          }
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Scrollable content region below the About header.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.scrollContainer",
+          "visualBounds": {
+            "x": 0,
+            "y": 52,
+            "width": 750,
+            "height": 448
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 52,
+            "width": 750,
+            "height": 448
+          }
+        }
+      },
+      {
+        "name": "AboutContentStack",
+        "type": "container",
+        "bounds": {
+          "x": 95,
+          "y": 66,
+          "width": 560,
+          "height": 420
+        },
+        "boxModel": {
+          "gap": 10
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 2,
+        "parent": "AboutScrollContainer",
+        "explanation": "Centered 560px max-width content stack with 10px item rhythm.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.contentStack",
+          "visualBounds": {
+            "x": 95,
+            "y": 66,
+            "width": 560,
+            "height": 420
+          },
+          "hitBounds": {
+            "x": 95,
+            "y": 66,
+            "width": 560,
+            "height": 420
+          }
+        }
+      },
+      {
+        "name": "AboutLogoTile",
+        "type": "container",
+        "bounds": {
+          "x": 347,
+          "y": 66,
+          "width": 56,
+          "height": 56
+        },
+        "depth": 3,
+        "parent": "AboutContentStack",
+        "explanation": "56px logo tile with 36px icon and compact Liquid Glass radius.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.logoTile",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 347,
+            "y": 66,
+            "width": 56,
+            "height": 56
+          },
+          "hitBounds": {
+            "x": 347,
+            "y": 66,
+            "width": 56,
+            "height": 56
+          }
+        }
+      },
+      {
+        "name": "AboutTitle",
+        "type": "other",
+        "bounds": {
+          "x": 95,
+          "y": 132,
+          "width": 560,
+          "height": 60
+        },
+        "depth": 3,
+        "parent": "AboutContentStack",
+        "explanation": "Product title plus version badge block.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.titleVersion",
+          "visualBounds": {
+            "x": 95,
+            "y": 132,
+            "width": 560,
+            "height": 60
+          },
+          "hitBounds": {
+            "x": 95,
+            "y": 132,
+            "width": 560,
+            "height": 60
+          }
+        }
+      },
+      {
+        "name": "AboutTagline",
+        "type": "other",
+        "bounds": {
+          "x": 155,
+          "y": 202,
+          "width": 440,
+          "height": 19
+        },
+        "depth": 3,
+        "parent": "AboutContentStack",
+        "explanation": "Centered tagline text with bounded width.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.tagline",
+          "visualBounds": {
+            "x": 155,
+            "y": 202,
+            "width": 440,
+            "height": 19
+          },
+          "hitBounds": {
+            "x": 155,
+            "y": 202,
+            "width": 440,
+            "height": 19
+          }
+        }
+      },
+      {
+        "name": "AboutCreatorRow",
+        "type": "other",
+        "bounds": {
+          "x": 245,
+          "y": 231,
+          "width": 260,
+          "height": 32
+        },
+        "depth": 3,
+        "parent": "AboutContentStack",
+        "explanation": "Creator avatar and label row.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.creatorRow",
+          "visualBounds": {
+            "x": 245,
+            "y": 231,
+            "width": 260,
+            "height": 32
+          },
+          "hitBounds": {
+            "x": 245,
+            "y": 231,
+            "width": 260,
+            "height": 32
+          }
+        }
+      },
+      {
+        "name": "AboutQuickActions",
+        "type": "container",
+        "bounds": {
+          "x": 175,
+          "y": 273,
+          "width": 400,
+          "height": 34
+        },
+        "boxModel": {
+          "gap": 8
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 3,
+        "parent": "AboutContentStack",
+        "explanation": "Three compact action controls with 8px gap.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.quickActions",
+          "visualBounds": {
+            "x": 175,
+            "y": 273,
+            "width": 400,
+            "height": 34
+          },
+          "hitBounds": {
+            "x": 175,
+            "y": 273,
+            "width": 400,
+            "height": 34
+          }
+        }
+      },
+      {
+        "name": "AboutOpenGithub",
+        "type": "button",
+        "bounds": {
+          "x": 175,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "depth": 4,
+        "parent": "AboutQuickActions",
+        "explanation": "34px tall compact text button; hit target exceeds 28px.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.actionButton",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 175,
+            "y": 273,
+            "width": 128,
+            "height": 34
+          },
+          "hitBounds": {
+            "x": 175,
+            "y": 273,
+            "width": 128,
+            "height": 34
+          }
+        }
+      },
+      {
+        "name": "AboutOpenDiscord",
+        "type": "button",
+        "bounds": {
+          "x": 311,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "depth": 4,
+        "parent": "AboutQuickActions",
+        "explanation": "34px tall compact text button; hit target exceeds 28px.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.actionButton",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 311,
+            "y": 273,
+            "width": 128,
+            "height": 34
+          },
+          "hitBounds": {
+            "x": 311,
+            "y": 273,
+            "width": 128,
+            "height": 34
+          }
+        }
+      },
+      {
+        "name": "AboutFollowX",
+        "type": "button",
+        "bounds": {
+          "x": 447,
+          "y": 273,
+          "width": 128,
+          "height": 34
+        },
+        "depth": 4,
+        "parent": "AboutQuickActions",
+        "explanation": "34px tall compact text button; hit target exceeds 28px.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.actionButton",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 447,
+            "y": 273,
+            "width": 128,
+            "height": 34
+          },
+          "hitBounds": {
+            "x": 447,
+            "y": 273,
+            "width": 128,
+            "height": 34
+          }
+        }
+      },
+      {
+        "name": "AboutUpdateCard",
+        "type": "panel",
+        "bounds": {
+          "x": 95,
+          "y": 317,
+          "width": 500,
+          "height": 60
+        },
+        "boxModel": {
+          "padding": {
+            "top": 14,
+            "right": 16,
+            "bottom": 14,
+            "left": 16
+          }
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 3,
+        "parent": "AboutContentStack",
+        "explanation": "Update card uses compact 10px radius and content-layer material.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.updateCard",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 95,
+            "y": 317,
+            "width": 500,
+            "height": 60
+          },
+          "hitBounds": {
+            "x": 95,
+            "y": 317,
+            "width": 500,
+            "height": 60
+          }
+        }
+      },
+      {
+        "name": "AboutUpdateButton",
+        "type": "button",
+        "bounds": {
+          "x": 437,
+          "y": 330,
+          "width": 142,
+          "height": 34
+        },
+        "depth": 4,
+        "parent": "AboutUpdateCard",
+        "explanation": "Update action is 34px high with 142px minimum width.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.actionButton",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 437,
+            "y": 330,
+            "width": 142,
+            "height": 34
+          },
+          "hitBounds": {
+            "x": 437,
+            "y": 330,
+            "width": 142,
+            "height": 34
+          }
+        }
+      },
+      {
+        "name": "AboutAcknowledgementsCard",
+        "type": "panel",
+        "bounds": {
+          "x": 95,
+          "y": 387,
+          "width": 500,
+          "height": 34
+        },
+        "depth": 3,
+        "parent": "AboutContentStack",
+        "explanation": "Collapsed acknowledgements panel with compact 10px radius.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "about.acknowledgementsCard",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 95,
+            "y": 387,
+            "width": 500,
+            "height": 34
+          },
+          "hitBounds": {
+            "x": 95,
+            "y": 387,
+            "width": 500,
+            "height": 34
+          }
+        }
+      }
+    ],
+    "timestamp": "2026-05-30T03:58:22.387467+00:00"
+  }
+}

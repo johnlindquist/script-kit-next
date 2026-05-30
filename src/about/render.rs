@@ -19,6 +19,7 @@ use crate::{
         non_list_metrics, non_list_palette, NonListDensity, NonListMetrics, NonListPalette,
     },
     theme,
+    ui::chrome,
     updates::UpdateState,
 };
 
@@ -144,7 +145,7 @@ fn render_header(chrome: theme::AppChromeColors, dismiss: AboutClickHandler) -> 
                 .id("about-close-button")
                 .tab_index(0)
                 .size(px(28.0))
-                .rounded(px(8.0))
+                .rounded(px(chrome::LIQUID_GLASS_CONTROL_RADIUS_PX))
                 .flex()
                 .items_center()
                 .justify_center()
@@ -466,7 +467,7 @@ fn action_button_with_min_width(
     id: &'static str,
     label: &'static str,
     palette: NonListPalette,
-    metrics: NonListMetrics,
+    _metrics: NonListMetrics,
     handler: AboutClickHandler,
     enabled: bool,
     min_width: f32,
@@ -485,7 +486,7 @@ fn action_button_with_min_width(
         .h(px(34.0))
         .min_w(px(min_width))
         .px(px(12.0))
-        .rounded(px(metrics.card_radius))
+        .rounded(px(chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
         .border_1()
         .border_color(palette.border)
         .bg(palette.input)

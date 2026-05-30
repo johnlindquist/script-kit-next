@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.elements",
+  "command": "elements.snapshot",
+  "classification": "ok",
+  "session": "dev-watch",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "About"
+  },
+  "target": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "About",
+    "appViewVariant": "About",
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 500
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 750,
+      "height": 500,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 500
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 82905,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "semanticSurface": {
+    "surfaceKind": "About",
+    "appViewVariant": "About"
+  },
+  "totalCount": 2,
+  "returnedCount": 2,
+  "truncated": false,
+  "focusedSemanticId": null,
+  "selectedSemanticId": null,
+  "duplicateSemanticIds": [],
+  "missingPrimitives": [
+    "elementBounds"
+  ],
+  "nodes": [
+    {
+      "semanticId": "panel:current-view",
+      "role": "panel",
+      "type": "panel",
+      "label": "panel:current-view",
+      "text": null,
+      "value": null,
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "panel:current-view",
+        "type": "panel"
+      }
+    },
+    {
+      "semanticId": "footer:content:row",
+      "role": "footer",
+      "type": "panel",
+      "label": "content",
+      "text": "content",
+      "value": null,
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:content:row",
+        "type": "panel",
+        "text": "content",
+        "role": "footer",
+        "kind": "contentFooterRow",
+        "selectable": false
+      }
+    }
+  ],
+  "warnings": [
+    "collector_used_current_view_fallback",
+    "getElements does not expose bounds yet; use devtools.layout.measure for geometry."
+  ],
+  "errors": []
+}

@@ -2,6 +2,7 @@
 
 const ABOUT_RENDER_SOURCE: &str = include_str!("../src/about/render.rs");
 const ABOUT_ROUTE_SOURCE: &str = include_str!("../src/app_impl/about_route.rs");
+const LAYOUT_SOURCE: &str = include_str!("../src/app_layout/build_layout_info.rs");
 const BUTTON_SOURCE: &str = include_str!("../src/components/button/component.rs");
 const RENDER_IMPL_SOURCE: &str = include_str!("../src/main_sections/render_impl.rs");
 
@@ -185,6 +186,38 @@ fn about_quick_actions_wrap_before_overflowing_narrow_widths() {
     assert!(
         ABOUT_RENDER_SOURCE.contains("action_button_with_min_width"),
         "About should keep button sizing explicit per layout context"
+    );
+}
+
+#[test]
+fn about_layout_info_uses_about_specific_window_geometry() {
+    let about_start = LAYOUT_SOURCE
+        .find("if matches!(self.current_view, AppView::About")
+        .expect("About layout branch should exist");
+    let about_layout = &LAYOUT_SOURCE[about_start
+        ..LAYOUT_SOURCE[about_start..]
+            .find("// Header")
+            .map(|offset| about_start + offset)
+            .expect("About layout branch should return before generic header layout")];
+
+    for needle in [
+        "AboutHeader",
+        "AboutCloseButton",
+        "AboutScrollContainer",
+        "AboutContentStack",
+        "AboutQuickActions",
+        "AboutUpdateCard",
+        "AboutAcknowledgementsCard",
+    ] {
+        assert!(
+            about_layout.contains(needle),
+            "About layout receipt should expose About-specific component: {needle}"
+        );
+    }
+    assert!(
+        about_layout.contains("LIQUID_GLASS_CONTROL_RADIUS_PX")
+            && about_layout.contains("LIQUID_GLASS_COMPACT_RADIUS_PX"),
+        "About layout receipt should report Liquid Glass control and compact radii"
     );
 }
 

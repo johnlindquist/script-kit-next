@@ -252,7 +252,6 @@ fn surfaces_cli_groups_oracle_buildout_batches() {
         "acp-chat-ai",
         "notes-dictation-media",
         "platform-windowing-permissions",
-        "storybook-design-theme",
         "observability-security-storage",
     ] {
         assert!(
@@ -260,6 +259,27 @@ fn surfaces_cli_groups_oracle_buildout_batches() {
             "surface inventory must include Oracle buildout batch: {batch}"
         );
     }
+
+    let platform_index = SURFACES
+        .find("platform-windowing-permissions")
+        .expect("platform/windowing batch should be present");
+    let launcher_index = SURFACES
+        .find("launcher-main-actions")
+        .expect("launcher batch should be present");
+    assert!(
+        platform_index < launcher_index,
+        "surface inventory should prioritize outside-in platform/window proof before inner launcher controls"
+    );
+    assert!(
+        !SURFACES.contains("storybook-design-theme"),
+        "outdated Storybook/design-lab surfaces must not be active Liquid Glass Oracle batches"
+    );
+    assert!(
+        SURFACES.contains("liquidGlassAuditExclusions")
+            && SURFACES.contains("DesignGallery")
+            && SURFACES.contains("DesignExplorer"),
+        "surface inventory should keep outdated design-lab surfaces as explicit audit exclusions"
+    );
 
     for primitive in [
         "devtools.targets.watch",
