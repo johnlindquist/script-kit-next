@@ -76,6 +76,33 @@ fn confirm_prompt_layout_exposes_content_stack_footer_and_buttons() {
 }
 
 #[test]
+fn confirm_prompt_content_nodes_use_panel_radius_tokens() {
+    let branch = source_between(
+        LAYOUT_SOURCE,
+        "if matches!(self.current_view, AppView::ConfirmPrompt",
+        "// Header",
+    );
+
+    for component in [
+        "ConfirmPromptStack",
+        "ConfirmPromptTitle",
+        "ConfirmPromptBody",
+    ] {
+        let start = branch
+            .find(&format!("LayoutComponentInfo::new(\"{component}\""))
+            .unwrap_or_else(|| panic!("missing ConfirmPrompt component: {component}"));
+        let component_source = &branch[start..];
+        let end = component_source
+            .find(".with_visual_token")
+            .unwrap_or_else(|| panic!("{component} should declare visual metadata"));
+        assert!(
+            component_source[..end].contains("Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX)"),
+            "{component} must use the shared Liquid Glass panel radius token"
+        );
+    }
+}
+
+#[test]
 fn confirm_prompt_elements_expose_footer_actions() {
     let branch = source_between(
         ELEMENTS_SOURCE,
