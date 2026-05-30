@@ -153,6 +153,7 @@ async function main() {
     PromptEntity: ["prompt-div", "promptentity"],
     PromptChildContent: ["prompt-child", "promptchildcontent"],
     ExplicitPromptEntity: ["prompt-explicit", "explicitpromptentity"],
+    UtilityChildContent: ["utility-quick", "utilitychildcontent"],
     About: ["about"],
     Feedback: ["feedback", "creation-feedback", "creationFeedback"],
     AcpChat: ["acp"],
@@ -207,6 +208,11 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-prompt-explicit-env-fixed-layout-sdk.json`,
         `${RECEIPT_ROOT}/window-priority-prompt-explicit-env-current-layout-sdk.json`,
+      ]);
+    } else if (surfaceKind === "UtilityChildContent") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-utility-quick-fixed-layout.json`,
+        `${RECEIPT_ROOT}/window-priority-utility-quick-current-layout.json`,
       ]);
     }
     const status = classify(evidence);
