@@ -281,8 +281,11 @@ impl ScriptListApp {
         const EMOJI_CELL_ID_OFFSET: usize = 20_000;
 
         let grid_element: AnyElement = if filtered_len == 0 {
-            let state = EmojiPickerEmptyState::from_filter(&filter);
-            crate::list_item::EmptyState::new(state.message(), empty_text_color, &empty_font_family)
+            crate::list_item::EmptyState::new(
+                EmojiPickerEmptyState::from_filter(&filter).message(),
+                empty_text_color,
+                &empty_font_family,
+            )
                 .icon(crate::designs::icon_variations::IconName::Star)
                 .into_element()
         } else {
