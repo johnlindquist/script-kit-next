@@ -1,0 +1,1 @@
+{"schemaVersion":1,"tool":"devtools-session","status":"ok","phase":"cleanup","session":"liquid-webcam-current","cleanup":{"command":"bash scripts/agentic/session.sh stop liquid-webcam-current"}}

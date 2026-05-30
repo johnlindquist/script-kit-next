@@ -154,6 +154,7 @@ async function main() {
     PromptChildContent: ["prompt-child", "promptchildcontent"],
     ExplicitPromptEntity: ["prompt-explicit", "explicitpromptentity"],
     UtilityChildContent: ["utility-quick", "utilitychildcontent"],
+    Webcam: ["webcam"],
     About: ["about"],
     Feedback: ["feedback", "creation-feedback", "creationFeedback"],
     AcpChat: ["acp"],
@@ -213,6 +214,11 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-utility-quick-fixed-layout.json`,
         `${RECEIPT_ROOT}/window-priority-utility-quick-current-layout.json`,
+      ]);
+    } else if (surfaceKind === "Webcam") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-webcam-fixed-layout.json`,
+        `${RECEIPT_ROOT}/window-priority-webcam-current-layout.json`,
       ]);
     }
     const status = classify(evidence);

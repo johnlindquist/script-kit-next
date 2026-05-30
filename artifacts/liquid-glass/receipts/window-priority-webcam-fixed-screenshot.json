@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 3,
+  "status": "error",
+  "label": "window-priority-webcam-fixed",
+  "timestamp": "2026-05-30T05:55:58.484Z",
+  "durationMs": 2284,
+  "requiresVisionReview": false,
+  "resolvedTarget": null,
+  "captureRouting": "cli-window-id",
+  "requestedAutomationWindowId": null,
+  "requestedOsWindowId": 84174,
+  "showIssuedBeforeCapture": true,
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-webcam-fixed.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowId": null
+  },
+  "captureTarget": {
+    "requestedWindowId": 84174,
+    "actualWindowId": null
+  },
+  "inspection": null,
+  "popupCapture": null,
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": false,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-webcam-fixed.png",
+    "sizeBytes": null,
+    "width": null,
+    "height": null,
+    "contentAudit": null,
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowFrontmost": null,
+    "windowFocused": null,
+    "windowId": null,
+    "error": "Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T05:55:56.748Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-webcam-fixed.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84174}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T05:55:56.748Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T05:55:57.456Z\",\"attempt\":1,\"windowId\":84174}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T05:55:57.544Z\",\"attempt\":1,\"windowId\":84174,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T05:55:57.746Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-webcam-fixed.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84174}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T05:55:57.746Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T05:55:58.400Z\",\"attempt\":1,\"windowId\":84174}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T05:55:58.482Z\",\"attempt\":2,\"windowId\":84174,\"exitCode\":1,\"stderr\":\"could not create image from window\"}"
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: FAILED (Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T05:55:56.748Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-webcam-fixed.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84174}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T05:55:56.748Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T05:55:57.456Z\",\"attempt\":1,\"windowId\":84174}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T05:55:57.544Z\",\"attempt\":1,\"windowId\":84174,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T05:55:57.746Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-webcam-fixed.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84174}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T05:55:57.746Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T05:55:58.400Z\",\"attempt\":1,\"windowId\":84174}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T05:55:58.482Z\",\"attempt\":2,\"windowId\":84174,\"exitCode\":1,\"stderr\":\"could not create image from window\"})"
+}

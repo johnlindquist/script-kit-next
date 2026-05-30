@@ -17,6 +17,7 @@ impl ScriptListApp {
             AppView::About { .. } => crate::window_resize::ViewType::ScriptList,
             AppView::CreationFeedback { .. } => crate::window_resize::ViewType::DivPrompt,
             AppView::EnvPrompt { .. } => crate::window_resize::ViewType::DivPrompt,
+            AppView::WebcamView { .. } => crate::window_resize::ViewType::DivPrompt,
             AppView::NamingPrompt { .. } | AppView::CreateAiPresetView { .. } => {
                 crate::window_resize::ViewType::ArgPromptNoChoices
             }
@@ -738,32 +739,43 @@ impl ScriptListApp {
 
         if matches!(
             self.current_view,
-            AppView::DivPrompt { .. }
+            AppView::WebcamView { .. }
+                | AppView::DivPrompt { .. }
                 | AppView::EditorPrompt { .. }
                 | AppView::TermPrompt { .. }
                 | AppView::ScratchPadView { .. }
                 | AppView::QuickTerminalView { .. }
         ) {
-            let (component_name, explanation) = match &self.current_view {
+            let (component_name, explanation, token) = match &self.current_view {
+                AppView::WebcamView { .. } => (
+                    "WebcamContent",
+                    "WebcamView fills the standard prompt content area with the media preview or deterministic camera startup/error state; native footer owns Capture Photo and Actions.",
+                    "content.webcamPreview",
+                ),
                 AppView::DivPrompt { .. } => (
                     "DivContent",
                     "DivPrompt fills the content area with scrollable HTML content and footer ownership routed through the shared main-window footer slot.",
+                    "content.promptBody",
                 ),
                 AppView::EditorPrompt { .. } => (
                     "EditorContent",
                     "EditorPrompt fills the content area; footer ownership is routed through the shared main-window footer slot.",
+                    "content.promptBody",
                 ),
                 AppView::QuickTerminalView { .. } => (
                     "TerminalContent",
                     "QuickTerminalView fills the compact content area and reserves native-footer space through the shared main-window footer slot.",
+                    "content.promptBody",
                 ),
                 AppView::ScratchPadView { .. } => (
                     "ScratchPadContent",
                     "ScratchPadView fills the editor-height utility content area with an auto-saving editor and prompt-owned footer handling.",
+                    "content.promptBody",
                 ),
                 _ => (
                     "TerminalContent",
                     "TermPrompt fills the content area and owns the SDK terminal hint strip through the shared main-window footer slot.",
+                    "content.promptBody",
                 ),
             };
 
@@ -775,7 +787,7 @@ impl ScriptListApp {
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
                         None,
                     )
-                    .with_visual_token("content.promptBody")
+                    .with_visual_token(token)
                     .with_flex_column()
                     .with_flex_grow(1.0)
                     .with_depth(2)

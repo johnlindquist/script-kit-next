@@ -277,6 +277,38 @@ fn terminal_layout_info_has_terminal_content_branch() {
 }
 
 #[test]
+fn webcam_layout_info_has_webcam_content_branch() {
+    let source = include_str!("../src/app_layout/build_layout_info.rs");
+    let branch_start = source
+        .find("AppView::WebcamView { .. } => (\n                    \"WebcamContent\"")
+        .expect("webcam layout branch exists");
+    let prompt_branch = &source[branch_start..];
+    let return_idx = prompt_branch
+        .find("return LayoutInfo")
+        .expect("webcam layout branch should return layout info");
+    let script_list_idx = prompt_branch
+        .find("ScriptList")
+        .expect("launcher ScriptList branch exists after prompt branch");
+    assert!(
+        return_idx < script_list_idx,
+        "Webcam layout info must return before adding launcher ScriptList/PreviewPanel components"
+    );
+    assert!(
+        source.contains("AppView::WebcamView { .. } => crate::window_resize::ViewType::DivPrompt"),
+        "Webcam layout receipts should use the same DivPrompt sizing as the runtime resize path"
+    );
+    assert!(
+        prompt_branch[..return_idx].contains("WebcamContent")
+            && prompt_branch[..return_idx].contains("content.webcamPreview")
+            && prompt_branch[..return_idx].contains("LayoutComponentType::Prompt")
+            && prompt_branch[..return_idx].contains("MATERIAL_SOLID_THEME_TOKEN")
+            && prompt_branch[..return_idx].contains("CHROME_LAYER_CONTENT"),
+        "Webcam content must carry content-layer Liquid Glass visual metadata"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"webcam_layout_info\",\"webcam_content_branch\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
 fn select_drop_layout_info_has_prompt_owned_branches() {
     let source = include_str!("../src/app_layout/build_layout_info.rs");
     let branch_start = source
