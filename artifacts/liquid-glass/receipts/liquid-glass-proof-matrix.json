@@ -5,7 +5,7 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T13:26:25.247Z",
+  "generatedAt": "2026-05-30T13:29:14.032Z",
   "summary": {
     "surfaceCount": 29,
     "strongProofSurfaceCount": 4,
@@ -25,16 +25,16 @@
     "appRenderMissingSurfaceCount": 26,
     "offscreenRenderFailedSurfaceCount": 0,
     "offscreenRenderMissingSurfaceCount": 29,
-    "guidelineProofSurfaceCount": 18,
+    "guidelineProofSurfaceCount": 22,
     "guidelineFailedSurfaceCount": 0,
-    "guidelineMissingSurfaceCount": 11,
+    "guidelineMissingSurfaceCount": 7,
     "strongGuidanceProofSurfaceCount": 4,
-    "staleLayoutEvidenceSurfaceCount": 11,
+    "staleLayoutEvidenceSurfaceCount": 7,
     "sourceUiGapSurfaceCount": 0,
-    "guidanceCaptureBlockedSurfaceCount": 14,
+    "guidanceCaptureBlockedSurfaceCount": 18,
     "numericGuidanceMissingOsVisualSurfaceCount": 0,
     "missingGuidanceProofSurfaceCount": 0,
-    "layoutReceiptFreshnessLimitationSurfaceCount": 11,
+    "layoutReceiptFreshnessLimitationSurfaceCount": 7,
     "diagnosticReadbackLimitationSurfaceCount": 3,
     "visualTierDebtSurfaceCount": 25,
     "surfaceProofDebtCount": 25,
@@ -226,7 +226,7 @@
         },
         {
           "surfaceKind": "Settings",
-          "proofStatus": "numeric-proof-missing-guideline-assertions"
+          "proofStatus": "numeric-proof-missing-visual-capture"
         },
         {
           "surfaceKind": "KitStoreBrowse",
@@ -238,11 +238,11 @@
         },
         {
           "surfaceKind": "ProcessManager",
-          "proofStatus": "numeric-proof-missing-guideline-assertions"
+          "proofStatus": "numeric-proof-missing-visual-capture"
         },
         {
           "surfaceKind": "CurrentAppCommands",
-          "proofStatus": "numeric-proof-missing-guideline-assertions"
+          "proofStatus": "numeric-proof-missing-visual-capture"
         },
         {
           "surfaceKind": "ThemeChooser",
@@ -250,7 +250,7 @@
         },
         {
           "surfaceKind": "EmojiPicker",
-          "proofStatus": "numeric-proof-missing-guideline-assertions"
+          "proofStatus": "numeric-proof-missing-visual-capture"
         },
         {
           "surfaceKind": "AcpHistory",
@@ -2113,14 +2113,14 @@
     },
     {
       "surfaceKind": "Settings",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "proofTiers": {
         "osScreenshotProof": "blocked",
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "failedTiers": [
@@ -2210,9 +2210,7 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-settings-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -2494,14 +2492,14 @@
     },
     {
       "surfaceKind": "ProcessManager",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "proofTiers": {
         "osScreenshotProof": "blocked",
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "failedTiers": [
@@ -2591,9 +2589,7 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-process-manager-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -2619,14 +2615,14 @@
     },
     {
       "surfaceKind": "CurrentAppCommands",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "proofTiers": {
         "osScreenshotProof": "blocked",
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "failedTiers": [
@@ -2716,9 +2712,7 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-current-app-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -3269,14 +3263,14 @@
     },
     {
       "surfaceKind": "EmojiPicker",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "proofTiers": {
         "osScreenshotProof": "blocked",
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "failedTiers": [
@@ -3366,9 +3360,7 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-emoji-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -5883,14 +5875,14 @@
     },
     {
       "surfaceKind": "Settings",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "proofTiers": {
         "osScreenshotProof": "blocked",
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "requiredEvidence": {
@@ -5900,7 +5892,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true
@@ -5988,9 +5980,7 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-settings-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
@@ -6300,14 +6290,14 @@
     },
     {
       "surfaceKind": "ProcessManager",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "proofTiers": {
         "osScreenshotProof": "blocked",
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "requiredEvidence": {
@@ -6317,7 +6307,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true
@@ -6405,9 +6395,7 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-process-manager-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
@@ -6437,14 +6425,14 @@
     },
     {
       "surfaceKind": "CurrentAppCommands",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "proofTiers": {
         "osScreenshotProof": "blocked",
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "requiredEvidence": {
@@ -6454,7 +6442,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true
@@ -6542,9 +6530,7 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-current-app-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
@@ -7147,14 +7133,14 @@
     },
     {
       "surfaceKind": "EmojiPicker",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "proofTiers": {
         "osScreenshotProof": "blocked",
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "requiredEvidence": {
@@ -7164,7 +7150,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true
@@ -7252,9 +7238,7 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-emoji-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
@@ -10620,10 +10604,10 @@
       "surfaceKind": "ProcessManager",
       "outsideInPriority": 35,
       "priorityGroup": "surface-content",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
-      "blockingClass": "stale-layout-evidence",
-      "priority": "freshness-refresh",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
+      "blockingClass": "window-id-api-blocked",
+      "priority": "capture-blocker",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -10719,12 +10703,10 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-process-manager-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
+      "recommendedNextAction": "resolve OS compositor capture blocker window-id-api-blocked; current source/layout proof is not contradicted",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-process-manager.json",
         "artifacts/liquid-glass/receipts/window-priority-process-manager-current-cleanup.json",
@@ -10747,10 +10729,10 @@
       "surfaceKind": "CurrentAppCommands",
       "outsideInPriority": 36,
       "priorityGroup": "surface-content",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
-      "blockingClass": "stale-layout-evidence",
-      "priority": "freshness-refresh",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
+      "blockingClass": "window-id-api-blocked",
+      "priority": "capture-blocker",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -10846,12 +10828,10 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-current-app-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
+      "recommendedNextAction": "resolve OS compositor capture blocker window-id-api-blocked; current source/layout proof is not contradicted",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-current-app.json",
         "artifacts/liquid-glass/receipts/window-priority-current-app-current-cleanup.json",
@@ -10874,10 +10854,10 @@
       "surfaceKind": "Settings",
       "outsideInPriority": 37,
       "priorityGroup": "surface-content",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
-      "blockingClass": "stale-layout-evidence",
-      "priority": "freshness-refresh",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
+      "blockingClass": "window-id-api-blocked",
+      "priority": "capture-blocker",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -10973,12 +10953,10 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-settings-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
+      "recommendedNextAction": "resolve OS compositor capture blocker window-id-api-blocked; current source/layout proof is not contradicted",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-settings.json",
         "artifacts/liquid-glass/receipts/window-priority-settings-current-cleanup.json",
@@ -11472,10 +11450,10 @@
       "surfaceKind": "EmojiPicker",
       "outsideInPriority": 42,
       "priorityGroup": "surface-content",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
-      "blockingClass": "stale-layout-evidence",
-      "priority": "freshness-refresh",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
+      "blockingClass": "window-id-api-blocked",
+      "priority": "capture-blocker",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -11571,12 +11549,10 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-emoji-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
+      "recommendedNextAction": "resolve OS compositor capture blocker window-id-api-blocked; current source/layout proof is not contradicted",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-emoji.json",
         "artifacts/liquid-glass/receipts/window-priority-emoji-current-cleanup.json",
@@ -16944,8 +16920,8 @@
       ],
       "automationSemanticSurface": "settings",
       "coverageAliases": [],
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "sourceUiGaps": [],
       "devtoolsCaptureLimitations": [
         "osScreenshotProof:blocked",
@@ -16975,9 +16951,7 @@
           ]
         }
       ],
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-settings-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
@@ -16994,7 +16968,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true
@@ -17004,7 +16978,7 @@
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "osCapture": {
@@ -17067,10 +17041,80 @@
         "unstyledNodeCount": 0,
         "controlsWithHitFailures": [],
         "contentGlassNodes": [],
+        "contentNativeMaterialNodes": [],
+        "glassLayerViolations": [],
         "missingStyleNodeNames": [],
         "chromeLayers": {
-          "content": 9,
-          "functionalChrome": 5
+          "content": 8,
+          "functionalChrome": 5,
+          "windowBackdrop": 1
+        },
+        "guidelineAssertions": {
+          "appleDocumented": {
+            "hitTargets": {
+              "source": "apple-documented",
+              "macosMinimumHitSize": {
+                "width": 28,
+                "height": 28
+              },
+              "macosMinimumVisualSize": {
+                "width": 20,
+                "height": 20
+              },
+              "failures": []
+            },
+            "buttonCenterDistance": {
+              "source": "apple-documented",
+              "requiredCenterDistance": 60,
+              "failures": []
+            },
+            "materialLayering": {
+              "source": "apple-documented",
+              "contentGlassNodes": [],
+              "contentNativeMaterialNodes": [],
+              "glassLayerViolations": []
+            },
+            "colorAdaptivity": {
+              "source": "apple-documented",
+              "hardcodedColorNodes": []
+            },
+            "safeAreaLayout": {
+              "source": "apple-documented",
+              "clippedNodeCount": 0,
+              "overflowY": false
+            },
+            "buttonShapeFamilies": {
+              "source": "apple-documented",
+              "exactAppleRadiusConstants": null
+            }
+          },
+          "projectLocal": {
+            "cornerRadiusTokens": {
+              "source": "project-local",
+              "failures": []
+            },
+            "paddingTokens": {
+              "source": "project-local",
+              "minimumPanelPadding": 16,
+              "minimumCompactRowHorizontalPadding": 10
+            },
+            "spacingTokens": {
+              "source": "project-local",
+              "minimumFooterActionGap": 8
+            },
+            "windowBackdropPolicy": {
+              "source": "project-local",
+              "contentGlassNodeCount": 0
+            },
+            "themeTokenUsage": {
+              "source": "project-local",
+              "hardcodedColorNodes": []
+            },
+            "renderReadbackPixelThresholds": {
+              "source": "project-local",
+              "minimumNonBlackRatio": 0.01
+            }
+          }
         }
       },
       "evidence": {
@@ -17109,10 +17153,80 @@
           "unstyledNodeCount": 0,
           "controlsWithHitFailures": [],
           "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": [],
           "missingStyleNodeNames": [],
           "chromeLayers": {
-            "content": 9,
-            "functionalChrome": 5
+            "content": 8,
+            "functionalChrome": 5,
+            "windowBackdrop": 1
+          },
+          "guidelineAssertions": {
+            "appleDocumented": {
+              "hitTargets": {
+                "source": "apple-documented",
+                "macosMinimumHitSize": {
+                  "width": 28,
+                  "height": 28
+                },
+                "macosMinimumVisualSize": {
+                  "width": 20,
+                  "height": 20
+                },
+                "failures": []
+              },
+              "buttonCenterDistance": {
+                "source": "apple-documented",
+                "requiredCenterDistance": 60,
+                "failures": []
+              },
+              "materialLayering": {
+                "source": "apple-documented",
+                "contentGlassNodes": [],
+                "contentNativeMaterialNodes": [],
+                "glassLayerViolations": []
+              },
+              "colorAdaptivity": {
+                "source": "apple-documented",
+                "hardcodedColorNodes": []
+              },
+              "safeAreaLayout": {
+                "source": "apple-documented",
+                "clippedNodeCount": 0,
+                "overflowY": false
+              },
+              "buttonShapeFamilies": {
+                "source": "apple-documented",
+                "exactAppleRadiusConstants": null
+              }
+            },
+            "projectLocal": {
+              "cornerRadiusTokens": {
+                "source": "project-local",
+                "failures": []
+              },
+              "paddingTokens": {
+                "source": "project-local",
+                "minimumPanelPadding": 16,
+                "minimumCompactRowHorizontalPadding": 10
+              },
+              "spacingTokens": {
+                "source": "project-local",
+                "minimumFooterActionGap": 8
+              },
+              "windowBackdropPolicy": {
+                "source": "project-local",
+                "contentGlassNodeCount": 0
+              },
+              "themeTokenUsage": {
+                "source": "project-local",
+                "hardcodedColorNodes": []
+              },
+              "renderReadbackPixelThresholds": {
+                "source": "project-local",
+                "minimumNonBlackRatio": 0.01
+              }
+            }
           }
         },
         "osScreenshotBlockers": [
@@ -17139,9 +17253,7 @@
             ]
           }
         ],
-        "layoutReceiptFreshnessLimitations": [
-          "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-settings-current-layout.json"
-        ],
+        "layoutReceiptFreshnessLimitations": [],
         "notes": [
           "visualAudit: artifacts/liquid-glass/receipts/window-priority-settings-current-layout.json"
         ]
@@ -17585,8 +17697,8 @@
       ],
       "automationSemanticSurface": "processManager",
       "coverageAliases": [],
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "sourceUiGaps": [],
       "devtoolsCaptureLimitations": [
         "osScreenshotProof:blocked",
@@ -17616,9 +17728,7 @@
           ]
         }
       ],
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-process-manager-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
@@ -17635,7 +17745,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true
@@ -17645,7 +17755,7 @@
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "osCapture": {
@@ -17708,10 +17818,80 @@
         "unstyledNodeCount": 0,
         "controlsWithHitFailures": [],
         "contentGlassNodes": [],
+        "contentNativeMaterialNodes": [],
+        "glassLayerViolations": [],
         "missingStyleNodeNames": [],
         "chromeLayers": {
-          "content": 9,
-          "functionalChrome": 5
+          "content": 8,
+          "functionalChrome": 5,
+          "windowBackdrop": 1
+        },
+        "guidelineAssertions": {
+          "appleDocumented": {
+            "hitTargets": {
+              "source": "apple-documented",
+              "macosMinimumHitSize": {
+                "width": 28,
+                "height": 28
+              },
+              "macosMinimumVisualSize": {
+                "width": 20,
+                "height": 20
+              },
+              "failures": []
+            },
+            "buttonCenterDistance": {
+              "source": "apple-documented",
+              "requiredCenterDistance": 60,
+              "failures": []
+            },
+            "materialLayering": {
+              "source": "apple-documented",
+              "contentGlassNodes": [],
+              "contentNativeMaterialNodes": [],
+              "glassLayerViolations": []
+            },
+            "colorAdaptivity": {
+              "source": "apple-documented",
+              "hardcodedColorNodes": []
+            },
+            "safeAreaLayout": {
+              "source": "apple-documented",
+              "clippedNodeCount": 0,
+              "overflowY": false
+            },
+            "buttonShapeFamilies": {
+              "source": "apple-documented",
+              "exactAppleRadiusConstants": null
+            }
+          },
+          "projectLocal": {
+            "cornerRadiusTokens": {
+              "source": "project-local",
+              "failures": []
+            },
+            "paddingTokens": {
+              "source": "project-local",
+              "minimumPanelPadding": 16,
+              "minimumCompactRowHorizontalPadding": 10
+            },
+            "spacingTokens": {
+              "source": "project-local",
+              "minimumFooterActionGap": 8
+            },
+            "windowBackdropPolicy": {
+              "source": "project-local",
+              "contentGlassNodeCount": 0
+            },
+            "themeTokenUsage": {
+              "source": "project-local",
+              "hardcodedColorNodes": []
+            },
+            "renderReadbackPixelThresholds": {
+              "source": "project-local",
+              "minimumNonBlackRatio": 0.01
+            }
+          }
         }
       },
       "evidence": {
@@ -17750,10 +17930,80 @@
           "unstyledNodeCount": 0,
           "controlsWithHitFailures": [],
           "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": [],
           "missingStyleNodeNames": [],
           "chromeLayers": {
-            "content": 9,
-            "functionalChrome": 5
+            "content": 8,
+            "functionalChrome": 5,
+            "windowBackdrop": 1
+          },
+          "guidelineAssertions": {
+            "appleDocumented": {
+              "hitTargets": {
+                "source": "apple-documented",
+                "macosMinimumHitSize": {
+                  "width": 28,
+                  "height": 28
+                },
+                "macosMinimumVisualSize": {
+                  "width": 20,
+                  "height": 20
+                },
+                "failures": []
+              },
+              "buttonCenterDistance": {
+                "source": "apple-documented",
+                "requiredCenterDistance": 60,
+                "failures": []
+              },
+              "materialLayering": {
+                "source": "apple-documented",
+                "contentGlassNodes": [],
+                "contentNativeMaterialNodes": [],
+                "glassLayerViolations": []
+              },
+              "colorAdaptivity": {
+                "source": "apple-documented",
+                "hardcodedColorNodes": []
+              },
+              "safeAreaLayout": {
+                "source": "apple-documented",
+                "clippedNodeCount": 0,
+                "overflowY": false
+              },
+              "buttonShapeFamilies": {
+                "source": "apple-documented",
+                "exactAppleRadiusConstants": null
+              }
+            },
+            "projectLocal": {
+              "cornerRadiusTokens": {
+                "source": "project-local",
+                "failures": []
+              },
+              "paddingTokens": {
+                "source": "project-local",
+                "minimumPanelPadding": 16,
+                "minimumCompactRowHorizontalPadding": 10
+              },
+              "spacingTokens": {
+                "source": "project-local",
+                "minimumFooterActionGap": 8
+              },
+              "windowBackdropPolicy": {
+                "source": "project-local",
+                "contentGlassNodeCount": 0
+              },
+              "themeTokenUsage": {
+                "source": "project-local",
+                "hardcodedColorNodes": []
+              },
+              "renderReadbackPixelThresholds": {
+                "source": "project-local",
+                "minimumNonBlackRatio": 0.01
+              }
+            }
           }
         },
         "osScreenshotBlockers": [
@@ -17780,9 +18030,7 @@
             ]
           }
         ],
-        "layoutReceiptFreshnessLimitations": [
-          "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-process-manager-current-layout.json"
-        ],
+        "layoutReceiptFreshnessLimitations": [],
         "notes": [
           "visualAudit: artifacts/liquid-glass/receipts/window-priority-process-manager-current-layout.json"
         ]
@@ -17795,8 +18043,8 @@
       ],
       "automationSemanticSurface": "currentAppCommands",
       "coverageAliases": [],
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "sourceUiGaps": [],
       "devtoolsCaptureLimitations": [
         "osScreenshotProof:blocked",
@@ -17826,9 +18074,7 @@
           ]
         }
       ],
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-current-app-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
@@ -17845,7 +18091,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true
@@ -17855,7 +18101,7 @@
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "osCapture": {
@@ -17918,10 +18164,80 @@
         "unstyledNodeCount": 0,
         "controlsWithHitFailures": [],
         "contentGlassNodes": [],
+        "contentNativeMaterialNodes": [],
+        "glassLayerViolations": [],
         "missingStyleNodeNames": [],
         "chromeLayers": {
-          "content": 9,
-          "functionalChrome": 5
+          "content": 8,
+          "functionalChrome": 5,
+          "windowBackdrop": 1
+        },
+        "guidelineAssertions": {
+          "appleDocumented": {
+            "hitTargets": {
+              "source": "apple-documented",
+              "macosMinimumHitSize": {
+                "width": 28,
+                "height": 28
+              },
+              "macosMinimumVisualSize": {
+                "width": 20,
+                "height": 20
+              },
+              "failures": []
+            },
+            "buttonCenterDistance": {
+              "source": "apple-documented",
+              "requiredCenterDistance": 60,
+              "failures": []
+            },
+            "materialLayering": {
+              "source": "apple-documented",
+              "contentGlassNodes": [],
+              "contentNativeMaterialNodes": [],
+              "glassLayerViolations": []
+            },
+            "colorAdaptivity": {
+              "source": "apple-documented",
+              "hardcodedColorNodes": []
+            },
+            "safeAreaLayout": {
+              "source": "apple-documented",
+              "clippedNodeCount": 0,
+              "overflowY": false
+            },
+            "buttonShapeFamilies": {
+              "source": "apple-documented",
+              "exactAppleRadiusConstants": null
+            }
+          },
+          "projectLocal": {
+            "cornerRadiusTokens": {
+              "source": "project-local",
+              "failures": []
+            },
+            "paddingTokens": {
+              "source": "project-local",
+              "minimumPanelPadding": 16,
+              "minimumCompactRowHorizontalPadding": 10
+            },
+            "spacingTokens": {
+              "source": "project-local",
+              "minimumFooterActionGap": 8
+            },
+            "windowBackdropPolicy": {
+              "source": "project-local",
+              "contentGlassNodeCount": 0
+            },
+            "themeTokenUsage": {
+              "source": "project-local",
+              "hardcodedColorNodes": []
+            },
+            "renderReadbackPixelThresholds": {
+              "source": "project-local",
+              "minimumNonBlackRatio": 0.01
+            }
+          }
         }
       },
       "evidence": {
@@ -17960,10 +18276,80 @@
           "unstyledNodeCount": 0,
           "controlsWithHitFailures": [],
           "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": [],
           "missingStyleNodeNames": [],
           "chromeLayers": {
-            "content": 9,
-            "functionalChrome": 5
+            "content": 8,
+            "functionalChrome": 5,
+            "windowBackdrop": 1
+          },
+          "guidelineAssertions": {
+            "appleDocumented": {
+              "hitTargets": {
+                "source": "apple-documented",
+                "macosMinimumHitSize": {
+                  "width": 28,
+                  "height": 28
+                },
+                "macosMinimumVisualSize": {
+                  "width": 20,
+                  "height": 20
+                },
+                "failures": []
+              },
+              "buttonCenterDistance": {
+                "source": "apple-documented",
+                "requiredCenterDistance": 60,
+                "failures": []
+              },
+              "materialLayering": {
+                "source": "apple-documented",
+                "contentGlassNodes": [],
+                "contentNativeMaterialNodes": [],
+                "glassLayerViolations": []
+              },
+              "colorAdaptivity": {
+                "source": "apple-documented",
+                "hardcodedColorNodes": []
+              },
+              "safeAreaLayout": {
+                "source": "apple-documented",
+                "clippedNodeCount": 0,
+                "overflowY": false
+              },
+              "buttonShapeFamilies": {
+                "source": "apple-documented",
+                "exactAppleRadiusConstants": null
+              }
+            },
+            "projectLocal": {
+              "cornerRadiusTokens": {
+                "source": "project-local",
+                "failures": []
+              },
+              "paddingTokens": {
+                "source": "project-local",
+                "minimumPanelPadding": 16,
+                "minimumCompactRowHorizontalPadding": 10
+              },
+              "spacingTokens": {
+                "source": "project-local",
+                "minimumFooterActionGap": 8
+              },
+              "windowBackdropPolicy": {
+                "source": "project-local",
+                "contentGlassNodeCount": 0
+              },
+              "themeTokenUsage": {
+                "source": "project-local",
+                "hardcodedColorNodes": []
+              },
+              "renderReadbackPixelThresholds": {
+                "source": "project-local",
+                "minimumNonBlackRatio": 0.01
+              }
+            }
           }
         },
         "osScreenshotBlockers": [
@@ -17990,9 +18376,7 @@
             ]
           }
         ],
-        "layoutReceiptFreshnessLimitations": [
-          "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-current-app-current-layout.json"
-        ],
+        "layoutReceiptFreshnessLimitations": [],
         "notes": [
           "visualAudit: artifacts/liquid-glass/receipts/window-priority-current-app-current-layout.json"
         ]
@@ -19305,8 +19689,8 @@
       ],
       "automationSemanticSurface": "emojiPicker",
       "coverageAliases": [],
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "sourceUiGaps": [],
       "devtoolsCaptureLimitations": [
         "osScreenshotProof:blocked",
@@ -19336,9 +19720,7 @@
           ]
         }
       ],
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-emoji-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
@@ -19355,7 +19737,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true
@@ -19365,7 +19747,7 @@
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "osCapture": {
@@ -19428,10 +19810,80 @@
         "unstyledNodeCount": 0,
         "controlsWithHitFailures": [],
         "contentGlassNodes": [],
+        "contentNativeMaterialNodes": [],
+        "glassLayerViolations": [],
         "missingStyleNodeNames": [],
         "chromeLayers": {
-          "content": 9,
-          "functionalChrome": 5
+          "content": 8,
+          "functionalChrome": 5,
+          "windowBackdrop": 1
+        },
+        "guidelineAssertions": {
+          "appleDocumented": {
+            "hitTargets": {
+              "source": "apple-documented",
+              "macosMinimumHitSize": {
+                "width": 28,
+                "height": 28
+              },
+              "macosMinimumVisualSize": {
+                "width": 20,
+                "height": 20
+              },
+              "failures": []
+            },
+            "buttonCenterDistance": {
+              "source": "apple-documented",
+              "requiredCenterDistance": 60,
+              "failures": []
+            },
+            "materialLayering": {
+              "source": "apple-documented",
+              "contentGlassNodes": [],
+              "contentNativeMaterialNodes": [],
+              "glassLayerViolations": []
+            },
+            "colorAdaptivity": {
+              "source": "apple-documented",
+              "hardcodedColorNodes": []
+            },
+            "safeAreaLayout": {
+              "source": "apple-documented",
+              "clippedNodeCount": 0,
+              "overflowY": false
+            },
+            "buttonShapeFamilies": {
+              "source": "apple-documented",
+              "exactAppleRadiusConstants": null
+            }
+          },
+          "projectLocal": {
+            "cornerRadiusTokens": {
+              "source": "project-local",
+              "failures": []
+            },
+            "paddingTokens": {
+              "source": "project-local",
+              "minimumPanelPadding": 16,
+              "minimumCompactRowHorizontalPadding": 10
+            },
+            "spacingTokens": {
+              "source": "project-local",
+              "minimumFooterActionGap": 8
+            },
+            "windowBackdropPolicy": {
+              "source": "project-local",
+              "contentGlassNodeCount": 0
+            },
+            "themeTokenUsage": {
+              "source": "project-local",
+              "hardcodedColorNodes": []
+            },
+            "renderReadbackPixelThresholds": {
+              "source": "project-local",
+              "minimumNonBlackRatio": 0.01
+            }
+          }
         }
       },
       "evidence": {
@@ -19470,10 +19922,80 @@
           "unstyledNodeCount": 0,
           "controlsWithHitFailures": [],
           "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": [],
           "missingStyleNodeNames": [],
           "chromeLayers": {
-            "content": 9,
-            "functionalChrome": 5
+            "content": 8,
+            "functionalChrome": 5,
+            "windowBackdrop": 1
+          },
+          "guidelineAssertions": {
+            "appleDocumented": {
+              "hitTargets": {
+                "source": "apple-documented",
+                "macosMinimumHitSize": {
+                  "width": 28,
+                  "height": 28
+                },
+                "macosMinimumVisualSize": {
+                  "width": 20,
+                  "height": 20
+                },
+                "failures": []
+              },
+              "buttonCenterDistance": {
+                "source": "apple-documented",
+                "requiredCenterDistance": 60,
+                "failures": []
+              },
+              "materialLayering": {
+                "source": "apple-documented",
+                "contentGlassNodes": [],
+                "contentNativeMaterialNodes": [],
+                "glassLayerViolations": []
+              },
+              "colorAdaptivity": {
+                "source": "apple-documented",
+                "hardcodedColorNodes": []
+              },
+              "safeAreaLayout": {
+                "source": "apple-documented",
+                "clippedNodeCount": 0,
+                "overflowY": false
+              },
+              "buttonShapeFamilies": {
+                "source": "apple-documented",
+                "exactAppleRadiusConstants": null
+              }
+            },
+            "projectLocal": {
+              "cornerRadiusTokens": {
+                "source": "project-local",
+                "failures": []
+              },
+              "paddingTokens": {
+                "source": "project-local",
+                "minimumPanelPadding": 16,
+                "minimumCompactRowHorizontalPadding": 10
+              },
+              "spacingTokens": {
+                "source": "project-local",
+                "minimumFooterActionGap": 8
+              },
+              "windowBackdropPolicy": {
+                "source": "project-local",
+                "contentGlassNodeCount": 0
+              },
+              "themeTokenUsage": {
+                "source": "project-local",
+                "hardcodedColorNodes": []
+              },
+              "renderReadbackPixelThresholds": {
+                "source": "project-local",
+                "minimumNonBlackRatio": 0.01
+              }
+            }
           }
         },
         "osScreenshotBlockers": [
@@ -19500,9 +20022,7 @@
             ]
           }
         ],
-        "layoutReceiptFreshnessLimitations": [
-          "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-emoji-current-layout.json"
-        ],
+        "layoutReceiptFreshnessLimitations": [],
         "notes": [
           "visualAudit: artifacts/liquid-glass/receipts/window-priority-emoji-current-layout.json"
         ]
@@ -22270,7 +22790,7 @@
   "warnings": [
     "25 contract surfaces are not yet strong-proof",
     "25 contract surfaces have explicit visual-tier debt; inspect proofTiers before claiming exhaustive Liquid Glass proof",
-    "11 contract surfaces are missing Tahoe guideline assertions",
+    "7 contract surfaces are missing Tahoe guideline assertions",
     "3 contract surfaces attempted app-render proof but GPUI render readback was unavailable or unsupported",
     "strong-guidance-proof means current artifacts include OS screenshot, numeric layout visualAudit, guideline assertions, and image diff evidence; GPUI readback is diagnostic only",
     "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor output or native Liquid Glass blur",
