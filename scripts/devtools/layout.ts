@@ -80,7 +80,10 @@ function parseArgs(argv: string[]): Args {
       args.timeoutMs = Number(argv[++index] ?? args.timeoutMs);
       args.forwarded.push(String(args.timeoutMs));
     } else if (arg === "--include") {
-      args.include = String(argv[++index] ?? "").split(",").map((part) => part.trim()).filter(Boolean);
+      args.include = String(argv[++index] ?? "")
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
     } else if (arg === "--limit") {
       args.limit = Number(argv[++index] ?? args.limit);
     } else if (arg === "--start") {
@@ -103,12 +106,25 @@ async function run(command: string[], label: string): Promise<JsonObject> {
     proc.exited,
   ]);
   if (exitCode !== 0) {
-    return { status: "error", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim() };
+    return {
+      status: "error",
+      label,
+      exitCode,
+      stdout: stdout.trim(),
+      stderr: stderr.trim(),
+    };
   }
   try {
     return JSON.parse(stdout);
   } catch {
-    return { status: "error", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim(), error: "invalid_json_output" };
+    return {
+      status: "error",
+      label,
+      exitCode,
+      stdout: stdout.trim(),
+      stderr: stderr.trim(),
+      error: "invalid_json_output",
+    };
   }
 }
 
@@ -116,7 +132,12 @@ function requestId(prefix: string) {
   return `devtools-layout-${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 }
 
-async function rpc(session: string, payload: JsonObject, expect: string, timeoutMs: number) {
+async function rpc(
+  session: string,
+  payload: JsonObject,
+  expect: string,
+  timeoutMs: number,
+) {
   return run(
     [
       "bash",
@@ -138,7 +159,12 @@ function responseOf(envelope: JsonObject): JsonObject {
 }
 
 function asArray(value: unknown): JsonObject[] {
-  return Array.isArray(value) ? value.filter((entry): entry is JsonObject => typeof entry === "object" && entry !== null) : [];
+  return Array.isArray(value)
+    ? value.filter(
+        (entry): entry is JsonObject =>
+          typeof entry === "object" && entry !== null,
+      )
+    : [];
 }
 
 function asNumber(value: unknown, fallback = 0) {
@@ -146,13 +172,21 @@ function asNumber(value: unknown, fallback = 0) {
 }
 
 function rectFrom(value: unknown): Rect {
-  const object = value && typeof value === "object" ? value as JsonObject : {};
+  const object =
+    value && typeof value === "object" ? (value as JsonObject) : {};
   return {
     x: asNumber(object.x),
     y: asNumber(object.y),
     width: asNumber(object.width),
     height: asNumber(object.height),
   };
+}
+
+function optionalRectFrom(value: unknown): Rect | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  return rectFrom(value);
 }
 
 function right(rect: Rect) {
@@ -168,13 +202,43 @@ function intersects(a: Rect, b: Rect) {
 }
 
 function clippedBy(rect: Rect, viewport: Rect) {
-  return rect.x < viewport.x || rect.y < viewport.y || right(rect) > right(viewport) || bottom(rect) > bottom(viewport);
+  return (
+    rect.x < viewport.x ||
+    rect.y < viewport.y ||
+    right(rect) > right(viewport) ||
+    bottom(rect) > bottom(viewport)
+  );
+}
+
+function hitMetrics(component: JsonObject, bounds: Rect) {
+  const style =
+    component.visualStyle && typeof component.visualStyle === "object"
+      ? (component.visualStyle as JsonObject)
+      : null;
+  const hitBounds = optionalRectFrom(style?.hitBounds) ?? bounds;
+  const visualBounds = optionalRectFrom(style?.visualBounds) ?? bounds;
+  const exception =
+    typeof style?.exception === "string" ? style.exception : null;
+  return {
+    hitBounds,
+    visualBounds,
+    hitWidth: hitBounds.width,
+    hitHeight: hitBounds.height,
+    visualWidth: visualBounds.width,
+    visualHeight: visualBounds.height,
+    minHitPass: hitBounds.width >= 28 && hitBounds.height >= 28,
+    minVisualPass: visualBounds.width >= 20 && visualBounds.height >= 20,
+    preferredHitPass: hitBounds.width >= 44 && hitBounds.height >= 44,
+    exception,
+  };
 }
 
 function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
   const info = (layout.info as JsonObject | undefined) ?? layout;
   const components = asArray(info.components);
-  const targetBounds = rectFrom((targetReceipt.resolvedTarget as JsonObject | undefined)?.bounds);
+  const targetBounds = rectFrom(
+    (targetReceipt.resolvedTarget as JsonObject | undefined)?.bounds,
+  );
   const viewportRect = {
     x: 0,
     y: 0,
@@ -191,31 +255,65 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
       parent: component.parent ?? null,
       children: component.children ?? [],
       explanation: component.explanation ?? null,
+      visualStyle: component.visualStyle ?? null,
+      hitMetrics: hitMetrics(component, bounds),
       clipped: clippedBy(bounds, viewportRect),
       raw: component,
     };
   });
   const overlaps = [];
   for (let left = 0; left < nodes.length; left += 1) {
-    for (let rightIndex = left + 1; rightIndex < nodes.length; rightIndex += 1) {
+    for (
+      let rightIndex = left + 1;
+      rightIndex < nodes.length;
+      rightIndex += 1
+    ) {
       const a = nodes[left];
       const b = nodes[rightIndex];
       const sameSiblingBand = a.depth === b.depth && a.parent === b.parent;
-      if (sameSiblingBand && a.name && b.name && intersects(a.bounds, b.bounds)) {
+      if (
+        sameSiblingBand &&
+        a.name &&
+        b.name &&
+        intersects(a.bounds, b.bounds)
+      ) {
         overlaps.push({ a: a.name, b: b.name });
       }
     }
   }
-  const maxBottom = nodes.reduce((current, node) => Math.max(current, bottom(node.bounds)), 0);
+  const maxBottom = nodes.reduce(
+    (current, node) => Math.max(current, bottom(node.bounds)),
+    0,
+  );
   const clippedNodeCount = nodes.filter((node) => node.clipped).length;
   const overlapCount = overlaps.length;
   const overflowY = maxBottom > viewportRect.height;
+  const nodesWithVisualStyle = nodes.filter((node) => node.visualStyle != null);
+  const controlsWithHitFailures = nodes.filter((node) => {
+    const type = String(node.type ?? "");
+    return (
+      ["button", "input"].includes(type) &&
+      !node.hitMetrics.minHitPass &&
+      node.hitMetrics.exception == null
+    );
+  });
+  const contentGlassNodes = nodesWithVisualStyle.filter((node) => {
+    const style = node.visualStyle as JsonObject;
+    return (
+      style.chromeLayer === "content" &&
+      style.materialSource === "NSGlassEffectView"
+    );
+  });
   return {
     promptType: info.promptType ?? null,
     timestamp: info.timestamp ?? null,
     viewportRect,
     windowRect: targetBounds,
-    regions: nodes.map((node) => ({ name: node.name, type: node.type, bounds: node.bounds })),
+    regions: nodes.map((node) => ({
+      name: node.name,
+      type: node.type,
+      bounds: node.bounds,
+    })),
     nodes,
     overlaps,
     resizePressure: {
@@ -227,10 +325,39 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
       overlapCount,
       pressureScore: clippedNodeCount + overlapCount + (overflowY ? 1 : 0),
     },
+    visualAudit: {
+      nodeCount: nodes.length,
+      styledNodeCount: nodesWithVisualStyle.length,
+      unstyledNodeCount: nodes.length - nodesWithVisualStyle.length,
+      controlsWithHitFailures: controlsWithHitFailures.map((node) => ({
+        name: node.name,
+        type: node.type,
+        hitMetrics: node.hitMetrics,
+      })),
+      contentGlassNodes: contentGlassNodes.map((node) => node.name),
+      missingStyleNodeNames: nodes
+        .filter((node) => node.visualStyle == null)
+        .map((node) => node.name),
+      chromeLayers: Object.fromEntries(
+        Object.entries(
+          nodesWithVisualStyle.reduce<Record<string, number>>((acc, node) => {
+            const layer = String(
+              (node.visualStyle as JsonObject).chromeLayer ?? "unknown",
+            );
+            acc[layer] = (acc[layer] ?? 0) + 1;
+            return acc;
+          }, {}),
+        ).sort(([a], [b]) => a.localeCompare(b)),
+      ),
+    },
   };
 }
 
-function classify(targetReceipt: JsonObject, layoutEnvelope: JsonObject, analysis: ReturnType<typeof analyzeLayout>) {
+function classify(
+  targetReceipt: JsonObject,
+  layoutEnvelope: JsonObject,
+  analysis: ReturnType<typeof analyzeLayout>,
+) {
   if (targetReceipt.classification !== "ok") {
     return targetReceipt.classification ?? "blocked-by-target-ambiguity";
   }
@@ -245,80 +372,128 @@ function classify(targetReceipt: JsonObject, layoutEnvelope: JsonObject, analysi
 
 async function main() {
   const args = parseArgs(Bun.argv.slice(2));
-  const targetReceipt = await run(["bun", "scripts/devtools/targets.ts", "inspect", ...args.forwarded], "targets.inspect");
-  const selector = (targetReceipt.requestedTarget as JsonObject | undefined)?.selector ?? args.target ?? { type: "focused" };
-  const layoutEnvelope = await rpc(args.session, {
-    type: "getLayoutInfo",
-    requestId: requestId("measure"),
-    target: selector,
-    options: {
-      include: args.include,
-      limit: args.limit,
+  const targetReceipt = await run(
+    ["bun", "scripts/devtools/targets.ts", "inspect", ...args.forwarded],
+    "targets.inspect",
+  );
+  const selector = (targetReceipt.requestedTarget as JsonObject | undefined)
+    ?.selector ??
+    args.target ?? { type: "focused" };
+  const layoutEnvelope = await rpc(
+    args.session,
+    {
+      type: "getLayoutInfo",
+      requestId: requestId("measure"),
+      target: selector,
+      options: {
+        include: args.include,
+        limit: args.limit,
+      },
     },
-  }, "layoutInfoResult", args.timeoutMs);
+    "layoutInfoResult",
+    args.timeoutMs,
+  );
   const layout = responseOf(layoutEnvelope);
   const analysis = analyzeLayout(layout, targetReceipt);
   const classification = classify(targetReceipt, layoutEnvelope, analysis);
 
-  console.log(JSON.stringify({
-    schemaVersion: 1,
-    tool: "script-kit-devtools.layout",
-    command: "layout.measure",
-    classification,
-    session: args.session,
-    include: args.include,
-    limit: args.limit,
-    requestedTarget: targetReceipt.requestedTarget ?? { selector },
-    target: targetReceipt.resolvedTarget ?? null,
-    promptType: analysis.promptType,
-    timestamp: analysis.timestamp,
-    componentCount: analysis.nodes.length,
-    window: {
-      rect: analysis.windowRect,
-      visible: (targetReceipt.resolvedTarget as JsonObject | undefined)?.visible ?? null,
-      focused: (targetReceipt.resolvedTarget as JsonObject | undefined)?.focused ?? null,
-    },
-    viewport: {
-      clientWidth: analysis.viewportRect.width,
-      clientHeight: analysis.viewportRect.height,
-      contentWidth: analysis.viewportRect.width,
-      contentHeight: analysis.resizePressure.desiredContentHeight,
-      scrollWidth: analysis.viewportRect.width,
-      scrollHeight: analysis.resizePressure.desiredContentHeight,
-      canScrollX: false,
-      canScrollY: analysis.resizePressure.overflowY,
-      scrollTop: null,
-      maxScrollTop: Math.max(0, analysis.resizePressure.desiredContentHeight - analysis.viewportRect.height),
-      overflowPolicyY: analysis.resizePressure.overflowY ? "auto" : "hidden",
-    },
-    pressure: {
-      overflowY: analysis.resizePressure.overflowY,
-      hiddenContentHeight: Math.max(0, analysis.resizePressure.desiredContentHeight - analysis.viewportRect.height),
-      clippedNodeCount: analysis.resizePressure.clippedNodeCount,
-      overlapCount: analysis.resizePressure.overlapCount,
-      footerOverlapCount: analysis.overlaps.filter((entry) => String(entry.a).includes("Footer") || String(entry.b).includes("Footer")).length,
-      inputOverlapCount: analysis.overlaps.filter((entry) => String(entry.a).includes("Input") || String(entry.b).includes("Input")).length,
-      pressureScore: analysis.resizePressure.pressureScore,
-    },
-    viewportRect: analysis.viewportRect,
-    windowRect: analysis.windowRect,
-    regions: analysis.regions,
-    nodes: analysis.nodes,
-    overlaps: analysis.overlaps,
-    resizePressure: analysis.resizePressure,
-    handlerForm: (layout.info as JsonObject | undefined)?.handlerForm ?? layout.handlerForm ?? null,
-    missingPrimitives: [
-      analysis.nodes.length === 0 ? "layoutComponents" : "",
-      layoutEnvelope.status === "error" ? "layoutInfoResult" : "",
-      targetReceipt.classification !== "ok" ? "strictTargetIdentity" : "",
-    ].filter(Boolean),
-    warnings: [
-      analysis.resizePressure.overflowY ? "content exceeds measured viewport height" : "",
-      analysis.resizePressure.overlapCount > 0 ? "layout components overlap" : "",
-    ].filter(Boolean),
-    errors: [targetReceipt, layoutEnvelope].filter((value) => value.status === "error"),
-    rawLayout: layout,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        schemaVersion: 1,
+        tool: "script-kit-devtools.layout",
+        command: "layout.measure",
+        classification,
+        session: args.session,
+        include: args.include,
+        limit: args.limit,
+        requestedTarget: targetReceipt.requestedTarget ?? { selector },
+        target: targetReceipt.resolvedTarget ?? null,
+        promptType: analysis.promptType,
+        timestamp: analysis.timestamp,
+        componentCount: analysis.nodes.length,
+        window: {
+          rect: analysis.windowRect,
+          visible:
+            (targetReceipt.resolvedTarget as JsonObject | undefined)?.visible ??
+            null,
+          focused:
+            (targetReceipt.resolvedTarget as JsonObject | undefined)?.focused ??
+            null,
+        },
+        viewport: {
+          clientWidth: analysis.viewportRect.width,
+          clientHeight: analysis.viewportRect.height,
+          contentWidth: analysis.viewportRect.width,
+          contentHeight: analysis.resizePressure.desiredContentHeight,
+          scrollWidth: analysis.viewportRect.width,
+          scrollHeight: analysis.resizePressure.desiredContentHeight,
+          canScrollX: false,
+          canScrollY: analysis.resizePressure.overflowY,
+          scrollTop: null,
+          maxScrollTop: Math.max(
+            0,
+            analysis.resizePressure.desiredContentHeight -
+              analysis.viewportRect.height,
+          ),
+          overflowPolicyY: analysis.resizePressure.overflowY
+            ? "auto"
+            : "hidden",
+        },
+        pressure: {
+          overflowY: analysis.resizePressure.overflowY,
+          hiddenContentHeight: Math.max(
+            0,
+            analysis.resizePressure.desiredContentHeight -
+              analysis.viewportRect.height,
+          ),
+          clippedNodeCount: analysis.resizePressure.clippedNodeCount,
+          overlapCount: analysis.resizePressure.overlapCount,
+          footerOverlapCount: analysis.overlaps.filter(
+            (entry) =>
+              String(entry.a).includes("Footer") ||
+              String(entry.b).includes("Footer"),
+          ).length,
+          inputOverlapCount: analysis.overlaps.filter(
+            (entry) =>
+              String(entry.a).includes("Input") ||
+              String(entry.b).includes("Input"),
+          ).length,
+          pressureScore: analysis.resizePressure.pressureScore,
+        },
+        viewportRect: analysis.viewportRect,
+        windowRect: analysis.windowRect,
+        regions: analysis.regions,
+        nodes: analysis.nodes,
+        overlaps: analysis.overlaps,
+        resizePressure: analysis.resizePressure,
+        visualAudit: analysis.visualAudit,
+        handlerForm:
+          (layout.info as JsonObject | undefined)?.handlerForm ??
+          layout.handlerForm ??
+          null,
+        missingPrimitives: [
+          analysis.nodes.length === 0 ? "layoutComponents" : "",
+          layoutEnvelope.status === "error" ? "layoutInfoResult" : "",
+          targetReceipt.classification !== "ok" ? "strictTargetIdentity" : "",
+        ].filter(Boolean),
+        warnings: [
+          analysis.resizePressure.overflowY
+            ? "content exceeds measured viewport height"
+            : "",
+          analysis.resizePressure.overlapCount > 0
+            ? "layout components overlap"
+            : "",
+        ].filter(Boolean),
+        errors: [targetReceipt, layoutEnvelope].filter(
+          (value) => value.status === "error",
+        ),
+        rawLayout: layout,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 await main();

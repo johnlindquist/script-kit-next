@@ -232,12 +232,14 @@
     <section class="grid">
       <div class="panel">
         <h2>Run State</h2>
-        <p><span class="status done">clean worktree at start</span></p>
+      <p><span class="status done">baseline committed</span> <span class="status done">first visual receipt slice verified</span></p>
         <table>
           <tbody>
             <tr><th>Branch</th><td><code>main</code></td></tr>
-            <tr><th>Head</th><td><code>5c4b1f15c</code> Enable Tahoe liquid glass backgrounds</td></tr>
-          <tr><th>CI</th><td><a href="https://github.com/johnlindquist/script-kit-next/actions/runs/26670410182">26670410182</a>, in progress at artifact creation; Format, Check, Clippy, TypeScript SDK Tests green when last checked</td></tr>
+            <tr><th>Head at start</th><td><code>5c4b1f15c</code> Enable Tahoe liquid glass backgrounds</td></tr>
+            <tr><th>Audit baseline commit</th><td><code>15f8a410c</code> Start Liquid Glass visual audit</td></tr>
+            <tr><th>Latest observed head</th><td><code>d9a7a75d0</code> Use cwd docs as ghost text context</td></tr>
+            <tr><th>CI</th><td><a href="https://github.com/johnlindquist/script-kit-next/actions/runs/26670803596">26670803596</a>, in progress when GitHub API rate limit was hit locally</td></tr>
             <tr><th>Artifact root</th><td><code>artifacts/liquid-glass/</code></td></tr>
           </tbody>
         </table>
@@ -305,8 +307,8 @@
           <tr><th>Surface</th><th>Primitive</th><th>Before</th><th>After</th><th>Gap</th></tr>
         </thead>
         <tbody>
-          <tr><td>Main launcher</td><td><code>layout.ts measure</code>, <code>inspect.ts</code>, <code>verify-shot.ts</code></td><td>Window 750x480; Header 45 high; SearchInput 534x22 at 16,11; list rows 40 high; LogoButton 20x28; ActionsButton 85x28; RunButton 55x28; screenshot nonblack ratio 0.705</td><td>pending</td><td>Need corner/material tokens in semantic/layout receipts.</td></tr>
-          <tr><td>Actions dialog</td><td><code>actions.ts inspect</code>, <code>automation-window.ts inspect</code>, <code>verify-shot.ts</code></td><td>Target 320x338 at 800,221; screenshot nonblack ratio 0.803; action layout fields mostly null</td><td>pending</td><td>Need first-class popup layout, disabled-reason geometry, material metadata, corner radius.</td></tr>
+          <tr><td>Main launcher</td><td><code>layout.ts measure</code>, <code>inspect.ts</code>, <code>verify-shot.ts</code></td><td>Window 750x480; Header 45 high; SearchInput 534x22 at 16,11; list rows 40 high; LogoButton 20x28; ActionsButton 85x28; RunButton 55x28; screenshot nonblack ratio 0.705</td><td><code>after-main-layout-visual-style.json</code>: 14/14 styled nodes, layers content=9 and functionalChrome=5, no hit failures, no content glass nodes. SearchInput hitBounds now 534x28 while visualBounds remain 534x22.</td><td>Corner/material/hit metadata now exists for main layout; contrast and center-distance still missing.</td></tr>
+          <tr><td>Actions dialog</td><td><code>actions.ts inspect</code>, <code>layout.ts measure</code>, <code>automation-window.ts inspect</code>, <code>verify-shot.ts</code></td><td>Target 320x338 at 800,221; screenshot nonblack ratio 0.803; action layout fields mostly null</td><td><code>after-actions-layout-visual-style.json</code>: 22/22 styled nodes, layers floatingTransient=1, functionalChrome=11, content=10, no content glass nodes.</td><td>Popup visual/style metadata exists; action inspect still needs richer disabled-reason and popup placement geometry.</td></tr>
           <tr><td>Notes</td><td><code>notes.ts inspect</code>, <code>verify-shot.ts</code></td><td>Target 350x280 at 1112,50; screenshot nonblack ratio 0.673; inspect classified blocked-by-missing-primitive for deeper layout state</td><td>pending</td><td>Need visual material/corner extraction and Notes layout pressure fields.</td></tr>
           <tr><td>Dictation</td><td><code>dictation.ts inspect</code></td><td>pending</td><td>pending</td><td>Need overlay screenshot and measured compact controls.</td></tr>
         </tbody>
@@ -320,9 +322,24 @@
           <tr><th>Slug</th><th>Scope</th><th>Status</th><th>Files</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>tahoe-guidelines-map</code></td><td>Apple HIG + Script Kit design-system mapping</td><td class="todo">running in browser Oracle</td><td><code>~/.oracle/bundles/tahoe-guidelines-map.txt</code>, <code>~/.oracle/sessions/tahoe-guidelines-map/output.log</code>, <a href="https://chatgpt.com/c/6a1a3ce3-3650-83e8-ab5d-9d7110421417">conversation</a></td></tr>
+          <tr><td><code>tahoe-guidelines-map</code></td><td>Apple HIG + Script Kit design-system mapping</td><td class="done">complete</td><td><code>~/.oracle/bundles/tahoe-guidelines-map.txt</code>, <code>~/.oracle/sessions/tahoe-guidelines-map/output.log</code>, <a href="https://chatgpt.com/c/6a1a3ce3-3650-83e8-ab5d-9d7110421417">conversation</a></td></tr>
+          <tr><td><code>launcher-glass-audit</code></td><td>Launcher/actions/footer focused visual pass with screenshots</td><td class="done">complete</td><td><code>~/.oracle/bundles/launcher-glass-audit.txt</code>, <code>~/.oracle/sessions/launcher-glass-audit/output.log</code>, <a href="https://chatgpt.com/c/6a1a3eeb-c0c8-83e8-9dcf-ab30ad483ae9">conversation</a></td></tr>
         </tbody>
       </table>
+    </section>
+
+    <section class="panel">
+      <h2>After Screenshots</h2>
+      <div class="shot-grid">
+        <figure>
+          <a href="artifacts/liquid-glass/screenshots/after-main-only-visual-style.png"><img src="artifacts/liquid-glass/screenshots/after-main-only-visual-style.png" alt="After screenshot of the main launcher after visual style receipts" style="display:block;width:100%;height:auto"></a>
+          <figcaption>Main launcher after first receipt slice: <code>artifacts/liquid-glass/screenshots/after-main-only-visual-style.png</code>. Visual appearance is intentionally unchanged; proof is in layout/style receipts.</figcaption>
+        </figure>
+        <figure>
+          <a href="artifacts/liquid-glass/screenshots/after-actions-visual-style.png"><img src="artifacts/liquid-glass/screenshots/after-actions-visual-style.png" alt="After screenshot of actions dialog after visual style receipts" style="display:block;width:100%;height:auto"></a>
+          <figcaption>Actions dialog after first receipt slice: <code>artifacts/liquid-glass/screenshots/after-actions-visual-style.png</code>. Receipt: <code>after-actions-layout-visual-style.json</code>.</figcaption>
+        </figure>
+      </div>
     </section>
 
     <section class="panel">
@@ -343,6 +360,18 @@
         <div class="entry">
           <time>2026-05-29 19:32 MDT</time>
           <p>Captured before screenshots and receipts for main launcher, actions dialog, and notes. Main layout receipts expose bounds and hit sizes, but not corner radius or material identity. Actions/Notes receipts expose screenshot proof but still miss deeper layout/style primitives needed for Tahoe numeric verification.</p>
+        </div>
+        <div class="entry">
+          <time>2026-05-29 19:38 MDT</time>
+          <p>Pushed baseline commit <code>15f8a410c</code>. A later shared-branch commit <code>d9a7a75d0</code> appeared and was fetched as current <code>origin/main</code>. GitHub API polling then hit a temporary rate limit, so CI was not polled further in this pass.</p>
+        </div>
+        <div class="entry">
+          <time>2026-05-29 19:47 MDT</time>
+          <p>Implemented the first Oracle-recommended shippable slice: shared chrome tokens plus layout visual/style receipt scaffolding. Verified with <code>./scripts/agentic/agent-cargo.sh test --lib visual_style -- --nocapture</code>, <code>./scripts/agentic/agent-cargo.sh test --lib visual_exception -- --nocapture</code>, <code>./scripts/agentic/agent-cargo.sh check --lib</code>, <code>./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui</code>, and target-agent runtime receipts. Main layout now reports 14/14 styled nodes; actions dialog reports 22/22 styled nodes.</p>
+        </div>
+        <div class="entry">
+          <time>2026-05-29 19:50 MDT</time>
+          <p>Focused Oracle session <code>launcher-glass-audit</code> completed. It confirmed the next visual implementation wave should update footer chrome constants, actions popup radii/row metrics, launcher row selected treatment, popup anchor receipts, and contrast/center-distance measurement. Added compare receipts: <code>compare-main-layout-visual-style.json</code> and <code>compare-actions-inspect-visual-style.json</code>.</p>
         </div>
       </div>
     </section>

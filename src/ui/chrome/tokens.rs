@@ -5,6 +5,23 @@ pub use crate::window_resize::main_layout::{
 
 pub const DIVIDER_OPACITY: f32 = crate::theme::opacity::OPACITY_HOVER;
 
+pub const LIQUID_GLASS_MIN_HIT_PX: f32 = 28.0;
+pub const LIQUID_GLASS_MIN_VISUAL_PX: f32 = 20.0;
+pub const LIQUID_GLASS_PREFERRED_HIT_PX: f32 = 44.0;
+pub const LIQUID_GLASS_PREFERRED_CENTER_GAP_PX: f32 = 60.0;
+
+pub const LIQUID_GLASS_WINDOW_RADIUS_PX: f32 = 22.0;
+pub const LIQUID_GLASS_PANEL_RADIUS_PX: f32 = 16.0;
+pub const LIQUID_GLASS_CONTROL_RADIUS_PX: f32 = 14.0;
+pub const LIQUID_GLASS_COMPACT_RADIUS_PX: f32 = 10.0;
+
+pub const CHROME_LAYER_CONTENT: &str = "content";
+pub const CHROME_LAYER_FUNCTIONAL: &str = "functionalChrome";
+pub const CHROME_LAYER_FLOATING: &str = "floatingTransient";
+
+pub const MATERIAL_SOLID_THEME_TOKEN: &str = "solidThemeToken";
+pub const MATERIAL_NS_VISUAL_EFFECT: &str = "NSVisualEffectView";
+
 pub fn alpha_from_opacity(opacity: f32) -> u32 {
     (opacity.clamp(0.0, 1.0) * 255.0).round() as u32
 }

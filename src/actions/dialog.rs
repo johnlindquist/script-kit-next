@@ -1956,6 +1956,7 @@ impl ActionsDialog {
         target: &crate::protocol::AutomationWindowInfo,
     ) -> crate::protocol::LayoutInfo {
         use crate::protocol::{LayoutComponentInfo, LayoutComponentType, LayoutInfo};
+        use crate::ui::chrome as chrome_tokens;
 
         let row_geometry = self.devtools_row_geometry();
         let viewport = row_geometry
@@ -1977,6 +1978,12 @@ impl ActionsDialog {
         components.push(
             LayoutComponentInfo::new("ActionsDialog", LayoutComponentType::Container)
                 .with_bounds(0.0, 0.0, window_width, window_height)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FLOATING,
+                    chrome_tokens::MATERIAL_NS_VISUAL_EFFECT,
+                    Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                )
+                .with_visual_token("chrome.actionsDialog")
                 .with_flex_column()
                 .with_depth(0)
                 .with_explanation(
@@ -1994,6 +2001,12 @@ impl ActionsDialog {
                     LayoutComponentType::Input,
                     search_bounds,
                 )
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
+                )
+                .with_visual_token("chrome.actionsSearch")
                 .with_depth(1)
                 .with_parent("ActionsDialog")
                 .with_explanation("Search/filter input owned by the ActionsDialog route."),
@@ -2010,6 +2023,12 @@ impl ActionsDialog {
                     LayoutComponentType::Header,
                     header_bounds,
                 )
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                )
+                .with_visual_token("chrome.actionsHeader")
                 .with_depth(1)
                 .with_parent("ActionsDialog")
                 .with_explanation("Optional contextual header shown above the actions list."),
@@ -2023,6 +2042,12 @@ impl ActionsDialog {
                     LayoutComponentType::List,
                     list_bounds,
                 )
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_CONTENT,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    None,
+                )
+                .with_visual_token("content.actionsList")
                 .with_depth(1)
                 .with_parent("ActionsDialog")
                 .with_explanation("Scrollable grouped actions list viewport."),
@@ -2059,6 +2084,20 @@ impl ActionsDialog {
                             component_type,
                             rect,
                         )
+                        .with_visual_style(
+                            if kind == "section" {
+                                chrome_tokens::CHROME_LAYER_FUNCTIONAL
+                            } else {
+                                chrome_tokens::CHROME_LAYER_CONTENT
+                            },
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                        )
+                        .with_visual_token(if kind == "section" {
+                            "chrome.actionsSection"
+                        } else {
+                            "content.actionsRow"
+                        })
                         .with_depth(2)
                         .with_parent("ActionsList")
                         .with_explanation(
@@ -2076,6 +2115,13 @@ impl ActionsDialog {
                             LayoutComponentType::Other,
                             shortcut_bounds,
                         )
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                        )
+                        .with_visual_token("chrome.shortcutKeycap")
+                        .with_visual_exception("denseKeyboardHint")
                         .with_depth(3)
                         .with_parent(format!("ActionsRow[{visual_index}]"))
                         .with_explanation(

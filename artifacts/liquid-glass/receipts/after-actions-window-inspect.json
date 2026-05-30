@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "status": "ok",
+  "targetJson": {
+    "type": "kind",
+    "kind": "actionsDialog",
+    "index": 0
+  },
+  "surfaceId": null,
+  "automationWindowId": "actions-dialog",
+  "osWindowId": 82972,
+  "inspect": {
+    "type": "automationInspectResult",
+    "requestId": "inspect-1780105558859",
+    "schemaVersion": 3,
+    "windowId": "actions-dialog",
+    "windowKind": "ActionsDialog",
+    "title": "Actions",
+    "resolvedBounds": {
+      "x": 800,
+      "y": 221,
+      "width": 320,
+      "height": 388
+    },
+    "targetBoundsInScreenshot": {
+      "x": 215,
+      "y": 44,
+      "width": 320,
+      "height": 388
+    },
+    "surfaceHitPoint": {
+      "x": 375,
+      "y": 238
+    },
+    "suggestedHitPoints": [
+      {
+        "semanticId": "panel:actions-dialog",
+        "x": 375,
+        "y": 238,
+        "reason": "surface_center"
+      }
+    ],
+    "elements": [
+      {
+        "semanticId": "input:actions-search",
+        "type": "input",
+        "value": "",
+        "focused": true
+      },
+      {
+        "semanticId": "list:actions",
+        "type": "list",
+        "text": "9 actions"
+      },
+      {
+        "semanticId": "choice:0:run_script",
+        "type": "choice",
+        "text": "Open Theme Designer",
+        "value": "run_script",
+        "selected": true,
+        "index": 0
+      },
+      {
+        "semanticId": "choice:1:toggle_info",
+        "type": "choice",
+        "text": "Show Info",
+        "value": "toggle_info",
+        "selected": false,
+        "index": 1
+      },
+      {
+        "semanticId": "choice:2:add_shortcut",
+        "type": "choice",
+        "text": "Add Keyboard Shortcut",
+        "value": "add_shortcut",
+        "selected": false,
+        "index": 2
+      },
+      {
+        "semanticId": "choice:3:add_alias",
+        "type": "choice",
+        "text": "Add Alias",
+        "value": "add_alias",
+        "selected": false,
+        "index": 3
+      },
+      {
+        "semanticId": "choice:4:copy_deeplink",
+        "type": "choice",
+        "text": "Copy Deep Link",
+        "value": "copy_deeplink",
+        "selected": false,
+        "index": 4
+      },
+      {
+        "semanticId": "choice:5:reset_ranking",
+        "type": "choice",
+        "text": "Delete Ranking Entry",
+        "value": "reset_ranking",
+        "selected": false,
+        "index": 5
+      },
+      {
+        "semanticId": "choice:6:reload_scripts",
+        "type": "choice",
+        "text": "Reload Scripts",
+        "value": "reload_scripts",
+        "selected": false,
+        "index": 6
+      },
+      {
+        "semanticId": "choice:7:settings",
+        "type": "choice",
+        "text": "Open Settings",
+        "value": "settings",
+        "selected": false,
+        "index": 7
+      },
+      {
+        "semanticId": "choice:8:view_logs",
+        "type": "choice",
+        "text": "Show Logs",
+        "value": "view_logs",
+        "selected": false,
+        "index": 8
+      }
+    ],
+    "totalCount": 11,
+    "focusedSemanticId": "input:actions-search",
+    "selectedSemanticId": "choice:0:run_script",
+    "screenshotWidth": 320,
+    "screenshotHeight": 388,
+    "osWindowId": 82972,
+    "semanticQuality": "full",
+    "pid": 26494
+  },
+  "popupSemantics": {
+    "hasRealElements": false,
+    "panelOnly": false,
+    "warnings": [],
+    "batchMutationAvailable": false
+  }
+}

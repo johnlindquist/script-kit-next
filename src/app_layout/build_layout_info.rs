@@ -42,8 +42,7 @@ impl ScriptListApp {
         let window_height = f32::from(crate::window_resize::height_for_view(layout_view_type, 0));
         let uses_split_preview = matches!(
             layout_view_type,
-            crate::window_resize::ViewType::MainWindow
-                | crate::window_resize::ViewType::ScriptList
+            crate::window_resize::ViewType::MainWindow | crate::window_resize::ViewType::ScriptList
         );
 
         // Determine current prompt type
@@ -104,6 +103,7 @@ impl ScriptListApp {
         let mut components = Vec::new();
 
         // Layout constants (same as build_component_bounds)
+        use crate::ui::chrome as chrome_tokens;
         const HEADER_PADDING_Y: f32 = 8.0;
         const HEADER_PADDING_X: f32 = 16.0;
         const BUTTON_HEIGHT: f32 = 28.0;
@@ -121,6 +121,12 @@ impl ScriptListApp {
         components.push(
             LayoutComponentInfo::new("Window", LayoutComponentType::Container)
                 .with_bounds(0.0, 0.0, window_width, window_height)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_CONTENT,
+                    chrome_tokens::MATERIAL_NS_VISUAL_EFFECT,
+                    Some(chrome_tokens::LIQUID_GLASS_WINDOW_RADIUS_PX),
+                )
+                .with_visual_token("window.vibrancy")
                 .with_flex_column()
                 .with_depth(0)
                 .with_explanation("Root window container. Uses flex-column layout."),
@@ -130,6 +136,12 @@ impl ScriptListApp {
         components.push(
             LayoutComponentInfo::new("Header", LayoutComponentType::Header)
                 .with_bounds(0.0, 0.0, window_width, header_height)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                )
+                .with_visual_token("chrome.header")
                 .with_padding(HEADER_PADDING_Y, HEADER_PADDING_X, HEADER_PADDING_Y, HEADER_PADDING_X)
                 .with_flex_row()
                 .with_depth(1)
@@ -149,6 +161,13 @@ impl ScriptListApp {
         components.push(
             LayoutComponentInfo::new("SearchInput", LayoutComponentType::Input)
                 .with_bounds(HEADER_PADDING_X, input_y, input_width, INPUT_HEIGHT)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
+                )
+                .with_visual_token("chrome.searchInput")
+                .with_hit_bounds(HEADER_PADDING_X, HEADER_PADDING_Y, input_width, BUTTON_HEIGHT)
                 .with_flex_grow(1.0)
                 .with_depth(2)
                 .with_parent("Header")
@@ -163,6 +182,12 @@ impl ScriptListApp {
             {
                 let component = LayoutComponentInfo::new("ContentArea", LayoutComponentType::Container)
                 .with_bounds(0.0, content_top, window_width, content_height)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_CONTENT,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    None,
+                )
+                .with_visual_token("content.background")
                 .with_flex_grow(1.0)
                 .with_depth(1)
                 .with_parent("Window");
@@ -265,6 +290,12 @@ impl ScriptListApp {
         components.push(
             LayoutComponentInfo::new("ScriptList", LayoutComponentType::List)
                 .with_bounds(0.0, content_top, list_width, content_height)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_CONTENT,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    None,
+                )
+                .with_visual_token("content.list")
                 .with_flex_column()
                 .with_depth(2)
                 .with_parent("ContentArea")
@@ -280,6 +311,12 @@ impl ScriptListApp {
             components.push(
                 LayoutComponentInfo::new("PreviewPanel", LayoutComponentType::Panel)
                     .with_bounds(list_width, content_top, preview_width, content_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("content.previewPanel")
                     .with_padding(16.0, 16.0, 16.0, 16.0)
                     .with_flex_column()
                     .with_depth(2)
@@ -298,6 +335,12 @@ impl ScriptListApp {
             components.push(
                 LayoutComponentInfo::new(format!("ListItem[{}]", i), LayoutComponentType::ListItem)
                     .with_bounds(0.0, item_top, list_width, LIST_ITEM_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                    )
+                    .with_visual_token("content.listItem")
                     .with_padding(12.0, 16.0, 12.0, 16.0)
                     .with_gap(8.0)
                     .with_flex_row()
@@ -319,6 +362,19 @@ impl ScriptListApp {
         components.push(
             LayoutComponentInfo::new("LogoButton", LayoutComponentType::Button)
                 .with_bounds(logo_x, button_y, 20.0, button_height)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    Some(button_height / 2.0),
+                )
+                .with_visual_token("chrome.headerButton")
+                .with_hit_bounds(
+                    logo_x,
+                    button_y,
+                    chrome_tokens::LIQUID_GLASS_MIN_HIT_PX,
+                    button_height,
+                )
+                .with_visual_exception("compactIconButton")
                 .with_padding(4.0, 4.0, 4.0, 4.0)
                 .with_depth(2)
                 .with_parent("Header")
@@ -331,6 +387,12 @@ impl ScriptListApp {
         components.push(
             LayoutComponentInfo::new("ActionsButton", LayoutComponentType::Button)
                 .with_bounds(actions_x, button_y, actions_width, button_height)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    Some(button_height / 2.0),
+                )
+                .with_visual_token("chrome.headerButton")
                 .with_padding(4.0, 8.0, 4.0, 8.0)
                 .with_depth(2)
                 .with_parent("Header")
@@ -346,6 +408,12 @@ impl ScriptListApp {
         components.push(
             LayoutComponentInfo::new("RunButton", LayoutComponentType::Button)
                 .with_bounds(run_x, button_y, run_width, button_height)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    Some(button_height / 2.0),
+                )
+                .with_visual_token("chrome.headerButton")
                 .with_padding(4.0, 8.0, 4.0, 8.0)
                 .with_depth(2)
                 .with_parent("Header")

@@ -290,6 +290,47 @@ pub struct LayoutBounds {
     pub height: f32,
 }
 
+/// Rounded-corner radii in pixels for visual compliance receipts.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutCornerRadius {
+    pub top_left: f32,
+    pub top_right: f32,
+    pub bottom_right: f32,
+    pub bottom_left: f32,
+}
+
+impl LayoutCornerRadius {
+    pub fn uniform(radius: f32) -> Self {
+        Self {
+            top_left: radius,
+            top_right: radius,
+            bottom_right: radius,
+            bottom_left: radius,
+        }
+    }
+}
+
+/// Visual/style metadata used by DevTools to audit Tahoe/Liquid Glass UI rules.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutVisualStyle {
+    /// content, functionalChrome, navigationChrome, floatingTransient, or statusOnly.
+    pub chrome_layer: String,
+    /// none, solidThemeToken, NSVisualEffectView, NSGlassEffectView, GPUIRgba, or unknown.
+    pub material_source: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub corner_radius: Option<LayoutCornerRadius>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub visual_bounds: Option<LayoutBounds>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hit_bounds: Option<LayoutBounds>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exception: Option<String>,
+}
+
 /// Component type for categorization
 ///
 /// # Forward Compatibility
@@ -350,6 +391,9 @@ pub struct LayoutComponentInfo {
     /// Example: "Height is 45px = padding(8) + content(28) + padding(8) + divider(1)"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub explanation: Option<String>,
+    /// Optional visual/style receipt for Liquid Glass and accessibility audits.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub visual_style: Option<LayoutVisualStyle>,
 }
 
 impl LayoutComponentInfo {
@@ -364,6 +408,7 @@ impl LayoutComponentInfo {
             parent: None,
             children: Vec::new(),
             explanation: None,
+            visual_style: None,
         }
     }
 
@@ -437,6 +482,53 @@ impl LayoutComponentInfo {
         self.explanation = Some(explanation.into());
         self
     }
+
+    pub fn with_visual_style(
+        mut self,
+        chrome_layer: impl Into<String>,
+        material_source: impl Into<String>,
+        corner_radius: Option<f32>,
+    ) -> Self {
+        self.visual_style = Some(LayoutVisualStyle {
+            chrome_layer: chrome_layer.into(),
+            material_source: material_source.into(),
+            token_source: None,
+            corner_radius: corner_radius.map(LayoutCornerRadius::uniform),
+            visual_bounds: Some(self.bounds.clone()),
+            hit_bounds: Some(self.bounds.clone()),
+            exception: None,
+        });
+        self
+    }
+
+    pub fn with_visual_token(mut self, token_source: impl Into<String>) -> Self {
+        let style = self
+            .visual_style
+            .get_or_insert_with(LayoutVisualStyle::default);
+        style.token_source = Some(token_source.into());
+        self
+    }
+
+    pub fn with_hit_bounds(mut self, x: f32, y: f32, width: f32, height: f32) -> Self {
+        let style = self
+            .visual_style
+            .get_or_insert_with(LayoutVisualStyle::default);
+        style.hit_bounds = Some(LayoutBounds {
+            x,
+            y,
+            width,
+            height,
+        });
+        self
+    }
+
+    pub fn with_visual_exception(mut self, exception: impl Into<String>) -> Self {
+        let style = self
+            .visual_style
+            .get_or_insert_with(LayoutVisualStyle::default);
+        style.exception = Some(exception.into());
+        self
+    }
 }
 
 /// Full layout information for the current UI state
@@ -462,4 +554,43 @@ pub struct LayoutInfo {
     pub handler_form: Option<serde_json::Value>,
     /// Timestamp when layout was captured (ISO 8601)
     pub timestamp: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LayoutComponentInfo, LayoutComponentType};
+
+    #[test]
+    fn visual_style_serializes_for_devtools_receipts() {
+        let component = LayoutComponentInfo::new("SearchInput", LayoutComponentType::Input)
+            .with_bounds(16.0, 11.0, 534.0, 22.0)
+            .with_visual_style("functionalChrome", "solidThemeToken", Some(14.0))
+            .with_visual_token("chrome.searchInput")
+            .with_hit_bounds(16.0, 8.0, 534.0, 28.0);
+
+        let json = serde_json::to_value(component).expect("serialize visual style component");
+        let style = json
+            .get("visualStyle")
+            .expect("visualStyle should be emitted");
+
+        assert_eq!(style["chromeLayer"], "functionalChrome");
+        assert_eq!(style["materialSource"], "solidThemeToken");
+        assert_eq!(style["tokenSource"], "chrome.searchInput");
+        assert_eq!(style["cornerRadius"]["topLeft"], 14.0);
+        assert_eq!(style["visualBounds"]["height"], 22.0);
+        assert_eq!(style["hitBounds"]["height"], 28.0);
+    }
+
+    #[test]
+    fn visual_exception_marks_dense_controls() {
+        let component = LayoutComponentInfo::new("LogoButton", LayoutComponentType::Button)
+            .with_bounds(714.0, 8.0, 20.0, 28.0)
+            .with_visual_style("functionalChrome", "solidThemeToken", Some(14.0))
+            .with_hit_bounds(714.0, 8.0, 28.0, 28.0)
+            .with_visual_exception("compactIconButton");
+
+        let json = serde_json::to_value(component).expect("serialize visual exception");
+        assert_eq!(json["visualStyle"]["exception"], "compactIconButton");
+        assert_eq!(json["visualStyle"]["hitBounds"]["width"], 28.0);
+    }
 }
