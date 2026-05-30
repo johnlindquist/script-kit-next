@@ -5,7 +5,7 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T03:03:35.841Z",
+  "generatedAt": "2026-05-30T03:08:47.512Z",
   "summary": {
     "surfaceCount": 31,
     "strongProofSurfaceCount": 2,
@@ -1360,8 +1360,12 @@
         "screenshot": true,
         "numericLayout": true,
         "imageDiff": true,
-        "visualAudit": true
+        "visualAudit": true,
+        "mediaProof": false,
+        "syntheticDelivery": false
       },
+      "mediaProof": null,
+      "syntheticDelivery": null,
       "evidence": {
         "screenshots": [
           "artifacts/liquid-glass/screenshots/before-notes.png",
@@ -1402,17 +1406,81 @@
     },
     {
       "id": "dictation",
-      "proofStatus": "missing-proof",
+      "proofStatus": "media-proof-missing-visual",
       "requiredEvidence": {
         "screenshot": false,
         "numericLayout": false,
         "imageDiff": false,
-        "visualAudit": false
+        "visualAudit": false,
+        "mediaProof": true,
+        "syntheticDelivery": true
+      },
+      "mediaProof": {
+        "status": "blocked-by-missing-primitive",
+        "missingRuntimePrimitives": [
+          "wrong-target refusal receipt"
+        ]
+      },
+      "syntheticDelivery": {
+        "classification": "ok",
+        "target": {
+          "requested": "mainWindowFilter",
+          "receiptTarget": "MainWindowFilter",
+          "receiptTargetLabel": "Script Kit",
+          "requestedTargetMatches": true
+        },
+        "delivery": {
+          "requestId": "devtools-dictation-deliver-1780110377446",
+          "beforeGeneration": 0,
+          "afterGeneration": 1,
+          "advanced": true,
+          "receipt": {
+            "generation": 1,
+            "target": "MainWindowFilter",
+            "targetLabel": "Script Kit",
+            "destination": "MainWindowFilter",
+            "deliveredInternally": true,
+            "historyEntryId": "dictation-20260530T030617.573Z-63017a14c8384f50bd7766389c477523",
+            "transcriptLen": 27,
+            "transcriptFingerprint": "fnv1a64:fe5b6ca0e016b3d4",
+            "audioDurationMs": 0,
+            "insertionRange": {
+              "available": true,
+              "unit": "utf8Bytes",
+              "start": 0,
+              "end": 27,
+              "insertedLength": 27,
+              "operation": "replaceInput",
+              "source": "deliveryPipeline",
+              "redacted": true
+            },
+            "source": "deliveryPipeline",
+            "redacted": true
+          },
+          "insertionRange": {
+            "available": true,
+            "unit": "utf8Bytes",
+            "start": 0,
+            "end": 27,
+            "insertedLength": 27,
+            "operation": "replaceInput",
+            "source": "deliveryPipeline",
+            "redacted": true
+          },
+          "insertionRangeAvailable": true,
+          "transcriptLenMatchesFixture": true,
+          "transcriptFingerprintAvailable": true,
+          "rawTranscriptReturned": false
+        }
       },
       "evidence": {
         "screenshots": [],
         "layoutReceipts": [],
-        "inspectReceipts": [],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/dictation-next-inspect.json",
+          "artifacts/liquid-glass/receipts/dictation-next-post-delivery-inspect.json",
+          "artifacts/liquid-glass/receipts/dictation-next-window-inspect.json"
+        ],
         "imageDiffReceipts": [],
         "diffMasks": [],
         "visualAudit": null,
@@ -1426,8 +1494,12 @@
         "screenshot": false,
         "numericLayout": false,
         "imageDiff": false,
-        "visualAudit": false
+        "visualAudit": false,
+        "mediaProof": false,
+        "syntheticDelivery": false
       },
+      "mediaProof": null,
+      "syntheticDelivery": null,
       "evidence": {
         "screenshots": [],
         "layoutReceipts": [],
@@ -1445,8 +1517,12 @@
         "screenshot": false,
         "numericLayout": false,
         "imageDiff": false,
-        "visualAudit": false
+        "visualAudit": false,
+        "mediaProof": false,
+        "syntheticDelivery": false
       },
+      "mediaProof": null,
+      "syntheticDelivery": null,
       "evidence": {
         "screenshots": [],
         "layoutReceipts": [],

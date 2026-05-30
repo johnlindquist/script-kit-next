@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.media.inspect",
+  "status": "blocked-by-missing-primitive",
+  "inputs": {
+    "coveragePath": "/dev/fd/11",
+    "receiptPath": "artifacts/liquid-glass/receipts/dictation-next-post-delivery-inspect.json",
+    "surface": "dictation"
+  },
+  "surface": {
+    "id": "dictation",
+    "name": "Dictation window and media flow",
+    "status": "partial"
+  },
+  "passiveSafety": {
+    "noMicrophoneCaptureRequired": true,
+    "noSystemSettingsRequired": true,
+    "noTccMutationRequired": true
+  },
+  "redaction": {
+    "transcriptContentReturned": false,
+    "deviceLabelsReturned": false,
+    "targetLabelsReturned": false,
+    "rawDeviceIdsReturned": false
+  },
+  "requiredFields": [
+    {
+      "field": "passive microphone permission status",
+      "presentInReceipt": true,
+      "listedAsMissing": false
+    },
+    {
+      "field": "microphone device snapshot",
+      "presentInReceipt": true,
+      "listedAsMissing": false
+    },
+    {
+      "field": "model readiness generation",
+      "presentInReceipt": true,
+      "listedAsMissing": false
+    },
+    {
+      "field": "recording state generation",
+      "presentInReceipt": true,
+      "listedAsMissing": false
+    },
+    {
+      "field": "audio level metrics",
+      "presentInReceipt": true,
+      "listedAsMissing": false
+    },
+    {
+      "field": "target delivery generation",
+      "presentInReceipt": true,
+      "listedAsMissing": false
+    },
+    {
+      "field": "transcript fingerprint",
+      "presentInReceipt": true,
+      "listedAsMissing": false
+    },
+    {
+      "field": "cursor insertion range",
+      "presentInReceipt": true,
+      "listedAsMissing": false
+    },
+    {
+      "field": "wrong-target refusal receipt",
+      "presentInReceipt": false,
+      "listedAsMissing": true
+    },
+    {
+      "field": "hotkey binding snapshot",
+      "presentInReceipt": true,
+      "listedAsMissing": false
+    },
+    {
+      "field": "media cleanup receipt",
+      "presentInReceipt": true,
+      "listedAsMissing": false
+    }
+  ],
+  "missingRuntimePrimitives": [
+    "wrong-target refusal receipt"
+  ],
+  "recommendedNext": [
+    "Expose passive microphone permission and device snapshots without opening System Settings.",
+    "Expose model readiness and recording generations before transcript delivery.",
+    "Expose target delivery, cursor insertion, wrong-target refusal, and cleanup receipts.",
+    "Only then promote live Dictation recipes from fail-closed backlog to regression proof."
+  ]
+}

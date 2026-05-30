@@ -1,0 +1,569 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.dictation",
+  "command": "dictation.inspect",
+  "classification": "blocked-by-missing-primitive",
+  "session": "liquid-glass-dictation-next",
+  "passiveSafety": {
+    "noMicrophoneCaptureRequired": true,
+    "noSystemSettingsRequired": true,
+    "noTccMutationRequired": true,
+    "noSyntheticTranscriptInjected": true
+  },
+  "redaction": {
+    "transcriptContentReturned": false,
+    "deviceLabelsReturned": false,
+    "targetLabelsReturned": false,
+    "rawDeviceIdsReturned": false
+  },
+  "coverage": {
+    "id": "dictation",
+    "status": "partial",
+    "features": [
+      "idle/hidden",
+      "recording",
+      "quiet recording",
+      "active speech",
+      "confirming",
+      "stop confirmation",
+      "transcribing",
+      "delivering",
+      "finished",
+      "failed/error",
+      "Idle -> Recording",
+      "Recording -> Confirming",
+      "Recording -> Transcribing",
+      "Recording -> Failed",
+      "Confirming -> Recording",
+      "Confirming -> Transcribing",
+      "Transcribing -> Delivering",
+      "Transcribing -> Failed",
+      "Delivering -> Finished",
+      "Delivering -> Failed",
+      "Finished -> Idle",
+      "Failed -> Idle",
+      "Script Kit target delivery",
+      "ACP target delivery",
+      "external app target delivery",
+      "Notes editor target delivery",
+      "Tab AI target delivery",
+      "frontmost app paste delivery",
+      "waveform/audio level bars",
+      "microphone permission",
+      "microphone device",
+      "preferred device fallback",
+      "model readiness",
+      "model download/extract/failure status",
+      "hotkey readiness",
+      "hotkey registration",
+      "hotkey conflict detection",
+      "target identity",
+      "transcript generation",
+      "cursor insertion range",
+      "wrong-target rejection",
+      "cleanup without TCC/System Settings mutation"
+    ],
+    "shortcuts": [
+      "dictation hotkey",
+      "Escape",
+      "Enter",
+      "Space",
+      "Cmd+W",
+      "target badge click"
+    ],
+    "supportedNow": [
+      "dictation story states",
+      "kit://dictation",
+      "kit://dictation-history",
+      "getState dictation passive runtime phase/target/elapsed envelope",
+      "getState dictation passive model readiness generation",
+      "getState dictation passive microphone permission status and redacted device snapshot",
+      "getState dictation passive hotkey binding snapshot",
+      "getState dictation recording state generation and idle audio-level receipt",
+      "getState dictation media cleanup receipt",
+      "dictation.deliver-fixture pushDictationResult target delivery generation, transcript fingerprint, and main-filter insertion range receipt",
+      "devtools.media.inspect passive receipt gate",
+      "fail-closed dictation stress specs"
+    ],
+    "missingRuntimePrimitives": [
+      "cursor insertion range for Notes/ACP/frontmost destinations",
+      "wrong-target refusal receipt"
+    ]
+  },
+  "mediaReceipt": {
+    "schemaVersion": 1,
+    "tool": "script-kit-devtools.media.inspect",
+    "status": "blocked-by-missing-primitive",
+    "inputs": {
+      "coveragePath": "/tmp/devtools-dictation-coverage-54368.json",
+      "receiptPath": "/tmp/devtools-dictation-state-54368.json",
+      "surface": "dictation"
+    },
+    "surface": {
+      "id": "dictation",
+      "name": "Dictation window and media flow",
+      "status": "partial"
+    },
+    "passiveSafety": {
+      "noMicrophoneCaptureRequired": true,
+      "noSystemSettingsRequired": true,
+      "noTccMutationRequired": true
+    },
+    "redaction": {
+      "transcriptContentReturned": false,
+      "deviceLabelsReturned": false,
+      "targetLabelsReturned": false,
+      "rawDeviceIdsReturned": false
+    },
+    "requiredFields": [
+      {
+        "field": "passive microphone permission status",
+        "presentInReceipt": true,
+        "listedAsMissing": false
+      },
+      {
+        "field": "microphone device snapshot",
+        "presentInReceipt": true,
+        "listedAsMissing": false
+      },
+      {
+        "field": "model readiness generation",
+        "presentInReceipt": true,
+        "listedAsMissing": false
+      },
+      {
+        "field": "recording state generation",
+        "presentInReceipt": true,
+        "listedAsMissing": false
+      },
+      {
+        "field": "audio level metrics",
+        "presentInReceipt": true,
+        "listedAsMissing": false
+      },
+      {
+        "field": "target delivery generation",
+        "presentInReceipt": false,
+        "listedAsMissing": false
+      },
+      {
+        "field": "transcript fingerprint",
+        "presentInReceipt": false,
+        "listedAsMissing": false
+      },
+      {
+        "field": "cursor insertion range",
+        "presentInReceipt": false,
+        "listedAsMissing": false
+      },
+      {
+        "field": "wrong-target refusal receipt",
+        "presentInReceipt": false,
+        "listedAsMissing": true
+      },
+      {
+        "field": "hotkey binding snapshot",
+        "presentInReceipt": true,
+        "listedAsMissing": false
+      },
+      {
+        "field": "media cleanup receipt",
+        "presentInReceipt": true,
+        "listedAsMissing": false
+      }
+    ],
+    "missingRuntimePrimitives": [
+      "target delivery generation",
+      "transcript fingerprint",
+      "cursor insertion range",
+      "wrong-target refusal receipt"
+    ],
+    "recommendedNext": [
+      "Expose passive microphone permission and device snapshots without opening System Settings.",
+      "Expose model readiness and recording generations before transcript delivery.",
+      "Expose target delivery, cursor insertion, wrong-target refusal, and cleanup receipts.",
+      "Only then promote live Dictation recipes from fail-closed backlog to regression proof."
+    ]
+  },
+  "runtimeState": {
+    "schemaVersion": 1,
+    "source": "runtime.dictation.automationState",
+    "passive": true,
+    "redacted": true,
+    "generation": 1,
+    "recordingStateGeneration": 1,
+    "isRecording": false,
+    "phase": "idle",
+    "target": null,
+    "targetLabel": null,
+    "elapsedMs": null,
+    "audioLevels": {
+      "available": false,
+      "bars": [],
+      "barCount": 0,
+      "source": "runtime.session.lastBars",
+      "stopReason": "not recording"
+    },
+    "setup": {
+      "ready": true,
+      "model": {
+        "status": "available",
+        "generation": 1,
+        "source": "parakeetModelAvailability"
+      },
+      "microphone": {
+        "permissionStatus": "Granted",
+        "status": "ready",
+        "deviceSnapshot": {
+          "available": true,
+          "deviceCount": 6,
+          "defaultDevice": {
+            "labelFingerprint": "fnv1a64:d132e98fb83bff35",
+            "idFingerprint": "fnv1a64:0ea48593437fd49d",
+            "transport": "Virtual"
+          },
+          "selected": {
+            "labelFingerprint": "fnv1a64:44ecc44b3e60abce",
+            "idFingerprint": "fnv1a64:ecb307f9ac8c5fe2",
+            "transport": "BuiltIn",
+            "fellBack": false
+          },
+          "savedPreference": {
+            "configured": true,
+            "idFingerprint": "fnv1a64:ecb307f9ac8c5fe2",
+            "resolved": true
+          },
+          "rawDeviceIdsRedacted": true,
+          "deviceLabelsReturned": false
+        },
+        "generation": 1,
+        "source": "passiveAVFoundationEnumeration",
+        "noPermissionPrompt": true
+      },
+      "hotkey": {
+        "enabled": true,
+        "configured": true,
+        "display": "⇧⌘Semicolon",
+        "status": "Ready(\"meta+shift+Semicolon\")",
+        "generation": 1,
+        "source": "config.dictationHotkey"
+      },
+      "configFingerprint": {
+        "pathFingerprint": "fnv1a64:2937adb9e9e825ed",
+        "len": 13945,
+        "modifiedMs": 1780090293554
+      }
+    },
+    "lastDelivery": null,
+    "deliveryReceiptAvailable": false,
+    "stop": null,
+    "cleanup": {
+      "captureActive": false,
+      "captureStopInProgress": false,
+      "transcriberCached": false,
+      "generation": 1,
+      "source": "runtime.dictation.cleanupState"
+    },
+    "safety": {
+      "noMicrophoneCaptureStarted": true,
+      "noSystemSettingsOpened": true,
+      "noTccMutation": true,
+      "noTranscriptContent": true,
+      "rawDeviceIdsRedacted": true,
+      "deviceLabelsReturned": false
+    }
+  },
+  "deliveryReceiptAvailable": false,
+  "runtimeStateReceipt": {
+    "schemaVersion": 1,
+    "status": "ok",
+    "session": "liquid-glass-dictation-next",
+    "requestId": "devtools-dictation-state-1780110377320",
+    "responseType": "stateResult",
+    "response": {
+      "type": "stateResult",
+      "requestId": "devtools-dictation-state-1780110377320",
+      "promptType": "none",
+      "surfaceContract": {
+        "schemaVersion": 1,
+        "surfaceKind": "ScriptList",
+        "family": "MainMenu",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "OptionalInfoPanel",
+        "focusPolicy": "LauncherFilterFocus",
+        "keyboardPolicy": "LauncherListKeyboard",
+        "actionsPolicy": "MainMenuActions",
+        "proofPolicy": "StateAndElementsProof",
+        "visualPolicy": "CompactLauncherVisual",
+        "automationSemanticSurface": "scriptList",
+        "nativeFooterSurface": "script_list"
+      },
+      "activeFooter": {
+        "schemaVersion": 1,
+        "owner": "native",
+        "expectedSurface": "script_list",
+        "requestedSurface": "script_list",
+        "activeSurface": "script_list",
+        "nativeFooterHostInstalled": true,
+        "gpuiFallbackVisible": false,
+        "leftInfo": null,
+        "buttonCount": 4,
+        "buttons": [
+          {
+            "action": "cwd",
+            "key": "⇥",
+            "label": "~/dev/script-kit-gpui",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "agentModel",
+            "key": "⇧⇥",
+            "label": "Claude · Sonnet 4.6",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "run",
+            "key": "↵",
+            "label": "Open Theme Designer",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "actions",
+            "key": "⌘K",
+            "label": "Actions",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          }
+        ],
+        "mismatch": null
+      },
+      "inputValue": "",
+      "choiceCount": 550,
+      "visibleChoiceCount": 555,
+      "selectedIndex": 1,
+      "selectedValue": "Theme Designer",
+      "isFocused": true,
+      "windowVisible": true,
+      "miniAi": {
+        "visible": false,
+        "promptId": null,
+        "mainWindowMode": "mini",
+        "draftLen": 0,
+        "pendingSubmit": false,
+        "handoffSource": "mini_ai_launcher",
+        "returnOrigin": "scriptList",
+        "lastCloseSource": null
+      },
+      "filterInputDecorations": {
+        "text": "",
+        "chips": []
+      },
+      "rootFileSearch": {
+        "query": "",
+        "mode": null,
+        "loading": false,
+        "visibleLoading": false,
+        "generation": 0,
+        "visibleResultCount": 0,
+        "cacheEntryCount": 0,
+        "cacheResultCount": 0
+      },
+      "mainListScroll": {
+        "scrollTop": 0,
+        "scrollTopItem": 0,
+        "scrollTopOffset": 0,
+        "contentHeight": 22578,
+        "viewportHeight": 437,
+        "footerHeight": 38,
+        "safeViewportHeight": 399,
+        "maxScrollTop": 22179,
+        "selectedIndex": 1,
+        "selectedRowTop": 26,
+        "selectedRowBottom": 66,
+        "selectedRowVisible": true,
+        "selectedRowAboveFooter": true,
+        "itemCount": 567
+      },
+      "dictation": {
+        "schemaVersion": 1,
+        "source": "runtime.dictation.automationState",
+        "passive": true,
+        "redacted": true,
+        "generation": 1,
+        "recordingStateGeneration": 1,
+        "isRecording": false,
+        "phase": "idle",
+        "target": null,
+        "targetLabel": null,
+        "elapsedMs": null,
+        "audioLevels": {
+          "available": false,
+          "bars": [],
+          "barCount": 0,
+          "source": "runtime.session.lastBars",
+          "stopReason": "not recording"
+        },
+        "setup": {
+          "ready": true,
+          "model": {
+            "status": "available",
+            "generation": 1,
+            "source": "parakeetModelAvailability"
+          },
+          "microphone": {
+            "permissionStatus": "Granted",
+            "status": "ready",
+            "deviceSnapshot": {
+              "available": true,
+              "deviceCount": 6,
+              "defaultDevice": {
+                "labelFingerprint": "fnv1a64:d132e98fb83bff35",
+                "idFingerprint": "fnv1a64:0ea48593437fd49d",
+                "transport": "Virtual"
+              },
+              "selected": {
+                "labelFingerprint": "fnv1a64:44ecc44b3e60abce",
+                "idFingerprint": "fnv1a64:ecb307f9ac8c5fe2",
+                "transport": "BuiltIn",
+                "fellBack": false
+              },
+              "savedPreference": {
+                "configured": true,
+                "idFingerprint": "fnv1a64:ecb307f9ac8c5fe2",
+                "resolved": true
+              },
+              "rawDeviceIdsRedacted": true,
+              "deviceLabelsReturned": false
+            },
+            "generation": 1,
+            "source": "passiveAVFoundationEnumeration",
+            "noPermissionPrompt": true
+          },
+          "hotkey": {
+            "enabled": true,
+            "configured": true,
+            "display": "⇧⌘Semicolon",
+            "status": "Ready(\"meta+shift+Semicolon\")",
+            "generation": 1,
+            "source": "config.dictationHotkey"
+          },
+          "configFingerprint": {
+            "pathFingerprint": "fnv1a64:2937adb9e9e825ed",
+            "len": 13945,
+            "modifiedMs": 1780090293554
+          }
+        },
+        "lastDelivery": null,
+        "deliveryReceiptAvailable": false,
+        "stop": null,
+        "cleanup": {
+          "captureActive": false,
+          "captureStopInProgress": false,
+          "transcriberCached": false,
+          "generation": 1,
+          "source": "runtime.dictation.cleanupState"
+        },
+        "safety": {
+          "noMicrophoneCaptureStarted": true,
+          "noSystemSettingsOpened": true,
+          "noTccMutation": true,
+          "noTranscriptContent": true,
+          "rawDeviceIdsRedacted": true,
+          "deviceLabelsReturned": false
+        }
+      }
+    }
+  },
+  "providerResource": {
+    "uri": "kit://dictation",
+    "envVar": "SCRIPT_KIT_DICTATION_JSON",
+    "source": "none",
+    "available": false,
+    "parseError": null,
+    "payloadFingerprint": null,
+    "payloadLength": 0,
+    "payload": null
+  },
+  "sourceEvidence": {
+    "phases": [
+      "Idle",
+      "Recording",
+      "Confirming",
+      "Transcribing",
+      "Delivering",
+      "Finished",
+      "Failed"
+    ],
+    "targets": [
+      "MainWindowFilter",
+      "MainWindowPrompt",
+      "NotesEditor",
+      "AiChatComposer",
+      "TabAiHarness",
+      "ExternalApp"
+    ],
+    "runtimeReadApis": {
+      "isRecording": true,
+      "elapsed": true,
+      "currentPhase": true,
+      "currentTarget": true,
+      "lastDelivery": true,
+      "redactedFingerprint": true,
+      "automationState": true
+    },
+    "stdin": {
+      "pushDictationResultVerb": true,
+      "acceptedTargetLabels": [
+        "mainWindowFilter",
+        "mainWindowPrompt",
+        "notesEditor",
+        "aiChatComposer",
+        "tabAiHarness",
+        "externalApp"
+      ]
+    }
+  },
+  "deliveryTargets": [
+    "MainWindowFilter",
+    "MainWindowPrompt",
+    "NotesEditor",
+    "AiChatComposer",
+    "TabAiHarness",
+    "ExternalApp"
+  ],
+  "sessionPhases": [
+    "Idle",
+    "Recording",
+    "Confirming",
+    "Transcribing",
+    "Delivering",
+    "Finished",
+    "Failed"
+  ],
+  "missingPrimitives": [
+    "target delivery generation",
+    "transcript fingerprint",
+    "cursor insertion range",
+    "wrong-target refusal receipt",
+    "cursor insertion range for Notes/ACP/frontmost destinations",
+    "target delivery generation receipt",
+    "transcript fingerprint receipt"
+  ],
+  "recommendedNext": [
+    "Keep expanding passive dictation runtime state from source-owned receipts before any live microphone proof.",
+    "Expose delivery receipts for pushDictationResult and real transcription that include target generation and redacted transcript fingerprint.",
+    "Expose cursor insertion range and wrong-target refusal receipts without starting microphone capture."
+  ],
+  "warnings": [
+    "Dictation inspection is intentionally passive; use pushDictationResult only in a separate explicit delivery test.",
+    "Dictation remains fail-closed until passive runtime state and delivery receipts exist."
+  ],
+  "errors": []
+}

@@ -74,7 +74,13 @@ function receiptHas(receipt: JsonObject | null, field: string) {
   if (!receipt) {
     return false;
   }
-  const dictation = asObject(asObject(receipt.response).dictation ?? receipt.dictation ?? asObject(receipt.runtimeState).dictation);
+  const runtimeState = asObject(receipt.runtimeState);
+  const dictation = asObject(
+    asObject(receipt.response).dictation
+      ?? receipt.dictation
+      ?? runtimeState.dictation
+      ?? (runtimeState.source === "runtime.dictation.automationState" ? runtimeState : null),
+  );
   const setup = asObject(dictation.setup);
   const microphone = asObject(setup.microphone);
   const model = asObject(setup.model);
@@ -109,6 +115,9 @@ function receiptHas(receipt: JsonObject | null, field: string) {
   }
   if (field === "media cleanup receipt") {
     return typeof cleanup.captureActive === "boolean" && typeof cleanup.generation === "number";
+  }
+  if (field === "wrong-target refusal receipt") {
+    return typeof dictation.wrongTargetRefusal === "object" && dictation.wrongTargetRefusal !== null;
   }
 
   const normalized = field.replace(/[^a-z0-9]+/gi, "").toLowerCase();

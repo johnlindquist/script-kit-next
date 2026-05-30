@@ -199,15 +199,40 @@ async function main() {
         `${RECEIPT_ROOT}/notes-next-layout.json`,
       ]);
     }
+    const dictationMedia = target.id === "dictation"
+      ? await readJsonIfExists(`${RECEIPT_ROOT}/dictation-next-post-delivery-media.json`)
+      : null;
+    const dictationDelivery = target.id === "dictation"
+      ? await readJsonIfExists(`${RECEIPT_ROOT}/dictation-next-deliver-fixture.json`)
+      : null;
+    const baseStatus = classify(evidence);
+    const proofStatus = target.id === "dictation" && dictationMedia
+      ? "media-proof-missing-visual"
+      : baseStatus;
     return {
       id: target.id,
-      proofStatus: classify(evidence),
+      proofStatus,
       requiredEvidence: {
         screenshot: evidence.screenshots.length > 0,
         numericLayout: evidence.layoutReceipts.length > 0,
         imageDiff: evidence.imageDiffReceipts.length > 0,
         visualAudit: evidence.visualAudit != null,
+        mediaProof: dictationMedia != null,
+        syntheticDelivery: dictationDelivery != null,
       },
+      mediaProof: dictationMedia
+        ? {
+          status: dictationMedia.status ?? null,
+          missingRuntimePrimitives: dictationMedia.missingRuntimePrimitives ?? [],
+        }
+        : null,
+      syntheticDelivery: dictationDelivery
+        ? {
+          classification: dictationDelivery.classification ?? null,
+          target: dictationDelivery.target ?? null,
+          delivery: dictationDelivery.delivery ?? null,
+        }
+        : null,
       evidence,
     };
   }));
