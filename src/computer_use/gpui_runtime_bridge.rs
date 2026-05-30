@@ -1,7 +1,9 @@
 use crate::computer_use::runtime_bridge::{
     ComputerUseAppWindowInfo, ComputerUseCaptureNativeWindowError,
     ComputerUseCaptureNativeWindowRequest, ComputerUseCaptureNativeWindowSnapshot,
-    ComputerUseCaptureNativeWindowStatus, ComputerUseCapturePixelAudit, ComputerUseInspectRequest,
+    ComputerUseCaptureNativeWindowStatus, ComputerUseCapturePixelAudit,
+    ComputerUseCaptureRenderWindowRequest, ComputerUseCaptureRenderWindowSnapshot,
+    ComputerUseCaptureRenderWindowStatus, ComputerUseInspectRequest,
     ComputerUseListAppWindowsRequest, ComputerUseListAppWindowsSnapshot,
     ComputerUseListAppsRequest, ComputerUseListAppsSnapshot, ComputerUseNativeWindowCaptureInfo,
     ComputerUseRunningAppInfo, ComputerUseRuntimeBridge, ComputerUseRuntimeError,
@@ -45,6 +47,12 @@ pub enum GpuiComputerUseRequest {
         request: ComputerUseCaptureNativeWindowRequest,
         response_tx:
             SyncSender<Result<ComputerUseCaptureNativeWindowSnapshot, ComputerUseRuntimeError>>,
+    },
+    CaptureRenderWindow {
+        request_id: String,
+        request: ComputerUseCaptureRenderWindowRequest,
+        response_tx:
+            SyncSender<Result<ComputerUseCaptureRenderWindowSnapshot, ComputerUseRuntimeError>>,
     },
 }
 
@@ -102,6 +110,15 @@ impl GpuiComputerUseRequest {
         result: Result<ComputerUseCaptureNativeWindowSnapshot, ComputerUseRuntimeError>,
     ) {
         if let Self::CaptureNativeWindow { response_tx, .. } = self {
+            let _ = response_tx.send(result);
+        }
+    }
+
+    pub fn respond_capture_render_window(
+        self,
+        result: Result<ComputerUseCaptureRenderWindowSnapshot, ComputerUseRuntimeError>,
+    ) {
+        if let Self::CaptureRenderWindow { response_tx, .. } = self {
             let _ = response_tx.send(result);
         }
     }
@@ -201,6 +218,32 @@ impl ComputerUseRuntimeBridge for GpuiComputerUseRuntimeBridge {
         let (response_tx, response_rx) = mpsc::sync_channel(1);
         sender
             .try_send(GpuiComputerUseRequest::CaptureNativeWindow {
+                request_id,
+                request,
+                response_tx,
+            })
+            .map_err(|_| ComputerUseRuntimeError::Unavailable)?;
+
+        response_rx
+            .recv_timeout(self.timeout)
+            .map_err(|_| ComputerUseRuntimeError::Timeout)?
+    }
+
+    fn capture_render_window(
+        &self,
+        request: ComputerUseCaptureRenderWindowRequest,
+    ) -> Result<ComputerUseCaptureRenderWindowSnapshot, ComputerUseRuntimeError> {
+        let sender = self
+            .sender
+            .read()
+            .ok()
+            .and_then(|guard| guard.clone())
+            .ok_or(ComputerUseRuntimeError::Unavailable)?;
+
+        let request_id = request.correlation_id.clone();
+        let (response_tx, response_rx) = mpsc::sync_channel(1);
+        sender
+            .try_send(GpuiComputerUseRequest::CaptureRenderWindow {
                 request_id,
                 request,
                 response_tx,
@@ -870,6 +913,31 @@ fn capture_native_window_receipt(
     }
 }
 
+#[cfg(target_os = "macos")]
+pub fn capture_render_window_on_gpui_thread(
+    request: &ComputerUseCaptureRenderWindowRequest,
+) -> Result<ComputerUseCaptureRenderWindowSnapshot, ComputerUseRuntimeError> {
+    Ok(ComputerUseCaptureRenderWindowSnapshot {
+        schema_version: 1,
+        source: "gpuiRenderReadback",
+        scope: "liveAutomationWindowRenderReadback",
+        status: ComputerUseCaptureRenderWindowStatus::Unsupported,
+        correlation_id: request.correlation_id.clone(),
+        target: request.target.clone(),
+        capture: None,
+        error: Some(ComputerUseCaptureNativeWindowError {
+            code: "gpui_readback_unavailable",
+            message: "GPUI render readback is not implemented in this runtime".to_string(),
+            reason: Some("unsupported".to_string()),
+            pixel_audit: None,
+        }),
+        warnings: vec![
+            "No pixels were captured; do not count this as app-render visual proof.".to_string(),
+        ],
+        limitation: "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor/native blur output.",
+    })
+}
+
 trait CaptureReceiptExt {
     fn with_capture(self, capture: ComputerUseNativeWindowCaptureInfo) -> Self;
 }
@@ -1099,6 +1167,33 @@ pub fn capture_native_window_on_gpui_thread(
             pixel_audit: None,
         }),
         warnings: Vec::new(),
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn capture_render_window_on_gpui_thread(
+    request: &ComputerUseCaptureRenderWindowRequest,
+) -> Result<ComputerUseCaptureRenderWindowSnapshot, ComputerUseRuntimeError> {
+    Ok(ComputerUseCaptureRenderWindowSnapshot {
+        schema_version: 1,
+        source: "gpuiRenderReadback",
+        scope: "liveAutomationWindowRenderReadback",
+        status: ComputerUseCaptureRenderWindowStatus::Unsupported,
+        correlation_id: request.correlation_id.clone(),
+        target: request.target.clone(),
+        capture: None,
+        error: Some(ComputerUseCaptureNativeWindowError {
+            code: "unsupported_platform",
+            message: "computer/capture_render_window is not supported on this platform"
+                .to_string(),
+            reason: Some("unsupported_platform".to_string()),
+            pixel_audit: None,
+        }),
+        warnings: vec![
+            "No pixels were captured; do not count this as app-render visual proof.".to_string(),
+        ],
+        limitation:
+            "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor/native blur output.",
     })
 }
 

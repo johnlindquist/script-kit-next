@@ -43,6 +43,27 @@ fn capture_native_window_handler_routes_through_runtime_bridge_with_correlation_
 }
 
 #[test]
+fn capture_render_window_routes_through_live_runtime_and_returns_structured_unsupported_receipt() {
+    let tools = read("src/mcp_computer_use_tools.rs");
+    let handler = extract_section(&tools, "fn handle_capture_render_window", 3500);
+    assert!(handler.contains("ComputerUseCaptureRenderWindowRequest"));
+    assert!(handler.contains("runtime.capture_render_window"));
+    assert!(handler.contains("gpui_readback_unavailable"));
+    assert!(handler.contains("App-rendered GPUI pixels only"));
+
+    let bridge = read("src/computer_use/gpui_runtime_bridge.rs");
+    assert!(bridge.contains("CaptureRenderWindow"));
+    assert!(bridge.contains("fn capture_render_window("));
+    assert!(bridge.contains("capture_render_window_on_gpui_thread"));
+    assert!(bridge.contains("ComputerUseCaptureRenderWindowStatus::Unsupported"));
+    assert!(bridge.contains("do not count this as app-render visual proof"));
+
+    let setup = read("src/main_entry/app_run_setup.rs");
+    let event_loop = extract_section(&setup, "GpuiComputerUseRequest::CaptureRenderWindow", 700);
+    assert!(event_loop.contains("capture_render_window_on_gpui_thread"));
+}
+
+#[test]
 fn mcp_server_forces_accepted_connections_to_blocking_io() {
     let src = read("src/mcp_server/mod.rs");
     let section = extract_section(&src, "fn handle_connection", 900);
