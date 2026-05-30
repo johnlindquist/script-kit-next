@@ -329,16 +329,38 @@ fn app_state_persists_current_app_commands_session_metadata() {
 }
 
 #[test]
-fn trace_current_app_intent_builtin_is_registered() {
+fn trace_current_app_intent_is_collapsed_into_do_in_current_app() {
     let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
-    let entry = entries
-        .iter()
-        .find(|e| e.id == "builtin/trace-current-app-intent")
-        .expect("builtin/trace-current-app-intent must be in the registry");
+    assert!(
+        entries
+            .iter()
+            .all(|e| e.id != "builtin/trace-current-app-intent"),
+        "trace-current-app-intent is no longer a standalone launcher builtin"
+    );
 
+    let do_entry = entries
+        .iter()
+        .find(|e| e.id == "builtin/do-in-current-app")
+        .expect("builtin/do-in-current-app must stay registered");
     assert_eq!(
-        entry.feature,
-        BuiltInFeature::UtilityCommand(UtilityCommandType::TraceCurrentAppIntent)
+        do_entry.feature,
+        BuiltInFeature::UtilityCommand(UtilityCommandType::DoInCurrentApp)
+    );
+    assert!(
+        do_entry.keywords.iter().any(|keyword| keyword == "intent")
+            && do_entry
+                .keywords
+                .iter()
+                .any(|keyword| keyword == "automation"),
+        "Do in Current App owns the current-app intent/automation launcher vocabulary"
+    );
+
+    let menu_bar_source = std::fs::read_to_string("src/menu_bar/current_app_commands.rs")
+        .expect("must read current-app commands source");
+    assert!(
+        menu_bar_source.contains("build_current_app_intent_trace_receipt")
+            && menu_bar_source.contains("normalize_trace_current_app_intent_request"),
+        "trace receipt helpers remain in the current-app command domain even without a standalone builtin"
     );
 }
 

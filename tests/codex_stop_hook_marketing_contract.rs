@@ -1,78 +1,36 @@
-//! Source-level contract tests for the repo-local Codex Stop hook.
+//! Source-level contract for the retired repo-local Codex Stop hook.
 //!
-//! Codex Stop continuations can keep the same `turn_id` across multiple
-//! generated continuation prompts. The marketing image run depends on each
-//! Stop event being able to block again until a pause marker appears.
+//! The legacy Stop hook and `.codex/hooks.json` were removed by commit
+//! `4534aac79 Remove legacy Codex hooks.` This test intentionally guards the
+//! current contract: this repository no longer ships that hook surface, so
+//! clean checkouts must not require `.codex/hooks/*` files to compile.
 
-const STOP_HOOK: &str = include_str!("../.codex/hooks/stop-continue-agentic-testing.ts");
+use std::path::Path;
 
 #[test]
-fn marketing_stop_run_is_supported() {
+fn legacy_codex_stop_hook_is_not_a_repo_contract() {
     assert!(
-        STOP_HOOK.contains("\"marketing-infographics\""),
-        "the Stop hook must keep the marketing infographic run kind wired"
+        !Path::new(".codex/hooks.json").exists(),
+        "legacy repo-local Codex hooks config was intentionally removed"
     );
     assert!(
-        STOP_HOOK.contains("buildMarketingPrompt("),
-        "the Stop hook must build a dedicated marketing continuation prompt"
+        !Path::new(".codex/hooks/stop-continue-agentic-testing.ts").exists(),
+        "legacy Stop continuation hook was intentionally removed"
     );
     assert!(
-        STOP_HOOK.contains("MARKETING_STYLE_DIRECTIONS"),
-        "marketing continuations must rotate through varied visual directions"
+        !Path::new(".codex/hooks/marketing-infographics.md").exists(),
+        "legacy marketing continuation prompt file was intentionally removed"
     );
 }
 
 #[test]
-fn repeated_turn_id_does_not_stop_continuation_chain() {
+fn codex_directory_only_keeps_the_repo_skill_link() {
     assert!(
-        !STOP_HOOK.contains("state.lastTurnId && payload.turn_id")
-            && !STOP_HOOK.contains("state.lastTurnId === payload.turn_id"),
-        "Stop continuations can reuse the active turn_id. A repeated-turn guard \
-         makes the chain stop after the first generated image instead of \
-         continuing until the pause marker is set."
+        Path::new(".codex/skills").exists(),
+        ".codex remains only as the repo-local skills compatibility link"
     );
     assert!(
-        STOP_HOOK.contains("state.lastTurnId = payload.turn_id"),
-        "the hook may still record the last turn id for diagnostics"
-    );
-}
-
-#[test]
-fn pause_marker_is_the_manual_stop_contract() {
-    assert!(
-        STOP_HOOK.contains("PAUSE_MARKER = \"[stop-hook:pause]\""),
-        "the manual stop contract must remain explicit and grepable"
-    );
-    assert!(
-        STOP_HOOK.contains("shouldPauseFromMessage(payload)")
-            && STOP_HOOK.contains("existsSync(pausePath)"),
-        "the hook must stop from either assistant pause text or the pause file"
-    );
-    assert!(
-        STOP_HOOK.contains(".some((line) => line.trim() === PAUSE_MARKER)")
-            && !STOP_HOOK.contains("last_assistant_message?.includes(PAUSE_MARKER)"),
-        "mentions of the marker in prose or backticks must not accidentally \
-         pause the run; the marker must be alone on a line"
-    );
-    assert!(
-        STOP_HOOK.contains("if (!DRY_RUN) {\n    writeFileSync(pausePath"),
-        "dry-run hook verification must not create a pause file"
-    );
-}
-
-#[test]
-fn selected_stop_hook_events_are_logged() {
-    assert!(
-        STOP_HOOK.contains("defaultEventLogPath(")
-            && STOP_HOOK.contains(".events.jsonl")
-            && STOP_HOOK.contains("logHookEvent("),
-        "the hook must maintain a per-run event ledger for Stop-hook evidence"
-    );
-    assert!(
-        STOP_HOOK.contains("reason: \"block_with_continuation_prompt\"")
-            && STOP_HOOK.contains("reason: \"pause_file_exists\"")
-            && STOP_HOOK.contains("reason: \"assistant_pause_marker\""),
-        "the event ledger must distinguish continue, pause-file no-op, and \
-         assistant-marker pause outcomes"
+        !Path::new(".codex/hooks").exists(),
+        "no replacement repo-local Codex hook directory exists in this checkout"
     );
 }
