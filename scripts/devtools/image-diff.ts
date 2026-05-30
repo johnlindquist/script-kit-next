@@ -1,0 +1,185 @@
+#!/usr/bin/env bun
+
+type Args = {
+  red: string;
+  green: string;
+  out: string;
+  label: string;
+  fuzz: string;
+};
+
+type Dimensions = {
+  width: number;
+  height: number;
+};
+
+function usage() {
+  return [
+    "Usage:",
+    "  bun scripts/devtools/image-diff.ts compare --red <before.png> --green <after.png> --out <diff.png> [--label <name>] [--fuzz <percent>]",
+    "",
+    "Creates an ImageMagick compare mask and emits a JSON receipt with dimensions, changed-pixel count, ratio, and diff bounding box.",
+  ].join("\n");
+}
+
+function parseArgs(argv: string[]): Args {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(usage());
+    process.exit(0);
+  }
+  if (argv[0] !== "compare") {
+    console.error(usage());
+    process.exit(2);
+  }
+
+  const args: Args = {
+    red: "",
+    green: "",
+    out: "",
+    label: "image-diff",
+    fuzz: "0%",
+  };
+
+  for (let index = 1; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--red") {
+      args.red = argv[++index] ?? "";
+    } else if (arg === "--green") {
+      args.green = argv[++index] ?? "";
+    } else if (arg === "--out") {
+      args.out = argv[++index] ?? "";
+    } else if (arg === "--label") {
+      args.label = argv[++index] ?? args.label;
+    } else if (arg === "--fuzz") {
+      args.fuzz = argv[++index] ?? args.fuzz;
+    }
+  }
+
+  if (!args.red || !args.green || !args.out) {
+    console.error(usage());
+    process.exit(2);
+  }
+  return args;
+}
+
+function runMagick(args: string[], okExitCodes = new Set([0])) {
+  const result = Bun.spawnSync(["magick", ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const stdout = new TextDecoder().decode(result.stdout).trim();
+  const stderr = new TextDecoder().decode(result.stderr).trim();
+  if (!okExitCodes.has(result.exitCode ?? 1)) {
+    throw new Error(`magick ${args.join(" ")} failed with ${result.exitCode}: ${stderr || stdout}`);
+  }
+  return { stdout, stderr, exitCode: result.exitCode ?? 0 };
+}
+
+function identify(path: string): Dimensions {
+  const { stdout } = runMagick(["identify", "-format", "%w %h", path]);
+  const [width, height] = stdout.split(/\s+/).map(Number);
+  if (!Number.isFinite(width) || !Number.isFinite(height)) {
+    throw new Error(`Could not identify dimensions for ${path}: ${stdout}`);
+  }
+  return { width, height };
+}
+
+function parseChangedPixels(metric: string): number {
+  const parenthesized = metric.match(/\(([-+0-9.eE]+)\)\s*$/);
+  const raw = parenthesized?.[1] ?? metric.match(/[-+0-9.eE]+/)?.[0] ?? "";
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    throw new Error(`Could not parse ImageMagick AE metric: ${metric}`);
+  }
+  return Math.round(value);
+}
+
+function parseBoundingBox(value: string) {
+  const match = value.match(/^(\d+)x(\d+)\+(-?\d+)\+(-?\d+)$/);
+  if (!match) {
+    return null;
+  }
+  return {
+    width: Number(match[1]),
+    height: Number(match[2]),
+    x: Number(match[3]),
+    y: Number(match[4]),
+  };
+}
+
+async function main() {
+  const args = parseArgs(Bun.argv.slice(2));
+  await Bun.write(args.out, "");
+  await Bun.$`rm -f ${args.out}`;
+
+  const redDimensions = identify(args.red);
+  const greenDimensions = identify(args.green);
+  const canvas = {
+    width: Math.max(redDimensions.width, greenDimensions.width),
+    height: Math.max(redDimensions.height, greenDimensions.height),
+  };
+
+  const compare = runMagick(
+    [
+      "compare",
+      "-metric",
+      "AE",
+      "-fuzz",
+      args.fuzz,
+      "-highlight-color",
+      "red",
+      "-lowlight-color",
+      "black",
+      args.red,
+      args.green,
+      args.out,
+    ],
+    new Set([0, 1]),
+  );
+  const changedPixels = parseChangedPixels(compare.stderr || compare.stdout);
+  const totalPixels = canvas.width * canvas.height;
+  const changedPixelRatio = totalPixels > 0 ? changedPixels / totalPixels : null;
+  const trim = runMagick([args.out, "-fuzz", "1%", "-trim", "-format", "%@", "info:"]);
+  const diffBoundingBox = changedPixels > 0 ? parseBoundingBox(trim.stdout) : null;
+
+  const receipt = {
+    schemaVersion: 1,
+    tool: "script-kit-devtools.image-diff",
+    command: "image-diff.compare",
+    classification: "ok",
+    label: args.label,
+    redPath: args.red,
+    greenPath: args.green,
+    diffPath: args.out,
+    fuzz: args.fuzz,
+    dimensions: {
+      red: redDimensions,
+      green: greenDimensions,
+      comparisonCanvas: canvas,
+      sameSize: redDimensions.width === greenDimensions.width && redDimensions.height === greenDimensions.height,
+      widthDelta: greenDimensions.width - redDimensions.width,
+      heightDelta: greenDimensions.height - redDimensions.height,
+    },
+    changedPixels,
+    totalPixels,
+    changedPixelRatio,
+    changedPixelPercent: changedPixelRatio == null ? null : changedPixelRatio * 100,
+    diffBoundingBox,
+    assertions: {
+      diffMaskWritten: await Bun.file(args.out).exists(),
+      changedPixelsMeasured: Number.isFinite(changedPixels),
+      dimensionsMeasured: true,
+    },
+    warnings: [
+      redDimensions.width === greenDimensions.width && redDimensions.height === greenDimensions.height
+        ? ""
+        : "red and green screenshots have different dimensions; changed-pixel ratio uses the max comparison canvas",
+    ].filter(Boolean),
+    errors: [],
+    timestamp: new Date().toISOString(),
+  };
+
+  console.log(JSON.stringify(receipt, null, 2));
+}
+
+await main();

@@ -177,6 +177,11 @@
       grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     }
 
+    .metric {
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
     figure {
       margin: 0;
       border: 1px solid var(--line);
@@ -266,7 +271,7 @@
 
     <section class="panel">
       <h2>Surface Inventory</h2>
-      <p>Source-backed inventory from <code>bun scripts/devtools/surfaces.ts</code>: 31 surface contracts, 48 AppView variants, 47 feature-map entries, 23 owner skills, and 7 explicit DevTools coverage entries.</p>
+      <p>Source-backed inventory from <code>bun scripts/devtools/surfaces.ts</code>: 31 surface contracts, 48 AppView variants, 47 feature-map entries, 23 owner skills, 7 explicit DevTools coverage entries, and 9 recommended Oracle batches. Current receipt: <code>artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json</code>.</p>
       <table>
         <thead>
           <tr><th>Batch</th><th>Surface families</th><th>Status</th><th>Oracle / Evidence</th></tr>
@@ -323,14 +328,49 @@
 
     <section class="panel">
       <h2>Image Diffing Recommendation</h2>
-      <p>Next audit slices should add an image-diffing library to make before/after comparisons explicit instead of relying on visual inspection alone.</p>
+      <p>The audit now has a local ImageMagick-backed DevTools primitive at <code>scripts/devtools/image-diff.ts</code> so before/after screenshots can produce numeric receipts and diff masks instead of relying on visual inspection alone.</p>
       <ul>
-        <li>Use a perceptual screenshot diff tool such as <code>pixelmatch</code> with <code>pngjs</code>, or an equivalent structural/perceptual diff library, and save masks beside each before/after pair.</li>
+        <li>Save masks beside each before/after pair and keep the JSON receipt next to the layout and screenshot receipts.</li>
         <li>Generate focused overlays that call out rounded-corner deltas, padding shifts, hit-target expansion, row-height changes, popup anchor movement, and material/blur region changes.</li>
         <li>Record numeric summaries in this log: changed-pixel count, changed-pixel ratio, bounding boxes of differences, per-corner radius evidence, and expected-vs-actual padding/token deltas.</li>
         <li>Prefer component-cropped diffs for buttons, selected rows, input chrome, footers, popups, and window corners so tiny Tahoe/Liquid Glass regressions are easy to see.</li>
         <li>Keep raw screenshots, diff masks, and JSON diff receipts under <code>artifacts/liquid-glass/</code>, then link them from each surface row.</li>
       </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Image Diff Receipts</h2>
+      <table>
+        <thead>
+          <tr><th>Pair</th><th>Dimensions</th><th>Changed pixels</th><th>Receipt</th><th>Interpretation</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Main launcher before to Tahoe metric slice</td>
+            <td><span class="metric">1724x1184 -> 1724x1184</span></td>
+            <td><span class="metric">115,430 / 2,041,216 = 5.65%</span></td>
+            <td><code>image-diff-main-before-to-tahoe-next.json</code></td>
+            <td>Same-size screenshot pair. The mask isolates real visual drift while layout receipts prove no content glass misuse and no hit failures.</td>
+          </tr>
+          <tr>
+            <td>Actions dialog before to Tahoe metric slice</td>
+            <td><span class="metric">1636x1096 -> 1724x1184</span></td>
+            <td><span class="metric">1,504,270 / 2,041,216 = 73.69%</span></td>
+            <td><code>image-diff-actions-before-to-tahoe-next.json</code></td>
+            <td>The high changed-pixel ratio is expected because the strict target capture dimensions changed. Numeric layout proof is stronger here: popup 340x402, radius 18, search 40, rows 36, row radius 10.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="shot-grid" style="margin-top:14px">
+        <figure>
+          <a href="artifacts/liquid-glass/diffs/main-before-to-tahoe-next.png"><img src="artifacts/liquid-glass/diffs/main-before-to-tahoe-next.png" alt="Diff mask for main launcher before to Tahoe metric slice"></a>
+          <figcaption>Main launcher diff mask: <code>artifacts/liquid-glass/diffs/main-before-to-tahoe-next.png</code>.</figcaption>
+        </figure>
+        <figure>
+          <a href="artifacts/liquid-glass/diffs/actions-before-to-tahoe-next.png"><img src="artifacts/liquid-glass/diffs/actions-before-to-tahoe-next.png" alt="Diff mask for actions dialog before to Tahoe metric slice"></a>
+          <figcaption>Actions dialog diff mask: <code>artifacts/liquid-glass/diffs/actions-before-to-tahoe-next.png</code>. Needs a component-cropped follow-up diff for smaller visual deltas.</figcaption>
+        </figure>
+      </div>
     </section>
 
     <section class="panel">
@@ -406,6 +446,10 @@
         <div class="entry">
           <time>2026-05-29 20:45 MDT</time>
           <p>Applied the first visible Tahoe metric slice locally: ActionsDialog width 340, popup radius 18, search height 40, row height 36, section header height 22, row radius 10, launcher selected-row render radius 10, and footer keycap/action gaps/radii updated to the 22/6/4/10 token set. Runtime receipts from session <code>liquid-glass-tahoe-next</code> captured <code>tahoe-next-main.png</code>, <code>tahoe-next-actions.png</code>, and key metric JSON. Focused tests and <code>check --lib</code>/<code>build --bin script-kit-gpui</code> passed; broad <code>actions_dialog</code> filter exposed an unrelated ACP escape test failure to track separately.</p>
+        </div>
+        <div class="entry">
+          <time>2026-05-29 20:50 MDT</time>
+          <p>Added <code>scripts/devtools/image-diff.ts</code> and generated first mathematical screenshot-diff receipts. Main launcher before-to-Tahoe mask measured 115,430 changed pixels out of 2,041,216 (5.65%). Actions before-to-Tahoe mask measured 1,504,270 changed pixels (73.69%) with a dimension warning because the strict capture grew from 1636x1096 to 1724x1184; this is recorded as a prompt to add component-cropped popup diffs before using image masks for fine-grained actions claims.</p>
         </div>
       </div>
     </section>
