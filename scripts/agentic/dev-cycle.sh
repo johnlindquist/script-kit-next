@@ -183,9 +183,17 @@ fi
 
 before_mtime="$(mtime "$BIN_PATH")"
 
+# Opt-in cargo features for the dev build (space- or comma-separated). Lets the
+# dev loop enable optional features like local-llm:
+#   SCRIPT_KIT_CARGO_FEATURES=local-llm ./dev.sh
+feature_args=()
+if [ -n "${SCRIPT_KIT_CARGO_FEATURES:-}" ]; then
+    feature_args+=(--features "$SCRIPT_KIT_CARGO_FEATURES")
+fi
+
 build_start=$SECONDS
 run_with_heartbeat build \
-    cargo build --bin script-kit-gpui --message-format="${SCRIPT_KIT_CARGO_MESSAGE_FORMAT:-short}"
+    cargo build --bin script-kit-gpui "${feature_args[@]}" --message-format="${SCRIPT_KIT_CARGO_MESSAGE_FORMAT:-short}"
 build_elapsed=$((SECONDS - build_start))
 
 after_mtime="$(mtime "$BIN_PATH")"

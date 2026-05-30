@@ -176,8 +176,8 @@ fn measured_native_baselines_are_probe_backed_and_pinned() {
 /// the audit can never claim 9pt while the UI still renders 0pt (no fake-green).
 #[test]
 fn search_input_renders_and_emits_native_nine_point_content_inset() {
-    let tokens = fs::read_to_string("src/ui/chrome/tokens.rs")
-        .expect("failed to read chrome tokens.rs");
+    let tokens =
+        fs::read_to_string("src/ui/chrome/tokens.rs").expect("failed to read chrome tokens.rs");
     assert!(
         tokens.contains("pub const SEARCH_INPUT_TEXT_INSET_X_PX: f32 = 9.0;"),
         "the search-input inset token must be the measured native 9pt"
@@ -216,7 +216,9 @@ fn search_input_renders_and_emits_native_nine_point_content_inset() {
         "SearchInput must emit the 9pt native content inset, matching the render layer"
     );
     assert!(
-        !node.contains("0.0,\n                    crate::panel::CURSOR_MARGIN_Y,\n                    0.0,"),
+        !node.contains(
+            "0.0,\n                    crate::panel::CURSOR_MARGIN_Y,\n                    0.0,"
+        ),
         "SearchInput must no longer emit the pre-fix flush 0.0pt horizontal inset"
     );
 }
@@ -287,8 +289,9 @@ fn window_radius_is_measured_against_native_mask_baseline() {
         "probe must screenshot native windows and measure their corner mask"
     );
 
-    let receipt = fs::read_to_string("artifacts/liquid-glass/receipts/tahoe-window-mask-baseline.json")
-        .expect("window-mask baseline receipt must be committed");
+    let receipt =
+        fs::read_to_string("artifacts/liquid-glass/receipts/tahoe-window-mask-baseline.json")
+            .expect("window-mask baseline receipt must be committed");
     for needle in [
         "\"cornerRadiusPt\" : 15",
         "titledStandardWindow",

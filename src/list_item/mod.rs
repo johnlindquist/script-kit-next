@@ -1085,8 +1085,12 @@ pub struct ListItem {
     on_hover: Option<OnHoverCallback>,
     /// Semantic ID for AI-driven UX targeting. Format: {type}:{index}:{value}
     semantic_id: Option<String>,
-    /// Show left accent bar when selected (3px colored bar on left edge)
+    /// Deprecated: the left-edge selected-row accent bar has been removed.
+    /// Retained as a no-op flag so existing call sites keep compiling.
     show_accent_bar: bool,
+    /// Live accent-color exploration variation (main menu). Controls which single
+    /// surface of the row carries the theme accent. Default is `RowTint`.
+    accent_variation: crate::designs::AccentVariation,
     /// Character indices in the name that match the search query (for fuzzy highlight)
     /// When present, matched characters are rendered with accent color for visual emphasis
     highlight_indices: Option<Vec<usize>>,
@@ -1158,6 +1162,7 @@ impl ListItem {
             on_hover: None,
             semantic_id: None,
             show_accent_bar: false,
+            accent_variation: crate::designs::AccentVariation::default(),
             highlight_indices: None,
             description_highlight_indices: None,
             type_accessory: None,
@@ -1168,9 +1173,16 @@ impl ListItem {
         }
     }
 
-    /// Enable the left accent bar (3px colored bar shown when selected)
-    pub fn with_accent_bar(mut self, show: bool) -> Self {
-        self.show_accent_bar = show;
+    /// Deprecated no-op: the left-edge selected-row accent bar was removed in
+    /// favor of the [`AccentVariation`](crate::designs::AccentVariation) explorer.
+    /// Kept so existing call sites compile unchanged.
+    pub fn with_accent_bar(self, _show: bool) -> Self {
+        self
+    }
+
+    /// Set the live accent-color exploration variation for this row.
+    pub fn accent_variation(mut self, variation: crate::designs::AccentVariation) -> Self {
+        self.accent_variation = variation;
         self
     }
 
@@ -1398,17 +1410,63 @@ impl RenderOnce for ListItem {
         // This replaces per-view InputMode::Mouse gating — GPUI tracks modality natively.
         let hover_visible = self.hovered && !window.last_input_was_keyboard();
 
-        // Both hover and selected use text_primary (white on dark, black on light)
-        // at different opacities for a clear luminance ladder
+        // Live accent exploration: which single surface of the row carries the
+        // theme accent. Every variation shares one baseline — no left-edge bar.
+        use crate::designs::AccentVariation;
+        // Footer-combo variations reuse the Icon Tile row look; collapse to the
+        // row kind so the matches below stay a small closed set.
+        let accent_variation = self.accent_variation.row_kind();
+        // Pack the theme accent (0xRRGGBB) into an rgba color at the given alpha.
+        let accent_at = |alpha: u32| rgba((colors.accent_selected << 8) | alpha);
+        let selected = self.selected;
+
+        // --- Bold accent treatment decisions (see AccentVariation) ---
+        // Each flag lights up one row surface; deliberately high-contrast.
+        let on_accent_text = matches!(accent_variation, AccentVariation::SolidFill) && selected;
+        let name_is_accent = matches!(
+            accent_variation,
+            AccentVariation::AccentText | AccentVariation::AccentName | AccentVariation::Loud
+        ) && selected;
+        let icon_is_accent_bright = matches!(
+            accent_variation,
+            AccentVariation::AccentText | AccentVariation::Loud
+        ) && selected;
+        let icon_all_accent = matches!(accent_variation, AccentVariation::AllIcons);
+        let icon_tile = matches!(accent_variation, AccentVariation::IconTile) && selected;
+        let ring = matches!(accent_variation, AccentVariation::Ring) && selected;
+        let left_block = matches!(accent_variation, AccentVariation::LeftBlock);
+        let name_underline_bold =
+            matches!(accent_variation, AccentVariation::AccentName) && selected;
+        let badges_accent = matches!(accent_variation, AccentVariation::Loud);
+
+        // Both hover and selected use text_primary at different opacities by default.
         let selected_alpha = (colors.selected_opacity * 255.0) as u8;
         let hover_alpha = (colors.hover_opacity * 255.0) as u8;
-        let selected_bg = colors.text_primary.rgba8(selected_alpha);
-        let hover_bg = colors.text_primary.rgba8(hover_alpha);
+        // Fill-style variations replace the neutral selection fill with bold accent.
+        let (selected_bg, hover_bg): (Hsla, Hsla) = match accent_variation {
+            AccentVariation::SolidFill => (accent_at(0xCC).into(), accent_at(0x55).into()),
+            AccentVariation::Ring => (accent_at(0x24).into(), accent_at(0x14).into()),
+            AccentVariation::Loud => (accent_at(0x40).into(), accent_at(0x1E).into()),
+            _ => (
+                colors.text_primary.rgba8(selected_alpha),
+                colors.text_primary.rgba8(hover_alpha),
+            ),
+        };
 
         // Icon element (if present) - displayed on the left
         // Supports both emoji strings and PNG image data
-        // Icons use slightly muted color to maintain text hierarchy
-        let icon_text_color = if self.selected {
+        let icon_text_color = if on_accent_text || icon_tile {
+            // On a solid accent fill/tile, the glyph flips to the contrast color.
+            rgb(colors.text_on_accent)
+        } else if icon_is_accent_bright {
+            accent_at(0xFF)
+        } else if icon_all_accent {
+            if selected {
+                accent_at(0xFF)
+            } else {
+                accent_at(0xC0)
+            }
+        } else if selected {
             rgb(colors.text_primary)
         } else {
             rgba((colors.text_primary << 8) | colors.alpha_icon) // Quiet icons let names lead
@@ -1464,6 +1522,22 @@ impl RenderOnce for ListItem {
             }
         };
 
+        // Icon Tile: seat the selected icon inside a solid filled accent tile.
+        let icon_element = if icon_tile && self.icon.is_some() {
+            div()
+                .w(icon_size)
+                .h(icon_size)
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(7.0))
+                .bg(accent_at(0xF2))
+                .flex_shrink_0()
+                .child(icon_element)
+        } else {
+            icon_element
+        };
+
         // Progressive disclosure: detect if search/filter is active
         // Used to conditionally show descriptions and accessories
         let is_filtering =
@@ -1489,8 +1563,12 @@ impl RenderOnce for ListItem {
             metrics.name_weight
         };
         let name_element = if let Some(ref indices) = self.highlight_indices {
-            // Build StyledText with highlighted matched characters
-            let highlight_color = if self.selected {
+            // Build StyledText with highlighted matched characters.
+            let highlight_color = if on_accent_text {
+                rgb(colors.text_on_accent)
+            } else if name_is_accent {
+                accent_at(0xFF)
+            } else if self.selected {
                 rgb(colors.text_primary)
             } else {
                 rgba((colors.text_primary << 8) | colors.alpha_name)
@@ -1509,7 +1587,9 @@ impl RenderOnce for ListItem {
             }
 
             // Base text color is more muted when highlighting to create contrast
-            let base_color = if self.selected {
+            let base_color = if on_accent_text {
+                rgba((colors.text_on_accent << 8) | 0xCC)
+            } else if self.selected {
                 rgba((colors.text_primary << 8) | colors.alpha_muted)
             } else {
                 rgba((colors.text_primary << 8) | colors.alpha_hint)
@@ -1533,9 +1613,11 @@ impl RenderOnce for ListItem {
                 .child(styled)
         } else {
             // Plain text rendering (no search active)
-            // Selected: full-opacity primary text for maximum readability
-            // Unselected: quieted primary text so selected item stands out
-            let name_color = if self.selected {
+            let name_color = if on_accent_text {
+                rgb(colors.text_on_accent)
+            } else if name_is_accent {
+                accent_at(0xFF)
+            } else if self.selected {
                 rgb(colors.text_primary)
             } else {
                 rgba((colors.text_primary << 8) | colors.alpha_name)
@@ -1555,6 +1637,15 @@ impl RenderOnce for ListItem {
                 .child(self.name)
         };
 
+        // Accent Name: a thick accent underline beneath the bright-accent title.
+        let name_element = if name_underline_bold {
+            name_element
+                .border_b(px(2.0))
+                .border_color(accent_at(0xFF))
+                .pb(px(1.0))
+        } else {
+            name_element
+        };
         item_content = item_content.child(name_element);
 
         // Description - progressive disclosure pattern (Spotlight/Raycast style)
@@ -1572,7 +1663,9 @@ impl RenderOnce for ListItem {
                 // Selected: use primary text (readable against selection bg)
                 // Unselected: use secondary text (recedes in the list)
                 // All descriptions use text_primary — opacity alone controls brightness
-                let desc_color = if self.selected {
+                let desc_color = if on_accent_text {
+                    rgba((colors.text_on_accent << 8) | 0xCC)
+                } else if self.selected {
                     rgba((colors.text_primary << 8) | colors.alpha_muted)
                 } else {
                     rgba((colors.text_primary << 8) | colors.alpha_hint)
@@ -1580,8 +1673,10 @@ impl RenderOnce for ListItem {
                 let desc_element = if let Some(ref desc_indices) =
                     self.description_highlight_indices
                 {
-                    // Build StyledText with highlighted matched characters in description
-                    let highlight_color = if self.selected {
+                    // Build StyledText with highlighted matched characters in description.
+                    let highlight_color = if on_accent_text {
+                        rgb(colors.text_on_accent)
+                    } else if self.selected {
                         rgba((colors.text_primary << 8) | colors.alpha_strong)
                     } else {
                         rgba((colors.text_primary << 8) | colors.alpha_muted)
@@ -1694,11 +1789,9 @@ impl RenderOnce for ListItem {
         // without waiting for state updates via cx.notify().
         //
         // For selected items, we don't apply hover styles (they already have full focus styling).
-        let pl_val = if self.show_accent_bar {
-            ITEM_PADDING_X - ACCENT_BAR_WIDTH
-        } else {
-            ITEM_PADDING_X
-        };
+        // The left-edge selected-row accent bar was removed; rows use uniform
+        // leading padding regardless of selection.
+        let pl_val = ITEM_PADDING_X;
 
         let inner_content_id = ElementId::NamedInteger("list-item-inner".into(), item_index as u64);
         let mut inner_content = div()
@@ -1716,8 +1809,37 @@ impl RenderOnce for ListItem {
             .flex()
             .flex_row()
             .items_center()
-            .gap(px(metrics.icon_text_gap))
-            .child(icon_element);
+            .gap(px(metrics.icon_text_gap));
+
+        // Left Block: a chunky filled accent block leading the row. The slot is
+        // always reserved so icons stay aligned across rows.
+        if left_block {
+            let block_alpha = if self.selected {
+                0xFF
+            } else if hover_visible {
+                0x66
+            } else {
+                0x00
+            };
+            inner_content = inner_content.child(
+                div()
+                    .w(px(10.0))
+                    .h_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .flex_shrink_0()
+                    .child(
+                        div()
+                            .w(px(6.0))
+                            .h(px(20.0))
+                            .rounded(px(3.0))
+                            .bg(accent_at(block_alpha)),
+                    ),
+            );
+        }
+
+        inner_content = inner_content.child(icon_element);
 
         // Leading accessory slot (e.g., color swatch strip) — between icon and text
         let has_leading_accessory = self.leading_accessory.is_some();
@@ -1744,16 +1866,27 @@ impl RenderOnce for ListItem {
             // Tool/language badge for scriptlets (e.g., "ts", "bash")
             if show_accessories && !is_filtering {
                 if let Some(ref badge) = self.tool_badge {
-                    let badge_bg = (colors.text_primary << 8) | ALPHA_TINT_MEDIUM;
+                    // Loud lights up the metadata badges with the accent too.
+                    let badge_is_accent = badges_accent;
+                    let badge_bg = if badge_is_accent {
+                        accent_at(0x40)
+                    } else {
+                        rgba((colors.text_primary << 8) | ALPHA_TINT_MEDIUM)
+                    };
+                    let badge_text = if badge_is_accent {
+                        accent_at(0xFF)
+                    } else {
+                        rgba((colors.text_primary << 8) | colors.alpha_hint)
+                    };
                     accessories = accessories.child(
                         div()
                             .text_size(px(TOOL_BADGE_FONT_SIZE))
                             .font_family(FONT_MONO)
-                            .text_color(rgba((colors.text_primary << 8) | colors.alpha_hint))
+                            .text_color(badge_text)
                             .px(px(TOOL_BADGE_PADDING_X))
                             .py(px(TOOL_BADGE_PADDING_Y))
                             .rounded(px(TOOL_BADGE_RADIUS))
-                            .bg(rgba(badge_bg))
+                            .bg(badge_bg)
                             .child(badge.clone()),
                     );
                 }
@@ -1775,7 +1908,12 @@ impl RenderOnce for ListItem {
             if let Some(ref accessory) = self.type_accessory {
                 let tooltip_label = accessory.label.to_string();
                 let svg_path = resolve_svg_icon_path(accessory.icon_name);
-                let accent_color = rgba(row_type_accessory_rgba(&colors, self.selected));
+                // Loud pushes the type accessory accent harder than the baseline.
+                let accent_color = if badges_accent {
+                    accent_at(if self.selected { 0xFF } else { 0x99 })
+                } else {
+                    rgba(row_type_accessory_rgba(&colors, self.selected))
+                };
                 accessories = accessories.child(
                     div()
                         .id(ElementId::Name(
@@ -1832,22 +1970,12 @@ impl RenderOnce for ListItem {
             ElementId::NamedInteger("list-item".into(), item_index as u64)
         };
 
-        // Accent bar: Use LEFT BORDER on inner_content instead of container because:
-        // 1. GPUI clamps corner radii to ≤ half the shortest side
-        // 2. A 3px-wide child with 12px radius gets clamped to ~1.5px (invisible)
-        // 3. A border on the inner_content follows rounded corners naturally
-        let accent_color = rgb(colors.accent_selected);
+        // Left-edge accent bar removed: accent usage is now governed by the
+        // AccentVariation explorer applied above, not a fixed selection strip.
 
-        // Apply accent bar as left border (only when enabled)
-        if self.show_accent_bar {
-            inner_content =
-                inner_content
-                    .border_l(px(ACCENT_BAR_WIDTH))
-                    .border_color(if self.selected {
-                        accent_color
-                    } else {
-                        gpui::transparent_black().into()
-                    });
+        // Accent Ring: outline the selected row with a thick accent border.
+        if ring {
+            inner_content = inner_content.border_2().border_color(accent_at(0xE6));
         }
 
         // Base container with ID for stateful interactivity
@@ -2114,6 +2242,33 @@ mod render_section_header_source_tests {
         assert!(
             !body.contains("suppresses top border"),
             "render_section_header docs should not describe removed separator behavior"
+        );
+    }
+}
+
+#[cfg(test)]
+mod selected_accent_bar_removed_tests {
+    const SOURCE: &str = include_str!("mod.rs");
+
+    #[test]
+    fn list_item_does_not_render_left_edge_accent_bar() {
+        // The selected-row left-edge accent strip was removed in favor of the
+        // AccentVariation explorer. Guard against it sneaking back in.
+        // NOTE: needle is assembled via concat! so this assertion does not
+        // match itself in the included source text.
+        let needle = concat!("border_l(px(ACCENT_", "BAR_WIDTH))");
+        assert!(
+            !SOURCE.contains(needle),
+            "selected-row left-edge accent bar must not render"
+        );
+    }
+
+    #[test]
+    fn with_accent_bar_is_a_no_op() {
+        // The builder is retained only for call-site compatibility.
+        assert!(
+            SOURCE.contains("pub fn with_accent_bar(self, _show: bool) -> Self"),
+            "with_accent_bar should be a compatibility no-op"
         );
     }
 }

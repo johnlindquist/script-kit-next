@@ -28,41 +28,63 @@ impl ScriptListApp {
         }
     }
 
-    pub(crate) fn cycle_design(&mut self, cx: &mut Context<Self>) {
-        let old_design = self.current_design;
-        let new_design = old_design.next();
-        let all_designs = DesignVariant::all();
-        let old_idx = all_designs
-            .iter()
-            .position(|&v| v == old_design)
-            .unwrap_or(0);
-        let new_idx = all_designs
-            .iter()
-            .position(|&v| v == new_design)
-            .unwrap_or(0);
+    /// Cycle the live accent-color exploration variation for the main menu.
+    ///
+    /// Mirrors the old `cycle_design` pattern: mutate state, log, surface the
+    /// active variation (as a toast and in the search placeholder), then notify.
+    /// Triggered by `alt+left` (`forward = false`) / `alt+right`
+    /// (`forward = true`) from the arrow interceptor and the ScriptList key
+    /// handler.
+    pub(crate) fn cycle_accent_variation(
+        &mut self,
+        forward: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let old_variation = self.current_accent_variation;
+        let new_variation = if forward {
+            old_variation.next()
+        } else {
+            old_variation.prev()
+        };
 
         info!(
-            target: "DESIGN",
-            old_design = old_design.name(),
-            old_index = old_idx,
-            new_design = new_design.name(),
-            new_index = new_idx,
-            total_designs = all_designs.len(),
-            "Cycling design"
-        );
-        info!(
-            target: "DESIGN",
-            design = new_design.name(),
-            description = new_design.description(),
-            "Design details"
+            target: "ACCENT",
+            old_variation = old_variation.name(),
+            old_index = old_variation.index(),
+            new_variation = new_variation.name(),
+            new_index = new_variation.index(),
+            total_variations = crate::designs::AccentVariation::COUNT,
+            "Cycling accent variation"
         );
 
-        self.current_design = new_design;
-        debug!(
-            target: "DESIGN",
-            current_design = ?self.current_design,
-            "Updated current design"
+        self.current_accent_variation = new_variation;
+        // Mirror into the process-global so the native AppKit footer host (which
+        // runs outside the GPUI render tree) can read the active variation when
+        // it rebuilds on the next `sync_main_footer_popup`. See
+        // `crate::designs::current_accent_variation`.
+        crate::designs::set_current_accent_variation(new_variation);
+
+        // Surface the active variation in the search placeholder so it stays
+        // identifiable while browsing the (empty-filter) list.
+        let input_state = self.gpui_input_state.clone();
+        input_state.update(cx, |state, cx| {
+            state.set_placeholder(new_variation.placeholder(), window, cx);
+        });
+
+        self.toast_manager.push(
+            components::toast::Toast::info(
+                format!(
+                    "Accent {}/{}: {}",
+                    new_variation.index() + 1,
+                    crate::designs::AccentVariation::COUNT,
+                    new_variation.name()
+                ),
+                &self.theme,
+            )
+            .duration_ms(Some(TOAST_INFO_MS)),
         );
+
         cx.notify();
     }
 

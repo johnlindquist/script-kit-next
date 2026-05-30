@@ -219,7 +219,8 @@
 
         let gpui_input_state = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder(DEFAULT_PLACEHOLDER)
+                // Placeholder identifies the active accent-exploration variation.
+                .placeholder(crate::designs::AccentVariation::default().placeholder())
                 .inline_completion_visible_without_focus(true)
         });
         let gpui_input_subscription = cx.subscribe_in(&gpui_input_state, window, {

@@ -360,6 +360,16 @@
 app.run(move |cx: &mut App| {
         logging::log("APP", "GPUI Application starting");
 
+        // Drop any loaded on-device ghost-text model before the process tears
+        // down ggml's Metal backend. With the `local-llm` feature this prevents
+        // a llama.cpp static-destructor abort at exit; it is a cheap no-op when
+        // no local model was ever loaded. Runs on every quit path.
+        cx.on_app_quit(|_cx| {
+            crate::ai::local_llm::shutdown_local_ghost_llm();
+            async {}
+        })
+        .detach();
+
         // Warm up the secrets cache in background thread
         // This pre-decrypts secrets.age so AI chat opens instantly instead of
         // waiting ~7s for sequential keyring lookups

@@ -628,7 +628,7 @@ pub(crate) fn save_generated_script_from_response(
     Ok(script_path)
 }
 
-fn select_generation_model(
+pub(crate) fn select_generation_model(
     registry: &ProviderRegistry,
 ) -> Result<(ModelInfo, Arc<dyn AiProvider>)> {
     let models = registry.get_all_models();

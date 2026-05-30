@@ -1342,6 +1342,7 @@ impl Element for TextElement {
         let focus_handle = self.state.read(cx).focus_handle.clone();
         let show_cursor = self.state.read(cx).show_cursor(window, cx);
         let focused = focus_handle.is_focused(window);
+        let is_single_line = self.state.read(cx).mode.is_single_line();
         let show_inline_completion = self.state.read(cx).should_show_inline_completion(window);
         let bounds = prepaint.bounds;
         let selected_range = self.state.read(cx).selected_range;
@@ -1591,11 +1592,19 @@ impl Element for TextElement {
             if let Some(first_line) = &prepaint.ghost_first_line {
                 if let Some(cursor_bounds) = prepaint.cursor_bounds_with_scroll() {
                     let first_line_x = cursor_bounds.origin.x + cursor_bounds.size.width;
-                    let p = point(first_line_x, cursor_bounds.origin.y);
+                    // The caret is vertically centered within the line (its height is
+                    // < line_height), so cursor_bounds.origin.y sits a couple pixels
+                    // below the text row top. Subtract that centering so the ghost
+                    // suffix shares the typed text's baseline instead of drifting down.
+                    let caret_centering = (line_height - cursor_bounds.size.height).max(px(0.)) / 2.;
+                    let p = point(first_line_x, cursor_bounds.origin.y - caret_centering);
 
-                    // Only paint editor background fill when input is focused (editor mode).
-                    // Launcher/non-focused paths skip this to avoid covering vibrancy.
-                    if focused {
+                    // Only paint the editor background fill in multi-line editor mode,
+                    // where ghost text overlays editor content and needs an opaque
+                    // backing. The single-line launcher input must NOT paint it: the
+                    // fill renders as a dark box behind the ghost suffix and also
+                    // covers vibrancy. Ghost text there is just dim foreground text.
+                    if focused && !is_single_line {
                         let bg_bounds =
                             Bounds::new(p, size(first_line.width + px(4.), line_height));
                         window.paint_quad(fill(bg_bounds, cx.theme().editor_background()));

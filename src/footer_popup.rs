@@ -329,6 +329,12 @@ struct MainWindowFooterRefreshSignature {
     selection_rgba: u32,
     hover_rgba: u32,
     left_dot_hex: Option<u32>,
+    /// Active accent-variation discriminant. The accent explorer
+    /// (`crate::designs::AccentVariation`) can tint the footer's text, keycap
+    /// borders, and/or divider toward the accent. The native footer reads the
+    /// *global* current variation (not threaded through `config`), so the
+    /// discriminant is folded into the signature to force a rebuild on cycle.
+    accent_variation: u8,
     /// Per-button leading-dot colors (parallel to `config.buttons`). A theme
     /// change can recolor a button's status dot without changing the config, and
     /// the AppKit dot layer is created inside the content rebuild, so this is
@@ -1214,6 +1220,99 @@ unsafe fn ensure_main_footer_host(ns_window: id) -> bool {
     find_subview_by_identifier(content_view, FOOTER_EFFECT_ID) != nil
 }
 
+/// Hex (0xRRGGBB) for the native footer's label / hint text. Tints toward the
+/// theme accent when the active [`crate::designs::AccentVariation`] enables the
+/// footer-text axis; otherwise the theme's primary text color.
+#[cfg(target_os = "macos")]
+fn footer_text_hex(theme: &crate::theme::Theme) -> u32 {
+    if crate::designs::current_accent_variation().footer_text_accent() {
+        crate::theme::AppChromeColors::from_theme(theme).accent_hex
+    } else {
+        theme.colors.text.primary
+    }
+}
+
+/// Hex (0xRRGGBB) for the native footer's keycap / labelcap borders. Tints
+/// toward the accent when the active variation enables the footer-keycap axis.
+#[cfg(target_os = "macos")]
+fn footer_keycap_hex(theme: &crate::theme::Theme) -> u32 {
+    if crate::designs::current_accent_variation().footer_keycap_accent() {
+        crate::theme::AppChromeColors::from_theme(theme).accent_hex
+    } else {
+        theme.colors.text.primary
+    }
+}
+
+/// Border alpha for the native footer's keycaps. Accent variations render the
+/// borders at a strong fixed alpha so the (often soft) accent reads clearly;
+/// otherwise the theme's muted keycap-border alpha is used.
+#[cfg(target_os = "macos")]
+fn footer_keycap_border_alpha(theme: &crate::theme::Theme, selected: bool) -> f64 {
+    if crate::designs::current_accent_variation().footer_keycap_accent() {
+        0.9
+    } else {
+        crate::components::footer_chrome::footer_keycap_border_alpha(theme, selected) as f64
+    }
+}
+
+/// Resting button-background rgba when a button-fill accent variation is active;
+/// `None` means "leave the button transparent at rest" (the default). See
+/// [`crate::designs::AccentVariation::footer_button_fill`].
+#[cfg(target_os = "macos")]
+fn footer_button_rest_fill_rgba(theme: &crate::theme::Theme) -> Option<u32> {
+    let fill = crate::designs::current_accent_variation().footer_button_fill()?;
+    Some((crate::theme::AppChromeColors::from_theme(theme).accent_hex << 8) | fill.rest)
+}
+
+/// Hover background rgba for a footer button. Accent-fill variations override the
+/// theme hover color so every button hovers to the same accent tint.
+#[cfg(target_os = "macos")]
+fn footer_button_hover_fill_rgba(theme: &crate::theme::Theme) -> u32 {
+    let chrome = crate::theme::AppChromeColors::from_theme(theme);
+    match crate::designs::current_accent_variation().footer_button_fill() {
+        Some(fill) => (chrome.accent_hex << 8) | fill.hover,
+        None => chrome.hover_rgba,
+    }
+}
+
+/// Active/selected background rgba for a footer button. Accent-fill variations
+/// use ONE shared accent tint for every action (keeping the buttons perfectly
+/// in sync); otherwise the per-action theme default is used.
+#[cfg(target_os = "macos")]
+fn footer_button_active_fill_rgba(action: FooterAction, theme: &crate::theme::Theme) -> u32 {
+    let chrome = crate::theme::AppChromeColors::from_theme(theme);
+    match crate::designs::current_accent_variation().footer_button_fill() {
+        Some(fill) => (chrome.accent_hex << 8) | fill.active,
+        None => footer_selected_background_rgba(action, &chrome),
+    }
+}
+
+/// Active/selected background rgba addressed by the cached `_isActionsButton`
+/// ivar (used in hover-exit restore). Mirrors [`footer_button_active_fill_rgba`]
+/// but resolves the action from the ivar so all buttons stay in sync.
+#[cfg(target_os = "macos")]
+fn footer_button_active_fill_rgba_for_actions(
+    is_actions: cocoa::base::BOOL,
+    theme: &crate::theme::Theme,
+) -> u32 {
+    let chrome = crate::theme::AppChromeColors::from_theme(theme);
+    match crate::designs::current_accent_variation().footer_button_fill() {
+        Some(fill) => (chrome.accent_hex << 8) | fill.active,
+        None => footer_selected_background_rgba_for_actions_button(is_actions, &chrome),
+    }
+}
+
+/// Packed RGBA for the native footer's top divider line. Replaces the default
+/// divider color with a strong accent line when the footer-divider axis is on.
+#[cfg(target_os = "macos")]
+fn footer_divider_rgba(theme: &crate::theme::Theme, default_rgba: u32) -> u32 {
+    if crate::designs::current_accent_variation().footer_divider_accent() {
+        (crate::theme::AppChromeColors::from_theme(theme).accent_hex << 8) | 0xFF
+    } else {
+        default_rgba
+    }
+}
+
 #[cfg(target_os = "macos")]
 unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfig) -> bool {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
@@ -1288,6 +1387,7 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
         selection_rgba: chrome.selection_rgba,
         hover_rgba: chrome.hover_rgba,
         left_dot_hex,
+        accent_variation: crate::designs::current_accent_variation() as u8,
         button_leading_dot_hexes,
     };
     let (
@@ -1313,6 +1413,11 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
                 previous.config != signature.config
                     || previous.content_width_bits != signature.content_width_bits
                     || previous.button_leading_dot_hexes != signature.button_leading_dot_hexes
+                    // Accent cycling must fully rebuild the hint buttons so the
+                    // keycap borders and label text pick up the accent (the
+                    // lighter visuals-only recolor path doesn't reach every
+                    // AppKit subview reliably).
+                    || previous.accent_variation != signature.accent_variation
             })
             .unwrap_or(true);
         let footer_visuals_changed = guard
@@ -1325,6 +1430,7 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
                     || previous.selection_rgba != signature.selection_rgba
                     || previous.hover_rgba != signature.hover_rgba
                     || previous.left_dot_hex != signature.left_dot_hex
+                    || previous.accent_variation != signature.accent_variation
             })
             .unwrap_or(true);
         let effect_theme_changed = guard
@@ -1386,7 +1492,8 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
         }
         let divider_layer: id = msg_send![divider_view, layer];
         if divider_layer != nil {
-            let divider_color = ns_color_from_rgba(chrome.divider_rgba);
+            let divider_color =
+                ns_color_from_rgba(footer_divider_rgba(&theme, chrome.divider_rgba));
             if divider_color != nil {
                 let cg_color: id = msg_send![divider_color, CGColor];
                 if cg_color != nil {
@@ -1396,8 +1503,15 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
         }
     }
 
-    let alpha = crate::window_resize::main_layout::HINT_TEXT_OPACITY as f64;
-    let text_color = ns_color_from_hex_with_alpha(theme.colors.text.primary, alpha);
+    // Accent footer text renders at full opacity so the (often soft) theme
+    // accent reads boldly against the translucent footer; non-accent text keeps
+    // the muted hint opacity.
+    let alpha = if crate::designs::current_accent_variation().footer_text_accent() {
+        1.0
+    } else {
+        crate::window_resize::main_layout::HINT_TEXT_OPACITY as f64
+    };
+    let text_color = ns_color_from_hex_with_alpha(footer_text_hex(&theme), alpha);
 
     let hints_view = find_subview_by_identifier(footer_view, FOOTER_HINTS_ID);
     if hints_view != nil {
@@ -2144,13 +2258,15 @@ unsafe fn recolor_footer_hint_subviews(view: id, theme: &crate::theme::Theme) {
         return;
     }
 
-    let text_color = ns_color_from_hex_with_alpha(
-        theme.colors.text.primary,
-        crate::window_resize::main_layout::HINT_TEXT_OPACITY as f64,
-    );
+    let text_alpha = if crate::designs::current_accent_variation().footer_text_accent() {
+        1.0
+    } else {
+        crate::window_resize::main_layout::HINT_TEXT_OPACITY as f64
+    };
+    let text_color = ns_color_from_hex_with_alpha(footer_text_hex(theme), text_alpha);
     let border_color = ns_color_from_hex_with_alpha(
-        theme.colors.text.primary,
-        crate::components::footer_chrome::footer_keycap_border_alpha(theme, false) as f64,
+        footer_keycap_hex(theme),
+        footer_keycap_border_alpha(theme, false),
     );
 
     recolor_footer_hint_subviews_with_colors(view, text_color, border_color);
@@ -2703,7 +2819,6 @@ unsafe fn make_footer_hint_item(
         return nil;
     }
 
-    let chrome = crate::theme::AppChromeColors::from_theme(theme);
     let edge_padding_x = if matches!(
         button_cfg.action,
         FooterAction::Run | FooterAction::Cwd | FooterAction::AgentModel
@@ -2713,14 +2828,12 @@ unsafe fn make_footer_hint_item(
         FOOTER_HINT_PADDING_X
     };
     let keycap_border_color = ns_color_from_hex_with_alpha(
-        theme.colors.text.primary,
-        crate::components::footer_chrome::footer_keycap_border_alpha(theme, button_cfg.selected)
-            as f64,
+        footer_keycap_hex(theme),
+        footer_keycap_border_alpha(theme, button_cfg.selected),
     );
     let labelcap_border_color = ns_color_from_hex_with_alpha(
-        theme.colors.text.primary,
-        crate::components::footer_chrome::footer_keycap_border_alpha(theme, button_cfg.selected)
-            as f64,
+        footer_keycap_hex(theme),
+        footer_keycap_border_alpha(theme, button_cfg.selected),
     );
     let key_font: id = font;
 
@@ -2984,11 +3097,19 @@ unsafe fn make_footer_hint_item(
     let container_layer: id = msg_send![container, layer];
     if container_layer != nil {
         let _: () = msg_send![container_layer, setCornerRadius: FOOTER_HINT_RADIUS];
-        if button_cfg.selected {
-            let selected_ns: id =
-                ns_color_from_rgba(footer_selected_background_rgba(button_cfg.action, &chrome));
-            if selected_ns != nil {
-                let cg: id = msg_send![selected_ns, CGColor];
+        // Resolve the resting background: selected buttons use the active fill,
+        // otherwise accent-fill variations paint a subtle resting tint and all
+        // other variations stay transparent. Every action routes through the
+        // same helpers so the buttons stay perfectly in sync.
+        let rest_rgba = if button_cfg.selected {
+            Some(footer_button_active_fill_rgba(button_cfg.action, theme))
+        } else {
+            footer_button_rest_fill_rgba(theme)
+        };
+        if let Some(rest_rgba) = rest_rgba {
+            let rest_ns: id = ns_color_from_rgba(rest_rgba);
+            if rest_ns != nil {
+                let cg: id = msg_send![rest_ns, CGColor];
                 if cg != nil {
                     let _: () = msg_send![container_layer, setBackgroundColor: cg];
                 }
@@ -3867,12 +3988,11 @@ extern "C" fn footer_button_mouse_down(
             obj.set_ivar::<cocoa::base::BOOL>("_selected", YES);
         }
         let theme = crate::theme::get_cached_theme();
-        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
         apply_footer_button_background(
             button_id,
-            Some(footer_selected_background_rgba(
+            Some(footer_button_active_fill_rgba(
                 FooterAction::Actions,
-                &chrome,
+                &theme,
             )),
         );
         let superview: id = msg_send![button_id, superview];
@@ -3924,8 +4044,10 @@ extern "C" fn footer_button_mouse_entered(
             return;
         }
         let theme = crate::theme::get_cached_theme();
-        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-        apply_footer_button_background(this as *const _ as id, Some(chrome.hover_rgba));
+        apply_footer_button_background(
+            this as *const _ as id,
+            Some(footer_button_hover_fill_rgba(&theme)),
+        );
         set_footer_button_text_opacity(superview, 1.0);
         set_footer_button_border_alpha(
             superview,
@@ -3969,15 +4091,19 @@ extern "C" fn footer_button_mouse_exited(
 
         let theme = crate::theme::get_cached_theme();
         if selected == YES || (is_actions == YES && actions_window_open) {
-            let chrome = crate::theme::AppChromeColors::from_theme(&theme);
             apply_footer_button_background(
                 this as *const _ as id,
-                Some(footer_selected_background_rgba_for_actions_button(
-                    is_actions, &chrome,
+                Some(footer_button_active_fill_rgba_for_actions(
+                    is_actions, &theme,
                 )),
             );
         } else {
-            apply_footer_button_background(this as *const _ as id, None);
+            // Restore the resting state: accent-fill variations keep a subtle
+            // tint at rest (Some), all others clear to transparent (None).
+            apply_footer_button_background(
+                this as *const _ as id,
+                footer_button_rest_fill_rgba(&theme),
+            );
         }
         set_footer_button_text_opacity(superview, crate::theme::opacity::OPACITY_TEXT_MUTED as f64);
         set_footer_button_border_alpha(

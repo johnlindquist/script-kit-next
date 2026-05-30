@@ -166,7 +166,22 @@ impl ScriptListApp {
         match &view.current_view {
             AppView::ScriptList => {
                 // Main script list key handling
-                if view.try_execute_root_file_action_shortcut(
+                if _has_alt
+                    && !has_cmd
+                    && !_has_ctrl
+                    && !has_shift
+                    && (crate::ui_foundation::is_key_left(&key_lower)
+                        || crate::ui_foundation::is_key_right(&key_lower))
+                {
+                    // Alt+Left / Alt+Right cycle the accent-color exploration
+                    // variation (mirrors the live keyboard + interceptor paths).
+                    let forward = crate::ui_foundation::is_key_right(&key_lower);
+                    logging::log(
+                        "STDIN",
+                        "SimulateKey: Alt+Arrow - cycle accent variation",
+                    );
+                    view.cycle_accent_variation(forward, window, ctx);
+                } else if view.try_execute_root_file_action_shortcut(
                     &key_lower, has_cmd, has_shift, _has_alt, _has_ctrl,
                     window, ctx,
                 ) {

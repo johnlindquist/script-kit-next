@@ -610,11 +610,12 @@ impl ScriptListApp {
             // Reset the flag since we're now in main menu
             self.opened_from_main_menu = false;
 
-            // Sync input and reset placeholder to default
+            // Sync input and reset placeholder to the active accent variation id
+            let accent_placeholder = self.current_accent_variation.placeholder();
             self.gpui_input_state.update(cx, |state, cx| {
                 state.set_value("", window, cx);
                 state.set_selection(0, 0, window, cx);
-                state.set_placeholder(DEFAULT_PLACEHOLDER.to_string(), window, cx);
+                state.set_placeholder(accent_placeholder, window, cx);
             });
 
             // Clear actions popup state (prevents stale overlay on return to menu)

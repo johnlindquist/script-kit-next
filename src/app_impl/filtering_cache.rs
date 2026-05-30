@@ -2045,7 +2045,7 @@ impl ScriptListApp {
 
     fn refresh_ghost_from_cached_results_with_cx(
         &mut self,
-        cx: Option<&mut gpui::Context<Self>>,
+        mut cx: Option<&mut gpui::Context<Self>>,
     ) {
         let should_clear = !matches!(self.current_view, AppView::ScriptList)
             || self.show_actions_popup
@@ -2054,61 +2054,313 @@ impl ScriptListApp {
             || self.inline_calculator.is_some();
 
         if should_clear {
-            self.ghost_prediction = None;
-            if let Some(cx) = cx {
-                self.gpui_input_state.update(cx, |state, cx| {
-                    if state.has_inline_completion() {
-                        state.clear_inline_completion(cx);
-                    }
-                });
-            }
+            self.cancel_ghost_llm_prediction();
+            self.clear_ghost_prediction(cx.as_deref_mut());
             return;
         }
 
-        let query = &self.computed_filter_text;
+        let query = self.computed_filter_text.clone();
         let (_, flat_results) = self.main_menu_result_caches.clone_grouped_results();
-        let ghost_context = self
+        // Resolve cwd, then go through the per-cwd cache so we only stat the
+        // two context docs per keystroke instead of reading + parsing up to
+        // 24k chars each time. `context_for_cwd` mutably borrows `self`, so the
+        // query is cloned above to avoid an overlapping immutable borrow.
+        let cwd = self
             .spine_cwd
+            .clone()
+            .or_else(|| std::env::current_dir().ok());
+        let (ghost_context, context_rev) = cwd
             .as_deref()
-            .map(crate::scripts::search::ghost::GhostContext::from_cwd)
-            .or_else(|| {
-                std::env::current_dir()
-                    .ok()
-                    .map(|cwd| crate::scripts::search::ghost::GhostContext::from_cwd(&cwd))
-            })
-            .unwrap_or_default();
-        self.ghost_prediction =
-            crate::scripts::search::ghost::compute_ghost_prediction_with_context(
-                query,
-                &flat_results,
-                crate::scripts::search::ghost::PredictionRevision::default(),
-                &ghost_context,
-            );
+            .map(|cwd| self.ghost_context_cache.context_for_cwd(cwd))
+            .unwrap_or_else(|| (crate::scripts::search::ghost::GhostContext::default(), 0));
+        // `query_rev` rides the LLM generation so revisions advance on every
+        // input change; `context_rev` invalidates when the cwd docs change.
+        let revision = crate::scripts::search::ghost::PredictionRevision {
+            query_rev: self.ghost_llm_generation,
+            catalog_rev: 0,
+            context_rev,
+        };
+
+        // 1. Command completion always wins and suppresses any pending LLM call.
+        if let Some(pred) = crate::scripts::search::ghost::compute_command_ghost_prediction(
+            &query,
+            &flat_results,
+            revision,
+        ) {
+            self.cancel_ghost_llm_prediction();
+            self.apply_ghost_prediction(pred, cx.as_deref_mut());
+            return;
+        }
+
+        // 2. A cached LLM result wins over the deterministic starter.
+        if let Some(pred) = self.cached_ghost_llm_prediction(&query, cwd.as_ref(), context_rev) {
+            self.apply_ghost_prediction(pred, cx.as_deref_mut());
+            // Keep the cached suffix; no need to spawn another request.
+            return;
+        }
+
+        // 3. The deterministic starter shows instantly while the LLM is pending
+        //    or unavailable. Never blank when a real starter exists.
+        let starter = crate::scripts::search::ghost::fallback_prompt_starter_prediction(
+            &query,
+            revision,
+            &ghost_context,
+        );
+        if let Some(pred) = starter {
+            self.apply_ghost_prediction(pred, cx.as_deref_mut());
+        } else {
+            self.clear_ghost_prediction(cx.as_deref_mut());
+        }
+
+        // 4. Only an input-triggered refresh (cx present) may spawn async work.
         if let Some(cx) = cx {
-            if let Some(ref pred) = self.ghost_prediction {
-                let suffix = pred.ghost_suffix.clone();
+            self.maybe_start_ghost_llm_prediction(
+                query,
+                flat_results,
+                cwd,
+                ghost_context,
+                context_rev,
+                cx,
+            );
+        }
+    }
+
+    /// Writes a prediction into both `ghost_prediction` and the inline
+    /// completion suffix, skipping the GPUI update when nothing visible changed
+    /// (avoids flicker between equal suffixes/kinds).
+    fn apply_ghost_prediction(
+        &mut self,
+        pred: crate::scripts::search::ghost::GhostPrediction,
+        cx: Option<&mut gpui::Context<Self>>,
+    ) {
+        let suffix = pred.ghost_suffix.clone();
+        let suffix_changed = self
+            .ghost_prediction
+            .as_ref()
+            .is_none_or(|current| current.ghost_suffix != suffix || current.kind != pred.kind);
+        tracing::info!(
+            target: "script_kit::ghost_text",
+            query = %pred.query,
+            ghost_suffix = %pred.ghost_suffix,
+            full_label = %pred.full_label,
+            confidence = %pred.confidence,
+            ghost_id = pred.ghost_id,
+            kind = pred.kind_label(),
+            accepts_tab = pred.accepts_tab(),
+            "ghost_prediction_applied"
+        );
+        self.ghost_prediction = Some(pred);
+        if suffix_changed {
+            if let Some(cx) = cx {
                 self.gpui_input_state.update(cx, |state, cx| {
                     state.set_inline_completion_text(suffix, cx);
                 });
-                tracing::info!(
-                    target: "script_kit::ghost_text",
-                    query = %pred.query,
-                    ghost_suffix = %pred.ghost_suffix,
-                    full_label = %pred.full_label,
-                    confidence = %pred.confidence,
-                    ghost_id = pred.ghost_id,
-                    kind = pred.kind_label(),
-                    accepts_tab = pred.accepts_tab(),
-                    "ghost_prediction_set_on_input"
-                );
-            } else {
-                self.gpui_input_state.update(cx, |state, cx| {
-                    if state.has_inline_completion() {
-                        state.clear_inline_completion(cx);
-                    }
-                });
             }
         }
+    }
+
+    fn clear_ghost_prediction(&mut self, cx: Option<&mut gpui::Context<Self>>) {
+        self.ghost_prediction = None;
+        if let Some(cx) = cx {
+            self.gpui_input_state.update(cx, |state, cx| {
+                if state.has_inline_completion() {
+                    state.clear_inline_completion(cx);
+                }
+            });
+        }
+    }
+
+    /// Cancels any in-flight LLM ghost request (best-effort) and bumps the
+    /// generation so a late response is discarded on return.
+    fn cancel_ghost_llm_prediction(&mut self) {
+        if let Some(cancel) = self.ghost_llm_cancel.take() {
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        self.ghost_llm_generation = self.ghost_llm_generation.wrapping_add(1).max(1);
+    }
+
+    fn ghost_llm_model_id_hint(&self) -> String {
+        // Ghost text is now served by the on-device GGUF model, so cache identity
+        // is the local model's fingerprint (filename+len+mtime+sampling), not a
+        // cloud provider/model id.
+        crate::ai::local_llm::ghost_model_id_hint(&self.config)
+    }
+
+    fn cached_ghost_llm_prediction(
+        &mut self,
+        query: &str,
+        cwd: Option<&std::path::PathBuf>,
+        context_rev: u64,
+    ) -> Option<crate::scripts::search::ghost::GhostPrediction> {
+        let model_id = self.ghost_llm_model_id_hint();
+        let key = crate::scripts::search::ghost::GhostLlmCacheKey {
+            query: query.to_string(),
+            cwd: cwd.cloned(),
+            context_rev,
+            model_id,
+        };
+        self.ghost_llm_cache.retain(|(_, entry)| entry.is_fresh());
+        self.ghost_llm_cache
+            .iter()
+            .find_map(|(candidate_key, entry)| {
+                (candidate_key == &key).then(|| entry.prediction.clone())
+            })
+    }
+
+    fn cache_ghost_llm_prediction(
+        &mut self,
+        key: crate::scripts::search::ghost::GhostLlmCacheKey,
+        prediction: crate::scripts::search::ghost::GhostPrediction,
+    ) {
+        if let Some(index) = self
+            .ghost_llm_cache
+            .iter()
+            .position(|(candidate_key, _)| candidate_key == &key)
+        {
+            self.ghost_llm_cache.remove(index);
+        }
+        self.ghost_llm_cache.push_front((
+            key,
+            crate::scripts::search::ghost::GhostLlmCacheEntry {
+                prediction,
+                inserted_at: std::time::Instant::now(),
+            },
+        ));
+        while self.ghost_llm_cache.len() > crate::scripts::search::ghost::GHOST_LLM_CACHE_LIMIT {
+            self.ghost_llm_cache.pop_back();
+        }
+    }
+
+    /// Debounced on-device (GGUF/llama.cpp) ghost prediction side-channel.
+    /// Cancels any prior request,
+    /// waits `GHOST_LLM_DEBOUNCE_MS`, calls the provider on the background
+    /// executor, and writes the sanitized suffix back only if still current.
+    fn maybe_start_ghost_llm_prediction(
+        &mut self,
+        query: String,
+        flat_results: std::sync::Arc<[crate::scripts::SearchResult]>,
+        cwd: Option<std::path::PathBuf>,
+        ghost_context: crate::scripts::search::ghost::GhostContext,
+        context_rev: u64,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        const GHOST_LLM_DEBOUNCE_MS: u64 = 320;
+
+        let trimmed = query.trim();
+        if !crate::scripts::search::ghost::is_safe_agent_prompt_seed(trimmed) {
+            self.cancel_ghost_llm_prediction();
+            return;
+        }
+        // Do not spend an LLM call when a command completion already applies.
+        let probe_revision = crate::scripts::search::ghost::PredictionRevision {
+            query_rev: self.ghost_llm_generation,
+            catalog_rev: 0,
+            context_rev,
+        };
+        if crate::scripts::search::ghost::compute_command_ghost_prediction(
+            &query,
+            &flat_results,
+            probe_revision,
+        )
+        .is_some()
+        {
+            self.cancel_ghost_llm_prediction();
+            return;
+        }
+
+        self.cancel_ghost_llm_prediction();
+        self.ghost_llm_generation = self.ghost_llm_generation.wrapping_add(1).max(1);
+        let generation = self.ghost_llm_generation;
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.ghost_llm_cancel = Some(cancel.clone());
+        let config = self.config.clone();
+
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(GHOST_LLM_DEBOUNCE_MS))
+                .await;
+            if cancel.load(Ordering::Relaxed) {
+                return;
+            }
+
+            let query_for_model = query.trim_end().to_string();
+            let config_for_model = config.clone();
+            let ghost_context_for_model = ghost_context.clone();
+            let cwd_for_model = cwd.clone();
+            let cancel_for_model = cancel.clone();
+            // On-device GGUF (llama.cpp) generation — no network. Runs on a
+            // dedicated actor thread; this background task just awaits the reply.
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    crate::ai::local_llm::generate_ghost_completion(
+                        &config_for_model,
+                        crate::ai::local_llm::LocalGhostRequest {
+                            partial_query: query_for_model,
+                            context: ghost_context_for_model,
+                            cwd: cwd_for_model,
+                            cancel: cancel_for_model,
+                        },
+                    )
+                    .map(|response| (response.model_id, response.raw_completion))
+                })
+                .await;
+
+            let _ = cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    if app.ghost_llm_generation != generation {
+                        return;
+                    }
+                    app.ghost_llm_cancel = None;
+                    if app.computed_filter_text != query {
+                        return;
+                    }
+                    let Ok((model_id, raw_response)) = result else {
+                        // Silent fallback: the starter remains visible.
+                        return;
+                    };
+                    let revision = crate::scripts::search::ghost::PredictionRevision {
+                        query_rev: generation,
+                        catalog_rev: 0,
+                        context_rev,
+                    };
+                    let Some(prediction) =
+                        crate::scripts::search::ghost::llm_prediction_from_response(
+                            &query,
+                            &raw_response,
+                            revision,
+                        )
+                    else {
+                        return;
+                    };
+                    // Final priority guard: don't replace a command completion
+                    // that appeared while the LLM was running.
+                    let (_, current_flat) = app.main_menu_result_caches.clone_grouped_results();
+                    if crate::scripts::search::ghost::compute_command_ghost_prediction(
+                        &app.computed_filter_text,
+                        &current_flat,
+                        revision,
+                    )
+                    .is_some()
+                    {
+                        return;
+                    }
+                    let key = crate::scripts::search::ghost::GhostLlmCacheKey {
+                        query: query.clone(),
+                        cwd: cwd.clone(),
+                        context_rev,
+                        model_id,
+                    };
+                    app.cache_ghost_llm_prediction(key, prediction.clone());
+                    app.apply_ghost_prediction(prediction, Some(cx));
+                    cx.notify();
+                })
+            });
+        })
+        .detach();
     }
 }
 

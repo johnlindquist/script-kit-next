@@ -77,15 +77,31 @@ CGGetActiveDisplayList(0, nil, &dispCount)
 var disps = [CGDirectDisplayID](repeating: 0, count: Int(dispCount))
 CGGetActiveDisplayList(dispCount, &disps, &dispCount)
 
-let center = CGPoint(x: winRect.midX, y: winRect.midY)
+// Select the display with the largest overlap with the window rect. This is
+// robust when the window straddles a display edge or sits in a gap between
+// non-aligned displays (where contains(center) can mis-select the main display).
+func overlapArea(_ a: CGRect, _ b: CGRect) -> CGFloat {
+    let r = a.intersection(b)
+    return r.isNull ? 0 : r.width * r.height
+}
 var targetIndex = 0
-for (i, d) in disps.enumerated() where CGDisplayBounds(d).contains(center) { targetIndex = i; break }
+var bestOverlap: CGFloat = -1
+for (i, d) in disps.enumerated() {
+    let o = overlapArea(winRect, CGDisplayBounds(d))
+    if o > bestOverlap { bestOverlap = o; targetIndex = i }
+}
 let target = disps.isEmpty ? CGMainDisplayID() : disps[targetIndex]
 let dispBounds = CGDisplayBounds(target)
-let pixelW = CGDisplayPixelsWide(target)
-let pixelH = CGDisplayPixelsHigh(target)
-let scaleX = Double(pixelW) / Double(dispBounds.width)
-let scaleY = Double(pixelH) / Double(dispBounds.height)
+
+// True BACKING pixel dimensions come from the display mode (pixelWidth/Height),
+// not CGDisplayPixelsWide which returns the scaled *point* resolution on retina
+// displays. screencapture writes images at backing resolution, so the crop must
+// be computed at backing scale.
+let mode = CGDisplayCopyDisplayMode(target)
+let backingW = mode?.pixelWidth ?? CGDisplayPixelsWide(target)
+let backingH = mode?.pixelHeight ?? CGDisplayPixelsHigh(target)
+let scaleX = Double(backingW) / Double(dispBounds.width)
+let scaleY = Double(backingH) / Double(dispBounds.height)
 
 emit([
     "ok": true,
@@ -98,10 +114,12 @@ emit([
     "displayIndex1Based": targetIndex + 1,
     "isMain": CGDisplayIsMain(target) != 0,
     "displayBounds": ["x": dispBounds.minX, "y": dispBounds.minY, "w": dispBounds.width, "h": dispBounds.height],
-    "displayPixels": ["w": pixelW, "h": pixelH],
+    // BACKING pixel dimensions — used by the wrapper to identify which captured
+    // display image is this one (all displays here have distinct sizes).
+    "displayBackingPixels": ["w": backingW, "h": backingH],
     "scaleX": scaleX,
     "scaleY": scaleY,
-    // crop rect in display-local pixels for `sips --cropOffset Y X` + `-c H W`
+    // crop rect in display-local BACKING pixels for `sips --cropOffset Y X` + `-c H W`
     "cropPixels": [
         "x": Int(((winRect.minX - dispBounds.minX) * scaleX).rounded()),
         "y": Int(((winRect.minY - dispBounds.minY) * scaleY).rounded()),

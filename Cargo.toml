@@ -195,6 +195,10 @@ smappservice-rs = "0.1"
 # is deferred because VisibleWindows crop semantics differ from the active-display crop
 # Tab AI currently relies on.
 macos-screenshot-kit = { path = "oracle/macos-screenshot-kit" }
+# On-device GGUF inference for Ghost Text (Cotabby approach). Optional + gated by
+# the `local-llm` feature; default-features off (we don't want openmp) with metal
+# + sampler. Kept off by default until the ggml/whisper double-link is proven.
+llama-cpp-2 = { version = "0.1.146", default-features = false, features = ["metal", "sampler"], optional = true }
 
 [patch."https://github.com/zed-industries/zed"]
 gpui = { path = "vendor/gpui" }
@@ -205,6 +209,10 @@ gpui_util = { path = "vendor/gpui_util" }
 
 [features]
 default = ["ocr"]
+# On-device GGUF ghost-text engine via llama.cpp (Metal). OFF by default until
+# the ggml/whisper double-link is proven clean on macOS CI; enable with
+# `--features local-llm`. See src/ai/local_llm/.
+local-llm = ["dep:llama-cpp-2"]
 # Enable tests that interact with system APIs (clipboard, accessibility, hotkeys)
 # These tests may have side effects like modifying clipboard, opening dialogs, etc.
 # Run with: cargo test --features system-tests

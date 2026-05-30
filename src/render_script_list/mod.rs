@@ -650,6 +650,7 @@ fn render_spine_projection_row(
     is_selected: bool,
     is_hovered: bool,
     colors: ListItemColors,
+    accent_variation: crate::designs::AccentVariation,
 ) -> AnyElement {
     let (type_label, type_icon) = row.kind.type_accessory_info();
 
@@ -657,7 +658,7 @@ fn render_spine_projection_row(
         .index(ix)
         .selected(is_selected)
         .hovered(is_hovered)
-        .with_accent_bar(true)
+        .accent_variation(accent_variation)
         .semantic_id(row.id.to_string())
         .description_opt(row.subtitle.as_ref().map(|subtitle: &gpui::SharedString| subtitle.to_string()))
         .icon_kind_opt(spine_projection_icon_kind(row))
@@ -759,6 +760,9 @@ impl ScriptListApp {
         // Get design tokens for current design variant
         let tokens = get_tokens(self.current_design);
         let design_visual = tokens.visual();
+
+        // Accent exploration is row-level (threaded into the list renderer via
+        // current_accent_variation); no header/footer chrome treatments here.
 
         // Unified color, typography, and spacing resolution
         // Shell uses theme-first so non-default design variants keep the active
@@ -891,6 +895,7 @@ impl ScriptListApp {
 
             // theme_colors was pre-computed above to avoid borrow conflicts
             let current_design = self.current_design;
+            let current_accent_variation = self.current_accent_variation;
 
             // Track filter for closure logging and highlighting
             let filter_for_closure = filter_text_for_render.clone();
@@ -1042,10 +1047,12 @@ impl ScriptListApp {
                                                 is_selected,
                                                 is_hovered,
                                                 theme_colors,
+                                                current_accent_variation,
                                             )
                                         } else {
                                             render_design_item(
                                                 current_design,
+                                                current_accent_variation,
                                                 result,
                                                 ix,
                                                 is_selected,
@@ -1290,6 +1297,25 @@ impl ScriptListApp {
                 let key_str = event.keystroke.key.as_str();
                 let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
+
+                // Alt+Left / Alt+Right cycle the live accent-color exploration
+                // variation. Real keyboard input is caught first by the global
+                // arrow interceptor (which stops propagation); this branch also
+                // serves automation (`simulateKey`), which routes directly here.
+                if matches!(this.current_view, AppView::ScriptList)
+                    && event.keystroke.modifiers.alt
+                    && !has_cmd
+                    && !event.keystroke.modifiers.control
+                    && !event.keystroke.modifiers.shift
+                    && (crate::ui_foundation::is_key_left(key_str)
+                        || crate::ui_foundation::is_key_right(key_str))
+                {
+                    let forward = crate::ui_foundation::is_key_right(key_str);
+                    this.cycle_accent_variation(forward, window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+
                 if matches!(this.current_view, AppView::ScriptList)
                     && this.handle_menu_syntax_form_control_key_input(
                         key_str,
@@ -1375,12 +1401,6 @@ impl ScriptListApp {
                         "l" => {
                             logging::log("KEY", "Shortcut Cmd+L -> toggle_logs");
                             this.toggle_logs(cx);
-                            return;
-                        }
-                        // Cmd+1 cycles through all designs
-                        "1" => {
-                            logging::log("KEY", "Shortcut Cmd+1 -> cycle_design");
-                            this.cycle_design(cx);
                             return;
                         }
                         // Script context shortcuts (require a selected script)

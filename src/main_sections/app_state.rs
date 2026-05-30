@@ -679,6 +679,17 @@ struct ScriptListApp {
     gpui_input_focused: bool,
     pub(crate) ghost_prediction: Option<crate::scripts::search::ghost::GhostPrediction>,
     pub(crate) prediction_revision: crate::scripts::search::ghost::PredictionRevision,
+    /// Monotonic generation guarding the debounced LLM ghost prediction. Bumped
+    /// on every keystroke / cancel so stale background responses are discarded.
+    ghost_llm_generation: u64,
+    /// Cancel flag for the in-flight LLM ghost request (best-effort: set before
+    /// dispatch; stale responses are always discarded by generation compare).
+    ghost_llm_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// LRU cache of LLM ghost predictions keyed by (query, cwd, context_rev, model).
+    ghost_llm_cache: std::collections::VecDeque<(
+        crate::scripts::search::ghost::GhostLlmCacheKey,
+        crate::scripts::search::ghost::GhostLlmCacheEntry,
+    )>,
     pub(crate) launcher_context: crate::context_snapshot::launcher_context::LauncherContextSnapshot,
     launcher_context_generation: u64,
     #[allow(dead_code)]
@@ -852,6 +863,11 @@ struct ScriptListApp {
     /// even though the `>:home` segment is stripped from the input bar.
     spine_cwd_label: Option<String>,
     spine_cwd_revision: u64,
+    /// Caches the parsed ghost-text context digest (project name, task
+    /// phrases, topic keywords) per cwd, keyed by AGENTS.md/README.md
+    /// existence + length + mtime. Lets `refresh_ghost_*` avoid re-reading
+    /// and re-parsing up to 24k chars of docs on every keystroke.
+    ghost_context_cache: crate::scripts::search::ghost::GhostContextCache,
     /// True while the user is inside FileSearchView for the purpose of
     /// picking a working directory (entered by typing `>` in the main
     /// menu). Enter on a directory in this mode sets `spine_cwd` and
@@ -941,6 +957,9 @@ struct ScriptListApp {
     scriptlet_preview_cache_lines: Vec<syntax::HighlightedLine>,
     // Current design variant for hot-swappable UI designs
     current_design: DesignVariant,
+    // Live accent-color exploration variation for the main menu.
+    // Cycled with alt+left/alt+right; surfaced in the search placeholder.
+    pub(crate) current_accent_variation: crate::designs::AccentVariation,
     // Toast manager for notification queue
     toast_manager: ToastManager,
     // Cache for decoded clipboard images (entry_id -> RenderImage)

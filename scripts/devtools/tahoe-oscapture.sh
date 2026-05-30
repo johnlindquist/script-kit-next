@@ -102,18 +102,33 @@ if [[ "$OK_FIELD" != "True" ]]; then
   exit 2
 fi
 
-DIDX="$(read_field "['displayIndex1Based']")"
 CX="$(read_field "['cropPixels']['x']")"
 CY="$(read_field "['cropPixels']['y']")"
 CW="$(read_field "['cropPixels']['w']")"
 CH="$(read_field "['cropPixels']['h']")"
 WID="$(read_field "['windowId']")"
 DID="$(read_field "['displayId']")"
+TBW="$(read_field "['displayBackingPixels']['w']")"
+TBH="$(read_field "['displayBackingPixels']['h']")"
 
-FULL="$(mktemp -t tahoe-disp).png"
-trap 'kill "$CAFF" 2>/dev/null || true; rm -f "$FULL"' EXIT
-screencapture -x -D"$DIDX" -t png "$FULL" 2>/dev/null
-if [[ ! -s "$FULL" ]]; then write_blocked "display-capture-failed"; echo "display $DIDX capture failed" >&2; exit 2; fi
+# Capture EVERY display, then pick the image whose backing pixel size matches the
+# target display. This avoids screencapture's -D index (which does not reliably
+# match CGGetActiveDisplayList order) and works for retina + non-retina mixes.
+TMPDIR_CAP="$(mktemp -d -t tahoe-disp)"
+trap 'kill "$CAFF" 2>/dev/null || true; rm -rf "$TMPDIR_CAP"' EXIT
+# Up to 8 displays; screencapture writes one file per display, extra args ignored.
+screencapture -x -t png \
+  "$TMPDIR_CAP/d1.png" "$TMPDIR_CAP/d2.png" "$TMPDIR_CAP/d3.png" "$TMPDIR_CAP/d4.png" \
+  "$TMPDIR_CAP/d5.png" "$TMPDIR_CAP/d6.png" "$TMPDIR_CAP/d7.png" "$TMPDIR_CAP/d8.png" 2>/dev/null
+
+FULL=""
+for f in "$TMPDIR_CAP"/d*.png; do
+  [[ -s "$f" ]] || continue
+  fw="$(sips -g pixelWidth "$f" 2>/dev/null | awk '/pixelWidth/{print $2}')"
+  fh="$(sips -g pixelHeight "$f" 2>/dev/null | awk '/pixelHeight/{print $2}')"
+  if [[ "$fw" == "$TBW" && "$fh" == "$TBH" ]]; then FULL="$f"; break; fi
+done
+if [[ -z "$FULL" ]]; then write_blocked "display-match-failed"; echo "no captured display matched backing ${TBW}x${TBH}" >&2; exit 2; fi
 
 cp "$FULL" "$PNG"
 sips -c "$CH" "$CW" --cropOffset "$CY" "$CX" "$PNG" >/dev/null 2>&1 || { write_blocked "crop-failed"; echo "crop failed" >&2; exit 2; }
@@ -133,9 +148,9 @@ awk "BEGIN{exit !($NONBLACK < 0.01)}" && { write_blocked "low-content-capture" "
 W="$(sips -g pixelWidth "$PNG" 2>/dev/null | awk '/pixelWidth/{print $2}')"
 H="$(sips -g pixelHeight "$PNG" 2>/dev/null | awk '/pixelHeight/{print $2}')"
 
-python3 - "$RECEIPT" "$TERM_ARG" "$SURFACE" "$PNG" "$WID" "$DID" "$DIDX" "$W" "$H" "$NONBLACK" "$GEO_JSON" <<'PY'
+python3 - "$RECEIPT" "$TERM_ARG" "$SURFACE" "$PNG" "$WID" "$DID" "$W" "$H" "$NONBLACK" "$GEO_JSON" <<'PY'
 import json,sys
-path,term,surface,png,wid,did,didx,w,h,nb,geo=sys.argv[1:12]
+path,term,surface,png,wid,did,w,h,nb,geo=sys.argv[1:11]
 geoj=json.loads(geo)
 json.dump({
   "schemaVersion":1,"label":f"lg-oscap-{term}","surface":surface,"status":"ok",
@@ -145,10 +160,10 @@ json.dump({
     "captureKind":"screen-rect","countsAsOsScreenshotEvidence":True,
     "countsAsCompositorEvidence":True,"blockerCode":"none",
     "screenshotPath":png,"windowId":int(wid),"displayId":int(did),
-    "displayIndex1Based":int(didx),"winRect":geoj.get("winRect"),
+    "winRect":geoj.get("winRect"),"displayBackingPixels":geoj.get("displayBackingPixels"),
     "displayBounds":geoj.get("displayBounds"),"cropPixels":geoj.get("cropPixels"),
-    "attempts":[{"method":"screencapture-display-crop","status":"captured",
-                 "display":int(didx),"nonBlackRatio":float(nb)}],
+    "attempts":[{"method":"screencapture-alldisplays-match-crop","status":"captured",
+                 "displayId":int(did),"nonBlackRatio":float(nb)}],
   },
   "screenshotReceipt":{"captured":True,"path":png,"width":int(w),"height":int(h),
     "captureMethod":"tahoe-oscapture.sh","windowCaptureMethod":"screencapture-display-crop",

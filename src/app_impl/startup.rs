@@ -577,7 +577,8 @@ impl ScriptListApp {
 
         let gpui_input_state = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder(DEFAULT_PLACEHOLDER)
+                // Placeholder identifies the active accent-exploration variation.
+                .placeholder(crate::designs::AccentVariation::default().placeholder())
                 .inline_completion_visible_without_focus(true)
         });
         let gpui_input_subscription = cx.subscribe_in(&gpui_input_state, window, {
@@ -870,6 +871,9 @@ impl ScriptListApp {
             gpui_input_focused: false,
             ghost_prediction: None,
             prediction_revision: Default::default(),
+            ghost_llm_generation: 0,
+            ghost_llm_cancel: None,
+            ghost_llm_cache: std::collections::VecDeque::new(),
             launcher_context: Default::default(),
             launcher_context_generation: 0,
             gpui_input_subscriptions: vec![gpui_input_subscription],
@@ -961,6 +965,7 @@ impl ScriptListApp {
             spine_cwd: initial_spine_cwd,
             spine_cwd_label: initial_spine_cwd_label,
             spine_cwd_revision: initial_spine_cwd_revision,
+            ghost_context_cache: crate::scripts::search::ghost::GhostContextCache::default(),
             cwd_pick_mode: false,
             agent_model_picker_active: false,
             spine_agent_label: initial_spine_agent_label,
@@ -993,6 +998,8 @@ impl ScriptListApp {
             scriptlet_preview_cache_lines: Vec::new(),
             // Design system: start with default design
             current_design: DesignVariant::default(),
+            // Accent-color exploration: start on the first variation (Row Tint)
+            current_accent_variation: crate::designs::AccentVariation::default(),
             // Toast manager: initialize for error notifications
             toast_manager: ToastManager::new(),
             // Clipboard image cache: decoded RenderImages for thumbnails/preview
@@ -1736,6 +1743,32 @@ impl ScriptListApp {
                 let no_direction_modifiers = !event.keystroke.modifiers.platform
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control;
+
+                // Alt+Left / Alt+Right cycle the live accent-color exploration
+                // variation on the main menu. The emoji-grid branch below requires
+                // no_direction_modifiers (which excludes alt), so there is no clash.
+                let alt_direction = event.keystroke.modifiers.alt
+                    && !event.keystroke.modifiers.platform
+                    && !event.keystroke.modifiers.control
+                    && !event.keystroke.modifiers.shift;
+                if (is_left || is_right) && alt_direction {
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            // Scope to the main menu; leave other surfaces untouched.
+                            if !matches!(this.current_view, AppView::ScriptList) {
+                                return;
+                            }
+                            if this.show_actions_popup
+                                || crate::actions::is_actions_window_open()
+                            {
+                                return;
+                            }
+                            this.cycle_accent_variation(is_right, window, cx);
+                        });
+                    }
+                    cx.stop_propagation();
+                    return;
+                }
 
                 // Emoji picker uses Left/Right to navigate the grid and must consume
                 // those keys before the search input moves its text cursor.

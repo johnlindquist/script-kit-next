@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "label": "lg-oscap-clipboard",
+  "surface": "ClipboardHistory",
+  "status": "ok",
+  "classification": "captured",
+  "captureKind": "screen-rect",
+  "visualEvidence": {
+    "source": "os-window-capture",
+    "available": true,
+    "classification": "captured",
+    "captureKind": "screen-rect",
+    "countsAsOsScreenshotEvidence": true,
+    "countsAsCompositorEvidence": true,
+    "blockerCode": "none",
+    "screenshotPath": "artifacts/liquid-glass/screenshots/lg-oscap-clipboard.png",
+    "windowId": 87225,
+    "displayId": 3,
+    "winRect": {
+      "h": 480,
+      "w": 750,
+      "x": 2097,
+      "y": -903
+    },
+    "displayBackingPixels": {
+      "h": 2160,
+      "w": 3840
+    },
+    "displayBounds": {
+      "h": 1080,
+      "w": 1920,
+      "x": 1512,
+      "y": -1080
+    },
+    "cropPixels": {
+      "h": 960,
+      "w": 1500,
+      "x": 1170,
+      "y": 354
+    },
+    "attempts": [
+      {
+        "method": "screencapture-alldisplays-match-crop",
+        "status": "captured",
+        "displayId": 3,
+        "nonBlackRatio": 0.9985
+      }
+    ]
+  },
+  "screenshotReceipt": {
+    "captured": true,
+    "path": "artifacts/liquid-glass/screenshots/lg-oscap-clipboard.png",
+    "width": 1500,
+    "height": 960,
+    "captureMethod": "tahoe-oscapture.sh",
+    "windowCaptureMethod": "screencapture-display-crop",
+    "contentAudit": {
+      "nonBlackRatio": 0.9985,
+      "blank": false
+    }
+  }
+}
