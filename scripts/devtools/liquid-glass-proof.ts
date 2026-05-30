@@ -147,7 +147,7 @@ async function main() {
   };
 
   const surfaceTerms: Record<string, string[]> = {
-    ScriptList: ["main", "launcher"],
+    ScriptList: ["main"],
     ActionsDialog: ["actions"],
     ConfirmPrompt: ["confirm"],
     PromptEntity: ["prompt-div", "promptentity"],
@@ -160,6 +160,7 @@ async function main() {
     AcpChat: ["acp"],
     AcpHistory: ["acp-history"],
     ClipboardHistory: ["clipboard"],
+    AppLauncher: ["app-launcher", "applauncher"],
     NotesWindow: ["notes"],
     Dictation: ["dictation"],
   };
@@ -199,6 +200,10 @@ async function main() {
     } else if (surfaceKind === "ClipboardHistory") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-clipboard-current-layout.json`,
+      ]);
+    } else if (surfaceKind === "AppLauncher") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-app-launcher-current-layout.json`,
       ]);
     } else if (surfaceKind === "PromptEntity") {
       await attachVisualAudit(evidence, [

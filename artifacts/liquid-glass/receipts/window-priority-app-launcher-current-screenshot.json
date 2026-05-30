@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 3,
+  "status": "error",
+  "label": "window-priority-app-launcher-current",
+  "timestamp": "2026-05-30T06:04:38.804Z",
+  "durationMs": 5153,
+  "requiresVisionReview": false,
+  "resolvedTarget": {
+    "windowId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "surfaceId": null
+  },
+  "dispatchPath": "window_role_fallback",
+  "resolvedWindowId": "main",
+  "osWindowId": 84188,
+  "inspectionOsWindowId": 84188,
+  "captureRouting": "inspection-os-window-id",
+  "requestedAutomationWindowId": "main",
+  "requestedOsWindowId": 84188,
+  "showIssuedBeforeCapture": true,
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-app-launcher-current.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowId": null
+  },
+  "captureTarget": {
+    "requestedWindowId": 84188,
+    "actualWindowId": null
+  },
+  "inspection": {
+    "automationWindowId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "osWindowId": 84188,
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 750,
+      "height": 480
+    },
+    "screenshotWidth": 750,
+    "screenshotHeight": 480,
+    "pixelProbes": [],
+    "warnings": [
+      "footer_elements_truncated_by_limit"
+    ]
+  },
+  "popupCapture": {
+    "strategy": "not_applicable",
+    "windowKind": "Main",
+    "targetBounds": null,
+    "semanticReceiptsArePrimary": false
+  },
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": false,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-app-launcher-current.png",
+    "sizeBytes": null,
+    "width": null,
+    "height": null,
+    "contentAudit": null,
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowFrontmost": null,
+    "windowFocused": null,
+    "windowId": null,
+    "error": "Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T06:04:37.098Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-app-launcher-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84188}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T06:04:37.098Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T06:04:37.750Z\",\"attempt\":1,\"windowId\":84188}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T06:04:37.841Z\",\"attempt\":1,\"windowId\":84188,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T06:04:38.050Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-app-launcher-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84188}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T06:04:38.050Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T06:04:38.716Z\",\"attempt\":1,\"windowId\":84188}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T06:04:38.802Z\",\"attempt\":2,\"windowId\":84188,\"exitCode\":1,\"stderr\":\"could not create image from window\"}"
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: FAILED (Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T06:04:37.098Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-app-launcher-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84188}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T06:04:37.098Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T06:04:37.750Z\",\"attempt\":1,\"windowId\":84188}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T06:04:37.841Z\",\"attempt\":1,\"windowId\":84188,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T06:04:38.050Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-app-launcher-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84188}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T06:04:38.050Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T06:04:38.716Z\",\"attempt\":1,\"windowId\":84188}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T06:04:38.802Z\",\"attempt\":2,\"windowId\":84188,\"exitCode\":1,\"stderr\":\"could not create image from window\"})"
+}
