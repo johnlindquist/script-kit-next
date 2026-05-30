@@ -5,7 +5,7 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-latest.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T10:04:20.178Z",
+  "generatedAt": "2026-05-30T10:05:22.431Z",
   "summary": {
     "surfaceCount": 29,
     "strongProofSurfaceCount": 1,
@@ -7823,7 +7823,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -7893,7 +7893,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-prompt-explicit-env.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-current-layout-sdk.json",
@@ -7917,7 +7917,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -7973,7 +7973,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-utility-quick.json",
         "artifacts/liquid-glass/receipts/window-priority-utility-quick-current-layout.json",
@@ -8419,7 +8419,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -8475,7 +8475,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-elements.json",
         "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json",
@@ -8499,7 +8499,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -8600,7 +8600,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-attachment-portal.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-cleanup.json",
@@ -8632,7 +8632,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -8733,7 +8733,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/image-diff-window-priority-confirm-before-to-after.json",
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-confirm-proof.json",
@@ -8760,7 +8760,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -8861,7 +8861,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-webcam.json",
         "artifacts/liquid-glass/receipts/window-priority-webcam-current-cleanup.json",
@@ -8894,7 +8894,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -9111,7 +9111,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-clipboard.json",
         "artifacts/liquid-glass/receipts/tahoe-native-clipboard-capture-hidpi.json",
@@ -9153,7 +9153,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -9254,7 +9254,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-app-launcher.json",
         "artifacts/liquid-glass/receipts/window-priority-app-launcher-current-cleanup.json",
@@ -9280,7 +9280,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -9381,7 +9381,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-window-switcher.json",
         "artifacts/liquid-glass/receipts/window-priority-window-switcher-current-cleanup.json",
@@ -9407,7 +9407,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -9508,7 +9508,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-browser-tabs.json",
         "artifacts/liquid-glass/receipts/window-priority-browser-tabs-current-cleanup.json",
@@ -9534,7 +9534,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -9604,7 +9604,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-generic-filterable.json",
         "artifacts/liquid-glass/receipts/window-priority-generic-filterable-favorites-current-elements.json",
@@ -9641,7 +9641,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -9742,7 +9742,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-process-manager.json",
         "artifacts/liquid-glass/receipts/window-priority-process-manager-current-cleanup.json",
@@ -9768,7 +9768,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -9869,7 +9869,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-current-app.json",
         "artifacts/liquid-glass/receipts/window-priority-current-app-current-cleanup.json",
@@ -9895,7 +9895,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -9996,7 +9996,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-settings.json",
         "artifacts/liquid-glass/receipts/window-priority-settings-current-cleanup.json",
@@ -10022,7 +10022,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -10123,7 +10123,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-kit-store-browse.json",
         "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-cleanup.json",
@@ -10153,7 +10153,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -10254,7 +10254,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-kit-store-installed.json",
         "artifacts/liquid-glass/receipts/window-priority-kit-store-installed-current-cleanup.json",
@@ -10282,7 +10282,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -10338,7 +10338,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-acp-history.json",
         "artifacts/liquid-glass/receipts/window-priority-acp-history-current-cleanup.json",
@@ -10366,7 +10366,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -10467,7 +10467,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-theme.json",
         "artifacts/liquid-glass/receipts/window-priority-theme-current-cleanup.json",
@@ -10493,7 +10493,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -10594,7 +10594,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-emoji.json",
         "artifacts/liquid-glass/receipts/window-priority-emoji-current-cleanup.json",
@@ -10620,7 +10620,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -10676,7 +10676,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-sdk-reference.json",
         "artifacts/liquid-glass/receipts/window-priority-sdk-reference-current-elements.json",
@@ -10701,7 +10701,7 @@
       "proofStatus": "numeric-proof-missing-guideline-assertions",
       "guidanceProofStatus": "stale-layout-evidence",
       "blockingClass": "stale-layout-evidence",
-      "priority": "capture-blocker",
+      "priority": "freshness-refresh",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -10757,7 +10757,7 @@
       ],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "resolve OS compositor capture blocker stale-layout-evidence; current source/layout proof is not contradicted",
+      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-script-template.json",
         "artifacts/liquid-glass/receipts/window-priority-script-template-current-cleanup.json",

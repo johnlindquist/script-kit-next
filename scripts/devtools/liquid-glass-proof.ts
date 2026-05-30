@@ -1358,10 +1358,10 @@ async function main() {
       blockingClass,
       priority: blockingClass === "source-ui-gap" || blockingClass === "devtools-capture-limitation"
         ? "capture-blocker"
-        : compositorCaptureBlocked
-          ? "capture-blocker"
         : blockingClass === "stale-layout-evidence"
           ? "freshness-refresh"
+        : compositorCaptureBlocked
+          ? "capture-blocker"
         : "missing-proof-tier",
       nextEvidenceNeeded: guidanceNeeded,
       guidanceEvidenceNeeded: guidanceNeeded,
@@ -1375,10 +1375,10 @@ async function main() {
       guidelineFailures: surface.guidelineFailures,
       recommendedNextAction: blockingClass === "source-ui-gap"
         ? "fix UI/source layout/style gap, then rerun layout + OS visual proof"
+        : blockingClass === "stale-layout-evidence"
+          ? "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii"
         : compositorCaptureBlocked
           ? `resolve OS compositor capture blocker ${blockingClass}; current source/layout proof is not contradicted`
-          : blockingClass === "stale-layout-evidence"
-            ? "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii"
           : blockingClass === "missing-guidance-visual-evidence"
             ? "run strict OS screenshot capture and image diff for this surface"
             : blockingClass === "diagnostic-readback-limitation"
