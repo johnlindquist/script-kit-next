@@ -167,6 +167,7 @@ async function main() {
     CurrentAppCommands: ["current-app", "current-app-commands", "currentappcommands"],
     Settings: ["settings"],
     EmojiPicker: ["emoji", "emoji-picker", "emojipicker"],
+    ThemeChooser: ["theme", "choose-theme", "theme-chooser", "themechooser"],
     NotesWindow: ["notes"],
     Dictation: ["dictation"],
   };
@@ -234,6 +235,10 @@ async function main() {
     } else if (surfaceKind === "EmojiPicker") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-emoji-current-layout.json`,
+      ]);
+    } else if (surfaceKind === "ThemeChooser") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-theme-current-layout.json`,
       ]);
     } else if (surfaceKind === "PromptEntity") {
       await attachVisualAudit(evidence, [

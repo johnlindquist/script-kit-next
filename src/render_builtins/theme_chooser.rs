@@ -3493,6 +3493,7 @@ impl ScriptListApp {
                         chrome.accent_badge_border_rgba,
                         save_copy_hover_rgba,
                         move |_, _, cx| {
+                            cx.stop_propagation();
                             if let Some(app) = save_click_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     this.save_current_theme_as_user_theme(
@@ -3517,6 +3518,7 @@ impl ScriptListApp {
                         chrome.whisper_border_rgba,
                         neutral_hover_rgba,
                         move |_, _, cx| {
+                            cx.stop_propagation();
                             if let Some(app) = update_click_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     this.update_selected_user_theme(
@@ -3541,6 +3543,7 @@ impl ScriptListApp {
                         chrome.whisper_border_rgba,
                         destructive_hover_rgba,
                         move |_, _, cx| {
+                            cx.stop_propagation();
                             if let Some(app) = delete_click_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     this.delete_selected_user_theme(
@@ -3565,6 +3568,7 @@ impl ScriptListApp {
                         chrome.whisper_border_rgba,
                         neutral_hover_rgba,
                         move |_, _, cx| {
+                            cx.stop_propagation();
                             if let Some(app) = restore_click_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     this.restore_last_deleted_user_theme(
