@@ -1,5 +1,10 @@
 #!/usr/bin/env bun
 
+import {
+  appleGuidelineConformance,
+  type NodeLike,
+} from "./apple-guideline-constants";
+
 type JsonObject = Record<string, unknown>;
 
 type Rect = { x: number; y: number; width: number; height: number };
@@ -436,6 +441,16 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
     const style = node.visualStyle as JsonObject;
     return !hasPositiveRadius(style.cornerRadius) && !hasPositiveRadius(style.radius);
   });
+  // Apple-documented numeric conformance: concentric-radius, control padding,
+  // and capsule-radius deviations against Apple's published FORMULAS/constants
+  // (provenance-tagged in apple-guideline-constants.ts). Replaces the previous
+  // null radius-constants placeholder with real per-node deviation math.
+  const backingScaleFactor =
+    typeof info.backingScaleFactor === "number" ? info.backingScaleFactor : null;
+  const appleConformance = appleGuidelineConformance(
+    nodes as unknown as NodeLike[],
+    backingScaleFactor,
+  );
   return {
     promptType: info.promptType ?? null,
     timestamp: info.timestamp ?? null,
@@ -511,14 +526,50 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
             clippedNodeCount,
             overflowY,
           },
-          buttonShapeFamilies: {
-            source: "apple-documented",
-            exactAppleRadiusConstants: null,
+          // Apple does NOT publish a width-based "exact panel radius constant";
+          // window radius is style-dependent / system-owned. We encode Apple's
+          // documented FORMULAS (capsule = h/2, concentric child = parent − inset)
+          // and compute per-node deviations instead. Exact window radius resolves
+          // via a native baseline probe (metric macos.window.toolbarRadius.nativeBaseline, roadmap).
+          cornerGeometry: {
+            source: "apple-documented-and-derived",
+            backingScaleFactor: appleConformance.backingScaleFactor,
+            constants: appleConformance.constants.filter((m) =>
+              m.category === "cornerRadius" || m.category === "concentricity",
+            ),
+            deviations: appleConformance.deviations.filter((d) =>
+              d.metricId.startsWith("shape.") || d.metricId.startsWith("macos.window."),
+            ),
+            failures: appleConformance.failures.filter((d) => d.metricId.startsWith("shape.")),
+            nearMisses: appleConformance.nearMisses.filter((d) => d.metricId.startsWith("shape.")),
           },
+          padding: {
+            source: "apple-documented-and-derived",
+            constants: appleConformance.constants.filter((m) => m.category === "padding"),
+            deviations: appleConformance.deviations.filter((d) => {
+              const m = appleConformance.constants.find((c) => c.id === d.metricId);
+              return m?.category === "padding";
+            }),
+            unmeasured: appleConformance.unmeasured,
+            failures: appleConformance.failures.filter((d) => {
+              const m = appleConformance.constants.find((c) => c.id === d.metricId);
+              return m?.category === "padding";
+            }),
+          },
+          spacing: {
+            source: "apple-documented",
+            constants: appleConformance.constants.filter((m) => m.category === "spacing"),
+            buttonCenterDistance,
+          },
+          conformanceScore: appleConformance.score,
         },
         projectLocal: {
+          // DEMOTED to a smoke test: "every radius-bearing surface has SOME
+          // positive radius". Numeric Apple alignment now lives in
+          // appleDocumented.cornerGeometry above (concentric deviation math).
           cornerRadiusTokens: {
             source: "project-local",
+            note: "smoke-only: positive-radius presence; numeric Apple comparison is appleDocumented.cornerGeometry",
             failures: cornerRadiusFailures.map((node) => node.name),
           },
           paddingTokens: {
