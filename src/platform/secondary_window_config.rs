@@ -130,31 +130,379 @@ unsafe fn liquid_glass_tint_color() -> id {
     ]
 }
 
+/// Stable `tag` sentinel so the backdrop view can be found idempotently via
+/// `contentView.viewWithTag:` on repeated configure passes.
 #[cfg(target_os = "macos")]
-unsafe fn configure_tahoe_window_backdrop(
-    window: id,
-    log_target: &str,
-    window_name: &str,
-) {
+const TAHOE_GLASS_BACKDROP_TAG: isize = 0x5c17_0175;
+/// Accessibility/debug identifier for the native glass backdrop view.
+#[cfg(target_os = "macos")]
+const TAHOE_GLASS_BACKDROP_IDENTIFIER: &str = "script-kit-tahoe-glass-backdrop";
+/// `NSWindowBelow` ordering constant for `addSubview:positioned:relativeTo:`.
+#[cfg(target_os = "macos")]
+const NS_WINDOW_BELOW: isize = -1;
+
+/// Pass-through hit test: the backdrop never participates in input so it can
+/// never steal clicks/scrolls from GPUI content or the footer trio. Mirrors
+/// the existing `ScriptKitFooterPassthroughView` principle.
+#[cfg(target_os = "macos")]
+extern "C" fn tahoe_glass_backdrop_hit_test(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    _: cocoa::foundation::NSPoint,
+) -> id {
+    cocoa::base::nil
+}
+
+/// `NSView.tag` is read-only, so the subclass overrides it to return the
+/// stable sentinel, enabling idempotent `viewWithTag:` lookup.
+#[cfg(target_os = "macos")]
+extern "C" fn tahoe_glass_backdrop_tag(_this: &objc::runtime::Object, _: objc::runtime::Sel) -> isize {
+    TAHOE_GLASS_BACKDROP_TAG
+}
+
+/// Lazily register a dedicated `NSGlassEffectView` subclass that is pass-through
+/// for hit testing and reports the stable tag. Superclass is resolved at runtime
+/// from `NSGlassEffectView` (macOS 26 Tahoe); returns `None` if unavailable.
+#[cfg(target_os = "macos")]
+fn tahoe_glass_backdrop_view_class(glass_class: id) -> Option<*const objc::runtime::Class> {
+    use objc::declare::ClassDecl;
+    use objc::runtime::{Class, Object, Sel};
+    use std::sync::OnceLock;
+
+    static CLASS: OnceLock<usize> = OnceLock::new();
+    let ptr = *CLASS.get_or_init(|| unsafe {
+        if glass_class.is_null() {
+            return 0;
+        }
+        if let Some(existing) = Class::get("ScriptKitTahoeGlassBackdropView") {
+            return existing as *const Class as usize;
+        }
+        // SAFETY: `glass_class` came from NSClassFromString("NSGlassEffectView");
+        // it is a valid ObjC Class pointer usable as a ClassDecl superclass.
+        let superclass = &*(glass_class as *const Class);
+        let Some(mut decl) = ClassDecl::new("ScriptKitTahoeGlassBackdropView", superclass) else {
+            return Class::get("ScriptKitTahoeGlassBackdropView")
+                .map(|class| class as *const Class as usize)
+                .unwrap_or(0);
+        };
+        decl.add_method(
+            sel!(hitTest:),
+            tahoe_glass_backdrop_hit_test
+                as extern "C" fn(&Object, Sel, cocoa::foundation::NSPoint) -> id,
+        );
+        decl.add_method(
+            sel!(tag),
+            tahoe_glass_backdrop_tag as extern "C" fn(&Object, Sel) -> isize,
+        );
+        decl.register() as *const Class as usize
+    });
+    if ptr == 0 {
+        None
+    } else {
+        Some(ptr as *const objc::runtime::Class)
+    }
+}
+
+/// Read the content view's layer corner radius (0.0 when no backing layer).
+#[cfg(target_os = "macos")]
+unsafe fn tahoe_content_corner_radius(content_view: id) -> f64 {
+    if content_view == nil {
+        return 0.0;
+    }
+    let layer: id = msg_send![content_view, layer];
+    if layer == nil {
+        return 0.0;
+    }
+    msg_send![layer, cornerRadius]
+}
+
+/// Recursively count `isKindOfClass:` matches under `view`, skipping the
+/// `excluded_subtree` root (used to count NSVisualEffectViews while excluding
+/// the glass backdrop itself for the footer non-regression audit).
+#[cfg(target_os = "macos")]
+unsafe fn tahoe_count_views_kind_of_excluding(
+    view: id,
+    class_id: *const objc::runtime::Class,
+    excluded_subtree: id,
+) -> usize {
+    if view == nil || view == excluded_subtree {
+        return 0;
+    }
+    let is_kind: bool = msg_send![view, isKindOfClass: class_id];
+    let mut count = usize::from(is_kind);
+    let subviews: id = msg_send![view, subviews];
+    if subviews != nil {
+        let subview_count: usize = msg_send![subviews, count];
+        for index in 0..subview_count {
+            let child: id = msg_send![subviews, objectAtIndex: index];
+            count += tahoe_count_views_kind_of_excluding(child, class_id, excluded_subtree);
+        }
+    }
+    count
+}
+
+/// Audit the immediate children of `content_view`: how many are glass views and
+/// the index of the first glass child.
+#[cfg(target_os = "macos")]
+unsafe fn tahoe_glass_subview_audit(content_view: id, glass_class: id) -> (usize, Option<usize>, usize) {
+    if content_view == nil || glass_class == nil {
+        return (0, None, 0);
+    }
+    let subviews: id = msg_send![content_view, subviews];
+    if subviews == nil {
+        return (0, None, 0);
+    }
+    let subview_count: usize = msg_send![subviews, count];
+    let mut glass_count = 0usize;
+    let mut first_glass_index = None;
+    for index in 0..subview_count {
+        let child: id = msg_send![subviews, objectAtIndex: index];
+        if child == nil {
+            continue;
+        }
+        let is_glass: bool = msg_send![child, isKindOfClass: glass_class];
+        if is_glass {
+            glass_count += 1;
+            if first_glass_index.is_none() {
+                first_glass_index = Some(index);
+            }
+        }
+    }
+    (glass_count, first_glass_index, subview_count)
+}
+
+/// True when `glass_view` is the backmost (index 0) child of `content_view`.
+#[cfg(target_os = "macos")]
+unsafe fn tahoe_glass_backdrop_is_backmost(content_view: id, glass_view: id) -> bool {
+    if content_view == nil || glass_view == nil {
+        return false;
+    }
+    let subviews: id = msg_send![content_view, subviews];
+    if subviews == nil {
+        return false;
+    }
+    let subview_count: usize = msg_send![subviews, count];
+    if subview_count == 0 {
+        return false;
+    }
+    let first: id = msg_send![subviews, objectAtIndex: 0usize];
+    first == glass_view
+}
+
+/// Re-pin the glass view to the backmost position without reparenting or
+/// touching any sibling (the footer NSVisualEffectView trio is never moved).
+#[cfg(target_os = "macos")]
+unsafe fn tahoe_pin_glass_backdrop_backmost(content_view: id, glass_view: id) {
+    if content_view == nil || glass_view == nil {
+        return;
+    }
+    if tahoe_glass_backdrop_is_backmost(content_view, glass_view) {
+        return;
+    }
+    // SAFETY: retain across the move so removeFromSuperview cannot deallocate
+    // the view before addSubview re-retains it.
+    let _: id = msg_send![glass_view, retain];
+    let _: () = msg_send![glass_view, removeFromSuperview];
+    let _: () = msg_send![
+        content_view,
+        addSubview: glass_view
+        positioned: NS_WINDOW_BELOW
+        relativeTo: nil
+    ];
+    let _: () = msg_send![glass_view, release];
+}
+
+/// Install (or reuse) a native macOS 26 Tahoe `NSGlassEffectView` as the
+/// backmost backdrop of the window's content view.
+///
+/// Design (Oracle-Session tahoe-native-glass-backdrop):
+/// - Gated on `NSGlassEffectView` availability; no-op on older macOS.
+/// - A dedicated, tagged, pass-through subclass inserted as a BACKMOST SIBLING
+///   of content via `addSubview:positioned:NSWindowBelow relativeTo:nil`. It is
+///   NOT a content wrapper (`setContentView:`), so the main-window footer blur
+///   trio (NSVisualEffectView + hitTest:nil + transparent hitbox) is untouched.
+/// - Idempotent: repeated configure passes find the same tagged view via
+///   `viewWithTag:` instead of stacking duplicates.
+/// - The view is NOT an NSVisualEffectView, so the vibrancy recursion that runs
+///   before this call never reconfigures it as blur material.
+///
+/// # Safety
+/// `window` must be a valid NSWindow on the main thread (checked + null-guarded).
+#[cfg(target_os = "macos")]
+unsafe fn configure_tahoe_window_backdrop(window: id, log_target: &str, window_name: &str) {
+    use cocoa::appkit::{NSViewHeightSizable, NSViewWidthSizable};
+    use cocoa::foundation::NSRect;
+
     if window.is_null() {
+        return;
+    }
+    if require_main_thread("configure_tahoe_window_backdrop") {
         return;
     }
 
     let Some(glass_class) = tahoe_liquid_glass_class() else {
+        logging::log(
+            log_target,
+            &format!(
+                "{}: Tahoe NSGlassEffectView unavailable; native glass backdrop skipped",
+                window_name
+            ),
+        );
         return;
     };
 
+    let content_view: id = msg_send![window, contentView];
+    if content_view == nil {
+        logging::log(
+            log_target,
+            &format!(
+                "WARNING: {} has no contentView; Tahoe native glass backdrop skipped",
+                window_name
+            ),
+        );
+        return;
+    }
+
+    let content_bounds: NSRect = msg_send![content_view, bounds];
+    let vev_count_before =
+        tahoe_count_views_kind_of_excluding(content_view, class!(NSVisualEffectView), nil);
+
+    let mut created = false;
+    let mut glass_view: id = msg_send![content_view, viewWithTag: TAHOE_GLASS_BACKDROP_TAG];
+    if glass_view != nil {
+        let is_glass: bool = msg_send![glass_view, isKindOfClass: glass_class];
+        let superview: id = msg_send![glass_view, superview];
+        if !is_glass || superview != content_view {
+            logging::log(
+                log_target,
+                &format!(
+                    "WARNING: {}: Tahoe glass backdrop tag collision (is_glass={}, direct_child={}); skipped",
+                    window_name,
+                    is_glass,
+                    superview == content_view
+                ),
+            );
+            return;
+        }
+    } else {
+        let Some(backdrop_class) = tahoe_glass_backdrop_view_class(glass_class) else {
+            logging::log(
+                log_target,
+                &format!(
+                    "WARNING: {}: failed to register ScriptKitTahoeGlassBackdropView",
+                    window_name
+                ),
+            );
+            return;
+        };
+        let allocated: id = msg_send![backdrop_class, alloc];
+        glass_view = msg_send![allocated, initWithFrame: content_bounds];
+        if glass_view == nil {
+            logging::log(
+                log_target,
+                &format!(
+                    "WARNING: {}: failed to allocate NSGlassEffectView backdrop",
+                    window_name
+                ),
+            );
+            return;
+        }
+        let identifier = tahoe_ns_string(TAHOE_GLASS_BACKDROP_IDENTIFIER);
+        if identifier != nil {
+            let _: () = msg_send![glass_view, setIdentifier: identifier];
+        }
+        let _: () =
+            msg_send![glass_view, setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
+        let _: () = msg_send![
+            content_view,
+            addSubview: glass_view
+            positioned: NS_WINDOW_BELOW
+            relativeTo: nil
+        ];
+        created = true;
+    }
+
+    let _: () = msg_send![glass_view, setFrame: content_bounds];
+    let _: () =
+        msg_send![glass_view, setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
+
     let tint_color = liquid_glass_tint_color();
-    let _ = glass_class;
+    let tint_applied = if tint_color != nil {
+        let responds: bool = msg_send![glass_view, respondsToSelector: sel!(setTintColor:)];
+        if responds {
+            let _: () = msg_send![glass_view, setTintColor: tint_color];
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    let corner_radius = tahoe_content_corner_radius(content_view);
+    let corner_applied = {
+        let responds: bool = msg_send![glass_view, respondsToSelector: sel!(setCornerRadius:)];
+        if responds {
+            let _: () = msg_send![glass_view, setCornerRadius: corner_radius];
+            true
+        } else {
+            false
+        }
+    };
+
+    tahoe_pin_glass_backdrop_backmost(content_view, glass_view);
+    let _: () = msg_send![glass_view, setNeedsDisplay: true];
+
+    let vev_count_after =
+        tahoe_count_views_kind_of_excluding(content_view, class!(NSVisualEffectView), glass_view);
+    let (glass_count, glass_index, subview_count) =
+        tahoe_glass_subview_audit(content_view, glass_class);
+    let backmost = tahoe_glass_backdrop_is_backmost(content_view, glass_view);
+    let index_label = glass_index
+        .map(|index| index.to_string())
+        .unwrap_or_else(|| "none".to_string());
 
     logging::log(
         log_target,
         &format!(
-            "{}: Tahoe native window backdrop uses shared theme tint (tint ready={})",
+            "{}: Tahoe NSGlassEffectView backdrop {} (glass_count={}, backmost={}, index={}, subviews={}, frame=({:.1},{:.1},{:.1},{:.1}), tint_applied={}, corner_applied={}, corner_radius={:.1}, vev_before={}, vev_after_excl_glass={})",
             window_name,
-            !tint_color.is_null()
+            if created { "installed" } else { "reused" },
+            glass_count,
+            backmost,
+            index_label,
+            subview_count,
+            content_bounds.origin.x,
+            content_bounds.origin.y,
+            content_bounds.size.width,
+            content_bounds.size.height,
+            tint_applied,
+            corner_applied,
+            corner_radius,
+            vev_count_before,
+            vev_count_after,
         ),
     );
+
+    if glass_count != 1 || !backmost || vev_count_before != vev_count_after {
+        logging::log(
+            log_target,
+            &format!(
+                "WARNING: {}: Tahoe glass backdrop audit FAILED (glass_count={}, backmost={}, vev_before={}, vev_after_excl_glass={})",
+                window_name, glass_count, backmost, vev_count_before, vev_count_after
+            ),
+        );
+    }
+}
+
+/// Build an autoreleased NSString from a Rust `&str` (nil on interior NUL).
+#[cfg(target_os = "macos")]
+fn tahoe_ns_string(text: &str) -> id {
+    let Ok(c_string) = std::ffi::CString::new(text) else {
+        return nil;
+    };
+    // SAFETY: `c_string` is a valid NUL-terminated C string for this call.
+    unsafe { msg_send![class!(NSString), stringWithUTF8String: c_string.as_ptr()] }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -556,6 +904,90 @@ mod secondary_window_config_tests {
                 "appearance refresh predicate must not match generic/non-secondary title: {title}"
             );
         }
+    }
+
+    // Source-contract guards for the native Tahoe NSGlassEffectView backdrop
+    // (Oracle-Session tahoe-native-glass-backdrop). These do not prove runtime
+    // pixels; they prevent a later "simplification" from removing the
+    // safety-critical idempotence / backmost-insertion / pass-through / footer
+    // non-mutation properties.
+    #[test]
+    fn tahoe_glass_backdrop_source_contract_is_native_idempotent_backmost_and_passthrough() {
+        let source = include_str!("secondary_window_config.rs");
+        assert!(
+            source.contains("tahoe_liquid_glass_class()"),
+            "Tahoe glass must remain gated by NSClassFromString availability"
+        );
+        assert!(
+            source.contains("ScriptKitTahoeGlassBackdropView"),
+            "Tahoe glass backdrop must use a dedicated subclass"
+        );
+        assert!(
+            source.contains("viewWithTag: TAHOE_GLASS_BACKDROP_TAG"),
+            "Tahoe glass backdrop must be idempotent via a stable tag lookup"
+        );
+        assert!(
+            source.contains("initWithFrame: content_bounds"),
+            "Tahoe glass backdrop must be created at contentView bounds"
+        );
+        assert!(
+            source.contains("positioned: NS_WINDOW_BELOW") && source.contains("relativeTo: nil"),
+            "Tahoe glass backdrop must be inserted below all existing contentView subviews"
+        );
+        assert!(
+            source.contains("tahoe_glass_backdrop_hit_test") && source.contains("cocoa::base::nil"),
+            "Tahoe glass backdrop must be pass-through for hit testing"
+        );
+        assert!(
+            source.contains("sel!(setTintColor:)") && source.contains("setTintColor: tint_color"),
+            "Tahoe glass backdrop must apply the theme tint through NSGlassEffectView tintColor"
+        );
+        assert!(
+            source.contains("sel!(setCornerRadius:)")
+                && source.contains("setCornerRadius: corner_radius"),
+            "Tahoe glass backdrop must apply content corner radius when the selector exists"
+        );
+    }
+
+    #[test]
+    fn tahoe_glass_backdrop_source_contract_does_not_mutate_footer_or_wrap_content() {
+        let source = include_str!("secondary_window_config.rs");
+        let start = source
+            .find("unsafe fn configure_tahoe_window_backdrop")
+            .expect("configure_tahoe_window_backdrop exists");
+        let body = &source[start..source[start..]
+            .find("#[cfg(not(target_os = \"macos\"))]")
+            .map(|offset| start + offset)
+            .unwrap_or(source.len())];
+        assert!(
+            !body.contains("setContentView:"),
+            "Tahoe backdrop must not wrap/reparent GPUI or footer content"
+        );
+        assert!(
+            !body.contains("setIgnoresMouseEvents:"),
+            "NSGlassEffectView must be made pass-through with hitTest:nil, not NSWindow-only ignoresMouseEvents"
+        );
+        assert!(
+            !body.contains("setTag:"),
+            "NSView tag is read-only; use subclass tag override instead"
+        );
+        assert!(
+            !body.contains("setMaterial:")
+                && !body.contains("setBlendingMode:")
+                && !body.contains("setState:")
+                && !body.contains("setEmphasized:"),
+            "NSGlassEffectView must not be configured with NSVisualEffectView material selectors"
+        );
+        assert!(
+            !body.contains("FOOTER_") && !body.contains("script-kit-footer-effect"),
+            "Tahoe backdrop configuration must not special-case or mutate footer internals"
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn tahoe_glass_backdrop_ordering_constant_is_backmost() {
+        assert_eq!(super::NS_WINDOW_BELOW, -1);
     }
 }
 
