@@ -112,6 +112,19 @@ function duplicateKeys(bindings: JsonObject[]) {
   return [...duplicates];
 }
 
+function nativeFooterSnapshot(activeFooter: JsonObject, bindings: JsonObject[]) {
+  return {
+    hostInstalled: activeFooter.nativeFooterHostInstalled ?? null,
+    owner: activeFooter.owner ?? null,
+    activeSurface: activeFooter.activeSurface ?? null,
+    expectedSurface: activeFooter.expectedSurface ?? null,
+    bindingsAvailable: bindings.length > 0,
+    activationPrimitiveAvailable: false,
+    missingPrimitive: "nativeFooterActivationReceipt",
+    nextSafeCommand: "bun scripts/devtools/focus.ts inspect --target-id <id> --strict",
+  };
+}
+
 function classify(targetReceipt: JsonObject, stateEnvelope: JsonObject, bindings: JsonObject[]) {
   if (targetReceipt.classification !== "ok") {
     return targetReceipt.classification ?? "blocked-by-target-ambiguity";
@@ -159,6 +172,7 @@ async function main() {
     disabledReason: action.actionDisabled ?? null,
   }));
   const bindings = [...footerBindings, ...popupActions];
+  const nativeFooter = nativeFooterSnapshot(activeFooter, bindings);
   const duplicates = duplicateKeys(bindings);
   const classification = classify(targetReceipt, stateEnvelope, bindings);
 
@@ -180,6 +194,7 @@ async function main() {
       nativeFooterHostInstalled: activeFooter.nativeFooterHostInstalled ?? null,
       buttonCount: activeFooter.buttonCount ?? footerBindings.length,
     },
+    nativeFooter,
     activePopup,
     bindings,
     duplicateKeys: duplicates,
@@ -187,6 +202,7 @@ async function main() {
       bindings.length === 0 ? "keyboardBindings" : "",
       stateEnvelope.status === "error" ? "stateResult" : "",
       targetReceipt.classification !== "ok" ? "strictTargetIdentity" : "",
+      nativeFooter.hostInstalled === true ? "nativeFooterActivationReceipt" : "",
     ].filter(Boolean),
     warnings: [
       duplicates.length > 0 ? `duplicate shortcut keys: ${duplicates.join(", ")}` : "",

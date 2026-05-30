@@ -103,7 +103,7 @@ fn truncate_display(value: &str, max_chars: usize) -> String {
 fn normalized_context_query(query: &str) -> String {
     query
         .trim()
-        .trim_start_matches(|ch: char| matches!(ch, '@' | '/' | '|' | '.' | ';'))
+        .trim_start_matches(['@', '/', '|', '.', ';'])
         .to_ascii_lowercase()
 }
 
@@ -112,8 +112,7 @@ fn context_value_match_penalty(value: &str, normalized_query: &str) -> Option<i3
         return Some(PENALTY_EXACT);
     }
     let value_lower = value.to_ascii_lowercase();
-    let trimmed =
-        value_lower.trim_start_matches(|ch: char| matches!(ch, '@' | '/' | '|' | '.' | ';'));
+    let trimmed = value_lower.trim_start_matches(['@', '/', '|', '.', ';']);
     if trimmed == normalized_query {
         Some(PENALTY_EXACT)
     } else if trimmed.starts_with(normalized_query) {

@@ -986,7 +986,7 @@ impl ScriptListApp {
 
     pub(crate) fn open_tab_ai_acp_with_mention_picker(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.tab_ai_harness_script_list_trigger = Some('@');
@@ -1888,11 +1888,38 @@ impl ScriptListApp {
             source_view = %source_view,
         );
 
-        let origin = if matches!(self.current_view, AppView::FileSearchView { .. }) {
+        let is_file_search = matches!(self.current_view, AppView::FileSearchView { .. });
+        let origin = if is_file_search {
             acp_entry::AcpEntryOrigin::FileSearch
         } else {
             acp_entry::AcpEntryOrigin::MainLauncher
         };
+
+        // Empty-input guard: when the user opens Agent Chat from the main menu
+        // with an empty filter and the selection is merely the default
+        // auto-selected top row (i.e. they typed nothing and never arrowed to a
+        // specific command), Cmd+Return should land in an EMPTY composer rather
+        // than staging that auto-selected row as an `@cmd:` context chip. Staging
+        // is still preserved when the filter is non-empty OR the user
+        // deliberately moved the selection off the default first-selectable row.
+        let suppress_default_script_list_selection = matches!(
+            self.current_view,
+            AppView::ScriptList
+        ) && self.filter_text.trim().is_empty()
+            && self
+                .main_menu_result_caches
+                .first_selectable_index()
+                .map_or(self.selected_index == 0, |first| self.selected_index == first);
+        if suppress_default_script_list_selection {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "tab_ai_script_list_empty_default_selection_not_staged",
+                selected_index = self.selected_index,
+                first_selectable_index = ?self.main_menu_result_caches.first_selectable_index(),
+            );
+        }
+        let suppress_focused_part = suppress_default_script_list_selection;
+
         self.open_acp_chat_from_entry_request(
             acp_entry::AcpEntryRequest {
                 origin,
@@ -1900,9 +1927,11 @@ impl ScriptListApp {
                 seed_text: None,
                 ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
                 seed_policy: acp_entry::AcpSeedPolicy::ComposerOnly,
-                suppress_focused_part: false,
-                context_staging: if matches!(self.current_view, AppView::FileSearchView { .. }) {
+                suppress_focused_part,
+                context_staging: if is_file_search {
                     acp_entry::AcpContextStaging::FileSearchSelection
+                } else if suppress_focused_part {
+                    acp_entry::AcpContextStaging::SuppressFocused
                 } else {
                     acp_entry::AcpContextStaging::AmbientOrFocused
                 },

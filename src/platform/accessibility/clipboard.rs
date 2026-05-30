@@ -94,7 +94,7 @@ pub fn copy_all_plain_text_preserving_clipboard() -> Result<String> {
         };
         restore_result.context("Failed to restore clipboard after focused-text copy fallback")?;
 
-        return Ok(text);
+        Ok(text)
     }
 
     #[cfg(not(target_os = "macos"))]

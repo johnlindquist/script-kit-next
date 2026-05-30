@@ -15,6 +15,9 @@ type Args = {
   key: string;
   modifiers: string[];
   allowSubmit: boolean;
+  submitIntent: string;
+  allowSubmitReason: string;
+  preflightOnly: boolean;
   strict: boolean;
   expectedSurfaceKind: string;
   timeoutMs: number;
@@ -25,8 +28,8 @@ type Args = {
 
 type SubmitLifecycleState =
   | { state: "not-submit"; reason: string }
-  | { state: "blocked-before-dispatch"; reason: string; selectedSemanticId?: string | null }
-  | { state: "dispatched"; actionId?: string | null; parentSubjectId?: string | null; parentSubjectText?: string | null }
+  | { state: "blocked-before-dispatch"; reason: string; gateName?: string; selectedSemanticId?: string | null; nextSafeCommand?: string | null; requiredFlags?: string[]; missingPrimitive?: string | null; requestedIntent?: string | null }
+  | { state: "dispatched"; actionId?: string | null; allowedBy?: string | null; proofIntent?: string | null; parentSubjectId?: string | null; parentSubjectText?: string | null }
   | { state: "source-live"; actionId?: string | null; parentSubjectId?: string | null; parentSubjectText?: string | null }
   | { state: "source-closed-parent-live"; actionId?: string | null; parentSubjectId?: string | null; parentSubjectText?: string | null; parentTarget?: JsonObject | null }
   | { state: "failed"; reason: string; actionId?: string | null; sourceAfter?: JsonObject | null; parentAfter?: JsonObject | null };
@@ -75,6 +78,8 @@ function usage() {
     "  bun scripts/devtools/act.ts set-input --value <value> [target args]  # alias for --text",
     "  bun scripts/devtools/act.ts select --semantic-id <id> [--allow-submit] [target args]",
     "  bun scripts/devtools/act.ts key --key <name-or-character> [--modifiers cmd,shift] [--allow-submit] [target args]",
+    "  bun scripts/devtools/act.ts key --key Enter --modifiers cmd --preflight-only [target args]",
+    "  bun scripts/devtools/act.ts key --key Enter --modifiers cmd --allow-submit --submit-intent agent-chat-route --allow-submit-reason <why> [target args]",
     "  bun scripts/devtools/act.ts open-actions [target args]",
     "  bun scripts/devtools/act.ts set-theme-control --control <id> --value <value> --surface ThemeChooser [target args]",
     "",
@@ -104,6 +109,9 @@ function parseArgs(argv: string[]): Args {
     key: "",
     modifiers: [],
     allowSubmit: false,
+    submitIntent: "",
+    allowSubmitReason: "",
+    preflightOnly: false,
     strict: false,
     expectedSurfaceKind: "",
     timeoutMs: 8000,
@@ -162,6 +170,12 @@ function parseArgs(argv: string[]): Args {
         .filter(Boolean);
     } else if (arg === "--allow-submit") {
       args.allowSubmit = true;
+    } else if (arg === "--submit-intent") {
+      args.submitIntent = argv[++index] ?? "";
+    } else if (arg === "--allow-submit-reason") {
+      args.allowSubmitReason = argv[++index] ?? "";
+    } else if (arg === "--preflight-only") {
+      args.preflightOnly = true;
     } else if (arg === "--timeout") {
       args.timeoutMs = Number(argv[++index] ?? args.timeoutMs);
       args.forwarded.push("--timeout", String(args.timeoutMs));
@@ -277,10 +291,10 @@ function safety(args: Args) {
   if (args.actionKind === "key" && !allowedKeys.has(normalizedKey) && !isPrintableTextKey(args)) {
     errors.push(`key '${args.key}' is not in the safe DevTools key allowlist`);
   }
-  if (args.actionKind === "key" && blockedSubmitKeys.has(normalizedKey) && !args.allowSubmit) {
+  if (args.actionKind === "key" && blockedSubmitKeys.has(normalizedKey) && !args.allowSubmit && !args.preflightOnly) {
     errors.push("submit-like key requires --allow-submit");
   }
-  if (args.actionKind === "key" && args.modifiers.includes("cmd") && blockedSubmitKeys.has(normalizedKey) && !args.allowSubmit) {
+  if (args.actionKind === "key" && args.modifiers.includes("cmd") && blockedSubmitKeys.has(normalizedKey) && !args.allowSubmit && !args.preflightOnly) {
     errors.push("cmd+enter requires --allow-submit");
   }
   if (args.actionKind === "select" && args.allowSubmit) {
@@ -296,6 +310,8 @@ function safety(args: Args) {
       : args.actionKind === "key" ? "simulateKey" : "batch",
     destructive: args.allowSubmit,
     submitAllowed: args.allowSubmit,
+    submitIntent: args.submitIntent || null,
+    allowSubmitReason: args.allowSubmitReason || null,
     nativeEscalation: false,
     errors,
     warnings,
@@ -438,10 +454,46 @@ function isLifecycleClassification(receipt: JsonObject) {
 
 function isSubmitLike(args: Args) {
   const normalizedKey = args.key.toLowerCase();
-  return args.allowSubmit && (
+  return (args.allowSubmit || args.preflightOnly) && (
     (args.actionKind === "key" && blockedSubmitKeys.has(normalizedKey))
     || (args.actionKind === "select")
   );
+}
+
+function isCmdEnter(args: Args) {
+  const normalizedKey = args.key.toLowerCase();
+  return args.actionKind === "key"
+    && (normalizedKey === "enter" || normalizedKey === "return")
+    && args.modifiers.includes("cmd");
+}
+
+function submitGateDetails(args: Args, targetReceipt: JsonObject, before: JsonObject) {
+  const target = targetInfo(targetReceipt);
+  return {
+    gateName: "submit.preflight",
+    actionKind: args.actionKind,
+    key: args.key || null,
+    modifiers: args.modifiers,
+    allowSubmit: args.allowSubmit,
+    allowSubmitReason: args.allowSubmitReason || null,
+    submitIntent: args.submitIntent || null,
+    selectedSemanticId: typeof before.selectedSemanticId === "string" ? before.selectedSemanticId : null,
+    selectedActionId: selectedActionIdFromSemanticId(before.selectedSemanticId),
+    target: {
+      automationId: target?.automationId ?? null,
+      targetKind: target?.targetKind ?? null,
+      surfaceKind: target?.surfaceKind ?? null,
+      appViewVariant: target?.appViewVariant ?? null,
+      nativeFooterSurface: target?.nativeFooterSurface ?? null,
+    },
+  };
+}
+
+function isScopedAgentChatRoute(args: Args, targetReceipt: JsonObject) {
+  return isCmdEnter(args)
+    && args.allowSubmit
+    && args.submitIntent === "agent-chat-route"
+    && (isScriptListTargetReceipt(targetReceipt) || isPromptEntityTargetReceipt(targetReceipt));
 }
 
 function isDismissLike(args: Args) {
@@ -556,6 +608,35 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
   }
   const selectedSemanticId = requestedActivationSemanticId(args, before);
   const actionId = selectedActionIdFromSemanticId(selectedSemanticId);
+  if (args.submitIntent === "profile-picker-route") {
+    return {
+      state: "blocked-before-dispatch",
+      reason: "native footer activation proof requires a nativeFooterActivationReceipt primitive",
+      gateName: "native-footer.activation.missing",
+      selectedSemanticId: selectedSemanticId as string | null,
+      missingPrimitive: "nativeFooterActivationReceipt",
+      requestedIntent: "profile-picker-route",
+      nextSafeCommand: "bun scripts/devtools/keyboard.ts inspect --target-id <id> --strict",
+    };
+  }
+  if (isScopedAgentChatRoute(args, targetReceipt)) {
+    return {
+      state: "dispatched",
+      actionId: "cmd-enter-agent-chat-route",
+      allowedBy: "submitIntent:agent-chat-route",
+      proofIntent: args.submitIntent,
+    };
+  }
+  if (args.allowSubmit && !args.submitIntent) {
+    return {
+      state: "blocked-before-dispatch",
+      reason: "submit-like proof requires --submit-intent so --allow-submit is scoped",
+      gateName: "submit.intent.required",
+      selectedSemanticId: selectedSemanticId as string | null,
+      requiredFlags: ["--allow-submit", "--submit-intent <intent>", "--allow-submit-reason <why>"],
+      nextSafeCommand: "rerun with --preflight-only first, then --allow-submit --submit-intent agent-chat-route --allow-submit-reason <why>",
+    };
+  }
   if (!isActionsDialogTargetReceipt(targetReceipt)) {
     if (
       isPromptPopupTargetReceipt(targetReceipt)
@@ -719,13 +800,19 @@ function classify(
   submitLifecycle: SubmitLifecycleState,
   postActionLifecycle: PostActionLifecycleState,
 ) {
-  if (guard.errors.length > 0) {
-    return "blocked-by-unsafe-operation";
-  }
   if (targetReceipt.classification !== "ok") {
     return targetReceipt.classification ?? "blocked-by-target-ambiguity";
   }
+  if (args.preflightOnly) {
+    return "ok";
+  }
   if (submitLifecycle.state === "blocked-before-dispatch") {
+    if (submitLifecycle.gateName === "native-footer.activation.missing") {
+      return "blocked-by-native-escalation-required";
+    }
+    return "blocked-by-unsafe-operation";
+  }
+  if (guard.errors.length > 0) {
     return "blocked-by-unsafe-operation";
   }
   if (submitLifecycle.state === "source-live" || submitLifecycle.state === "source-closed-parent-live") {
@@ -765,10 +852,20 @@ async function main() {
   const beforeScroll = await scrollReceipt(args, "scroll.before");
   const startedAt = new Date().toISOString();
   const preflight = await submitPreflight(args, targetReceipt, before);
+  const blockedAction = preflight.state === "blocked-before-dispatch"
+    ? {
+      gateName: preflight.gateName ?? "submit.preflight",
+      reason: preflight.reason,
+      requiredFlags: preflight.requiredFlags ?? [],
+      nextSafeCommand: preflight.nextSafeCommand ?? null,
+      missingPrimitive: preflight.missingPrimitive ?? null,
+      requestedIntent: preflight.requestedIntent ?? args.submitIntent ?? null,
+    }
+    : null;
   const guardWithPreflight = {
     ...guard,
     destructive: guard.destructive && !isNonDestructiveSubmit(preflight),
-    submitAttempted: isSubmitLike(args) && preflight.state !== "blocked-before-dispatch",
+    submitAttempted: !args.preflightOnly && isSubmitLike(args) && preflight.state !== "blocked-before-dispatch",
     submitPreflightSelectedSemanticId: (before.selectedSemanticId as string | undefined) ?? null,
     errors: preflight.state === "blocked-before-dispatch"
       ? [...guard.errors, preflight.reason]
@@ -776,7 +873,14 @@ async function main() {
   };
 
   let actionEnvelope: JsonObject = { status: "blocked", reason: "blocked-by-unsafe-operation" };
-  if (guardWithPreflight.errors.length === 0 && targetReceipt.classification === "ok") {
+  if (args.preflightOnly) {
+    actionEnvelope = {
+      status: "ok",
+      label: "act.preflight-only",
+      skippedDispatch: true,
+      reason: "preflight-only requested",
+    };
+  } else if (guardWithPreflight.errors.length === 0 && targetReceipt.classification === "ok") {
     actionEnvelope = shouldUseLauncherSetFilter(args, targetReceipt)
       ? await send(args.session, {
         type: "setFilter",
@@ -820,6 +924,10 @@ async function main() {
     endedAt,
     actionId: requestId(args.actionKind),
     actionKind: args.actionKind,
+    proofIntent: args.submitIntent || null,
+    preflightOnly: args.preflightOnly,
+    submitGate: submitGateDetails(args, targetReceipt, before),
+    blockedAction,
     requestedTarget: targetReceipt.requestedTarget ?? { selector },
     targetBefore: before.target ?? targetReceipt.resolvedTarget ?? null,
     input: {

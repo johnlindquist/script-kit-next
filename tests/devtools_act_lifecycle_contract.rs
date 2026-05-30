@@ -150,3 +150,54 @@ fn act_exposes_theme_designer_control_setter() {
         );
     }
 }
+
+#[test]
+fn act_exposes_scoped_submit_intent_and_preflight_only() {
+    for needle in [
+        "--submit-intent",
+        "--allow-submit-reason",
+        "--preflight-only",
+        "submitIntent",
+        "allowSubmitReason",
+        "preflightOnly",
+        "submit.intent.required",
+        "requiredFlags",
+        "nextSafeCommand",
+    ] {
+        assert!(
+            ACT_TS.contains(needle),
+            "act.ts must expose scoped submit proof field {needle}"
+        );
+    }
+}
+
+#[test]
+fn act_allows_cmd_enter_agent_chat_only_by_named_intent() {
+    for needle in [
+        "function isCmdEnter",
+        "function isScopedAgentChatRoute",
+        "agent-chat-route",
+        "cmd-enter-agent-chat-route",
+        "allowedBy: \"submitIntent:agent-chat-route\"",
+    ] {
+        assert!(
+            ACT_TS.contains(needle),
+            "Cmd+Enter Agent Chat proof must be named and scoped: {needle}"
+        );
+    }
+}
+
+#[test]
+fn act_reports_native_footer_activation_gap_without_native_escalation() {
+    for needle in [
+        "profile-picker-route",
+        "native-footer.activation.missing",
+        "nativeFooterActivationReceipt",
+        "blocked-by-native-escalation-required",
+    ] {
+        assert!(
+            ACT_TS.contains(needle),
+            "native footer model-picker proof must fail closed with {needle}"
+        );
+    }
+}

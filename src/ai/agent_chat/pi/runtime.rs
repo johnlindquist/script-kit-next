@@ -21,6 +21,7 @@ use super::protocol::{
 
 type PendingResponses = Arc<Mutex<HashMap<String, PendingResponse>>>;
 type ActiveTurn = Arc<Mutex<Option<ActiveTurnState>>>;
+type StderrFailureHint = Arc<Mutex<Option<String>>>;
 
 const PI_REVEAL_CHUNK_DELAY_MS: u64 = 6;
 
@@ -166,16 +167,27 @@ async fn run_pi_rpc_event_loop(
 
     let pending: PendingResponses = Arc::new(Mutex::new(HashMap::new()));
     let active_turn: ActiveTurn = Arc::new(Mutex::new(None));
+    let stderr_failure_hint: StderrFailureHint = Arc::new(Mutex::new(None));
     let stdout_pending = pending.clone();
     let stdout_active = active_turn.clone();
+    let stdout_stderr_failure_hint = stderr_failure_hint.clone();
 
     tokio::spawn(async move {
-        read_stdout(stdout, stdout_pending, stdout_active).await;
+        read_stdout(
+            stdout,
+            stdout_pending,
+            stdout_active,
+            Some(stdout_stderr_failure_hint),
+        )
+        .await;
     });
 
     tokio::spawn(async move {
         let mut lines = BufReader::new(stderr).lines();
         while let Ok(Some(line)) = lines.next_line().await {
+            if let Some(hint) = user_facing_pi_stderr_hint(&line) {
+                stderr_failure_hint.lock().replace(hint);
+            }
             log_pi_rpc_stderr_line(&line);
         }
     });
@@ -355,18 +367,23 @@ async fn run_pi_rpc_single_turn(
 
     let pending: PendingResponses = Arc::new(Mutex::new(HashMap::new()));
     let active_turn: ActiveTurn = Arc::new(Mutex::new(None));
+    let stderr_failure_hint: StderrFailureHint = Arc::new(Mutex::new(None));
     let (done_tx, done_rx) = async_channel::bounded::<()>(1);
 
     tokio::spawn(read_single_turn_stdout(
         stdout,
         pending.clone(),
         active_turn.clone(),
+        Some(stderr_failure_hint.clone()),
         done_tx,
     ));
 
     tokio::spawn(async move {
         let mut lines = BufReader::new(stderr).lines();
         while let Ok(Some(line)) = lines.next_line().await {
+            if let Some(hint) = user_facing_pi_stderr_hint(&line) {
+                stderr_failure_hint.lock().replace(hint);
+            }
             log_pi_rpc_stderr_line(&line);
         }
     });
@@ -481,6 +498,7 @@ async fn read_single_turn_stdout<R>(
     stdout: R,
     pending: PendingResponses,
     active_turn: ActiveTurn,
+    stderr_failure_hint: Option<StderrFailureHint>,
     done_tx: async_channel::Sender<()>,
 ) where
     R: AsyncRead + Unpin,
@@ -561,7 +579,10 @@ async fn read_single_turn_stdout<R>(
         send_to_active(
             &active_turn,
             AgentChatEvent::Failed {
-                error: "Pi RPC isolated turn ended before completion".to_string(),
+                error: pi_rpc_process_exit_error(
+                    "Pi RPC isolated turn ended before completion",
+                    stderr_failure_hint.as_ref(),
+                ),
             },
         )
         .await;
@@ -630,8 +651,35 @@ fn log_pi_rpc_stderr_line(line: &str) {
     );
 }
 
-async fn read_stdout<R>(stdout: R, pending: PendingResponses, active_turn: ActiveTurn)
-where
+fn user_facing_pi_stderr_hint(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    let safe_auth_hint = lower.contains("no api key")
+        || lower.contains("api key found")
+        || lower.contains("set env var")
+        || lower.contains("missing api key");
+    safe_auth_hint.then(|| trimmed.to_string())
+}
+
+fn pi_rpc_process_exit_error(
+    prefix: &str,
+    stderr_failure_hint: Option<&StderrFailureHint>,
+) -> String {
+    let Some(hint) = stderr_failure_hint.and_then(|hint| hint.lock().clone()) else {
+        return prefix.to_string();
+    };
+    format!("{prefix}: {hint}")
+}
+
+async fn read_stdout<R>(
+    stdout: R,
+    pending: PendingResponses,
+    active_turn: ActiveTurn,
+    stderr_failure_hint: Option<StderrFailureHint>,
+) where
     R: AsyncRead + Unpin,
 {
     let mut lines = BufReader::new(stdout).lines();
@@ -699,6 +747,17 @@ where
             active_turn.lock().take();
         }
     }
+
+    tracing::warn!(
+        target: "script_kit::tab_ai",
+        event = "pi_rpc_stdout_closed",
+        "Pi RPC stdout closed before all pending responses completed"
+    );
+    let error = pi_rpc_process_exit_error(
+        "Pi RPC process exited before responding",
+        stderr_failure_hint.as_ref(),
+    );
+    fail_pending_responses(&pending, &error).await;
 }
 
 async fn send_events(event_tx: &AcpEventTx, events: Vec<AgentChatEvent>) {
@@ -737,6 +796,36 @@ async fn send_to_active(active_turn: &ActiveTurn, event: AgentChatEvent) {
         let _ = event_tx.send(event).await;
     }
     active_turn.lock().take();
+}
+
+async fn fail_pending_responses(pending: &PendingResponses, error: &str) {
+    let pending_responses = pending.lock().drain().collect::<Vec<_>>();
+
+    for (id, pending_response) in pending_responses {
+        match pending_response {
+            PendingResponse::Events(event_tx) => {
+                let _ = event_tx
+                    .send(AgentChatEvent::Failed {
+                        error: error.to_string(),
+                    })
+                    .await;
+            }
+            PendingResponse::Rpc(response_tx) => {
+                let _ = response_tx.send(PiRpcResponse {
+                    id: Some(id),
+                    command: None,
+                    success: false,
+                    data: None,
+                    error: Some(error.to_string()),
+                    raw: serde_json::json!({
+                        "type": "response",
+                        "success": false,
+                        "error": error,
+                    }),
+                });
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -891,6 +980,17 @@ mod tests {
     }
 
     #[test]
+    fn pi_rpc_stderr_auth_hint_is_user_facing_without_logging_raw_line() {
+        let hint =
+            user_facing_pi_stderr_hint("No API key found for provider anthropic. Set env var.");
+        assert_eq!(
+            hint.as_deref(),
+            Some("No API key found for provider anthropic. Set env var.")
+        );
+        assert!(user_facing_pi_stderr_hint("debug: provider startup").is_none());
+    }
+
+    #[test]
     fn pi_rpc_reveal_delay_is_few_ms() {
         assert!(
             PI_REVEAL_CHUNK_DELAY_MS <= 8,
@@ -956,6 +1056,71 @@ mod tests {
             .await;
             let error = result.unwrap_err().to_string();
             assert!(error.contains("model unavailable"));
+        });
+    }
+
+    #[test]
+    fn read_stdout_fails_pending_events_when_pi_exits_before_response() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        runtime.block_on(async {
+            let pending: PendingResponses = Arc::new(Mutex::new(HashMap::new()));
+            let active_turn: ActiveTurn = Arc::new(Mutex::new(None));
+            let (event_tx, event_rx) = async_channel::bounded(1);
+            pending
+                .lock()
+                .insert("models-test".to_string(), PendingResponse::Events(event_tx));
+            let stderr_hint: StderrFailureHint = Arc::new(Mutex::new(Some(
+                "No API key found for provider anthropic. Set env var.".to_string(),
+            )));
+
+            read_stdout(
+                tokio::io::empty(),
+                pending.clone(),
+                active_turn,
+                Some(stderr_hint),
+            )
+            .await;
+
+            assert!(pending.lock().is_empty());
+            let event = event_rx.recv().await.unwrap();
+            assert!(matches!(
+                event,
+                AgentChatEvent::Failed { error } if error.contains("exited before responding")
+                    && error.contains("No API key found for provider anthropic")
+            ));
+        });
+    }
+
+    #[test]
+    fn read_stdout_fails_pending_rpc_when_pi_exits_before_response() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        runtime.block_on(async {
+            let pending: PendingResponses = Arc::new(Mutex::new(HashMap::new()));
+            let active_turn: ActiveTurn = Arc::new(Mutex::new(None));
+            let (response_tx, response_rx) = oneshot::channel();
+            pending.lock().insert(
+                "set-model-test".to_string(),
+                PendingResponse::Rpc(response_tx),
+            );
+
+            read_stdout(tokio::io::empty(), pending.clone(), active_turn, None).await;
+
+            assert!(pending.lock().is_empty());
+            let response = response_rx.await.unwrap();
+            assert!(!response.success);
+            assert!(response
+                .error
+                .as_deref()
+                .unwrap_or_default()
+                .contains("exited before responding"));
         });
     }
 }

@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { outputSummary, summarizeText, tryParseJson as summarizeJsonText } from "./lib/receipt-output";
 
 type JsonObject = Record<string, unknown>;
 
@@ -13,13 +14,28 @@ type Args = {
   show: boolean;
   timeoutMs: number;
   childCommand: string[];
+  outputPath: string;
+  previewBytes: number;
+  inlineFullOutput: boolean;
+  externalSession: string;
+  externalOutputLog: string;
+  wrapperTimeoutMs: number;
 };
+
+const actionOutputFields = [
+  "stdoutSummary",
+  "stderrSummary",
+  "omittedBytes",
+  "fingerprint",
+  "stdoutJson",
+  "artifactPath",
+];
 
 function usage() {
   return [
     "Usage:",
     "  bun scripts/devtools/events.ts tail [--session <name>] [--limit <n>] [--contains <text>]",
-    "  bun scripts/devtools/events.ts record [--session <name>] [--start] [--show] -- <devtools command...>",
+    "  bun scripts/devtools/events.ts record [--session <name>] [--start] [--show] [--output <path>] [--preview-bytes <n>] [--inline-full-output] [--external-session <slug>] [--external-output-log <path>] [--wrapper-timeout-ms <n>] -- <devtools command...>",
   ].join("\n");
 }
 
@@ -44,6 +60,12 @@ function parseArgs(argv: string[]): Args {
     show: false,
     timeoutMs: 8000,
     childCommand: separator >= 0 ? argv.slice(separator + 1) : [],
+    outputPath: "",
+    previewBytes: 2048,
+    inlineFullOutput: false,
+    externalSession: "",
+    externalOutputLog: "",
+    wrapperTimeoutMs: 0,
   };
 
   for (let index = 0; index < options.length; index += 1) {
@@ -60,6 +82,19 @@ function parseArgs(argv: string[]): Args {
       args.show = true;
     } else if (arg === "--timeout") {
       args.timeoutMs = Number(options[++index] ?? args.timeoutMs);
+    } else if (arg === "--output") {
+      args.outputPath = options[++index] ?? "";
+    } else if (arg === "--preview-bytes") {
+      args.previewBytes = Number(options[++index] ?? args.previewBytes);
+    } else if (arg === "--inline-full-output") {
+      args.inlineFullOutput = true;
+    } else if (arg === "--external-session") {
+      args.externalSession = options[++index] ?? "";
+      if (!args.wrapperTimeoutMs) args.wrapperTimeoutMs = 120000;
+    } else if (arg === "--external-output-log") {
+      args.externalOutputLog = options[++index] ?? "";
+    } else if (arg === "--wrapper-timeout-ms") {
+      args.wrapperTimeoutMs = Number(options[++index] ?? 0);
     }
   }
 
@@ -71,7 +106,7 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
-async function run(command: string[], label: string): Promise<JsonObject> {
+async function runCommand(command: string[], label: string): Promise<{ receipt: JsonObject; stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -79,13 +114,27 @@ async function run(command: string[], label: string): Promise<JsonObject> {
     proc.exited,
   ]);
   if (exitCode !== 0) {
-    return { status: "error", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim() };
+    return {
+      receipt: { status: "error", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim() },
+      stdout,
+      stderr,
+      exitCode,
+    };
   }
   try {
-    return JSON.parse(stdout);
+    return { receipt: JSON.parse(stdout), stdout, stderr, exitCode };
   } catch {
-    return { status: "ok", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim() };
+    return {
+      receipt: { status: "ok", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim() },
+      stdout,
+      stderr,
+      exitCode,
+    };
   }
+}
+
+async function run(command: string[], label: string): Promise<JsonObject> {
+  return (await runCommand(command, label)).receipt;
 }
 
 async function fileSize(path: string) {
@@ -158,6 +207,142 @@ function countEvents(lines: ReturnType<typeof parseLine>[]) {
   return { byType, warningCount: warnings.length, warnings: warnings.slice(-10) };
 }
 
+function lineText(lines: Array<{ line?: string }>) {
+  return lines.map((entry) => String(entry.line ?? "")).join("\n");
+}
+
+function classifyFailureSignals(child: JsonObject | null, appEvents: ReturnType<typeof parseLine>[], responseEvents: ReturnType<typeof parseLine>[]) {
+  const text = [
+    JSON.stringify(child ?? {}),
+    lineText(appEvents),
+    lineText(responseEvents),
+  ].join("\n");
+  const openAiSeen = /command_type=openAi|"type":"openAi"|openAi/.test(text);
+  const acpNotAcp = /notAcp|not_acp|status.?[:=].?notAcp/i.test(text);
+  const piWarmSeen = /pi warm|warm pi|prepare.*pi|acquire.*pi|Pi Text|openAi/i.test(text);
+  const responseTimeout = /response_timeout|timeout|parseOutcome.?[:=].?timeout/i.test(text);
+  return {
+    openAi: {
+      seen: openAiSeen,
+      parsedEventSeen: /event_type=stdin_command_parsed.*command_type=openAi/.test(text),
+    },
+    acp: {
+      statusNotAcpSeen: acpNotAcp,
+      nextReceipt: "getAcpState(target ai or focused AcpChat target)",
+    },
+    piWarm: {
+      signalsSeen: piWarmSeen,
+      nextReceipt: "events.record around openAi plus getAcpState after transition",
+    },
+    timeout: {
+      responseTimeoutSeen: responseTimeout,
+    },
+    likelyOwners: [
+      acpNotAcp ? "acp-chat-core" : "",
+      piWarmSeen ? "sdk-script-execution" : "",
+      openAiSeen ? "protocol-automation" : "",
+    ].filter(Boolean),
+    recommendedNext: [
+      openAiSeen && acpNotAcp ? "Prove target identity first: targets.inspect --target-kind acpDetached|main and getAcpState." : "",
+      piWarmSeen ? "Separate warm Pi acquire failure from ACP routing failure in the receipt." : "",
+      responseTimeout ? "Use compact output artifact path; do not rely on transcript tail." : "",
+    ].filter(Boolean),
+  };
+}
+
+function compactActionReceipt(receipt: JsonObject | null, inlineFullOutput: boolean) {
+  if (!receipt || inlineFullOutput) return receipt;
+  const safety = (receipt.safety as JsonObject | undefined) ?? {};
+  const submitGate = (receipt.submitGate as JsonObject | undefined) ?? {};
+  const targetBefore = (receipt.targetBefore as JsonObject | undefined) ?? null;
+  const targetAfter = (receipt.targetAfter as JsonObject | undefined) ?? null;
+  return {
+    schemaVersion: receipt.schemaVersion ?? null,
+    tool: receipt.tool ?? null,
+    command: receipt.command ?? null,
+    classification: receipt.classification ?? null,
+    session: receipt.session ?? null,
+    proofIntent: receipt.proofIntent ?? null,
+    preflightOnly: receipt.preflightOnly ?? null,
+    actionKind: receipt.actionKind ?? null,
+    blockedAction: receipt.blockedAction ?? null,
+    submitGate: {
+      gateName: submitGate.gateName ?? null,
+      key: submitGate.key ?? null,
+      modifiers: submitGate.modifiers ?? [],
+      allowSubmit: submitGate.allowSubmit ?? null,
+      allowSubmitReason: submitGate.allowSubmitReason ?? null,
+      submitIntent: submitGate.submitIntent ?? null,
+      selectedSemanticId: submitGate.selectedSemanticId ?? null,
+      selectedActionId: submitGate.selectedActionId ?? null,
+      target: submitGate.target ?? null,
+    },
+    safety: {
+      channel: safety.channel ?? null,
+      destructive: safety.destructive ?? null,
+      submitAllowed: safety.submitAllowed ?? null,
+      submitIntent: safety.submitIntent ?? null,
+      allowSubmitReason: safety.allowSubmitReason ?? null,
+      nativeEscalation: safety.nativeEscalation ?? null,
+      submitAttempted: safety.submitAttempted ?? null,
+      errors: safety.errors ?? [],
+      warnings: safety.warnings ?? [],
+    },
+    submitLifecycle: receipt.submitLifecycle ?? null,
+    postActionLifecycle: receipt.postActionLifecycle ?? null,
+    actionReceipt: receipt.actionReceipt ?? null,
+    targetBefore: targetBefore
+      ? {
+        automationId: targetBefore.automationId ?? null,
+        targetKind: targetBefore.targetKind ?? null,
+        surfaceKind: targetBefore.surfaceKind ?? null,
+        appViewVariant: targetBefore.appViewVariant ?? null,
+        nativeFooterSurface: targetBefore.nativeFooterSurface ?? null,
+        strictTargetMatch: targetBefore.strictTargetMatch ?? null,
+      }
+      : null,
+    targetAfter: targetAfter
+      ? {
+        automationId: targetAfter.automationId ?? null,
+        targetKind: targetAfter.targetKind ?? null,
+        surfaceKind: targetAfter.surfaceKind ?? null,
+        appViewVariant: targetAfter.appViewVariant ?? null,
+        nativeFooterSurface: targetAfter.nativeFooterSurface ?? null,
+        strictTargetMatch: targetAfter.strictTargetMatch ?? null,
+      }
+      : null,
+    rawActionReceiptOmitted: true,
+  };
+}
+
+function parsedSummary(parsed: JsonObject | null) {
+  if (!parsed) return null;
+  return {
+    type: parsed.type ?? null,
+    requestId: parsed.requestId ?? null,
+    tool: parsed.tool ?? null,
+    command: parsed.command ?? null,
+    classification: parsed.classification ?? null,
+    status: parsed.status ?? null,
+    json: summarizeJsonText(JSON.stringify(parsed)),
+  };
+}
+
+function compactEventEntries(entries: ReturnType<typeof parseLine>[], previewBytes: number, inlineFullOutput: boolean) {
+  if (inlineFullOutput) return entries;
+  return entries.map((entry) => ({
+    index: entry.index,
+    kind: entry.kind,
+    eventType: entry.eventType,
+    correlationId: entry.correlationId,
+    commandType: entry.commandType,
+    level: entry.level,
+    line: summarizeText(entry.line, previewBytes).preview,
+    lineSummary: summarizeText(entry.line, previewBytes),
+    parsed: parsedSummary(entry.parsed),
+  }));
+}
+
 async function sessionStatus(args: Args) {
   if (args.start) {
     await run(["bash", "scripts/agentic/session.sh", "start", args.session], "session-start");
@@ -169,6 +354,9 @@ async function sessionStatus(args: Args) {
 }
 
 function classify(status: JsonObject, child: JsonObject | null, appLines: unknown[], responseLines: unknown[]) {
+  if (child?.status === "error" && String((child.error as JsonObject | undefined)?.code ?? "").includes("external_wrapper_timeout")) {
+    return "blocked-by-external-wrapper-timeout";
+  }
   if (status.status !== "ok" || status.healthy === false) {
     return "blocked-by-target-ambiguity";
   }
@@ -191,8 +379,15 @@ async function main() {
   const responsesOffset = args.command === "record" ? await fileSize(responsesPath) : 0;
 
   let child: JsonObject | null = null;
+  let actionOutput: Awaited<ReturnType<typeof outputSummary>> | null = null;
   if (args.command === "record") {
-    child = await run(args.childCommand, "recorded-command");
+    const childRun = await runCommand(args.childCommand, "recorded-command");
+    child = childRun.receipt;
+    actionOutput = await outputSummary("recorded-command", childRun.stdout, childRun.stderr, {
+      outputPath: args.outputPath || null,
+      previewBytes: args.previewBytes,
+      inlineFullOutput: args.inlineFullOutput,
+    });
   }
 
   const appEvents = await readLines(logPath, logOffset, args.limit, args.contains);
@@ -202,6 +397,15 @@ async function main() {
     appLog: countEvents(appEvents),
     responses: countEvents(responseEvents),
   };
+  const externalSession = args.externalSession
+    ? {
+      slug: args.externalSession,
+      outputLogPath: args.externalOutputLog || `~/.oracle/sessions/${args.externalSession}/output.log`,
+      wrapperTimeoutMs: args.wrapperTimeoutMs || 120000,
+      wrapperTimeoutIsNotBrowserSessionFailure: true,
+      reattachInstruction: "read output.log and preserve slug/path in the report",
+    }
+    : null;
 
   console.log(JSON.stringify({
     schemaVersion: 1,
@@ -219,12 +423,21 @@ async function main() {
       limit: args.limit,
       contains: args.contains || null,
     },
+    outputPolicy: {
+      previewBytes: args.previewBytes,
+      inlineFullOutput: args.inlineFullOutput,
+      artifactPath: actionOutput?.artifactPath ?? null,
+      actionOutputFields,
+    },
+    actionOutput,
+    failureSignals: classifyFailureSignals(child, appEvents, responseEvents),
+    externalSession,
     recordedCommand: args.command === "record" ? args.childCommand : null,
-    actionReceipt: child,
+    actionReceipt: compactActionReceipt(child, args.inlineFullOutput),
     eventSummary: summary,
     events: {
-      appLog: appEvents,
-      responses: responseEvents,
+      appLog: compactEventEntries(appEvents, args.previewBytes, args.inlineFullOutput),
+      responses: compactEventEntries(responseEvents, args.previewBytes, args.inlineFullOutput),
     },
     warnings: [
       ...summary.appLog.warnings,

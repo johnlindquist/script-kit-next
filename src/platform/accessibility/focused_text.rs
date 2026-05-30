@@ -263,8 +263,14 @@ fn capture_focused_text_field_platform(
 
 pub fn focused_text_snapshot_for_tests(text: impl Into<String>) -> FocusedTextSnapshot {
     let text = text.into();
+    let session_id = FocusedTextSessionId::new_for_tests("focused-text-test-session");
+    // Fixture sessions have no real AX element, so register an in-memory
+    // mutable target seeded with the captured text. Replace/Append then act on
+    // this buffer and report a truthful `changed_text` receipt, making the full
+    // capture → rewrite → paste-back round-trip exercisable without a foreign app.
+    super::mutation::register_in_memory_focused_text_target(&session_id, &text);
     FocusedTextSnapshot {
-        session_id: FocusedTextSessionId::new_for_tests("focused-text-test-session"),
+        session_id,
         captured_at_ms: SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_millis())

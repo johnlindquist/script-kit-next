@@ -524,9 +524,8 @@ impl GpuiFooterOverlay {
         );
         let key_first = is_footer_left_pinned_button(&button)
             && !matches!(action, FooterAction::Cwd | FooterAction::AgentModel);
-        let justify = if matches!(action, FooterAction::Cwd | FooterAction::AgentModel) {
-            crate::components::footer_chrome::FooterHintContentJustify::Start
-        } else if key_first {
+        let justify = if matches!(action, FooterAction::Cwd | FooterAction::AgentModel) || key_first
+        {
             crate::components::footer_chrome::FooterHintContentJustify::Start
         } else if matches!(action, FooterAction::Run) {
             crate::components::footer_chrome::FooterHintContentJustify::KeyAnchored
@@ -2339,6 +2338,21 @@ fn is_footer_left_pinned_button(button_cfg: &FooterButtonConfig) -> bool {
         && button_cfg.key.as_ref() == crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN
 }
 
+/// Extra trailing slack added to a hint item's minimum width. The trailing
+/// action buttons reserve a comfortable 12px so their bordered chrome doesn't
+/// crowd the rail edge. The Run button and the left-pinned chips (Cwd /
+/// Agent·Model) are start-anchored, so that slack would land as dead space
+/// *after* their keycaps — which is exactly what made the left group's gaps look
+/// uneven versus the right group. They get no extra padding so every group
+/// advances on the same `width + FOOTER_HINT_ITEM_GAP` rule.
+fn footer_hint_legacy_extra_padding(button_cfg: &FooterButtonConfig) -> f64 {
+    if matches!(button_cfg.action, FooterAction::Run) || is_footer_left_pinned_button(button_cfg) {
+        0.0
+    } else {
+        12.0
+    }
+}
+
 #[cfg(target_os = "macos")]
 fn footer_hint_max_item_width(
     action: FooterAction,
@@ -2724,7 +2738,10 @@ unsafe fn make_footer_hint_item(
     let _: () = msg_send![keys_view, setWantsLayer: YES];
 
     let mut keys_view_width = 0.0_f64;
-    let key_gap = 3.0_f64;
+    // Keycap-to-keycap spacing must match the width the estimator reserves
+    // (FOOTER_ACTION_CONTENT_GAP_PX), so multi-key groups like ⇧⇥ / ⌘K are laid
+    // out exactly as sized — no AppKit-only magic number.
+    let key_gap = crate::components::footer_chrome::FOOTER_ACTION_CONTENT_GAP_PX as f64;
 
     for (i, key_str) in shortcut_keys.iter().enumerate() {
         let chip_view: id = msg_send![class!(NSView), alloc];
@@ -2908,11 +2925,7 @@ unsafe fn make_footer_hint_item(
     } else {
         0.0
     };
-    let legacy_extra_padding = if matches!(button_cfg.action, FooterAction::Run) {
-        0.0
-    } else {
-        12.0
-    };
+    let legacy_extra_padding = footer_hint_legacy_extra_padding(button_cfg);
     let min_content_width = keys_view_width
         + label_group_width
         + gap_width
@@ -3085,11 +3098,66 @@ unsafe fn make_footer_hint_text_field(
 mod footer_layout_tests {
     use super::{
         footer_active_dot_hex, footer_dot_hex, footer_hint_content_layout,
-        footer_hint_label_widths, footer_hint_max_item_width, footer_hint_slot_width,
+        footer_hint_content_layout_for_button, footer_hint_label_widths,
+        footer_hint_legacy_extra_padding, footer_hint_max_item_width, footer_hint_slot_width,
         footer_overlay_button_full_width_px, footer_selected_background_rgba, FooterAction,
         FooterButtonConfig, FooterDotStatus, FOOTER_HINT_KEY_LABEL_GAP, FOOTER_HINT_PADDING_X,
         FOOTER_RUN_HINT_PADDING_X,
     };
+
+    #[test]
+    fn left_pinned_buttons_do_not_receive_legacy_extra_padding() {
+        // The left chips and the Run button are start-anchored, so trailing
+        // padding would show up as a visibly wider gap before the next item.
+        assert_eq!(
+            footer_hint_legacy_extra_padding(&FooterButtonConfig::new(
+                FooterAction::Cwd,
+                "⇥",
+                "~/ai_completion"
+            )),
+            0.0
+        );
+        assert_eq!(
+            footer_hint_legacy_extra_padding(&FooterButtonConfig::new(
+                FooterAction::AgentModel,
+                "⇧⇥",
+                "Codex · GPT-5.5"
+            )),
+            0.0
+        );
+        assert_eq!(
+            footer_hint_legacy_extra_padding(&FooterButtonConfig::new(
+                FooterAction::Run,
+                "↵",
+                "Send"
+            )),
+            0.0
+        );
+        // Trailing action buttons keep the comfortable 12px reserve.
+        assert_eq!(
+            footer_hint_legacy_extra_padding(&FooterButtonConfig::new(
+                FooterAction::Actions,
+                "⌘K",
+                "Actions"
+            )),
+            12.0
+        );
+    }
+
+    #[test]
+    fn left_pinned_cwd_uses_same_label_to_key_gap_as_trailing_buttons() {
+        let button = FooterButtonConfig::new(FooterAction::Cwd, "⇥", "~/ai_completion");
+        let label_width = 92.0;
+        let key_width = 20.0;
+        let item_width =
+            label_width + FOOTER_HINT_KEY_LABEL_GAP + key_width + FOOTER_RUN_HINT_PADDING_X * 2.0;
+        let (label_x, key_x, _) =
+            footer_hint_content_layout_for_button(&button, item_width, label_width, key_width);
+        // Label anchored at the leading padding, keycap exactly one content-gap
+        // after the label — identical spacing to the right-side buttons.
+        assert_eq!(label_x, FOOTER_RUN_HINT_PADDING_X.round());
+        assert_eq!(key_x - (label_x + label_width), FOOTER_HINT_KEY_LABEL_GAP);
+    }
 
     #[test]
     fn footer_hint_slot_widths_are_stable_per_action() {

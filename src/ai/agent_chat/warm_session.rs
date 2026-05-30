@@ -47,6 +47,7 @@ pub(crate) struct AgentChatWarmSessionSnapshot {
     pub generation: u64,
     pub ui_thread_id: Option<String>,
     pub state: AgentChatWarmSessionState,
+    pub failure_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,6 +66,7 @@ struct WarmSlot {
     state: AgentChatWarmSessionState,
     connection: Option<Arc<dyn AgentChatConnection>>,
     acquired_at: Option<Instant>,
+    failure_message: Option<String>,
 }
 
 impl WarmSlot {
@@ -74,6 +76,7 @@ impl WarmSlot {
             generation: self.generation,
             ui_thread_id: self.ui_thread_id.clone(),
             state: self.state,
+            failure_message: self.failure_message.clone(),
         }
     }
 }
@@ -147,6 +150,7 @@ impl AgentChatWarmSessionManager {
                     state: AgentChatWarmSessionState::Preparing,
                     connection: None,
                     acquired_at: None,
+                    failure_message: None,
                 },
             );
             (generation, ui_thread_id)
@@ -196,6 +200,7 @@ impl AgentChatWarmSessionManager {
                 state: AgentChatWarmSessionState::Preparing,
                 connection: None,
                 acquired_at: None,
+                failure_message: None,
             };
             let snapshot = slot.snapshot();
             inner.slots.insert(spec.key.clone(), slot);
@@ -269,6 +274,7 @@ impl AgentChatWarmSessionManager {
                     generation,
                     ui_thread_id: None,
                     state: AgentChatWarmSessionState::Empty,
+                    failure_message: None,
                 };
             };
 
@@ -287,6 +293,7 @@ impl AgentChatWarmSessionManager {
                 state: AgentChatWarmSessionState::Preparing,
                 connection: None,
                 acquired_at: None,
+                failure_message: None,
             };
             let snapshot = replacement.snapshot();
             inner.slots.insert(key.clone(), replacement);
@@ -325,6 +332,7 @@ impl AgentChatWarmSessionManager {
                     generation: lease.generation,
                     ui_thread_id: None,
                     state: AgentChatWarmSessionState::Empty,
+                    failure_message: None,
                 });
             };
 
@@ -443,7 +451,8 @@ impl AgentChatWarmSessionManager {
                     generation,
                     key = %spec.key,
                 );
-                let state = match connection.prepare_session(ui_thread_id.clone(), spec.cwd.clone())
+                let (state, failure_message) = match connection
+                    .prepare_session(ui_thread_id.clone(), spec.cwd.clone())
                 {
                     Ok(events) => {
                         tracing::info!(
@@ -452,22 +461,56 @@ impl AgentChatWarmSessionManager {
                             generation,
                             key = %spec.key,
                         );
-                        if wait_for_prepare_ready(events, DEFAULT_PREPARE_READY_TIMEOUT) {
-                            tracing::info!(
-                                target: "script_kit::tab_ai",
-                                event = "warm_prepare_slot_ready",
-                                generation,
-                                key = %spec.key,
-                            );
-                            AgentChatWarmSessionState::Ready
-                        } else {
-                            tracing::warn!(
-                                target: "script_kit::tab_ai",
-                                event = "warm_prepare_slot_timeout",
-                                generation,
-                                key = %spec.key,
-                            );
-                            AgentChatWarmSessionState::Failed
+                        match wait_for_prepare_ready(events, DEFAULT_PREPARE_READY_TIMEOUT) {
+                            PrepareReadyOutcome::Ready => {
+                                tracing::info!(
+                                    target: "script_kit::tab_ai",
+                                    event = "warm_prepare_slot_ready",
+                                    generation,
+                                    key = %spec.key,
+                                );
+                                (AgentChatWarmSessionState::Ready, None)
+                            }
+                            PrepareReadyOutcome::RuntimeFailed(error) => {
+                                tracing::warn!(
+                                    target: "script_kit::tab_ai",
+                                    event = "warm_prepare_slot_runtime_failed",
+                                    generation,
+                                    key = %spec.key,
+                                    error = %error,
+                                );
+                                (AgentChatWarmSessionState::Failed, Some(error))
+                            }
+                            PrepareReadyOutcome::Timeout => {
+                                tracing::warn!(
+                                    target: "script_kit::tab_ai",
+                                    event = "warm_prepare_slot_timeout",
+                                    generation,
+                                    key = %spec.key,
+                                );
+                                (
+                                    AgentChatWarmSessionState::Failed,
+                                    Some(format!(
+                                        "Pi Agent Chat model warm-up timed out after {} ms",
+                                        DEFAULT_PREPARE_READY_TIMEOUT.as_millis()
+                                    )),
+                                )
+                            }
+                            PrepareReadyOutcome::Closed => {
+                                tracing::warn!(
+                                    target: "script_kit::tab_ai",
+                                    event = "warm_prepare_slot_events_closed",
+                                    generation,
+                                    key = %spec.key,
+                                );
+                                (
+                                    AgentChatWarmSessionState::Failed,
+                                    Some(
+                                        "Pi Agent Chat model warm-up stream closed before reporting available models"
+                                            .to_string(),
+                                    ),
+                                )
+                            }
                         }
                     }
                     Err(error) => {
@@ -478,7 +521,12 @@ impl AgentChatWarmSessionManager {
                             key = %spec.key,
                             %error,
                         );
-                        AgentChatWarmSessionState::Failed
+                        (
+                            AgentChatWarmSessionState::Failed,
+                            Some(format!(
+                                "Failed to prepare Pi Agent Chat session: {error:#}"
+                            )),
+                        )
                     }
                 };
 
@@ -489,6 +537,7 @@ impl AgentChatWarmSessionManager {
                     state,
                     connection: (state == AgentChatWarmSessionState::Ready).then_some(connection),
                     acquired_at: None,
+                    failure_message,
                 }
             }
             Err(error) => {
@@ -506,6 +555,9 @@ impl AgentChatWarmSessionManager {
                     state: AgentChatWarmSessionState::Failed,
                     connection: None,
                     acquired_at: None,
+                    failure_message: Some(format!(
+                        "Failed to spawn Pi Agent Chat runtime: {error:#}"
+                    )),
                 }
             }
         }
@@ -520,14 +572,36 @@ impl AgentChatWarmSessionManager {
     }
 }
 
-fn wait_for_prepare_ready(events: AgentChatEventRx, timeout: Duration) -> bool {
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PrepareReadyOutcome {
+    Ready,
+    RuntimeFailed(String),
+    Timeout,
+    Closed,
+}
+
+fn wait_for_prepare_ready(events: AgentChatEventRx, timeout: Duration) -> PrepareReadyOutcome {
     let deadline = Instant::now() + timeout;
 
     loop {
         match events.try_recv() {
-            Ok(AgentChatEvent::ModelsAvailable { .. }) => return true,
-            Ok(AgentChatEvent::Failed { .. } | AgentChatEvent::SetupRequired { .. }) => {
-                return false;
+            Ok(AgentChatEvent::ModelsAvailable { .. }) => return PrepareReadyOutcome::Ready,
+            Ok(AgentChatEvent::Failed { error }) => {
+                return PrepareReadyOutcome::RuntimeFailed(error);
+            }
+            Ok(AgentChatEvent::SetupRequired {
+                reason,
+                auth_methods,
+            }) => {
+                let detail = if auth_methods.is_empty() {
+                    format!("Pi Agent Chat setup required: {reason}")
+                } else {
+                    format!(
+                        "Pi Agent Chat setup required: {reason}. Available methods: {}",
+                        auth_methods.join(", ")
+                    )
+                };
+                return PrepareReadyOutcome::RuntimeFailed(detail);
             }
             Ok(_) => continue,
             Err(async_channel::TryRecvError::Empty) => {
@@ -537,11 +611,11 @@ fn wait_for_prepare_ready(events: AgentChatEventRx, timeout: Duration) -> bool {
                         event = "agent_chat_warm_prepare_ready_timeout",
                         timeout_ms = timeout.as_millis(),
                     );
-                    return false;
+                    return PrepareReadyOutcome::Timeout;
                 }
                 std::thread::sleep(Duration::from_millis(10));
             }
-            Err(async_channel::TryRecvError::Closed) => return false,
+            Err(async_channel::TryRecvError::Closed) => return PrepareReadyOutcome::Closed,
         }
     }
 }
@@ -955,6 +1029,10 @@ mod tests {
 
         let failed = manager.prepare_warm(spec(factory.clone())).unwrap();
         assert_eq!(failed.state, AgentChatWarmSessionState::Failed);
+        assert_eq!(
+            failed.failure_message.as_deref(),
+            Some("Failed to prepare Pi Agent Chat session: prepare failed")
+        );
 
         let retry = manager.prepare_warm(spec(factory.clone())).unwrap();
         assert_eq!(retry.state, AgentChatWarmSessionState::Ready);
@@ -973,6 +1051,10 @@ mod tests {
         let snapshot = manager.prepare_warm(spec(factory.clone())).unwrap();
 
         assert_eq!(snapshot.state, AgentChatWarmSessionState::Failed);
+        assert_eq!(
+            snapshot.failure_message.as_deref(),
+            Some("Pi Agent Chat model warm-up stream closed before reporting available models")
+        );
         assert!(manager.acquire_warm("key-a").is_none());
     }
 
@@ -988,6 +1070,10 @@ mod tests {
         let snapshot = manager.prepare_warm(spec(factory.clone())).unwrap();
 
         assert_eq!(snapshot.state, AgentChatWarmSessionState::Failed);
+        assert_eq!(
+            snapshot.failure_message.as_deref(),
+            Some("Pi Agent Chat setup required: login required. Available methods: browser")
+        );
         assert_eq!(factory.spawned().len(), 1);
     }
 }

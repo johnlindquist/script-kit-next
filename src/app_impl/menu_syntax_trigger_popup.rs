@@ -1026,4 +1026,51 @@ mod tests {
             ),
         }
     }
+
+    #[test]
+    fn launcher_trigger_updates_render_in_main_area_not_popup_window() {
+        let source = std::fs::read_to_string("src/app_impl/filter_input_change.rs")
+            .expect("Failed to read src/app_impl/filter_input_change.rs");
+        let branch = source
+            .split("} else if needs_popup_sync {")
+            .nth(1)
+            .and_then(|tail| tail.split("} else if matches!(").next())
+            .expect("filter_input_change.rs should have a needs_popup_sync branch");
+
+        assert!(
+            branch.contains("menu_syntax_main_hint_snapshot"),
+            "trigger snapshots should be documented as feeding the main search area"
+        );
+        assert!(
+            branch.contains("close_menu_syntax_trigger_popup_window(cx)"),
+            "stale trigger popup windows should close when trigger rows move to the main area"
+        );
+        assert!(
+            !branch.contains("sync_menu_syntax_trigger_popup_window_for_filter"),
+            "filter input changes must not sync trigger snapshots into the detached popup window"
+        );
+    }
+
+    #[test]
+    fn launcher_trigger_state_machine_does_not_open_popup_window() {
+        let source = std::fs::read_to_string("src/app_impl/menu_syntax_trigger_popup_window.rs")
+            .expect("Failed to read src/app_impl/menu_syntax_trigger_popup_window.rs");
+        let body = source
+            .split("pub(crate) fn run_menu_syntax_trigger_popup_state_machine(")
+            .nth(1)
+            .and_then(|tail| {
+                tail.split("pub(crate) fn menu_syntax_trigger_picker_context")
+                    .next()
+            })
+            .expect("run_menu_syntax_trigger_popup_state_machine should exist");
+
+        assert!(
+            body.contains("close_menu_syntax_trigger_popup_window(cx)"),
+            "trigger state changes should keep any detached trigger popup closed"
+        );
+        assert!(
+            !body.contains("sync_menu_syntax_trigger_popup_window_for_filter"),
+            "trigger state machine must preserve snapshots for the main area without opening the popup"
+        );
+    }
 }

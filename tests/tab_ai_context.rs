@@ -35,9 +35,7 @@ fn full_blob() -> TabAiContextBlob {
                 pid: 42,
             }),
             selected_text: Some("selected text".to_string()),
-            browser: Some(BrowserContext {
-                url: "https://docs.rs".to_string(),
-            }),
+            browser: Some(BrowserContext::from_url("https://docs.rs".to_string())),
             ..Default::default()
         },
         vec!["recent-a".to_string(), "recent-b".to_string()],

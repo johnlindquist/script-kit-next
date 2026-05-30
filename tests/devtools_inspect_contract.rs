@@ -682,6 +682,65 @@ fn events_cli_records_action_correlated_app_and_response_logs() {
 }
 
 #[test]
+fn events_cli_compacts_child_output_and_records_artifact_path() {
+    for needle in [
+        "--output",
+        "--preview-bytes",
+        "--inline-full-output",
+        "outputPolicy",
+        "actionOutput",
+        "stdoutSummary",
+        "stderrSummary",
+        "omittedBytes",
+        "fingerprint",
+        "stdoutJson",
+        "artifactPath",
+    ] {
+        assert!(
+            EVENTS.contains(needle),
+            "events.ts must expose compact command output field {needle}"
+        );
+    }
+}
+
+#[test]
+fn events_cli_reports_openai_pi_and_external_wrapper_signals() {
+    for needle in [
+        "--external-session",
+        "--external-output-log",
+        "--wrapper-timeout-ms",
+        "failureSignals",
+        "openAi",
+        "statusNotAcpSeen",
+        "piWarm",
+        "likelyOwners",
+        "wrapperTimeoutIsNotBrowserSessionFailure",
+        "reattachInstruction",
+    ] {
+        assert!(
+            EVENTS.contains(needle),
+            "events.ts must expose proof-failure signal {needle}"
+        );
+    }
+}
+
+#[test]
+fn focus_and_keyboard_report_native_footer_activation_gap() {
+    for needle in [
+        "nativeFooter",
+        "nativeFooterHostInstalled",
+        "activationPrimitiveAvailable",
+        "nativeFooterActivationReceipt",
+        "missingPrimitive",
+    ] {
+        assert!(
+            FOCUS.contains(needle) || KEYBOARD.contains(needle),
+            "focus/keyboard must expose native footer gap field {needle}"
+        );
+    }
+}
+
+#[test]
 fn notes_cli_exposes_notes_window_state_and_missing_runtime_primitives() {
     for needle in [
         "script-kit-devtools.notes",

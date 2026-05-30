@@ -1189,7 +1189,7 @@ impl ScriptListApp {
     pub(crate) fn run_menu_syntax_trigger_popup_state_machine(
         &mut self,
         raw_filter: &str,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let picker_ctx = self.menu_syntax_trigger_picker_context(raw_filter);
@@ -1215,11 +1215,7 @@ impl ScriptListApp {
                         selected_row_id,
                         visible_start: 0,
                     };
-                self.sync_menu_syntax_trigger_popup_window_for_filter(
-                    raw_filter.to_string(),
-                    window,
-                    cx,
-                );
+                close_menu_syntax_trigger_popup_window(cx);
             }
             TriggerPopupTransition::Update {
                 snapshot,
@@ -1241,11 +1237,7 @@ impl ScriptListApp {
                         selected_row_id,
                         visible_start,
                     };
-                self.sync_menu_syntax_trigger_popup_window_for_filter(
-                    raw_filter.to_string(),
-                    window,
-                    cx,
-                );
+                close_menu_syntax_trigger_popup_window(cx);
             }
         }
     }

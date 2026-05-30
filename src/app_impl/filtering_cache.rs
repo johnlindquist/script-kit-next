@@ -2067,8 +2067,23 @@ impl ScriptListApp {
 
         let query = &self.computed_filter_text;
         let (_, flat_results) = self.main_menu_result_caches.clone_grouped_results();
+        let ghost_context = self
+            .spine_cwd
+            .as_deref()
+            .map(crate::scripts::search::ghost::GhostContext::from_cwd)
+            .or_else(|| {
+                std::env::current_dir()
+                    .ok()
+                    .map(|cwd| crate::scripts::search::ghost::GhostContext::from_cwd(&cwd))
+            })
+            .unwrap_or_default();
         self.ghost_prediction =
-            crate::scripts::search::ghost::compute_ghost_prediction(query, &flat_results);
+            crate::scripts::search::ghost::compute_ghost_prediction_with_context(
+                query,
+                &flat_results,
+                crate::scripts::search::ghost::PredictionRevision::default(),
+                &ghost_context,
+            );
         if let Some(cx) = cx {
             if let Some(ref pred) = self.ghost_prediction {
                 let suffix = pred.ghost_suffix.clone();
@@ -2082,6 +2097,8 @@ impl ScriptListApp {
                     full_label = %pred.full_label,
                     confidence = %pred.confidence,
                     ghost_id = pred.ghost_id,
+                    kind = pred.kind_label(),
+                    accepts_tab = pred.accepts_tab(),
                     "ghost_prediction_set_on_input"
                 );
             } else {

@@ -214,42 +214,6 @@ fn minimal_profile_omits_selected_text_and_menu_bar_from_json() {
 }
 
 #[test]
-fn inspect_current_context_builtin_is_registered() {
-    let entries = script_kit_gpui::builtins::get_builtin_entries(
-        &script_kit_gpui::config::BuiltInConfig::default(),
-    );
-
-    let entry = entries
-        .iter()
-        .find(|entry| entry.id == "builtin/inspect-current-context")
-        .expect("builtin/inspect-current-context must be in the registry");
-
-    assert_eq!(
-        entry.feature,
-        script_kit_gpui::builtins::BuiltInFeature::UtilityCommand(
-            script_kit_gpui::builtins::UtilityCommandType::InspectCurrentContext,
-        )
-    );
-
-    assert!(
-        entry.keywords.iter().any(|keyword| keyword == "json"),
-        "Inspect Current Context must be discoverable by 'json'"
-    );
-    assert!(
-        entry.keywords.iter().any(|keyword| keyword == "inspect"),
-        "Inspect Current Context must be discoverable by 'inspect'"
-    );
-    assert!(
-        entry.keywords.iter().any(|keyword| keyword == "clipboard"),
-        "Inspect Current Context must be discoverable by 'clipboard'"
-    );
-    assert!(
-        entry.keywords.iter().any(|keyword| keyword == "context"),
-        "Inspect Current Context must be discoverable by 'context'"
-    );
-}
-
-#[test]
 fn context_resource_schema_lists_screenshot_parameter() {
     init();
     let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();

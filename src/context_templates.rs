@@ -10,7 +10,7 @@ impl ContextTemplateVars {
         #[cfg(target_os = "macos")]
         {
             let tracked = crate::frontmost_app_tracker::get_last_real_app();
-            return Self {
+            Self {
                 app_name: tracked
                     .as_ref()
                     .map(|a| a.name.clone())
@@ -19,7 +19,7 @@ impl ContextTemplateVars {
                     .as_ref()
                     .and_then(|a| a.window_title.clone())
                     .unwrap_or_else(|| "Focused Window".to_string()),
-            };
+            }
         }
         #[cfg(not(target_os = "macos"))]
         {

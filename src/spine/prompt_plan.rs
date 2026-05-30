@@ -211,8 +211,8 @@ fn apply_style_sugar(plan: &mut SpinePromptPlan, segment_index: usize, id: Strin
         label: id.clone(),
     });
     plan.selected_profile = Some(SpinePromptProfile {
-        id: id,
-        label: plan.selected_style.as_ref().unwrap().id.clone(),
+        id: id.clone(),
+        label: id,
         source: SpinePromptProfileSource::StyleSugar,
     });
     if !plan

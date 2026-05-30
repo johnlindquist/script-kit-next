@@ -188,7 +188,7 @@ pub(crate) fn batch_select_mention_item_by_value(value: &str, cx: &mut App) -> O
             .items
             .iter()
             .position(|item| item.id.as_ref() == value)?;
-        (slot.handle.clone(), idx)
+        (slot.handle, idx)
     };
     let _ = handle.update(cx, |popup, _window, cx| {
         popup.activate_item(idx, cx);

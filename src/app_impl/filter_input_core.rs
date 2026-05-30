@@ -401,6 +401,13 @@ impl ScriptListApp {
         if self.ghost_prediction.is_none() {
             return false;
         }
+        if self
+            .ghost_prediction
+            .as_ref()
+            .is_some_and(|prediction| !prediction.accepts_tab())
+        {
+            return false;
+        }
         let accepted = self.gpui_input_state.update(cx, |state, window_cx| {
             state.accept_inline_completion(window, window_cx)
         });
@@ -442,6 +449,24 @@ mod tests {
                 view
             );
         }
+    }
+
+    #[test]
+    fn accept_ghost_prediction_respects_hint_only_predictions() {
+        let source = fs::read_to_string("src/app_impl/filter_input_core.rs")
+            .expect("Failed to read src/app_impl/filter_input_core.rs");
+        let accept_pos = source
+            .find("pub(crate) fn accept_ghost_prediction")
+            .expect("accept_ghost_prediction should exist");
+        let body = &source[accept_pos..(accept_pos + 900).min(source.len())];
+        assert!(
+            body.contains("accepts_tab()") && body.contains("accept_inline_completion"),
+            "accept_ghost_prediction must check accepts_tab() before accepting inline completion"
+        );
+        assert!(
+            body.find("accepts_tab()") < body.find("accept_inline_completion"),
+            "hint-only ghost predictions must be rejected before InputState accepts inline completion"
+        );
     }
 
     #[test]
@@ -535,7 +560,9 @@ mod tests {
             );
         }
 
-        for query in ["/", "@", "|", ".", ";", "~/src", "@browser", "/tmp", "foo", ""] {
+        for query in [
+            "/", "@", "|", ".", ";", "~/src", "@browser", "/tmp", "foo", "",
+        ] {
             assert!(
                 !ScriptListApp::is_transient_script_list_trigger(query),
                 "expected '{query}' to remain a real query"

@@ -1293,7 +1293,7 @@ impl AcpChatView {
         let thread = self.live_thread().read(cx);
         let visible = self.main_window_footer_visible_for_thread(thread);
         let cwd = thread.cwd().clone();
-        let cwd_display = if cwd.as_os_str().is_empty() || cwd == std::path::PathBuf::from(".") {
+        let cwd_display = if cwd.as_os_str().is_empty() || cwd == std::path::Path::new(".") {
             None
         } else {
             let home = dirs::home_dir().unwrap_or_default();
@@ -1939,7 +1939,7 @@ impl AcpChatView {
                         | AgentChatEvent::SetupRequired { .. }
                 );
                 let view_ref = view.clone();
-                let _ = cx.update(|cx| {
+                cx.update(|cx| {
                     if let Some(entity) = view_ref.upgrade() {
                         entity.update(cx, |this, cx| {
                             this.apply_focused_text_variation_event(index, generation, event, cx);
@@ -3576,7 +3576,7 @@ impl AcpChatView {
             cx.background_executor()
                 .timer(Duration::from_millis(1))
                 .await;
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 callback(cx);
             });
         })
@@ -4727,26 +4727,22 @@ impl AcpChatView {
             self.model_selector_open = false;
             self.history_menu = None;
         }
-        if clear_slash_input {
-            if !self.is_setup_mode() {
-                self.live_thread().update(cx, |thread, cx| {
-                    let text = thread.input.text().to_string();
-                    if text.starts_with('/') {
-                        thread.input.set_text(String::new());
-                        thread.input.set_cursor(0);
-                    }
-                    cx.notify();
-                });
-            }
+        if clear_slash_input && !self.is_setup_mode() {
+            self.live_thread().update(cx, |thread, cx| {
+                let text = thread.input.text().to_string();
+                if text.starts_with('/') {
+                    thread.input.set_text(String::new());
+                    thread.input.set_cursor(0);
+                }
+                cx.notify();
+            });
         }
-        if insert_slash_input {
-            if !self.is_setup_mode() {
-                self.live_thread().update(cx, |thread, cx| {
-                    thread.input.set_text("/".to_string());
-                    thread.input.set_cursor(1);
-                    cx.notify();
-                });
-            }
+        if insert_slash_input && !self.is_setup_mode() {
+            self.live_thread().update(cx, |thread, cx| {
+                thread.input.set_text("/".to_string());
+                thread.input.set_cursor(1);
+                cx.notify();
+            });
         }
         if let Some(reason) = log_visible_reason {
             self.log_mention_visible_range(reason);
@@ -7744,6 +7740,7 @@ impl AcpChatView {
             .into_any_element()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_acp_middle_area(
         &mut self,
         is_empty: bool,
@@ -8213,10 +8210,8 @@ impl AcpChatView {
                     self.trigger_close_window_requested(window, cx);
                 }
             }
-        } else {
-            if !self.cancel_streaming_from_escape(cx) {
-                self.trigger_close_requested(window, cx);
-            }
+        } else if !self.cancel_streaming_from_escape(cx) {
+            self.trigger_close_requested(window, cx);
         }
     }
 
@@ -12313,17 +12308,17 @@ impl AcpChatView {
             && !modifiers.alt
             && !modifiers.shift
         {
-            if crate::ui_foundation::is_key_up(key) {
-                if self.move_focused_text_variation_selection(-1, cx) {
-                    cx.stop_propagation();
-                    return;
-                }
+            if crate::ui_foundation::is_key_up(key)
+                && self.move_focused_text_variation_selection(-1, cx)
+            {
+                cx.stop_propagation();
+                return;
             }
-            if crate::ui_foundation::is_key_down(key) {
-                if self.move_focused_text_variation_selection(1, cx) {
-                    cx.stop_propagation();
-                    return;
-                }
+            if crate::ui_foundation::is_key_down(key)
+                && self.move_focused_text_variation_selection(1, cx)
+            {
+                cx.stop_propagation();
+                return;
             }
         }
 
@@ -12340,17 +12335,17 @@ impl AcpChatView {
             && (self.focused_text_variations.is_empty()
                 || !self.live_thread().read(cx).input.is_empty())
         {
-            if crate::ui_foundation::is_key_up(key) {
-                if self.recall_focused_text_instruction_history(-1, cx) {
-                    cx.stop_propagation();
-                    return;
-                }
+            if crate::ui_foundation::is_key_up(key)
+                && self.recall_focused_text_instruction_history(-1, cx)
+            {
+                cx.stop_propagation();
+                return;
             }
-            if crate::ui_foundation::is_key_down(key) {
-                if self.recall_focused_text_instruction_history(1, cx) {
-                    cx.stop_propagation();
-                    return;
-                }
+            if crate::ui_foundation::is_key_down(key)
+                && self.recall_focused_text_instruction_history(1, cx)
+            {
+                cx.stop_propagation();
+                return;
             }
         }
 
@@ -12656,17 +12651,17 @@ impl AcpChatView {
             && !modifiers.control
             && !modifiers.alt
         {
-            if crate::ui_foundation::is_key_left(key) {
-                if self.navigate_focused_text_variation_history(-1, cx) {
-                    cx.stop_propagation();
-                    return;
-                }
+            if crate::ui_foundation::is_key_left(key)
+                && self.navigate_focused_text_variation_history(-1, cx)
+            {
+                cx.stop_propagation();
+                return;
             }
-            if crate::ui_foundation::is_key_right(key) {
-                if self.navigate_focused_text_variation_history(1, cx) {
-                    cx.stop_propagation();
-                    return;
-                }
+            if crate::ui_foundation::is_key_right(key)
+                && self.navigate_focused_text_variation_history(1, cx)
+            {
+                cx.stop_propagation();
+                return;
             }
         }
 

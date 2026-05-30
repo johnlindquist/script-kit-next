@@ -121,7 +121,7 @@ pub(crate) fn batch_select_model_by_value(value: &str, cx: &mut App) -> Option<S
         if !snap.entries.iter().any(|entry| entry.id == value) {
             return None;
         }
-        slot.handle.clone()
+        slot.handle
     };
     let _ = handle.update(cx, |popup, _window, cx| {
         popup.select_model(value, cx);

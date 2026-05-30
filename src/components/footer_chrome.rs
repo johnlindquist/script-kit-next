@@ -391,6 +391,43 @@ pub(crate) fn footer_shortcut_keycaps_width_px_from_tokens<'a>(
     keys_width + tokens.len().saturating_sub(1) as f32 * FOOTER_ACTION_CONTENT_GAP_PX
 }
 
+/// Total width of a horizontal run of items laid out with a constant gap
+/// between adjacent items (no leading/trailing gap). This is the single source
+/// of truth both the left-pinned chip group and the trailing action group use,
+/// so the two sides advance with identical math.
+#[cfg(test)]
+pub(crate) fn footer_horizontal_run_width_px(widths: &[f32], gap_px: f32) -> f32 {
+    if widths.is_empty() {
+        return 0.0;
+    }
+    widths
+        .iter()
+        .copied()
+        .map(|width| width.max(0.0))
+        .sum::<f32>()
+        + gap_px * widths.len().saturating_sub(1) as f32
+}
+
+/// Per-item left origins for a horizontal run advanced by `width + gap`, anchored
+/// at `origin_x`. Origins are rounded to whole pixels at each boundary to match
+/// the AppKit `NSPoint` rounding style and avoid subpixel drift.
+#[cfg(test)]
+pub(crate) fn footer_horizontal_run_origins_px(
+    widths: &[f32],
+    gap_px: f32,
+    origin_x: f32,
+) -> Vec<f32> {
+    let mut x = origin_x;
+    widths
+        .iter()
+        .map(|width| {
+            let origin = x.round();
+            x += width.max(0.0) + gap_px;
+            origin
+        })
+        .collect()
+}
+
 pub(crate) fn footer_hint_content_estimated_width_px(
     label: &str,
     key: &str,
@@ -796,6 +833,49 @@ mod tests {
         assert_eq!(footer_appkit_glyph_y("↵", 20.0, 10.0), 3.0);
         assert_eq!(footer_appkit_glyph_y(";", 20.0, 10.0), 6.0);
         assert_eq!(footer_button_height(32.0), 28.0);
+    }
+
+    #[test]
+    fn footer_horizontal_run_width_uses_gap_only_between_items() {
+        // 40 + 20 + 20 + 2 gaps * 3px = 86
+        assert_eq!(
+            footer_horizontal_run_width_px(&[40.0, 20.0, 20.0], FOOTER_ACTION_ITEM_GAP_PX),
+            86.0
+        );
+        assert_eq!(
+            footer_horizontal_run_width_px(&[], FOOTER_ACTION_ITEM_GAP_PX),
+            0.0
+        );
+        // A single item has no inter-item gap.
+        assert_eq!(
+            footer_horizontal_run_width_px(&[40.0], FOOTER_ACTION_ITEM_GAP_PX),
+            40.0
+        );
+    }
+
+    #[test]
+    fn footer_horizontal_run_origins_use_constant_gap() {
+        assert_eq!(
+            footer_horizontal_run_origins_px(&[40.0, 20.0, 20.0], FOOTER_ACTION_ITEM_GAP_PX, 0.0),
+            vec![0.0, 43.0, 66.0]
+        );
+        // The same run anchored at a non-zero origin just shifts every item.
+        assert_eq!(
+            footer_horizontal_run_origins_px(&[40.0, 20.0], FOOTER_ACTION_ITEM_GAP_PX, 10.0),
+            vec![10.0, 53.0]
+        );
+    }
+
+    #[test]
+    fn shortcut_keycap_width_uses_shared_content_gap() {
+        // The native AppKit keycap layout must advance by the SAME gap the width
+        // estimator reserves (FOOTER_ACTION_CONTENT_GAP_PX), so multi-key groups
+        // like ⇧⇥ and ⌘K are sized exactly as laid out.
+        let width = footer_shortcut_keycaps_width_px_from_tokens(["⇧", "⇥"]);
+        let expected = footer_keycap_estimated_width_px("⇧")
+            + FOOTER_ACTION_CONTENT_GAP_PX
+            + footer_keycap_estimated_width_px("⇥");
+        assert_eq!(width, expected);
     }
 
     #[test]

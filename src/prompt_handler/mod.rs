@@ -4384,6 +4384,8 @@ impl ScriptListApp {
                             "fullLabel": p.full_label,
                             "ghostSuffix": p.ghost_suffix,
                             "confidence": p.confidence,
+                            "kind": p.kind_label(),
+                            "acceptsTab": p.accepts_tab(),
                         })
                     }),
                 );

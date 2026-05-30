@@ -1535,11 +1535,36 @@ impl ScriptListApp {
                             // Tab-to-Agent deprecated: Cmd+Enter is the AI entry.
                             // Ghost text acceptance (above) now owns plain Tab.
 
-                            // Consume Tab/Shift+Tab while the Agent Chat is
-                            // open so the surface keeps local tab ownership.
+                            // Agent Chat owns Tab locally. Plain Tab stays
+                            // swallowed so the global interceptor cannot re-open a
+                            // fresh chat. Shift+Tab is the documented Agent·Model
+                            // shortcut, so route it to the in-chat profile/model
+                            // picker via the window-aware entry point (the same
+                            // method the footer Agent·Model chip uses). We do NOT
+                            // reuse open_agent_model_picker_window here: that path
+                            // forces non-ScriptList views back to ScriptList,
+                            // which would leave Agent Chat mid-conversation.
                             if let AppView::AcpChatView { entity, .. } = &this.current_view {
+                                if has_shift {
+                                    cx.stop_propagation();
+                                    if this.show_actions_popup
+                                        || crate::actions::is_actions_window_open()
+                                    {
+                                        return;
+                                    }
+                                    tracing::info!(
+                                        target: "script_kit::keyboard",
+                                        event = "acp_shift_tab_profile_picker",
+                                        "Opening Agent Chat profile/model picker from Shift+Tab"
+                                    );
+                                    let entity = entity.clone();
+                                    entity.update(cx, |chat, cx| {
+                                        chat.open_profile_trigger_picker_in_window(window, cx);
+                                    });
+                                    return;
+                                }
                                 let handled = entity
-                                    .update(cx, |chat, cx| chat.handle_tab_key(has_shift, cx));
+                                    .update(cx, |chat, cx| chat.handle_tab_key(false, cx));
                                 if handled {
                                     cx.stop_propagation();
                                     return;

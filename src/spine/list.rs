@@ -195,7 +195,7 @@ pub(super) fn active_segment_range(
 fn stripped_query(query: &str) -> String {
     query
         .trim()
-        .trim_start_matches(|ch| matches!(ch, '@' | '/' | '|' | '.' | ';'))
+        .trim_start_matches(['@', '/', '|', '.', ';'])
         .to_ascii_lowercase()
 }
 
@@ -523,7 +523,7 @@ fn prompt_builder_segment_label(segment: &SpineSegment) -> Option<String> {
         SpineSegmentKind::Profile { profile_id } => profile_id.as_str(),
         SpineSegmentKind::Style { style_id } => style_id.as_str(),
         SpineSegmentKind::ProjectCwd { sub_query } => {
-            sub_query.as_deref().unwrap_or_else(|| segment.raw.as_str())
+            sub_query.as_deref().unwrap_or(segment.raw.as_str())
         }
         _ => return None,
     };
@@ -558,8 +558,7 @@ fn normalize_prompt_builder_label(raw: &str) -> String {
 }
 
 fn humanize_label(raw: &str) -> String {
-    raw.replace('-', " ")
-        .replace('_', " ")
+    raw.replace(['-', '_'], " ")
         .split_whitespace()
         .map(|word| {
             let mut chars = word.chars();
@@ -626,6 +625,7 @@ fn build_prompt_builder_tail_section(parse: &SpineParse) -> SpineListSection {
     }
 }
 
+#[allow(dead_code)]
 fn build_tail_history_sections(
     parse: &SpineParse,
     projection: &SpineCursorProjection,

@@ -413,6 +413,53 @@ fn startup_new_tab_guard_checks_acp_chat_view() {
 }
 
 #[test]
+fn startup_shift_tab_opens_acp_profile_picker() {
+    // QA story #5: in-chat Shift+Tab must open the Agent·Model profile/model
+    // picker (not be swallowed). Both Tab interceptors route Shift+Tab to the
+    // window-aware picker entry while keeping plain Tab swallowed.
+    for src in [STARTUP_SOURCE, STARTUP_NEW_TAB_SOURCE] {
+        assert!(
+            src.contains("acp_shift_tab_profile_picker"),
+            "Shift+Tab in Agent Chat must log the profile-picker routing event"
+        );
+        assert!(
+            src.contains("open_profile_trigger_picker_in_window"),
+            "Shift+Tab in Agent Chat must open the in-chat profile/model picker"
+        );
+        // Plain Tab stays swallowed via handle_tab_key(false, ...).
+        assert!(
+            src.contains("chat.handle_tab_key(false, cx)"),
+            "plain Tab in Agent Chat must remain swallowed (handle_tab_key(false))"
+        );
+    }
+}
+
+#[test]
+fn native_footer_agent_model_preserves_acp_chat_view() {
+    let arm = UI_WINDOW_SOURCE
+        .split("crate::footer_popup::FooterAction::AgentModel =>")
+        .nth(1)
+        .and_then(|tail| tail.split("/// If the current view is an ACP chat").next())
+        .expect("ui_window.rs should contain the native AgentModel footer action arm");
+
+    assert!(
+        arm.contains("AppView::AcpChatView { entity, .. }"),
+        "AgentModel footer clicks in Agent Chat must branch on the live ACP view"
+    );
+    assert!(
+        arm.contains("chat.open_profile_trigger_picker_in_window(window, cx);"),
+        "AgentModel footer clicks in Agent Chat must open the in-chat profile/model picker"
+    );
+    assert!(
+        arm.contains("return;")
+            && arm.find("return;")
+                < arm.find("self.current_view = AppView::ScriptList")
+                    .or_else(|| arm.find("self.open_agent_model_picker_window(window, cx);")),
+        "AgentModel footer clicks in Agent Chat must return before the ScriptList/global picker fallback"
+    );
+}
+
+#[test]
 fn startup_plain_enter_routes_to_acp_picker_when_open() {
     assert!(
         ACP_VIEW_SOURCE.contains("pub(crate) fn handle_enter_key"),

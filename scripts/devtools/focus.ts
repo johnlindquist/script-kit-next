@@ -102,6 +102,19 @@ function focusedNode(nodes: JsonObject[], focusedSemanticId: unknown) {
   return nodes.find((node) => node.semanticId === id || node.focused === true) ?? null;
 }
 
+function nativeFooterSnapshot(state: JsonObject) {
+  const activeFooter = (state.activeFooter as JsonObject | undefined) ?? {};
+  return {
+    owner: activeFooter.owner ?? null,
+    activeSurface: activeFooter.activeSurface ?? null,
+    expectedSurface: activeFooter.expectedSurface ?? null,
+    nativeFooterHostInstalled: activeFooter.nativeFooterHostInstalled ?? null,
+    buttonCount: activeFooter.buttonCount ?? null,
+    activationPrimitiveAvailable: false,
+    missingPrimitive: "nativeFooterActivationReceipt",
+  };
+}
+
 function classify(targetReceipt: JsonObject, stateEnvelope: JsonObject, elementsEnvelope: JsonObject, focused: JsonObject | null) {
   if (targetReceipt.classification !== "ok") {
     return targetReceipt.classification ?? "blocked-by-target-ambiguity";
@@ -138,6 +151,7 @@ async function main() {
   const selectedSemanticId = elements.selectedSemanticId ?? null;
   const focused = focusedNode(nodes, focusedSemanticId);
   const classification = classify(targetReceipt, stateEnvelope, elementsEnvelope, focused);
+  const nativeFooter = nativeFooterSnapshot(state);
 
   console.log(JSON.stringify({
     schemaVersion: 1,
@@ -154,6 +168,7 @@ async function main() {
     focusedNode: focused,
     selectedNode: nodes.find((node) => node.semanticId === selectedSemanticId) ?? null,
     activeFooter: state.activeFooter ?? null,
+    nativeFooter,
     submitDiagnostics: state.submitDiagnostics ?? null,
     keyboardOwner: {
       inputValue: state.inputValue ?? null,
@@ -167,6 +182,7 @@ async function main() {
       stateEnvelope.status === "error" ? "stateResult" : "",
       elementsEnvelope.status === "error" ? "elementsResult" : "",
       targetReceipt.classification !== "ok" ? "strictTargetIdentity" : "",
+      nativeFooter.nativeFooterHostInstalled === true ? "nativeFooterActivationReceipt" : "",
     ].filter(Boolean),
     warnings: [
       state.isFocused === false ? "window is visible but not focused" : "",

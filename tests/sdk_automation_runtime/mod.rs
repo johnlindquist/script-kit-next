@@ -186,6 +186,7 @@ fn state_result_serializes_all_fields() {
             "phase": "idle",
             "passive": true,
         })),
+        None,
     );
     let json = serde_json::to_value(&msg).expect("serialize stateResult");
     assert_eq!(json["type"], "stateResult");
@@ -238,6 +239,7 @@ fn state_result_round_trips() {
         None,
         false,
         true,
+        None,
         None,
         None,
         None,

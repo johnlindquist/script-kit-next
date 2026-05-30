@@ -569,7 +569,21 @@ fn render_info_content(
     }
 
     if let Some(note) = spec.footer_shortcut_note.clone() {
-        stack = stack.child(render_info_shortcut_note(note, theme, palette));
+        // Align the footer shortcut keycap into the same fixed-width slot the
+        // guidance rows use, so its trailing text lines up with the guidance
+        // labels above it instead of starting at the keycap's natural width.
+        let guidance_items: Vec<InfoGuidanceItem> = spec
+            .sections
+            .iter()
+            .flat_map(|section| section.items.iter().cloned())
+            .collect();
+        let shortcut_slot_width_px = info_guidance_shortcut_slot_width_px(&guidance_items);
+        stack = stack.child(render_info_shortcut_note(
+            note,
+            theme,
+            palette,
+            shortcut_slot_width_px,
+        ));
     } else if let Some(note) = spec.footer_note.clone() {
         stack = stack.child(render_info_plain_footer_note(note, palette));
     }
@@ -590,20 +604,32 @@ fn render_info_shortcut_note(
     note: InfoShortcutNote,
     theme: &theme::Theme,
     palette: InfoPalette,
+    shortcut_slot_width_px: f32,
 ) -> AnyElement {
+    let keycaps = crate::components::footer_chrome::render_footer_shortcut_keycaps(
+        note.shortcut.to_string(),
+        theme,
+    );
+    // Use the same fixed-width keycap slot + row gap as `render_guidance_row` so
+    // the note text aligns horizontally with the guidance labels above it.
+    let keycap_slot = if shortcut_slot_width_px > 0.0 {
+        div()
+            .w(px(shortcut_slot_width_px))
+            .flex_none()
+            .flex()
+            .items_center()
+            .child(keycaps)
+    } else {
+        div().flex().items_center().child(keycaps)
+    };
     div()
         .flex()
         .items_center()
-        .gap(px(INFO_SPACING.xs * 0.5))
+        .gap(px(INFO_SPACING.sm))
         .text_size(px(INFO_TYPE_SCALE.caption.size))
         .line_height(px(INFO_TYPE_SCALE.caption.line))
         .text_color(palette.hint)
-        .child(
-            crate::components::footer_chrome::render_footer_shortcut_keycaps(
-                note.shortcut.to_string(),
-                theme,
-            ),
-        )
+        .child(keycap_slot)
         .child(note.text)
         .into_any_element()
 }
@@ -824,6 +850,29 @@ mod tests {
             crate::components::footer_chrome::footer_shortcut_keycaps_width_px(":tag:")
         );
         assert!(width > crate::components::footer_chrome::footer_shortcut_keycaps_width_px("⌘P"));
+    }
+
+    #[test]
+    fn footer_shortcut_note_shares_guidance_keycap_slot_width() {
+        // Regression: the acp empty-state footer note (⌘K) must align its
+        // trailing text with the guidance labels above it. That requires the
+        // note to render its keycap into the same fixed-width slot the guidance
+        // rows compute from the section items.
+        let spec = acp_empty_guidance_spec();
+        assert!(
+            spec.footer_shortcut_note.is_some(),
+            "acp guidance should carry a footer shortcut note"
+        );
+        let guidance_items: Vec<InfoGuidanceItem> = spec
+            .sections
+            .iter()
+            .flat_map(|section| section.items.iter().cloned())
+            .collect();
+        let slot = info_guidance_shortcut_slot_width_px(&guidance_items);
+        assert!(
+            slot > 0.0,
+            "footer note must align into a real (positive) keycap slot, got {slot}"
+        );
     }
 
     #[test]

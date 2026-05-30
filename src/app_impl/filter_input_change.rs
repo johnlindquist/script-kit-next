@@ -791,14 +791,17 @@ impl ScriptListApp {
             if object_selector_owns_input {
                 self.invalidate_grouped_cache();
             } else if needs_popup_sync {
-                self.sync_menu_syntax_trigger_popup_window_for_filter(new_text.clone(), window, cx);
-                // Popup ownership just flipped — invalidate the grouped
-                // results cache so the main launcher list is rebuilt with
-                // the popup-aware gate in `get_grouped_results_cached`.
-                // Without this, a cache computed before the popup opened
-                // would stay visible behind the popup (e.g. typing `+`
-                // shows 468 stale fuzzy results when setFilter triggered
-                // the synchronous reconcile before the state machine ran).
+                // Trigger snapshots now render in the main search area via
+                // `menu_syntax_main_hint_snapshot`, not in the detached popup.
+                // The popup window is still used by capture-form field
+                // suggestions, so close any stale trigger-owned popup here
+                // while preserving the snapshot that feeds the main area.
+                crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+                // Ownership just flipped — invalidate the grouped results
+                // cache so the main launcher list is rebuilt with the
+                // trigger-aware gate in `get_grouped_results_cached`.
+                // Without this, a cache computed before the trigger snapshot
+                // appeared would stay visible behind the main hint surface.
                 self.invalidate_grouped_cache();
             } else if matches!(
                 &transition,

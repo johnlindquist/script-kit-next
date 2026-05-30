@@ -413,14 +413,31 @@ impl ScriptListApp {
             }
             crate::footer_popup::FooterAction::AgentModel => {
                 // Click on the Agent·Model chip → open the combined
-                // agent+model picker, mirroring Shift+Tab from ScriptList
-                // (see startup.rs tab_interceptor).
+                // agent+model picker. From Agent Chat, keep the chat surface
+                // alive and use the same in-chat picker path as Shift+Tab.
+                // From ScriptList, use the global pre-launch picker.
                 tracing::info!(
                     target: "script_kit::footer_popup",
                     event = "main_window_footer_agent_model_chip_clicked",
                     view = ?self.current_view,
                     "Opening agent/model picker from footer chip"
                 );
+                if let AppView::AcpChatView { entity, .. } = &self.current_view {
+                    if self.show_actions_popup || crate::actions::is_actions_window_open() {
+                        tracing::info!(
+                            target: "script_kit::footer_popup",
+                            event = "main_window_footer_agent_model_chip_ignored_actions_open",
+                            view = ?self.current_view,
+                            "Ignored Agent·Model footer chip while actions dialog owns input"
+                        );
+                        return;
+                    }
+                    let entity = entity.clone();
+                    entity.update(cx, |chat, cx| {
+                        chat.open_profile_trigger_picker_in_window(window, cx);
+                    });
+                    return;
+                }
                 if !matches!(self.current_view, AppView::ScriptList) {
                     self.current_view = AppView::ScriptList;
                 }

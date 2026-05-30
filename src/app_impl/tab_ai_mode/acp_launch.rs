@@ -184,6 +184,24 @@ impl ScriptListApp {
         };
         let warm_spec = pi_launch.warm_spec();
         let manager = crate::ai::agent_chat::launch::warm_session_manager();
+        if let Some(snapshot) = manager.snapshot(&pi_launch.warm_key).filter(|snapshot| {
+            snapshot.state == crate::ai::agent_chat::warm_session::AgentChatWarmSessionState::Failed
+        }) {
+            let error = snapshot.failure_message.unwrap_or_else(|| {
+                "Pi Agent Chat model warm-up failed. Retry after fixing the provider configuration."
+                    .to_string()
+            });
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "pi_agent_chat_warm_failed_setup",
+                profile_id = %pi_launch.profile.id,
+                warm_key = %pi_launch.warm_key,
+                generation = snapshot.generation,
+                error = %error,
+            );
+            self.show_pi_agent_chat_unavailable_setup_view(source_view, error, cx);
+            return;
+        }
         let Some(lease) = manager.acquire_warm_ready(&pi_launch.warm_key) else {
             match manager.prepare_warm_background(warm_spec) {
                 Ok(snapshot) => {
@@ -256,7 +274,8 @@ impl ScriptListApp {
         });
 
         let view_entity = cx.new(|cx| {
-            crate::ai::agent_chat::ui::AgentChatView::new(thread.clone(), cx).with_ui_variant(request.ui_variant)
+            crate::ai::agent_chat::ui::AgentChatView::new(thread.clone(), cx)
+                .with_ui_variant(request.ui_variant)
         });
 
         self.active_agent_chat_warm_lease = Some(lease);

@@ -59,7 +59,7 @@ pub fn project_cursor(parse: &SpineParse, cursor_byte: usize) -> SpineCursorProj
         };
     }
 
-    let has_prompt_segments = parse.segments.iter().any(|s| is_prompt_builder_segment(s));
+    let has_prompt_segments = parse.segments.iter().any(is_prompt_builder_segment);
 
     // Find the segment containing the cursor. If cursor is at a boundary,
     // it belongs to the segment whose range includes it (left-biased for
@@ -115,7 +115,9 @@ fn split_segments(input: &str) -> Vec<SpineSegment> {
             continue;
         }
 
-        let ch = input[pos..].chars().next().unwrap();
+        let Some(ch) = char_at(input, pos) else {
+            break;
+        };
         let ch_len = ch.len_utf8();
         let at_boundary = pos == 0 || bytes[pos - 1] == b' ';
 
@@ -128,7 +130,10 @@ fn split_segments(input: &str) -> Vec<SpineSegment> {
             pos += ch_len;
             // Consume non-space chars (the value word)
             while pos < len && bytes[pos] != b' ' {
-                pos += input[pos..].chars().next().unwrap().len_utf8();
+                let Some(next_ch) = char_at(input, pos) else {
+                    break;
+                };
+                pos += next_ch.len_utf8();
             }
             let raw = input[seg_start..pos].to_string();
             let rest = &input[seg_start + ch_len..pos];
@@ -144,7 +149,9 @@ fn split_segments(input: &str) -> Vec<SpineSegment> {
             let seg_start = pos;
             pos += ch_len;
             while pos < len {
-                let next_ch = input[pos..].chars().next().unwrap();
+                let Some(next_ch) = char_at(input, pos) else {
+                    break;
+                };
                 let next_at_boundary = bytes[pos - 1] == b' ';
                 let next_is_any_sigil = PROMPT_BUILDER_SIGILS.contains(&next_ch)
                     || next_ch == CAPTURE_SIGIL
@@ -176,7 +183,9 @@ fn split_segments(input: &str) -> Vec<SpineSegment> {
                     // Check if the next non-space char is a sigil at boundary
                     let peek = pos + 1;
                     if peek < len {
-                        let next_ch = input[peek..].chars().next().unwrap();
+                        let Some(next_ch) = char_at(input, peek) else {
+                            break;
+                        };
                         let next_is_sigil = PROMPT_BUILDER_SIGILS.contains(&next_ch)
                             || next_ch == CAPTURE_SIGIL
                             || next_ch == FILTER_SIGIL;
@@ -185,7 +194,10 @@ fn split_segments(input: &str) -> Vec<SpineSegment> {
                         }
                     }
                 }
-                pos += input[pos..].chars().next().unwrap().len_utf8();
+                let Some(next_ch) = char_at(input, pos) else {
+                    break;
+                };
+                pos += next_ch.len_utf8();
             }
             // Trim trailing whitespace
             let mut seg_end = pos;
@@ -203,6 +215,10 @@ fn split_segments(input: &str) -> Vec<SpineSegment> {
     }
 
     segments
+}
+
+fn char_at(input: &str, pos: usize) -> Option<char> {
+    input.get(pos..)?.chars().next()
 }
 
 /// Classify a sigil segment by its leading character.

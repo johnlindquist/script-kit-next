@@ -44,9 +44,9 @@ fn rich_context() -> TabAiContextBlob {
                 pid: 1234,
             }),
             selected_text: Some("hello world".to_string()),
-            browser: Some(script_kit_gpui::context_snapshot::BrowserContext {
-                url: "https://example.com".to_string(),
-            }),
+            browser: Some(script_kit_gpui::context_snapshot::BrowserContext::from_url(
+                "https://example.com".to_string(),
+            )),
             ..Default::default()
         },
         vec!["copy url".to_string(), "open finder".to_string()],
@@ -193,9 +193,7 @@ fn public_ai_exports_cover_tab_ai_prompt_and_context_types() {
                 bundle_id: "com.tinyspeck.slackmacgap".to_string(),
                 pid: 1234,
             }),
-            browser: Some(BrowserContext {
-                url: "https://example.com".to_string(),
-            }),
+            browser: Some(BrowserContext::from_url("https://example.com".to_string())),
             ..Default::default()
         },
         vec!["force quit".to_string()],
