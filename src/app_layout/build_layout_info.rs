@@ -436,7 +436,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
                     .with_visual_token("feedback.intro")
                     .with_depth(2)
@@ -453,7 +453,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
                     .with_visual_token("feedback.pathSection")
                     .with_gap(FEEDBACK_SECTION_GAP)
@@ -498,7 +498,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_FUNCTIONAL,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
                     .with_visual_token("feedback.actions")
                     .with_gap(FEEDBACK_BUTTON_GAP)

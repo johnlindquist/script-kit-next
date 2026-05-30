@@ -110,18 +110,19 @@ function hasPositiveRadius(value: unknown) {
   return radii.length > 0 && radii.every((entry) => entry > 0);
 }
 
-const REQUIRED_POSITIVE_RADIUS_NODE_NAMES = new Set([
-  "ContentArea",
-  "ScriptList",
-  "PreviewPanel",
-]);
+function isRadiusBearingNode(node: JsonObject) {
+  const type = String(node.type ?? "").toLowerCase();
+  if (type === "other" || type === "text") return false;
+  const name = String(node.name ?? node.type ?? "");
+  return /Area|Content|Panel|List|Window|Header|Footer|Input|Button|Item|Row|Card|Prompt|Choices|Search|Action|Close|Tile/i
+    .test(name);
+}
 
 function nodesWithMissingPositiveRadius(receipt: JsonObject) {
   return asArray(receipt.nodes)
     .map(asObject)
     .filter((node) => {
-      const name = String(node.name ?? node.type ?? "");
-      if (!REQUIRED_POSITIVE_RADIUS_NODE_NAMES.has(name)) return false;
+      if (!isRadiusBearingNode(node)) return false;
       const style = asObject(node.visualStyle);
       if (Object.keys(style).length === 0) return false;
       return !hasPositiveRadius(style.cornerRadius) && !hasPositiveRadius(style.radius);
@@ -998,6 +999,7 @@ async function main() {
       ]);
     } else if (surfaceKind === "ActionsDialog") {
       await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-actions-guideline-layout.json`,
         `${RECEIPT_ROOT}/tahoe-next-actions-layout.json`,
         `${RECEIPT_ROOT}/after-actions-layout-visual-style.json`,
       ]);
@@ -1028,6 +1030,7 @@ async function main() {
       ]);
     } else if (surfaceKind === "Feedback") {
       await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-feedback-guideline-layout.json`,
         `${RECEIPT_ROOT}/window-priority-feedback-layout-after.json`,
       ]);
     } else if (surfaceKind === "Dictation") {

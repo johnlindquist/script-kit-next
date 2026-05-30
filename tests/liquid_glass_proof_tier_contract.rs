@@ -138,7 +138,7 @@ fn proof_matrix_splits_guidance_proof_from_diagnostics() {
             && PROOF_MATRIX.contains("osScreenshotBlockerCounts")
             && PROOF_MATRIX.contains("layoutReceiptFreshnessLimitations")
             && PROOF_MATRIX.contains("stale-layout-evidence")
-            && PROOF_MATRIX.contains("REQUIRED_POSITIVE_RADIUS_NODE_NAMES")
+            && PROOF_MATRIX.contains("function isRadiusBearingNode")
             && PROOF_MATRIX.contains("diagnosticLimitations")
             && PROOF_MATRIX.contains("guidanceEvidenceNeeded")
             && PROOF_MATRIX.contains("diagnosticEvidenceNeeded")

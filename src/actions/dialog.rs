@@ -2047,7 +2047,7 @@ impl ActionsDialog {
                 .with_visual_style(
                     chrome_tokens::CHROME_LAYER_CONTENT,
                     chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                    None,
+                    Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                 )
                 .with_visual_token("content.actionsList")
                 .with_depth(1)

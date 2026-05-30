@@ -94,3 +94,49 @@ fn shared_prompt_layout_nodes_use_liquid_glass_radius_tokens() {
         );
     }
 }
+
+#[test]
+fn creation_feedback_content_nodes_use_liquid_glass_panel_radius() {
+    let layout = fs::read_to_string("src/app_layout/build_layout_info.rs")
+        .expect("failed to read build_layout_info.rs");
+
+    for node in [
+        "CreationFeedbackIntro",
+        "CreationFeedbackPathSection",
+        "CreationFeedbackActions",
+    ] {
+        let start = layout
+            .find(&format!("LayoutComponentInfo::new(\"{node}\""))
+            .unwrap_or_else(|| panic!("{node} layout node should exist"));
+        let node_source = &layout[start..];
+        let end = node_source
+            .find(".with_visual_token")
+            .unwrap_or_else(|| panic!("{node} should declare visual metadata"));
+        assert!(
+            node_source[..end].contains("Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX)"),
+            "{node} must use the shared Liquid Glass panel radius token"
+        );
+    }
+}
+
+#[test]
+fn actions_list_layout_node_uses_liquid_glass_panel_radius() {
+    let dialog =
+        fs::read_to_string("src/actions/dialog.rs").expect("failed to read actions/dialog.rs");
+
+    let start = dialog
+        .find("\"ActionsList\"")
+        .expect("ActionsList layout node should exist");
+    let node_source = &dialog[start..];
+    let end = node_source
+        .find(".with_visual_token")
+        .expect("ActionsList should declare visual metadata");
+    assert!(
+        node_source[..end].contains("Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX)"),
+        "ActionsList must use the shared Liquid Glass panel radius token"
+    );
+    assert!(
+        !node_source[..end].contains("Some(0.0)"),
+        "ActionsList must not satisfy guideline proof with a zero-radius placeholder"
+    );
+}
