@@ -114,3 +114,37 @@ fn root_window_layout_material_is_backdrop_not_content_glass() {
         "Liquid Glass proof classification must fail layouts with content-layer AppKit glass/material violations"
     );
 }
+
+#[test]
+fn file_search_mini_layout_receipt_uses_window_backdrop() {
+    let receipt = read_source(
+        "artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-layout.json",
+    );
+
+    assert!(
+        receipt.contains("\"surfaceKind\": \"FileSearchMini\""),
+        "test must pin the FileSearchMini layout receipt, not a neighboring file-search surface"
+    );
+    assert!(
+        receipt.contains("\"contentGlassNodes\": []"),
+        "FileSearchMini root Window must not be counted as content glass"
+    );
+    assert!(
+        receipt.contains("\"contentNativeMaterialNodes\": []"),
+        "FileSearchMini root Window must not be counted as content-owned AppKit/native material"
+    );
+    assert!(
+        receipt.contains("\"glassLayerViolations\": []"),
+        "FileSearchMini must have no content-layer glass/material violations"
+    );
+    assert!(
+        receipt.contains("\"windowBackdrop\": 1"),
+        "FileSearchMini must classify exactly one root window backdrop layer"
+    );
+    assert!(
+        !receipt.contains(
+            "\"chromeLayer\": \"content\",\n        \"materialSource\": \"NSVisualEffectView\""
+        ),
+        "FileSearchMini root Window must not regress to content + NSVisualEffectView"
+    );
+}

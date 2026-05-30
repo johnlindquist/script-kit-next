@@ -102,6 +102,7 @@ interface InspectionReceipt {
   resolvedBounds?: WindowBounds | null;
   screenshotWidth?: number | null;
   screenshotHeight?: number | null;
+  pid?: number | null;
   pixelProbes: Array<{ x: number; y: number; r: number; g: number; b: number; a: number }>;
   warnings: string[];
 }
@@ -435,6 +436,52 @@ async function captureNativeWindowViaMcp(
   };
 }
 
+async function resolveNativeWindowIdFromInspection(
+  inspection: InspectionReceipt | null
+): Promise<number | null> {
+  if (
+    !inspection ||
+    typeof inspection.pid !== "number" ||
+    inspection.pid <= 0 ||
+    !inspection.resolvedBounds
+  ) {
+    return null;
+  }
+
+  const list = await callMcpTool("computer/list_native_windows", {
+    includeHidden: true,
+    includeBackground: true,
+  });
+  const expectedWidth = Math.round(inspection.resolvedBounds.width);
+  const expectedHeight = Math.round(inspection.resolvedBounds.height);
+  const matches: Array<Record<string, any>> = [];
+
+  for (const appEntry of list.apps ?? []) {
+    const app = appEntry.app ?? appEntry;
+    if (app.pid !== inspection.pid) {
+      continue;
+    }
+    for (const window of appEntry.windows ?? []) {
+      const bounds = window.bounds ?? {};
+      const width = Math.round(Number(bounds.width));
+      const height = Math.round(Number(bounds.height));
+      if (width === expectedWidth && height === expectedHeight) {
+        matches.push(window);
+      }
+    }
+  }
+
+  const selected =
+    matches.find(
+      (window) =>
+        window.observation?.captureSelectionCandidate?.status === "candidate"
+    ) ?? matches[0];
+
+  return typeof selected?.nativeWindowId === "number"
+    ? selected.nativeWindowId
+    : null;
+}
+
 function inspectionScreenRect(inspection: InspectionReceipt | null): WindowBounds | null {
   const bounds = inspection?.resolvedBounds;
   if (
@@ -729,6 +776,7 @@ async function queryInspection(
       (response.resolvedBounds as InspectionReceipt["resolvedBounds"]) ?? null,
     screenshotWidth: (response.screenshotWidth as number) ?? null,
     screenshotHeight: (response.screenshotHeight as number) ?? null,
+    pid: (response.pid as number) ?? null,
     pixelProbes: (response.pixelProbes as InspectionReceipt["pixelProbes"]) ?? [],
     warnings: (response.warnings as string[]) ?? [],
   };
@@ -970,16 +1018,29 @@ async function captureScreenshot(
   let windowFrontmost: boolean | null = null;
   let windowFocused: boolean | null = null;
   let windowId: number | null = null;
+  let nativeCaptureFailure: string | null = null;
+  let screenRectFailure: string | null = null;
   const strictWindowProof = opts.strictWindow === true || hasAcpAssertions(opts);
   const inspectionOsWindowId =
     typeof inspection?.osWindowId === "number" && inspection.osWindowId > 0
       ? inspection.osWindowId
       : null;
   const requestedAutomationWindowId = inspection?.automationWindowId ?? null;
-  const requestedOsWindowId =
+  let requestedOsWindowId =
     typeof captureWindowId === "number" && captureWindowId > 0
       ? captureWindowId
       : inspectionOsWindowId;
+  if (requestedOsWindowId == null && targetJson) {
+    requestedOsWindowId = await resolveNativeWindowIdFromInspection(inspection);
+    if (requestedOsWindowId != null) {
+      diag("verify_shot_native_window_resolved_from_pid", {
+        label,
+        automationWindowId: requestedAutomationWindowId,
+        pid: inspection?.pid ?? null,
+        requestedOsWindowId,
+      });
+    }
+  }
   let captureRouting: CaptureRouting =
     requestedOsWindowId != null
       ? captureWindowId != null
@@ -1123,10 +1184,11 @@ async function captureScreenshot(
         windowId = nativeCapture.windowId;
       }
     } catch (error) {
+      nativeCaptureFailure = error instanceof Error ? error.message : String(error);
       diag("verify_shot_native_capture_fallback", {
         label,
         requestedOsWindowId,
-        error: error instanceof Error ? error.message : String(error),
+        error: nativeCaptureFailure,
       });
     }
   }
@@ -1233,12 +1295,14 @@ async function captureScreenshot(
       };
     }
   } else {
-    const rectCapture = await captureScreenRectFromInspection(inspection, outPath, 200);
-    if (rectCapture.ok && inspectionOsWindowId != null) {
+    if (inspectionScreenRect(inspection) && inspectionOsWindowId != null) {
       captureRouting = "screen-rect-from-inspection";
       captureMethod = "window.ts";
       windowCaptureMethod = "screencapture";
       windowId = inspectionOsWindowId;
+    }
+    const rectCapture = await captureScreenRectFromInspection(inspection, outPath, 200);
+    if (rectCapture.ok && inspectionOsWindowId != null) {
       diag("verify_shot_screen_rect_fallback", {
         label,
         reason: "strict-window-helper-failed",
@@ -1247,7 +1311,17 @@ async function captureScreenshot(
         bounds: rectCapture.bounds,
       });
     } else {
+      screenRectFailure =
+        rectCapture.ok
+          ? "screen-rect fallback captured but inspection lacked osWindowId"
+          : rectCapture.error;
       // Strict mode: window.ts failed and we have ACP assertions — do not fall back to generic frontmost capture.
+      const primaryFailure = stderr.trim() || stdout.trim() || "window.ts capture failed";
+      const failureParts = [
+        `primary=${primaryFailure}`,
+        nativeCaptureFailure ? `native=${nativeCaptureFailure}` : null,
+        screenRectFailure ? `screenRect=${screenRectFailure}` : null,
+      ].filter(Boolean);
       return {
         result: {
           captured: false,
@@ -1261,7 +1335,7 @@ async function captureScreenshot(
           windowFrontmost,
           windowFocused,
           windowId,
-          error: `Strict window capture failed: ${stderr.trim() || stdout.trim() || (rectCapture.ok ? "screen-rect fallback lacked inspection osWindowId" : rectCapture.error) || "window.ts capture failed"}`,
+          error: `Strict window capture failed: ${failureParts.join("; ")}`,
         },
         plan: {
           routing: captureRouting,
@@ -1421,12 +1495,14 @@ async function captureScreenshot(
     captureRouting !== "screen-rect-from-inspection" &&
     inspectionOsWindowId != null
   ) {
-    const rectCapture = await captureScreenRectFromInspection(inspection, outPath, 200);
-    if (rectCapture.ok) {
+    if (inspectionScreenRect(inspection)) {
       captureRouting = "screen-rect-from-inspection";
       captureMethod = "window.ts";
       windowCaptureMethod = "screencapture";
       windowId = inspectionOsWindowId;
+    }
+    const rectCapture = await captureScreenRectFromInspection(inspection, outPath, 200);
+    if (rectCapture.ok) {
       stats = statSync(outPath);
       dims = await getImageDimensions(outPath);
       try {
@@ -1465,6 +1541,8 @@ async function captureScreenshot(
         bounds: rectCapture.bounds,
         contentAudit,
       });
+    } else {
+      screenRectFailure = rectCapture.error;
     }
   }
 
@@ -1482,8 +1560,11 @@ async function captureScreenshot(
         windowFrontmost,
         windowFocused,
         windowId,
-        error:
+        error: [
           "Screenshot pixel audit rejected a blank/black image. Check macOS Screen Recording permission or capture timing before using this PNG as visual proof.",
+          nativeCaptureFailure ? `native=${nativeCaptureFailure}` : null,
+          screenRectFailure ? `screenRect=${screenRectFailure}` : null,
+        ].filter(Boolean).join(" "),
       },
       plan: {
         routing: captureRouting,

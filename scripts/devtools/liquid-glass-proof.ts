@@ -118,6 +118,12 @@ function screenshotUsability(path: string, receipts: string[]): ScreenshotUsabil
     const receiptName = receipt.split("/").pop() ?? receipt;
     return receiptName.startsWith(baseName) && receiptName.includes("screenshot");
   });
+  if (matchingReceipts.length === 0 && baseName.startsWith("tahoe-native-")) {
+    return {
+      usable: false,
+      note: `ignored screenshot ${path}: no matching screenshot receipt with capture status`,
+    };
+  }
 
   for (const receipt of matchingReceipts) {
     const json = readJsonSync(receipt);

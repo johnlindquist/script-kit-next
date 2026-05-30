@@ -116,6 +116,28 @@ fn strict_window_has_target_bound_screen_rect_fallback() {
 }
 
 #[test]
+fn strict_window_resolves_ambiguous_target_by_inspection_pid() {
+    assert!(
+        VERIFY_SHOT.contains("resolveNativeWindowIdFromInspection"),
+        "ambiguous target screenshots should recover a native window id from inspectAutomationWindow pid"
+    );
+    assert!(
+        VERIFY_SHOT.contains("inspection.pid"),
+        "inspection pid must be preserved for native-window disambiguation"
+    );
+    assert!(
+        VERIFY_SHOT.contains("computer/list_native_windows")
+            && VERIFY_SHOT.contains("app.pid !== inspection.pid")
+            && VERIFY_SHOT.contains("captureSelectionCandidate?.status === \"candidate\""),
+        "pid-based fallback must query native windows, filter by owner pid, and prefer capture candidates"
+    );
+    assert!(
+        VERIFY_SHOT.contains("verify_shot_native_window_resolved_from_pid"),
+        "pid-based native-window recovery must emit a diagnostic receipt"
+    );
+}
+
+#[test]
 fn strict_window_skips_show_for_attached_popup_exact_capture() {
     assert!(
         VERIFY_SHOT.contains("function isAttachedPopupWindowKind"),

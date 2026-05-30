@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "tool": "manual-fullscreen-capture-audit",
+  "classification": "blocked-by-black-screen-capture",
+  "path": "artifacts/liquid-glass/screenshots/tahoe-native-fullscreen-probe.png",
+  "sizeBytes": 113276,
+  "width": 3024,
+  "height": 1964,
+  "mean": 0.250009,
+  "standardDeviation": 0.00192067,
+  "entropy": 0.000103729,
+  "command": "screencapture -x artifacts/liquid-glass/screenshots/tahoe-native-fullscreen-probe.png",
+  "interpretation": "Fullscreen screencapture produced a privacy-like black image with only a tiny cursor/status dot; not usable as visual proof."
+}

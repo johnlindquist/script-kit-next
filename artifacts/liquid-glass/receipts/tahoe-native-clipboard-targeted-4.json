@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 3,
+  "status": "error",
+  "label": "tahoe-native-clipboard-targeted-4",
+  "timestamp": "2026-05-30T08:10:48.351Z",
+  "durationMs": 781,
+  "requiresVisionReview": false,
+  "resolvedTarget": {
+    "windowId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "surfaceId": null
+  },
+  "dispatchPath": "window_role_fallback",
+  "resolvedWindowId": "main",
+  "captureRouting": "generic-frontmost",
+  "requestedAutomationWindowId": "main",
+  "requestedOsWindowId": null,
+  "showIssuedBeforeCapture": false,
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-clipboard-targeted-4.png",
+    "captureMethod": null,
+    "windowCaptureMethod": null,
+    "windowId": null
+  },
+  "captureTarget": {
+    "requestedWindowId": null,
+    "actualWindowId": null
+  },
+  "inspection": {
+    "automationWindowId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "osWindowId": null,
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 750,
+      "height": 480
+    },
+    "resolvedBounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenshotWidth": null,
+    "screenshotHeight": null,
+    "pixelProbes": [],
+    "warnings": [
+      "screenshot_capture_failed: Ambiguous OS window match for automation target main (Main); '' and '' tied at score 5100"
+    ]
+  },
+  "popupCapture": {
+    "strategy": "not_applicable",
+    "windowKind": "Main",
+    "targetBounds": null,
+    "semanticReceiptsArePrimary": false
+  },
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": false,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-native-clipboard-targeted-4.png",
+    "sizeBytes": null,
+    "width": null,
+    "height": null,
+    "contentAudit": null,
+    "captureMethod": null,
+    "windowCaptureMethod": null,
+    "windowFrontmost": null,
+    "windowFocused": null,
+    "windowId": null,
+    "error": "Targeted screenshot capture requires a native osWindowId, but inspection did not return one"
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: FAILED (Targeted screenshot capture requires a native osWindowId, but inspection did not return one)"
+}
