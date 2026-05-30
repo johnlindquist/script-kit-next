@@ -11,6 +11,7 @@ import {
   classifyDeviation,
   classifyMinimum,
   concentricRadiusDeviations,
+  footerSpacingDeviations,
   searchPaddingDeviations,
   type NodeLike,
 } from "./apple-guideline-constants";
@@ -101,6 +102,44 @@ test("the real main-launcher SearchInput (0pt flush text inset) is outOfBand vs 
   expect(d.deltaPt).toBe(-9);
   expect(d.classification).toBe("outOfBand");
   expect(d.normativeStrength).toBe("hard");
+});
+
+test("the real main-launcher MainFooter (6pt item gap) is outOfBand vs the soft 12pt floor (SOFT, not hard)", () => {
+  // Mirrors build_layout_info.rs MainFooter: a footer panel whose inter-item gap
+  // is FOOTER_ACTION_ITEM_GAP_PX = 6pt, carried as boxModel.gap.
+  const footer: NodeLike[] = [
+    {
+      name: "MainFooter",
+      type: "panel",
+      parent: "Window",
+      bounds: { x: 0, y: 458, width: 750, height: 22 },
+      visualStyle: { cornerRadius: 16, contentInsets: { top: 2, right: 14, bottom: 2, left: 14 } },
+      boxModel: { gap: 6 },
+    },
+  ];
+  const d = footerSpacingDeviations(footer, 2)[0];
+  expect(d.observedPt).toBe(6);
+  expect(d.targetPt).toBe(12);
+  expect(d.deltaPt).toBe(-6);
+  expect(d.classification).toBe("outOfBand");
+  // Honest: footer hint chips are NOT regular buttons, so this is SOFT.
+  expect(d.normativeStrength).toBe("soft");
+});
+
+test("a footer node with no boxModel.gap is an explicit unmeasured gap", () => {
+  const footer: NodeLike[] = [
+    { name: "MainFooter", type: "panel", parent: "Window", bounds: { x: 0, y: 458, width: 750, height: 22 } },
+  ];
+  const d = footerSpacingDeviations(footer, 2)[0];
+  expect(d.classification).toBe("unmeasured");
+  expect(d.failureReason).toContain("boxModel.gap");
+});
+
+test("a footer with a roomy 14pt gap is withinBand (refutes 'cramped' once spacing is adequate)", () => {
+  const footer: NodeLike[] = [
+    { name: "MainFooter", type: "panel", parent: "Window", bounds: { x: 0, y: 458, width: 750, height: 22 }, boxModel: { gap: 14 } },
+  ];
+  expect(footerSpacingDeviations(footer, 2)[0].classification).toBe("withinBand");
 });
 
 test("classifyDeviation respects retina pixel-quantization tolerance", () => {

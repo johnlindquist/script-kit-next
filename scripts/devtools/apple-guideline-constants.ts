@@ -256,6 +256,24 @@ export const APPLE_GUIDELINE_METRICS: GuidelineMetric[] = [
     copyrightSafeSummary: "A default NSGlassEffectView rounds to 8pt on macOS 26.5 (measured); a free element default, not the window mask.",
   },
   {
+    id: "layout.footer.itemGap",
+    category: "spacing",
+    confidence: "derived",
+    normativeStrength: "soft",
+    // Footer hint chips are NOT regular buttons, so Apple's 16pt hard regular-
+    // control gap is a reference ceiling, not a hard floor. The soft floor is the
+    // ~12pt bezel-padding heuristic: adjacent compact controls should have at
+    // least that much breathing room. Below it reads as cramped.
+    target: { kind: "minimum", minPt: 12 },
+    tolerance: { absPt: 1, nearAbsPt: 3 },
+    derivation: {
+      fromMetricIds: ["layout.regularButton.minimumGap", "layout.bezelElement.padding"],
+      formula: "footer item gap should be >= ~12pt (bezel-padding floor); Apple's hard regular-control gap is 16pt",
+      notes: "Soft because footer hint chips are compact, non-bezeled controls Apple's HIG does not size explicitly.",
+    },
+    copyrightSafeSummary: "Derived (soft): adjacent compact footer controls should keep ~12pt+ of gap; 6pt reads as cramped vs Apple's 16pt regular-control gap.",
+  },
+  {
     id: "macos.window.toolbarRadius.nativeBaseline",
     category: "cornerRadius",
     confidence: "measuredNative",
@@ -314,6 +332,7 @@ export interface NodeLike {
   parent?: unknown;
   bounds: BoundsPt;
   visualStyle?: unknown;
+  boxModel?: unknown;
 }
 
 export interface GuidelineDeviation {
@@ -571,6 +590,67 @@ export function searchPaddingDeviations(nodes: NodeLike[], scale: number | null)
   return out;
 }
 
+// --- Footer item spacing ----------------------------------------------------
+// The user's "footer lacks padding" concern, measured: a footer rail that
+// declares its inter-item gap (boxModel.gap) is classified against the soft
+// ~12pt floor. SOFT — footer hint chips are compact, non-bezeled controls.
+function footerGapFromNode(node: NodeLike): number | null {
+  const box = node.boxModel && typeof node.boxModel === "object" ? (node.boxModel as Record<string, unknown>) : null;
+  if (box && typeof box.gap === "number" && Number.isFinite(box.gap)) return box.gap;
+  return null;
+}
+
+export function footerSpacingDeviations(nodes: NodeLike[], scale: number | null): GuidelineDeviation[] {
+  const m = metric("layout.footer.itemGap");
+  const out: GuidelineDeviation[] = [];
+  for (const node of nodes) {
+    const name = String(node.name ?? "");
+    const type = String(node.type ?? "").toLowerCase();
+    const isFooter = /footer/i.test(name) || type === "footer";
+    if (!isFooter) continue;
+    const gap = footerGapFromNode(node);
+    if (gap == null) {
+      out.push({
+        metricId: m.id,
+        source: sourceFor(m.confidence),
+        confidence: m.confidence,
+        normativeStrength: m.normativeStrength,
+        nodeName: name,
+        nodeType: String(node.type ?? ""),
+        observedPt: null,
+        targetPt: 12,
+        minPt: 12,
+        deltaPt: null,
+        deltaPct: null,
+        tolerance: m.tolerance,
+        classification: "unmeasured",
+        failureReason: "footer node lacks boxModel.gap; cannot measure inter-item spacing",
+      });
+      continue;
+    }
+    out.push({
+      metricId: m.id,
+      source: sourceFor(m.confidence),
+      confidence: m.confidence,
+      normativeStrength: m.normativeStrength,
+      nodeName: name,
+      nodeType: String(node.type ?? ""),
+      observedPt: gap,
+      targetPt: 12,
+      minPt: 12,
+      deltaPt: gap - 12,
+      deltaPct: (gap - 12) / 12,
+      tolerance: m.tolerance,
+      classification: classifyMinimum(gap, 12, m.tolerance, scale),
+      derivation: {
+        formula: "footer item gap >= ~12pt soft floor (Apple hard regular-control gap = 16pt)",
+        inputs: { observedGapPt: gap, softFloorPt: 12, appleRegularControlGapPt: 16 },
+      },
+    });
+  }
+  return out;
+}
+
 // --- Capsule radius (large/x-large controls only) --------------------------
 export function capsuleRadiusDeviations(nodes: NodeLike[], scale: number | null): GuidelineDeviation[] {
   const m = metric("shape.capsule.radius");
@@ -627,6 +707,7 @@ export function appleGuidelineConformance(nodes: NodeLike[], scale: number | nul
   const deviations: GuidelineDeviation[] = [
     ...concentricRadiusDeviations(nodes, scale),
     ...searchPaddingDeviations(nodes, scale),
+    ...footerSpacingDeviations(nodes, scale),
     ...capsuleRadiusDeviations(nodes, scale),
   ];
   const failures = deviations.filter((d) => d.classification === "outOfBand");

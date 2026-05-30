@@ -1984,6 +1984,42 @@ impl ScriptListApp {
                 )),
         );
 
+        // Main-launcher footer (hint strip). Emit it so the Apple-guideline
+        // conformance engine can MEASURE the user's "footer lacks padding"
+        // concern. Outer side inset = HINT_STRIP_PADDING_X (14pt, adequate); the
+        // cramped dimension is the inter-item gap = FOOTER_ACTION_ITEM_GAP_PX
+        // (6pt) carried as boxModel.gap, which the engine classifies against the
+        // soft ~12pt floor (Apple's hard regular-control gap is 16pt).
+        {
+            use crate::components::footer_chrome::FOOTER_ACTION_ITEM_GAP_PX;
+            use crate::window_resize::main_layout::{
+                HINT_STRIP_PADDING_X, NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+            };
+            let footer_y = window_height - NATIVE_MAIN_WINDOW_FOOTER_HEIGHT;
+            components.push(
+                LayoutComponentInfo::new("MainFooter", LayoutComponentType::Panel)
+                    .with_bounds(0.0, footer_y, window_width, NATIVE_MAIN_WINDOW_FOOTER_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("chrome.mainFooter")
+                    .with_content_insets(
+                        crate::components::footer_chrome::FOOTER_BUTTON_VERTICAL_INSET_PX,
+                        HINT_STRIP_PADDING_X,
+                        crate::components::footer_chrome::FOOTER_BUTTON_VERTICAL_INSET_PX,
+                        HINT_STRIP_PADDING_X,
+                    )
+                    .with_gap(FOOTER_ACTION_ITEM_GAP_PX)
+                    .with_depth(1)
+                    .with_parent("Window")
+                    .with_explanation(
+                        "Hint-strip footer. Side inset 14px; inter-item gap 6px (boxModel.gap) is the measured 'footer lacks padding' signal vs Apple's soft ~12pt floor.".to_string(),
+                    ),
+            );
+        }
+
         LayoutInfo {
             window_width,
             window_height,

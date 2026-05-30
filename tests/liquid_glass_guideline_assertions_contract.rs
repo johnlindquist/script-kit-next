@@ -207,6 +207,57 @@ fn search_input_emits_measured_zero_horizontal_content_inset() {
     );
 }
 
+/// Slice 3b (Oracle session `tahoe-apple-guideline-metrics`): the main-launcher
+/// must EMIT a footer rail node carrying its real inter-item gap (boxModel.gap =
+/// FOOTER_ACTION_ITEM_GAP_PX) so the conformance engine can MEASURE the user's
+/// "footer lacks padding" concern (6pt observed vs the soft ~12pt floor). The
+/// metric is SOFT — footer hint chips are not regular buttons — so we must not
+/// overstate it as a hard Apple violation.
+#[test]
+fn main_footer_emits_measured_item_gap_for_soft_conformance() {
+    let layout = fs::read_to_string("src/app_layout/build_layout_info.rs")
+        .expect("failed to read build_layout_info.rs");
+    let start = layout
+        .find("LayoutComponentInfo::new(\"MainFooter\"")
+        .expect("main-launcher MainFooter node should exist");
+    let node = &layout[start..];
+    let end = node
+        .find(".with_explanation(")
+        .expect("MainFooter should declare an explanation");
+    let node = &node[..end];
+    assert!(
+        node.contains(".with_gap(FOOTER_ACTION_ITEM_GAP_PX)"),
+        "MainFooter must emit its real inter-item gap as boxModel.gap"
+    );
+    assert!(
+        node.contains(".with_content_insets("),
+        "MainFooter must emit its content insets (side padding)"
+    );
+
+    let constants = fs::read_to_string("scripts/devtools/apple-guideline-constants.ts")
+        .expect("failed to read apple-guideline-constants.ts");
+    assert!(
+        constants.contains("layout.footer.itemGap"),
+        "constants must define the footer item-gap metric"
+    );
+    // Must be SOFT/derived, not a hard documented Apple constant.
+    let metric_block = constants
+        .split("id: \"layout.footer.itemGap\"")
+        .nth(1)
+        .and_then(|tail| tail.get(..400))
+        .unwrap_or("");
+    assert!(
+        metric_block.contains("normativeStrength: \"soft\"")
+            && metric_block.contains("confidence: \"derived\""),
+        "footer item-gap metric must be soft/derived (footer hints are not regular buttons)"
+    );
+    assert!(
+        constants.contains("footerSpacingDeviations")
+            && constants.contains("...footerSpacingDeviations(nodes, scale)"),
+        "footerSpacingDeviations must be wired into the conformance rollup"
+    );
+}
+
 #[test]
 fn layout_visual_audit_rejects_zero_radius_placeholders() {
     let layout =
