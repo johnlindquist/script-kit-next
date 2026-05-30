@@ -36,6 +36,9 @@ type FeatureMapEntry = {
 type OracleBatch = {
   id: string;
   name: string;
+  priority: number;
+  outsideInPhase: "window-container" | "surface-shell" | "content-controls" | "supporting-systems";
+  priorityRationale: string;
   owners: string[];
   surfaceKinds: string[];
   featureIds: string[];
@@ -139,6 +142,9 @@ function buildOracleBatches(contracts: SurfaceContract[], features: FeatureMapEn
     {
       id: "platform-windowing-permissions",
       name: "Platform windows, containers, materials, resizing, screenshots, lifecycle",
+      priority: 1,
+      outsideInPhase: "window-container",
+      priorityRationale: "Highest impact: outer windows, materials, safe areas, lifecycle, and resize behavior constrain every inner layout.",
       owners: ["platform-windowing-macos", "window-resizing", "launcher-surface-contracts"],
       surfaceKinds: keepKinds(["About", "Feedback"]),
       featureIds: featureIds(features, ["platform-windowing-macos", "window-resizing", "launcher-surface-contracts"], [
@@ -156,6 +162,9 @@ function buildOracleBatches(contracts: SurfaceContract[], features: FeatureMapEn
     {
       id: "launcher-main-actions",
       name: "Launcher, main menu, source filters, actions, shortcuts, aliases",
+      priority: 2,
+      outsideInPhase: "surface-shell",
+      priorityRationale: "Main window shell, launcher container, action popup container, and footer chrome define the default app layout.",
       owners: ["main-menu-search-selection", "actions-popups", "keyboard-focus-routing"],
       surfaceKinds: keepKinds(["ScriptList", "ActionsDialog", "ConfirmPrompt"]),
       featureIds: featureIds(features, ["main-menu-search-selection", "actions-popups", "keyboard-focus-routing"], [
@@ -173,6 +182,9 @@ function buildOracleBatches(contracts: SurfaceContract[], features: FeatureMapEn
     {
       id: "prompt-runtime-family",
       name: "Prompt runtime family, child content, terminal, editor, forms, path, drop, env, confirm",
+      priority: 3,
+      outsideInPhase: "surface-shell",
+      priorityRationale: "Prompt windows and child-content containers are the broadest SDK-facing layout shells after the launcher.",
       owners: ["prompt-runtime", "sdk-script-execution", "quick-terminal-pty", "file-search-portals"],
       surfaceKinds: keepKinds(["PromptEntity", "PromptChildContent", "ExplicitPromptEntity", "UtilityChildContent", "Webcam", "ConfirmPrompt"]),
       featureIds: featureIds(features, ["prompt-runtime", "sdk-script-execution", "quick-terminal-pty", "file-search-portals"], [
@@ -192,6 +204,9 @@ function buildOracleBatches(contracts: SurfaceContract[], features: FeatureMapEn
     {
       id: "builtins-filterable",
       name: "Built-in filterable views and split-preview rows",
+      priority: 4,
+      outsideInPhase: "surface-shell",
+      priorityRationale: "Filterable built-ins reuse shared list and preview containers; prove the shell before row-level controls.",
       owners: ["builtin-filterable-surfaces", "theme-config-preferences", "storage-cache-security"],
       surfaceKinds: keepKinds([
         "ClipboardHistory",
@@ -223,6 +238,9 @@ function buildOracleBatches(contracts: SurfaceContract[], features: FeatureMapEn
     {
       id: "portals-resources-context",
       name: "File portals, attachment portals, MCP resources, context catalogs",
+      priority: 5,
+      outsideInPhase: "surface-shell",
+      priorityRationale: "Portal windows and return containers affect attachment, resource, and context layouts before individual rows.",
       owners: ["file-search-portals", "mcp-context-resources", "acp-context-composer"],
       surfaceKinds: keepKinds(["FileSearchMini", "FileSearchFull", "AttachmentPortalBrowser", "ScriptTemplateCatalog", "SdkReference"]),
       featureIds: featureIds(features, ["file-search-portals", "mcp-context-resources", "acp-context-composer"], [
@@ -240,6 +258,9 @@ function buildOracleBatches(contracts: SurfaceContract[], features: FeatureMapEn
     {
       id: "acp-chat-ai",
       name: "ACP chat, composer, history, SDK AI APIs, model setup",
+      priority: 6,
+      outsideInPhase: "content-controls",
+      priorityRationale: "ACP has important window shells, but after detached/window proof the remaining work is composer and transcript internals.",
       owners: ["acp-chat-core", "acp-context-composer", "sdk-script-execution"],
       surfaceKinds: keepKinds(["AcpChat", "AcpHistory", "AttachmentPortalBrowser", "GenericFilterableList"]),
       featureIds: featureIds(features, ["acp-chat-core", "acp-context-composer", "sdk-script-execution"], ["acp", "agent chat", "ai"]),
@@ -252,6 +273,9 @@ function buildOracleBatches(contracts: SurfaceContract[], features: FeatureMapEn
     {
       id: "notes-dictation-media",
       name: "Notes, notes-hosted ACP, dictation, media, history, target delivery",
+      priority: 7,
+      outsideInPhase: "content-controls",
+      priorityRationale: "Notes and Dictation have practical window proof; remaining work is embedded ACP, media state, history, and delivery details.",
       owners: ["notes-window", "dictation-media", "acp-chat-core"],
       surfaceKinds: keepKinds(["AcpChat", "AcpHistory", "ClipboardHistory"]),
       featureIds: featureIds(features, ["notes-window", "dictation-media", "acp-chat-core"], ["notes", "dictation", "media"]),
@@ -264,6 +288,9 @@ function buildOracleBatches(contracts: SurfaceContract[], features: FeatureMapEn
     {
       id: "observability-security-storage",
       name: "Observability, storage, sharing, security, diagnostics, replay",
+      priority: 8,
+      outsideInPhase: "supporting-systems",
+      priorityRationale: "Supporting receipts and diagnostics are essential, but they should follow visible window/container proof.",
       owners: ["dev-loop-observability", "storage-cache-security", "testing-quality-gates"],
       surfaceKinds: keepKinds(["Feedback", "SdkReference", "ScriptTemplateCatalog"]),
       featureIds: featureIds(features, ["dev-loop-observability", "storage-cache-security", "testing-quality-gates"], [
@@ -417,10 +444,10 @@ function markdown(report: ReturnType<typeof buildReport>) {
     "",
     "## Oracle Batches",
     "",
-    "| Batch | SurfaceKinds | Feature IDs | Required primitives |",
-    "| --- | --- | --- | --- |",
+    "| Priority | Phase | Batch | SurfaceKinds | Feature IDs | Required primitives |",
+    "| --- | --- | --- | --- | --- | --- |",
     ...report.recommendedOracleBatches.map((batch) =>
-      `| ${batch.name} | ${batch.surfaceKinds.join(", ")} | ${batch.featureIds.join(", ")} | ${batch.requiredDevToolsPrimitives.join(", ")} |`
+      `| ${batch.priority} | ${batch.outsideInPhase} | ${batch.name} | ${batch.surfaceKinds.join(", ")} | ${batch.featureIds.join(", ")} | ${batch.requiredDevToolsPrimitives.join(", ")} |`
     ),
   ];
   return lines.join("\n");
