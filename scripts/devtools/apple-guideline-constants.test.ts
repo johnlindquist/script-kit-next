@@ -209,6 +209,26 @@ test("the window-mask native baseline receipt pins native Tahoe windows at 15pt"
   expect(windowMaskBaseline.ourWindowRadiusTokenPt).toBe(22);
 });
 
+test("an over-inset 24pt input is outOfBand vs the EXACT 9pt native inset (Oracle fix: not a minimum)", () => {
+  // Per Oracle review tahoe-guideline-review-remaining: 9pt is an EXACT native
+  // text-field inset, so a 24pt inset must NOT pass as "matches native". The old
+  // classifyMinimum let any value >= 9 pass; classifyDeviation correctly fails it.
+  const overInset: NodeLike[] = [
+    {
+      name: "SearchInput",
+      type: "input",
+      parent: "Header",
+      bounds: { x: 16, y: 11, width: 498, height: 22 },
+      visualStyle: { cornerRadius: 14, contentInsets: { top: 2, right: 24, bottom: 2, left: 24 } },
+    },
+  ];
+  const d = searchPaddingDeviations(overInset, 2)[0];
+  expect(d.observedPt).toBe(24);
+  expect(d.targetPt).toBe(9);
+  expect(d.deltaPt).toBe(15);
+  expect(d.classification).toBe("outOfBand");
+});
+
 test("classifyDeviation respects retina pixel-quantization tolerance", () => {
   // target 6, tolerance absPt 1 on a 2x display -> passBand max(1, 2*0.5)=1
   expect(classifyDeviation(0.5, 6, { absPt: 1, nearAbsPt: 2 }, 2)).toBe("withinBand");

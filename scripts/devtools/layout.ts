@@ -387,8 +387,17 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
       const a = nodes[left];
       const b = nodes[rightIndex];
       const sameSiblingBand = a.depth === b.depth && a.parent === b.parent;
+      // A floating overlay (e.g. the hint-strip footer) intentionally floats over
+      // content with safe-area/scroll-edge insets — the list viewport is reduced by
+      // the footer height, so the geometric intersection is by design, not a clip.
+      // (Oracle review tahoe-guideline-review-remaining; render_script_list reduces
+      // safe_viewport_height by the footer overlay height.)
+      const floatingOverlayPair =
+        a.hitMetrics?.exception === "floatingFooterOverlay" ||
+        b.hitMetrics?.exception === "floatingFooterOverlay";
       if (
         sameSiblingBand &&
+        !floatingOverlayPair &&
         a.name &&
         b.name &&
         intersects(a.bounds, b.bounds)

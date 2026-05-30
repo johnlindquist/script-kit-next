@@ -543,7 +543,11 @@ export function concentricRadiusDeviations(nodes: NodeLike[], scale: number | nu
 export function searchPaddingDeviations(nodes: NodeLike[], scale: number | null): GuidelineDeviation[] {
   const m = metric("control.searchField.textInset.horizontal");
   // Measured-native anchor: native regular NSTextField insets text 9pt (macOS 26.5).
-  // Soft band context retained (8–12pt) for `minPt`/`maxPt` reporting.
+  // This is an EXACT native inset, classified with classifyDeviation (penalizing
+  // both too-little AND too-much), NOT a minimum — a 24pt inset does not "match"
+  // the 9pt native text-field inset. (Oracle review tahoe-guideline-review-remaining:
+  // the separate unbezeled-lane edge-distance minimum ~24pt is later-polish.)
+  // Soft band context retained (8–12pt) for `minPt`/`maxPt` reporting only.
   const nativeTargetPt = m.target.kind === "constant" ? m.target.valuePt : 9;
   const out: GuidelineDeviation[] = [];
   for (const node of nodes) {
@@ -578,7 +582,7 @@ export function searchPaddingDeviations(nodes: NodeLike[], scale: number | null)
       });
       continue;
     }
-    const classification = classifyMinimum(observed, nativeTargetPt, m.tolerance, scale);
+    const classification = classifyDeviation(observed - nativeTargetPt, nativeTargetPt, m.tolerance, scale);
     out.push({
       metricId: m.id,
       source: sourceFor(m.confidence),

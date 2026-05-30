@@ -2012,10 +2012,15 @@ impl ScriptListApp {
                         HINT_STRIP_PADDING_X,
                     )
                     .with_gap(FOOTER_ACTION_ITEM_GAP_PX)
+                    // The hint strip is a FLOATING glass overlay (render_script_list
+                    // positions it .absolute() and reduces the list safe_viewport by
+                    // the footer height), so its geometric overlap with ContentArea is
+                    // intentional Tahoe scroll-edge/safe-area behavior, not a clip.
+                    .with_visual_exception("floatingFooterOverlay")
                     .with_depth(1)
                     .with_parent("Window")
                     .with_explanation(
-                        "Hint-strip footer. Side inset 14px; inter-item gap 6px (boxModel.gap) is the measured 'footer lacks padding' signal vs Apple's soft ~12pt floor.".to_string(),
+                        "Floating hint-strip footer overlay (absolute; the list safe-viewport is inset by its height). Side inset 14px; inter-item gap 12px (boxModel.gap = FOOTER_ACTION_ITEM_GAP_PX) now meets Apple's soft ~12pt bezel-padding floor (raised from 6px, the prior 'footer lacks padding' signal).".to_string(),
                     ),
             );
         }
