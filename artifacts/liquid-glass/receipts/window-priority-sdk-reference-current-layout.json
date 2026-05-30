@@ -3,10 +3,12 @@
   "tool": "script-kit-devtools.layout",
   "command": "layout.measure",
   "classification": "ok",
-  "session": "liquid-resource-browsers-current",
+  "session": "liquid-batch3",
   "include": [
     "nodes",
     "regions",
+    "scroll",
+    "anchors",
     "resize",
     "overlaps"
   ],
@@ -35,8 +37,8 @@
     "surfaceGeneration": null,
     "dataGeneration": null,
     "bounds": {
-      "x": 585,
-      "y": 177,
+      "x": 34,
+      "y": -842,
       "width": 750,
       "height": 480
     },
@@ -46,8 +48,8 @@
     "frontmost": null,
     "focused": null,
     "screenshotIdentity": {
-      "width": 750,
-      "height": 480,
+      "width": null,
+      "height": null,
       "targetBoundsInScreenshot": {
         "x": 0,
         "y": 0,
@@ -56,17 +58,45 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 38530,
+    "pid": 56154,
     "strictTargetMatch": true,
     "ambiguity": []
   },
+  "layoutEvidenceFreshness": {
+    "schemaVersion": 1,
+    "generatedAt": "2026-05-30T13:32:44.150Z",
+    "auditSchema": "panel-radius-v2",
+    "requiredPanelRadiusNodes": [
+      "ContentArea",
+      "ScriptList",
+      "PreviewPanel"
+    ],
+    "sourceFingerprint": {
+      "schemaVersion": 1,
+      "algorithm": "sha256",
+      "files": [
+        {
+          "path": "src/app_layout/build_layout_info.rs",
+          "sha256": "d0cdc414765c7b39f1df9ebc44e47153fb429f17800c6a7c2e7478fedd9216c7"
+        },
+        {
+          "path": "scripts/devtools/layout.ts",
+          "sha256": "10fc886f0677c720d31e020a1afce824008c8767aaf451d427ae4f259469257e"
+        },
+        {
+          "path": "src/ui/chrome/tokens.rs",
+          "sha256": "42e274081636cb27743c06ddd80e7142fd3110e5462851b0998e885968a22220"
+        }
+      ]
+    }
+  },
   "promptType": "sdkReference",
-  "timestamp": "2026-05-30T07:27:40.675820+00:00",
+  "timestamp": "2026-05-30T13:32:44.105945+00:00",
   "componentCount": 14,
   "window": {
     "rect": {
-      "x": 585,
-      "y": 177,
+      "x": 34,
+      "y": -842,
       "width": 750,
       "height": 480
     },
@@ -102,8 +132,8 @@
     "height": 480
   },
   "windowRect": {
-    "x": 585,
-    "y": 177,
+    "x": 34,
+    "y": -842,
     "width": 750,
     "height": 480
   },
@@ -571,6 +601,12 @@
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
         "tokenSource": "content.background",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
         "visualBounds": {
           "x": 0,
           "y": 45,
@@ -627,6 +663,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.background",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -659,6 +701,12 @@
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
         "tokenSource": "content.list",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
         "visualBounds": {
           "x": 0,
           "y": 45,
@@ -714,6 +762,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.list",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -746,6 +800,12 @@
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
         "tokenSource": "content.previewPanel",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
         "visualBounds": {
           "x": 375,
           "y": 45,
@@ -809,6 +869,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.previewPanel",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 375,
             "y": 45,
@@ -1702,6 +1768,73 @@
       "content": 8,
       "functionalChrome": 5,
       "windowBackdrop": 1
+    },
+    "guidelineAssertions": {
+      "appleDocumented": {
+        "hitTargets": {
+          "source": "apple-documented",
+          "macosMinimumHitSize": {
+            "width": 28,
+            "height": 28
+          },
+          "macosMinimumVisualSize": {
+            "width": 20,
+            "height": 20
+          },
+          "failures": []
+        },
+        "buttonCenterDistance": {
+          "source": "apple-documented",
+          "requiredCenterDistance": 60,
+          "failures": []
+        },
+        "materialLayering": {
+          "source": "apple-documented",
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": []
+        },
+        "colorAdaptivity": {
+          "source": "apple-documented",
+          "hardcodedColorNodes": []
+        },
+        "safeAreaLayout": {
+          "source": "apple-documented",
+          "clippedNodeCount": 0,
+          "overflowY": false
+        },
+        "buttonShapeFamilies": {
+          "source": "apple-documented",
+          "exactAppleRadiusConstants": null
+        }
+      },
+      "projectLocal": {
+        "cornerRadiusTokens": {
+          "source": "project-local",
+          "failures": []
+        },
+        "paddingTokens": {
+          "source": "project-local",
+          "minimumPanelPadding": 16,
+          "minimumCompactRowHorizontalPadding": 10
+        },
+        "spacingTokens": {
+          "source": "project-local",
+          "minimumFooterActionGap": 8
+        },
+        "windowBackdropPolicy": {
+          "source": "project-local",
+          "contentGlassNodeCount": 0
+        },
+        "themeTokenUsage": {
+          "source": "project-local",
+          "hardcodedColorNodes": []
+        },
+        "renderReadbackPixelThresholds": {
+          "source": "project-local",
+          "minimumNonBlackRatio": 0.01
+        }
+      }
     }
   },
   "handlerForm": null,
@@ -1710,7 +1843,7 @@
   "errors": [],
   "rawLayout": {
     "type": "layoutInfoResult",
-    "requestId": "devtools-layout-measure-1780126060648-d7c95a",
+    "requestId": "devtools-layout-measure-1780147964033-cd0003",
     "windowWidth": 750,
     "windowHeight": 480,
     "promptType": "sdkReference",
@@ -1859,6 +1992,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.background",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -1892,6 +2031,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.list",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -1933,6 +2078,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.previewPanel",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 375,
             "y": 45,
@@ -2321,6 +2472,6 @@
         }
       }
     ],
-    "timestamp": "2026-05-30T07:27:40.675820+00:00"
+    "timestamp": "2026-05-30T13:32:44.105945+00:00"
   }
 }
