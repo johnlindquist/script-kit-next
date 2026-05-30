@@ -3,7 +3,7 @@
   "tool": "script-kit-devtools.layout",
   "command": "layout.measure",
   "classification": "ok",
-  "session": "liquid-kit-store-browse-current",
+  "session": "liquid-kit-store-browse-proof2",
   "include": [
     "nodes",
     "regions",
@@ -58,12 +58,12 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 56958,
+    "pid": 71528,
     "strictTargetMatch": true,
     "ambiguity": []
   },
   "promptType": "browseKits",
-  "timestamp": "2026-05-30T06:48:10.688190+00:00",
+  "timestamp": "2026-05-30T06:49:38.859216+00:00",
   "componentCount": 10,
   "window": {
     "rect": {
@@ -1173,7 +1173,7 @@
   "errors": [],
   "rawLayout": {
     "type": "layoutInfoResult",
-    "requestId": "devtools-layout-measure-1780123688001-4bd8d1",
+    "requestId": "devtools-layout-measure-1780123778835-8ba942",
     "windowWidth": 750,
     "windowHeight": 480,
     "promptType": "browseKits",
@@ -1535,6 +1535,6 @@
         }
       }
     ],
-    "timestamp": "2026-05-30T06:48:10.688190+00:00"
+    "timestamp": "2026-05-30T06:49:38.859216+00:00"
   }
 }

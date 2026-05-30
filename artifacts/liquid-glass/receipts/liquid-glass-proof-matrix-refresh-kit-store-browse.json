@@ -3,9 +3,9 @@
   "tool": "script-kit-devtools.liquid-glass-proof",
   "command": "proof.matrix",
   "classification": "incomplete",
-  "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
+  "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-latest.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T06:47:52.593Z",
+  "generatedAt": "2026-05-30T06:49:21.553Z",
   "summary": {
     "surfaceCount": 29,
     "strongProofSurfaceCount": 4,
@@ -1284,6 +1284,7 @@
         ],
         "inspectReceipts": [
           "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-elements-devtools.json",
           "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-elements.json",
           "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-layout.json",
           "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-matrix.json",

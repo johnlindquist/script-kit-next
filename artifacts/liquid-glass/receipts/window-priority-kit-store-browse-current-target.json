@@ -49,7 +49,7 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 56958,
+    "pid": 86075,
     "strictTargetMatch": true,
     "ambiguity": []
   },
@@ -59,7 +59,7 @@
       "automationId": "main",
       "windowKind": "Main",
       "title": "Script Kit",
-      "visible": true,
+      "visible": false,
       "focused": false,
       "bounds": {
         "x": 585,
@@ -71,12 +71,12 @@
       "appViewVariant": null,
       "parentAutomationId": null,
       "parentKind": null,
-      "pid": 56958
+      "pid": 86075
     }
   ],
   "rawInspect": {
     "type": "automationInspectResult",
-    "requestId": "devtools-targets-inspect-1780123738092-59e6c0",
+    "requestId": "devtools-targets-inspect-1780123836618-1e5dd2",
     "schemaVersion": 3,
     "windowId": "main",
     "windowKind": "Main",
@@ -121,38 +121,36 @@
         "text": "0 items"
       },
       {
-        "semanticId": "footer:native:row",
+        "semanticId": "footer:prompt:row",
         "type": "panel",
-        "text": "native",
+        "text": "prompt",
         "value": "kit_store_browse",
         "role": "footer",
-        "kind": "nativeFooterRow",
+        "kind": "promptFooterRow",
         "selectable": false
       },
       {
-        "semanticId": "footer:native:run",
+        "semanticId": "footer:prompt:run",
         "type": "button",
         "text": "↵ Install",
         "value": "run",
         "selected": false,
         "index": 0,
         "role": "footer",
-        "kind": "nativeFooterButton",
+        "kind": "promptFooterButton",
         "source": "kit_store_browse",
-        "sourceName": "kit_store_browse",
         "selectable": false
       },
       {
-        "semanticId": "footer:native:close",
+        "semanticId": "footer:prompt:close",
         "type": "button",
         "text": "Esc Back",
         "value": "close",
         "selected": false,
         "index": 1,
         "role": "footer",
-        "kind": "nativeFooterButton",
+        "kind": "promptFooterButton",
         "source": "kit_store_browse",
-        "sourceName": "kit_store_browse",
         "selectable": true
       }
     ],
@@ -160,9 +158,9 @@
     "focusedSemanticId": "input:kit-search",
     "screenshotWidth": 750,
     "screenshotHeight": 480,
-    "osWindowId": 84357,
+    "osWindowId": 84364,
     "semanticQuality": "full",
-    "pid": 56958
+    "pid": 86075
   },
   "sessionLifecycle": [],
   "errors": []

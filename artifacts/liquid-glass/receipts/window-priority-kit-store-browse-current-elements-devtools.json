@@ -3,7 +3,7 @@
   "tool": "script-kit-devtools.elements",
   "command": "elements.snapshot",
   "classification": "ok",
-  "session": "liquid-kit-store-browse-proof",
+  "session": "liquid-kit-store-browse-proof2",
   "requestedTarget": {
     "selector": {
       "type": "main"
@@ -49,7 +49,7 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 56853,
+    "pid": 71528,
     "strictTargetMatch": true,
     "ambiguity": []
   },
