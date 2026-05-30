@@ -118,6 +118,14 @@ fn matrix_declares_stable_sibling_filterable_surface_cases() {
             "__aurp16_no_app_match__",
         ),
         (
+            "window-switcher-visible-rows",
+            "windowSwitcher",
+            "WindowSwitcher",
+            "list:windows",
+            "window-switcher",
+            "__aurp16_no_window_match__",
+        ),
+        (
             "design-gallery-visible-rows",
             "designGallery",
             "DesignGallery",
@@ -232,6 +240,7 @@ fn matrix_entries_declare_image_library_metadata() {
         ("clipboard-history", "clipboard-history.png"),
         ("emoji-picker", "emoji-picker.png"),
         ("app-launcher", "app-launcher.png"),
+        ("window-switcher", "window-switcher.png"),
         ("design-gallery", "design-gallery.png"),
         ("process-manager", "process-manager.png"),
     ] {
