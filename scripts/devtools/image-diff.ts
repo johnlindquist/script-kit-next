@@ -6,6 +6,8 @@ type Args = {
   out: string;
   label: string;
   fuzz: string;
+  redCrop: string;
+  greenCrop: string;
 };
 
 type Dimensions = {
@@ -16,7 +18,7 @@ type Dimensions = {
 function usage() {
   return [
     "Usage:",
-    "  bun scripts/devtools/image-diff.ts compare --red <before.png> --green <after.png> --out <diff.png> [--label <name>] [--fuzz <percent>]",
+    "  bun scripts/devtools/image-diff.ts compare --red <before.png> --green <after.png> --out <diff.png> [--label <name>] [--fuzz <percent>] [--red-crop <WxH+X+Y>] [--green-crop <WxH+X+Y>]",
     "",
     "Creates an ImageMagick compare mask and emits a JSON receipt with dimensions, changed-pixel count, ratio, and diff bounding box.",
   ].join("\n");
@@ -38,6 +40,8 @@ function parseArgs(argv: string[]): Args {
     out: "",
     label: "image-diff",
     fuzz: "0%",
+    redCrop: "",
+    greenCrop: "",
   };
 
   for (let index = 1; index < argv.length; index += 1) {
@@ -52,6 +56,10 @@ function parseArgs(argv: string[]): Args {
       args.label = argv[++index] ?? args.label;
     } else if (arg === "--fuzz") {
       args.fuzz = argv[++index] ?? args.fuzz;
+    } else if (arg === "--red-crop") {
+      args.redCrop = argv[++index] ?? "";
+    } else if (arg === "--green-crop") {
+      args.greenCrop = argv[++index] ?? "";
     }
   }
 
@@ -107,13 +115,29 @@ function parseBoundingBox(value: string) {
   };
 }
 
+async function prepareInput(path: string, crop: string, tmpDir: string, name: string) {
+  if (!crop) {
+    return path;
+  }
+  if (!/^\d+x\d+\+-?\d+\+-?\d+$/.test(crop)) {
+    throw new Error(`Invalid ${name} crop ${crop}; expected WxH+X+Y`);
+  }
+  const out = `${tmpDir}/${name}.png`;
+  runMagick([path, "-crop", crop, "+repage", out]);
+  return out;
+}
+
 async function main() {
   const args = parseArgs(Bun.argv.slice(2));
   await Bun.write(args.out, "");
   await Bun.$`rm -f ${args.out}`;
+  const tmpDir = `/tmp/script-kit-image-diff-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  await Bun.$`mkdir -p ${tmpDir}`;
 
-  const redDimensions = identify(args.red);
-  const greenDimensions = identify(args.green);
+  const redInput = await prepareInput(args.red, args.redCrop, tmpDir, "red");
+  const greenInput = await prepareInput(args.green, args.greenCrop, tmpDir, "green");
+  const redDimensions = identify(redInput);
+  const greenDimensions = identify(greenInput);
   const canvas = {
     width: Math.max(redDimensions.width, greenDimensions.width),
     height: Math.max(redDimensions.height, greenDimensions.height),
@@ -130,8 +154,8 @@ async function main() {
       "red",
       "-lowlight-color",
       "black",
-      args.red,
-      args.green,
+      redInput,
+      greenInput,
       args.out,
     ],
     new Set([0, 1]),
@@ -152,6 +176,10 @@ async function main() {
     greenPath: args.green,
     diffPath: args.out,
     fuzz: args.fuzz,
+    crop: {
+      red: args.redCrop || null,
+      green: args.greenCrop || null,
+    },
     dimensions: {
       red: redDimensions,
       green: greenDimensions,
@@ -179,6 +207,7 @@ async function main() {
     timestamp: new Date().toISOString(),
   };
 
+  await Bun.$`rm -rf ${tmpDir}`;
   console.log(JSON.stringify(receipt, null, 2));
 }
 

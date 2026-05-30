@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.image-diff",
+  "command": "image-diff.compare",
+  "classification": "ok",
+  "label": "main-header-before-to-tahoe-next",
+  "redPath": "artifacts/liquid-glass/screenshots/before-main-launcher.png",
+  "greenPath": "artifacts/liquid-glass/screenshots/tahoe-next-main.png",
+  "diffPath": "artifacts/liquid-glass/diffs/main-header-before-to-tahoe-next.png",
+  "fuzz": "0%",
+  "crop": {
+    "red": "1724x240+0+0",
+    "green": "1724x240+0+0"
+  },
+  "dimensions": {
+    "red": {
+      "width": 1724,
+      "height": 240
+    },
+    "green": {
+      "width": 1724,
+      "height": 240
+    },
+    "comparisonCanvas": {
+      "width": 1724,
+      "height": 240
+    },
+    "sameSize": true,
+    "widthDelta": 0,
+    "heightDelta": 0
+  },
+  "changedPixels": 15727,
+  "totalPixels": 413760,
+  "changedPixelRatio": 0.03800995746326373,
+  "changedPixelPercent": 3.800995746326373,
+  "diffBoundingBox": {
+    "width": 1480,
+    "height": 144,
+    "x": 0,
+    "y": 0
+  },
+  "assertions": {
+    "diffMaskWritten": true,
+    "changedPixelsMeasured": true,
+    "dimensionsMeasured": true
+  },
+  "warnings": [],
+  "errors": [],
+  "timestamp": "2026-05-30T02:52:25.084Z"
+}
