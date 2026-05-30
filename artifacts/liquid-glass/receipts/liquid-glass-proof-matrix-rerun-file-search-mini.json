@@ -1,0 +1,2703 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.liquid-glass-proof",
+  "command": "proof.matrix",
+  "classification": "ok",
+  "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
+  "artifactRoot": "artifacts/liquid-glass",
+  "generatedAt": "2026-05-30T08:20:40.002Z",
+  "summary": {
+    "surfaceCount": 29,
+    "strongProofSurfaceCount": 4,
+    "partialProofSurfaceCount": 25,
+    "missingProofSurfaceCount": 0,
+    "batchCount": 8,
+    "strongProofBatchCount": 1,
+    "partialProofBatchCount": 7,
+    "missingProofBatchCount": 0
+  },
+  "batches": [
+    {
+      "id": "platform-windowing-permissions",
+      "name": "Platform windows, containers, materials, resizing, screenshots, lifecycle",
+      "owners": [
+        "platform-windowing-macos",
+        "window-resizing",
+        "launcher-surface-contracts"
+      ],
+      "surfaceKinds": [
+        "About",
+        "Feedback"
+      ],
+      "requiredDevToolsPrimitives": [
+        "devtools.windows.inspect",
+        "devtools.permissions.inspect",
+        "devtools.visual.compare",
+        "devtools.lifecycle.trace"
+      ],
+      "proofStatus": "strong-proof",
+      "provenSurfaceCount": 2,
+      "partialSurfaceCount": 0,
+      "missingSurfaceCount": 0,
+      "surfaceStatuses": [
+        {
+          "surfaceKind": "About",
+          "proofStatus": "strong-proof"
+        },
+        {
+          "surfaceKind": "Feedback",
+          "proofStatus": "strong-proof"
+        }
+      ]
+    },
+    {
+      "id": "launcher-main-actions",
+      "name": "Launcher, main menu, source filters, actions, shortcuts, aliases",
+      "owners": [
+        "main-menu-search-selection",
+        "actions-popups",
+        "keyboard-focus-routing"
+      ],
+      "surfaceKinds": [
+        "ScriptList",
+        "ActionsDialog",
+        "ConfirmPrompt"
+      ],
+      "requiredDevToolsPrimitives": [
+        "devtools.targets.watch",
+        "devtools.act",
+        "devtools.measure.layout",
+        "devtools.measure.text"
+      ],
+      "proofStatus": "partial-proof",
+      "provenSurfaceCount": 2,
+      "partialSurfaceCount": 1,
+      "missingSurfaceCount": 0,
+      "surfaceStatuses": [
+        {
+          "surfaceKind": "ScriptList",
+          "proofStatus": "strong-proof"
+        },
+        {
+          "surfaceKind": "ActionsDialog",
+          "proofStatus": "strong-proof"
+        },
+        {
+          "surfaceKind": "ConfirmPrompt",
+          "proofStatus": "numeric-proof-no-image-diff"
+        }
+      ]
+    },
+    {
+      "id": "prompt-runtime-family",
+      "name": "Prompt runtime family, child content, terminal, editor, forms, path, drop, env, confirm",
+      "owners": [
+        "prompt-runtime",
+        "sdk-script-execution",
+        "quick-terminal-pty",
+        "file-search-portals"
+      ],
+      "surfaceKinds": [
+        "PromptEntity",
+        "PromptChildContent",
+        "ExplicitPromptEntity",
+        "UtilityChildContent",
+        "Webcam",
+        "ConfirmPrompt"
+      ],
+      "requiredDevToolsPrimitives": [
+        "devtools.prompt.inspect",
+        "devtools.measure.scroll",
+        "devtools.measure.selection",
+        "devtools.act.safeSubmit"
+      ],
+      "proofStatus": "partial-proof",
+      "provenSurfaceCount": 0,
+      "partialSurfaceCount": 6,
+      "missingSurfaceCount": 0,
+      "surfaceStatuses": [
+        {
+          "surfaceKind": "PromptEntity",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "PromptChildContent",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "ExplicitPromptEntity",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "UtilityChildContent",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "Webcam",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "ConfirmPrompt",
+          "proofStatus": "numeric-proof-no-image-diff"
+        }
+      ]
+    },
+    {
+      "id": "builtins-filterable",
+      "name": "Built-in filterable views and split-preview rows",
+      "owners": [
+        "builtin-filterable-surfaces",
+        "theme-config-preferences",
+        "storage-cache-security"
+      ],
+      "surfaceKinds": [
+        "ClipboardHistory",
+        "AppLauncher",
+        "WindowSwitcher",
+        "BrowserTabs",
+        "GenericFilterableList",
+        "Settings",
+        "KitStoreBrowse",
+        "KitStoreInstalled",
+        "ProcessManager",
+        "CurrentAppCommands",
+        "ThemeChooser",
+        "EmojiPicker",
+        "AcpHistory"
+      ],
+      "requiredDevToolsPrimitives": [
+        "devtools.resources.inspect",
+        "devtools.measure.preview",
+        "devtools.list.diff",
+        "devtools.storage.fingerprint"
+      ],
+      "proofStatus": "partial-proof",
+      "provenSurfaceCount": 0,
+      "partialSurfaceCount": 13,
+      "missingSurfaceCount": 0,
+      "surfaceStatuses": [
+        {
+          "surfaceKind": "ClipboardHistory",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "AppLauncher",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "WindowSwitcher",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "BrowserTabs",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "GenericFilterableList",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "Settings",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "KitStoreBrowse",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "KitStoreInstalled",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "ProcessManager",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "CurrentAppCommands",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "ThemeChooser",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "EmojiPicker",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "AcpHistory",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        }
+      ]
+    },
+    {
+      "id": "portals-resources-context",
+      "name": "File portals, attachment portals, MCP resources, context catalogs",
+      "owners": [
+        "file-search-portals",
+        "mcp-context-resources",
+        "acp-context-composer"
+      ],
+      "surfaceKinds": [
+        "FileSearchMini",
+        "FileSearchFull",
+        "AttachmentPortalBrowser",
+        "ScriptTemplateCatalog",
+        "SdkReference"
+      ],
+      "requiredDevToolsPrimitives": [
+        "devtools.portal.inspect",
+        "devtools.resources.inspect",
+        "devtools.act.portalReturn",
+        "devtools.privacy.redaction"
+      ],
+      "proofStatus": "partial-proof",
+      "provenSurfaceCount": 0,
+      "partialSurfaceCount": 5,
+      "missingSurfaceCount": 0,
+      "surfaceStatuses": [
+        {
+          "surfaceKind": "FileSearchMini",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "FileSearchFull",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "AttachmentPortalBrowser",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "ScriptTemplateCatalog",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "SdkReference",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        }
+      ]
+    },
+    {
+      "id": "acp-chat-ai",
+      "name": "ACP chat, composer, history, SDK AI APIs, model setup",
+      "owners": [
+        "acp-chat-core",
+        "acp-context-composer",
+        "sdk-script-execution"
+      ],
+      "surfaceKinds": [
+        "AcpChat",
+        "AcpHistory",
+        "AttachmentPortalBrowser",
+        "GenericFilterableList"
+      ],
+      "requiredDevToolsPrimitives": [
+        "devtools.acp.inspect",
+        "devtools.acp.timeline",
+        "devtools.composer.inspect",
+        "devtools.turn.diff"
+      ],
+      "proofStatus": "partial-proof",
+      "provenSurfaceCount": 0,
+      "partialSurfaceCount": 4,
+      "missingSurfaceCount": 0,
+      "surfaceStatuses": [
+        {
+          "surfaceKind": "AcpChat",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "AcpHistory",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "AttachmentPortalBrowser",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "GenericFilterableList",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        }
+      ]
+    },
+    {
+      "id": "notes-dictation-media",
+      "name": "Notes, notes-hosted ACP, dictation, media, history, target delivery",
+      "owners": [
+        "notes-window",
+        "dictation-media",
+        "acp-chat-core"
+      ],
+      "surfaceKinds": [
+        "AcpChat",
+        "AcpHistory",
+        "ClipboardHistory"
+      ],
+      "requiredDevToolsPrimitives": [
+        "devtools.notes.inspect",
+        "devtools.media.inspect",
+        "devtools.measure.selection",
+        "devtools.delivery.trace"
+      ],
+      "proofStatus": "partial-proof",
+      "provenSurfaceCount": 0,
+      "partialSurfaceCount": 3,
+      "missingSurfaceCount": 0,
+      "surfaceStatuses": [
+        {
+          "surfaceKind": "AcpChat",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "AcpHistory",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "ClipboardHistory",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        }
+      ]
+    },
+    {
+      "id": "observability-security-storage",
+      "name": "Observability, storage, sharing, security, diagnostics, replay",
+      "owners": [
+        "dev-loop-observability",
+        "storage-cache-security",
+        "testing-quality-gates"
+      ],
+      "surfaceKinds": [
+        "Feedback",
+        "SdkReference",
+        "ScriptTemplateCatalog"
+      ],
+      "requiredDevToolsPrimitives": [
+        "devtools.events.tail",
+        "devtools.storage.fingerprint",
+        "devtools.security.inspect",
+        "devtools.investigate"
+      ],
+      "proofStatus": "partial-proof",
+      "provenSurfaceCount": 1,
+      "partialSurfaceCount": 2,
+      "missingSurfaceCount": 0,
+      "surfaceStatuses": [
+        {
+          "surfaceKind": "Feedback",
+          "proofStatus": "strong-proof"
+        },
+        {
+          "surfaceKind": "SdkReference",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        },
+        {
+          "surfaceKind": "ScriptTemplateCatalog",
+          "proofStatus": "numeric-proof-missing-visual-capture"
+        }
+      ]
+    }
+  ],
+  "surfaces": [
+    {
+      "surfaceKind": "ScriptList",
+      "appViewVariants": [
+        "ScriptList"
+      ],
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [
+        "main"
+      ],
+      "proofStatus": "strong-proof",
+      "requiredEvidence": {
+        "screenshot": true,
+        "numericLayout": true,
+        "imageDiff": true,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "contentNativeMaterialNodes": [],
+        "glassLayerViolations": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 8,
+          "functionalChrome": 5,
+          "windowBackdrop": 1
+        }
+      },
+      "evidence": {
+        "screenshots": [
+          "artifacts/liquid-glass/screenshots/after-main-only-visual-style.png",
+          "artifacts/liquid-glass/screenshots/after-main-visual-style.png",
+          "artifacts/liquid-glass/screenshots/before-main-launcher.png",
+          "artifacts/liquid-glass/screenshots/tahoe-next-main.png"
+        ],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/after-main-layout-visual-style.json",
+          "artifacts/liquid-glass/receipts/before-main-layout.json",
+          "artifacts/liquid-glass/receipts/compare-main-layout-visual-style.json",
+          "artifacts/liquid-glass/receipts/compare-tahoe-next-main-layout.json",
+          "artifacts/liquid-glass/receipts/inline-agent-main-layout.json",
+          "artifacts/liquid-glass/receipts/tahoe-next-main-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-main-backdrop-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/after-main-inspect-visual-style.json",
+          "artifacts/liquid-glass/receipts/after-main-only-inspect-visual-style.json",
+          "artifacts/liquid-glass/receipts/after-main-only-window-inspect.json",
+          "artifacts/liquid-glass/receipts/after-main-window-inspect.json",
+          "artifacts/liquid-glass/receipts/before-main-inspect.json",
+          "artifacts/liquid-glass/receipts/inline-agent-main-target-inspect.json",
+          "artifacts/liquid-glass/receipts/tahoe-next-main-inspect.json",
+          "artifacts/liquid-glass/receipts/tahoe-next-main-window-inspect.json",
+          "artifacts/liquid-glass/receipts/window-priority-main-backdrop-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-main-backdrop-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-main-backdrop-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-main-backdrop-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-main-backdrop-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-fixed-rect-maincoords-capture.json"
+        ],
+        "imageDiffReceipts": [
+          "artifacts/liquid-glass/receipts/image-diff-main-before-to-tahoe-next.json",
+          "artifacts/liquid-glass/receipts/image-diff-main-header-before-to-tahoe-next.json"
+        ],
+        "diffMasks": [
+          "artifacts/liquid-glass/diffs/main-before-to-tahoe-next.png",
+          "artifacts/liquid-glass/diffs/main-header-before-to-tahoe-next.png"
+        ],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 8,
+            "functionalChrome": 5,
+            "windowBackdrop": 1
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-main-backdrop-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "About",
+      "appViewVariants": [
+        "About"
+      ],
+      "automationSemanticSurface": "about",
+      "coverageAliases": [],
+      "proofStatus": "strong-proof",
+      "requiredEvidence": {
+        "screenshot": true,
+        "numericLayout": true,
+        "imageDiff": true,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 16,
+        "styledNodeCount": 16,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 9,
+          "functionalChrome": 7
+        }
+      },
+      "evidence": {
+        "screenshots": [
+          "artifacts/liquid-glass/screenshots/window-priority-about-after.png",
+          "artifacts/liquid-glass/screenshots/window-priority-about.png"
+        ],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-about-layout-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-about-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/image-diff-window-priority-about-before-to-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-about-elements-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-about-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-about-layout-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-about-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-about-open.json",
+          "artifacts/liquid-glass/receipts/window-priority-about-panel-invariant-blocker.json",
+          "artifacts/liquid-glass/receipts/window-priority-about-reopen-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-about-screenshot-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-about-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-about-surface-inspect.json",
+          "artifacts/liquid-glass/receipts/window-priority-about-target-inspect-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-about-target-inspect.json"
+        ],
+        "imageDiffReceipts": [
+          "artifacts/liquid-glass/receipts/image-diff-window-priority-about-before-to-after.json"
+        ],
+        "diffMasks": [
+          "artifacts/liquid-glass/diffs/image-diff-window-priority-about-before-to-after.png"
+        ],
+        "visualAudit": {
+          "nodeCount": 16,
+          "styledNodeCount": 16,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 9,
+            "functionalChrome": 7
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-about-layout-after.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "ActionsDialog",
+      "appViewVariants": [
+        "ActionsDialog"
+      ],
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [
+        "actions-dialog"
+      ],
+      "proofStatus": "strong-proof",
+      "requiredEvidence": {
+        "screenshot": true,
+        "numericLayout": true,
+        "imageDiff": true,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 21,
+        "styledNodeCount": 21,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 9,
+          "floatingTransient": 1,
+          "functionalChrome": 11
+        }
+      },
+      "evidence": {
+        "screenshots": [
+          "artifacts/liquid-glass/screenshots/after-actions-visual-style.png",
+          "artifacts/liquid-glass/screenshots/before-actions-dialog.png",
+          "artifacts/liquid-glass/screenshots/tahoe-next-actions.png"
+        ],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/after-actions-layout-visual-style.json",
+          "artifacts/liquid-glass/receipts/compare-tahoe-next-actions-layout.json",
+          "artifacts/liquid-glass/receipts/tahoe-next-actions-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/after-actions-inspect-visual-style.json",
+          "artifacts/liquid-glass/receipts/after-actions-window-inspect.json",
+          "artifacts/liquid-glass/receipts/before-actions-inspect.json",
+          "artifacts/liquid-glass/receipts/before-actions-window-inspect.json",
+          "artifacts/liquid-glass/receipts/compare-actions-inspect-visual-style.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-actions-cmd-shift-a-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/tahoe-next-actions-inspect.json",
+          "artifacts/liquid-glass/receipts/tahoe-next-actions-window-inspect.json"
+        ],
+        "imageDiffReceipts": [
+          "artifacts/liquid-glass/receipts/image-diff-actions-before-to-tahoe-next.json",
+          "artifacts/liquid-glass/receipts/image-diff-actions-popup-estimated-crop-before-to-tahoe-next.json",
+          "artifacts/liquid-glass/receipts/image-diff-actions-popup-receipt-crop-before-to-tahoe-next.json"
+        ],
+        "diffMasks": [
+          "artifacts/liquid-glass/diffs/actions-before-to-tahoe-next.png",
+          "artifacts/liquid-glass/diffs/actions-popup-estimated-crop-before-to-tahoe-next.png",
+          "artifacts/liquid-glass/diffs/actions-popup-receipt-crop-before-to-tahoe-next.png"
+        ],
+        "visualAudit": {
+          "nodeCount": 21,
+          "styledNodeCount": 21,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 9,
+            "floatingTransient": 1,
+            "functionalChrome": 11
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/tahoe-next-actions-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "PromptEntity",
+      "appViewVariants": [
+        "ArgPrompt",
+        "DivPrompt",
+        "FormPrompt",
+        "SelectPrompt",
+        "PathPrompt",
+        "DropPrompt",
+        "TemplatePrompt",
+        "ChatPrompt",
+        "MiniPrompt",
+        "MicroPrompt"
+      ],
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 5,
+        "styledNodeCount": 5,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 3,
+          "functionalChrome": 2
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-current-layout-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-fixed-layout-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-layout-after.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-bus-probe.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-close-stale.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-current-layout-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-current-open-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-current-open.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-current-screenshot-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-current-target-inspect.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-current-window-capture.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-fix-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-fixed-layout-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-fixed-open-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-fixed-rect-capture.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-fixed-rect-flipped-capture.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-fixed-rect-maincoords-capture.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-fixed-screenshot-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-fixed-window-capture.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-fixed-window-list.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-layout-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-open-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-screenshot-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-inspect-after.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 5,
+          "styledNodeCount": 5,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 3,
+            "functionalChrome": 2
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-prompt-div-fixed-layout-sdk.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "PromptChildContent",
+      "appViewVariants": [
+        "TermPrompt",
+        "EditorPrompt"
+      ],
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 5,
+        "styledNodeCount": 5,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 3,
+          "functionalChrome": 2
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-prompt-child-editor-fixed-layout-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-child-select-current-layout-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-child-select-fixed-layout-sdk.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-prompt-child-editor-fixed-layout-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-child-editor-fixed-open-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-child-editor-fixed-screenshot-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-child-editor-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-child-select-current-layout-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-child-select-current-open-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-child-select-current-screenshot-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-child-select-fixed-layout-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-child-select-fixed-open-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-child-select-fixed-screenshot-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-child-select-session-start.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 5,
+          "styledNodeCount": 5,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 3,
+            "functionalChrome": 2
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-prompt-child-editor-fixed-layout-sdk.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "ExplicitPromptEntity",
+      "appViewVariants": [
+        "EnvPrompt",
+        "NamingPrompt",
+        "CreateAiPresetView"
+      ],
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 5,
+        "styledNodeCount": 5,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 3,
+          "functionalChrome": 2
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-current-layout-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-fixed-layout-sdk.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-current-layout-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-current-open-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-current-screenshot-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-fixed-layout-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-fixed-open-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-fixed-screenshot-sdk.json",
+          "artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-session-start.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 5,
+          "styledNodeCount": 5,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 3,
+            "functionalChrome": 2
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-prompt-explicit-env-fixed-layout-sdk.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "Webcam",
+      "appViewVariants": [
+        "WebcamView"
+      ],
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 5,
+        "styledNodeCount": 5,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 3,
+          "functionalChrome": 2
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-webcam-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-fixed-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-webcam-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-current-list-before.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-current-trigger.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-fixed-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-fixed-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-fixed-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-fixed-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-fixed-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-fixed-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-fixed-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-webcam-fixed-trigger.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 5,
+          "styledNodeCount": 5,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 3,
+            "functionalChrome": 2
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-webcam-fixed-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "ClipboardHistory",
+      "appViewVariants": [
+        "ClipboardHistoryView"
+      ],
+      "automationSemanticSurface": "clipboardHistory",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 9,
+          "functionalChrome": 5
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-clipboard-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-clipboard-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-clipboard-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-clipboard-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-clipboard-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-clipboard-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-clipboard-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-clipboard-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-clipboard-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-clipboard-current-trigger.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 9,
+            "functionalChrome": 5
+          }
+        },
+        "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/tahoe-native-clipboard-fullscreen-crop-1x.png: no matching screenshot receipt with capture status",
+          "ignored screenshot artifacts/liquid-glass/screenshots/tahoe-native-clipboard-fullscreen-crop-2x.png: no matching screenshot receipt with capture status",
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-clipboard-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "AppLauncher",
+      "appViewVariants": [
+        "AppLauncherView"
+      ],
+      "automationSemanticSurface": "appLauncher",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 9,
+          "functionalChrome": 5
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-app-launcher-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-app-launcher-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-app-launcher-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-app-launcher-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-app-launcher-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-app-launcher-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-app-launcher-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-app-launcher-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-app-launcher-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-app-launcher-current-trigger.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 9,
+            "functionalChrome": 5
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-app-launcher-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "WindowSwitcher",
+      "appViewVariants": [
+        "WindowSwitcherView"
+      ],
+      "automationSemanticSurface": "windowSwitcher",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 9,
+          "functionalChrome": 5
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-window-switcher-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-window-switcher.json",
+          "artifacts/liquid-glass/receipts/window-priority-window-switcher-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-window-switcher-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-window-switcher-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-window-switcher-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-window-switcher-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-window-switcher-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-window-switcher-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-window-switcher-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-window-switcher-current-trigger.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 9,
+            "functionalChrome": 5
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-window-switcher-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "BrowserTabs",
+      "appViewVariants": [
+        "BrowserTabsView"
+      ],
+      "automationSemanticSurface": "browserTabs",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 9,
+          "functionalChrome": 5
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-browser-tabs-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-browser-tabs-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-browser-tabs-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-browser-tabs-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-browser-tabs-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-browser-tabs-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-browser-tabs-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-browser-tabs-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-browser-tabs-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-browser-tabs-current-trigger.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 9,
+            "functionalChrome": 5
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-browser-tabs-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "GenericFilterableList",
+      "appViewVariants": [
+        "SearchAiPresetsView",
+        "FavoritesBrowseView"
+      ],
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 9,
+        "styledNodeCount": 9,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "contentNativeMaterialNodes": [],
+        "glassLayerViolations": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 3,
+          "functionalChrome": 5,
+          "windowBackdrop": 1
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-favorites-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-search-ai-presets-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-favorites-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-favorites-current-enter-2.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-favorites-current-enter.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-favorites-current-filter.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-favorites-current-launcher-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-favorites-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-favorites-current-matrix.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-favorites-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-favorites-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-favorites-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-favorites-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-search-ai-presets-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-search-ai-presets-current-enter.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-search-ai-presets-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-search-ai-presets-current-matrix.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-search-ai-presets-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-search-ai-presets-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-search-ai-presets-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-search-ai-presets-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-generic-filterable-show.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 9,
+          "styledNodeCount": 9,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 3,
+            "functionalChrome": 5,
+            "windowBackdrop": 1
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-generic-filterable-favorites-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "Settings",
+      "appViewVariants": [
+        "SettingsView"
+      ],
+      "automationSemanticSurface": "settings",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 9,
+          "functionalChrome": 5
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-settings-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-settings-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-settings-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-settings-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-settings-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-settings-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-settings-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-settings-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-settings-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-settings-current-trigger.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 9,
+            "functionalChrome": 5
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-settings-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "KitStoreBrowse",
+      "appViewVariants": [
+        "BrowseKitsView"
+      ],
+      "automationSemanticSurface": "kitStoreBrowse",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 10,
+        "styledNodeCount": 10,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 4,
+          "functionalChrome": 6
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-elements-devtools.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-matrix.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-trigger.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-wait.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 10,
+          "styledNodeCount": 10,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 4,
+            "functionalChrome": 6
+          }
+        },
+        "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-kit-store-browse-current.png: receipt artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-screenshot.json is classified as an error",
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-kit-store-browse-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "KitStoreInstalled",
+      "appViewVariants": [
+        "InstalledKitsView"
+      ],
+      "automationSemanticSurface": "kitStoreInstalled",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 9,
+        "styledNodeCount": 9,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 4,
+          "functionalChrome": 5
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-installed-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-installed-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-installed-current-elements-devtools.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-installed-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-installed-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-installed-current-matrix.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-installed-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-installed-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-installed-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-installed-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-installed-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-kit-store-installed-current-trigger.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 9,
+          "styledNodeCount": 9,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 4,
+            "functionalChrome": 5
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-kit-store-installed-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "ProcessManager",
+      "appViewVariants": [
+        "ProcessManagerView"
+      ],
+      "automationSemanticSurface": "processManager",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 9,
+          "functionalChrome": 5
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-process-manager-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-process-manager-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-process-manager-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-process-manager-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-process-manager-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-process-manager-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-process-manager-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-process-manager-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-process-manager-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-process-manager-current-trigger.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 9,
+            "functionalChrome": 5
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-process-manager-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "CurrentAppCommands",
+      "appViewVariants": [
+        "CurrentAppCommandsView"
+      ],
+      "automationSemanticSurface": "currentAppCommands",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 9,
+          "functionalChrome": 5
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-current-app-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-current-app-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-current-app-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-current-app-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-current-app-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-current-app-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-current-app-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-current-app-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-current-app-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-current-app-current-trigger.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 9,
+            "functionalChrome": 5
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-current-app-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "UtilityChildContent",
+      "appViewVariants": [
+        "ScratchPadView",
+        "QuickTerminalView"
+      ],
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 5,
+        "styledNodeCount": 5,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 3,
+          "functionalChrome": 2
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-current-open.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-open.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-session-start.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 5,
+          "styledNodeCount": 5,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 3,
+            "functionalChrome": 2
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "FileSearchMini",
+      "appViewVariants": [
+        "FileSearchView"
+      ],
+      "automationSemanticSurface": "fileSearch",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "contentNativeMaterialNodes": [],
+        "glassLayerViolations": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 8,
+          "functionalChrome": 5,
+          "windowBackdrop": 1
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-enter.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-filter.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-wait.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 8,
+            "functionalChrome": 5,
+            "windowBackdrop": 1
+          }
+        },
+        "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-file-search-mini-current.png: receipt artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-screenshot.json is classified as an error",
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "FileSearchFull",
+      "appViewVariants": [
+        "FileSearchView"
+      ],
+      "automationSemanticSurface": "fileSearch",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "contentNativeMaterialNodes": [],
+        "glassLayerViolations": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 8,
+          "functionalChrome": 5,
+          "windowBackdrop": 1
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-trigger.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-wait.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 8,
+            "functionalChrome": 5,
+            "windowBackdrop": 1
+          }
+        },
+        "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-file-search-full-current.png: receipt artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "ThemeChooser",
+      "appViewVariants": [
+        "ThemeChooserView"
+      ],
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 9,
+          "functionalChrome": 5
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-theme-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-theme-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-theme-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-theme-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-theme-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-theme-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-theme-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-theme-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-theme-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-theme-current-trigger.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 9,
+            "functionalChrome": 5
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-theme-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "EmojiPicker",
+      "appViewVariants": [
+        "EmojiPickerView"
+      ],
+      "automationSemanticSurface": "emojiPicker",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 9,
+          "functionalChrome": 5
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-emoji-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-emoji-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-emoji-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-emoji-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-emoji-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-emoji-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-emoji-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-emoji-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-emoji-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-emoji-current-trigger.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 9,
+            "functionalChrome": 5
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-emoji-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "Feedback",
+      "appViewVariants": [
+        "CreationFeedback",
+        "ScriptIssuesView"
+      ],
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [],
+      "proofStatus": "strong-proof",
+      "requiredEvidence": {
+        "screenshot": true,
+        "numericLayout": true,
+        "imageDiff": true,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 9,
+        "styledNodeCount": 9,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 4,
+          "functionalChrome": 5
+        }
+      },
+      "evidence": {
+        "screenshots": [
+          "artifacts/liquid-glass/screenshots/window-priority-feedback-after.png",
+          "artifacts/liquid-glass/screenshots/window-priority-feedback-before.png"
+        ],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-feedback-layout-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-layout-before.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/image-diff-window-priority-feedback-before-to-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-elements-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-isolated-build.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-layout-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-layout-before.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-open-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-screenshot-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-surface-inspect.json",
+          "artifacts/liquid-glass/receipts/window-priority-feedback-target-inspect-after.json"
+        ],
+        "imageDiffReceipts": [
+          "artifacts/liquid-glass/receipts/image-diff-window-priority-feedback-before-to-after.json"
+        ],
+        "diffMasks": [
+          "artifacts/liquid-glass/diffs/image-diff-window-priority-feedback-before-to-after.png"
+        ],
+        "visualAudit": {
+          "nodeCount": 9,
+          "styledNodeCount": 9,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 4,
+            "functionalChrome": 5
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-feedback-layout-after.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "SdkReference",
+      "appViewVariants": [
+        "SdkReferenceView"
+      ],
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "contentNativeMaterialNodes": [],
+        "glassLayerViolations": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 8,
+          "functionalChrome": 5,
+          "windowBackdrop": 1
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-sdk-reference-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-sdk-reference-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-sdk-reference-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-sdk-reference-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-sdk-reference-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-sdk-reference-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-sdk-reference-current-trigger.json",
+          "artifacts/liquid-glass/receipts/window-priority-sdk-reference-current-wait.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 8,
+            "functionalChrome": 5,
+            "windowBackdrop": 1
+          }
+        },
+        "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-sdk-reference-current.png: receipt artifacts/liquid-glass/receipts/window-priority-sdk-reference-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-sdk-reference-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "ScriptTemplateCatalog",
+      "appViewVariants": [
+        "ScriptTemplateCatalogView"
+      ],
+      "automationSemanticSurface": "scriptTemplateCatalog",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "contentNativeMaterialNodes": [],
+        "glassLayerViolations": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 8,
+          "functionalChrome": 5,
+          "windowBackdrop": 1
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-script-template-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-script-template-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-script-template-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-script-template-current-enter.json",
+          "artifacts/liquid-glass/receipts/window-priority-script-template-current-filter.json",
+          "artifacts/liquid-glass/receipts/window-priority-script-template-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-script-template-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-script-template-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-script-template-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-script-template-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-script-template-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-script-template-current-trigger.json",
+          "artifacts/liquid-glass/receipts/window-priority-script-template-current-wait.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 8,
+            "functionalChrome": 5,
+            "windowBackdrop": 1
+          }
+        },
+        "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-script-template-current.png: receipt artifacts/liquid-glass/receipts/window-priority-script-template-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-script-template-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "AcpHistory",
+      "appViewVariants": [
+        "AcpHistoryView"
+      ],
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "chromeLayers": {
+          "content": 8,
+          "functionalChrome": 5,
+          "windowBackdrop": 1
+        },
+        "contentGlassNodes": [],
+        "controlsWithHitFailures": [],
+        "glassLayerViolations": [],
+        "missingStyleNodeNames": [],
+        "nodeCount": 14,
+        "styledNodeCount": 14,
+        "unstyledNodeCount": 0,
+        "contentNativeMaterialNodes": []
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-enter.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-filter.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-launcher-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-target.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "chromeLayers": {
+            "content": 8,
+            "functionalChrome": 5,
+            "windowBackdrop": 1
+          },
+          "contentGlassNodes": [],
+          "controlsWithHitFailures": [],
+          "glassLayerViolations": [],
+          "missingStyleNodeNames": [],
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "contentNativeMaterialNodes": []
+        },
+        "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-acp-history-current.png: receipt artifacts/liquid-glass/receipts/window-priority-acp-history-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-acp-history-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "AttachmentPortalBrowser",
+      "appViewVariants": [
+        "BrowserHistoryView",
+        "DictationHistoryView",
+        "NotesBrowseView"
+      ],
+      "automationSemanticSurface": "scriptList",
+      "coverageAliases": [
+        "dictation-history"
+      ],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 15,
+        "styledNodeCount": 15,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "contentNativeMaterialNodes": [],
+        "glassLayerViolations": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 9,
+          "functionalChrome": 5,
+          "windowBackdrop": 1
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-enter.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-filter.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-launcher-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-trigger.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-window-find.json",
+          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-window-inspect.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 15,
+          "styledNodeCount": 15,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 9,
+            "functionalChrome": 5,
+            "windowBackdrop": 1
+          }
+        },
+        "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-attachment-portal-current.png: receipt artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-screenshot.json is classified as an error",
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-layout.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "AcpChat",
+      "appViewVariants": [
+        "AcpChatView"
+      ],
+      "automationSemanticSurface": "acpChat",
+      "coverageAliases": [
+        "notes-acp"
+      ],
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true
+      },
+      "visualAudit": {
+        "nodeCount": 4,
+        "styledNodeCount": 4,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 1,
+          "floatingTransient": 1,
+          "functionalChrome": 2
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/notes-acp-after-open-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-detached-layout-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/notes-acp-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-actions-cmd-shift-a-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-activation-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-cmd-enter-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-select-send-to-ai-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-before-notes-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-before-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-failclosed-before-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-open-acp-failclosed-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-open-acp-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-post-open-acp-inspect.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-detached-elements-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-detached-isolated-build.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-detached-layout-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-detached-open-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-detached-screenshot-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-detached-target-inspect-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-elements.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-enter.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-filter.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-launcher-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-screenshot.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-state.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-history-current-target.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 4,
+          "styledNodeCount": 4,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 1,
+            "floatingTransient": 1,
+            "functionalChrome": 2
+          }
+        },
+        "notes": [
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-acp-history-current.png: receipt artifacts/liquid-glass/receipts/window-priority-acp-history-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-acp-detached-layout-after.json"
+        ]
+      }
+    },
+    {
+      "surfaceKind": "ConfirmPrompt",
+      "appViewVariants": [
+        "ConfirmPrompt"
+      ],
+      "automationSemanticSurface": "confirmPrompt",
+      "coverageAliases": [],
+      "proofStatus": "numeric-proof-no-image-diff",
+      "requiredEvidence": {
+        "screenshot": true,
+        "numericLayout": true,
+        "imageDiff": true,
+        "visualAudit": false
+      },
+      "visualAudit": null,
+      "evidence": {
+        "screenshots": [
+          "artifacts/liquid-glass/screenshots/window-priority-confirm-before.png"
+        ],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-confirm-layout-after.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/image-diff-window-priority-confirm-before-to-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-confirm-elements-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-confirm-isolated-build.json",
+          "artifacts/liquid-glass/receipts/window-priority-confirm-layout-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-confirm-open-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-confirm-screenshot-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-confirm-show-before-capture.json",
+          "artifacts/liquid-glass/receipts/window-priority-confirm-target-inspect-after.json"
+        ],
+        "imageDiffReceipts": [
+          "artifacts/liquid-glass/receipts/image-diff-window-priority-confirm-before-to-after.json"
+        ],
+        "diffMasks": [],
+        "visualAudit": null,
+        "notes": []
+      }
+    }
+  ],
+  "practicalTargets": [
+    {
+      "id": "notes",
+      "proofStatus": "strong-proof",
+      "requiredEvidence": {
+        "screenshot": true,
+        "numericLayout": true,
+        "imageDiff": true,
+        "visualAudit": true,
+        "mediaProof": false,
+        "syntheticDelivery": false
+      },
+      "mediaProof": null,
+      "syntheticDelivery": null,
+      "evidence": {
+        "screenshots": [
+          "artifacts/liquid-glass/screenshots/before-notes.png",
+          "artifacts/liquid-glass/screenshots/notes-next.png"
+        ],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/notes-acp-after-open-layout.json",
+          "artifacts/liquid-glass/receipts/notes-next-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/before-notes-inspect.json",
+          "artifacts/liquid-glass/receipts/before-notes-window-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-actions-cmd-shift-a-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-activation-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-cmd-enter-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-select-send-to-ai-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-before-notes-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-before-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-failclosed-before-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-open-acp-failclosed-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-open-acp-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-post-open-acp-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-next-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-next-window-inspect.json"
+        ],
+        "imageDiffReceipts": [
+          "artifacts/liquid-glass/receipts/image-diff-notes-before-to-next.json"
+        ],
+        "diffMasks": [
+          "artifacts/liquid-glass/diffs/notes-before-to-next.png"
+        ],
+        "visualAudit": {
+          "nodeCount": 4,
+          "styledNodeCount": 4,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 1,
+            "floatingTransient": 1,
+            "functionalChrome": 2
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/notes-next-layout.json"
+        ]
+      }
+    },
+    {
+      "id": "dictation",
+      "proofStatus": "numeric-window-proof-screenshot-blocked",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true,
+        "mediaProof": true,
+        "syntheticDelivery": true
+      },
+      "mediaProof": {
+        "status": "blocked-by-missing-primitive",
+        "missingRuntimePrimitives": [
+          "wrong-target refusal receipt"
+        ]
+      },
+      "syntheticDelivery": {
+        "classification": "ok",
+        "target": {
+          "requested": "mainWindowFilter",
+          "receiptTarget": "MainWindowFilter",
+          "receiptTargetLabel": "Script Kit",
+          "requestedTargetMatches": true
+        },
+        "delivery": {
+          "requestId": "devtools-dictation-deliver-1780110377446",
+          "beforeGeneration": 0,
+          "afterGeneration": 1,
+          "advanced": true,
+          "receipt": {
+            "generation": 1,
+            "target": "MainWindowFilter",
+            "targetLabel": "Script Kit",
+            "destination": "MainWindowFilter",
+            "deliveredInternally": true,
+            "historyEntryId": "dictation-20260530T030617.573Z-63017a14c8384f50bd7766389c477523",
+            "transcriptLen": 27,
+            "transcriptFingerprint": "fnv1a64:fe5b6ca0e016b3d4",
+            "audioDurationMs": 0,
+            "insertionRange": {
+              "available": true,
+              "unit": "utf8Bytes",
+              "start": 0,
+              "end": 27,
+              "insertedLength": 27,
+              "operation": "replaceInput",
+              "source": "deliveryPipeline",
+              "redacted": true
+            },
+            "source": "deliveryPipeline",
+            "redacted": true
+          },
+          "insertionRange": {
+            "available": true,
+            "unit": "utf8Bytes",
+            "start": 0,
+            "end": 27,
+            "insertedLength": 27,
+            "operation": "replaceInput",
+            "source": "deliveryPipeline",
+            "redacted": true
+          },
+          "insertionRangeAvailable": true,
+          "transcriptLenMatchesFixture": true,
+          "transcriptFingerprintAvailable": true,
+          "rawTranscriptReturned": false
+        }
+      },
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-dictation-layout-after.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/dictation-next-inspect.json",
+          "artifacts/liquid-glass/receipts/dictation-next-post-delivery-inspect.json",
+          "artifacts/liquid-glass/receipts/dictation-next-window-inspect.json",
+          "artifacts/liquid-glass/receipts/window-priority-dictation-capture-screenshot-rpc.json",
+          "artifacts/liquid-glass/receipts/window-priority-dictation-elements-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-dictation-isolated-build.json",
+          "artifacts/liquid-glass/receipts/window-priority-dictation-layout-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-dictation-open-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-dictation-screenshot-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-dictation-target-inspect-after.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 6,
+          "styledNodeCount": 6,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 2,
+            "floatingTransient": 1,
+            "functionalChrome": 3
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-dictation-layout-after.json"
+        ]
+      }
+    },
+    {
+      "id": "acp-detached",
+      "proofStatus": "numeric-window-proof-screenshot-blocked",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true,
+        "mediaProof": false,
+        "syntheticDelivery": false
+      },
+      "mediaProof": null,
+      "syntheticDelivery": null,
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-acp-detached-layout-after.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-acp-detached-elements-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-detached-isolated-build.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-detached-layout-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-detached-open-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-detached-screenshot-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-acp-detached-target-inspect-after.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 4,
+          "styledNodeCount": 4,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 1,
+            "floatingTransient": 1,
+            "functionalChrome": 2
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-acp-detached-layout-after.json"
+        ]
+      }
+    },
+    {
+      "id": "inline-agent",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true,
+        "mediaProof": false,
+        "syntheticDelivery": false
+      },
+      "mediaProof": null,
+      "syntheticDelivery": null,
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/inline-agent-main-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/inline-agent-ai-target-inspect.json",
+          "artifacts/liquid-glass/receipts/inline-agent-capture-window-allowed-send.json",
+          "artifacts/liquid-glass/receipts/inline-agent-capture-window-send.json",
+          "artifacts/liquid-glass/receipts/inline-agent-main-target-inspect.json",
+          "artifacts/liquid-glass/receipts/inline-agent-target-inspect.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 14,
+          "styledNodeCount": 14,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 9,
+            "functionalChrome": 5
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/inline-agent-main-layout.json"
+        ]
+      }
+    },
+    {
+      "id": "notes-acp",
+      "proofStatus": "actions-panel-proof-acp-startup-blocked",
+      "requiredEvidence": {
+        "screenshot": false,
+        "numericLayout": true,
+        "imageDiff": false,
+        "visualAudit": true,
+        "mediaProof": false,
+        "syntheticDelivery": false
+      },
+      "mediaProof": null,
+      "syntheticDelivery": null,
+      "evidence": {
+        "screenshots": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/notes-acp-after-open-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/notes-acp-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-actions-cmd-shift-a-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-activation-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-cmd-enter-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-select-send-to-ai-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-before-notes-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-before-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-failclosed-before-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-open-acp-failclosed-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-open-acp-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-post-open-acp-inspect.json"
+        ],
+        "imageDiffReceipts": [],
+        "diffMasks": [],
+        "visualAudit": {
+          "nodeCount": 5,
+          "styledNodeCount": 5,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 1,
+            "floatingTransient": 2,
+            "functionalChrome": 2
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/notes-acp-next-actions-open-inspect.json"
+        ]
+      }
+    }
+  ],
+  "warnings": [
+    "strong-proof means current artifacts include screenshot, numeric layout visualAudit, and image diff evidence; it is not an Apple conformance claim by itself"
+  ],
+  "errors": []
+}

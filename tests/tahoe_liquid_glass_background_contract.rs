@@ -1,5 +1,7 @@
 use std::fs;
 
+const PROOF_MATRIX: &str = include_str!("../scripts/devtools/liquid-glass-proof.ts");
+
 fn read_source(path: &str) -> String {
     fs::read_to_string(path).unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
 }
@@ -36,13 +38,24 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
     );
     assert!(
         platform.contains("configure_tahoe_window_backdrop(window, \"APPEARANCE\", &title_string)")
-            && platform.contains("title_string.contains(\"Script Kit Dictation\")"),
+            && platform.contains("\"Script Kit Dictation\"")
+            && platform.contains("should_refresh_secondary_window_appearance(&title_string)"),
         "Theme/appearance refresh must revisit existing secondary native backdrops, including Dictation"
+    );
+    assert!(
+        platform.contains("fn should_refresh_secondary_window_appearance(title: &str) -> bool")
+            && platform.contains("EXACT_SECONDARY_TITLES")
+            && platform.contains("\"Notes\"")
+            && platform.contains("\"Mini AI\"")
+            && platform.contains("\"Script Kit Agent Chat\"")
+            && platform.contains("\"Script Kit ACP\"")
+            && platform.contains("should_refresh_secondary_window_appearance(&title_string)"),
+        "Theme/appearance refresh must use one predicate covering real Notes, detached Agent Chat, and legacy AI titles"
     );
     assert!(
         platform.contains("pub unsafe fn configure_hud_window_vibrancy(window: id, is_dark: bool)")
             && platform.contains("c\"Script Kit HUD\".as_ptr()")
-            && platform.contains("title_string.contains(\"Script Kit HUD\")"),
+            && platform.contains("\"Script Kit HUD\""),
         "HUD Liquid Glass must use the shared native material path and remain discoverable for theme/appearance refresh"
     );
     assert!(
@@ -147,4 +160,32 @@ fn file_search_mini_layout_receipt_uses_window_backdrop() {
         ),
         "FileSearchMini root Window must not regress to content + NSVisualEffectView"
     );
+}
+
+#[test]
+fn proof_matrix_filters_image_diff_receipts_by_receipt_assertions() {
+    assert!(
+        PROOF_MATRIX.contains("function imageDiffUsability"),
+        "Liquid Glass matrix must validate image-diff receipts before counting them"
+    );
+    for needle in [
+        "classification",
+        "diffMaskWritten",
+        "changedPixelsMeasured",
+        "sameSizeRequired",
+        "dimensions.sameSize",
+        "surfaceKind === \"ConfirmPrompt\"",
+        "window-priority-confirm-layout-after.json",
+        "window-priority-confirm-screenshot-after.json",
+        "ignored ConfirmPrompt screenshot evidence",
+        "appRenderReadbackBlocked",
+        "appRenderBlockedSurfaceCount",
+        "numeric-proof-app-render-blocked",
+        "GPUI render readback was unavailable or unsupported",
+    ] {
+        assert!(
+            PROOF_MATRIX.contains(needle),
+            "Liquid Glass proof matrix must inspect `{needle}`"
+        );
+    }
 }

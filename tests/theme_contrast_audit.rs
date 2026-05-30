@@ -8,6 +8,7 @@
 
 use script_kit_gpui::theme::{
     audit_theme_contrast, theme_contrast_score, worst_theme_contrast, Theme, ThemeContrastSample,
+    LIGHT_ROW_HOVER_OPACITY, LIGHT_ROW_SELECTED_OPACITY,
 };
 use serde_json::json;
 
@@ -34,8 +35,8 @@ fn default_light_theme_uses_light_ordered_row_state_opacity() {
         .as_f64()
         .expect("hover opacity should be numeric");
 
-    assert!((selected - 0.08).abs() < 1e-6);
-    assert!((hover - 0.04).abs() < 1e-6);
+    assert!((selected - f64::from(LIGHT_ROW_SELECTED_OPACITY)).abs() < 1e-6);
+    assert!((hover - f64::from(LIGHT_ROW_HOVER_OPACITY)).abs() < 1e-6);
     assert!(
         hover < selected,
         "light theme hover should remain quieter than focused selection"

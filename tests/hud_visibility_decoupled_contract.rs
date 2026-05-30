@@ -62,10 +62,9 @@ fn hud_surface_tracks_main_window_background_opacity_and_material() {
     let source = hud_manager_source();
 
     assert!(
-        source.contains("opacity.vibrancy_background.unwrap_or(opacity.main)")
-            && source.contains("hex_to_rgba_with_opacity(\n                colors.background.main,\n                background_alpha,\n            )")
+        source.contains("crate::ui_foundation::main_window_matched_background_rgba(&theme)")
             && source.contains(".bg(rgba(colors.background_rgba))"),
-        "HUD pill background must use the same theme background alpha path as the main window"
+        "HUD pill background must use the shared main-window background helper"
     );
     assert!(
         source.contains("crate::platform::configure_hud_window_vibrancy(")

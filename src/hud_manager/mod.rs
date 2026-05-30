@@ -50,12 +50,6 @@ impl HudColors {
     fn from_theme() -> Self {
         let theme = get_cached_theme();
         let colors = &theme.colors;
-        let opacity = theme.get_opacity();
-        let background_alpha = if theme.is_vibrancy_enabled() {
-            opacity.vibrancy_background.unwrap_or(opacity.main)
-        } else {
-            1.0
-        };
 
         // Calculate hover/active variants from accent
         // For hover: lighten by ~10%
@@ -66,10 +60,7 @@ impl HudColors {
 
         Self {
             background: colors.background.main,
-            background_rgba: crate::ui_foundation::hex_to_rgba_with_opacity(
-                colors.background.main,
-                background_alpha,
-            ),
+            background_rgba: crate::ui_foundation::main_window_matched_background_rgba(&theme),
             text_primary: colors.text.primary,
             accent,
             accent_hover,

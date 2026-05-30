@@ -3,10 +3,12 @@
   "tool": "script-kit-devtools.layout",
   "command": "layout.measure",
   "classification": "ok",
-  "session": "liquid-file-search-current",
+  "session": "liquid-glass-app-render",
   "include": [
     "nodes",
     "regions",
+    "scroll",
+    "anchors",
     "resize",
     "overlaps"
   ],
@@ -56,12 +58,12 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 11615,
+    "pid": 54219,
     "strictTargetMatch": true,
     "ambiguity": []
   },
   "promptType": "fileSearch",
-  "timestamp": "2026-05-30T07:23:23.611422+00:00",
+  "timestamp": "2026-05-30T08:59:52.634457+00:00",
   "componentCount": 14,
   "window": {
     "rect": {
@@ -1702,6 +1704,77 @@
       "content": 8,
       "functionalChrome": 5,
       "windowBackdrop": 1
+    },
+    "guidelineAssertions": {
+      "appleDocumented": {
+        "hitTargets": {
+          "source": "apple-documented",
+          "macosMinimumHitSize": {
+            "width": 28,
+            "height": 28
+          },
+          "macosMinimumVisualSize": {
+            "width": 20,
+            "height": 20
+          },
+          "failures": []
+        },
+        "buttonCenterDistance": {
+          "source": "apple-documented",
+          "requiredCenterDistance": 60,
+          "failures": []
+        },
+        "materialLayering": {
+          "source": "apple-documented",
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": []
+        },
+        "colorAdaptivity": {
+          "source": "apple-documented",
+          "hardcodedColorNodes": []
+        },
+        "safeAreaLayout": {
+          "source": "apple-documented",
+          "clippedNodeCount": 0,
+          "overflowY": false
+        },
+        "buttonShapeFamilies": {
+          "source": "apple-documented",
+          "exactAppleRadiusConstants": null
+        }
+      },
+      "projectLocal": {
+        "cornerRadiusTokens": {
+          "source": "project-local",
+          "failures": [
+            "ContentArea",
+            "ScriptList",
+            "PreviewPanel"
+          ]
+        },
+        "paddingTokens": {
+          "source": "project-local",
+          "minimumPanelPadding": 16,
+          "minimumCompactRowHorizontalPadding": 10
+        },
+        "spacingTokens": {
+          "source": "project-local",
+          "minimumFooterActionGap": 8
+        },
+        "windowBackdropPolicy": {
+          "source": "project-local",
+          "contentGlassNodeCount": 0
+        },
+        "themeTokenUsage": {
+          "source": "project-local",
+          "hardcodedColorNodes": []
+        },
+        "renderReadbackPixelThresholds": {
+          "source": "project-local",
+          "minimumNonBlackRatio": 0.01
+        }
+      }
     }
   },
   "handlerForm": null,
@@ -1710,7 +1783,7 @@
   "errors": [],
   "rawLayout": {
     "type": "layoutInfoResult",
-    "requestId": "devtools-layout-measure-1780125803587-6a9be5",
+    "requestId": "devtools-layout-measure-1780131592581-fd25ff",
     "windowWidth": 750,
     "windowHeight": 480,
     "promptType": "fileSearch",
@@ -2321,6 +2394,6 @@
         }
       }
     ],
-    "timestamp": "2026-05-30T07:23:23.611422+00:00"
+    "timestamp": "2026-05-30T08:59:52.634457+00:00"
   }
 }

@@ -161,8 +161,9 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
         // - 50% opacity keeps every stock theme surface consistently translucent.
         //
         // IMPORTANT: Light and dark modes intentionally use the same floor here.
-        // Secondary text and placeholder alpha tiers are raised in the theme
-        // defaults to keep text readable over the more transparent background.
+        // Supporting text readability is handled by the shared text opacity ladder;
+        // keep muted/hint/placeholder tiers quiet so Liquid Glass chrome does not
+        // read as a stack of full-strength labels over the translucent root bg.
         let bg_alpha = if is_dark {
             // Dark mode: use user's value or default
             opacity.vibrancy_background.unwrap_or(0.50)

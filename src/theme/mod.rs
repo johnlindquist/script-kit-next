@@ -41,7 +41,11 @@ pub use audit::{
 
 // Re-export types used externally
 pub(crate) use types::relative_luminance_srgb;
-pub use types::{BackgroundGradient, ColorScheme, FontConfig, Theme, VibrancyMaterial};
+#[allow(unused_imports)]
+pub use types::{
+    BackgroundGradient, ColorScheme, FontConfig, Theme, VibrancyMaterial, DARK_ROW_HOVER_OPACITY,
+    DARK_ROW_SELECTED_OPACITY, LIGHT_ROW_HOVER_OPACITY, LIGHT_ROW_SELECTED_OPACITY,
+};
 
 // Re-export helper types for lightweight color extraction
 pub use helpers::{

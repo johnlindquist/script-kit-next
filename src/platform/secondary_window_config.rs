@@ -510,7 +510,7 @@ mod secondary_window_config_tests {
         );
         assert!(
             body.contains("c\"Script Kit HUD\".as_ptr()")
-                && source.contains("title_string.contains(\"Script Kit HUD\")"),
+                && super::should_refresh_secondary_window_appearance("Script Kit HUD"),
             "HUD windows need a stable title so theme/appearance refresh can retint them with the shared material path"
         );
         assert!(
@@ -519,6 +519,61 @@ mod secondary_window_config_tests {
             "shared native window configuration must source material from the cached theme"
         );
     }
+
+    #[test]
+    fn secondary_appearance_refresh_title_predicate_covers_current_and_legacy_secondary_titles() {
+        for title in [
+            "Notes",
+            "Mini AI",
+            "Script Kit Agent Chat",
+            "Script Kit ACP",
+            "Script Kit Notes",
+            "Actions",
+            "Script Kit Footer",
+            "Script Kit Dictation",
+            "Script Kit HUD",
+        ] {
+            assert!(
+                super::should_refresh_secondary_window_appearance(title),
+                "appearance refresh must cover secondary window title: {title}"
+            );
+        }
+    }
+
+    #[test]
+    fn secondary_appearance_refresh_title_predicate_rejects_generic_titles() {
+        for title in [
+            "Agent Chat",
+            "Notes Archive",
+            "Mini",
+            "AI",
+            "Script Kit",
+            "Script Kit Main",
+            "Random User Window",
+        ] {
+            assert!(
+                !super::should_refresh_secondary_window_appearance(title),
+                "appearance refresh predicate must not match generic/non-secondary title: {title}"
+            );
+        }
+    }
+}
+
+fn should_refresh_secondary_window_appearance(title: &str) -> bool {
+    const EXACT_SECONDARY_TITLES: &[&str] = &["Notes", "Mini AI", "Script Kit Agent Chat"];
+    const EXISTING_SECONDARY_TITLE_MARKERS: &[&str] = &[
+        "Script Kit ACP",
+        "Script Kit Notes",
+        "Actions",
+        "Script Kit Footer",
+        "Script Kit Dictation",
+        "Script Kit HUD",
+    ];
+
+    EXACT_SECONDARY_TITLES.contains(&title)
+        || EXISTING_SECONDARY_TITLE_MARKERS
+            .iter()
+            .any(|marker| title.contains(marker))
 }
 
 /// Update appearance for all secondary windows (Notes, AI, Actions) when system appearance changes.
@@ -575,13 +630,7 @@ pub fn update_all_secondary_windows_appearance(is_dark: bool) {
                 .to_string();
 
             // Match secondary window titles
-            if title_string.contains("Script Kit ACP")
-                || title_string.contains("Script Kit Notes")
-                || title_string.contains("Actions")
-                || title_string.contains("Script Kit Footer")
-                || title_string.contains("Script Kit Dictation")
-                || title_string.contains("Script Kit HUD")
-            {
+            if should_refresh_secondary_window_appearance(&title_string) {
                 // Clear window appearance so GPUI can detect system appearance changes.
                 // Set appearance on individual NSVisualEffectViews instead.
                 let _: () = msg_send![window, setAppearance: nil];

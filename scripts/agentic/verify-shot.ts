@@ -272,6 +272,7 @@ interface VisualEvidenceReceipt {
   available: boolean;
   countsAsOsScreenshotEvidence: boolean;
   countsAsAppRenderEvidence: boolean;
+  countsAsOffscreenRenderEvidence: boolean;
   classification: VisualCaptureClassification;
   attempts: CaptureAttemptReceipt[];
   path?: string | null;
@@ -279,6 +280,8 @@ interface VisualEvidenceReceipt {
   width?: number | null;
   height?: number | null;
   pixelAudit?: ScreenshotContentAudit | Record<string, unknown> | null;
+  target?: Record<string, unknown> | null;
+  assertions?: Record<string, boolean>;
   limitation: string | null;
 }
 
@@ -853,6 +856,7 @@ function buildOsVisualEvidence(
     available: captured,
     countsAsOsScreenshotEvidence: captured,
     countsAsAppRenderEvidence: false,
+    countsAsOffscreenRenderEvidence: false,
     classification,
     attempts,
     path: screenshotResult?.path ?? null,
@@ -867,7 +871,8 @@ function buildOsVisualEvidence(
 
 async function captureRenderReadbackViaMcp(
   target: Record<string, unknown>,
-  outPath: string
+  outPath: string,
+  inspection: InspectionReceipt | null
 ): Promise<VisualEvidenceReceipt> {
   try {
     const capture = await callMcpTool("computer/capture_render_window", {
@@ -883,31 +888,55 @@ async function captureRenderReadbackViaMcp(
       const decoded = Buffer.from(image, "base64");
       writeFileSync(outPath, decoded);
     }
+    const localPixelAudit = existsSync(outPath) ? auditPngContent(outPath) : null;
+    const nonBlank = localPixelAudit != null && localPixelAudit.blank === false;
+    const captured = status === "captured" && nonBlank;
     return {
       source: "gpui-render-readback",
-      available: status === "captured",
+      available: captured,
       countsAsOsScreenshotEvidence: false,
-      countsAsAppRenderEvidence: status === "captured",
-      classification: status === "captured" ? "captured" : "gpui-readback-unavailable",
+      countsAsAppRenderEvidence: captured,
+      countsAsOffscreenRenderEvidence: false,
+      classification: status !== "captured"
+        ? "gpui-readback-unavailable"
+        : nonBlank ? "captured" : "blank-image-rejected",
       attempts: [{
         source: "gpui-render-readback",
-        status: status === "captured"
+        status: captured
           ? "captured"
           : status === "unsupported" || errorCode === "runtime_unavailable" || errorCode === "unknown_tool"
             ? "unsupported"
+            : status === "captured"
+              ? "blankRejected"
             : "failed",
         requestedWindowId: null,
         actualWindowId: null,
-        errorCode,
-        message,
+        errorCode: status === "captured" && !nonBlank ? "render_blank_image_rejected" : errorCode,
+        message: status === "captured" && !nonBlank
+          ? "GPUI render readback produced a blank or black image"
+          : message,
+        pixelAudit: localPixelAudit ?? (capture.capture?.pixelAudit ?? null),
       }],
-      path: status === "captured" ? outPath : null,
+      path: captured ? outPath : null,
       sha256: capture.capture?.sha256 ?? null,
       width: capture.capture?.width ?? null,
       height: capture.capture?.height ?? null,
-      pixelAudit: capture.capture?.pixelAudit ?? null,
+      pixelAudit: localPixelAudit ?? (capture.capture?.pixelAudit ?? null),
+      target: {
+        requested: target,
+        resolvedWindowId: inspection?.automationWindowId ?? null,
+        windowKind: inspection?.windowKind ?? null,
+        osWindowId: inspection?.osWindowId ?? null,
+        resolvedBounds: inspection?.resolvedBounds ?? null,
+      },
+      assertions: {
+        targetIdentity: inspection?.automationWindowId != null,
+        nonBlankPixels: nonBlank,
+        dimensionsMeasured: capture.capture?.width != null && capture.capture?.height != null,
+        notOsScreenshot: true,
+      },
       limitation: capture.limitation
-        ?? "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor/native blur output.",
+        ?? "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor, native blur, occlusion, shadow, screen recording permission, or actual screen pixels.",
     };
   } catch (error) {
     return {
@@ -915,6 +944,7 @@ async function captureRenderReadbackViaMcp(
       available: false,
       countsAsOsScreenshotEvidence: false,
       countsAsAppRenderEvidence: false,
+      countsAsOffscreenRenderEvidence: false,
       classification: "gpui-readback-unavailable",
       attempts: [{
         source: "gpui-render-readback",
@@ -925,7 +955,20 @@ async function captureRenderReadbackViaMcp(
         message: error instanceof Error ? error.message : String(error),
       }],
       path: null,
-      limitation: "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor/native blur output.",
+      target: {
+        requested: target,
+        resolvedWindowId: inspection?.automationWindowId ?? null,
+        windowKind: inspection?.windowKind ?? null,
+        osWindowId: inspection?.osWindowId ?? null,
+        resolvedBounds: inspection?.resolvedBounds ?? null,
+      },
+      assertions: {
+        targetIdentity: inspection?.automationWindowId != null,
+        nonBlankPixels: false,
+        dimensionsMeasured: false,
+        notOsScreenshot: true,
+      },
+      limitation: "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor, native blur, occlusion, shadow, screen recording permission, or actual screen pixels.",
     };
   }
 }
@@ -2722,6 +2765,8 @@ if (!["os", "render", "auto"].includes(visualSource)) {
   console.error(`Invalid --visual-source ${visualSource}; expected os, render, or auto`);
   process.exit(2);
 }
+const wantsOsVisual = visualSource === "os" || visualSource === "auto";
+const wantsRenderVisual = visualSource === "render" || visualSource === "auto";
 
 // Parse --target-json for ACP window targeting
 let targetJson: Record<string, unknown> | undefined;
@@ -2796,7 +2841,7 @@ let screenshotResult: ScreenshotResult | null = null;
 let capturePlan: CapturePlan | null = null;
 let visualEvidence: VisualEvidenceReceipt | null = null;
 let renderEvidence: VisualEvidenceReceipt | null = null;
-if (!skipScreenshot) {
+if (!skipScreenshot && wantsOsVisual) {
   const captureOutcome = await captureScreenshot(
     session,
     outPath,
@@ -2809,13 +2854,16 @@ if (!skipScreenshot) {
   screenshotResult = captureOutcome.result;
   capturePlan = captureOutcome.plan;
   visualEvidence = buildOsVisualEvidence(screenshotResult, capturePlan);
+}
+if (!skipScreenshot && targetJson && wantsRenderVisual) {
   if (
-    targetJson &&
-    (visualSource === "render" ||
-      (visualSource === "auto" && visualEvidence?.available === false))
+    visualSource === "render" ||
+    (visualSource === "auto" && visualEvidence?.available === false)
   ) {
-    const renderOutPath = outPath.replace(/\.png$/i, ".render.png");
-    renderEvidence = await captureRenderReadbackViaMcp(targetJson, renderOutPath);
+    const renderOutPath = visualSource === "render"
+      ? outPath
+      : outPath.replace(/\.png$/i, ".render.png");
+    renderEvidence = await captureRenderReadbackViaMcp(targetJson, renderOutPath, inspection);
   }
 }
 
@@ -2920,10 +2968,14 @@ if (inspection) {
 }
 
 const allPassed = assertions.every((a) => a.passed);
+const osInfraError = wantsOsVisual && screenshotResult && !screenshotResult.captured && !skipScreenshot;
+const renderInfraError =
+  visualSource === "render" && (!renderEvidence || renderEvidence.available !== true);
 const hasInfraError =
   (stateResult?.error && !skipState) ||
   (probeResult?.error && needsProbe) ||
-  (screenshotResult && !screenshotResult.captured && !skipScreenshot) ||
+  osInfraError ||
+  renderInfraError ||
   popupCaptureInfraError;
 
 // Build resolvedTarget from inspection when available

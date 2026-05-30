@@ -7,12 +7,10 @@
 //! integration test so it can run independently of the lib-test target
 //! (which currently fails to compile in this worktree due to unrelated WIP).
 
-use script_kit_gpui::theme::{contrast_ratio, presets};
-
-const PRESET_PREVIEW_OPACITY_SELECTED_DARK: f32 = 0.23;
-const PRESET_PREVIEW_OPACITY_HOVER_DARK: f32 = 0.06;
-const PRESET_PREVIEW_OPACITY_SELECTED_LIGHT: f32 = 0.08;
-const PRESET_PREVIEW_OPACITY_HOVER_LIGHT: f32 = 0.04;
+use script_kit_gpui::theme::{
+    contrast_ratio, presets, DARK_ROW_HOVER_OPACITY, DARK_ROW_SELECTED_OPACITY,
+    LIGHT_ROW_HOVER_OPACITY, LIGHT_ROW_SELECTED_OPACITY,
+};
 
 fn composite_alpha(fg: u32, alpha: f32, bg: u32) -> u32 {
     let blend = |shift: u32| {
@@ -66,8 +64,8 @@ fn third_party_presets_clear_selection_and_hover_visibility() {
         // Sanity: opacity defaults match what the audit assumes per appearance.
         if preset.is_dark {
             assert!(
-                (opacity.selected - PRESET_PREVIEW_OPACITY_SELECTED_DARK).abs() < 1e-3
-                    && (opacity.hover - PRESET_PREVIEW_OPACITY_HOVER_DARK).abs() < 1e-3,
+                (opacity.selected - DARK_ROW_SELECTED_OPACITY).abs() < 1e-3
+                    && (opacity.hover - DARK_ROW_HOVER_OPACITY).abs() < 1e-3,
                 "{} unexpected dark row opacity: selected={} hover={}",
                 preset.id,
                 opacity.selected,
@@ -75,8 +73,8 @@ fn third_party_presets_clear_selection_and_hover_visibility() {
             );
         } else {
             assert!(
-                (opacity.selected - PRESET_PREVIEW_OPACITY_SELECTED_LIGHT).abs() < 1e-3
-                    && (opacity.hover - PRESET_PREVIEW_OPACITY_HOVER_LIGHT).abs() < 1e-3,
+                (opacity.selected - LIGHT_ROW_SELECTED_OPACITY).abs() < 1e-3
+                    && (opacity.hover - LIGHT_ROW_HOVER_OPACITY).abs() < 1e-3,
                 "{} unexpected light row opacity: selected={} hover={}",
                 preset.id,
                 opacity.selected,

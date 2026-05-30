@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 3,
+  "status": "error",
+  "label": "tahoe-render-proof-isolated-current",
+  "timestamp": "2026-05-30T08:46:51.417Z",
+  "durationMs": 9732,
+  "requiresVisionReview": false,
+  "resolvedTarget": {
+    "windowId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "surfaceId": null
+  },
+  "dispatchPath": "exact_handle",
+  "resolvedWindowId": "main",
+  "osWindowId": 84630,
+  "inspectionOsWindowId": 84630,
+  "captureRouting": "screen-rect-from-inspection",
+  "requestedAutomationWindowId": "main",
+  "requestedOsWindowId": 84630,
+  "showIssuedBeforeCapture": true,
+  "screenRectFallback": {
+    "attempted": true,
+    "used": false,
+    "source": "automationInspect.resolvedBounds",
+    "bounds": {
+      "x": 2097,
+      "y": -903,
+      "width": 750,
+      "height": 480
+    },
+    "nativeWindowId": 84630,
+    "automationResolvedBounds": {
+      "x": 2097,
+      "y": -903,
+      "width": 750,
+      "height": 480
+    },
+    "error": "could not create image from rect"
+  },
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-render-proof-isolated-current.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": "screencapture",
+    "windowId": 84630
+  },
+  "captureTarget": {
+    "requestedWindowId": 84630,
+    "actualWindowId": 84630
+  },
+  "inspection": {
+    "automationWindowId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "osWindowId": 84630,
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 750,
+      "height": 480
+    },
+    "resolvedBounds": {
+      "x": 2097,
+      "y": -903,
+      "width": 750,
+      "height": 480
+    },
+    "screenshotWidth": 750,
+    "screenshotHeight": 480,
+    "pid": 84119,
+    "pixelProbes": [],
+    "warnings": [
+      "footer_elements_truncated_by_limit"
+    ]
+  },
+  "popupCapture": {
+    "strategy": "not_applicable",
+    "windowKind": "Main",
+    "targetBounds": null,
+    "semanticReceiptsArePrimary": false
+  },
+  "visualEvidence": {
+    "source": "os-window-capture",
+    "available": false,
+    "countsAsOsScreenshotEvidence": false,
+    "countsAsAppRenderEvidence": false,
+    "classification": "macos-windowserver-capture-blocked",
+    "attempts": [
+      {
+        "source": "computer/capture_native_window",
+        "status": "failed",
+        "requestedWindowId": 84630,
+        "actualWindowId": 84630,
+        "errorCode": "capture_failed",
+        "message": "Strict window capture failed: primary={\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:46:47.057Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-render-proof-isolated-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84630}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:46:47.057Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:46:47.711Z\",\"attempt\":1,\"windowId\":84669}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:46:47.814Z\",\"attempt\":1,\"windowId\":84630,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:46:48.017Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-render-proof-isolated-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84630}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:46:48.017Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:46:48.651Z\",\"attempt\":1,\"windowId\":84669}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:46:48.749Z\",\"attempt\":2,\"windowId\":84630,\"exitCode\":1,\"stderr\":\"could not create image from window\"}; native=computer/capture_native_window did not return image data: status=permissionDenied error=permission_denied; screenRect=could not create image from rect",
+        "pixelAudit": null
+      },
+      {
+        "source": "screencapture-window-id",
+        "status": "failed",
+        "requestedWindowId": 84630,
+        "actualWindowId": 84630,
+        "errorCode": "screencapture_window_failed",
+        "message": "Strict window capture failed: primary={\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:46:47.057Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-render-proof-isolated-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84630}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:46:47.057Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:46:47.711Z\",\"attempt\":1,\"windowId\":84669}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:46:47.814Z\",\"attempt\":1,\"windowId\":84630,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:46:48.017Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-render-proof-isolated-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84630}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:46:48.017Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:46:48.651Z\",\"attempt\":1,\"windowId\":84669}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:46:48.749Z\",\"attempt\":2,\"windowId\":84630,\"exitCode\":1,\"stderr\":\"could not create image from window\"}; native=computer/capture_native_window did not return image data: status=permissionDenied error=permission_denied; screenRect=could not create image from rect",
+        "pixelAudit": null
+      },
+      {
+        "source": "screencapture-screen-rect",
+        "status": "failed",
+        "requestedWindowId": 84630,
+        "actualWindowId": 84630,
+        "errorCode": "screencapture_rect_failed",
+        "message": "could not create image from rect",
+        "pixelAudit": null
+      }
+    ],
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-render-proof-isolated-current.png",
+    "width": null,
+    "height": null,
+    "pixelAudit": null,
+    "limitation": "macOS WindowServer screenshot capture did not produce usable pixels; do not count this as OS screenshot proof."
+  },
+  "renderEvidence": {
+    "source": "gpui-render-readback",
+    "available": false,
+    "countsAsOsScreenshotEvidence": false,
+    "countsAsAppRenderEvidence": false,
+    "classification": "gpui-readback-unavailable",
+    "attempts": [
+      {
+        "source": "gpui-render-readback",
+        "status": "unsupported",
+        "requestedWindowId": null,
+        "actualWindowId": null,
+        "errorCode": "unknown_tool",
+        "message": "Unknown computer-use tool: computer/capture_render_window"
+      }
+    ],
+    "path": null,
+    "sha256": null,
+    "width": null,
+    "height": null,
+    "pixelAudit": null,
+    "limitation": "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor/native blur output."
+  },
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": false,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-render-proof-isolated-current.png",
+    "sizeBytes": null,
+    "width": null,
+    "height": null,
+    "contentAudit": null,
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": "screencapture",
+    "windowFrontmost": null,
+    "windowFocused": null,
+    "windowId": 84630,
+    "error": "Strict window capture failed: primary={\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:46:47.057Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-render-proof-isolated-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84630}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:46:47.057Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:46:47.711Z\",\"attempt\":1,\"windowId\":84669}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:46:47.814Z\",\"attempt\":1,\"windowId\":84630,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:46:48.017Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-render-proof-isolated-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84630}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:46:48.017Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:46:48.651Z\",\"attempt\":1,\"windowId\":84669}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:46:48.749Z\",\"attempt\":2,\"windowId\":84630,\"exitCode\":1,\"stderr\":\"could not create image from window\"}; native=computer/capture_native_window did not return image data: status=permissionDenied error=permission_denied; screenRect=could not create image from rect"
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: FAILED (Strict window capture failed: primary={\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:46:47.057Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-render-proof-isolated-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84630}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:46:47.057Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:46:47.711Z\",\"attempt\":1,\"windowId\":84669}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:46:47.814Z\",\"attempt\":1,\"windowId\":84630,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T08:46:48.017Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-render-proof-isolated-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84630}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T08:46:48.017Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T08:46:48.651Z\",\"attempt\":1,\"windowId\":84669}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T08:46:48.749Z\",\"attempt\":2,\"windowId\":84630,\"exitCode\":1,\"stderr\":\"could not create image from window\"}; native=computer/capture_native_window did not return image data: status=permissionDenied error=permission_denied; screenRect=could not create image from rect)"
+}

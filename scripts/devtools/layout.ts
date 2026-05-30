@@ -233,6 +233,53 @@ function hitMetrics(component: JsonObject, bounds: Rect) {
   };
 }
 
+function center(rect: Rect) {
+  return {
+    x: rect.x + rect.width / 2,
+    y: rect.y + rect.height / 2,
+  };
+}
+
+function distance(a: { x: number; y: number }, b: { x: number; y: number }) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function buttonCenterDistanceAssertions(nodes: Array<{
+  name: unknown;
+  type: unknown;
+  parent: unknown;
+  hitMetrics: ReturnType<typeof hitMetrics>;
+}>) {
+  const buttons = nodes.filter((node) => String(node.type ?? "") === "button");
+  const failures = [];
+  for (let left = 0; left < buttons.length; left += 1) {
+    for (let rightIndex = left + 1; rightIndex < buttons.length; rightIndex += 1) {
+      const a = buttons[left];
+      const b = buttons[rightIndex];
+      if (a.parent !== b.parent) continue;
+      if (a.hitMetrics.exception || b.hitMetrics.exception) continue;
+      const centerDistance = distance(
+        center(a.hitMetrics.hitBounds),
+        center(b.hitMetrics.hitBounds),
+      );
+      if (centerDistance < 60) {
+        failures.push({
+          a: a.name,
+          b: b.name,
+          centerDistance,
+          required: 60,
+          source: "apple-documented",
+        });
+      }
+    }
+  }
+  return {
+    source: "apple-documented",
+    requiredCenterDistance: 60,
+    failures,
+  };
+}
+
 function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
   const info = (layout.info as JsonObject | undefined) ?? layout;
   const components = asArray(info.components);
@@ -315,6 +362,15 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
     chromeLayer: (node.visualStyle as JsonObject).chromeLayer ?? null,
     materialSource: (node.visualStyle as JsonObject).materialSource ?? null,
   }));
+  const buttonCenterDistance = buttonCenterDistanceAssertions(nodes);
+  const hardcodedColorNodes = nodesWithVisualStyle.filter((node) => {
+    const style = node.visualStyle as JsonObject;
+    return style.usesSemanticThemeToken === false || style.colorSource === "hardcoded";
+  });
+  const cornerRadiusFailures = nodesWithVisualStyle.filter((node) => {
+    const style = node.visualStyle as JsonObject;
+    return style.cornerRadius == null && style.radius == null;
+  });
   return {
     promptType: info.promptType ?? null,
     timestamp: info.timestamp ?? null,
@@ -362,6 +418,67 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
           }, {}),
         ).sort(([a], [b]) => a.localeCompare(b)),
       ),
+      guidelineAssertions: {
+        appleDocumented: {
+          hitTargets: {
+            source: "apple-documented",
+            macosMinimumHitSize: { width: 28, height: 28 },
+            macosMinimumVisualSize: { width: 20, height: 20 },
+            failures: controlsWithHitFailures.map((node) => ({
+              name: node.name,
+              type: node.type,
+              hitMetrics: node.hitMetrics,
+            })),
+          },
+          buttonCenterDistance,
+          materialLayering: {
+            source: "apple-documented",
+            contentGlassNodes: contentNativeMaterialNodes.map((node) => node.name),
+            contentNativeMaterialNodes: contentNativeMaterialNodes.map((node) => node.name),
+            glassLayerViolations,
+          },
+          colorAdaptivity: {
+            source: "apple-documented",
+            hardcodedColorNodes: hardcodedColorNodes.map((node) => node.name),
+          },
+          safeAreaLayout: {
+            source: "apple-documented",
+            clippedNodeCount,
+            overflowY,
+          },
+          buttonShapeFamilies: {
+            source: "apple-documented",
+            exactAppleRadiusConstants: null,
+          },
+        },
+        projectLocal: {
+          cornerRadiusTokens: {
+            source: "project-local",
+            failures: cornerRadiusFailures.map((node) => node.name),
+          },
+          paddingTokens: {
+            source: "project-local",
+            minimumPanelPadding: 16,
+            minimumCompactRowHorizontalPadding: 10,
+          },
+          spacingTokens: {
+            source: "project-local",
+            minimumFooterActionGap: 8,
+          },
+          windowBackdropPolicy: {
+            source: "project-local",
+            contentGlassNodeCount: contentNativeMaterialNodes.length,
+          },
+          themeTokenUsage: {
+            source: "project-local",
+            hardcodedColorNodes: hardcodedColorNodes.map((node) => node.name),
+          },
+          renderReadbackPixelThresholds: {
+            source: "project-local",
+            minimumNonBlackRatio: 0.01,
+          },
+        },
+      },
     },
   };
 }

@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 3,
+  "status": "error",
+  "label": "tahoe-render-proof-main-current",
+  "timestamp": "2026-05-30T08:45:33.751Z",
+  "durationMs": 53,
+  "requiresVisionReview": false,
+  "resolvedTarget": null,
+  "dispatchPath": "exact_handle",
+  "captureRouting": "generic-frontmost",
+  "requestedAutomationWindowId": null,
+  "requestedOsWindowId": null,
+  "showIssuedBeforeCapture": false,
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-render-proof-main-current.png",
+    "captureMethod": null,
+    "windowCaptureMethod": null,
+    "windowId": null
+  },
+  "captureTarget": {
+    "requestedWindowId": null,
+    "actualWindowId": null
+  },
+  "inspection": null,
+  "popupCapture": null,
+  "visualEvidence": {
+    "source": "os-window-capture",
+    "available": false,
+    "countsAsOsScreenshotEvidence": false,
+    "countsAsAppRenderEvidence": false,
+    "classification": "unknown-capture-failure",
+    "attempts": [],
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-render-proof-main-current.png",
+    "width": null,
+    "height": null,
+    "pixelAudit": null,
+    "limitation": "macOS WindowServer screenshot capture did not produce usable pixels; do not count this as OS screenshot proof."
+  },
+  "renderEvidence": {
+    "source": "gpui-render-readback",
+    "available": false,
+    "countsAsOsScreenshotEvidence": false,
+    "countsAsAppRenderEvidence": false,
+    "classification": "gpui-readback-unavailable",
+    "attempts": [
+      {
+        "source": "gpui-render-readback",
+        "status": "unsupported",
+        "requestedWindowId": null,
+        "actualWindowId": null,
+        "errorCode": "unknown_tool",
+        "message": "Unknown computer-use tool: computer/capture_render_window"
+      }
+    ],
+    "path": null,
+    "sha256": null,
+    "width": null,
+    "height": null,
+    "pixelAudit": null,
+    "limitation": "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor/native blur output."
+  },
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": false,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-render-proof-main-current.png",
+    "sizeBytes": null,
+    "width": null,
+    "height": null,
+    "contentAudit": null,
+    "captureMethod": null,
+    "windowCaptureMethod": null,
+    "windowFrontmost": null,
+    "windowFocused": null,
+    "windowId": null,
+    "error": "Targeted screenshot capture requires a native osWindowId, but inspection did not return one"
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: FAILED (Targeted screenshot capture requires a native osWindowId, but inspection did not return one)"
+}

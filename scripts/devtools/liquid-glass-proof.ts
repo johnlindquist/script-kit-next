@@ -511,6 +511,25 @@ async function main() {
         `${RECEIPT_ROOT}/tahoe-next-actions-layout.json`,
         `${RECEIPT_ROOT}/after-actions-layout-visual-style.json`,
       ]);
+    } else if (surfaceKind === "ConfirmPrompt") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-confirm-layout-after.json`,
+      ]);
+      const confirmScreenshotReceipt = await readJsonIfExists(
+        `${RECEIPT_ROOT}/window-priority-confirm-screenshot-after.json`,
+      );
+      const visualEvidence = asObject(confirmScreenshotReceipt?.visualEvidence);
+      const screenshotReceipt = asObject(confirmScreenshotReceipt?.screenshotReceipt);
+      const afterScreenshotPass =
+        confirmScreenshotReceipt?.status === "pass" &&
+        (visualEvidence.countsAsOsScreenshotEvidence === true ||
+          screenshotReceipt.captured === true);
+      if (!afterScreenshotPass) {
+        evidence.screenshots = [];
+        evidence.notes.push(
+          "ignored ConfirmPrompt screenshot evidence: window-priority-confirm-screenshot-after.json is not a passing after-capture receipt",
+        );
+      }
     } else if (surfaceKind === "About") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-about-layout-after.json`,

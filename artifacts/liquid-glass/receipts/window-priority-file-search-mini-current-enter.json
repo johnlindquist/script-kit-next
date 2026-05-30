@@ -1,1 +1,1 @@
-{"schemaVersion":1,"status":"ok","session":"liquid-file-search-current","sent":true,"parseOutcome":"parsed","commandType":"simulateKey"}
+{"schemaVersion":1,"status":"ok","session":"liquid-file-search-capture","sent":true,"parseOutcome":"timeout","timeoutMs":3000}

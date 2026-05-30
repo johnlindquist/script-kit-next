@@ -204,25 +204,33 @@ fn default_border_active_opacity() -> f32 {
     0.25 // 0x40 / 255 ≈ 0.25
 }
 
-// ── Text grading defaults (Raycast-style) ────────────────────────────
-// All applied to text_primary. No double-dimming from secondary/muted colors.
+// ── Text grading defaults (Liquid Glass) ─────────────────────────────
+// Applied to text_primary. Keep labels bright while supporting copy recedes
+// on translucent 50% surfaces; do not reintroduce secondary/muted hex dimming.
+const TEXT_NAME_OPACITY: f32 = 1.00; // Names / primary labels (0xFF)
+const TEXT_STRONG_OPACITY: f32 = 0.80; // Badges, shortcuts, section headers (0xCC)
+const TEXT_MUTED_OPACITY: f32 = 0.65; // Focused descriptions, source hints (0xA5)
+const TEXT_HINT_OPACITY: f32 = 0.45; // Hovered descriptions, type labels (0x72)
+const TEXT_PLACEHOLDER_OPACITY: f32 = 0.40; // Placeholders, idle captions (0x66)
+const TEXT_ICON_OPACITY: f32 = 0.50; // Idle icons (0x7F)
+
 fn default_text_name() -> f32 {
-    1.0 // Names: always pure white (0xFF)
+    TEXT_NAME_OPACITY
 }
 fn default_text_strong() -> f32 {
-    0.80 // Badges, shortcuts, section headers (0xCC)
+    TEXT_STRONG_OPACITY
 }
 fn default_text_muted() -> f32 {
-    0.80 // Focused descriptions, source hints (0xCC)
+    TEXT_MUTED_OPACITY
 }
 fn default_text_hint() -> f32 {
-    0.70 // Hovered descriptions, type labels (0xB3)
+    TEXT_HINT_OPACITY
 }
 fn default_text_placeholder() -> f32 {
-    0.65 // Placeholders, idle captions (0xA6)
+    TEXT_PLACEHOLDER_OPACITY
 }
 fn default_text_icon() -> f32 {
-    0.50 // Idle icons (0x80)
+    TEXT_ICON_OPACITY
 }
 
 /// Convert 0.0–1.0 opacity to u32 alpha (0x00–0xFF) for rgba bit-packing.
@@ -2061,6 +2069,28 @@ mod tests {
         THEME_CACHE_TEST_LOCK
             .lock()
             .expect("theme cache test lock should succeed")
+    }
+
+    #[test]
+    fn test_default_text_opacity_ladder_is_liquid_glass_quiet() {
+        for opacity in [
+            BackgroundOpacity::dark_default(),
+            BackgroundOpacity::light_default(),
+        ] {
+            assert_eq!(opacity.text_name, TEXT_NAME_OPACITY);
+            assert_eq!(opacity.text_strong, TEXT_STRONG_OPACITY);
+            assert_eq!(opacity.text_muted_alpha, TEXT_MUTED_OPACITY);
+            assert_eq!(opacity.text_hint, TEXT_HINT_OPACITY);
+            assert_eq!(opacity.text_placeholder, TEXT_PLACEHOLDER_OPACITY);
+            assert_eq!(opacity.text_icon, TEXT_ICON_OPACITY);
+            assert!(opacity.text_strong > opacity.text_muted_alpha);
+            assert!(opacity.text_muted_alpha > opacity.text_hint);
+            assert!(opacity.text_hint > opacity.text_placeholder);
+            assert!(opacity.text_icon < opacity.text_strong);
+            assert_eq!(opacity_to_alpha(opacity.text_muted_alpha), 0xA5);
+            assert_eq!(opacity_to_alpha(opacity.text_hint), 0x72);
+            assert_eq!(opacity_to_alpha(opacity.text_placeholder), 0x66);
+        }
     }
 
     fn preferences_with_preset(preset_id: Option<&str>) -> ScriptKitUserPreferences {

@@ -653,12 +653,7 @@ impl CodeBlock {
                     .text_size(cx.theme().mono_font_size)
                     .relative()
                     .refine_style(&style.code_block)
-                    .child(Inline::new(
-                        "code",
-                        self.state.clone(),
-                        vec![],
-                        styles,
-                    ))
+                    .child(Inline::new("code", self.state.clone(), vec![], styles))
                     .when_some(node_cx.code_block_actions.clone(), |this, actions| {
                         this.child(
                             div()

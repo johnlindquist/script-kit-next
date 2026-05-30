@@ -111,7 +111,7 @@ fn auto_visual_source_attempts_render_readback_after_os_blocker() {
         .find("buildOsVisualEvidence(screenshotResult, capturePlan)")
         .expect("OS visual evidence classification must be built");
     let render_attempt = VERIFY_SHOT
-        .find("captureRenderReadbackViaMcp(targetJson, renderOutPath)")
+        .find("captureRenderReadbackViaMcp(targetJson, renderOutPath, inspection)")
         .expect("render readback fallback must exist");
     assert!(
         os_attempt < render_attempt,
@@ -129,7 +129,7 @@ fn auto_visual_source_attempts_render_readback_after_os_blocker() {
 fn render_readback_is_not_os_screenshot_proof() {
     assert!(
         VERIFY_SHOT.contains("countsAsOsScreenshotEvidence: false")
-            && VERIFY_SHOT.contains("countsAsAppRenderEvidence: status === \"captured\"")
+            && VERIFY_SHOT.contains("countsAsAppRenderEvidence: captured")
             && VERIFY_SHOT.contains("App-rendered GPUI pixels only"),
         "app-render readback must not be counted as OS screenshot/native compositor proof"
     );
@@ -246,5 +246,28 @@ fn popup_missing_crop_bounds_is_top_level_infra_error() {
     assert!(
         VERIFY_SHOT.contains("popupCaptureInfraError;"),
         "top-level hasInfraError must include popupCaptureInfraError"
+    );
+}
+
+#[test]
+fn render_visual_source_does_not_require_os_screenshot_success() {
+    assert!(
+        VERIFY_SHOT.contains("visualSource === \"render\"")
+            && VERIFY_SHOT.contains("wantsRenderVisual")
+            && VERIFY_SHOT.contains("wantsOsVisual"),
+        "render-only visual source must be modeled separately from OS screenshot capture"
+    );
+    assert!(
+        VERIFY_SHOT.contains("renderInfraError")
+            && VERIFY_SHOT.contains("countsAsOsScreenshotEvidence: false")
+            && VERIFY_SHOT.contains("countsAsAppRenderEvidence")
+            && VERIFY_SHOT.contains("countsAsOffscreenRenderEvidence: false"),
+        "render-only receipts must fail or pass on render evidence, not OS screenshot evidence"
+    );
+    assert!(
+        VERIFY_SHOT.contains("localPixelAudit")
+            && VERIFY_SHOT.contains("nonBlankPixels")
+            && VERIFY_SHOT.contains("notOsScreenshot"),
+        "render readback receipts must audit local pixels and state their proof limitation"
     );
 }

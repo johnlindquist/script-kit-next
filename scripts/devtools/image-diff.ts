@@ -12,6 +12,7 @@ type Args = {
   greenCropFromReceipt: string;
   redReferenceWidth: number | null;
   greenReferenceWidth: number | null;
+  requireSameSize: boolean;
 };
 
 type Dimensions = {
@@ -51,6 +52,7 @@ function parseArgs(argv: string[]): Args {
     greenCropFromReceipt: "",
     redReferenceWidth: null,
     greenReferenceWidth: null,
+    requireSameSize: false,
   };
 
   for (let index = 1; index < argv.length; index += 1) {
@@ -77,6 +79,8 @@ function parseArgs(argv: string[]): Args {
       args.redReferenceWidth = Number(argv[++index] ?? "");
     } else if (arg === "--green-reference-width") {
       args.greenReferenceWidth = Number(argv[++index] ?? "");
+    } else if (arg === "--require-same-size") {
+      args.requireSameSize = true;
     }
   }
 
@@ -226,12 +230,19 @@ async function main() {
   const changedPixelRatio = totalPixels > 0 ? changedPixels / totalPixels : null;
   const trim = runMagick([args.out, "-fuzz", "1%", "-trim", "-format", "%@", "info:"]);
   const diffBoundingBox = changedPixels > 0 ? parseBoundingBox(trim.stdout) : null;
+  const sameSize =
+    redDimensions.width === greenDimensions.width &&
+    redDimensions.height === greenDimensions.height;
+  const errors = args.requireSameSize && !sameSize ? ["dimension_mismatch"] : [];
+  const classification = errors.length === 0 ? "ok" : "error";
 
   const receipt = {
     schemaVersion: 1,
     tool: "script-kit-devtools.image-diff",
     command: "image-diff.compare",
-    classification: "ok",
+    classification,
+    proofKind: args.requireSameSize ? "capture-stability" : "visual-diff",
+    sameSizeRequired: args.requireSameSize,
     label: args.label,
     redPath: args.red,
     greenPath: args.green,
@@ -247,7 +258,7 @@ async function main() {
       red: redDimensions,
       green: greenDimensions,
       comparisonCanvas: canvas,
-      sameSize: redDimensions.width === greenDimensions.width && redDimensions.height === greenDimensions.height,
+      sameSize,
       widthDelta: greenDimensions.width - redDimensions.width,
       heightDelta: greenDimensions.height - redDimensions.height,
     },
@@ -262,16 +273,19 @@ async function main() {
       dimensionsMeasured: true,
     },
     warnings: [
-      redDimensions.width === greenDimensions.width && redDimensions.height === greenDimensions.height
+      sameSize
         ? ""
         : "red and green screenshots have different dimensions; changed-pixel ratio uses the max comparison canvas",
     ].filter(Boolean),
-    errors: [],
+    errors,
     timestamp: new Date().toISOString(),
   };
 
   await Bun.$`rm -rf ${tmpDir}`;
   console.log(JSON.stringify(receipt, null, 2));
+  if (classification === "error") {
+    process.exit(2);
+  }
 }
 
 await main();

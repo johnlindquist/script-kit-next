@@ -57,7 +57,8 @@ fn dictation_window_uses_shared_theme_background_and_material() {
         footer_popup.contains("static DICTATION_FOOTER_ACTION_CHANNEL")
             && footer_popup.contains("pub(crate) fn dictation_footer_action_channel")
             && footer_popup.contains("send_footer_action_from_sender(sender")
-            && footer_popup.contains("footer_sender_is_dictation_window(sender)"),
+            && footer_popup.contains("FooterWindowKind::Dictation")
+            && footer_popup.contains("t.contains(\"Script Kit Dictation\")"),
         "Shared native footer buttons must route dictation-window clicks through the dictation channel, not the main-window listener"
     );
     assert!(
@@ -71,7 +72,8 @@ fn dictation_window_uses_shared_theme_background_and_material() {
                 "configure_window_vibrancy_common(window, \"DICTATION\", \"Dictation overlay\", is_dark)"
             )
             && platform.contains("Script Kit Dictation")
-            && platform.contains("title_string.contains(\"Script Kit Dictation\")"),
+            && platform.contains("\"Script Kit Dictation\"")
+            && platform.contains("should_refresh_secondary_window_appearance(&title_string)"),
         "Dictation overlay must be title-addressable by secondary-window appearance refresh"
     );
     assert!(
