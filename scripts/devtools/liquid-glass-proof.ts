@@ -184,6 +184,10 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-dictation-layout-after.json`,
       ]);
+    } else if (surfaceKind === "AcpChat") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-acp-detached-layout-after.json`,
+      ]);
     }
     const status = classify(evidence);
     return {
@@ -206,6 +210,7 @@ async function main() {
   const practicalTargets = await Promise.all([
     { id: "notes", terms: ["notes"] },
     { id: "dictation", terms: ["dictation"] },
+    { id: "acp-detached", terms: ["acp-detached"] },
     { id: "inline-agent", terms: ["inline-agent"] },
     { id: "notes-acp", terms: ["notes-acp"] },
   ].map(async (target) => {
@@ -227,6 +232,10 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-dictation-layout-after.json`,
       ]);
+    } else if (target.id === "acp-detached") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-acp-detached-layout-after.json`,
+      ]);
     }
     const dictationMedia = target.id === "dictation"
       ? await readJsonIfExists(`${RECEIPT_ROOT}/dictation-next-post-delivery-media.json`)
@@ -237,6 +246,8 @@ async function main() {
     const baseStatus = classify(evidence);
     const proofStatus = target.id === "dictation" && evidence.visualAudit && evidence.layoutReceipts.length > 0
       ? "numeric-window-proof-screenshot-blocked"
+      : target.id === "acp-detached" && evidence.visualAudit && evidence.layoutReceipts.length > 0
+        ? "numeric-window-proof-screenshot-blocked"
       : target.id === "dictation" && dictationMedia
         ? "media-proof-missing-visual"
       : target.id === "inline-agent" && evidence.visualAudit && evidence.layoutReceipts.length > 0
