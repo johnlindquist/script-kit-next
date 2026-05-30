@@ -63,3 +63,16 @@ fn proof_matrix_lists_surface_and_visual_tier_debt() {
         "Liquid Glass proof matrix must list exact surfaces and tiers that still block exhaustive proof"
     );
 }
+
+#[test]
+fn proof_matrix_emits_ordered_debt_work_queue() {
+    assert!(
+        PROOF_MATRIX.contains("proofDebtWorkQueue")
+            && PROOF_MATRIX.contains("proofDebtWorkQueueCount")
+            && PROOF_MATRIX.contains("nextEvidenceNeeded")
+            && PROOF_MATRIX.contains("recommendedNextAction")
+            && PROOF_MATRIX.contains("capture-blocker")
+            && PROOF_MATRIX.contains("missing-proof-tier"),
+        "Liquid Glass proof matrix must emit an ordered work queue for remaining surface proof debt"
+    );
+}

@@ -684,6 +684,34 @@ async function main() {
       notes: surface.evidence.notes,
     }));
 
+
+  const proofDebtWorkQueue = surfaceProofDebtSurfaces.map((surface, index) => {
+    const missingEvidence = [
+      surface.requiredEvidence.osScreenshotProof !== "pass" ? "osScreenshotProof" : "",
+      surface.requiredEvidence.appRenderProof !== "pass" ? "appRenderProof" : "",
+      surface.requiredEvidence.offscreenRenderProof !== "pass" ? "offscreenRenderProof" : "",
+      surface.requiredEvidence.numericProof !== "pass" ? "numericProof" : "",
+      surface.requiredEvidence.imageDiffProof !== "pass" ? "imageDiffProof" : "",
+    ].filter(Boolean);
+    const visualCaptureBlocked = surface.proofTiers.osScreenshotProof === "blocked" ||
+      surface.proofTiers.appRenderProof === "fail" ||
+      surface.proofTiers.offscreenRenderProof === "fail" ||
+      surface.proofTiers.imageDiffProof === "blocked";
+    return {
+      rank: index + 1,
+      surfaceKind: surface.surfaceKind,
+      proofStatus: surface.proofStatus,
+      priority: visualCaptureBlocked ? "capture-blocker" : "missing-proof-tier",
+      nextEvidenceNeeded: missingEvidence,
+      recommendedNextAction: visualCaptureBlocked
+        ? "fix capture/readback blocker, then rerun screenshot/layout/image-diff proof"
+        : "capture missing screenshot/app-render/offscreen/image-diff evidence, then rerun proof matrix",
+      receipts: surface.receipts,
+      screenshots: surface.screenshots,
+      notes: surface.notes,
+    };
+  });
+
   const summary = {
     surfaceCount: surfaces.length,
     strongProofSurfaceCount: surfaces.filter((surface) => surface.proofStatus === "strong-proof").length,
@@ -697,6 +725,7 @@ async function main() {
     offscreenRenderMissingSurfaceCount: surfaces.filter((surface) => surface.proofTiers.offscreenRenderProof === "missing").length,
     visualTierDebtSurfaceCount: visualTierDebtSurfaces.length,
     surfaceProofDebtCount: surfaceProofDebtSurfaces.length,
+    proofDebtWorkQueueCount: proofDebtWorkQueue.length,
     batchCount: batches.length,
     strongProofBatchCount: batches.filter((batch) => batch.proofStatus === "strong-proof").length,
     partialProofBatchCount: batches.filter((batch) => batch.proofStatus === "partial-proof").length,
@@ -715,6 +744,7 @@ async function main() {
     batches,
     visualTierDebtSurfaces,
     surfaceProofDebtSurfaces,
+    proofDebtWorkQueue,
     surfaces,
     practicalTargets,
     warnings: [
