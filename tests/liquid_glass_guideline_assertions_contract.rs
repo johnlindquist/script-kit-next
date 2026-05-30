@@ -46,6 +46,90 @@ fn layout_visual_audit_rejects_zero_radius_placeholders() {
         !proof.contains("REQUIRED_POSITIVE_RADIUS_NODE_NAMES"),
         "proof matrix must not hide zero-radius styled nodes behind a hard-coded name whitelist"
     );
+    assert!(
+        !layout.contains("REQUIRED_POSITIVE_RADIUS_NODE_NAMES"),
+        "layout audit must not hide zero-radius styled nodes behind a hard-coded name whitelist"
+    );
+}
+
+fn snippet_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+    let start_index = source
+        .find(start)
+        .unwrap_or_else(|| panic!("missing start marker `{start}`"));
+    let end_index = source[start_index..]
+        .find(end)
+        .map(|offset| start_index + offset)
+        .unwrap_or_else(|| panic!("missing end marker `{end}`"));
+    &source[start_index..end_index]
+}
+
+/// The corner-radius audit must decide "is this node a rounded surface?" from
+/// its node TYPE, not from a hard-coded node-name list. Both audit layers
+/// (`layout.ts` cornerRadiusFailures and `liquid-glass-proof.ts`
+/// nodesWithMissingPositiveRadius) must share the same type-only predicate so
+/// they cannot drift, and Other/text nodes (bare labels, 1px dividers) must
+/// stay out of the radius-bearing set.
+#[test]
+fn corner_radius_audit_is_type_based_not_name_whitelisted() {
+    let layout =
+        fs::read_to_string("scripts/devtools/layout.ts").expect("failed to read layout.ts");
+    let proof = fs::read_to_string("scripts/devtools/liquid-glass-proof.ts")
+        .expect("failed to read liquid-glass-proof.ts");
+
+    let layout_predicate = snippet_between(
+        &layout,
+        "const RADIUS_BEARING_NODE_TYPES",
+        "function rectFrom",
+    );
+    let proof_predicate = snippet_between(
+        &proof,
+        "const RADIUS_BEARING_NODE_TYPES",
+        "function nodesWithMissingPositiveRadius",
+    );
+
+    for predicate in [layout_predicate, proof_predicate] {
+        assert!(
+            predicate.contains("RADIUS_BEARING_NODE_TYPES.has(type)"),
+            "radius-bearing classification must be type-based"
+        );
+        for node_type in [
+            "\"area\"",
+            "\"button\"",
+            "\"card\"",
+            "\"container\"",
+            "\"header\"",
+            "\"input\"",
+            "\"list\"",
+            "\"listitem\"",
+            "\"panel\"",
+            "\"prompt\"",
+            "\"window\"",
+        ] {
+            assert!(
+                predicate.contains(node_type),
+                "radius-bearing type set must include {node_type}"
+            );
+        }
+        assert!(
+            !predicate.contains("\"other\"") && !predicate.contains("\"text\""),
+            "Other/Text nodes must not be radius-bearing surfaces"
+        );
+        assert!(
+            !predicate.contains("KitStore")
+                && !predicate.contains("GenericFilterable")
+                && !predicate.contains("REQUIRED_POSITIVE_RADIUS_NODE_NAMES"),
+            "radius audit must not use surface-name carveouts"
+        );
+        assert!(
+            !predicate.contains("/Area|Content|Panel"),
+            "radius audit should not use the old name-regex heuristic"
+        );
+    }
+
+    assert!(
+        layout.contains("if (!isRadiusBearingNode(node)) return false;"),
+        "layout.ts cornerRadiusFailures must skip only non-radius-bearing node types"
+    );
 }
 
 #[test]

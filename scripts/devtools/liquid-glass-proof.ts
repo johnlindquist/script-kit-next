@@ -110,12 +110,27 @@ function hasPositiveRadius(value: unknown) {
   return radii.length > 0 && radii.every((entry) => entry > 0);
 }
 
+// Radius-bearing surfaces are container/fill-owning node TYPES, not bare text
+// labels or 1px hairline dividers. Type-based (NOT a node-name whitelist) and
+// kept identical to the predicate in scripts/devtools/layout.ts so the two
+// audit layers agree on which nodes must carry a positive Liquid Glass radius.
+const RADIUS_BEARING_NODE_TYPES = new Set([
+  "area",
+  "button",
+  "card",
+  "container",
+  "header",
+  "input",
+  "list",
+  "listitem",
+  "panel",
+  "prompt",
+  "window",
+]);
+
 function isRadiusBearingNode(node: JsonObject) {
   const type = String(node.type ?? "").toLowerCase();
-  if (type === "other" || type === "text") return false;
-  const name = String(node.name ?? node.type ?? "");
-  return /Area|Content|Panel|List|Window|Header|Footer|Input|Button|Item|Row|Card|Prompt|Choices|Search|Action|Close|Tile/i
-    .test(name);
+  return RADIUS_BEARING_NODE_TYPES.has(type);
 }
 
 function nodesWithMissingPositiveRadius(receipt: JsonObject) {

@@ -4,6 +4,34 @@ const TRIGGER_REGISTRY_SOURCE: &str = include_str!("../src/builtins/trigger_regi
 const ROUTES_SOURCE: &str = include_str!("../src/app_impl/routes.rs");
 const TRIGGER_DISPATCH_SOURCE: &str = include_str!("../src/app_impl/trigger_builtin_dispatch.rs");
 
+fn generic_filterable_node_source(name: &str) -> &'static str {
+    let start = LAYOUT_SOURCE
+        .find(&format!("LayoutComponentInfo::new(\"{name}\""))
+        .unwrap_or_else(|| panic!("{name} layout node should exist"));
+    let node_source = &LAYOUT_SOURCE[start..];
+    let end = node_source
+        .find(".with_visual_token")
+        .unwrap_or_else(|| panic!("{name} should declare visual metadata"));
+    &node_source[..end]
+}
+
+#[test]
+fn generic_filterable_list_uses_liquid_glass_panel_radius() {
+    let source = generic_filterable_node_source("GenericFilterableList");
+    assert!(
+        source.contains("LayoutComponentType::List"),
+        "GenericFilterableList must remain a List node"
+    );
+    assert!(
+        source.contains("Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX)"),
+        "GenericFilterableList must use the shared Liquid Glass panel radius token"
+    );
+    assert!(
+        !source.contains("Some(0.0)") && !source.contains("None"),
+        "GenericFilterableList must not satisfy guideline proof with a zero or missing radius"
+    );
+}
+
 #[test]
 fn generic_filterable_layout_uses_dedicated_full_width_nodes_before_generic_split_shell() {
     let branch = LAYOUT_SOURCE

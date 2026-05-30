@@ -1,5 +1,35 @@
 const LAYOUT_SOURCE: &str = include_str!("../src/app_layout/build_layout_info.rs");
 
+fn node_source(name: &str) -> &'static str {
+    let start = LAYOUT_SOURCE
+        .find(&format!("LayoutComponentInfo::new(\"{name}\""))
+        .unwrap_or_else(|| panic!("{name} layout node should exist"));
+    let node_source = &LAYOUT_SOURCE[start..];
+    let end = node_source
+        .find(".with_visual_token")
+        .unwrap_or_else(|| panic!("{name} should declare visual metadata"));
+    &node_source[..end]
+}
+
+#[test]
+fn kit_store_custom_lists_use_liquid_glass_panel_radius() {
+    for node in ["KitStoreBrowseList", "KitStoreInstalledList"] {
+        let source = node_source(node);
+        assert!(
+            source.contains("LayoutComponentType::List"),
+            "{node} must remain a List node"
+        );
+        assert!(
+            source.contains("Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX)"),
+            "{node} must use the shared Liquid Glass panel radius token"
+        );
+        assert!(
+            !source.contains("Some(0.0)") && !source.contains("None"),
+            "{node} must not satisfy guideline proof with a zero or missing radius"
+        );
+    }
+}
+
 #[test]
 fn kit_store_browse_layout_receipt_uses_custom_surface_nodes() {
     let browse_branch = LAYOUT_SOURCE

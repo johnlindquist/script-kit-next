@@ -813,7 +813,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
                     .with_visual_token("kitStoreBrowse.list")
                     .with_flex_column()
@@ -1044,7 +1044,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
                     .with_visual_token("kitStoreInstalled.list")
                     .with_flex_column()
@@ -1301,7 +1301,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
                     .with_visual_token(format!("genericFilterable.{variant}.list"))
                     .with_flex_column()

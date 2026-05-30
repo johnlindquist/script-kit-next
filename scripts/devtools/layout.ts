@@ -210,6 +210,31 @@ function hasPositiveRadius(value: unknown) {
   return radii.length > 0 && radii.every((entry) => entry > 0);
 }
 
+// Radius-bearing surfaces are container/fill-owning node TYPES, not bare text
+// labels or 1px hairline dividers. This is type-based (NOT a node-name
+// whitelist) and mirrors the same predicate in liquid-glass-proof.ts so the
+// two audit layers agree on which nodes must carry a positive Liquid Glass
+// radius. Title/count text labels and hairline dividers paint no rounded
+// surface and are intentionally excluded by their non-container node type.
+const RADIUS_BEARING_NODE_TYPES = new Set([
+  "area",
+  "button",
+  "card",
+  "container",
+  "header",
+  "input",
+  "list",
+  "listitem",
+  "panel",
+  "prompt",
+  "window",
+]);
+
+function isRadiusBearingNode(node: { type: unknown }) {
+  const type = String(node.type ?? "").toLowerCase();
+  return RADIUS_BEARING_NODE_TYPES.has(type);
+}
+
 function rectFrom(value: unknown): Rect {
   const object =
     value && typeof value === "object" ? (value as JsonObject) : {};
@@ -407,6 +432,7 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
     return style.usesSemanticThemeToken === false || style.colorSource === "hardcoded";
   });
   const cornerRadiusFailures = nodesWithVisualStyle.filter((node) => {
+    if (!isRadiusBearingNode(node)) return false;
     const style = node.visualStyle as JsonObject;
     return !hasPositiveRadius(style.cornerRadius) && !hasPositiveRadius(style.radius);
   });
