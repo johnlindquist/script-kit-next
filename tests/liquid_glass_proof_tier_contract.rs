@@ -69,10 +69,14 @@ fn proof_matrix_emits_ordered_debt_work_queue() {
     assert!(
         PROOF_MATRIX.contains("proofDebtWorkQueue")
             && PROOF_MATRIX.contains("proofDebtWorkQueueCount")
+            && PROOF_MATRIX.contains("OUTSIDE_IN_SURFACE_PRIORITY")
+            && PROOF_MATRIX.contains("outsideInPriority")
+            && PROOF_MATRIX.contains("priorityGroup")
+            && PROOF_MATRIX.contains("window-container")
             && PROOF_MATRIX.contains("nextEvidenceNeeded")
             && PROOF_MATRIX.contains("recommendedNextAction")
             && PROOF_MATRIX.contains("capture-blocker")
             && PROOF_MATRIX.contains("missing-proof-tier"),
-        "Liquid Glass proof matrix must emit an ordered work queue for remaining surface proof debt"
+        "Liquid Glass proof matrix must emit an outside-in ordered work queue for remaining surface proof debt"
     );
 }

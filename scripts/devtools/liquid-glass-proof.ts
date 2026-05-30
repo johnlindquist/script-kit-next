@@ -323,6 +323,38 @@ function classify(evidence: Evidence) {
   return "missing-proof";
 }
 
+const OUTSIDE_IN_SURFACE_PRIORITY: Record<string, number> = {
+  PromptEntity: 10,
+  PromptChildContent: 11,
+  ExplicitPromptEntity: 12,
+  UtilityChildContent: 13,
+  AcpChat: 14,
+  FileSearchMini: 15,
+  FileSearchFull: 16,
+  AttachmentPortalBrowser: 17,
+  ConfirmPrompt: 18,
+  Webcam: 19,
+  ClipboardHistory: 30,
+  AppLauncher: 31,
+  WindowSwitcher: 32,
+  BrowserTabs: 33,
+  GenericFilterableList: 34,
+  ProcessManager: 35,
+  CurrentAppCommands: 36,
+  Settings: 37,
+  KitStoreBrowse: 38,
+  KitStoreInstalled: 39,
+  AcpHistory: 40,
+  ThemeChooser: 41,
+  EmojiPicker: 42,
+  SdkReference: 43,
+  ScriptTemplateCatalog: 44,
+};
+
+function outsideInPriority(surfaceKind: unknown) {
+  return OUTSIDE_IN_SURFACE_PRIORITY[String(surfaceKind)] ?? 90;
+}
+
 async function attachVisualAudit(evidence: Evidence, preferred: string[]) {
   for (const path of preferred) {
     const json = await readJsonIfExists(path);
@@ -685,7 +717,7 @@ async function main() {
     }));
 
 
-  const proofDebtWorkQueue = surfaceProofDebtSurfaces.map((surface, index) => {
+  const proofDebtWorkQueue = surfaceProofDebtSurfaces.map((surface) => {
     const missingEvidence = [
       surface.requiredEvidence.osScreenshotProof !== "pass" ? "osScreenshotProof" : "",
       surface.requiredEvidence.appRenderProof !== "pass" ? "appRenderProof" : "",
@@ -698,8 +730,10 @@ async function main() {
       surface.proofTiers.offscreenRenderProof === "fail" ||
       surface.proofTiers.imageDiffProof === "blocked";
     return {
-      rank: index + 1,
+      rank: 0,
       surfaceKind: surface.surfaceKind,
+      outsideInPriority: outsideInPriority(surface.surfaceKind),
+      priorityGroup: outsideInPriority(surface.surfaceKind) < 30 ? "window-container" : "surface-content",
       proofStatus: surface.proofStatus,
       priority: visualCaptureBlocked ? "capture-blocker" : "missing-proof-tier",
       nextEvidenceNeeded: missingEvidence,
@@ -710,7 +744,12 @@ async function main() {
       screenshots: surface.screenshots,
       notes: surface.notes,
     };
-  });
+  })
+    .sort((left, right) =>
+      left.outsideInPriority - right.outsideInPriority ||
+      String(left.surfaceKind).localeCompare(String(right.surfaceKind))
+    )
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
 
   const summary = {
     surfaceCount: surfaces.length,
