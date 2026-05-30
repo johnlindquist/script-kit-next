@@ -151,6 +151,7 @@ async function main() {
     ActionsDialog: ["actions"],
     ConfirmPrompt: ["confirm"],
     PromptEntity: ["prompt-div", "promptentity"],
+    PromptChildContent: ["prompt-child", "promptchildcontent"],
     About: ["about"],
     Feedback: ["feedback", "creation-feedback", "creationFeedback"],
     AcpChat: ["acp"],
@@ -196,6 +197,10 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-prompt-div-fixed-layout-sdk.json`,
         `${RECEIPT_ROOT}/window-priority-prompt-div-current-layout-sdk.json`,
+      ]);
+    } else if (surfaceKind === "PromptChildContent") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-prompt-child-editor-fixed-layout-sdk.json`,
       ]);
     }
     const status = classify(evidence);

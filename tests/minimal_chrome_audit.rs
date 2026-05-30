@@ -269,17 +269,31 @@ fn terminal_layout_info_has_terminal_content_branch() {
 #[test]
 fn select_drop_layout_info_has_prompt_owned_branches() {
     let source = include_str!("../src/app_layout/build_layout_info.rs");
+    let branch_start = source
+        .find("AppView::SelectPrompt { .. } | AppView::DropPrompt { .. }")
+        .expect("select/drop prompt layout branch exists");
+    let prompt_branch = &source[branch_start..];
+    let return_idx = prompt_branch
+        .find("return LayoutInfo")
+        .expect("select/drop layout branch should return layout info");
     assert!(
-        source.contains("AppView::SelectPrompt")
-            && source.contains("SelectChoices")
-            && source.contains("LayoutComponentType::List"),
+        prompt_branch[..return_idx].contains("AppView::SelectPrompt")
+            && prompt_branch[..return_idx].contains("SelectChoices")
+            && prompt_branch[..return_idx].contains("LayoutComponentType::List"),
         "select layout info should report its prompt-owned list instead of launcher list/preview"
     );
     assert!(
-        source.contains("AppView::DropPrompt")
-            && source.contains("DropContent")
-            && source.contains("LayoutComponentType::Prompt"),
+        prompt_branch[..return_idx].contains("AppView::DropPrompt")
+            && prompt_branch[..return_idx].contains("DropContent")
+            && prompt_branch[..return_idx].contains("LayoutComponentType::Prompt"),
         "drop layout info should report prompt-owned drop content instead of launcher list/preview"
+    );
+    assert!(
+        prompt_branch[..return_idx].contains("content.promptChoices")
+            && prompt_branch[..return_idx].contains("content.promptDrop")
+            && prompt_branch[..return_idx].contains("MATERIAL_SOLID_THEME_TOKEN")
+            && prompt_branch[..return_idx].contains("CHROME_LAYER_CONTENT"),
+        "select/drop child content must carry content-layer Liquid Glass visual metadata"
     );
     eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"select_drop_layout_info\",\"prompt_owned_branches\":true,\"status\":\"pass\"}}");
 }

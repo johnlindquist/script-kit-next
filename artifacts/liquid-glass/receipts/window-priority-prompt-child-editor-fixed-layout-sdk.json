@@ -1,0 +1,428 @@
+{
+  "schemaVersion": 1,
+  "status": "ok",
+  "classification": "sdk-runtime-proof",
+  "label": "window-priority-prompt-child-editor-fixed",
+  "source": "artifacts/liquid-glass/scripts/prompt-child-editor-proof.ts",
+  "target": {
+    "surfaceKind": "PromptChildContent",
+    "appViewVariant": "EditorPrompt",
+    "nativeFooterSurface": "editor_prompt"
+  },
+  "window": {
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 750,
+      "height": 500
+    },
+    "promptType": "editor"
+  },
+  "componentCount": 5,
+  "visualAudit": {
+    "nodeCount": 5,
+    "styledNodeCount": 5,
+    "unstyledNodeCount": 0,
+    "controlsWithHitFailures": [],
+    "contentGlassNodes": [],
+    "missingStyleNodeNames": [],
+    "chromeLayers": {
+      "content": 3,
+      "functionalChrome": 2
+    }
+  },
+  "nodes": [
+    {
+      "name": "Window",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 500
+      },
+      "flex": {
+        "direction": "column"
+      },
+      "depth": 0,
+      "explanation": "Root window container. Uses flex-column layout.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "NSVisualEffectView",
+        "tokenSource": "window.vibrancy",
+        "cornerRadius": {
+          "topLeft": 22,
+          "topRight": 22,
+          "bottomRight": 22,
+          "bottomLeft": 22
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        }
+      }
+    },
+    {
+      "name": "Header",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 45
+      },
+      "boxModel": {
+        "padding": {
+          "top": 8,
+          "right": 16,
+          "bottom": 8,
+          "left": 16
+        }
+      },
+      "flex": {
+        "direction": "row"
+      },
+      "depth": 1,
+      "parent": "Window",
+      "explanation": "Height = padding(8) + content(28) + padding(8) + divider(1) = 45px. Uses flex-row with items-center.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.header",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        }
+      }
+    },
+    {
+      "name": "SearchInput",
+      "type": "input",
+      "bounds": {
+        "x": 16,
+        "y": 11,
+        "width": 534,
+        "height": 22
+      },
+      "flex": {
+        "grow": 1
+      },
+      "depth": 2,
+      "parent": "Header",
+      "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(200) = 534px. Vertically centered in header.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.searchInput",
+        "cornerRadius": {
+          "topLeft": 14,
+          "topRight": 14,
+          "bottomRight": 14,
+          "bottomLeft": 14
+        },
+        "visualBounds": {
+          "x": 16,
+          "y": 11,
+          "width": 534,
+          "height": 22
+        },
+        "hitBounds": {
+          "x": 16,
+          "y": 8,
+          "width": 534,
+          "height": 28
+        }
+      }
+    },
+    {
+      "name": "ContentArea",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 45,
+        "width": 750,
+        "height": 455
+      },
+      "flex": {
+        "direction": "row",
+        "grow": 1
+      },
+      "depth": 1,
+      "parent": "Window",
+      "explanation": "flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.background",
+        "visualBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        }
+      }
+    },
+    {
+      "name": "EditorContent",
+      "type": "prompt",
+      "bounds": {
+        "x": 0,
+        "y": 45,
+        "width": 750,
+        "height": 455
+      },
+      "flex": {
+        "direction": "column",
+        "grow": 1
+      },
+      "depth": 2,
+      "parent": "ContentArea",
+      "explanation": "EditorPrompt fills the content area; footer ownership is routed through the shared main-window footer slot.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.promptBody",
+        "visualBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        }
+      }
+    }
+  ],
+  "rawLayout": {
+    "windowWidth": 750,
+    "windowHeight": 500,
+    "promptType": "editor",
+    "components": [
+      {
+        "name": "Window",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 500
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Root window container. Uses flex-column layout.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "NSVisualEffectView",
+          "tokenSource": "window.vibrancy",
+          "cornerRadius": {
+            "topLeft": 22,
+            "topRight": 22,
+            "bottomRight": 22,
+            "bottomLeft": 22
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 500
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 500
+          }
+        }
+      },
+      {
+        "name": "Header",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 45
+        },
+        "boxModel": {
+          "padding": {
+            "top": 8,
+            "right": 16,
+            "bottom": 8,
+            "left": 16
+          }
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Height = padding(8) + content(28) + padding(8) + divider(1) = 45px. Uses flex-row with items-center.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.header",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 45
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 45
+          }
+        }
+      },
+      {
+        "name": "SearchInput",
+        "type": "input",
+        "bounds": {
+          "x": 16,
+          "y": 11,
+          "width": 534,
+          "height": 22
+        },
+        "flex": {
+          "grow": 1
+        },
+        "depth": 2,
+        "parent": "Header",
+        "explanation": "flex-grow:1 fills remaining space. Width = window(750) - padding(16) - buttons_area(200) = 534px. Vertically centered in header.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.searchInput",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 16,
+            "y": 11,
+            "width": 534,
+            "height": 22
+          },
+          "hitBounds": {
+            "x": 16,
+            "y": 8,
+            "width": 534,
+            "height": 28
+          }
+        }
+      },
+      {
+        "name": "ContentArea",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        },
+        "flex": {
+          "direction": "row",
+          "grow": 1
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.background",
+          "visualBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 455
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 455
+          }
+        }
+      },
+      {
+        "name": "EditorContent",
+        "type": "prompt",
+        "bounds": {
+          "x": 0,
+          "y": 45,
+          "width": 750,
+          "height": 455
+        },
+        "flex": {
+          "direction": "column",
+          "grow": 1
+        },
+        "depth": 2,
+        "parent": "ContentArea",
+        "explanation": "EditorPrompt fills the content area; footer ownership is routed through the shared main-window footer slot.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.promptBody",
+          "visualBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 455
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 45,
+            "width": 750,
+            "height": 455
+          }
+        }
+      }
+    ],
+    "timestamp": "2026-05-30T05:35:17.523092+00:00"
+  }
+}

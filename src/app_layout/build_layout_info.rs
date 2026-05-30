@@ -802,6 +802,15 @@ impl ScriptListApp {
             components.push(
                 LayoutComponentInfo::new(component_name, component_type)
                     .with_bounds(0.0, content_top, window_width, content_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token(match &self.current_view {
+                        AppView::SelectPrompt { .. } => "content.promptChoices",
+                        _ => "content.promptDrop",
+                    })
                     .with_flex_column()
                     .with_flex_grow(1.0)
                     .with_depth(2)

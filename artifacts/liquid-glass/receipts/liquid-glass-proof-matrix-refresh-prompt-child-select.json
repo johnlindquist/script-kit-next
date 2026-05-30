@@ -5,7 +5,7 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T05:35:26.469Z",
+  "generatedAt": "2026-05-30T05:31:43.924Z",
   "summary": {
     "surfaceCount": 29,
     "strongProofSurfaceCount": 4,
@@ -752,15 +752,10 @@
       "evidence": {
         "screenshots": [],
         "layoutReceipts": [
-          "artifacts/liquid-glass/receipts/window-priority-prompt-child-editor-fixed-layout-sdk.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-child-select-current-layout-sdk.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-child-select-fixed-layout-sdk.json"
         ],
         "inspectReceipts": [
-          "artifacts/liquid-glass/receipts/window-priority-prompt-child-editor-fixed-layout-sdk.json",
-          "artifacts/liquid-glass/receipts/window-priority-prompt-child-editor-fixed-open-sdk.json",
-          "artifacts/liquid-glass/receipts/window-priority-prompt-child-editor-fixed-screenshot-sdk.json",
-          "artifacts/liquid-glass/receipts/window-priority-prompt-child-editor-session-start.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-child-select-current-layout-sdk.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-child-select-current-open-sdk.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-child-select-current-screenshot-sdk.json",
@@ -784,7 +779,7 @@
           }
         },
         "notes": [
-          "visualAudit: artifacts/liquid-glass/receipts/window-priority-prompt-child-editor-fixed-layout-sdk.json"
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-prompt-child-select-fixed-layout-sdk.json"
         ]
       }
     },
