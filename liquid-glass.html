@@ -185,6 +185,12 @@
       background: var(--panel-strong);
     }
 
+    figure img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
     .placeholder {
       display: grid;
       min-height: 160px;
@@ -232,14 +238,14 @@
     <section class="grid">
       <div class="panel">
         <h2>Run State</h2>
-      <p><span class="status done">baseline committed</span> <span class="status done">first visual receipt slice verified</span></p>
+        <p><span class="status done">baseline committed</span> <span class="status done">visual receipt slice verified</span> <span class="status done">Tahoe action metrics captured</span> <span class="status todo">local commit only</span></p>
         <table>
           <tbody>
             <tr><th>Branch</th><td><code>main</code></td></tr>
             <tr><th>Head at start</th><td><code>5c4b1f15c</code> Enable Tahoe liquid glass backgrounds</td></tr>
             <tr><th>Audit baseline commit</th><td><code>15f8a410c</code> Start Liquid Glass visual audit</td></tr>
-            <tr><th>Latest observed head</th><td><code>456ed6e34</code> Add Liquid Glass visual style receipts</td></tr>
-            <tr><th>CI</th><td><a href="https://github.com/johnlindquist/script-kit-next/actions/runs/26671235849">26671235849</a>, artifact build in progress at last manager poll</td></tr>
+            <tr><th>Latest observed head</th><td><code>920c8a812</code> Log Liquid Glass image diff recommendation</td></tr>
+            <tr><th>CI</th><td><a href="https://github.com/johnlindquist/script-kit-next/actions/runs/26671812080">26671812080</a> for pushed head <code>920c8a812</code> was still in progress when checked from this local-only commit. Prior run <code>26671235849</code> was cancelled.</td></tr>
             <tr><th>Artifact root</th><td><code>artifacts/liquid-glass/</code></td></tr>
           </tbody>
         </table>
@@ -266,7 +272,7 @@
           <tr><th>Batch</th><th>Surface families</th><th>Status</th><th>Oracle / Evidence</th></tr>
         </thead>
         <tbody>
-          <tr><td>Launcher main actions</td><td>ScriptList, ActionsDialog, ConfirmPrompt, footer, source filters, shortcuts, aliases</td><td class="done">before captured</td><td><code>before-main-*.json</code>, <code>before-actions-*.json</code>, screenshot paths below</td></tr>
+          <tr><td>Launcher main actions</td><td>ScriptList, ActionsDialog, ConfirmPrompt, footer, source filters, shortcuts, aliases</td><td class="done">Tahoe metrics slice captured</td><td><code>before-main-*.json</code>, <code>before-actions-*.json</code>, <code>tahoe-next-*.json</code>, screenshot paths below</td></tr>
           <tr><td>Prompt runtime</td><td>arg/div/form/select/path/drop/template/chat/mini/micro, terminal, editor, webcam</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
           <tr><td>Built-ins</td><td>Clipboard, App Launcher, Window Switcher, Browser Tabs, Settings, Kit Store, Process Manager, Current App, Theme, Emoji, ACP History</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
           <tr><td>Portals/resources</td><td>File search mini/full, attachment portals, SDK reference, script templates, MCP resources</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
@@ -308,7 +314,7 @@
         </thead>
         <tbody>
           <tr><td>Main launcher</td><td><code>layout.ts measure</code>, <code>inspect.ts</code>, <code>verify-shot.ts</code></td><td>Window 750x480; Header 45 high; SearchInput 534x22 at 16,11; list rows 40 high; LogoButton 20x28; ActionsButton 85x28; RunButton 55x28; screenshot nonblack ratio 0.705</td><td><code>after-main-layout-visual-style.json</code>: 14/14 styled nodes, layers content=9 and functionalChrome=5, no hit failures, no content glass nodes. SearchInput hitBounds now 534x28 while visualBounds remain 534x22.</td><td>Corner/material/hit metadata now exists for main layout; contrast and center-distance still missing.</td></tr>
-          <tr><td>Actions dialog</td><td><code>actions.ts inspect</code>, <code>layout.ts measure</code>, <code>automation-window.ts inspect</code>, <code>verify-shot.ts</code></td><td>Target 320x338 at 800,221; screenshot nonblack ratio 0.803; action layout fields mostly null</td><td><code>after-actions-layout-visual-style.json</code>: 22/22 styled nodes, layers floatingTransient=1, functionalChrome=11, content=10, no content glass nodes.</td><td>Popup visual/style metadata exists; action inspect still needs richer disabled-reason and popup placement geometry.</td></tr>
+          <tr><td>Actions dialog</td><td><code>actions.ts inspect</code>, <code>layout.ts measure</code>, <code>automation-window.ts inspect</code>, <code>verify-shot.ts</code></td><td>Original target 320x338 at 800,221; screenshot nonblack ratio 0.803; action rows 30 high; search 36 high; popup corners sharp in render and 16px in earlier style receipt.</td><td><code>tahoe-next-actions-layout.json</code>: target 340x402, popup corner radius 18, search 340x40 with 14px radius, action rows 340x36 with 10px radius, section headers 22 high, shortcuts 22 high, 21/21 styled nodes, no content glass nodes. Screenshot <code>tahoe-next-actions.png</code> nonblack ratio 0.705.</td><td>Section headers and shortcut keycaps intentionally have visual heights under 28; DevTools records shortcut exception <code>denseKeyboardHint</code>. Need explicit section-header semantic exception or separate hit bounds, plus popup placement deltas.</td></tr>
           <tr><td>Notes</td><td><code>notes.ts inspect</code>, <code>verify-shot.ts</code></td><td>Target 350x280 at 1112,50; screenshot nonblack ratio 0.673; inspect classified blocked-by-missing-primitive for deeper layout state</td><td>pending</td><td>Need visual material/corner extraction and Notes layout pressure fields.</td></tr>
           <tr><td>Dictation</td><td><code>dictation.ts inspect</code></td><td>pending</td><td>pending</td><td>Need overlay screenshot and measured compact controls.</td></tr>
         </tbody>
@@ -344,12 +350,20 @@
       <h2>After Screenshots</h2>
       <div class="shot-grid">
         <figure>
-          <a href="artifacts/liquid-glass/screenshots/after-main-only-visual-style.png"><img src="artifacts/liquid-glass/screenshots/after-main-only-visual-style.png" alt="After screenshot of the main launcher after visual style receipts" style="display:block;width:100%;height:auto"></a>
+          <a href="artifacts/liquid-glass/screenshots/after-main-only-visual-style.png"><img src="artifacts/liquid-glass/screenshots/after-main-only-visual-style.png" alt="After screenshot of the main launcher after visual style receipts"></a>
           <figcaption>Main launcher after first receipt slice: <code>artifacts/liquid-glass/screenshots/after-main-only-visual-style.png</code>. Visual appearance is intentionally unchanged; proof is in layout/style receipts.</figcaption>
         </figure>
         <figure>
-          <a href="artifacts/liquid-glass/screenshots/after-actions-visual-style.png"><img src="artifacts/liquid-glass/screenshots/after-actions-visual-style.png" alt="After screenshot of actions dialog after visual style receipts" style="display:block;width:100%;height:auto"></a>
+          <a href="artifacts/liquid-glass/screenshots/after-actions-visual-style.png"><img src="artifacts/liquid-glass/screenshots/after-actions-visual-style.png" alt="After screenshot of actions dialog after visual style receipts"></a>
           <figcaption>Actions dialog after first receipt slice: <code>artifacts/liquid-glass/screenshots/after-actions-visual-style.png</code>. Receipt: <code>after-actions-layout-visual-style.json</code>.</figcaption>
+        </figure>
+        <figure>
+          <a href="artifacts/liquid-glass/screenshots/tahoe-next-main.png"><img src="artifacts/liquid-glass/screenshots/tahoe-next-main.png" alt="Tahoe metrics screenshot of the main launcher"></a>
+          <figcaption>Main launcher after Tahoe metric slice: <code>artifacts/liquid-glass/screenshots/tahoe-next-main.png</code>. Receipts: <code>tahoe-next-main-layout.json</code>, <code>tahoe-next-main-key-metrics.json</code>.</figcaption>
+        </figure>
+        <figure>
+          <a href="artifacts/liquid-glass/screenshots/tahoe-next-actions.png"><img src="artifacts/liquid-glass/screenshots/tahoe-next-actions.png" alt="Tahoe metrics screenshot of the actions dialog"></a>
+          <figcaption>Actions dialog after Tahoe metric slice: <code>artifacts/liquid-glass/screenshots/tahoe-next-actions.png</code>. Receipts: <code>tahoe-next-actions-layout.json</code>, <code>tahoe-next-actions-key-metrics.json</code>.</figcaption>
         </figure>
       </div>
     </section>
@@ -388,6 +402,10 @@
         <div class="entry">
           <time>2026-05-29 20:00 MDT</time>
           <p>Added a standing recommendation for future Tahoe slices to use an image-diffing library, with diff masks and JSON receipts that explicitly call out rounded-corner, padding, hit-target, row-height, popup-anchor, and material-region changes.</p>
+        </div>
+        <div class="entry">
+          <time>2026-05-29 20:45 MDT</time>
+          <p>Applied the first visible Tahoe metric slice locally: ActionsDialog width 340, popup radius 18, search height 40, row height 36, section header height 22, row radius 10, launcher selected-row render radius 10, and footer keycap/action gaps/radii updated to the 22/6/4/10 token set. Runtime receipts from session <code>liquid-glass-tahoe-next</code> captured <code>tahoe-next-main.png</code>, <code>tahoe-next-actions.png</code>, and key metric JSON. Focused tests and <code>check --lib</code>/<code>build --bin script-kit-gpui</code> passed; broad <code>actions_dialog</code> filter exposed an unrelated ACP escape test failure to track separately.</p>
         </div>
       </div>
     </section>

@@ -1,0 +1,458 @@
+{
+  "classification": "ok",
+  "visualAudit": {
+    "nodeCount": 14,
+    "styledNodeCount": 14,
+    "unstyledNodeCount": 0,
+    "controlsWithHitFailures": [],
+    "contentGlassNodes": [],
+    "missingStyleNodeNames": [],
+    "chromeLayers": {
+      "content": 9,
+      "functionalChrome": 5
+    }
+  },
+  "nodes": [
+    {
+      "name": "SearchInput",
+      "type": "input",
+      "bounds": {
+        "x": 16,
+        "y": 11,
+        "width": 534,
+        "height": 22
+      },
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.searchInput",
+        "cornerRadius": {
+          "topLeft": 14,
+          "topRight": 14,
+          "bottomRight": 14,
+          "bottomLeft": 14
+        },
+        "visualBounds": {
+          "x": 16,
+          "y": 11,
+          "width": 534,
+          "height": 22
+        },
+        "hitBounds": {
+          "x": 16,
+          "y": 8,
+          "width": 534,
+          "height": 28
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 16,
+          "y": 8,
+          "width": 534,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 16,
+          "y": 11,
+          "width": 534,
+          "height": 22
+        },
+        "hitWidth": 534,
+        "hitHeight": 28,
+        "visualWidth": 534,
+        "visualHeight": 22,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      }
+    },
+    {
+      "name": "ListItem[0]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 45,
+        "width": 375,
+        "height": 40
+      },
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.listItem",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 45,
+          "width": 375,
+          "height": 40
+        },
+        "hitWidth": 375,
+        "hitHeight": 40,
+        "visualWidth": 375,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      }
+    },
+    {
+      "name": "ListItem[1]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 85,
+        "width": 375,
+        "height": 40
+      },
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.listItem",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 85,
+          "width": 375,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 85,
+          "width": 375,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 85,
+          "width": 375,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 85,
+          "width": 375,
+          "height": 40
+        },
+        "hitWidth": 375,
+        "hitHeight": 40,
+        "visualWidth": 375,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      }
+    },
+    {
+      "name": "ListItem[2]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 125,
+        "width": 375,
+        "height": 40
+      },
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.listItem",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 125,
+          "width": 375,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 125,
+          "width": 375,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 125,
+          "width": 375,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 125,
+          "width": 375,
+          "height": 40
+        },
+        "hitWidth": 375,
+        "hitHeight": 40,
+        "visualWidth": 375,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      }
+    },
+    {
+      "name": "ListItem[3]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 165,
+        "width": 375,
+        "height": 40
+      },
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.listItem",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 165,
+          "width": 375,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 165,
+          "width": 375,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 165,
+          "width": 375,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 165,
+          "width": 375,
+          "height": 40
+        },
+        "hitWidth": 375,
+        "hitHeight": 40,
+        "visualWidth": 375,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      }
+    },
+    {
+      "name": "ListItem[4]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 205,
+        "width": 375,
+        "height": 40
+      },
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.listItem",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 205,
+          "width": 375,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 205,
+          "width": 375,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 205,
+          "width": 375,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 205,
+          "width": 375,
+          "height": 40
+        },
+        "hitWidth": 375,
+        "hitHeight": 40,
+        "visualWidth": 375,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      }
+    },
+    {
+      "name": "LogoButton",
+      "type": "button",
+      "bounds": {
+        "x": 714,
+        "y": 8,
+        "width": 20,
+        "height": 28
+      },
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.headerButton",
+        "cornerRadius": {
+          "topLeft": 14,
+          "topRight": 14,
+          "bottomRight": 14,
+          "bottomLeft": 14
+        },
+        "visualBounds": {
+          "x": 714,
+          "y": 8,
+          "width": 20,
+          "height": 28
+        },
+        "hitBounds": {
+          "x": 714,
+          "y": 8,
+          "width": 28,
+          "height": 28
+        },
+        "exception": "compactIconButton"
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 714,
+          "y": 8,
+          "width": 28,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 714,
+          "y": 8,
+          "width": 20,
+          "height": 28
+        },
+        "hitWidth": 28,
+        "hitHeight": 28,
+        "visualWidth": 20,
+        "visualHeight": 28,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": "compactIconButton"
+      }
+    },
+    {
+      "name": "ActionsButton",
+      "type": "button",
+      "bounds": {
+        "x": 605,
+        "y": 8,
+        "width": 85,
+        "height": 28
+      },
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.headerButton",
+        "cornerRadius": {
+          "topLeft": 14,
+          "topRight": 14,
+          "bottomRight": 14,
+          "bottomLeft": 14
+        },
+        "visualBounds": {
+          "x": 605,
+          "y": 8,
+          "width": 85,
+          "height": 28
+        },
+        "hitBounds": {
+          "x": 605,
+          "y": 8,
+          "width": 85,
+          "height": 28
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 605,
+          "y": 8,
+          "width": 85,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 605,
+          "y": 8,
+          "width": 85,
+          "height": 28
+        },
+        "hitWidth": 85,
+        "hitHeight": 28,
+        "visualWidth": 85,
+        "visualHeight": 28,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      }
+    }
+  ]
+}

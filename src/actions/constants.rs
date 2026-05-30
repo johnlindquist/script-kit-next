@@ -3,7 +3,7 @@
 //! Overlay popup dimensions and styling constants used by the ActionsDialog.
 
 /// Popup width for the actions dialog
-pub const POPUP_WIDTH: f32 = 320.0;
+pub const POPUP_WIDTH: f32 = 340.0;
 
 /// Maximum height for the actions dialog popup
 pub const POPUP_MAX_HEIGHT: f32 = 400.0;
@@ -12,17 +12,17 @@ pub const POPUP_MAX_HEIGHT: f32 = 400.0;
 pub const NOTES_RECENT_POPUP_MAX_HEIGHT: f32 = 560.0;
 
 /// Fixed height for action items (required for uniform_list virtualization)
-/// Compact height at 30px for tight, distilled appearance
-pub const ACTION_ITEM_HEIGHT: f32 = 30.0;
+/// Comfortable Tahoe action row height.
+pub const ACTION_ITEM_HEIGHT: f32 = 36.0;
 
 /// Fixed height for the search input row
-pub const SEARCH_INPUT_HEIGHT: f32 = 36.0;
+pub const SEARCH_INPUT_HEIGHT: f32 = 40.0;
 
 /// Width of the left accent bar for selected items (legacy, kept for reference)
 pub const ACCENT_BAR_WIDTH: f32 = 3.0;
 
 /// Height for the header row showing context title (matches section header style)
-pub const HEADER_HEIGHT: f32 = 24.0;
+pub const HEADER_HEIGHT: f32 = 26.0;
 
 /// Horizontal padding for section/header rows in the actions dialog
 pub const ACTION_PADDING_X: f32 = 12.0;
@@ -31,10 +31,14 @@ pub const ACTION_PADDING_X: f32 = 12.0;
 pub const ACTION_PADDING_TOP: f32 = 8.0;
 
 /// Height for section headers within the action list (used when SectionStyle::Headers is enabled)
-pub const SECTION_HEADER_HEIGHT: f32 = 20.0;
+pub const SECTION_HEADER_HEIGHT: f32 = 22.0;
 
 /// Horizontal inset for action rows (creates rounded pill appearance)
-pub const ACTION_ROW_INSET: f32 = 4.0;
+pub const ACTION_ROW_INSET: f32 = 8.0;
+
+/// Outer and inner radius for the Tahoe-style actions popup shell.
+pub const ACTIONS_POPUP_RADIUS: f32 = 18.0;
+pub const ACTIONS_ROW_RADIUS: f32 = 10.0;
 
 /// `.impeccable.md` contract: actions dialog groups are spacing-defined headers.
 pub const ACTIONS_DIALOG_EXPECT_SECTION_MODE: &str = "headers";
@@ -57,7 +61,7 @@ mod tests {
 
     #[test]
     fn test_popup_constants() {
-        assert_eq!(POPUP_WIDTH, 320.0);
+        assert_eq!(POPUP_WIDTH, 340.0);
         assert_eq!(POPUP_MAX_HEIGHT, 400.0);
         assert_eq!(NOTES_RECENT_POPUP_MAX_HEIGHT, 560.0);
         assert!(NOTES_RECENT_POPUP_MAX_HEIGHT > POPUP_MAX_HEIGHT);
@@ -65,7 +69,7 @@ mod tests {
 
     #[test]
     fn test_action_item_height_constant() {
-        assert_eq!(ACTION_ITEM_HEIGHT, 30.0);
+        assert_eq!(ACTION_ITEM_HEIGHT, 36.0);
         const _: () = assert!(ACTION_ITEM_HEIGHT > 0.0);
         const _: () = assert!(ACTION_ITEM_HEIGHT < POPUP_MAX_HEIGHT);
     }

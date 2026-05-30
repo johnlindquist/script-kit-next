@@ -30,7 +30,8 @@ use super::builders::{
     get_scriptlet_context_actions_with_custom, ChatPromptInfo, ClipboardEntryInfo, EmojiActionInfo,
 };
 use super::constants::{
-    ACTION_ROW_INSET, HEADER_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT,
+    ACTIONS_POPUP_RADIUS, ACTIONS_ROW_RADIUS, ACTION_ITEM_HEIGHT, ACTION_ROW_INSET, HEADER_HEIGHT,
+    POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT,
 };
 use crate::file_search::FileInfo;
 use crate::scriptlets::Scriptlet;
@@ -78,10 +79,10 @@ fn actions_dialog_default_style() -> ActionsDialogStyleFallback {
         show_header: true,
         show_search_divider: false,
         show_icons: false,
-        selection_opacity: 1.0,
-        hover_opacity: 1.0,
-        row_height: 30.0,
-        row_radius: 6.0,
+        selection_opacity: 0.72,
+        hover_opacity: 0.56,
+        row_height: ACTION_ITEM_HEIGHT,
+        row_radius: ACTIONS_ROW_RADIUS,
         shortcut_visible: true,
         mono_font: false,
         prefix_marker: None,
@@ -1981,7 +1982,7 @@ impl ActionsDialog {
                 .with_visual_style(
                     chrome_tokens::CHROME_LAYER_FLOATING,
                     chrome_tokens::MATERIAL_NS_VISUAL_EFFECT,
-                    Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    Some(ACTIONS_POPUP_RADIUS),
                 )
                 .with_visual_token("chrome.actionsDialog")
                 .with_flex_column()
@@ -2091,7 +2092,7 @@ impl ActionsDialog {
                                 chrome_tokens::CHROME_LAYER_CONTENT
                             },
                             chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                            Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                            Some(ACTIONS_ROW_RADIUS),
                         )
                         .with_visual_token(if kind == "section" {
                             "chrome.actionsSection"
@@ -4165,7 +4166,7 @@ impl Render for ActionsDialog {
             .w(px(POPUP_WIDTH))
             .h(px(total_height)) // Use calculated height including footer
             .when(!use_vibrancy, |d| d.bg(main_bg))
-            .rounded(px(0.0))
+            .rounded(px(ACTIONS_POPUP_RADIUS))
             .overflow_hidden()
             .text_color(container_text)
             .text_color(container_text)
@@ -4201,7 +4202,7 @@ impl Render for ActionsDialog {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize))]
 pub(crate) struct ActionsDialogChromeAudit {
-    /// `"sharp"` (no rounded corners) or `"rounded"`.
+    /// `"sharp"` (no rounded corners), `"rounded"`, or `"rounded_glass"`.
     pub container_mode: &'static str,
     /// `"top"` or `"bottom"`.
     pub search_position: &'static str,
@@ -4222,7 +4223,7 @@ impl ActionsDialogChromeAudit {
     pub(crate) fn from_live_defaults() -> Self {
         let style = actions_dialog_default_style();
         Self {
-            container_mode: "sharp",
+            container_mode: "rounded_glass",
             search_position: super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_POSITION,
             shows_search_divider: style.show_search_divider,
             show_container_border: style.show_container_border,
@@ -4238,7 +4239,7 @@ impl ActionsDialogChromeAudit {
         style: &crate::storybook::actions_dialog_variations::ActionsDialogStyle,
     ) -> Self {
         Self {
-            container_mode: "sharp",
+            container_mode: "rounded_glass",
             search_position: super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_POSITION,
             shows_search_divider: style.show_search_divider,
             show_container_border: style.show_container_border,
@@ -4682,8 +4683,8 @@ mod tests {
             crate::actions::constants::POPUP_MAX_HEIGHT,
         );
 
-        // POPUP_MAX_HEIGHT (400) - SEARCH_INPUT_HEIGHT (36) - HEADER_HEIGHT (24) - footer (32)
-        assert_eq!(viewport_height, 308.0);
+        // POPUP_MAX_HEIGHT (400) - SEARCH_INPUT_HEIGHT (40) - HEADER_HEIGHT (26) - footer (32)
+        assert_eq!(viewport_height, 302.0);
     }
 
     #[test]
@@ -4853,15 +4854,14 @@ mod tests {
         );
     }
 
-    /// The Storybook presenter must use a sharp (non-rounded) container
-    /// to match the live dialog's `.impeccable.md` spec: "No rounded
-    /// corners. Sharp edges matching the main window."
+    /// The Storybook presenter must use the same rounded glass container mode
+    /// as the live dialog.
     #[test]
-    fn actions_dialog_story_presenter_uses_sharp_container() {
+    fn actions_dialog_story_presenter_uses_rounded_glass_container() {
         let audit = ActionsDialogChromeAudit::from_live_defaults();
         assert_eq!(
-            audit.container_mode, "sharp",
-            "container must be sharp (no rounded corners) per .impeccable.md"
+            audit.container_mode, "rounded_glass",
+            "container must expose Tahoe rounded glass chrome"
         );
 
         // Also verify the Storybook "current" variant agrees
@@ -5024,7 +5024,7 @@ mod actions_dialog_spec_tests {
     #[test]
     fn live_defaults_match_impeccable_contract() {
         let audit = ActionsDialogChromeAudit::from_live_defaults();
-        assert_eq!(audit.container_mode, "sharp");
+        assert_eq!(audit.container_mode, "rounded_glass");
         assert_eq!(audit.search_position, "top");
         assert!(!audit.shows_search_divider);
         assert_eq!(audit.section_mode, "headers");

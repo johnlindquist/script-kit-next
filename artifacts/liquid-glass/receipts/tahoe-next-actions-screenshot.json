@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 3,
+  "status": "pass",
+  "label": "tahoe-next-actions",
+  "timestamp": "2026-05-30T02:45:30.642Z",
+  "durationMs": 1982,
+  "requiresVisionReview": false,
+  "resolvedTarget": {
+    "windowId": "actions-dialog",
+    "windowKind": "ActionsDialog",
+    "title": "Actions",
+    "surfaceId": null
+  },
+  "dispatchPath": "window_role_fallback",
+  "resolvedWindowId": "actions-dialog",
+  "osWindowId": 83433,
+  "inspectionOsWindowId": 83433,
+  "captureRouting": "cli-window-id",
+  "requestedAutomationWindowId": "actions-dialog",
+  "requestedOsWindowId": 83433,
+  "showIssuedBeforeCapture": false,
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-next-actions.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": "quartz",
+    "windowId": 83433
+  },
+  "captureTarget": {
+    "requestedWindowId": 83433,
+    "actualWindowId": 83433
+  },
+  "inspection": {
+    "automationWindowId": "actions-dialog",
+    "windowKind": "ActionsDialog",
+    "title": "Actions",
+    "osWindowId": 83433,
+    "targetBoundsInScreenshot": {
+      "x": 205,
+      "y": 44,
+      "width": 340,
+      "height": 402
+    },
+    "screenshotWidth": 340,
+    "screenshotHeight": 402,
+    "pixelProbes": [],
+    "warnings": []
+  },
+  "popupCapture": {
+    "strategy": "parent_capture_with_crop",
+    "windowKind": "ActionsDialog",
+    "targetBounds": {
+      "x": 205,
+      "y": 44,
+      "width": 340,
+      "height": 402
+    },
+    "semanticReceiptsArePrimary": true
+  },
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": true,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-next-actions.png",
+    "sizeBytes": 576793,
+    "width": 1724,
+    "height": 1184,
+    "contentAudit": {
+      "sampledPixels": 2041216,
+      "nonBlackPixels": 1438938,
+      "nonTransparentPixels": 1953678,
+      "uniqueBucketCount": 56,
+      "meanLuma": 66.97324389937546,
+      "maxLuma": 254.99999999999997,
+      "nonBlackRatio": 0.7049415642440584,
+      "blank": false
+    },
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": "quartz",
+    "windowFrontmost": true,
+    "windowFocused": true,
+    "windowId": 83433,
+    "error": null
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: /Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/tahoe-next-actions.png (576793B)"
+}

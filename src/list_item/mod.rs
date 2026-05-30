@@ -1119,6 +1119,8 @@ pub struct TypeAccessory {
 }
 /// Width of the left accent bar for selected items
 pub const ACCENT_BAR_WIDTH: f32 = 3.0;
+/// Rounded selected/hover row radius for Tahoe/Liquid Glass visual hierarchy.
+pub const LIST_ITEM_ROW_RADIUS_PX: f32 = crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX;
 
 /// Collapse newlines (and surrounding whitespace) into a single space
 /// so that list item text always renders on one line.
@@ -1707,7 +1709,7 @@ impl RenderOnce for ListItem {
             .pr(px(ITEM_PADDING_X))
             .py(px(ITEM_PADDING_Y))
             .bg(bg_color)
-            .rounded(px(6.0))
+            .rounded(px(LIST_ITEM_ROW_RADIUS_PX))
             .text_color(rgb(colors.text_primary))
             .font_family(FONT_SYSTEM_UI)
             .cursor_pointer()

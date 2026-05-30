@@ -3654,7 +3654,7 @@ mod from_dialog_builtin_action_validation_tests_34 {
     #[test]
     fn constant_popup_width_320() {
         use crate::actions::constants::POPUP_WIDTH;
-        assert_eq!(POPUP_WIDTH, 320.0);
+        assert_eq!(POPUP_WIDTH, 340.0);
     }
 
     #[test]
@@ -3666,13 +3666,13 @@ mod from_dialog_builtin_action_validation_tests_34 {
     #[test]
     fn constant_action_item_height_30() {
         use crate::actions::constants::ACTION_ITEM_HEIGHT;
-        assert_eq!(ACTION_ITEM_HEIGHT, 30.0);
+        assert_eq!(ACTION_ITEM_HEIGHT, 36.0);
     }
 
     #[test]
     fn constant_search_input_height_36() {
         use crate::actions::constants::SEARCH_INPUT_HEIGHT;
-        assert_eq!(SEARCH_INPUT_HEIGHT, 36.0);
+        assert_eq!(SEARCH_INPUT_HEIGHT, 40.0);
     }
 
     // =====================================================================
@@ -5335,12 +5335,12 @@ mod from_dialog_builtin_action_validation_tests_35 {
 
     #[test]
     fn constant_section_header_height() {
-        assert_eq!(SECTION_HEADER_HEIGHT, 20.0);
+        assert_eq!(SECTION_HEADER_HEIGHT, 22.0);
     }
 
     #[test]
     fn constant_header_height() {
-        assert_eq!(HEADER_HEIGHT, 24.0);
+        assert_eq!(HEADER_HEIGHT, 26.0);
     }
 
     #[test]
@@ -5362,7 +5362,7 @@ mod from_dialog_builtin_action_validation_tests_35 {
 
     #[test]
     fn constant_search_input_height() {
-        assert_eq!(SEARCH_INPUT_HEIGHT, 36.0);
+        assert_eq!(SEARCH_INPUT_HEIGHT, 40.0);
     }
 
     // =====================================================================
@@ -6478,7 +6478,9 @@ mod from_dialog_builtin_action_validation_tests_36 {
             is_dir: false,
         };
         let actions = get_path_context_actions(&pi);
-        assert!(actions.iter().any(|a| a.id == "file:open_in_quick_terminal"));
+        assert!(actions
+            .iter()
+            .any(|a| a.id == "file:open_in_quick_terminal"));
     }
 
     // =====================================================================
@@ -12846,7 +12848,9 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 is_dir: false,
             };
             let actions = get_path_context_actions(&info);
-            assert!(actions.iter().any(|a| a.id == "file:open_in_quick_terminal"));
+            assert!(actions
+                .iter()
+                .any(|a| a.id == "file:open_in_quick_terminal"));
         }
 
         #[test]
@@ -15817,7 +15821,9 @@ mod from_dialog_builtin_action_validation_tests_45 {
             is_dir: true,
         };
         let actions = get_path_context_actions(&path_info);
-        assert!(actions.iter().any(|a| a.id == "file:open_in_quick_terminal"));
+        assert!(actions
+            .iter()
+            .any(|a| a.id == "file:open_in_quick_terminal"));
         assert!(actions.iter().any(|a| a.id == "file:move_to_trash"));
     }
 

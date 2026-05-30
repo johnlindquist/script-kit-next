@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.compare",
+  "command": "compare.redgreen",
+  "classification": "ok",
+  "redReceiptIds": [
+    "artifacts/liquid-glass/receipts/after-actions-layout-visual-style.json"
+  ],
+  "greenReceiptIds": [
+    "artifacts/liquid-glass/receipts/tahoe-next-actions-layout.json"
+  ],
+  "samePrimitiveStack": true,
+  "sameUserPath": true,
+  "sameTargetSelector": true,
+  "targetIdentityComparable": true,
+  "assertions": {
+    "samePrimitiveStack": true,
+    "sameUserPath": true,
+    "sameTargetSelector": true,
+    "targetIdentityComparable": true,
+    "metricNamesComparable": true
+  },
+  "primitiveStack": {
+    "red": [
+      "script-kit-devtools.layout",
+      "layout.measure"
+    ],
+    "green": [
+      "script-kit-devtools.layout",
+      "layout.measure"
+    ]
+  },
+  "targetSelector": {
+    "red": {
+      "type": "kind",
+      "kind": "actionsDialog"
+    },
+    "green": {
+      "type": "kind",
+      "kind": "actionsDialog"
+    }
+  },
+  "targetIdentity": {
+    "red": {
+      "automationId": "actions-dialog",
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "targetKind": "ActionsDialog"
+    },
+    "green": {
+      "automationId": "actions-dialog",
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "targetKind": "ActionsDialog"
+    }
+  },
+  "metricNames": {
+    "red": [
+      "resizePressure.clippedNodeCount",
+      "resizePressure.desiredContentHeight",
+      "resizePressure.measuredContentHeight",
+      "resizePressure.overflowY",
+      "resizePressure.overlapCount",
+      "resizePressure.pressureScore"
+    ],
+    "green": [
+      "resizePressure.clippedNodeCount",
+      "resizePressure.desiredContentHeight",
+      "resizePressure.measuredContentHeight",
+      "resizePressure.overflowY",
+      "resizePressure.overlapCount",
+      "resizePressure.pressureScore"
+    ]
+  },
+  "classificationDelta": {
+    "red": "ok",
+    "green": "ok"
+  },
+  "warnings": [],
+  "errors": []
+}

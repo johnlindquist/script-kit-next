@@ -11,18 +11,18 @@ use crate::ui_foundation::HexColorExt;
 pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.0;
 pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.14;
 pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight(560.0);
-pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 20.0;
-pub(crate) const FOOTER_KEYCAP_PADDING_X_PX: f32 = 3.0;
-pub(crate) const FOOTER_KEYCAP_RADIUS_PX: f32 = 4.0;
+pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 22.0;
+pub(crate) const FOOTER_KEYCAP_PADDING_X_PX: f32 = 5.0;
+pub(crate) const FOOTER_KEYCAP_RADIUS_PX: f32 = 6.0;
 pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_SEMICOLON_GLYPH_NUDGE_Y_PX: f32 = -1.0;
 pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;
-pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 3.0;
-pub(crate) const FOOTER_ACTION_CONTENT_GAP_PX: f32 = 2.0;
-pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX: f32 = 2.0;
+pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 6.0;
+pub(crate) const FOOTER_ACTION_CONTENT_GAP_PX: f32 = 4.0;
+pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX: f32 = 4.0;
 pub(crate) const FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX: f32 = 6.0;
-pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 4.0;
+pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 10.0;
 pub(crate) const FOOTER_RUN_SLOT_MIN_WIDTH_PX: f32 = 92.0;
 pub(crate) const FOOTER_RUN_SLOT_MAX_WIDTH_PX: f32 = 242.0;
 pub(crate) const FOOTER_ACTIONS_SLOT_WIDTH_PX: f32 = 92.0;
@@ -837,10 +837,10 @@ mod tests {
 
     #[test]
     fn footer_horizontal_run_width_uses_gap_only_between_items() {
-        // 40 + 20 + 20 + 2 gaps * 3px = 86
+        // 40 + 20 + 20 + 2 gaps * 6px = 92
         assert_eq!(
             footer_horizontal_run_width_px(&[40.0, 20.0, 20.0], FOOTER_ACTION_ITEM_GAP_PX),
-            86.0
+            92.0
         );
         assert_eq!(
             footer_horizontal_run_width_px(&[], FOOTER_ACTION_ITEM_GAP_PX),
@@ -857,12 +857,12 @@ mod tests {
     fn footer_horizontal_run_origins_use_constant_gap() {
         assert_eq!(
             footer_horizontal_run_origins_px(&[40.0, 20.0, 20.0], FOOTER_ACTION_ITEM_GAP_PX, 0.0),
-            vec![0.0, 43.0, 66.0]
+            vec![0.0, 46.0, 72.0]
         );
         // The same run anchored at a non-zero origin just shifts every item.
         assert_eq!(
             footer_horizontal_run_origins_px(&[40.0, 20.0], FOOTER_ACTION_ITEM_GAP_PX, 10.0),
-            vec![10.0, 53.0]
+            vec![10.0, 56.0]
         );
     }
 
@@ -880,10 +880,10 @@ mod tests {
 
     #[test]
     fn footer_action_chrome_tokens_match_native_footer_contract() {
-        assert_eq!(FOOTER_ACTION_ITEM_GAP_PX, 3.0);
-        assert_eq!(FOOTER_ACTION_CONTENT_GAP_PX, 2.0);
-        assert_eq!(FOOTER_ACTION_CONTENT_PADDING_X_PX, 2.0);
-        assert_eq!(FOOTER_ACTION_BUTTON_RADIUS_PX, 4.0);
+        assert_eq!(FOOTER_ACTION_ITEM_GAP_PX, 6.0);
+        assert_eq!(FOOTER_ACTION_CONTENT_GAP_PX, 4.0);
+        assert_eq!(FOOTER_ACTION_CONTENT_PADDING_X_PX, 4.0);
+        assert_eq!(FOOTER_ACTION_BUTTON_RADIUS_PX, 10.0);
         assert_eq!(FOOTER_RUN_SLOT_MIN_WIDTH_PX, 92.0);
         assert_eq!(FOOTER_RUN_SLOT_MAX_WIDTH_PX, 242.0);
         assert_eq!(footer_action_slot_width(FooterActionSlot::Actions), 92.0);
