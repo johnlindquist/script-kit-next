@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.list",
+  "session": "liquid-glass-notes-acp",
+  "classification": "ok",
+  "targetCount": 2,
+  "targets": [
+    {
+      "index": 0,
+      "automationId": "main",
+      "windowKind": "Main",
+      "title": "Script Kit",
+      "visible": false,
+      "focused": false,
+      "bounds": {
+        "x": 2097,
+        "y": -903,
+        "width": 750,
+        "height": 152
+      },
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "parentAutomationId": null,
+      "parentKind": null,
+      "pid": 33854
+    },
+    {
+      "index": 1,
+      "automationId": "notes",
+      "windowKind": "Notes",
+      "title": "Notes",
+      "visible": true,
+      "focused": true,
+      "bounds": {
+        "x": 3062,
+        "y": -1030,
+        "width": 350,
+        "height": 280
+      },
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "parentAutomationId": null,
+      "parentKind": null,
+      "pid": 33854
+    }
+  ],
+  "sessionLifecycle": [],
+  "errors": []
+}
