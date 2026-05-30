@@ -71,7 +71,12 @@ fn shared_prompt_layout_nodes_use_liquid_glass_radius_tokens() {
         );
     }
 
-    for node in ["DivContent", "SelectChoices", "EnvPromptContent"] {
+    for node in [
+        "DivContent",
+        "SelectChoices",
+        "EnvPromptContent",
+        "TerminalContent",
+    ] {
         let start = layout
             .find(&format!("\"{node}\""))
             .unwrap_or_else(|| panic!("{node} layout node should exist"));

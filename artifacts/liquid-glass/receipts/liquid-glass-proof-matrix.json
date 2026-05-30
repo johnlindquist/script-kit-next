@@ -3,9 +3,9 @@
   "tool": "script-kit-devtools.liquid-glass-proof",
   "command": "proof.matrix",
   "classification": "incomplete",
-  "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-latest.json",
+  "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T10:26:32.145Z",
+  "generatedAt": "2026-05-30T10:37:15.117Z",
   "summary": {
     "surfaceCount": 29,
     "strongProofSurfaceCount": 2,
@@ -16,7 +16,8 @@
       "screenshot-receipt-error": 6,
       "macos-windowserver-capture-blocked": 17,
       "blank-image-rejected": 1,
-      "low-content-capture-rejected": 5
+      "unknown-capture-failure": 1,
+      "low-content-capture-rejected": 4
     },
     "appRenderProofSurfaceCount": 0,
     "appRenderBlockedSurfaceCount": 3,
@@ -24,16 +25,16 @@
     "appRenderMissingSurfaceCount": 26,
     "offscreenRenderFailedSurfaceCount": 0,
     "offscreenRenderMissingSurfaceCount": 29,
-    "guidelineProofSurfaceCount": 7,
+    "guidelineProofSurfaceCount": 9,
     "guidelineFailedSurfaceCount": 0,
-    "guidelineMissingSurfaceCount": 22,
+    "guidelineMissingSurfaceCount": 20,
     "strongGuidanceProofSurfaceCount": 2,
-    "staleLayoutEvidenceSurfaceCount": 22,
+    "staleLayoutEvidenceSurfaceCount": 20,
     "sourceUiGapSurfaceCount": 0,
-    "guidanceCaptureBlockedSurfaceCount": 5,
+    "guidanceCaptureBlockedSurfaceCount": 7,
     "numericGuidanceMissingOsVisualSurfaceCount": 0,
     "missingGuidanceProofSurfaceCount": 0,
-    "layoutReceiptFreshnessLimitationSurfaceCount": 22,
+    "layoutReceiptFreshnessLimitationSurfaceCount": 20,
     "diagnosticReadbackLimitationSurfaceCount": 3,
     "visualTierDebtSurfaceCount": 25,
     "surfaceProofDebtCount": 27,
@@ -157,7 +158,7 @@
         },
         {
           "surfaceKind": "UtilityChildContent",
-          "proofStatus": "numeric-proof-missing-guideline-assertions"
+          "proofStatus": "numeric-proof-missing-visual-capture"
         },
         {
           "surfaceKind": "Webcam",
@@ -289,7 +290,7 @@
         },
         {
           "surfaceKind": "FileSearchFull",
-          "proofStatus": "numeric-proof-missing-guideline-assertions"
+          "proofStatus": "numeric-proof-missing-visual-capture"
         },
         {
           "surfaceKind": "AttachmentPortalBrowser",
@@ -2374,14 +2375,14 @@
     },
     {
       "surfaceKind": "UtilityChildContent",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "proofTiers": {
         "osScreenshotProof": "blocked",
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "failedTiers": [
@@ -2426,9 +2427,7 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, TerminalContent: artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -2444,11 +2443,16 @@
         "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-open.json",
         "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-screenshot.json",
         "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-target.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-cleanup.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-layout.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-open.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-session-start.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-target.json",
         "artifacts/liquid-glass/receipts/window-priority-utility-quick-session-start.json"
       ],
       "screenshots": [],
       "notes": [
-        "visualAudit: artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-layout.json"
+        "visualAudit: artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-layout.json"
       ]
     },
     {
@@ -2688,14 +2692,14 @@
     },
     {
       "surfaceKind": "FileSearchFull",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "proofTiers": {
         "osScreenshotProof": "blocked",
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "failedTiers": [
@@ -2710,9 +2714,10 @@
       "osScreenshotBlockers": [
         {
           "receipt": "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json",
-          "source": "content-audit",
-          "classification": "low-content-capture-rejected",
-          "nonBlackRatio": 0.000022225455015679047,
+          "source": "os-window-capture",
+          "classification": "unknown-capture-failure",
+          "blockerCode": "unknown-capture-failure",
+          "limitation": "macOS WindowServer screenshot capture did not produce usable pixels; do not count this as OS screenshot proof.",
           "attempts": []
         }
       ],
@@ -2722,13 +2727,14 @@
         "windowIdCaptureProof": "missing",
         "compositorCaptureProof": "blocked",
         "countsAsCompositorEvidence": false,
-        "blockerCode": "blank-compositor-capture",
+        "blockerCode": "unknown-capture-failure",
         "blockers": [
           {
             "receipt": "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json",
-            "source": "content-audit",
-            "classification": "low-content-capture-rejected",
-            "nonBlackRatio": 0.000022225455015679047,
+            "source": "os-window-capture",
+            "classification": "unknown-capture-failure",
+            "blockerCode": "unknown-capture-failure",
+            "limitation": "macOS WindowServer screenshot capture did not produce usable pixels; do not count this as OS screenshot proof.",
             "attempts": []
           }
         ],
@@ -2740,9 +2746,7 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -2756,11 +2760,15 @@
         "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-state.json",
         "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-target.json",
         "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-trigger.json",
-        "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-wait.json"
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-wait.json",
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-session-start.json",
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-show.json",
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-target.json",
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-trigger.json"
       ],
       "screenshots": [],
       "notes": [
-        "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-file-search-full-current.png: receipt artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
+        "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-file-search-full-current.png: receipt artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json is classified as an error",
         "visualAudit: artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json"
       ]
     },
@@ -5919,14 +5927,14 @@
     },
     {
       "surfaceKind": "UtilityChildContent",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "proofTiers": {
         "osScreenshotProof": "blocked",
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "requiredEvidence": {
@@ -5936,7 +5944,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true
@@ -5979,9 +5987,7 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, TerminalContent: artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
@@ -6001,11 +6007,16 @@
         "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-open.json",
         "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-screenshot.json",
         "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-target.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-cleanup.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-layout.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-open.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-session-start.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-target.json",
         "artifacts/liquid-glass/receipts/window-priority-utility-quick-session-start.json"
       ],
       "screenshots": [],
       "notes": [
-        "visualAudit: artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-layout.json"
+        "visualAudit: artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-layout.json"
       ]
     },
     {
@@ -6257,14 +6268,14 @@
     },
     {
       "surfaceKind": "FileSearchFull",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "proofTiers": {
         "osScreenshotProof": "blocked",
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "requiredEvidence": {
@@ -6274,7 +6285,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true
@@ -6287,9 +6298,10 @@
       "osScreenshotBlockers": [
         {
           "receipt": "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json",
-          "source": "content-audit",
-          "classification": "low-content-capture-rejected",
-          "nonBlackRatio": 0.000022225455015679047,
+          "source": "os-window-capture",
+          "classification": "unknown-capture-failure",
+          "blockerCode": "unknown-capture-failure",
+          "limitation": "macOS WindowServer screenshot capture did not produce usable pixels; do not count this as OS screenshot proof.",
           "attempts": []
         }
       ],
@@ -6299,13 +6311,14 @@
         "windowIdCaptureProof": "missing",
         "compositorCaptureProof": "blocked",
         "countsAsCompositorEvidence": false,
-        "blockerCode": "blank-compositor-capture",
+        "blockerCode": "unknown-capture-failure",
         "blockers": [
           {
             "receipt": "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json",
-            "source": "content-audit",
-            "classification": "low-content-capture-rejected",
-            "nonBlackRatio": 0.000022225455015679047,
+            "source": "os-window-capture",
+            "classification": "unknown-capture-failure",
+            "blockerCode": "unknown-capture-failure",
+            "limitation": "macOS WindowServer screenshot capture did not produce usable pixels; do not count this as OS screenshot proof.",
             "attempts": []
           }
         ],
@@ -6317,9 +6330,7 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
@@ -6337,11 +6348,15 @@
         "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-state.json",
         "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-target.json",
         "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-trigger.json",
-        "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-wait.json"
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-wait.json",
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-session-start.json",
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-show.json",
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-target.json",
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-trigger.json"
       ],
       "screenshots": [],
       "notes": [
-        "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-file-search-full-current.png: receipt artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
+        "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-file-search-full-current.png: receipt artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json is classified as an error",
         "visualAudit: artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json"
       ]
     },
@@ -7908,10 +7923,10 @@
       "surfaceKind": "UtilityChildContent",
       "outsideInPriority": 13,
       "priorityGroup": "window-container",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
-      "blockingClass": "stale-layout-evidence",
-      "priority": "freshness-refresh",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
+      "blockingClass": "target-identity-blocked",
+      "priority": "capture-blocker",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -7962,12 +7977,10 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, TerminalContent: artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
+      "recommendedNextAction": "resolve OS compositor capture blocker target-identity-blocked; current source/layout proof is not contradicted",
       "receipts": [
         "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix-refresh-utility-quick.json",
         "artifacts/liquid-glass/receipts/window-priority-utility-quick-current-layout.json",
@@ -7977,11 +7990,16 @@
         "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-open.json",
         "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-screenshot.json",
         "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-target.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-cleanup.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-layout.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-open.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-session-start.json",
+        "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-target.json",
         "artifacts/liquid-glass/receipts/window-priority-utility-quick-session-start.json"
       ],
       "screenshots": [],
       "notes": [
-        "visualAudit: artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-layout.json"
+        "visualAudit: artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-layout.json"
       ]
     },
     {
@@ -8412,10 +8430,10 @@
       "surfaceKind": "FileSearchFull",
       "outsideInPriority": 16,
       "priorityGroup": "window-container",
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
-      "blockingClass": "stale-layout-evidence",
-      "priority": "freshness-refresh",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
+      "blockingClass": "unknown-capture-failure",
+      "priority": "capture-blocker",
       "nextEvidenceNeeded": [
         "osScreenshotProof",
         "imageDiffProof"
@@ -8436,9 +8454,10 @@
       "osScreenshotBlockers": [
         {
           "receipt": "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json",
-          "source": "content-audit",
-          "classification": "low-content-capture-rejected",
-          "nonBlackRatio": 0.000022225455015679047,
+          "source": "os-window-capture",
+          "classification": "unknown-capture-failure",
+          "blockerCode": "unknown-capture-failure",
+          "limitation": "macOS WindowServer screenshot capture did not produce usable pixels; do not count this as OS screenshot proof.",
           "attempts": []
         }
       ],
@@ -8448,13 +8467,14 @@
         "windowIdCaptureProof": "missing",
         "compositorCaptureProof": "blocked",
         "countsAsCompositorEvidence": false,
-        "blockerCode": "blank-compositor-capture",
+        "blockerCode": "unknown-capture-failure",
         "blockers": [
           {
             "receipt": "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json",
-            "source": "content-audit",
-            "classification": "low-content-capture-rejected",
-            "nonBlackRatio": 0.000022225455015679047,
+            "source": "os-window-capture",
+            "classification": "unknown-capture-failure",
+            "blockerCode": "unknown-capture-failure",
+            "limitation": "macOS WindowServer screenshot capture did not produce usable pixels; do not count this as OS screenshot proof.",
             "attempts": []
           }
         ],
@@ -8466,12 +8486,10 @@
           "screenRectCaptureAttempted": false
         }
       },
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidelineFailures": [],
-      "recommendedNextAction": "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii",
+      "recommendedNextAction": "resolve OS compositor capture blocker unknown-capture-failure; current source/layout proof is not contradicted",
       "receipts": [
         "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-elements.json",
         "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json",
@@ -8479,11 +8497,15 @@
         "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-state.json",
         "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-target.json",
         "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-trigger.json",
-        "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-wait.json"
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-wait.json",
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-session-start.json",
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-show.json",
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-target.json",
+        "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-trigger.json"
       ],
       "screenshots": [],
       "notes": [
-        "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-file-search-full-current.png: receipt artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
+        "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-file-search-full-current.png: receipt artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json is classified as an error",
         "visualAudit: artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json"
       ]
     },
@@ -15552,8 +15574,8 @@
       ],
       "automationSemanticSurface": "scriptList",
       "coverageAliases": [],
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "sourceUiGaps": [],
       "devtoolsCaptureLimitations": [
         "osScreenshotProof:blocked",
@@ -15568,9 +15590,7 @@
           "attempts": []
         }
       ],
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, TerminalContent: artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
@@ -15587,7 +15607,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true
@@ -15597,7 +15617,7 @@
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "osCapture": {
@@ -15630,10 +15650,80 @@
         "unstyledNodeCount": 0,
         "controlsWithHitFailures": [],
         "contentGlassNodes": [],
+        "contentNativeMaterialNodes": [],
+        "glassLayerViolations": [],
         "missingStyleNodeNames": [],
         "chromeLayers": {
-          "content": 3,
-          "functionalChrome": 2
+          "content": 2,
+          "functionalChrome": 2,
+          "windowBackdrop": 1
+        },
+        "guidelineAssertions": {
+          "appleDocumented": {
+            "hitTargets": {
+              "source": "apple-documented",
+              "macosMinimumHitSize": {
+                "width": 28,
+                "height": 28
+              },
+              "macosMinimumVisualSize": {
+                "width": 20,
+                "height": 20
+              },
+              "failures": []
+            },
+            "buttonCenterDistance": {
+              "source": "apple-documented",
+              "requiredCenterDistance": 60,
+              "failures": []
+            },
+            "materialLayering": {
+              "source": "apple-documented",
+              "contentGlassNodes": [],
+              "contentNativeMaterialNodes": [],
+              "glassLayerViolations": []
+            },
+            "colorAdaptivity": {
+              "source": "apple-documented",
+              "hardcodedColorNodes": []
+            },
+            "safeAreaLayout": {
+              "source": "apple-documented",
+              "clippedNodeCount": 0,
+              "overflowY": false
+            },
+            "buttonShapeFamilies": {
+              "source": "apple-documented",
+              "exactAppleRadiusConstants": null
+            }
+          },
+          "projectLocal": {
+            "cornerRadiusTokens": {
+              "source": "project-local",
+              "failures": []
+            },
+            "paddingTokens": {
+              "source": "project-local",
+              "minimumPanelPadding": 16,
+              "minimumCompactRowHorizontalPadding": 10
+            },
+            "spacingTokens": {
+              "source": "project-local",
+              "minimumFooterActionGap": 8
+            },
+            "windowBackdropPolicy": {
+              "source": "project-local",
+              "contentGlassNodeCount": 0
+            },
+            "themeTokenUsage": {
+              "source": "project-local",
+              "hardcodedColorNodes": []
+            },
+            "renderReadbackPixelThresholds": {
+              "source": "project-local",
+              "minimumNonBlackRatio": 0.01
+            }
+          }
         }
       },
       "evidence": {
@@ -15646,12 +15736,18 @@
           "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-open.json",
           "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-screenshot.json",
           "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-open.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-target.json",
           "artifacts/liquid-glass/receipts/window-priority-utility-quick-session-start.json"
         ],
         "screenshots": [],
         "layoutReceipts": [
           "artifacts/liquid-glass/receipts/window-priority-utility-quick-current-layout.json",
-          "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-layout.json"
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-layout.json"
         ],
         "inspectReceipts": [
           "artifacts/liquid-glass/receipts/window-priority-utility-quick-current-layout.json",
@@ -15661,6 +15757,11 @@
           "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-open.json",
           "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-screenshot.json",
           "artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-cleanup.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-layout.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-open.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-target.json",
           "artifacts/liquid-glass/receipts/window-priority-utility-quick-session-start.json"
         ],
         "imageDiffReceipts": [],
@@ -15671,10 +15772,80 @@
           "unstyledNodeCount": 0,
           "controlsWithHitFailures": [],
           "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": [],
           "missingStyleNodeNames": [],
           "chromeLayers": {
-            "content": 3,
-            "functionalChrome": 2
+            "content": 2,
+            "functionalChrome": 2,
+            "windowBackdrop": 1
+          },
+          "guidelineAssertions": {
+            "appleDocumented": {
+              "hitTargets": {
+                "source": "apple-documented",
+                "macosMinimumHitSize": {
+                  "width": 28,
+                  "height": 28
+                },
+                "macosMinimumVisualSize": {
+                  "width": 20,
+                  "height": 20
+                },
+                "failures": []
+              },
+              "buttonCenterDistance": {
+                "source": "apple-documented",
+                "requiredCenterDistance": 60,
+                "failures": []
+              },
+              "materialLayering": {
+                "source": "apple-documented",
+                "contentGlassNodes": [],
+                "contentNativeMaterialNodes": [],
+                "glassLayerViolations": []
+              },
+              "colorAdaptivity": {
+                "source": "apple-documented",
+                "hardcodedColorNodes": []
+              },
+              "safeAreaLayout": {
+                "source": "apple-documented",
+                "clippedNodeCount": 0,
+                "overflowY": false
+              },
+              "buttonShapeFamilies": {
+                "source": "apple-documented",
+                "exactAppleRadiusConstants": null
+              }
+            },
+            "projectLocal": {
+              "cornerRadiusTokens": {
+                "source": "project-local",
+                "failures": []
+              },
+              "paddingTokens": {
+                "source": "project-local",
+                "minimumPanelPadding": 16,
+                "minimumCompactRowHorizontalPadding": 10
+              },
+              "spacingTokens": {
+                "source": "project-local",
+                "minimumFooterActionGap": 8
+              },
+              "windowBackdropPolicy": {
+                "source": "project-local",
+                "contentGlassNodeCount": 0
+              },
+              "themeTokenUsage": {
+                "source": "project-local",
+                "hardcodedColorNodes": []
+              },
+              "renderReadbackPixelThresholds": {
+                "source": "project-local",
+                "minimumNonBlackRatio": 0.01
+              }
+            }
           }
         },
         "osScreenshotBlockers": [
@@ -15686,11 +15857,9 @@
             "attempts": []
           }
         ],
-        "layoutReceiptFreshnessLimitations": [
-          "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, TerminalContent: artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-layout.json"
-        ],
+        "layoutReceiptFreshnessLimitations": [],
         "notes": [
-          "visualAudit: artifacts/liquid-glass/receipts/window-priority-utility-quick-fixed-layout.json"
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-utility-quick-guideline-layout.json"
         ]
       }
     },
@@ -16200,8 +16369,8 @@
       ],
       "automationSemanticSurface": "fileSearch",
       "coverageAliases": [],
-      "proofStatus": "numeric-proof-missing-guideline-assertions",
-      "guidanceProofStatus": "stale-layout-evidence",
+      "proofStatus": "numeric-proof-missing-visual-capture",
+      "guidanceProofStatus": "guidance-proof-capture-blocked",
       "sourceUiGaps": [],
       "devtoolsCaptureLimitations": [
         "osScreenshotProof:blocked",
@@ -16210,15 +16379,14 @@
       "osScreenshotBlockers": [
         {
           "receipt": "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json",
-          "source": "content-audit",
-          "classification": "low-content-capture-rejected",
-          "nonBlackRatio": 0.000022225455015679047,
+          "source": "os-window-capture",
+          "classification": "unknown-capture-failure",
+          "blockerCode": "unknown-capture-failure",
+          "limitation": "macOS WindowServer screenshot capture did not produce usable pixels; do not count this as OS screenshot proof.",
           "attempts": []
         }
       ],
-      "layoutReceiptFreshnessLimitations": [
-        "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json"
-      ],
+      "layoutReceiptFreshnessLimitations": [],
       "diagnosticLimitations": [],
       "guidanceEvidenceNeeded": [
         "osScreenshotProof",
@@ -16235,7 +16403,7 @@
         "offscreenRenderProof": "missing",
         "numericLayout": true,
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiff": false,
         "imageDiffProof": "blocked",
         "visualAudit": true
@@ -16245,7 +16413,7 @@
         "appRenderProof": "missing",
         "offscreenRenderProof": "missing",
         "numericProof": "pass",
-        "guidelineProof": "missing",
+        "guidelineProof": "pass",
         "imageDiffProof": "blocked"
       },
       "osCapture": {
@@ -16254,13 +16422,14 @@
         "windowIdCaptureProof": "missing",
         "compositorCaptureProof": "blocked",
         "countsAsCompositorEvidence": false,
-        "blockerCode": "blank-compositor-capture",
+        "blockerCode": "unknown-capture-failure",
         "blockers": [
           {
             "receipt": "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json",
-            "source": "content-audit",
-            "classification": "low-content-capture-rejected",
-            "nonBlackRatio": 0.000022225455015679047,
+            "source": "os-window-capture",
+            "classification": "unknown-capture-failure",
+            "blockerCode": "unknown-capture-failure",
+            "limitation": "macOS WindowServer screenshot capture did not produce usable pixels; do not count this as OS screenshot proof.",
             "attempts": []
           }
         ],
@@ -16285,6 +16454,73 @@
           "content": 8,
           "functionalChrome": 5,
           "windowBackdrop": 1
+        },
+        "guidelineAssertions": {
+          "appleDocumented": {
+            "hitTargets": {
+              "source": "apple-documented",
+              "macosMinimumHitSize": {
+                "width": 28,
+                "height": 28
+              },
+              "macosMinimumVisualSize": {
+                "width": 20,
+                "height": 20
+              },
+              "failures": []
+            },
+            "buttonCenterDistance": {
+              "source": "apple-documented",
+              "requiredCenterDistance": 60,
+              "failures": []
+            },
+            "materialLayering": {
+              "source": "apple-documented",
+              "contentGlassNodes": [],
+              "contentNativeMaterialNodes": [],
+              "glassLayerViolations": []
+            },
+            "colorAdaptivity": {
+              "source": "apple-documented",
+              "hardcodedColorNodes": []
+            },
+            "safeAreaLayout": {
+              "source": "apple-documented",
+              "clippedNodeCount": 0,
+              "overflowY": false
+            },
+            "buttonShapeFamilies": {
+              "source": "apple-documented",
+              "exactAppleRadiusConstants": null
+            }
+          },
+          "projectLocal": {
+            "cornerRadiusTokens": {
+              "source": "project-local",
+              "failures": []
+            },
+            "paddingTokens": {
+              "source": "project-local",
+              "minimumPanelPadding": 16,
+              "minimumCompactRowHorizontalPadding": 10
+            },
+            "spacingTokens": {
+              "source": "project-local",
+              "minimumFooterActionGap": 8
+            },
+            "windowBackdropPolicy": {
+              "source": "project-local",
+              "contentGlassNodeCount": 0
+            },
+            "themeTokenUsage": {
+              "source": "project-local",
+              "hardcodedColorNodes": []
+            },
+            "renderReadbackPixelThresholds": {
+              "source": "project-local",
+              "minimumNonBlackRatio": 0.01
+            }
+          }
         }
       },
       "evidence": {
@@ -16295,7 +16531,11 @@
           "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-state.json",
           "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-target.json",
           "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-trigger.json",
-          "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-wait.json"
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-wait.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-trigger.json"
         ],
         "screenshots": [],
         "layoutReceipts": [
@@ -16308,7 +16548,11 @@
           "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-state.json",
           "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-target.json",
           "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-trigger.json",
-          "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-wait.json"
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-wait.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-session-start.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-show.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-target.json",
+          "artifacts/liquid-glass/receipts/window-priority-file-search-full-refresh-trigger.json"
         ],
         "imageDiffReceipts": [],
         "diffMasks": [],
@@ -16325,22 +16569,88 @@
             "content": 8,
             "functionalChrome": 5,
             "windowBackdrop": 1
+          },
+          "guidelineAssertions": {
+            "appleDocumented": {
+              "hitTargets": {
+                "source": "apple-documented",
+                "macosMinimumHitSize": {
+                  "width": 28,
+                  "height": 28
+                },
+                "macosMinimumVisualSize": {
+                  "width": 20,
+                  "height": 20
+                },
+                "failures": []
+              },
+              "buttonCenterDistance": {
+                "source": "apple-documented",
+                "requiredCenterDistance": 60,
+                "failures": []
+              },
+              "materialLayering": {
+                "source": "apple-documented",
+                "contentGlassNodes": [],
+                "contentNativeMaterialNodes": [],
+                "glassLayerViolations": []
+              },
+              "colorAdaptivity": {
+                "source": "apple-documented",
+                "hardcodedColorNodes": []
+              },
+              "safeAreaLayout": {
+                "source": "apple-documented",
+                "clippedNodeCount": 0,
+                "overflowY": false
+              },
+              "buttonShapeFamilies": {
+                "source": "apple-documented",
+                "exactAppleRadiusConstants": null
+              }
+            },
+            "projectLocal": {
+              "cornerRadiusTokens": {
+                "source": "project-local",
+                "failures": []
+              },
+              "paddingTokens": {
+                "source": "project-local",
+                "minimumPanelPadding": 16,
+                "minimumCompactRowHorizontalPadding": 10
+              },
+              "spacingTokens": {
+                "source": "project-local",
+                "minimumFooterActionGap": 8
+              },
+              "windowBackdropPolicy": {
+                "source": "project-local",
+                "contentGlassNodeCount": 0
+              },
+              "themeTokenUsage": {
+                "source": "project-local",
+                "hardcodedColorNodes": []
+              },
+              "renderReadbackPixelThresholds": {
+                "source": "project-local",
+                "minimumNonBlackRatio": 0.01
+              }
+            }
           }
         },
         "osScreenshotBlockers": [
           {
             "receipt": "artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json",
-            "source": "content-audit",
-            "classification": "low-content-capture-rejected",
-            "nonBlackRatio": 0.000022225455015679047,
+            "source": "os-window-capture",
+            "classification": "unknown-capture-failure",
+            "blockerCode": "unknown-capture-failure",
+            "limitation": "macOS WindowServer screenshot capture did not produce usable pixels; do not count this as OS screenshot proof.",
             "attempts": []
           }
         ],
-        "layoutReceiptFreshnessLimitations": [
-          "legacy layout receipt lacks explicit cornerRadiusTokens for ContentArea, ScriptList, PreviewPanel: artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json"
-        ],
+        "layoutReceiptFreshnessLimitations": [],
         "notes": [
-          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-file-search-full-current.png: receipt artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json nonBlackRatio 0.000022225455015679047 is below 0.01 usable-capture threshold",
+          "ignored screenshot artifacts/liquid-glass/screenshots/window-priority-file-search-full-current.png: receipt artifacts/liquid-glass/receipts/window-priority-file-search-full-current-screenshot.json is classified as an error",
           "visualAudit: artifacts/liquid-glass/receipts/window-priority-file-search-full-current-layout.json"
         ]
       }
@@ -19096,7 +19406,7 @@
   "warnings": [
     "27 contract surfaces are not yet strong-proof",
     "25 contract surfaces have explicit visual-tier debt; inspect proofTiers before claiming exhaustive Liquid Glass proof",
-    "22 contract surfaces are missing Tahoe guideline assertions",
+    "20 contract surfaces are missing Tahoe guideline assertions",
     "3 contract surfaces attempted app-render proof but GPUI render readback was unavailable or unsupported",
     "strong-guidance-proof means current artifacts include OS screenshot, numeric layout visualAudit, guideline assertions, and image diff evidence; GPUI readback is diagnostic only",
     "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor output or native Liquid Glass blur",

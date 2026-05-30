@@ -3,14 +3,15 @@
   "tool": "script-kit-devtools.layout",
   "command": "layout.measure",
   "classification": "ok",
-  "session": "liquid-file-search-current",
+  "session": "liquid-file-search-full-refresh",
   "include": [
     "nodes",
     "regions",
+    "scroll",
     "resize",
     "overlaps"
   ],
-  "limit": 200,
+  "limit": 80,
   "requestedTarget": {
     "selector": {
       "type": "main"
@@ -46,8 +47,8 @@
     "frontmost": null,
     "focused": null,
     "screenshotIdentity": {
-      "width": 750,
-      "height": 480,
+      "width": null,
+      "height": null,
       "targetBoundsInScreenshot": {
         "x": 0,
         "y": 0,
@@ -56,12 +57,40 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 11615,
+    "pid": 44087,
     "strictTargetMatch": true,
     "ambiguity": []
   },
+  "layoutEvidenceFreshness": {
+    "schemaVersion": 1,
+    "generatedAt": "2026-05-30T10:33:12.627Z",
+    "auditSchema": "panel-radius-v2",
+    "requiredPanelRadiusNodes": [
+      "ContentArea",
+      "ScriptList",
+      "PreviewPanel"
+    ],
+    "sourceFingerprint": {
+      "schemaVersion": 1,
+      "algorithm": "sha256",
+      "files": [
+        {
+          "path": "src/app_layout/build_layout_info.rs",
+          "sha256": "40455188d86a70362f468dbb6e5f3aadf0c3c0114665cefe8eff05c06aedb852"
+        },
+        {
+          "path": "scripts/devtools/layout.ts",
+          "sha256": "10fc886f0677c720d31e020a1afce824008c8767aaf451d427ae4f259469257e"
+        },
+        {
+          "path": "src/ui/chrome/tokens.rs",
+          "sha256": "42e274081636cb27743c06ddd80e7142fd3110e5462851b0998e885968a22220"
+        }
+      ]
+    }
+  },
   "promptType": "fileSearch",
-  "timestamp": "2026-05-30T07:23:46.866901+00:00",
+  "timestamp": "2026-05-30T10:33:12.610006+00:00",
   "componentCount": 14,
   "window": {
     "rect": {
@@ -571,6 +600,12 @@
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
         "tokenSource": "content.background",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
         "visualBounds": {
           "x": 0,
           "y": 45,
@@ -627,6 +662,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.background",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -659,6 +700,12 @@
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
         "tokenSource": "content.list",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
         "visualBounds": {
           "x": 0,
           "y": 45,
@@ -714,6 +761,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.list",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -746,6 +799,12 @@
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
         "tokenSource": "content.previewPanel",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
         "visualBounds": {
           "x": 375,
           "y": 45,
@@ -809,6 +868,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.previewPanel",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 375,
             "y": 45,
@@ -1702,6 +1767,73 @@
       "content": 8,
       "functionalChrome": 5,
       "windowBackdrop": 1
+    },
+    "guidelineAssertions": {
+      "appleDocumented": {
+        "hitTargets": {
+          "source": "apple-documented",
+          "macosMinimumHitSize": {
+            "width": 28,
+            "height": 28
+          },
+          "macosMinimumVisualSize": {
+            "width": 20,
+            "height": 20
+          },
+          "failures": []
+        },
+        "buttonCenterDistance": {
+          "source": "apple-documented",
+          "requiredCenterDistance": 60,
+          "failures": []
+        },
+        "materialLayering": {
+          "source": "apple-documented",
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": []
+        },
+        "colorAdaptivity": {
+          "source": "apple-documented",
+          "hardcodedColorNodes": []
+        },
+        "safeAreaLayout": {
+          "source": "apple-documented",
+          "clippedNodeCount": 0,
+          "overflowY": false
+        },
+        "buttonShapeFamilies": {
+          "source": "apple-documented",
+          "exactAppleRadiusConstants": null
+        }
+      },
+      "projectLocal": {
+        "cornerRadiusTokens": {
+          "source": "project-local",
+          "failures": []
+        },
+        "paddingTokens": {
+          "source": "project-local",
+          "minimumPanelPadding": 16,
+          "minimumCompactRowHorizontalPadding": 10
+        },
+        "spacingTokens": {
+          "source": "project-local",
+          "minimumFooterActionGap": 8
+        },
+        "windowBackdropPolicy": {
+          "source": "project-local",
+          "contentGlassNodeCount": 0
+        },
+        "themeTokenUsage": {
+          "source": "project-local",
+          "hardcodedColorNodes": []
+        },
+        "renderReadbackPixelThresholds": {
+          "source": "project-local",
+          "minimumNonBlackRatio": 0.01
+        }
+      }
     }
   },
   "handlerForm": null,
@@ -1710,7 +1842,7 @@
   "errors": [],
   "rawLayout": {
     "type": "layoutInfoResult",
-    "requestId": "devtools-layout-measure-1780125826821-3ef562",
+    "requestId": "devtools-layout-measure-1780137192585-f155b5",
     "windowWidth": 750,
     "windowHeight": 480,
     "promptType": "fileSearch",
@@ -1859,6 +1991,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.background",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -1892,6 +2030,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.list",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -1933,6 +2077,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.previewPanel",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 375,
             "y": 45,
@@ -2321,6 +2471,6 @@
         }
       }
     ],
-    "timestamp": "2026-05-30T07:23:46.866901+00:00"
+    "timestamp": "2026-05-30T10:33:12.610006+00:00"
   }
 }

@@ -1132,6 +1132,7 @@ async function main() {
       ]);
     } else if (surfaceKind === "UtilityChildContent") {
       await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-utility-quick-guideline-layout.json`,
         `${RECEIPT_ROOT}/window-priority-utility-quick-fixed-layout.json`,
         `${RECEIPT_ROOT}/window-priority-utility-quick-current-layout.json`,
       ]);
