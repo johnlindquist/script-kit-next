@@ -39,8 +39,8 @@
     "frontmost": null,
     "focused": null,
     "screenshotIdentity": {
-      "width": 750,
-      "height": 480,
+      "width": null,
+      "height": null,
       "targetBoundsInScreenshot": {
         "x": 0,
         "y": 0,
@@ -49,7 +49,7 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 3130,
+    "pid": 71051,
     "strictTargetMatch": true,
     "ambiguity": []
   },
@@ -71,12 +71,12 @@
       "appViewVariant": null,
       "parentAutomationId": null,
       "parentKind": null,
-      "pid": 3130
+      "pid": 71051
     }
   ],
   "rawInspect": {
     "type": "automationInspectResult",
-    "requestId": "devtools-targets-inspect-1780124841742-ddcc15",
+    "requestId": "devtools-targets-inspect-1780126381272-f595f3",
     "schemaVersion": 3,
     "windowId": "main",
     "windowKind": "Main",
@@ -110,8 +110,25 @@
     ],
     "elements": [
       {
-        "semanticId": "panel:current-view",
-        "type": "panel"
+        "semanticId": "input:favorites-filter",
+        "type": "input",
+        "value": "",
+        "focused": true
+      },
+      {
+        "semanticId": "list:favorites",
+        "type": "list",
+        "text": "0 items"
+      },
+      {
+        "semanticId": "panel:favorites-empty",
+        "type": "panel",
+        "text": "No favorites yet · Star scripts from the actions menu (Cmd+K)",
+        "value": "favorites",
+        "role": "empty-state",
+        "kind": "genericFilterableEmptyState",
+        "source": "favorites",
+        "selectable": false
       },
       {
         "semanticId": "footer:native:row",
@@ -136,15 +153,13 @@
         "selectable": true
       }
     ],
-    "totalCount": 3,
-    "screenshotWidth": 750,
-    "screenshotHeight": 480,
-    "osWindowId": 84489,
+    "totalCount": 5,
+    "focusedSemanticId": "input:favorites-filter",
     "semanticQuality": "full",
     "warnings": [
-      "collector_used_current_view_fallback"
+      "screenshot_capture_failed: Ambiguous OS window match for automation target main (Main); '' and '' tied at score 5100"
     ],
-    "pid": 3130
+    "pid": 71051
   },
   "sessionLifecycle": [],
   "errors": []

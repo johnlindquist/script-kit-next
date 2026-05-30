@@ -3,9 +3,9 @@
   "tool": "script-kit-devtools.liquid-glass-proof",
   "command": "proof.matrix",
   "classification": "ok",
-  "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
+  "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-latest.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T07:39:20.952Z",
+  "generatedAt": "2026-05-30T07:41:02.261Z",
   "summary": {
     "surfaceCount": 29,
     "strongProofSurfaceCount": 4,

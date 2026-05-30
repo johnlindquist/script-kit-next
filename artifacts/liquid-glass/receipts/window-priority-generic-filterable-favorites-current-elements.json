@@ -39,8 +39,8 @@
     "frontmost": null,
     "focused": null,
     "screenshotIdentity": {
-      "width": 750,
-      "height": 480,
+      "width": null,
+      "height": null,
       "targetBoundsInScreenshot": {
         "x": 0,
         "y": 0,
@@ -49,7 +49,7 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 3130,
+    "pid": 71051,
     "strictTargetMatch": true,
     "ambiguity": []
   },
@@ -57,10 +57,10 @@
     "surfaceKind": "GenericFilterableList",
     "appViewVariant": "FavoritesBrowseView"
   },
-  "totalCount": 3,
-  "returnedCount": 3,
+  "totalCount": 5,
+  "returnedCount": 5,
   "truncated": false,
-  "focusedSemanticId": null,
+  "focusedSemanticId": "input:favorites-filter",
   "selectedSemanticId": null,
   "duplicateSemanticIds": [],
   "missingPrimitives": [
@@ -68,11 +68,31 @@
   ],
   "nodes": [
     {
-      "semanticId": "panel:current-view",
-      "role": "panel",
-      "type": "panel",
-      "label": "panel:current-view",
+      "semanticId": "input:favorites-filter",
+      "role": "input",
+      "type": "input",
+      "label": "",
       "text": null,
+      "value": "",
+      "selected": null,
+      "focused": true,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "input:favorites-filter",
+        "type": "input",
+        "value": "",
+        "focused": true
+      }
+    },
+    {
+      "semanticId": "list:favorites",
+      "role": "list",
+      "type": "list",
+      "label": "0 items",
+      "text": "0 items",
       "value": null,
       "selected": null,
       "focused": null,
@@ -81,8 +101,33 @@
       "actions": [],
       "bounds": null,
       "raw": {
-        "semanticId": "panel:current-view",
-        "type": "panel"
+        "semanticId": "list:favorites",
+        "type": "list",
+        "text": "0 items"
+      }
+    },
+    {
+      "semanticId": "panel:favorites-empty",
+      "role": "empty-state",
+      "type": "panel",
+      "label": "No favorites yet · Star scripts from the actions menu (Cmd+K)",
+      "text": "No favorites yet · Star scripts from the actions menu (Cmd+K)",
+      "value": "favorites",
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": "favorites",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "panel:favorites-empty",
+        "type": "panel",
+        "text": "No favorites yet · Star scripts from the actions menu (Cmd+K)",
+        "value": "favorites",
+        "role": "empty-state",
+        "kind": "genericFilterableEmptyState",
+        "source": "favorites",
+        "selectable": false
       }
     },
     {
@@ -137,7 +182,6 @@
     }
   ],
   "warnings": [
-    "collector_used_current_view_fallback",
     "getElements does not expose bounds yet; use devtools.layout.measure for geometry."
   ],
   "errors": []

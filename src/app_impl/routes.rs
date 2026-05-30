@@ -199,6 +199,9 @@ pub const fn plan_trigger_builtin_route(id: TriggerBuiltin) -> AppRoute {
         TriggerBuiltin::SearchAiPresets => {
             AppRoute::ShowFilterableView(FilterableView::SearchAiPresets)
         }
+        TriggerBuiltin::ScriptTemplateCatalog => {
+            AppRoute::ExecuteBuiltin("builtin/new-script-from-template")
+        }
         TriggerBuiltin::ChooseTheme => AppRoute::ExecuteBuiltin("builtin/choose-theme"),
         TriggerBuiltin::ScriptKitSelfie => AppRoute::ExecuteBuiltin("builtin/script-kit-selfie"),
         TriggerBuiltin::MainWindow => AppRoute::ExecuteBuiltin("builtin/main-window"),
@@ -269,6 +272,7 @@ mod tests {
             ("builtin/choose-theme", 1),
             ("builtin/main-window", 1),
             ("builtin/new-script", 1),
+            ("builtin/new-script-from-template", 1),
             ("builtin/quick-terminal", 1),
             ("builtin/script-kit-selfie", 1),
             ("builtin/sdk-reference", 1),

@@ -8,6 +8,7 @@
 {"input":"builtin/process-manager","expected":"ShowFilterableView::ProcessManager"}
 {"input":"builtin/current-app-commands","expected":"OpenCurrentAppCommands"}
 {"input":"builtin/new-script","expected":"ExecuteBuiltin::builtin/new-script"}
+{"input":"builtin/new-script-from-template","expected":"ExecuteBuiltin::builtin/new-script-from-template"}
 {"input":"builtin/sdk-reference","expected":"ExecuteBuiltin::builtin/sdk-reference"}
 {"input":"builtin/vault","expected":"ExecuteBuiltin::builtin/vault"}
 {"input":"builtin/settings","expected":"ExecuteBuiltin::builtin/settings"}

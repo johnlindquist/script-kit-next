@@ -1,0 +1,294 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.elements",
+  "command": "elements.snapshot",
+  "classification": "ok",
+  "session": "liquid-generic-filterable-search-current",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "GenericFilterableList"
+  },
+  "target": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "GenericFilterableList",
+    "appViewVariant": "SearchAiPresetsView",
+    "nativeFooterSurface": "search_ai_presets",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 750,
+      "height": 480,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 99594,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "semanticSurface": {
+    "surfaceKind": "GenericFilterableList",
+    "appViewVariant": "SearchAiPresetsView"
+  },
+  "totalCount": 9,
+  "returnedCount": 9,
+  "truncated": false,
+  "focusedSemanticId": "input:ai-presets-filter",
+  "selectedSemanticId": "choice:0:general-assistant-he",
+  "duplicateSemanticIds": [],
+  "missingPrimitives": [
+    "elementBounds"
+  ],
+  "nodes": [
+    {
+      "semanticId": "input:ai-presets-filter",
+      "role": "input",
+      "type": "input",
+      "label": "",
+      "text": null,
+      "value": "",
+      "selected": null,
+      "focused": true,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "input:ai-presets-filter",
+        "type": "input",
+        "value": "",
+        "focused": true
+      }
+    },
+    {
+      "semanticId": "list:ai-presets",
+      "role": "list",
+      "type": "list",
+      "label": "5 items",
+      "text": "5 items",
+      "value": null,
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "list:ai-presets",
+        "type": "list",
+        "text": "5 items"
+      }
+    },
+    {
+      "semanticId": "choice:0:general-assistant-he",
+      "role": "generic-filterable-row",
+      "type": "choice",
+      "label": "General Assistant — Helpful AI assistant for any task",
+      "text": "General Assistant — Helpful AI assistant for any task",
+      "value": "General Assistant — Helpful AI assistant for any task",
+      "selected": true,
+      "focused": null,
+      "index": 0,
+      "owner": "ai-presets",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:0:general-assistant-he",
+        "type": "choice",
+        "text": "General Assistant — Helpful AI assistant for any task",
+        "value": "General Assistant — Helpful AI assistant for any task",
+        "selected": true,
+        "index": 0,
+        "role": "generic-filterable-row",
+        "kind": "ai-presets",
+        "source": "ai-presets",
+        "selectable": true
+      }
+    },
+    {
+      "semanticId": "choice:1:code-assistant-exper",
+      "role": "generic-filterable-row",
+      "type": "choice",
+      "label": "Code Assistant — Expert programmer and debugger",
+      "text": "Code Assistant — Expert programmer and debugger",
+      "value": "Code Assistant — Expert programmer and debugger",
+      "selected": false,
+      "focused": null,
+      "index": 1,
+      "owner": "ai-presets",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:1:code-assistant-exper",
+        "type": "choice",
+        "text": "Code Assistant — Expert programmer and debugger",
+        "value": "Code Assistant — Expert programmer and debugger",
+        "selected": false,
+        "index": 1,
+        "role": "generic-filterable-row",
+        "kind": "ai-presets",
+        "source": "ai-presets",
+        "selectable": true
+      }
+    },
+    {
+      "semanticId": "choice:2:writing-assistant-he",
+      "role": "generic-filterable-row",
+      "type": "choice",
+      "label": "Writing Assistant — Help with writing and editing",
+      "text": "Writing Assistant — Help with writing and editing",
+      "value": "Writing Assistant — Help with writing and editing",
+      "selected": false,
+      "focused": null,
+      "index": 2,
+      "owner": "ai-presets",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:2:writing-assistant-he",
+        "type": "choice",
+        "text": "Writing Assistant — Help with writing and editing",
+        "value": "Writing Assistant — Help with writing and editing",
+        "selected": false,
+        "index": 2,
+        "role": "generic-filterable-row",
+        "kind": "ai-presets",
+        "source": "ai-presets",
+        "selectable": true
+      }
+    },
+    {
+      "semanticId": "choice:3:research-assistant-d",
+      "role": "generic-filterable-row",
+      "type": "choice",
+      "label": "Research Assistant — Deep analysis and research",
+      "text": "Research Assistant — Deep analysis and research",
+      "value": "Research Assistant — Deep analysis and research",
+      "selected": false,
+      "focused": null,
+      "index": 3,
+      "owner": "ai-presets",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:3:research-assistant-d",
+        "type": "choice",
+        "text": "Research Assistant — Deep analysis and research",
+        "value": "Research Assistant — Deep analysis and research",
+        "selected": false,
+        "index": 3,
+        "role": "generic-filterable-row",
+        "kind": "ai-presets",
+        "source": "ai-presets",
+        "selectable": true
+      }
+    },
+    {
+      "semanticId": "choice:4:creative-partner-bra",
+      "role": "generic-filterable-row",
+      "type": "choice",
+      "label": "Creative Partner — Brainstorming and creative ideas",
+      "text": "Creative Partner — Brainstorming and creative ideas",
+      "value": "Creative Partner — Brainstorming and creative ideas",
+      "selected": false,
+      "focused": null,
+      "index": 4,
+      "owner": "ai-presets",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:4:creative-partner-bra",
+        "type": "choice",
+        "text": "Creative Partner — Brainstorming and creative ideas",
+        "value": "Creative Partner — Brainstorming and creative ideas",
+        "selected": false,
+        "index": 4,
+        "role": "generic-filterable-row",
+        "kind": "ai-presets",
+        "source": "ai-presets",
+        "selectable": true
+      }
+    },
+    {
+      "semanticId": "footer:native:row",
+      "role": "footer",
+      "type": "panel",
+      "label": "native",
+      "text": "native",
+      "value": "search_ai_presets",
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:native:row",
+        "type": "panel",
+        "text": "native",
+        "value": "search_ai_presets",
+        "role": "footer",
+        "kind": "nativeFooterRow",
+        "selectable": false
+      }
+    },
+    {
+      "semanticId": "footer:native:run",
+      "role": "footer",
+      "type": "button",
+      "label": "↵ Run",
+      "text": "↵ Run",
+      "value": "run",
+      "selected": false,
+      "focused": null,
+      "index": 0,
+      "owner": "search_ai_presets",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:native:run",
+        "type": "button",
+        "text": "↵ Run",
+        "value": "run",
+        "selected": false,
+        "index": 0,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "search_ai_presets",
+        "sourceName": "search_ai_presets",
+        "selectable": true
+      }
+    }
+  ],
+  "warnings": [
+    "getElements does not expose bounds yet; use devtools.layout.measure for geometry."
+  ],
+  "errors": []
+}

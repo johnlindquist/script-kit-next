@@ -3956,16 +3956,21 @@ impl ScriptListApp {
                     AppView::SearchAiPresetsView {
                         filter,
                         selected_index,
-                    } => (
-                        "searchAiPresets".to_string(),
-                        None,
-                        None,
-                        filter.clone(),
-                        0,
-                        0,
-                        *selected_index as i32,
-                        None,
-                    ),
+                    } => {
+                        let total = Self::ai_preset_search_visible_row_labels("").len();
+                        let rows = Self::ai_preset_search_visible_row_labels(filter);
+                        let selected_value = rows.get(*selected_index).cloned();
+                        (
+                            "searchAiPresets".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            total,
+                            rows.len(),
+                            *selected_index as i32,
+                            selected_value,
+                        )
+                    }
                     AppView::CreateAiPresetView { .. } => (
                         "createAiPreset".to_string(),
                         None,
@@ -3998,16 +4003,21 @@ impl ScriptListApp {
                     AppView::FavoritesBrowseView {
                         filter,
                         selected_index,
-                    } => (
-                        "favorites".to_string(),
-                        None,
-                        None,
-                        filter.clone(),
-                        0,
-                        0,
-                        *selected_index as i32,
-                        None,
-                    ),
+                    } => {
+                        let total = self.filtered_favorite_ids_for_filter("").len();
+                        let rows = self.filtered_favorite_ids_for_filter(filter);
+                        let selected_value = rows.get(*selected_index).cloned();
+                        (
+                            "favorites".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            total,
+                            rows.len(),
+                            *selected_index as i32,
+                            selected_value,
+                        )
+                    }
                     AppView::AcpChatView { .. } => (
                         "acpChat".to_string(),
                         None,

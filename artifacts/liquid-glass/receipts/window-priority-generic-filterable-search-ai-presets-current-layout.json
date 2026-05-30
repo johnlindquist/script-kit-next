@@ -3,7 +3,7 @@
   "tool": "script-kit-devtools.layout",
   "command": "layout.measure",
   "classification": "ok",
-  "session": "liquid-generic-filterable-current",
+  "session": "liquid-generic-filterable-search-current",
   "include": [
     "nodes",
     "regions",
@@ -28,8 +28,8 @@
     "parentAutomationId": null,
     "openerAutomationId": null,
     "surfaceKind": "GenericFilterableList",
-    "appViewVariant": "FavoritesBrowseView",
-    "nativeFooterSurface": "favorites",
+    "appViewVariant": "SearchAiPresetsView",
+    "nativeFooterSurface": "search_ai_presets",
     "surfaceFamily": null,
     "routeId": null,
     "routeStack": [],
@@ -48,8 +48,8 @@
     "frontmost": null,
     "focused": null,
     "screenshotIdentity": {
-      "width": null,
-      "height": null,
+      "width": 750,
+      "height": 480,
       "targetBoundsInScreenshot": {
         "x": 0,
         "y": 0,
@@ -58,13 +58,13 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 71051,
+    "pid": 99594,
     "strictTargetMatch": true,
     "ambiguity": []
   },
-  "promptType": "favoritesBrowse",
-  "timestamp": "2026-05-30T07:33:03.616565+00:00",
-  "componentCount": 9,
+  "promptType": "searchAiPresets",
+  "timestamp": "2026-05-30T07:37:00.716529+00:00",
+  "componentCount": 13,
   "window": {
     "rect": {
       "x": 585,
@@ -181,13 +181,53 @@
       }
     },
     {
-      "name": "GenericFilterableEmptyState",
-      "type": "panel",
+      "name": "GenericFilterableRow[0]",
+      "type": "listItem",
       "bounds": {
         "x": 0,
         "y": 45,
         "width": 750,
-        "height": 401
+        "height": 40
+      }
+    },
+    {
+      "name": "GenericFilterableRow[1]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 85,
+        "width": 750,
+        "height": 40
+      }
+    },
+    {
+      "name": "GenericFilterableRow[2]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 125,
+        "width": 750,
+        "height": 40
+      }
+    },
+    {
+      "name": "GenericFilterableRow[3]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 165,
+        "width": 750,
+        "height": 40
+      }
+    },
+    {
+      "name": "GenericFilterableRow[4]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 205,
+        "width": 750,
+        "height": 40
       }
     },
     {
@@ -312,11 +352,11 @@
       "depth": 1,
       "parent": "Window",
       "children": [],
-      "explanation": "GenericFilterableList favoritesBrowse owns a custom full-width list surface; it must not fall back to the launcher split shell.",
+      "explanation": "GenericFilterableList searchAiPresets owns a custom full-width list surface; it must not fall back to the launcher split shell.",
       "visualStyle": {
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
-        "tokenSource": "genericFilterable.favoritesBrowse.surface",
+        "tokenSource": "genericFilterable.searchAiPresets.surface",
         "cornerRadius": {
           "topLeft": 16,
           "topRight": 16,
@@ -373,11 +413,11 @@
         },
         "depth": 1,
         "parent": "Window",
-        "explanation": "GenericFilterableList favoritesBrowse owns a custom full-width list surface; it must not fall back to the launcher split shell.",
+        "explanation": "GenericFilterableList searchAiPresets owns a custom full-width list surface; it must not fall back to the launcher split shell.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.surface",
+          "tokenSource": "genericFilterable.searchAiPresets.surface",
           "cornerRadius": {
             "topLeft": 16,
             "topRight": 16,
@@ -415,7 +455,7 @@
       "visualStyle": {
         "chromeLayer": "functionalChrome",
         "materialSource": "solidThemeToken",
-        "tokenSource": "genericFilterable.favoritesBrowse.header",
+        "tokenSource": "genericFilterable.searchAiPresets.header",
         "cornerRadius": {
           "topLeft": 16,
           "topRight": 16,
@@ -485,7 +525,7 @@
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.header",
+          "tokenSource": "genericFilterable.searchAiPresets.header",
           "cornerRadius": {
             "topLeft": 16,
             "topRight": 16,
@@ -523,7 +563,7 @@
       "visualStyle": {
         "chromeLayer": "functionalChrome",
         "materialSource": "solidThemeToken",
-        "tokenSource": "genericFilterable.favoritesBrowse.search",
+        "tokenSource": "genericFilterable.searchAiPresets.search",
         "cornerRadius": {
           "topLeft": 14,
           "topRight": 14,
@@ -581,7 +621,7 @@
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.search",
+          "tokenSource": "genericFilterable.searchAiPresets.search",
           "cornerRadius": {
             "topLeft": 14,
             "topRight": 14,
@@ -615,11 +655,11 @@
       "depth": 3,
       "parent": "GenericFilterableHeader",
       "children": [],
-      "explanation": "favoritesBrowse count label stays in the functional header chrome.",
+      "explanation": "searchAiPresets count label stays in the functional header chrome.",
       "visualStyle": {
         "chromeLayer": "functionalChrome",
         "materialSource": "solidThemeToken",
-        "tokenSource": "genericFilterable.favoritesBrowse.count",
+        "tokenSource": "genericFilterable.searchAiPresets.count",
         "visualBounds": {
           "x": 638,
           "y": 8,
@@ -667,11 +707,11 @@
         },
         "depth": 3,
         "parent": "GenericFilterableHeader",
-        "explanation": "favoritesBrowse count label stays in the functional header chrome.",
+        "explanation": "searchAiPresets count label stays in the functional header chrome.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.count",
+          "tokenSource": "genericFilterable.searchAiPresets.count",
           "visualBounds": {
             "x": 638,
             "y": 8,
@@ -703,7 +743,7 @@
       "visualStyle": {
         "chromeLayer": "functionalChrome",
         "materialSource": "solidThemeToken",
-        "tokenSource": "genericFilterable.favoritesBrowse.divider",
+        "tokenSource": "genericFilterable.searchAiPresets.divider",
         "visualBounds": {
           "x": 16,
           "y": 44,
@@ -755,7 +795,7 @@
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.divider",
+          "tokenSource": "genericFilterable.searchAiPresets.divider",
           "visualBounds": {
             "x": 16,
             "y": 44,
@@ -787,7 +827,7 @@
       "visualStyle": {
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
-        "tokenSource": "genericFilterable.favoritesBrowse.list",
+        "tokenSource": "genericFilterable.searchAiPresets.list",
         "visualBounds": {
           "x": 0,
           "y": 45,
@@ -842,7 +882,7 @@
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.list",
+          "tokenSource": "genericFilterable.searchAiPresets.list",
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -859,22 +899,22 @@
       }
     },
     {
-      "name": "GenericFilterableEmptyState",
-      "type": "panel",
+      "name": "GenericFilterableRow[0]",
+      "type": "listItem",
       "bounds": {
         "x": 0,
         "y": 45,
         "width": 750,
-        "height": 401
+        "height": 40
       },
       "depth": 3,
       "parent": "GenericFilterableList",
       "children": [],
-      "explanation": "favoritesBrowse empty state occupies the full list viewport.",
+      "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
       "visualStyle": {
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
-        "tokenSource": "genericFilterable.favoritesBrowse.emptyState",
+        "tokenSource": "genericFilterable.searchAiPresets.row",
         "cornerRadius": {
           "topLeft": 10,
           "topRight": 10,
@@ -885,13 +925,13 @@
           "x": 0,
           "y": 45,
           "width": 750,
-          "height": 401
+          "height": 40
         },
         "hitBounds": {
           "x": 0,
           "y": 45,
           "width": 750,
-          "height": 401
+          "height": 40
         }
       },
       "hitMetrics": {
@@ -899,40 +939,48 @@
           "x": 0,
           "y": 45,
           "width": 750,
-          "height": 401
+          "height": 40
         },
         "visualBounds": {
           "x": 0,
           "y": 45,
           "width": 750,
-          "height": 401
+          "height": 40
         },
         "hitWidth": 750,
-        "hitHeight": 401,
+        "hitHeight": 40,
         "visualWidth": 750,
-        "visualHeight": 401,
+        "visualHeight": 40,
         "minHitPass": true,
         "minVisualPass": true,
-        "preferredHitPass": true,
+        "preferredHitPass": false,
         "exception": null
       },
       "clipped": false,
       "raw": {
-        "name": "GenericFilterableEmptyState",
-        "type": "panel",
+        "name": "GenericFilterableRow[0]",
+        "type": "listItem",
         "bounds": {
           "x": 0,
           "y": 45,
           "width": 750,
-          "height": 401
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 16,
+            "bottom": 0,
+            "left": 16
+          }
         },
         "depth": 3,
         "parent": "GenericFilterableList",
-        "explanation": "favoritesBrowse empty state occupies the full list viewport.",
+        "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.emptyState",
+          "tokenSource": "genericFilterable.searchAiPresets.row",
           "cornerRadius": {
             "topLeft": 10,
             "topRight": 10,
@@ -943,13 +991,429 @@
             "x": 0,
             "y": 45,
             "width": 750,
-            "height": 401
+            "height": 40
           },
           "hitBounds": {
             "x": 0,
             "y": 45,
             "width": 750,
-            "height": 401
+            "height": 40
+          }
+        }
+      }
+    },
+    {
+      "name": "GenericFilterableRow[1]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 85,
+        "width": 750,
+        "height": 40
+      },
+      "depth": 3,
+      "parent": "GenericFilterableList",
+      "children": [],
+      "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "genericFilterable.searchAiPresets.row",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 85,
+          "width": 750,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 85,
+          "width": 750,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 85,
+          "width": 750,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 85,
+          "width": 750,
+          "height": 40
+        },
+        "hitWidth": 750,
+        "hitHeight": 40,
+        "visualWidth": 750,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "GenericFilterableRow[1]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 85,
+          "width": 750,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 16,
+            "bottom": 0,
+            "left": 16
+          }
+        },
+        "depth": 3,
+        "parent": "GenericFilterableList",
+        "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "genericFilterable.searchAiPresets.row",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 85,
+            "width": 750,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 85,
+            "width": 750,
+            "height": 40
+          }
+        }
+      }
+    },
+    {
+      "name": "GenericFilterableRow[2]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 125,
+        "width": 750,
+        "height": 40
+      },
+      "depth": 3,
+      "parent": "GenericFilterableList",
+      "children": [],
+      "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "genericFilterable.searchAiPresets.row",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 125,
+          "width": 750,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 125,
+          "width": 750,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 125,
+          "width": 750,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 125,
+          "width": 750,
+          "height": 40
+        },
+        "hitWidth": 750,
+        "hitHeight": 40,
+        "visualWidth": 750,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "GenericFilterableRow[2]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 125,
+          "width": 750,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 16,
+            "bottom": 0,
+            "left": 16
+          }
+        },
+        "depth": 3,
+        "parent": "GenericFilterableList",
+        "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "genericFilterable.searchAiPresets.row",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 125,
+            "width": 750,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 125,
+            "width": 750,
+            "height": 40
+          }
+        }
+      }
+    },
+    {
+      "name": "GenericFilterableRow[3]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 165,
+        "width": 750,
+        "height": 40
+      },
+      "depth": 3,
+      "parent": "GenericFilterableList",
+      "children": [],
+      "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "genericFilterable.searchAiPresets.row",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 165,
+          "width": 750,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 165,
+          "width": 750,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 165,
+          "width": 750,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 165,
+          "width": 750,
+          "height": 40
+        },
+        "hitWidth": 750,
+        "hitHeight": 40,
+        "visualWidth": 750,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "GenericFilterableRow[3]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 165,
+          "width": 750,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 16,
+            "bottom": 0,
+            "left": 16
+          }
+        },
+        "depth": 3,
+        "parent": "GenericFilterableList",
+        "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "genericFilterable.searchAiPresets.row",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 165,
+            "width": 750,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 165,
+            "width": 750,
+            "height": 40
+          }
+        }
+      }
+    },
+    {
+      "name": "GenericFilterableRow[4]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 205,
+        "width": 750,
+        "height": 40
+      },
+      "depth": 3,
+      "parent": "GenericFilterableList",
+      "children": [],
+      "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "genericFilterable.searchAiPresets.row",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 205,
+          "width": 750,
+          "height": 40
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 205,
+          "width": 750,
+          "height": 40
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 205,
+          "width": 750,
+          "height": 40
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 205,
+          "width": 750,
+          "height": 40
+        },
+        "hitWidth": 750,
+        "hitHeight": 40,
+        "visualWidth": 750,
+        "visualHeight": 40,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "GenericFilterableRow[4]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 205,
+          "width": 750,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 16,
+            "bottom": 0,
+            "left": 16
+          }
+        },
+        "depth": 3,
+        "parent": "GenericFilterableList",
+        "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "genericFilterable.searchAiPresets.row",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 205,
+            "width": 750,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 205,
+            "width": 750,
+            "height": 40
           }
         }
       }
@@ -966,11 +1430,11 @@
       "depth": 2,
       "parent": "GenericFilterableSurface",
       "children": [],
-      "explanation": "Native footer slot for favorites; it must not overlap the list viewport.",
+      "explanation": "Native footer slot for search_ai_presets; it must not overlap the list viewport.",
       "visualStyle": {
         "chromeLayer": "functionalChrome",
         "materialSource": "solidThemeToken",
-        "tokenSource": "genericFilterable.favoritesBrowse.footer",
+        "tokenSource": "genericFilterable.searchAiPresets.footer",
         "cornerRadius": {
           "topLeft": 10,
           "topRight": 10,
@@ -1024,11 +1488,11 @@
         },
         "depth": 2,
         "parent": "GenericFilterableSurface",
-        "explanation": "Native footer slot for favorites; it must not overlap the list viewport.",
+        "explanation": "Native footer slot for search_ai_presets; it must not overlap the list viewport.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.footer",
+          "tokenSource": "genericFilterable.searchAiPresets.footer",
           "cornerRadius": {
             "topLeft": 10,
             "topRight": 10,
@@ -1062,8 +1526,8 @@
     "pressureScore": 0
   },
   "visualAudit": {
-    "nodeCount": 9,
-    "styledNodeCount": 9,
+    "nodeCount": 13,
+    "styledNodeCount": 13,
     "unstyledNodeCount": 0,
     "controlsWithHitFailures": [],
     "contentGlassNodes": [],
@@ -1071,7 +1535,7 @@
     "glassLayerViolations": [],
     "missingStyleNodeNames": [],
     "chromeLayers": {
-      "content": 3,
+      "content": 7,
       "functionalChrome": 5,
       "windowBackdrop": 1
     }
@@ -1082,10 +1546,10 @@
   "errors": [],
   "rawLayout": {
     "type": "layoutInfoResult",
-    "requestId": "devtools-layout-measure-1780126383590-955229",
+    "requestId": "devtools-layout-measure-1780126620691-c7eaae",
     "windowWidth": 750,
     "windowHeight": 480,
-    "promptType": "favoritesBrowse",
+    "promptType": "searchAiPresets",
     "components": [
       {
         "name": "Window",
@@ -1139,11 +1603,11 @@
         },
         "depth": 1,
         "parent": "Window",
-        "explanation": "GenericFilterableList favoritesBrowse owns a custom full-width list surface; it must not fall back to the launcher split shell.",
+        "explanation": "GenericFilterableList searchAiPresets owns a custom full-width list surface; it must not fall back to the launcher split shell.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.surface",
+          "tokenSource": "genericFilterable.searchAiPresets.surface",
           "cornerRadius": {
             "topLeft": 16,
             "topRight": 16,
@@ -1191,7 +1655,7 @@
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.header",
+          "tokenSource": "genericFilterable.searchAiPresets.header",
           "cornerRadius": {
             "topLeft": 16,
             "topRight": 16,
@@ -1227,7 +1691,7 @@
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.search",
+          "tokenSource": "genericFilterable.searchAiPresets.search",
           "cornerRadius": {
             "topLeft": 14,
             "topRight": 14,
@@ -1259,11 +1723,11 @@
         },
         "depth": 3,
         "parent": "GenericFilterableHeader",
-        "explanation": "favoritesBrowse count label stays in the functional header chrome.",
+        "explanation": "searchAiPresets count label stays in the functional header chrome.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.count",
+          "tokenSource": "genericFilterable.searchAiPresets.count",
           "visualBounds": {
             "x": 638,
             "y": 8,
@@ -1293,7 +1757,7 @@
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.divider",
+          "tokenSource": "genericFilterable.searchAiPresets.divider",
           "visualBounds": {
             "x": 16,
             "y": 44,
@@ -1326,7 +1790,7 @@
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.list",
+          "tokenSource": "genericFilterable.searchAiPresets.list",
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -1342,21 +1806,29 @@
         }
       },
       {
-        "name": "GenericFilterableEmptyState",
-        "type": "panel",
+        "name": "GenericFilterableRow[0]",
+        "type": "listItem",
         "bounds": {
           "x": 0,
           "y": 45,
           "width": 750,
-          "height": 401
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 16,
+            "bottom": 0,
+            "left": 16
+          }
         },
         "depth": 3,
         "parent": "GenericFilterableList",
-        "explanation": "favoritesBrowse empty state occupies the full list viewport.",
+        "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.emptyState",
+          "tokenSource": "genericFilterable.searchAiPresets.row",
           "cornerRadius": {
             "topLeft": 10,
             "topRight": 10,
@@ -1367,13 +1839,189 @@
             "x": 0,
             "y": 45,
             "width": 750,
-            "height": 401
+            "height": 40
           },
           "hitBounds": {
             "x": 0,
             "y": 45,
             "width": 750,
-            "height": 401
+            "height": 40
+          }
+        }
+      },
+      {
+        "name": "GenericFilterableRow[1]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 85,
+          "width": 750,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 16,
+            "bottom": 0,
+            "left": 16
+          }
+        },
+        "depth": 3,
+        "parent": "GenericFilterableList",
+        "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "genericFilterable.searchAiPresets.row",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 85,
+            "width": 750,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 85,
+            "width": 750,
+            "height": 40
+          }
+        }
+      },
+      {
+        "name": "GenericFilterableRow[2]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 125,
+          "width": 750,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 16,
+            "bottom": 0,
+            "left": 16
+          }
+        },
+        "depth": 3,
+        "parent": "GenericFilterableList",
+        "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "genericFilterable.searchAiPresets.row",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 125,
+            "width": 750,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 125,
+            "width": 750,
+            "height": 40
+          }
+        }
+      },
+      {
+        "name": "GenericFilterableRow[3]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 165,
+          "width": 750,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 16,
+            "bottom": 0,
+            "left": 16
+          }
+        },
+        "depth": 3,
+        "parent": "GenericFilterableList",
+        "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "genericFilterable.searchAiPresets.row",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 165,
+            "width": 750,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 165,
+            "width": 750,
+            "height": 40
+          }
+        }
+      },
+      {
+        "name": "GenericFilterableRow[4]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 205,
+          "width": 750,
+          "height": 40
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 16,
+            "bottom": 0,
+            "left": 16
+          }
+        },
+        "depth": 3,
+        "parent": "GenericFilterableList",
+        "explanation": "searchAiPresets rows mirror the shared ListItem 40px dense-row contract with full-width hit bounds.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "genericFilterable.searchAiPresets.row",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 205,
+            "width": 750,
+            "height": 40
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 205,
+            "width": 750,
+            "height": 40
           }
         }
       },
@@ -1388,11 +2036,11 @@
         },
         "depth": 2,
         "parent": "GenericFilterableSurface",
-        "explanation": "Native footer slot for favorites; it must not overlap the list viewport.",
+        "explanation": "Native footer slot for search_ai_presets; it must not overlap the list viewport.",
         "visualStyle": {
           "chromeLayer": "functionalChrome",
           "materialSource": "solidThemeToken",
-          "tokenSource": "genericFilterable.favoritesBrowse.footer",
+          "tokenSource": "genericFilterable.searchAiPresets.footer",
           "cornerRadius": {
             "topLeft": 10,
             "topRight": 10,
@@ -1414,6 +2062,6 @@
         }
       }
     ],
-    "timestamp": "2026-05-30T07:33:03.616565+00:00"
+    "timestamp": "2026-05-30T07:37:00.716529+00:00"
   }
 }

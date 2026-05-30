@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.inspect",
+  "session": "liquid-generic-filterable-search-current",
+  "classification": "ok",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "GenericFilterableList"
+  },
+  "resolvedTarget": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "GenericFilterableList",
+    "appViewVariant": "SearchAiPresetsView",
+    "nativeFooterSurface": "search_ai_presets",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 1500,
+      "height": 960,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 99594,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "windows": [
+    {
+      "index": 0,
+      "automationId": "main",
+      "windowKind": "Main",
+      "title": "Script Kit",
+      "visible": true,
+      "focused": false,
+      "bounds": {
+        "x": 585,
+        "y": 177,
+        "width": 750,
+        "height": 480
+      },
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "parentAutomationId": null,
+      "parentKind": null,
+      "pid": 99594
+    }
+  ],
+  "rawInspect": {
+    "type": "automationInspectResult",
+    "requestId": "devtools-targets-inspect-1780126614346-a8671e",
+    "schemaVersion": 3,
+    "windowId": "main",
+    "windowKind": "Main",
+    "surfaceKind": "GenericFilterableList",
+    "appViewVariant": "SearchAiPresetsView",
+    "nativeFooterSurface": "search_ai_presets",
+    "title": "Script Kit",
+    "resolvedBounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 750,
+      "height": 480
+    },
+    "surfaceHitPoint": {
+      "x": 375,
+      "y": 240
+    },
+    "suggestedHitPoints": [
+      {
+        "semanticId": "panel:window",
+        "x": 375,
+        "y": 240,
+        "reason": "surface_center"
+      }
+    ],
+    "elements": [
+      {
+        "semanticId": "input:ai-presets-filter",
+        "type": "input",
+        "value": "",
+        "focused": true
+      },
+      {
+        "semanticId": "list:ai-presets",
+        "type": "list",
+        "text": "5 items"
+      },
+      {
+        "semanticId": "choice:0:general-assistant-he",
+        "type": "choice",
+        "text": "General Assistant — Helpful AI assistant for any task",
+        "value": "General Assistant — Helpful AI assistant for any task",
+        "selected": true,
+        "index": 0,
+        "role": "generic-filterable-row",
+        "kind": "ai-presets",
+        "source": "ai-presets",
+        "selectable": true
+      },
+      {
+        "semanticId": "choice:1:code-assistant-exper",
+        "type": "choice",
+        "text": "Code Assistant — Expert programmer and debugger",
+        "value": "Code Assistant — Expert programmer and debugger",
+        "selected": false,
+        "index": 1,
+        "role": "generic-filterable-row",
+        "kind": "ai-presets",
+        "source": "ai-presets",
+        "selectable": true
+      },
+      {
+        "semanticId": "choice:2:writing-assistant-he",
+        "type": "choice",
+        "text": "Writing Assistant — Help with writing and editing",
+        "value": "Writing Assistant — Help with writing and editing",
+        "selected": false,
+        "index": 2,
+        "role": "generic-filterable-row",
+        "kind": "ai-presets",
+        "source": "ai-presets",
+        "selectable": true
+      },
+      {
+        "semanticId": "choice:3:research-assistant-d",
+        "type": "choice",
+        "text": "Research Assistant — Deep analysis and research",
+        "value": "Research Assistant — Deep analysis and research",
+        "selected": false,
+        "index": 3,
+        "role": "generic-filterable-row",
+        "kind": "ai-presets",
+        "source": "ai-presets",
+        "selectable": true
+      },
+      {
+        "semanticId": "choice:4:creative-partner-bra",
+        "type": "choice",
+        "text": "Creative Partner — Brainstorming and creative ideas",
+        "value": "Creative Partner — Brainstorming and creative ideas",
+        "selected": false,
+        "index": 4,
+        "role": "generic-filterable-row",
+        "kind": "ai-presets",
+        "source": "ai-presets",
+        "selectable": true
+      },
+      {
+        "semanticId": "footer:native:row",
+        "type": "panel",
+        "text": "native",
+        "value": "search_ai_presets",
+        "role": "footer",
+        "kind": "nativeFooterRow",
+        "selectable": false
+      },
+      {
+        "semanticId": "footer:native:run",
+        "type": "button",
+        "text": "↵ Run",
+        "value": "run",
+        "selected": false,
+        "index": 0,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "search_ai_presets",
+        "sourceName": "search_ai_presets",
+        "selectable": true
+      }
+    ],
+    "totalCount": 9,
+    "focusedSemanticId": "input:ai-presets-filter",
+    "selectedSemanticId": "choice:0:general-assistant-he",
+    "screenshotWidth": 1500,
+    "screenshotHeight": 960,
+    "osWindowId": 84595,
+    "semanticQuality": "full",
+    "pid": 99594
+  },
+  "sessionLifecycle": [],
+  "errors": []
+}
