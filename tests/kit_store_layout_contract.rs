@@ -31,3 +31,35 @@ fn kit_store_browse_layout_receipt_uses_custom_surface_nodes() {
         );
     }
 }
+
+#[test]
+fn kit_store_installed_layout_receipt_uses_custom_surface_nodes() {
+    let browse_branch = LAYOUT_SOURCE
+        .find("if let AppView::InstalledKitsView")
+        .expect("build_layout_info must have a KitStoreInstalled-specific layout branch");
+    let generic_script_list = LAYOUT_SOURCE
+        .find("LayoutComponentInfo::new(\"ScriptList\"")
+        .expect("build_layout_info must retain the generic ScriptList layout branch");
+
+    assert!(
+        browse_branch < generic_script_list,
+        "KitStoreInstalled must be measured before the generic ScriptList branch so receipts do not report 40px launcher rows or a preview panel"
+    );
+
+    for needle in [
+        "KitStoreInstalledHeader",
+        "KitStoreInstalledCount",
+        "KitStoreInstalledList",
+        "KitStoreInstalledRow",
+        "UpdateButton",
+        "RemoveButton",
+        "KitStoreInstalledFooter",
+        "KIT_STORE_ROW_HEIGHT: f32 = 72.0",
+        "instead of the generic launcher split shell",
+    ] {
+        assert!(
+            LAYOUT_SOURCE.contains(needle),
+            "KitStoreInstalled layout receipt is missing `{needle}`"
+        );
+    }
+}

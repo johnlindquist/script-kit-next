@@ -921,6 +921,236 @@ impl ScriptListApp {
             };
         }
 
+        if let AppView::InstalledKitsView { kits, .. } = &self.current_view {
+            const KIT_STORE_HEADER_HEIGHT: f32 = 44.0;
+            const KIT_STORE_HEADER_PADDING_X: f32 = 16.0;
+            const KIT_STORE_HEADER_PADDING_Y: f32 = 8.0;
+            const KIT_STORE_TITLE_WIDTH: f32 = 132.0;
+            const KIT_STORE_COUNT_WIDTH: f32 = 96.0;
+            const KIT_STORE_DIVIDER_HEIGHT: f32 = 1.0;
+            const KIT_STORE_LIST_PADDING_Y: f32 = 4.0;
+            const KIT_STORE_ROW_HEIGHT: f32 = 72.0;
+            const KIT_STORE_ROW_PADDING_X: f32 = 12.0;
+            const KIT_STORE_ROW_PADDING_Y: f32 = 8.0;
+            const KIT_STORE_ROW_GAP: f32 = 12.0;
+            const KIT_STORE_ACTION_GAP: f32 = 8.0;
+            const KIT_STORE_UPDATE_WIDTH: f32 = 62.0;
+            const KIT_STORE_REMOVE_WIDTH: f32 = 66.0;
+            const KIT_STORE_ACTION_HEIGHT: f32 = 28.0;
+            const KIT_STORE_FOOTER_HEIGHT: f32 = 34.0;
+
+            let divider_y = KIT_STORE_HEADER_HEIGHT;
+            let list_top =
+                divider_y + KIT_STORE_DIVIDER_HEIGHT + KIT_STORE_LIST_PADDING_Y;
+            let footer_y = window_height - KIT_STORE_FOOTER_HEIGHT;
+            let list_height =
+                (footer_y - list_top - KIT_STORE_LIST_PADDING_Y).max(0.0);
+            let count_x =
+                window_width - KIT_STORE_HEADER_PADDING_X - KIT_STORE_COUNT_WIDTH;
+
+            components.push(
+                LayoutComponentInfo::new("KitStoreInstalledSurface", LayoutComponentType::Panel)
+                    .with_bounds(0.0, 0.0, window_width, window_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("kitStoreInstalled.surface")
+                    .with_flex_column()
+                    .with_depth(1)
+                    .with_parent("Window")
+                    .with_explanation("Installed Kits owns a custom full-window surface instead of the generic launcher split shell."),
+            );
+            components.push(
+                LayoutComponentInfo::new("KitStoreInstalledHeader", LayoutComponentType::Header)
+                    .with_bounds(0.0, 0.0, window_width, KIT_STORE_HEADER_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("kitStoreInstalled.header")
+                    .with_padding(
+                        KIT_STORE_HEADER_PADDING_Y,
+                        KIT_STORE_HEADER_PADDING_X,
+                        KIT_STORE_HEADER_PADDING_Y,
+                        KIT_STORE_HEADER_PADDING_X,
+                    )
+                    .with_flex_row()
+                    .with_depth(2)
+                    .with_parent("KitStoreInstalledSurface")
+                    .with_explanation("Custom installed-kits header owns the title and installed count."),
+            );
+            components.push(
+                LayoutComponentInfo::new("KitStoreInstalledTitle", LayoutComponentType::Other)
+                    .with_bounds(
+                        KIT_STORE_HEADER_PADDING_X,
+                        KIT_STORE_HEADER_PADDING_Y,
+                        KIT_STORE_TITLE_WIDTH,
+                        28.0,
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("kitStoreInstalled.title")
+                    .with_depth(3)
+                    .with_parent("KitStoreInstalledHeader")
+                    .with_explanation("Static Installed Kits title in the custom header."),
+            );
+            components.push(
+                LayoutComponentInfo::new("KitStoreInstalledCount", LayoutComponentType::Other)
+                    .with_bounds(
+                        count_x,
+                        KIT_STORE_HEADER_PADDING_Y,
+                        KIT_STORE_COUNT_WIDTH,
+                        28.0,
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("kitStoreInstalled.count")
+                    .with_depth(3)
+                    .with_parent("KitStoreInstalledHeader")
+                    .with_explanation("Installed count text remains in the functional header chrome."),
+            );
+            components.push(
+                LayoutComponentInfo::new("KitStoreInstalledDivider", LayoutComponentType::Other)
+                    .with_bounds(
+                        KIT_STORE_HEADER_PADDING_X,
+                        divider_y,
+                        window_width - KIT_STORE_HEADER_PADDING_X * 2.0,
+                        KIT_STORE_DIVIDER_HEIGHT,
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("kitStoreInstalled.divider")
+                    .with_depth(2)
+                    .with_parent("KitStoreInstalledSurface")
+                    .with_explanation("One-pixel divider inset to the same 16px horizontal header padding."),
+            );
+            components.push(
+                LayoutComponentInfo::new("KitStoreInstalledList", LayoutComponentType::List)
+                    .with_bounds(0.0, list_top, window_width, list_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("kitStoreInstalled.list")
+                    .with_flex_column()
+                    .with_depth(2)
+                    .with_parent("KitStoreInstalledSurface")
+                    .with_explanation("Custom installed-kits list region uses full width and 72px rows."),
+            );
+
+            let visible_rows = ((list_height / KIT_STORE_ROW_HEIGHT) as usize)
+                .min(kits.len())
+                .min(5);
+            if visible_rows == 0 {
+                components.push(
+                    LayoutComponentInfo::new(
+                        "KitStoreInstalledEmptyState",
+                        LayoutComponentType::Panel,
+                    )
+                    .with_bounds(0.0, list_top, window_width, list_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                    )
+                    .with_visual_token("kitStoreInstalled.emptyState")
+                    .with_depth(3)
+                    .with_parent("KitStoreInstalledList")
+                    .with_explanation("Centered empty state occupies the installed-kits list when no kits are installed."),
+                );
+            } else {
+                for i in 0..visible_rows {
+                    let row_y = list_top + i as f32 * KIT_STORE_ROW_HEIGHT;
+                    let remove_x =
+                        window_width - KIT_STORE_ROW_PADDING_X - KIT_STORE_REMOVE_WIDTH;
+                    let update_x = remove_x - KIT_STORE_ACTION_GAP - KIT_STORE_UPDATE_WIDTH;
+                    let action_y = row_y + (KIT_STORE_ROW_HEIGHT - KIT_STORE_ACTION_HEIGHT) / 2.0;
+                    components.push(
+                        LayoutComponentInfo::new(
+                            format!("KitStoreInstalledRow[{}]", i),
+                            LayoutComponentType::ListItem,
+                        )
+                        .with_bounds(0.0, row_y, window_width, KIT_STORE_ROW_HEIGHT)
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_CONTENT,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                        )
+                        .with_visual_token("kitStoreInstalled.row")
+                        .with_padding(
+                            KIT_STORE_ROW_PADDING_Y,
+                            KIT_STORE_ROW_PADDING_X,
+                            KIT_STORE_ROW_PADDING_Y,
+                            KIT_STORE_ROW_PADDING_X,
+                        )
+                        .with_gap(KIT_STORE_ROW_GAP)
+                        .with_flex_row()
+                        .with_depth(3)
+                        .with_parent("KitStoreInstalledList")
+                        .with_explanation("Installed kit rows are 72px tall with 12px horizontal padding, 8px vertical padding, and a 12px text/action gap."),
+                    );
+                    for (name, x, width) in [
+                        ("KitStoreInstalledUpdateButton", update_x, KIT_STORE_UPDATE_WIDTH),
+                        ("KitStoreInstalledRemoveButton", remove_x, KIT_STORE_REMOVE_WIDTH),
+                    ] {
+                        components.push(
+                            LayoutComponentInfo::new(
+                                format!("{}[{}]", name, i),
+                                LayoutComponentType::Button,
+                            )
+                            .with_bounds(x, action_y, width, KIT_STORE_ACTION_HEIGHT)
+                            .with_visual_style(
+                                chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                                chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                                Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                            )
+                            .with_visual_token("kitStoreInstalled.actionButton")
+                            .with_hit_bounds(x, action_y, width, KIT_STORE_ACTION_HEIGHT)
+                            .with_depth(4)
+                            .with_parent(format!("KitStoreInstalledRow[{}]", i))
+                            .with_explanation("Inline installed-kit action keeps a badge-sized visual with a 28px minimum hit target."),
+                        );
+                    }
+                }
+            }
+
+            components.push(
+                LayoutComponentInfo::new("KitStoreInstalledFooter", LayoutComponentType::Container)
+                    .with_bounds(0.0, footer_y, window_width, KIT_STORE_FOOTER_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                    )
+                    .with_visual_token("kitStoreInstalled.footer")
+                    .with_depth(2)
+                    .with_parent("KitStoreInstalledSurface")
+                    .with_explanation("Native footer slot for Update and Remove hints; it must not overlap the list viewport."),
+            );
+
+            return LayoutInfo {
+                window_width,
+                window_height,
+                prompt_type: prompt_type.to_string(),
+                components,
+                handler_form: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            };
+        }
+
         // Header
         components.push(
             LayoutComponentInfo::new("Header", LayoutComponentType::Header)

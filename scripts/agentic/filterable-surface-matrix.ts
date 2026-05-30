@@ -449,7 +449,26 @@ export async function enterFilterableSurface(
   entry: FilterableSurfaceMatrixEntry,
   timeoutMs: number,
 ): Promise<JsonObject> {
-  return sendAndAwaitParse(session, entry.entryCommand, timeoutMs);
+  try {
+    return await sendAndAwaitParse(session, entry.entryCommand, timeoutMs);
+  } catch (error) {
+    if (entry.entryCommand.type !== "triggerBuiltin") {
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes('"parseOutcome":"timeout"')) {
+      throw error;
+    }
+    await waitForPromptType(session, entry, timeoutMs);
+    return {
+      schemaVersion: 1,
+      status: "ok",
+      sent: true,
+      parseOutcome: "timeout",
+      acceptedByState: true,
+      expectedPromptType: entry.promptType,
+    };
+  }
 }
 
 export async function waitForPromptType(
@@ -511,7 +530,9 @@ export async function runEntry(
   const steps: StepReceipt[] = [];
 
   await enterFilterableSurface(session, entry, timeoutMs);
-  await sendAndAwaitParse(session, { type: "setFilter", text: "" }, timeoutMs);
+  if (entry.filterText !== "") {
+    await sendAndAwaitParse(session, { type: "setFilter", text: "" }, timeoutMs);
+  }
 
   const emptyStateCommand = {
     type: "getState",
@@ -535,7 +556,9 @@ export async function runEntry(
   });
 
   const setFilterCommand = { type: "setFilter", text: entry.filterText };
-  await sendAndAwaitParse(session, setFilterCommand, timeoutMs);
+  if (entry.filterText !== "") {
+    await sendAndAwaitParse(session, setFilterCommand, timeoutMs);
+  }
 
   const filteredStateCommand = {
     type: "getState",
