@@ -273,20 +273,20 @@
     <section class="panel">
       <h2>Surface Inventory</h2>
       <p>Source-backed inventory from <code>bun scripts/devtools/surfaces.ts</code>: 31 surface contracts, 29 active Liquid Glass audit surfaces, 48 AppView variants, 47 feature-map entries, 23 owner skills, 7 explicit DevTools coverage entries, and 8 recommended Oracle batches. Current receipt: <code>artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json</code>.</p>
-      <p>Audit priority is now outside-in: prove platform windows, containers, material/backdrop behavior, resizing, safe areas, and lifecycle before inner controls and content. <code>DesignGallery</code> and <code>DesignExplorer</code> are kept in raw source inventory but excluded from the active proof matrix because the Storybook/design-lab surfaces are outdated.</p>
+      <p>Audit priority is now outside-in: prove platform windows, containers, material/backdrop behavior, resizing, safe areas, and lifecycle before inner controls and content. The generated inventory now carries explicit <code>priority</code>, <code>outsideInPhase</code>, and <code>priorityRationale</code> fields so window/container work remains the top queue. <code>DesignGallery</code> and <code>DesignExplorer</code> are kept in raw source inventory but excluded from the active proof matrix because the Storybook/design-lab surfaces are outdated.</p>
       <table>
         <thead>
-          <tr><th>Batch</th><th>Surface families</th><th>Status</th><th>Oracle / Evidence</th></tr>
+          <tr><th>Priority</th><th>Batch</th><th>Surface families</th><th>Status</th><th>Oracle / Evidence</th></tr>
         </thead>
         <tbody>
-          <tr><td>Platform windows</td><td>Window material, containers, resizing, safe areas, screenshots, lifecycle, About, Feedback</td><td class="done">About and Feedback strong</td><td><code>window-priority-about-*.json</code>, <code>window-priority-feedback-*.json</code>, screenshot/diff paths below</td></tr>
-          <tr><td>Launcher main actions</td><td>ScriptList, ActionsDialog, ConfirmPrompt, footer, source filters, shortcuts, aliases</td><td class="done">Tahoe metrics slice captured</td><td><code>before-main-*.json</code>, <code>before-actions-*.json</code>, <code>tahoe-next-*.json</code>, screenshot paths below</td></tr>
-          <tr><td>Prompt runtime</td><td>arg/div/form/select/path/drop/template/chat/mini/micro, terminal, editor, webcam</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
-          <tr><td>Built-ins</td><td>Clipboard, App Launcher, Window Switcher, Browser Tabs, Settings, Kit Store, Process Manager, Current App, Theme, Emoji, ACP History</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
-          <tr><td>Portals/resources</td><td>File search mini/full, attachment portals, SDK reference, script templates, MCP resources</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
-          <tr><td>ACP/chat</td><td>ACP chat, detached chat window, composer, model setup/switch, history, context parts</td><td class="partial">detached window numeric proof</td><td><code>window-priority-acp-detached-*.json</code>; Oracle browser batch <code>acp-window-liquid-glass</code> cancelled by client</td></tr>
-          <tr><td>Notes/dictation/media</td><td>Notes window, notes ACP, dictation overlay/history, media target delivery</td><td class="done">notes before captured</td><td><code>before-notes-*.json</code>, screenshot path below</td></tr>
-          <tr><td>Observability/storage</td><td>Feedback, SDK reference, script templates, diagnostics, replay, storage/security receipts</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
+          <tr><td><span class="metric">1</span></td><td>Platform windows</td><td>Window material, containers, resizing, safe areas, screenshots, lifecycle, About, Feedback</td><td class="done">About and Feedback strong</td><td><code>window-priority-about-*.json</code>, <code>window-priority-feedback-*.json</code>, screenshot/diff paths below</td></tr>
+          <tr><td><span class="metric">2</span></td><td>Launcher main actions</td><td>Main window shell, ScriptList, ActionsDialog, ConfirmPrompt, footer, source filters, shortcuts, aliases</td><td class="done">Tahoe metrics slice captured</td><td><code>before-main-*.json</code>, <code>before-actions-*.json</code>, <code>tahoe-next-*.json</code>, screenshot paths below</td></tr>
+          <tr><td><span class="metric">3</span></td><td>Prompt runtime</td><td>Prompt windows and child containers: arg/div/form/select/path/drop/template/chat/mini/micro, terminal, editor, webcam</td><td class="partial">DivPrompt blocker captured</td><td><code>window-priority-prompt-div-*.json</code>; protocol-bus timeout blocker recorded</td></tr>
+          <tr><td><span class="metric">4</span></td><td>Built-ins</td><td>Shared list/preview containers: Clipboard, App Launcher, Window Switcher, Browser Tabs, Settings, Kit Store, Process Manager, Current App, Theme, Emoji, ACP History</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
+          <tr><td><span class="metric">5</span></td><td>Portals/resources</td><td>Portal windows and return containers: file search mini/full, attachment portals, SDK reference, script templates, MCP resources</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
+          <tr><td><span class="metric">6</span></td><td>ACP/chat</td><td>ACP chat, detached chat window, composer, model setup/switch, history, context parts</td><td class="partial">detached window numeric proof</td><td><code>window-priority-acp-detached-*.json</code>; Oracle browser batch <code>acp-window-liquid-glass</code> cancelled by client</td></tr>
+          <tr><td><span class="metric">7</span></td><td>Notes/dictation/media</td><td>Notes window, notes ACP, dictation overlay/history, media target delivery</td><td class="done">notes before captured</td><td><code>before-notes-*.json</code>, screenshot path below</td></tr>
+          <tr><td><span class="metric">8</span></td><td>Observability/storage</td><td>Feedback, SDK reference, script templates, diagnostics, replay, storage/security receipts</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
         </tbody>
       </table>
     </section>
@@ -621,6 +621,10 @@
         <div class="entry">
           <time>2026-05-29 23:09 MDT</time>
           <p>Started the prompt DivPrompt proof slice and captured the first red receipts. <code>window-priority-prompt-div-open-after.json</code> proves the <code>run</code> command parsed, but <code>window-priority-prompt-div-target-inspect-after.json</code>, <code>window-priority-prompt-div-layout-after.json</code>, and <code>window-priority-prompt-div-screenshot-after.json</code> classify as blocked or errored with no main target resolved. This keeps PromptEntity marked as a live blocker instead of a missing artifact.</p>
+        </div>
+        <div class="entry">
+          <time>2026-05-29 23:12 MDT</time>
+          <p>Made the outside-in ordering machine-readable. <code>scripts/devtools/surfaces.ts</code> now emits explicit priority metadata for each Oracle batch: priority 1 is platform windows, priority 2 is the main launcher/action shell, priority 3 is prompt windows/child containers, then built-ins, portals, ACP internals, notes/dictation internals, and supporting observability/storage. Regenerated <code>surface-inventory-2026-05-29-2050.json</code> and <code>liquid-glass-proof-matrix.json</code> with Storybook/design-lab surfaces still excluded from active testing.</p>
         </div>
       </div>
     </section>
