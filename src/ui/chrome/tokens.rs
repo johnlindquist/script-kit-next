@@ -11,9 +11,16 @@ pub const LIQUID_GLASS_PREFERRED_HIT_PX: f32 = 44.0;
 pub const LIQUID_GLASS_PREFERRED_CENTER_GAP_PX: f32 = 60.0;
 
 pub const LIQUID_GLASS_WINDOW_RADIUS_PX: f32 = 22.0;
+/// Radius for the Tahoe-style floating popup shell (e.g. the actions dialog).
+pub const LIQUID_GLASS_POPUP_RADIUS_PX: f32 = 18.0;
 pub const LIQUID_GLASS_PANEL_RADIUS_PX: f32 = 16.0;
 pub const LIQUID_GLASS_CONTROL_RADIUS_PX: f32 = 14.0;
 pub const LIQUID_GLASS_COMPACT_RADIUS_PX: f32 = 10.0;
+
+/// Canonical interior padding for a Liquid Glass panel surface.
+pub const LIQUID_GLASS_PANEL_PADDING_PX: f32 = 16.0;
+/// Canonical dense gap between stacked controls/labels inside chrome.
+pub const LIQUID_GLASS_DENSE_GAP_PX: f32 = 8.0;
 
 pub const CHROME_LAYER_CONTENT: &str = "content";
 pub const CHROME_LAYER_FUNCTIONAL: &str = "functionalChrome";

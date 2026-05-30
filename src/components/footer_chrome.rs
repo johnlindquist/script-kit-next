@@ -22,7 +22,8 @@ pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 6.0;
 pub(crate) const FOOTER_ACTION_CONTENT_GAP_PX: f32 = 4.0;
 pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX: f32 = 4.0;
 pub(crate) const FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX: f32 = 6.0;
-pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 10.0;
+pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 =
+    crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX;
 pub(crate) const FOOTER_RUN_SLOT_MIN_WIDTH_PX: f32 = 92.0;
 pub(crate) const FOOTER_RUN_SLOT_MAX_WIDTH_PX: f32 = 242.0;
 pub(crate) const FOOTER_ACTIONS_SLOT_WIDTH_PX: f32 = 92.0;

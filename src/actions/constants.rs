@@ -37,8 +37,9 @@ pub const SECTION_HEADER_HEIGHT: f32 = 22.0;
 pub const ACTION_ROW_INSET: f32 = 8.0;
 
 /// Outer and inner radius for the Tahoe-style actions popup shell.
-pub const ACTIONS_POPUP_RADIUS: f32 = 18.0;
-pub const ACTIONS_ROW_RADIUS: f32 = 10.0;
+/// De-drifted onto the shared Liquid Glass popup/compact radius tokens.
+pub const ACTIONS_POPUP_RADIUS: f32 = crate::ui::chrome::LIQUID_GLASS_POPUP_RADIUS_PX;
+pub const ACTIONS_ROW_RADIUS: f32 = crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX;
 
 /// `.impeccable.md` contract: actions dialog groups are spacing-defined headers.
 pub const ACTIONS_DIALOG_EXPECT_SECTION_MODE: &str = "headers";

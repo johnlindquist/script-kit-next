@@ -3,7 +3,8 @@ use crate::theme::Theme;
 use crate::ui::chrome::alpha_from_opacity;
 
 /// Canonical height for prompt action buttons (Run/Actions/Save/Cancel/etc.).
-pub const BUTTON_GHOST_HEIGHT: f32 = 28.0;
+/// De-drifted onto the shared Liquid Glass minimum hit target (28pt).
+pub const BUTTON_GHOST_HEIGHT: f32 = crate::ui::chrome::LIQUID_GLASS_MIN_HIT_PX;
 /// Canonical horizontal padding for ghost buttons.
 pub const BUTTON_GHOST_PADDING_X: f32 = 8.0;
 /// Canonical vertical padding for ghost buttons.
