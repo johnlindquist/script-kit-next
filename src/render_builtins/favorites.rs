@@ -108,7 +108,7 @@ impl ScriptListApp {
             || description.to_lowercase().contains(&filter_lower)
     }
 
-    fn filtered_favorite_ids_for_filter(&self, filter: &str) -> Vec<String> {
+    pub(crate) fn filtered_favorite_ids_for_filter(&self, filter: &str) -> Vec<String> {
         script_kit_gpui::favorites::load_favorites()
             .unwrap_or_default()
             .script_ids

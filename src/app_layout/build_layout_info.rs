@@ -1153,6 +1153,239 @@ impl ScriptListApp {
             };
         }
 
+        if let AppView::FavoritesBrowseView {
+            filter,
+            selected_index,
+        }
+        | AppView::SearchAiPresetsView {
+            filter,
+            selected_index,
+        } = &self.current_view
+        {
+            const GENERIC_HEADER_HEIGHT: f32 = 44.0;
+            const GENERIC_HEADER_PADDING_X: f32 = 16.0;
+            const GENERIC_HEADER_PADDING_Y: f32 = 8.0;
+            const GENERIC_HEADER_GAP: f32 = 12.0;
+            const GENERIC_INPUT_HEIGHT: f32 = 28.0;
+            const GENERIC_INPUT_VISUAL_HEIGHT: f32 = 22.0;
+            const GENERIC_COUNT_WIDTH: f32 = 96.0;
+            const GENERIC_DIVIDER_HEIGHT: f32 = 1.0;
+            const GENERIC_ROW_HEIGHT: f32 = LIST_ITEM_HEIGHT;
+            const GENERIC_FOOTER_HEIGHT: f32 = 34.0;
+
+            let (variant, footer_surface, list_count) = match &self.current_view {
+                AppView::FavoritesBrowseView { filter, .. } => (
+                    "favoritesBrowse",
+                    "favorites",
+                    self.filtered_favorite_ids_for_filter(filter).len(),
+                ),
+                AppView::SearchAiPresetsView { filter, .. } => (
+                    "searchAiPresets",
+                    "search_ai_presets",
+                    Self::ai_preset_search_visible_row_labels(filter).len(),
+                ),
+                _ => unreachable!("generic filterable branch is guarded by current_view match"),
+            };
+
+            let divider_y = GENERIC_HEADER_HEIGHT;
+            let list_top = divider_y + GENERIC_DIVIDER_HEIGHT;
+            let footer_y = window_height - GENERIC_FOOTER_HEIGHT;
+            let list_height = (footer_y - list_top).max(0.0);
+            let search_x = GENERIC_HEADER_PADDING_X;
+            let search_width = (window_width
+                - GENERIC_HEADER_PADDING_X * 2.0
+                - GENERIC_HEADER_GAP
+                - GENERIC_COUNT_WIDTH)
+                .max(0.0);
+            let search_visual_y =
+                GENERIC_HEADER_PADDING_Y + (GENERIC_INPUT_HEIGHT - GENERIC_INPUT_VISUAL_HEIGHT) / 2.0;
+            let count_x = search_x + search_width + GENERIC_HEADER_GAP;
+
+            components.push(
+                LayoutComponentInfo::new("GenericFilterableSurface", LayoutComponentType::Panel)
+                    .with_bounds(0.0, 0.0, window_width, window_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token(format!("genericFilterable.{variant}.surface"))
+                    .with_flex_column()
+                    .with_depth(1)
+                    .with_parent("Window")
+                    .with_explanation(format!(
+                        "GenericFilterableList {variant} owns a custom full-width list surface; it must not fall back to the launcher split shell."
+                    )),
+            );
+            components.push(
+                LayoutComponentInfo::new("GenericFilterableHeader", LayoutComponentType::Header)
+                    .with_bounds(0.0, 0.0, window_width, GENERIC_HEADER_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token(format!("genericFilterable.{variant}.header"))
+                    .with_padding(
+                        GENERIC_HEADER_PADDING_Y,
+                        GENERIC_HEADER_PADDING_X,
+                        GENERIC_HEADER_PADDING_Y,
+                        GENERIC_HEADER_PADDING_X,
+                    )
+                    .with_gap(GENERIC_HEADER_GAP)
+                    .with_flex_row()
+                    .with_depth(2)
+                    .with_parent("GenericFilterableSurface")
+                    .with_explanation("Functional header holds the search field and result count with a 12px gap."),
+            );
+            components.push(
+                LayoutComponentInfo::new("GenericFilterableSearch", LayoutComponentType::Input)
+                    .with_bounds(
+                        search_x,
+                        search_visual_y,
+                        search_width,
+                        GENERIC_INPUT_VISUAL_HEIGHT,
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
+                    )
+                    .with_visual_token(format!("genericFilterable.{variant}.search"))
+                    .with_hit_bounds(
+                        search_x,
+                        GENERIC_HEADER_PADDING_Y,
+                        search_width,
+                        GENERIC_INPUT_HEIGHT,
+                    )
+                    .with_depth(3)
+                    .with_parent("GenericFilterableHeader")
+                    .with_explanation("Search uses a 22px visual text lane inside a 28px minimum hit target."),
+            );
+            components.push(
+                LayoutComponentInfo::new("GenericFilterableCount", LayoutComponentType::Other)
+                    .with_bounds(
+                        count_x,
+                        GENERIC_HEADER_PADDING_Y,
+                        GENERIC_COUNT_WIDTH,
+                        GENERIC_INPUT_HEIGHT,
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token(format!("genericFilterable.{variant}.count"))
+                    .with_depth(3)
+                    .with_parent("GenericFilterableHeader")
+                    .with_explanation(format!(
+                        "{variant} count label stays in the functional header chrome."
+                    )),
+            );
+            components.push(
+                LayoutComponentInfo::new("GenericFilterableDivider", LayoutComponentType::Other)
+                    .with_bounds(
+                        GENERIC_HEADER_PADDING_X,
+                        divider_y,
+                        window_width - GENERIC_HEADER_PADDING_X * 2.0,
+                        GENERIC_DIVIDER_HEIGHT,
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token(format!("genericFilterable.{variant}.divider"))
+                    .with_depth(2)
+                    .with_parent("GenericFilterableSurface")
+                    .with_explanation("One-pixel divider inset to the same 16px horizontal header padding."),
+            );
+            components.push(
+                LayoutComponentInfo::new("GenericFilterableList", LayoutComponentType::List)
+                    .with_bounds(0.0, list_top, window_width, list_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token(format!("genericFilterable.{variant}.list"))
+                    .with_flex_column()
+                    .with_depth(2)
+                    .with_parent("GenericFilterableSurface")
+                    .with_explanation("Generic filterable list uses full width and no preview panel."),
+            );
+
+            let visible_rows = ((list_height / GENERIC_ROW_HEIGHT) as usize)
+                .min(list_count)
+                .min(5);
+            if visible_rows == 0 {
+                components.push(
+                    LayoutComponentInfo::new("GenericFilterableEmptyState", LayoutComponentType::Panel)
+                        .with_bounds(0.0, list_top, window_width, list_height)
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_CONTENT,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                        )
+                        .with_visual_token(format!("genericFilterable.{variant}.emptyState"))
+                        .with_depth(3)
+                        .with_parent("GenericFilterableList")
+                        .with_explanation(format!(
+                            "{variant} empty state occupies the full list viewport."
+                        )),
+                );
+            } else {
+                for i in 0..visible_rows {
+                    let row_y = list_top + i as f32 * GENERIC_ROW_HEIGHT;
+                    components.push(
+                        LayoutComponentInfo::new(
+                            format!("GenericFilterableRow[{}]", i),
+                            LayoutComponentType::ListItem,
+                        )
+                        .with_bounds(0.0, row_y, window_width, GENERIC_ROW_HEIGHT)
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_CONTENT,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                        )
+                        .with_visual_token(format!("genericFilterable.{variant}.row"))
+                        .with_padding(0.0, GENERIC_HEADER_PADDING_X, 0.0, GENERIC_HEADER_PADDING_X)
+                        .with_depth(3)
+                        .with_parent("GenericFilterableList")
+                        .with_explanation(format!(
+                            "{variant} rows mirror the shared ListItem {}px dense-row contract with full-width hit bounds.",
+                            GENERIC_ROW_HEIGHT
+                        )),
+                    );
+                }
+            }
+
+            components.push(
+                LayoutComponentInfo::new("GenericFilterableFooter", LayoutComponentType::Container)
+                    .with_bounds(0.0, footer_y, window_width, GENERIC_FOOTER_HEIGHT)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                    )
+                    .with_visual_token(format!("genericFilterable.{variant}.footer"))
+                    .with_depth(2)
+                    .with_parent("GenericFilterableSurface")
+                    .with_explanation(format!(
+                        "Native footer slot for {footer_surface}; it must not overlap the list viewport."
+                    )),
+            );
+
+            return LayoutInfo {
+                window_width,
+                window_height,
+                prompt_type: prompt_type.to_string(),
+                components,
+                handler_form: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            };
+        }
+
         // Header
         components.push(
             LayoutComponentInfo::new("Header", LayoutComponentType::Header)
