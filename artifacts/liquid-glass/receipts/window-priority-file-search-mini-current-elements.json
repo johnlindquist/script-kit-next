@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "tool": "script-kit-devtools.elements",
   "command": "elements.snapshot",
-  "classification": "ok",
-  "session": "liquid-file-search-current",
+  "classification": "blocked-by-target-ambiguity",
+  "session": "liquid-file-search-mini-rekey-current",
   "requestedTarget": {
     "selector": {
       "type": "main"
@@ -18,9 +18,9 @@
     "hostKind": null,
     "parentAutomationId": null,
     "openerAutomationId": null,
-    "surfaceKind": "FileSearchMini",
-    "appViewVariant": "FileSearchView",
-    "nativeFooterSurface": "file_search",
+    "surfaceKind": "ScriptList",
+    "appViewVariant": "ScriptList",
+    "nativeFooterSurface": "script_list",
     "surfaceFamily": null,
     "routeId": null,
     "routeStack": [],
@@ -39,8 +39,8 @@
     "frontmost": null,
     "focused": null,
     "screenshotIdentity": {
-      "width": 750,
-      "height": 480,
+      "width": null,
+      "height": null,
       "targetBoundsInScreenshot": {
         "x": 0,
         "y": 0,
@@ -49,31 +49,32 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 11615,
-    "strictTargetMatch": true,
+    "pid": 75921,
+    "strictTargetMatch": false,
     "ambiguity": []
   },
   "semanticSurface": {
-    "surfaceKind": "FileSearchMini",
-    "appViewVariant": "FileSearchView"
+    "surfaceKind": "ScriptList",
+    "appViewVariant": "ScriptList"
   },
-  "totalCount": 5,
-  "returnedCount": 5,
+  "totalCount": 8,
+  "returnedCount": 8,
   "truncated": false,
-  "focusedSemanticId": "input:file-search-input",
-  "selectedSemanticId": null,
+  "focusedSemanticId": "input:filter",
+  "selectedSemanticId": "choice:0:open-file-search",
   "duplicateSemanticIds": [],
   "missingPrimitives": [
-    "elementBounds"
+    "elementBounds",
+    "strictTargetIdentity"
   ],
   "nodes": [
     {
-      "semanticId": "input:file-search-input",
+      "semanticId": "input:filter",
       "role": "input",
       "type": "input",
-      "label": "",
+      "label": "~",
       "text": null,
-      "value": "",
+      "value": "~",
       "selected": null,
       "focused": true,
       "index": null,
@@ -81,18 +82,18 @@
       "actions": [],
       "bounds": null,
       "raw": {
-        "semanticId": "input:file-search-input",
+        "semanticId": "input:filter",
         "type": "input",
-        "value": "",
+        "value": "~",
         "focused": true
       }
     },
     {
-      "semanticId": "list:file-results",
+      "semanticId": "list:results",
       "role": "list",
       "type": "list",
-      "label": "0 items",
-      "text": "0 items",
+      "label": "1 items",
+      "text": "1 items",
       "value": null,
       "selected": null,
       "focused": null,
@@ -101,9 +102,35 @@
       "actions": [],
       "bounds": null,
       "raw": {
-        "semanticId": "list:file-results",
+        "semanticId": "list:results",
         "type": "list",
-        "text": "0 items"
+        "text": "1 items"
+      }
+    },
+    {
+      "semanticId": "choice:0:open-file-search",
+      "role": "row",
+      "type": "choice",
+      "label": "Open File Search",
+      "text": "Open File Search",
+      "value": "Browse files",
+      "selected": true,
+      "focused": null,
+      "index": 0,
+      "owner": "Spine",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:0:open-file-search",
+        "type": "choice",
+        "text": "Open File Search",
+        "value": "Browse files",
+        "selected": true,
+        "index": 0,
+        "role": "row",
+        "kind": "hint",
+        "sourceName": "Spine",
+        "selectable": true
       }
     },
     {
@@ -112,7 +139,7 @@
       "type": "panel",
       "label": "native",
       "text": "native",
-      "value": "file_search",
+      "value": "script_list",
       "selected": null,
       "focused": null,
       "index": null,
@@ -123,36 +150,90 @@
         "semanticId": "footer:native:row",
         "type": "panel",
         "text": "native",
-        "value": "file_search",
+        "value": "script_list",
         "role": "footer",
         "kind": "nativeFooterRow",
         "selectable": false
       }
     },
     {
-      "semanticId": "footer:native:run",
+      "semanticId": "footer:native:cwd",
       "role": "footer",
       "type": "button",
-      "label": "↵ Run",
-      "text": "↵ Run",
-      "value": "run",
+      "label": "⇥ ~/dev/script-kit-gpui",
+      "text": "⇥ ~/dev/script-kit-gpui",
+      "value": "cwd",
       "selected": false,
       "focused": null,
       "index": 0,
-      "owner": "file_search",
+      "owner": "script_list",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:native:cwd",
+        "type": "button",
+        "text": "⇥ ~/dev/script-kit-gpui",
+        "value": "cwd",
+        "selected": false,
+        "index": 0,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "script_list",
+        "sourceName": "script_list",
+        "selectable": true
+      }
+    },
+    {
+      "semanticId": "footer:native:agentModel",
+      "role": "footer",
+      "type": "button",
+      "label": "⇧⇥ Claude · Sonnet 4.6",
+      "text": "⇧⇥ Claude · Sonnet 4.6",
+      "value": "agentModel",
+      "selected": false,
+      "focused": null,
+      "index": 1,
+      "owner": "script_list",
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "footer:native:agentModel",
+        "type": "button",
+        "text": "⇧⇥ Claude · Sonnet 4.6",
+        "value": "agentModel",
+        "selected": false,
+        "index": 1,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "script_list",
+        "sourceName": "script_list",
+        "selectable": true
+      }
+    },
+    {
+      "semanticId": "footer:native:run",
+      "role": "footer",
+      "type": "button",
+      "label": "↵ Open",
+      "text": "↵ Open",
+      "value": "run",
+      "selected": false,
+      "focused": null,
+      "index": 2,
+      "owner": "script_list",
       "actions": [],
       "bounds": null,
       "raw": {
         "semanticId": "footer:native:run",
         "type": "button",
-        "text": "↵ Run",
+        "text": "↵ Open",
         "value": "run",
         "selected": false,
-        "index": 0,
+        "index": 2,
         "role": "footer",
         "kind": "nativeFooterButton",
-        "source": "file_search",
-        "sourceName": "file_search",
+        "source": "script_list",
+        "sourceName": "script_list",
         "selectable": true
       }
     },
@@ -165,8 +246,8 @@
       "value": "actions",
       "selected": false,
       "focused": null,
-      "index": 1,
-      "owner": "file_search",
+      "index": 3,
+      "owner": "script_list",
       "actions": [],
       "bounds": null,
       "raw": {
@@ -175,11 +256,11 @@
         "text": "⌘K Actions",
         "value": "actions",
         "selected": false,
-        "index": 1,
+        "index": 3,
         "role": "footer",
         "kind": "nativeFooterButton",
-        "source": "file_search",
-        "sourceName": "file_search",
+        "source": "script_list",
+        "sourceName": "script_list",
         "selectable": true
       }
     }

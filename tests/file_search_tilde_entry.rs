@@ -47,28 +47,22 @@ fn tilde_mini_file_search_seeds_directory_rows_before_first_paint() {
         source.contains("self.file_search_display_indices.len()"),
         "mini file-search sizing should use seeded display rows instead of a zero-row flash"
     );
+    assert!(
+        source.contains("self.current_view = AppView::FileSearchView")
+            && source.contains("self.rekey_main_automation_surface_from_current_view();"),
+        "file-search entry must re-key main automation surface after switching current_view"
+    );
 }
 
 #[test]
-fn filter_input_change_routes_script_list_special_entries() {
+fn filter_input_change_routes_script_list_mode_exit_entries() {
     let source = fs::read_to_string("src/app_impl/filter_input_change.rs")
         .expect("Failed to read src/app_impl/filter_input_change.rs");
 
     assert!(
-        source.contains("ScriptListSpecialEntry::AcpSlashPicker"),
-        "filter_input_change must route '/' into ACP slash picker"
-    );
-    assert!(
-        source.contains("open_tab_ai_acp_with_slash_picker(window, cx)"),
-        "filter_input_change must call the ACP slash-picker helper"
-    );
-    assert!(
-        source.contains("ScriptListSpecialEntry::AcpMentionPicker"),
-        "filter_input_change must route '@' into the ACP mention picker"
-    );
-    assert!(
-        source.contains("open_tab_ai_acp_with_mention_picker(window, cx)"),
-        "filter_input_change must open ACP mention picker for '@'"
+        source.contains("Prompt-builder sigils (@, /, |, .) are handled by the Spine")
+            && source.contains("stay in the main list"),
+        "prompt-builder sigils must remain on the main-list Spine projection instead of switching AppView"
     );
     assert!(
         source.contains("ScriptListSpecialEntry::QuickTerminal"),

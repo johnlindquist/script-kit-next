@@ -6,6 +6,13 @@ const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
 const STDIN_COMMANDS: &str = include_str!("../src/stdin_commands/mod.rs");
 const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
 
+fn source_after<'a>(source: &'a str, needle: &str) -> &'a str {
+    let start = source
+        .find(needle)
+        .unwrap_or_else(|| panic!("{needle} should exist"));
+    &source[start..]
+}
+
 #[test]
 fn detached_acp_placeholder_fixture_is_first_class_stdin_command() {
     assert!(
@@ -69,5 +76,14 @@ fn detached_acp_layout_info_exposes_liquid_glass_shell_components() {
             && ACP_VIEW.contains("LIQUID_GLASS_COMPACT_RADIUS_PX")
             && ACP_VIEW.contains("MATERIAL_NS_VISUAL_EFFECT"),
         "detached ACP layout info must carry Liquid Glass radius/material tokens"
+    );
+
+    let viewport = source_after(ACP_VIEW, "LayoutComponentInfo::new(\"AcpMessageViewport\"");
+    let before_token = &viewport[..viewport
+        .find(".with_visual_token(\"content.acpMessages\")")
+        .expect("AcpMessageViewport should declare its visual token")];
+    assert!(
+        before_token.contains("Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX)"),
+        "AcpMessageViewport must expose a positive Liquid Glass radius in layout proof"
     );
 }

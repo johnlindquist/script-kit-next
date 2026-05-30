@@ -325,6 +325,7 @@ impl ScriptListApp {
             selected_index: 0,
             presentation,
         };
+        self.rekey_main_automation_surface_from_current_view();
         self.hovered_index = None;
         self.opened_from_main_menu = true;
 

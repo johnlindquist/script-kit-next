@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "tool": "script-kit-devtools.targets",
   "command": "targets.inspect",
-  "session": "liquid-file-search-current",
+  "session": "liquid-file-search-mini-rekey-current",
   "classification": "ok",
   "requestedTarget": {
     "selector": {
@@ -39,8 +39,8 @@
     "frontmost": null,
     "focused": null,
     "screenshotIdentity": {
-      "width": 750,
-      "height": 480,
+      "width": null,
+      "height": null,
       "targetBoundsInScreenshot": {
         "x": 0,
         "y": 0,
@@ -49,7 +49,7 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 11615,
+    "pid": 75921,
     "strictTargetMatch": true,
     "ambiguity": []
   },
@@ -71,12 +71,12 @@
       "appViewVariant": null,
       "parentAutomationId": null,
       "parentKind": null,
-      "pid": 11615
+      "pid": 75921
     }
   ],
   "rawInspect": {
     "type": "automationInspectResult",
-    "requestId": "devtools-targets-inspect-1780125799037-63be12",
+    "requestId": "devtools-targets-inspect-1780135190631-ee4570",
     "schemaVersion": 3,
     "windowId": "main",
     "windowKind": "Main",
@@ -158,11 +158,11 @@
     ],
     "totalCount": 5,
     "focusedSemanticId": "input:file-search-input",
-    "screenshotWidth": 750,
-    "screenshotHeight": 480,
-    "osWindowId": 84539,
     "semanticQuality": "full",
-    "pid": 11615
+    "warnings": [
+      "screenshot_capture_failed: Ambiguous OS window match for automation target main (Main); '' and '' tied at score 5100"
+    ],
+    "pid": 75921
   },
   "sessionLifecycle": [],
   "errors": []

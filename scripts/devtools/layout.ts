@@ -16,6 +16,32 @@ type Args = {
   forwarded: string[];
 };
 
+async function sha256File(path: string) {
+  const bytes = await Bun.file(path).arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function layoutSourceFingerprint() {
+  const paths = [
+    "src/app_layout/build_layout_info.rs",
+    "scripts/devtools/layout.ts",
+    "src/ui/chrome/tokens.rs",
+  ];
+  return {
+    schemaVersion: 1,
+    algorithm: "sha256",
+    files: await Promise.all(
+      paths.map(async (path) => ({
+        path,
+        sha256: await sha256File(path),
+      })),
+    ),
+  };
+}
+
 function usage() {
   return [
     "Usage:",
@@ -552,6 +578,13 @@ async function main() {
         limit: args.limit,
         requestedTarget: targetReceipt.requestedTarget ?? { selector },
         target: targetReceipt.resolvedTarget ?? null,
+        layoutEvidenceFreshness: {
+          schemaVersion: 1,
+          generatedAt: new Date().toISOString(),
+          auditSchema: "panel-radius-v2",
+          requiredPanelRadiusNodes: ["ContentArea", "ScriptList", "PreviewPanel"],
+          sourceFingerprint: await layoutSourceFingerprint(),
+        },
         promptType: analysis.promptType,
         timestamp: analysis.timestamp,
         componentCount: analysis.nodes.length,

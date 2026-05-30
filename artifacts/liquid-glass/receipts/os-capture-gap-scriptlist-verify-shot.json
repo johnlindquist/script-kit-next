@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 3,
+  "status": "error",
+  "label": "os-capture-gap-scriptlist",
+  "timestamp": "2026-05-30T09:56:32.953Z",
+  "durationMs": 7247,
+  "requiresVisionReview": false,
+  "resolvedTarget": {
+    "windowId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "surfaceId": null
+  },
+  "dispatchPath": "exact_handle",
+  "resolvedWindowId": "main",
+  "osWindowId": 84776,
+  "inspectionOsWindowId": 84776,
+  "captureRouting": "screen-rect-from-inspection",
+  "requestedAutomationWindowId": "main",
+  "requestedOsWindowId": 84776,
+  "showIssuedBeforeCapture": true,
+  "screenRectFallback": {
+    "attempted": true,
+    "used": false,
+    "source": "automationInspect.resolvedBounds",
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "nativeWindowId": 84776,
+    "automationResolvedBounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "error": "could not create image from rect"
+  },
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/os-capture-gap-scriptlist.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": "screencapture",
+    "windowId": 84776
+  },
+  "captureTarget": {
+    "requestedWindowId": 84776,
+    "actualWindowId": 84776
+  },
+  "inspection": {
+    "automationWindowId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "osWindowId": 84776,
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 750,
+      "height": 480
+    },
+    "resolvedBounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenshotWidth": 750,
+    "screenshotHeight": 480,
+    "pid": 58223,
+    "pixelProbes": [],
+    "warnings": [
+      "footer_elements_truncated_by_limit"
+    ]
+  },
+  "popupCapture": {
+    "strategy": "not_applicable",
+    "windowKind": "Main",
+    "targetBounds": null,
+    "semanticReceiptsArePrimary": false
+  },
+  "visualEvidence": {
+    "source": "os-window-capture",
+    "available": false,
+    "countsAsOsScreenshotEvidence": false,
+    "countsAsAppRenderEvidence": false,
+    "countsAsOffscreenRenderEvidence": false,
+    "classification": "macos-windowserver-capture-blocked",
+    "attempts": [
+      {
+        "source": "computer/capture_native_window",
+        "status": "failed",
+        "requestedWindowId": 84776,
+        "actualWindowId": 84776,
+        "errorCode": "capture_failed",
+        "message": "Strict window capture failed: primary={\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T09:56:30.439Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/os-capture-gap-scriptlist.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84776}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T09:56:30.439Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T09:56:31.767Z\",\"attempt\":1,\"windowId\":84768}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T09:56:31.821Z\",\"attempt\":1,\"windowId\":84776,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T09:56:32.021Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/os-capture-gap-scriptlist.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84776}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T09:56:32.022Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T09:56:32.662Z\",\"attempt\":1,\"windowId\":84768}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T09:56:32.709Z\",\"attempt\":2,\"windowId\":84776,\"exitCode\":1,\"stderr\":\"could not create image from window\"}; native=Unable to connect. Is the computer able to access the url?; screenRect=could not create image from rect",
+        "pixelAudit": null
+      },
+      {
+        "source": "screencapture-window-id",
+        "status": "failed",
+        "requestedWindowId": 84776,
+        "actualWindowId": 84776,
+        "errorCode": "screencapture_window_failed",
+        "message": "Strict window capture failed: primary={\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T09:56:30.439Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/os-capture-gap-scriptlist.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84776}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T09:56:30.439Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T09:56:31.767Z\",\"attempt\":1,\"windowId\":84768}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T09:56:31.821Z\",\"attempt\":1,\"windowId\":84776,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T09:56:32.021Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/os-capture-gap-scriptlist.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84776}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T09:56:32.022Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T09:56:32.662Z\",\"attempt\":1,\"windowId\":84768}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T09:56:32.709Z\",\"attempt\":2,\"windowId\":84776,\"exitCode\":1,\"stderr\":\"could not create image from window\"}; native=Unable to connect. Is the computer able to access the url?; screenRect=could not create image from rect",
+        "pixelAudit": null
+      },
+      {
+        "source": "screencapture-screen-rect",
+        "status": "failed",
+        "requestedWindowId": 84776,
+        "actualWindowId": 84776,
+        "errorCode": "screencapture_rect_failed",
+        "message": "could not create image from rect",
+        "pixelAudit": null
+      }
+    ],
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/os-capture-gap-scriptlist.png",
+    "width": null,
+    "height": null,
+    "pixelAudit": null,
+    "limitation": "macOS WindowServer screenshot capture did not produce usable pixels; do not count this as OS screenshot proof."
+  },
+  "renderEvidence": null,
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": false,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/os-capture-gap-scriptlist.png",
+    "sizeBytes": null,
+    "width": null,
+    "height": null,
+    "contentAudit": null,
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": "screencapture",
+    "windowFrontmost": null,
+    "windowFocused": null,
+    "windowId": 84776,
+    "error": "Strict window capture failed: primary={\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T09:56:30.439Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/os-capture-gap-scriptlist.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84776}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T09:56:30.439Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T09:56:31.767Z\",\"attempt\":1,\"windowId\":84768}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T09:56:31.821Z\",\"attempt\":1,\"windowId\":84776,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T09:56:32.021Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/os-capture-gap-scriptlist.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84776}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T09:56:32.022Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T09:56:32.662Z\",\"attempt\":1,\"windowId\":84768}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T09:56:32.709Z\",\"attempt\":2,\"windowId\":84776,\"exitCode\":1,\"stderr\":\"could not create image from window\"}; native=Unable to connect. Is the computer able to access the url?; screenRect=could not create image from rect"
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: FAILED (Strict window capture failed: primary={\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T09:56:30.439Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/os-capture-gap-scriptlist.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84776}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T09:56:30.439Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T09:56:31.767Z\",\"attempt\":1,\"windowId\":84768}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T09:56:31.821Z\",\"attempt\":1,\"windowId\":84776,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T09:56:32.021Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/os-capture-gap-scriptlist.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84776}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T09:56:32.022Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T09:56:32.662Z\",\"attempt\":1,\"windowId\":84768}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T09:56:32.709Z\",\"attempt\":2,\"windowId\":84776,\"exitCode\":1,\"stderr\":\"could not create image from window\"}; native=Unable to connect. Is the computer able to access the url?; screenRect=could not create image from rect)"
+}

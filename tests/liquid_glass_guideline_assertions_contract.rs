@@ -27,6 +27,8 @@ fn layout_visual_audit_emits_guideline_assertion_buckets() {
 fn layout_visual_audit_rejects_zero_radius_placeholders() {
     let layout =
         fs::read_to_string("scripts/devtools/layout.ts").expect("failed to read layout.ts");
+    let proof = fs::read_to_string("scripts/devtools/liquid-glass-proof.ts")
+        .expect("failed to read liquid-glass-proof.ts");
     assert!(
         layout.contains("function hasPositiveRadius"),
         "layout.ts must validate radius values, not only radius field presence"
@@ -39,6 +41,10 @@ fn layout_visual_audit_rejects_zero_radius_placeholders() {
         layout.contains("!hasPositiveRadius(style.cornerRadius)")
             && layout.contains("!hasPositiveRadius(style.radius)"),
         "cornerRadiusTokens failures must be based on positive Liquid Glass radii"
+    );
+    assert!(
+        !proof.contains("REQUIRED_POSITIVE_RADIUS_NODE_NAMES"),
+        "proof matrix must not hide zero-radius styled nodes behind a hard-coded name whitelist"
     );
 }
 

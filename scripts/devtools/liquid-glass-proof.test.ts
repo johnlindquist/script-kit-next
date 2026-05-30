@@ -190,7 +190,73 @@ describe("liquid-glass-proof guidance domain split", () => {
     expect(surface.guidanceProofStatus).toBe("guidance-proof-capture-blocked");
     expect(surface.sourceUiGaps).toEqual([]);
     expect(surface.devtoolsCaptureLimitations).toContain("osScreenshotProof:blocked");
-    expect(queueEntry.blockingClass).toBe("devtools-capture-limitation");
+    expect(surface.osScreenshotBlockers[0].classification).toBe("screenshot-receipt-error");
+    expect(surface.osCapture.blockerCode).toBe("window-id-api-blocked");
+    expect(matrix.summary.osScreenshotBlockerCounts["screenshot-receipt-error"]).toBe(1);
+    expect(queueEntry.blockingClass).toBe("window-id-api-blocked");
+  });
+
+  test("preserves exact WindowServer capture blocker taxonomy", () => {
+    const matrix = runProofFixture({
+      surfaceKind: "FixtureSurface",
+      visualAudit: passingVisualAudit(),
+      screenshotReceipt: {
+        visualEvidence: {
+          source: "os-window-capture",
+          available: false,
+          countsAsOsScreenshotEvidence: false,
+          classification: "macos-windowserver-capture-blocked",
+          limitation: "screencapture could not create an image from the target window or rect",
+          attempts: [
+            { method: "computer/capture_native_window", status: "failed", errorCode: "capture_failed", message: "native MCP unavailable" },
+            { method: "screencapture-window-id", status: "failed", errorCode: "screencapture_window_failed", stderr: "could not create image from window" },
+            { method: "screencapture-screen-rect", status: "failed", errorCode: "screencapture_rect_failed", stderr: "could not create image from rect" },
+          ],
+        },
+      },
+    });
+    const surface = matrix.surfaces[0];
+    const queueEntry = matrix.proofDebtWorkQueue[0];
+
+    expect(surface.proofTiers.osScreenshotProof).toBe("blocked");
+    expect(surface.proofTiers.imageDiffProof).toBe("blocked");
+    expect(surface.sourceUiGaps).toEqual([]);
+    expect(surface.osScreenshotBlockers[0].classification).toBe("macos-windowserver-capture-blocked");
+    expect(surface.osScreenshotBlockers[0].attempts.map((attempt: Record<string, unknown>) => attempt.errorCode)).toContain("screencapture_window_failed");
+    expect(surface.osCapture.blockerCode).toBe("screen-rect-capture-blocked");
+    expect(queueEntry.osScreenshotBlockers[0].classification).toBe("macos-windowserver-capture-blocked");
+    expect(queueEntry.blockingClass).toBe("screen-rect-capture-blocked");
+    expect(queueEntry.recommendedNextAction).toContain("screen-rect-capture-blocked");
+    expect(matrix.summary.osScreenshotBlockerCounts["macos-windowserver-capture-blocked"]).toBe(1);
+  });
+
+  test("normalizes legacy strict capture error logs into WindowServer blockers", () => {
+    const matrix = runProofFixture({
+      surfaceKind: "FixtureSurface",
+      visualAudit: passingVisualAudit(),
+      screenshotReceipt: {
+        status: "error",
+        screenshotReceipt: {
+          captured: false,
+          error: [
+            "Strict window capture failed: {\"event\":\"window_capture_attempt\",\"windowId\":84776}",
+            "{\"event\":\"window_capture_screencapture_l_failed\",\"windowId\":84776,\"stderr\":\"could not create image from window\"}",
+            "native=computer/capture_native_window did not return image data: status=notCaptureCandidate error=not_capture_candidate; screenRect=could not create image from rect",
+          ].join("\n"),
+        },
+      },
+    });
+    const blocker = matrix.surfaces[0].osScreenshotBlockers[0];
+
+    expect(blocker.classification).toBe("macos-windowserver-capture-blocked");
+    expect(blocker.attempts.map((attempt: Record<string, unknown>) => attempt.errorCode)).toEqual([
+      "screencapture_window_failed",
+      "screencapture_rect_failed",
+      "not_capture_candidate",
+    ]);
+    expect(matrix.surfaces[0].osCapture.blockerCode).toBe("screen-rect-capture-blocked");
+    expect(matrix.proofDebtWorkQueue[0].blockingClass).toBe("screen-rect-capture-blocked");
+    expect(matrix.summary.osScreenshotBlockerCounts["macos-windowserver-capture-blocked"]).toBe(1);
   });
 
   test("does not let diagnostic app-render blockers poison strong guidance proof", () => {
@@ -223,7 +289,7 @@ describe("liquid-glass-proof guidance domain split", () => {
     expect(queueEntry.blockingClass).toBe("source-ui-gap");
   });
 
-  test("rejects stale zero-radius layout receipts as guideline failures", () => {
+  test("classifies legacy zero-radius layout receipts as stale evidence, not source gaps", () => {
     const matrix = runProofFixture({
       surfaceKind: "FixtureSurface",
       visualAudit: passingVisualAudit(),
@@ -245,9 +311,12 @@ describe("liquid-glass-proof guidance domain split", () => {
     const surface = matrix.surfaces[0];
     const queueEntry = matrix.proofDebtWorkQueue[0];
 
-    expect(surface.proofTiers.guidelineProof).toBe("fail");
-    expect(queueEntry.guidelineFailures).toContain("projectLocal.cornerRadiusTokens: ContentArea");
-    expect(queueEntry.blockingClass).toBe("source-ui-gap");
+    expect(surface.proofTiers.guidelineProof).toBe("pass");
+    expect(surface.guidanceProofStatus).toBe("stale-layout-evidence");
+    expect(surface.sourceUiGaps).toEqual([]);
+    expect(queueEntry.guidelineFailures).toEqual([]);
+    expect(surface.layoutReceiptFreshnessLimitations[0]).toContain("ContentArea");
+    expect(queueEntry.blockingClass).toBe("stale-layout-evidence");
   });
 
   test("does not require radii on non-panel styled nodes", () => {

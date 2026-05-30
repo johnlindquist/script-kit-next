@@ -1,1 +1,1039 @@
-{"schemaVersion":1,"status":"ok","session":"liquid-file-search-capture","requestId":"set-tilde-batch-2","responseType":"batchResult","response":{"type":"batchResult","requestId":"set-tilde-batch-2","success":true,"results":[{"index":0,"success":true,"command":"setInput","elapsed":5}],"totalElapsed":5}}
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.act",
+  "command": "act.set-input",
+  "classification": "ok",
+  "session": "liquid-file-search-mini-rekey-current",
+  "startedAt": "2026-05-30T09:58:55.429Z",
+  "endedAt": "2026-05-30T09:58:57.036Z",
+  "actionId": "devtools-act-set-input-1780135137036-e07e58",
+  "actionKind": "set-input",
+  "proofIntent": null,
+  "preflightOnly": false,
+  "submitGate": {
+    "gateName": "submit.preflight",
+    "actionKind": "set-input",
+    "key": null,
+    "modifiers": [],
+    "allowSubmit": false,
+    "allowSubmitReason": null,
+    "submitIntent": null,
+    "selectedSemanticId": "choice:0:theme-designer",
+    "selectedActionId": "theme-designer",
+    "target": {
+      "automationId": "main",
+      "targetKind": "Main",
+      "surfaceKind": "ScriptList",
+      "appViewVariant": "ScriptList",
+      "nativeFooterSurface": "script_list"
+    }
+  },
+  "blockedAction": null,
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ScriptList"
+  },
+  "targetBefore": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "ScriptList",
+    "appViewVariant": "ScriptList",
+    "nativeFooterSurface": "script_list",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": null,
+      "height": null,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 75921,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "input": {
+    "text": "~",
+    "semanticId": null,
+    "control": null,
+    "value": null,
+    "key": null,
+    "modifiers": []
+  },
+  "safety": {
+    "channel": "batch",
+    "destructive": false,
+    "submitAllowed": false,
+    "submitIntent": null,
+    "allowSubmitReason": null,
+    "nativeEscalation": false,
+    "errors": [],
+    "warnings": [],
+    "submitAttempted": false,
+    "submitPreflightSelectedSemanticId": "choice:0:theme-designer"
+  },
+  "submitLifecycle": {
+    "state": "not-submit",
+    "reason": "action is not submit-like"
+  },
+  "postActionLifecycle": {
+    "state": "not-lifecycle-sensitive",
+    "reason": "action keeps source target inspectable"
+  },
+  "dismissLifecycle": null,
+  "expected": {
+    "protocolResponse": "stdin_command_parsed",
+    "submitAllowed": false,
+    "noNativeEscalation": true,
+    "prePostReceipts": [
+      "focus.inspect",
+      "focus.inspect.submitDiagnostics",
+      "scroll.inspect"
+    ]
+  },
+  "actionReceipt": {
+    "schemaVersion": 1,
+    "status": "ok",
+    "session": "liquid-file-search-mini-rekey-current",
+    "sent": true,
+    "parseOutcome": "parsed",
+    "commandType": "setFilter"
+  },
+  "targetAfter": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "ScriptList",
+    "appViewVariant": "ScriptList",
+    "nativeFooterSurface": "script_list",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": null,
+      "height": null,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 75921,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "submitDiagnostics": {
+    "before": null,
+    "after": null
+  },
+  "visibleResult": {
+    "focusChanged": false,
+    "selectionChanged": true,
+    "inputChanged": true,
+    "windowVisibleBefore": true,
+    "windowVisibleAfter": true,
+    "scrollChanged": true,
+    "submitDiagnosticsChanged": false
+  },
+  "before": {
+    "focus": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "classification": "ok",
+      "session": "liquid-file-search-mini-rekey-current",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "target": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "ScriptList",
+        "appViewVariant": "ScriptList",
+        "nativeFooterSurface": "script_list",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 585,
+          "y": 177,
+          "width": 750,
+          "height": 480
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 75921,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "windowFocused": true,
+      "windowVisible": true,
+      "focusedSemanticId": "input:filter",
+      "selectedSemanticId": "choice:0:theme-designer",
+      "focusedNode": {
+        "semanticId": "input:filter",
+        "type": "input",
+        "value": "",
+        "focused": true
+      },
+      "selectedNode": {
+        "semanticId": "choice:0:theme-designer",
+        "type": "choice",
+        "text": "Theme Designer",
+        "value": "Design your color theme with live preview",
+        "selected": true,
+        "index": 0,
+        "role": "row",
+        "kind": "built-in",
+        "source": "commands",
+        "selectable": true
+      },
+      "activeFooter": {
+        "schemaVersion": 1,
+        "owner": "native",
+        "expectedSurface": "script_list",
+        "requestedSurface": "script_list",
+        "activeSurface": "script_list",
+        "nativeFooterHostInstalled": true,
+        "gpuiFallbackVisible": false,
+        "leftInfo": null,
+        "buttonCount": 4,
+        "buttons": [
+          {
+            "action": "cwd",
+            "key": "⇥",
+            "label": "~/dev/script-kit-gpui",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "agentModel",
+            "key": "⇧⇥",
+            "label": "Claude · Sonnet 4.6",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "run",
+            "key": "↵",
+            "label": "Open Theme Designer",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "actions",
+            "key": "⌘K",
+            "label": "Actions",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          }
+        ],
+        "mismatch": null
+      },
+      "nativeFooter": {
+        "owner": "native",
+        "activeSurface": "script_list",
+        "expectedSurface": "script_list",
+        "nativeFooterHostInstalled": true,
+        "buttonCount": 4,
+        "activationPrimitiveAvailable": false,
+        "missingPrimitive": "nativeFooterActivationReceipt"
+      },
+      "submitDiagnostics": null,
+      "keyboardOwner": {
+        "inputValue": "",
+        "promptType": "none",
+        "surfaceKind": "ScriptList",
+        "inputOwnership": "LauncherFilter",
+        "keyboardPolicy": "LauncherListKeyboard"
+      },
+      "missingPrimitives": [
+        "nativeFooterActivationReceipt"
+      ],
+      "warnings": [],
+      "errors": []
+    },
+    "scroll": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.scroll",
+      "command": "scroll.inspect",
+      "classification": "ok",
+      "session": "liquid-file-search-mini-rekey-current",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "target": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "ScriptList",
+        "appViewVariant": "ScriptList",
+        "nativeFooterSurface": "script_list",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 585,
+          "y": 177,
+          "width": 750,
+          "height": 480
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 75921,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "scroll": {
+        "scrollTop": 0,
+        "scrollTopItem": 0,
+        "contentHeight": 9786,
+        "viewportHeight": 437,
+        "safeViewportHeight": 399,
+        "footerHeight": 38,
+        "maxScrollTop": 9387,
+        "canScrollY": true,
+        "selectedIndex": 1,
+        "selectedRowTop": 26,
+        "selectedRowBottom": 66,
+        "selectedRowVisible": true,
+        "selectedRowAboveFooter": true,
+        "itemCount": 247
+      },
+      "resizePressure": {
+        "overflowY": true,
+        "hiddenContentHeight": 9349,
+        "selectedRowOccluded": false
+      },
+      "missingPrimitives": [],
+      "errors": [],
+      "state": {
+        "type": "stateResult",
+        "requestId": "devtools-scroll-state-1780135135388-3b24e2",
+        "promptType": "none",
+        "surfaceContract": {
+          "schemaVersion": 1,
+          "surfaceKind": "ScriptList",
+          "family": "MainMenu",
+          "inputOwnership": "LauncherFilter",
+          "previewRole": "OptionalInfoPanel",
+          "focusPolicy": "LauncherFilterFocus",
+          "keyboardPolicy": "LauncherListKeyboard",
+          "actionsPolicy": "MainMenuActions",
+          "proofPolicy": "StateAndElementsProof",
+          "visualPolicy": "CompactLauncherVisual",
+          "automationSemanticSurface": "scriptList",
+          "nativeFooterSurface": "script_list"
+        },
+        "activeFooter": {
+          "schemaVersion": 1,
+          "owner": "native",
+          "expectedSurface": "script_list",
+          "requestedSurface": "script_list",
+          "activeSurface": "script_list",
+          "nativeFooterHostInstalled": true,
+          "gpuiFallbackVisible": false,
+          "leftInfo": null,
+          "buttonCount": 4,
+          "buttons": [
+            {
+              "action": "cwd",
+              "key": "⇥",
+              "label": "~/dev/script-kit-gpui",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            },
+            {
+              "action": "agentModel",
+              "key": "⇧⇥",
+              "label": "Claude · Sonnet 4.6",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            },
+            {
+              "action": "run",
+              "key": "↵",
+              "label": "Open Theme Designer",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            },
+            {
+              "action": "actions",
+              "key": "⌘K",
+              "label": "Actions",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            }
+          ],
+          "mismatch": null
+        },
+        "inputValue": "",
+        "choiceCount": 231,
+        "visibleChoiceCount": 236,
+        "selectedIndex": 1,
+        "selectedValue": "Theme Designer",
+        "isFocused": true,
+        "windowVisible": true,
+        "miniAi": {
+          "visible": false,
+          "promptId": null,
+          "mainWindowMode": "mini",
+          "draftLen": 0,
+          "pendingSubmit": false,
+          "handoffSource": "mini_ai_launcher",
+          "returnOrigin": "scriptList",
+          "lastCloseSource": null
+        },
+        "filterInputDecorations": {
+          "text": "",
+          "chips": []
+        },
+        "rootFileSearch": {
+          "query": "",
+          "mode": null,
+          "loading": false,
+          "visibleLoading": false,
+          "generation": 0,
+          "visibleResultCount": 0,
+          "cacheEntryCount": 0,
+          "cacheResultCount": 0
+        },
+        "mainListScroll": {
+          "scrollTop": 0,
+          "scrollTopItem": 0,
+          "scrollTopOffset": 0,
+          "contentHeight": 9786,
+          "viewportHeight": 437,
+          "footerHeight": 38,
+          "safeViewportHeight": 399,
+          "maxScrollTop": 9387,
+          "selectedIndex": 1,
+          "selectedRowTop": 26,
+          "selectedRowBottom": 66,
+          "selectedRowVisible": true,
+          "selectedRowAboveFooter": true,
+          "itemCount": 247
+        },
+        "dictation": {
+          "schemaVersion": 1,
+          "source": "runtime.dictation.automationState",
+          "passive": true,
+          "redacted": true,
+          "generation": 1,
+          "recordingStateGeneration": 1,
+          "isRecording": false,
+          "phase": "idle",
+          "target": null,
+          "targetLabel": null,
+          "elapsedMs": null,
+          "audioLevels": {
+            "available": false,
+            "bars": [],
+            "barCount": 0,
+            "source": "runtime.session.lastBars",
+            "stopReason": "not recording"
+          },
+          "setup": {
+            "ready": true,
+            "model": {
+              "status": "available",
+              "generation": 1,
+              "source": "parakeetModelAvailability"
+            },
+            "microphone": {
+              "permissionStatus": "Granted",
+              "status": "ready",
+              "deviceSnapshot": {
+                "available": true,
+                "deviceCount": 6,
+                "defaultDevice": {
+                  "labelFingerprint": "fnv1a64:d132e98fb83bff35",
+                  "idFingerprint": "fnv1a64:0ea48593437fd49d",
+                  "transport": "Virtual"
+                },
+                "selected": {
+                  "labelFingerprint": "fnv1a64:44ecc44b3e60abce",
+                  "idFingerprint": "fnv1a64:ecb307f9ac8c5fe2",
+                  "transport": "BuiltIn",
+                  "fellBack": false
+                },
+                "savedPreference": {
+                  "configured": true,
+                  "idFingerprint": "fnv1a64:ecb307f9ac8c5fe2",
+                  "resolved": true
+                },
+                "rawDeviceIdsRedacted": true,
+                "deviceLabelsReturned": false
+              },
+              "generation": 1,
+              "source": "passiveAVFoundationEnumeration",
+              "noPermissionPrompt": true
+            },
+            "hotkey": {
+              "enabled": true,
+              "configured": true,
+              "display": "⇧⌘Semicolon",
+              "status": "Ready(\"meta+shift+Semicolon\")",
+              "generation": 1,
+              "source": "config.dictationHotkey"
+            },
+            "configFingerprint": {
+              "pathFingerprint": "fnv1a64:2937adb9e9e825ed",
+              "len": 13945,
+              "modifiedMs": 1780090293554
+            }
+          },
+          "lastDelivery": null,
+          "deliveryReceiptAvailable": false,
+          "stop": null,
+          "cleanup": {
+            "captureActive": false,
+            "captureStopInProgress": false,
+            "transcriberCached": false,
+            "generation": 1,
+            "source": "runtime.dictation.cleanupState"
+          },
+          "safety": {
+            "noMicrophoneCaptureStarted": true,
+            "noSystemSettingsOpened": true,
+            "noTccMutation": true,
+            "noTranscriptContent": true,
+            "rawDeviceIdsRedacted": true,
+            "deviceLabelsReturned": false
+          }
+        }
+      }
+    }
+  },
+  "after": {
+    "focus": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "classification": "ok",
+      "session": "liquid-file-search-mini-rekey-current",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "target": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "ScriptList",
+        "appViewVariant": "ScriptList",
+        "nativeFooterSurface": "script_list",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 585,
+          "y": 177,
+          "width": 750,
+          "height": 480
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 75921,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "windowFocused": true,
+      "windowVisible": true,
+      "focusedSemanticId": "input:filter",
+      "selectedSemanticId": "choice:0:open-file-search",
+      "focusedNode": {
+        "semanticId": "input:filter",
+        "type": "input",
+        "value": "~",
+        "focused": true
+      },
+      "selectedNode": {
+        "semanticId": "choice:0:open-file-search",
+        "type": "choice",
+        "text": "Open File Search",
+        "value": "Browse files",
+        "selected": true,
+        "index": 0,
+        "role": "row",
+        "kind": "hint",
+        "sourceName": "Spine",
+        "selectable": true
+      },
+      "activeFooter": {
+        "schemaVersion": 1,
+        "owner": "native",
+        "expectedSurface": "script_list",
+        "requestedSurface": "script_list",
+        "activeSurface": "script_list",
+        "nativeFooterHostInstalled": true,
+        "gpuiFallbackVisible": false,
+        "leftInfo": null,
+        "buttonCount": 4,
+        "buttons": [
+          {
+            "action": "cwd",
+            "key": "⇥",
+            "label": "~/dev/script-kit-gpui",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "agentModel",
+            "key": "⇧⇥",
+            "label": "Claude · Sonnet 4.6",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "run",
+            "key": "↵",
+            "label": "Open",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "actions",
+            "key": "⌘K",
+            "label": "Actions",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          }
+        ],
+        "mismatch": null
+      },
+      "nativeFooter": {
+        "owner": "native",
+        "activeSurface": "script_list",
+        "expectedSurface": "script_list",
+        "nativeFooterHostInstalled": true,
+        "buttonCount": 4,
+        "activationPrimitiveAvailable": false,
+        "missingPrimitive": "nativeFooterActivationReceipt"
+      },
+      "submitDiagnostics": null,
+      "keyboardOwner": {
+        "inputValue": "~",
+        "promptType": "none",
+        "surfaceKind": "ScriptList",
+        "inputOwnership": "LauncherFilter",
+        "keyboardPolicy": "LauncherListKeyboard"
+      },
+      "missingPrimitives": [
+        "nativeFooterActivationReceipt"
+      ],
+      "warnings": [],
+      "errors": []
+    },
+    "scroll": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.scroll",
+      "command": "scroll.inspect",
+      "classification": "ok",
+      "session": "liquid-file-search-mini-rekey-current",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "target": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "ScriptList",
+        "appViewVariant": "ScriptList",
+        "nativeFooterSurface": "script_list",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 585,
+          "y": 177,
+          "width": 750,
+          "height": 480
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 75921,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "scroll": {
+        "scrollTop": 0,
+        "scrollTopItem": 0,
+        "contentHeight": 66,
+        "viewportHeight": 0,
+        "safeViewportHeight": 0,
+        "footerHeight": 38,
+        "maxScrollTop": 66,
+        "canScrollY": true,
+        "selectedIndex": 1,
+        "selectedRowTop": 26,
+        "selectedRowBottom": 66,
+        "selectedRowVisible": false,
+        "selectedRowAboveFooter": false,
+        "itemCount": 2
+      },
+      "resizePressure": {
+        "overflowY": true,
+        "hiddenContentHeight": 66,
+        "selectedRowOccluded": true
+      },
+      "missingPrimitives": [],
+      "errors": [],
+      "state": {
+        "type": "stateResult",
+        "requestId": "devtools-scroll-state-1780135136992-7b1fc1",
+        "promptType": "none",
+        "surfaceContract": {
+          "schemaVersion": 1,
+          "surfaceKind": "ScriptList",
+          "family": "MainMenu",
+          "inputOwnership": "LauncherFilter",
+          "previewRole": "OptionalInfoPanel",
+          "focusPolicy": "LauncherFilterFocus",
+          "keyboardPolicy": "LauncherListKeyboard",
+          "actionsPolicy": "MainMenuActions",
+          "proofPolicy": "StateAndElementsProof",
+          "visualPolicy": "CompactLauncherVisual",
+          "automationSemanticSurface": "scriptList",
+          "nativeFooterSurface": "script_list"
+        },
+        "activeFooter": {
+          "schemaVersion": 1,
+          "owner": "native",
+          "expectedSurface": "script_list",
+          "requestedSurface": "script_list",
+          "activeSurface": "script_list",
+          "nativeFooterHostInstalled": true,
+          "gpuiFallbackVisible": false,
+          "leftInfo": null,
+          "buttonCount": 4,
+          "buttons": [
+            {
+              "action": "cwd",
+              "key": "⇥",
+              "label": "~/dev/script-kit-gpui",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            },
+            {
+              "action": "agentModel",
+              "key": "⇧⇥",
+              "label": "Claude · Sonnet 4.6",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            },
+            {
+              "action": "run",
+              "key": "↵",
+              "label": "Open",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            },
+            {
+              "action": "actions",
+              "key": "⌘K",
+              "label": "Actions",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            }
+          ],
+          "mismatch": null
+        },
+        "inputValue": "~",
+        "choiceCount": 231,
+        "visibleChoiceCount": 1,
+        "selectedIndex": 1,
+        "selectedValue": "Open File Search",
+        "isFocused": true,
+        "windowVisible": true,
+        "miniAi": {
+          "visible": false,
+          "promptId": null,
+          "mainWindowMode": "mini",
+          "draftLen": 0,
+          "pendingSubmit": false,
+          "handoffSource": "mini_ai_launcher",
+          "returnOrigin": "scriptList",
+          "lastCloseSource": null
+        },
+        "filterInputDecorations": {
+          "text": "~",
+          "chips": []
+        },
+        "rootFileSearch": {
+          "query": "~",
+          "mode": "DirectoryBrowse",
+          "loading": false,
+          "visibleLoading": false,
+          "generation": 1,
+          "visibleResultCount": 96,
+          "cacheEntryCount": 0,
+          "cacheResultCount": 0
+        },
+        "mainListScroll": {
+          "scrollTop": 0,
+          "scrollTopItem": 0,
+          "scrollTopOffset": 0,
+          "contentHeight": 66,
+          "viewportHeight": 0,
+          "footerHeight": 38,
+          "safeViewportHeight": 0,
+          "maxScrollTop": 66,
+          "selectedIndex": 1,
+          "selectedRowTop": 26,
+          "selectedRowBottom": 66,
+          "selectedRowVisible": false,
+          "selectedRowAboveFooter": false,
+          "itemCount": 2
+        },
+        "dictation": {
+          "schemaVersion": 1,
+          "source": "runtime.dictation.automationState",
+          "passive": true,
+          "redacted": true,
+          "generation": 1,
+          "recordingStateGeneration": 1,
+          "isRecording": false,
+          "phase": "idle",
+          "target": null,
+          "targetLabel": null,
+          "elapsedMs": null,
+          "audioLevels": {
+            "available": false,
+            "bars": [],
+            "barCount": 0,
+            "source": "runtime.session.lastBars",
+            "stopReason": "not recording"
+          },
+          "setup": {
+            "ready": true,
+            "model": {
+              "status": "available",
+              "generation": 1,
+              "source": "parakeetModelAvailability"
+            },
+            "microphone": {
+              "permissionStatus": "Granted",
+              "status": "ready",
+              "deviceSnapshot": {
+                "available": true,
+                "deviceCount": 6,
+                "defaultDevice": {
+                  "labelFingerprint": "fnv1a64:d132e98fb83bff35",
+                  "idFingerprint": "fnv1a64:0ea48593437fd49d",
+                  "transport": "Virtual"
+                },
+                "selected": {
+                  "labelFingerprint": "fnv1a64:44ecc44b3e60abce",
+                  "idFingerprint": "fnv1a64:ecb307f9ac8c5fe2",
+                  "transport": "BuiltIn",
+                  "fellBack": false
+                },
+                "savedPreference": {
+                  "configured": true,
+                  "idFingerprint": "fnv1a64:ecb307f9ac8c5fe2",
+                  "resolved": true
+                },
+                "rawDeviceIdsRedacted": true,
+                "deviceLabelsReturned": false
+              },
+              "generation": 1,
+              "source": "passiveAVFoundationEnumeration",
+              "noPermissionPrompt": true
+            },
+            "hotkey": {
+              "enabled": true,
+              "configured": true,
+              "display": "⇧⌘Semicolon",
+              "status": "Ready(\"meta+shift+Semicolon\")",
+              "generation": 1,
+              "source": "config.dictationHotkey"
+            },
+            "configFingerprint": {
+              "pathFingerprint": "fnv1a64:2937adb9e9e825ed",
+              "len": 13945,
+              "modifiedMs": 1780090293554
+            }
+          },
+          "lastDelivery": null,
+          "deliveryReceiptAvailable": false,
+          "stop": null,
+          "cleanup": {
+            "captureActive": false,
+            "captureStopInProgress": false,
+            "transcriberCached": false,
+            "generation": 1,
+            "source": "runtime.dictation.cleanupState"
+          },
+          "safety": {
+            "noMicrophoneCaptureStarted": true,
+            "noSystemSettingsOpened": true,
+            "noTccMutation": true,
+            "noTranscriptContent": true,
+            "rawDeviceIdsRedacted": true,
+            "deviceLabelsReturned": false
+          }
+        }
+      }
+    }
+  },
+  "warnings": [],
+  "errors": []
+}

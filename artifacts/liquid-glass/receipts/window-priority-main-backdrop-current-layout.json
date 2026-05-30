@@ -3,16 +3,14 @@
   "tool": "script-kit-devtools.layout",
   "command": "layout.measure",
   "classification": "ok",
-  "session": "liquid-native-backdrop-main",
+  "session": "liquid-file-search-refresh",
   "include": [
     "nodes",
     "regions",
-    "scroll",
-    "anchors",
     "resize",
     "overlaps"
   ],
-  "limit": 500,
+  "limit": 200,
   "requestedTarget": {
     "selector": {
       "type": "main"
@@ -40,7 +38,7 @@
       "x": 585,
       "y": 177,
       "width": 750,
-      "height": 480
+      "height": 500
     },
     "screenId": null,
     "zOrder": null,
@@ -48,29 +46,57 @@
     "frontmost": null,
     "focused": null,
     "screenshotIdentity": {
-      "width": 750,
-      "height": 480,
+      "width": null,
+      "height": null,
       "targetBoundsInScreenshot": {
         "x": 0,
         "y": 0,
         "width": 750,
-        "height": 480
+        "height": 500
       },
       "nonBlankRatio": null
     },
-    "pid": 94330,
+    "pid": 52036,
     "strictTargetMatch": true,
     "ambiguity": []
   },
+  "layoutEvidenceFreshness": {
+    "schemaVersion": 1,
+    "generatedAt": "2026-05-30T09:50:40.863Z",
+    "auditSchema": "panel-radius-v2",
+    "requiredPanelRadiusNodes": [
+      "ContentArea",
+      "ScriptList",
+      "PreviewPanel"
+    ],
+    "sourceFingerprint": {
+      "schemaVersion": 1,
+      "algorithm": "sha256",
+      "files": [
+        {
+          "path": "src/app_layout/build_layout_info.rs",
+          "sha256": "7e779892e76bbf8bbea404339673839d53197fb4dedccab74eca8c2081372e39"
+        },
+        {
+          "path": "scripts/devtools/layout.ts",
+          "sha256": "10fc886f0677c720d31e020a1afce824008c8767aaf451d427ae4f259469257e"
+        },
+        {
+          "path": "src/ui/chrome/tokens.rs",
+          "sha256": "42e274081636cb27743c06ddd80e7142fd3110e5462851b0998e885968a22220"
+        }
+      ]
+    }
+  },
   "promptType": "mainMenu",
-  "timestamp": "2026-05-30T07:20:55.323108+00:00",
+  "timestamp": "2026-05-30T09:50:40.844120+00:00",
   "componentCount": 14,
   "window": {
     "rect": {
       "x": 585,
       "y": 177,
       "width": 750,
-      "height": 480
+      "height": 500
     },
     "visible": null,
     "focused": null
@@ -107,7 +133,7 @@
     "x": 585,
     "y": 177,
     "width": 750,
-    "height": 480
+    "height": 500
   },
   "regions": [
     {
@@ -573,6 +599,12 @@
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
         "tokenSource": "content.background",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
         "visualBounds": {
           "x": 0,
           "y": 45,
@@ -629,6 +661,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.background",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -661,6 +699,12 @@
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
         "tokenSource": "content.list",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
         "visualBounds": {
           "x": 0,
           "y": 45,
@@ -716,6 +760,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.list",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -748,6 +798,12 @@
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
         "tokenSource": "content.previewPanel",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
         "visualBounds": {
           "x": 375,
           "y": 45,
@@ -811,6 +867,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.previewPanel",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 375,
             "y": 45,
@@ -1704,6 +1766,73 @@
       "content": 8,
       "functionalChrome": 5,
       "windowBackdrop": 1
+    },
+    "guidelineAssertions": {
+      "appleDocumented": {
+        "hitTargets": {
+          "source": "apple-documented",
+          "macosMinimumHitSize": {
+            "width": 28,
+            "height": 28
+          },
+          "macosMinimumVisualSize": {
+            "width": 20,
+            "height": 20
+          },
+          "failures": []
+        },
+        "buttonCenterDistance": {
+          "source": "apple-documented",
+          "requiredCenterDistance": 60,
+          "failures": []
+        },
+        "materialLayering": {
+          "source": "apple-documented",
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": []
+        },
+        "colorAdaptivity": {
+          "source": "apple-documented",
+          "hardcodedColorNodes": []
+        },
+        "safeAreaLayout": {
+          "source": "apple-documented",
+          "clippedNodeCount": 0,
+          "overflowY": false
+        },
+        "buttonShapeFamilies": {
+          "source": "apple-documented",
+          "exactAppleRadiusConstants": null
+        }
+      },
+      "projectLocal": {
+        "cornerRadiusTokens": {
+          "source": "project-local",
+          "failures": []
+        },
+        "paddingTokens": {
+          "source": "project-local",
+          "minimumPanelPadding": 16,
+          "minimumCompactRowHorizontalPadding": 10
+        },
+        "spacingTokens": {
+          "source": "project-local",
+          "minimumFooterActionGap": 8
+        },
+        "windowBackdropPolicy": {
+          "source": "project-local",
+          "contentGlassNodeCount": 0
+        },
+        "themeTokenUsage": {
+          "source": "project-local",
+          "hardcodedColorNodes": []
+        },
+        "renderReadbackPixelThresholds": {
+          "source": "project-local",
+          "minimumNonBlackRatio": 0.01
+        }
+      }
     }
   },
   "handlerForm": null,
@@ -1712,7 +1841,7 @@
   "errors": [],
   "rawLayout": {
     "type": "layoutInfoResult",
-    "requestId": "devtools-layout-measure-1780125655299-0caa0e",
+    "requestId": "devtools-layout-measure-1780134640817-3d47c6",
     "windowWidth": 750,
     "windowHeight": 480,
     "promptType": "mainMenu",
@@ -1861,6 +1990,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.background",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -1894,6 +2029,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.list",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -1935,6 +2076,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "content.previewPanel",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 375,
             "y": 45,
@@ -2323,6 +2470,6 @@
         }
       }
     ],
-    "timestamp": "2026-05-30T07:20:55.323108+00:00"
+    "timestamp": "2026-05-30T09:50:40.844120+00:00"
   }
 }

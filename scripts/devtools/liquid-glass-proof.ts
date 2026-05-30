@@ -18,6 +18,8 @@ type Evidence = {
   imageDiffReceipts: string[];
   diffMasks: string[];
   visualAudit: JsonObject | null;
+  osScreenshotBlockers: JsonObject[];
+  layoutReceiptFreshnessLimitations: string[];
   notes: string[];
 };
 
@@ -34,8 +36,24 @@ type GuidanceProofStatus =
   | "strong-guidance-proof"
   | "numeric-guidance-proof-missing-os-visual"
   | "guidance-proof-capture-blocked"
+  | "stale-layout-evidence"
   | "source-ui-gap"
   | "missing-guidance-proof";
+
+const MACOS_WINDOWSERVER_CAPTURE_BLOCKED = "macos-windowserver-capture-blocked";
+const SCREEN_CAPTURE_WINDOW_FAILED = "screencapture_window_failed";
+const SCREEN_CAPTURE_RECT_FAILED = "screencapture_rect_failed";
+const OS_CAPTURE_BLOCKER_CODES = [
+  "target-identity-blocked",
+  "target-not-capture-candidate",
+  "window-id-api-blocked",
+  "screen-rect-capture-blocked",
+  "screen-recording-permission-blocked",
+  "blank-compositor-capture",
+  "occlusion-or-space-blocked",
+  "pixel-audit-failed",
+  "unknown-capture-failure",
+];
 
 let RECEIPT_ROOT = "artifacts/liquid-glass/receipts";
 let SCREENSHOT_ROOT = "artifacts/liquid-glass/screenshots";
@@ -92,48 +110,24 @@ function hasPositiveRadius(value: unknown) {
   return radii.length > 0 && radii.every((entry) => entry > 0);
 }
 
-const REQUIRED_POSITIVE_RADIUS_NODE_NAMES = new Set([
-  "ContentArea",
-  "ScriptList",
-  "PreviewPanel",
-]);
+function isRadiusBearingNode(node: JsonObject) {
+  const type = String(node.type ?? "").toLowerCase();
+  if (type === "other" || type === "text") return false;
+  const name = String(node.name ?? node.type ?? "");
+  return /Area|Content|Panel|List|Window|Header|Footer|Input|Button|Item|Row|Card|Prompt|Choices|Search|Action|Close|Tile/i
+    .test(name);
+}
 
 function nodesWithMissingPositiveRadius(receipt: JsonObject) {
   return asArray(receipt.nodes)
     .map(asObject)
     .filter((node) => {
-      const name = String(node.name ?? node.type ?? "");
-      if (!REQUIRED_POSITIVE_RADIUS_NODE_NAMES.has(name)) return false;
+      if (!isRadiusBearingNode(node)) return false;
       const style = asObject(node.visualStyle);
       if (Object.keys(style).length === 0) return false;
       return !hasPositiveRadius(style.cornerRadius) && !hasPositiveRadius(style.radius);
     })
     .map((node) => String(node.name ?? node.type ?? "unknown"));
-}
-
-function mergeCornerRadiusFailures(audit: JsonObject, failures: string[]) {
-  if (failures.length === 0) return audit;
-  const assertions = asObject(audit.guidelineAssertions);
-  const projectLocal = asObject(assertions.projectLocal);
-  const cornerRadiusTokens = asObject(projectLocal.cornerRadiusTokens);
-  const existing = asArray(cornerRadiusTokens.failures)
-    .map((entry) => String(asObject(entry).name ?? entry))
-    .filter(Boolean);
-  const merged = Array.from(new Set([...existing, ...failures])).sort();
-  return {
-    ...audit,
-    guidelineAssertions: {
-      ...assertions,
-      projectLocal: {
-        ...projectLocal,
-        cornerRadiusTokens: {
-          ...cornerRadiusTokens,
-          source: cornerRadiusTokens.source ?? "project-local",
-          failures: merged,
-        },
-      },
-    },
-  };
 }
 
 async function listFiles(dir: string) {
@@ -231,7 +225,67 @@ function screenshotUsability(path: string, receipts: string[]): ScreenshotUsabil
   return { usable: true };
 }
 
-function osScreenshotAttemptBlocked(receiptPath: string) {
+function captureAttemptSummary(attempts: unknown) {
+  return asArray(attempts).map(asObject).map((attempt) => ({
+    method: attempt.method ?? null,
+    status: attempt.status ?? null,
+    errorCode: attempt.errorCode ?? null,
+    reason: attempt.reason ?? null,
+    message: attempt.message ?? null,
+    stderr: attempt.stderr ?? null,
+  }));
+}
+
+function legacyStrictCaptureAttempts(error: unknown) {
+  const text = typeof error === "string" ? error : JSON.stringify(error ?? "");
+  const attempts: JsonObject[] = [];
+  for (const line of text.split("\n")) {
+    const jsonStart = line.indexOf("{");
+    if (jsonStart < 0) continue;
+    try {
+      const event = asObject(JSON.parse(line.slice(jsonStart)));
+      if (event.event === "window_capture_screencapture_l_failed") {
+        attempts.push({
+          method: "screencapture-window-id",
+          status: "failed",
+          errorCode: SCREEN_CAPTURE_WINDOW_FAILED,
+          stderr: event.stderr ?? null,
+          windowId: event.windowId ?? null,
+        });
+      }
+    } catch {
+      // Legacy receipts embed JSON event lines inside free-form error text.
+    }
+  }
+  if (text.includes("screenRect=could not create image from rect") || text.includes("could not create image from rect")) {
+    attempts.push({
+      method: "screencapture-screen-rect",
+      status: "failed",
+      errorCode: SCREEN_CAPTURE_RECT_FAILED,
+      stderr: "could not create image from rect",
+    });
+  }
+  if (text.includes("native=computer/capture_native_window")) {
+    attempts.push({
+      method: "computer/capture_native_window",
+      status: "failed",
+      errorCode: text.includes("not_capture_candidate") ? "not_capture_candidate" : "capture_failed",
+      stderr: null,
+    });
+  }
+  return attempts;
+}
+
+function captureBlockerClassification(defaultClassification: string, attempts: JsonObject[]) {
+  return attempts.some((attempt) =>
+    attempt.errorCode === SCREEN_CAPTURE_WINDOW_FAILED ||
+    attempt.errorCode === SCREEN_CAPTURE_RECT_FAILED
+  )
+    ? MACOS_WINDOWSERVER_CAPTURE_BLOCKED
+    : defaultClassification;
+}
+
+function osScreenshotBlockerFromReceipt(receiptPath: string): JsonObject | null {
   const name = receiptPath.split("/").pop() ?? receiptPath;
   if (!name.includes("screenshot") && !name.includes("capture")) {
     return null;
@@ -246,25 +300,67 @@ function osScreenshotAttemptBlocked(receiptPath: string) {
     visualEvidence.available === false &&
     visualEvidence.countsAsOsScreenshotEvidence !== true
   ) {
-    return String(visualEvidence.classification ?? "os-window-capture-blocked");
+    return {
+      receipt: receiptPath,
+      source: "os-window-capture",
+      classification: String(visualEvidence.classification ?? MACOS_WINDOWSERVER_CAPTURE_BLOCKED),
+      limitation: visualEvidence.limitation ?? null,
+      attempts: captureAttemptSummary(visualEvidence.attempts),
+    };
   }
   const screenshotReceipt = asObject(json.screenshotReceipt);
   const nestedScreenshotReceipt = asObject(asObject(json.screenshot).receipt);
   const receipt = Object.keys(screenshotReceipt).length > 0 ? screenshotReceipt : nestedScreenshotReceipt;
   if (json.status === "error" || json.classification === "error") {
-    return "screenshot-receipt-error";
+    const attempts = [
+      ...captureAttemptSummary(json.attempts),
+      ...legacyStrictCaptureAttempts(receipt.error ?? json.error),
+    ];
+    return {
+      receipt: receiptPath,
+      source: "screenshot-receipt",
+      classification: captureBlockerClassification("screenshot-receipt-error", attempts),
+      error: receipt.error ?? json.error ?? null,
+      attempts,
+    };
   }
   if (receipt.captured === false || typeof receipt.error === "string") {
-    return "screenshot-capture-failed";
+    const attempts = [
+      ...captureAttemptSummary(json.attempts),
+      ...legacyStrictCaptureAttempts(receipt.error),
+    ];
+    return {
+      receipt: receiptPath,
+      source: "screenshot-receipt",
+      classification: captureBlockerClassification("screenshot-capture-failed", attempts),
+      error: receipt.error ?? null,
+      attempts,
+    };
   }
   const audit = auditFromReceipt(json);
   if (audit.blank === true) {
-    return "blank-image-rejected";
+    return {
+      receipt: receiptPath,
+      source: "content-audit",
+      classification: "blank-image-rejected",
+      attempts: captureAttemptSummary(json.attempts),
+    };
   }
   if (typeof audit.nonBlackRatio === "number" && audit.nonBlackRatio < 0.01) {
-    return "low-content-capture-rejected";
+    return {
+      receipt: receiptPath,
+      source: "content-audit",
+      classification: "low-content-capture-rejected",
+      nonBlackRatio: audit.nonBlackRatio,
+      attempts: captureAttemptSummary(json.attempts),
+    };
   }
   return null;
+}
+
+function osScreenshotAttemptBlocked(receiptPath: string) {
+  const blocker = osScreenshotBlockerFromReceipt(receiptPath);
+  return blocker ? String(blocker.classification ?? "os-window-capture-blocked") : null;
 }
 
 function usableAppRenderEvidence(renderEvidence: JsonObject) {
@@ -445,6 +541,10 @@ function sourceUiGapsFromAudit(audit: JsonObject) {
   return gaps;
 }
 
+function sourceUiGapsFromEvidence(evidence: Evidence) {
+  return sourceUiGapsFromAudit(asObject(evidence.visualAudit));
+}
+
 function devtoolsCaptureLimitations(tiers: ProofTiers) {
   return [
     tiers.osScreenshotProof === "blocked" ? "osScreenshotProof:blocked" : "",
@@ -452,6 +552,109 @@ function devtoolsCaptureLimitations(tiers: ProofTiers) {
     tiers.appRenderProof === "blocked" ? "appRenderProof:blocked" : "",
     tiers.offscreenRenderProof === "fail" ? "offscreenRenderProof:fail" : "",
   ].filter(Boolean);
+}
+
+function osScreenshotBlockerCounts(surfaces: Array<{ osScreenshotBlockers?: unknown }>) {
+  const counts: Record<string, number> = {};
+  for (const surface of surfaces) {
+    const classifications = new Set(
+      asArray(surface.osScreenshotBlockers)
+        .map(asObject)
+        .map((blocker) => String(blocker.classification ?? "unknown"))
+        .filter(Boolean),
+    );
+    for (const classification of classifications) {
+      counts[classification] = (counts[classification] ?? 0) + 1;
+    }
+  }
+  return counts;
+}
+
+function flattenOsCaptureAttempts(blockers: unknown[]) {
+  return blockers.flatMap((blocker) => asArray(asObject(blocker).attempts).map(asObject));
+}
+
+function osCaptureBlockerCode(blockers: JsonObject[]) {
+  const classifications = new Set(blockers.map((blocker) => String(blocker.classification ?? "")));
+  const attempts = flattenOsCaptureAttempts(blockers);
+  const errorCodes = new Set(attempts.map((attempt) => String(attempt.errorCode ?? "")));
+  const errorText = blockers.map((blocker) => JSON.stringify(blocker.error ?? "")).join("\n");
+  if (classifications.has("blank-image-rejected") || classifications.has("low-content-capture-rejected")) {
+    return "blank-compositor-capture";
+  }
+  if (errorCodes.has(SCREEN_CAPTURE_RECT_FAILED)) {
+    return "screen-rect-capture-blocked";
+  }
+  if (errorCodes.has("not_capture_candidate")) {
+    return "target-not-capture-candidate";
+  }
+  if (errorCodes.has(SCREEN_CAPTURE_WINDOW_FAILED) || classifications.has(MACOS_WINDOWSERVER_CAPTURE_BLOCKED)) {
+    return "window-id-api-blocked";
+  }
+  if (errorText.includes("could not create image from window")) {
+    return "window-id-api-blocked";
+  }
+  if (
+    errorText.includes("No focused automation window") ||
+    errorText.includes("requires a native osWindowId") ||
+    errorText.includes("No response matching requestId")
+  ) {
+    return "target-identity-blocked";
+  }
+  return blockers.length > 0 ? "unknown-capture-failure" : null;
+}
+
+function osCaptureFromEvidence(evidence: Evidence, tiers: ProofTiers) {
+  const capturedVisualEvidence = evidence.receipts
+    .map(readJsonSync)
+    .map((json) => asObject(json?.visualEvidence))
+    .find((visualEvidence) =>
+      visualEvidence.source === "os-window-capture" &&
+      visualEvidence.classification === "captured" &&
+      visualEvidence.countsAsOsScreenshotEvidence === true
+    );
+  const captureKind = capturedVisualEvidence
+    ? String(capturedVisualEvidence.captureKind ?? "window-id")
+    : null;
+  const blockerCode = capturedVisualEvidence
+    ? "none"
+    : osCaptureBlockerCode(evidence.osScreenshotBlockers);
+  const attempts = [
+    ...flattenOsCaptureAttempts(evidence.osScreenshotBlockers),
+    ...captureAttemptSummary(capturedVisualEvidence?.attempts),
+  ];
+  const windowIdFailed = attempts.some((attempt) => attempt.errorCode === SCREEN_CAPTURE_WINDOW_FAILED);
+  const rectFailed = attempts.some((attempt) => attempt.errorCode === SCREEN_CAPTURE_RECT_FAILED);
+  return {
+    proof: tiers.osScreenshotProof,
+    captureKind,
+    windowIdCaptureProof: captureKind === "window-id"
+      ? "pass"
+      : windowIdFailed
+        ? "blocked"
+        : "missing",
+    compositorCaptureProof: tiers.osScreenshotProof === "pass"
+      ? "pass"
+      : tiers.osScreenshotProof === "blocked"
+        ? "blocked"
+        : "missing",
+    countsAsCompositorEvidence: capturedVisualEvidence
+      ? capturedVisualEvidence.countsAsCompositorEvidence === true ||
+        capturedVisualEvidence.countsAsOsScreenshotEvidence === true
+      : false,
+    blockerCode,
+    blockers: evidence.osScreenshotBlockers,
+    attempts,
+    assertions: {
+      countsAsOsScreenshotEvidence: capturedVisualEvidence?.countsAsOsScreenshotEvidence === true,
+      countsAsCompositorEvidence: capturedVisualEvidence
+        ? capturedVisualEvidence.countsAsCompositorEvidence === true ||
+          capturedVisualEvidence.countsAsOsScreenshotEvidence === true
+        : false,
+      windowIdCaptureAttempted: windowIdFailed || captureKind === "window-id",
+      screenRectCaptureAttempted: rectFailed || captureKind === "screen-rect",
+    },
+  };
 }
 
 function diagnosticLimitations(tiers: ProofTiers) {
@@ -463,10 +666,12 @@ function diagnosticLimitations(tiers: ProofTiers) {
 }
 
 function guidanceProofStatus(evidence: Evidence, tiers: ProofTiers): GuidanceProofStatus {
-  const audit = asObject(evidence.visualAudit);
-  const sourceGaps = sourceUiGapsFromAudit(audit);
+  const sourceGaps = sourceUiGapsFromEvidence(evidence);
   if (tiers.numericProof === "fail" || sourceGaps.length > 0) {
     return "source-ui-gap";
+  }
+  if (evidence.layoutReceiptFreshnessLimitations.length > 0) {
+    return "stale-layout-evidence";
   }
   if (tiers.numericProof !== "pass") {
     return "missing-guidance-proof";
@@ -525,6 +730,10 @@ function evidenceFor(terms: string[], files: { receipts: string[]; screenshots: 
     imageDiffReceipts,
     diffMasks: files.diffs.filter((path) => includesAny(path, terms)),
     visualAudit: null,
+    osScreenshotBlockers: receipts
+      .map(osScreenshotBlockerFromReceipt)
+      .filter((blocker): blocker is JsonObject => blocker != null),
+    layoutReceiptFreshnessLimitations: [],
     notes: [
       ...screenshotNotes,
       ...imageDiffNotes,
@@ -534,7 +743,7 @@ function evidenceFor(terms: string[], files: { receipts: string[]; screenshots: 
 }
 
 function proofTiers(evidence: Evidence): ProofTiers {
-  let osBlocked = false;
+  let osBlocked = evidence.osScreenshotBlockers.length > 0;
   let appRenderPass = false;
   let appRenderBlocked = false;
   let appRenderFail = false;
@@ -542,9 +751,6 @@ function proofTiers(evidence: Evidence): ProofTiers {
   let offscreenFail = false;
   for (const receipt of evidence.receipts) {
     const json = readJsonSync(receipt);
-    if (osScreenshotAttemptBlocked(receipt)) {
-      osBlocked = true;
-    }
     const visualEvidence = asObject(json?.visualEvidence);
     if (
       visualEvidence.source === "os-window-capture" &&
@@ -689,14 +895,24 @@ async function attachVisualAudit(evidence: Evidence, preferred: string[]) {
       ? asObject(json?.visualAudit)
       : asObject(asObject(asObject(json?.receipts).layout).visualAudit);
     if (Object.keys(audit).length > 0) {
-      evidence.visualAudit = mergeCornerRadiusFailures(
-        audit,
-        nodesWithMissingPositiveRadius(asObject(json)),
-      );
+      const syntheticRadiusFailures = nodesWithMissingPositiveRadius(asObject(json));
+      evidence.visualAudit = audit;
+      if (syntheticRadiusFailures.length > 0 && !hasExplicitCornerRadiusFailures(audit)) {
+        evidence.layoutReceiptFreshnessLimitations.push(
+          `legacy layout receipt lacks explicit cornerRadiusTokens for ${syntheticRadiusFailures.join(", ")}: ${path}`,
+        );
+      }
       evidence.notes.push(`visualAudit: ${path}`);
       return;
     }
   }
+}
+
+function hasExplicitCornerRadiusFailures(audit: JsonObject) {
+  const failures = asArray(
+    asObject(asObject(asObject(audit.guidelineAssertions).projectLocal).cornerRadiusTokens).failures,
+  );
+  return failures.length > 0;
 }
 
 async function main() {
@@ -802,6 +1018,7 @@ async function main() {
       ]);
     } else if (surfaceKind === "AcpChat") {
       await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-acp-detached-current-layout.json`,
         `${RECEIPT_ROOT}/window-priority-acp-detached-layout-after.json`,
       ]);
     } else if (surfaceKind === "ClipboardHistory") {
@@ -886,6 +1103,7 @@ async function main() {
       ]);
     } else if (surfaceKind === "PromptChildContent") {
       await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-prompt-child-editor-guideline-layout.json`,
         `${RECEIPT_ROOT}/window-priority-prompt-child-editor-fixed-layout-sdk.json`,
       ]);
     } else if (surfaceKind === "ExplicitPromptEntity") {
@@ -909,8 +1127,9 @@ async function main() {
     }
     const status = classify(evidence);
     const tiers = proofTiers(evidence);
+    const osCapture = osCaptureFromEvidence(evidence, tiers);
     const guidanceStatus = guidanceProofStatus(evidence, tiers);
-    const sourceGaps = sourceUiGapsFromAudit(asObject(evidence.visualAudit));
+    const sourceGaps = sourceUiGapsFromEvidence(evidence);
     const captureLimitations = devtoolsCaptureLimitations(tiers);
     const diagnostics = diagnosticLimitations(tiers);
     const requiredEvidence = {
@@ -934,11 +1153,14 @@ async function main() {
       guidanceProofStatus: guidanceStatus,
       sourceUiGaps: sourceGaps,
       devtoolsCaptureLimitations: captureLimitations,
+      osScreenshotBlockers: evidence.osScreenshotBlockers,
+      layoutReceiptFreshnessLimitations: evidence.layoutReceiptFreshnessLimitations,
       diagnosticLimitations: diagnostics,
       guidanceEvidenceNeeded: guidanceEvidenceNeeded(requiredEvidence),
       diagnosticEvidenceNeeded: diagnosticEvidenceNeeded(requiredEvidence),
       requiredEvidence,
       proofTiers: tiers,
+      osCapture,
       visualAudit: evidence.visualAudit,
       evidence,
     };
@@ -1011,6 +1233,7 @@ async function main() {
         syntheticDelivery: dictationDelivery != null,
       },
       proofTiers: tiers,
+      osCapture: osCaptureFromEvidence(evidence, tiers),
       mediaProof: dictationMedia
         ? {
           status: dictationMedia.status ?? null,
@@ -1073,6 +1296,9 @@ async function main() {
       ].filter(Boolean),
       sourceUiGaps: surface.sourceUiGaps,
       devtoolsCaptureLimitations: surface.devtoolsCaptureLimitations,
+      osScreenshotBlockers: surface.osScreenshotBlockers,
+      osCapture: surface.osCapture,
+      layoutReceiptFreshnessLimitations: surface.layoutReceiptFreshnessLimitations,
       guidanceEvidenceNeeded: surface.guidanceEvidenceNeeded,
       diagnosticLimitations: surface.diagnosticLimitations,
       guidelineFailures: guidelineFailureDetails(asObject(surface.visualAudit).guidelineAssertions),
@@ -1090,6 +1316,9 @@ async function main() {
       requiredEvidence: surface.requiredEvidence,
       sourceUiGaps: surface.sourceUiGaps,
       devtoolsCaptureLimitations: surface.devtoolsCaptureLimitations,
+      osScreenshotBlockers: surface.osScreenshotBlockers,
+      osCapture: surface.osCapture,
+      layoutReceiptFreshnessLimitations: surface.layoutReceiptFreshnessLimitations,
       diagnosticLimitations: surface.diagnosticLimitations,
       guidanceEvidenceNeeded: surface.guidanceEvidenceNeeded,
       diagnosticEvidenceNeeded: surface.diagnosticEvidenceNeeded,
@@ -1102,15 +1331,18 @@ async function main() {
     const guidanceNeeded = guidanceEvidenceNeeded(surface.requiredEvidence);
     const diagnosticNeeded = diagnosticEvidenceNeeded(surface.requiredEvidence);
     const sourceUiGap = surface.guidanceProofStatus === "source-ui-gap";
+    const staleLayoutEvidence = surface.guidanceProofStatus === "stale-layout-evidence";
     const compositorCaptureBlocked = surface.proofTiers.osScreenshotProof === "blocked" ||
       surface.proofTiers.imageDiffProof === "blocked";
     const diagnosticOnlyBlocked = surface.proofTiers.appRenderProof === "blocked" ||
       surface.proofTiers.appRenderProof === "fail" ||
       surface.proofTiers.offscreenRenderProof === "fail";
-    const blockingClass = sourceUiGap
+    const blockingClass = staleLayoutEvidence
+      ? "stale-layout-evidence"
+      : sourceUiGap
       ? "source-ui-gap"
       : compositorCaptureBlocked
-        ? "devtools-capture-limitation"
+        ? String(surface.osCapture?.blockerCode ?? "unknown-capture-failure")
         : guidanceNeeded.length > 0
           ? "missing-guidance-visual-evidence"
           : diagnosticOnlyBlocked
@@ -1126,18 +1358,27 @@ async function main() {
       blockingClass,
       priority: blockingClass === "source-ui-gap" || blockingClass === "devtools-capture-limitation"
         ? "capture-blocker"
+        : compositorCaptureBlocked
+          ? "capture-blocker"
+        : blockingClass === "stale-layout-evidence"
+          ? "freshness-refresh"
         : "missing-proof-tier",
       nextEvidenceNeeded: guidanceNeeded,
       guidanceEvidenceNeeded: guidanceNeeded,
       diagnosticEvidenceNeeded: diagnosticNeeded,
       sourceUiGaps: surface.sourceUiGaps,
       devtoolsCaptureLimitations: surface.devtoolsCaptureLimitations,
+      osScreenshotBlockers: surface.osScreenshotBlockers,
+      osCapture: surface.osCapture,
+      layoutReceiptFreshnessLimitations: surface.layoutReceiptFreshnessLimitations,
       diagnosticLimitations: surface.diagnosticLimitations,
       guidelineFailures: surface.guidelineFailures,
       recommendedNextAction: blockingClass === "source-ui-gap"
         ? "fix UI/source layout/style gap, then rerun layout + OS visual proof"
-        : blockingClass === "devtools-capture-limitation"
-          ? "fix OS/window capture limitation or permissions; do not treat this as a UI source gap"
+        : compositorCaptureBlocked
+          ? `resolve OS compositor capture blocker ${blockingClass}; current source/layout proof is not contradicted`
+          : blockingClass === "stale-layout-evidence"
+            ? "refresh layout receipt from current target-agent binary; do not edit source until a current receipt still fails panel radii"
           : blockingClass === "missing-guidance-visual-evidence"
             ? "run strict OS screenshot capture and image diff for this surface"
             : blockingClass === "diagnostic-readback-limitation"
@@ -1160,6 +1401,7 @@ async function main() {
     partialProofSurfaceCount: surfaces.filter((surface) => surface.proofStatus !== "missing-proof" && surface.proofStatus !== "strong-proof").length,
     missingProofSurfaceCount: surfaces.filter((surface) => surface.proofStatus === "missing-proof").length,
     osScreenshotBlockedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.osScreenshotProof === "blocked").length,
+    osScreenshotBlockerCounts: osScreenshotBlockerCounts(surfaces),
     appRenderProofSurfaceCount: surfaces.filter((surface) => surface.proofTiers.appRenderProof === "pass").length,
     appRenderBlockedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.appRenderProof === "blocked").length,
     appRenderFailedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.appRenderProof === "fail").length,
@@ -1170,10 +1412,12 @@ async function main() {
     guidelineFailedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.guidelineProof === "fail").length,
     guidelineMissingSurfaceCount: surfaces.filter((surface) => surface.proofTiers.guidelineProof === "missing").length,
     strongGuidanceProofSurfaceCount: surfaces.filter((surface) => surface.guidanceProofStatus === "strong-guidance-proof").length,
+    staleLayoutEvidenceSurfaceCount: surfaces.filter((surface) => surface.guidanceProofStatus === "stale-layout-evidence").length,
     sourceUiGapSurfaceCount: surfaces.filter((surface) => surface.guidanceProofStatus === "source-ui-gap").length,
     guidanceCaptureBlockedSurfaceCount: surfaces.filter((surface) => surface.guidanceProofStatus === "guidance-proof-capture-blocked").length,
     numericGuidanceMissingOsVisualSurfaceCount: surfaces.filter((surface) => surface.guidanceProofStatus === "numeric-guidance-proof-missing-os-visual").length,
     missingGuidanceProofSurfaceCount: surfaces.filter((surface) => surface.guidanceProofStatus === "missing-guidance-proof").length,
+    layoutReceiptFreshnessLimitationSurfaceCount: surfaces.filter((surface) => asArray(surface.layoutReceiptFreshnessLimitations).length > 0).length,
     diagnosticReadbackLimitationSurfaceCount: surfaces.filter((surface) => asArray(surface.diagnosticLimitations).length > 0).length,
     visualTierDebtSurfaceCount: visualTierDebtSurfaces.length,
     surfaceProofDebtCount: surfaceProofDebtSurfaces.length,

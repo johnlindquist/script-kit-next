@@ -1,1 +1,1554 @@
-{"schemaVersion":1,"status":"ok","session":"liquid-file-search-capture","sent":true,"parseOutcome":"timeout","timeoutMs":3000}
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.act",
+  "command": "act.key",
+  "classification": "blocked-by-target-ambiguity",
+  "session": "liquid-file-search-mini-rekey-current",
+  "startedAt": "2026-05-30T09:59:38.006Z",
+  "endedAt": "2026-05-30T09:59:39.724Z",
+  "actionId": "devtools-act-key-1780135181330-78d448",
+  "actionKind": "key",
+  "proofIntent": "file-search-mini-open",
+  "preflightOnly": false,
+  "submitGate": {
+    "gateName": "submit.preflight",
+    "actionKind": "key",
+    "key": "Enter",
+    "modifiers": [],
+    "allowSubmit": true,
+    "allowSubmitReason": "Open selected File Search hint for FileSearchMini Tahoe proof",
+    "submitIntent": "file-search-mini-open",
+    "selectedSemanticId": "choice:0:open-file-search",
+    "selectedActionId": "open-file-search",
+    "target": {
+      "automationId": "main",
+      "targetKind": "Main",
+      "surfaceKind": "ScriptList",
+      "appViewVariant": "ScriptList",
+      "nativeFooterSurface": "script_list"
+    }
+  },
+  "blockedAction": null,
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ScriptList"
+  },
+  "targetBefore": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "ScriptList",
+    "appViewVariant": "ScriptList",
+    "nativeFooterSurface": "script_list",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": null,
+      "height": null,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 75921,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "input": {
+    "text": null,
+    "semanticId": null,
+    "control": null,
+    "value": null,
+    "key": "Enter",
+    "modifiers": []
+  },
+  "safety": {
+    "channel": "simulateKey",
+    "destructive": false,
+    "submitAllowed": true,
+    "submitIntent": "file-search-mini-open",
+    "allowSubmitReason": "Open selected File Search hint for FileSearchMini Tahoe proof",
+    "nativeEscalation": false,
+    "errors": [],
+    "warnings": [],
+    "submitAttempted": true,
+    "submitPreflightSelectedSemanticId": "choice:0:open-file-search"
+  },
+  "submitLifecycle": {
+    "state": "failed",
+    "reason": "post-submit target not inspectable",
+    "actionId": "open-file-search",
+    "sourceAfter": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "classification": "blocked-by-target-ambiguity",
+      "session": "liquid-file-search-mini-rekey-current",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "target": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "FileSearchMini",
+        "appViewVariant": "FileSearchView",
+        "nativeFooterSurface": "file_search",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 585,
+          "y": 177,
+          "width": 750,
+          "height": 480
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 75921,
+        "strictTargetMatch": false,
+        "ambiguity": []
+      },
+      "windowFocused": true,
+      "windowVisible": true,
+      "focusedSemanticId": "input:file-search-input",
+      "selectedSemanticId": null,
+      "focusedNode": {
+        "semanticId": "input:file-search-input",
+        "type": "input",
+        "value": "",
+        "focused": true
+      },
+      "selectedNode": null,
+      "activeFooter": {
+        "schemaVersion": 1,
+        "owner": "native",
+        "expectedSurface": "file_search",
+        "requestedSurface": "file_search",
+        "activeSurface": "file_search",
+        "nativeFooterHostInstalled": true,
+        "gpuiFallbackVisible": false,
+        "leftInfo": null,
+        "buttonCount": 2,
+        "buttons": [
+          {
+            "action": "run",
+            "key": "↵",
+            "label": "Run",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "actions",
+            "key": "⌘K",
+            "label": "Actions",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          }
+        ],
+        "mismatch": null
+      },
+      "nativeFooter": {
+        "owner": "native",
+        "activeSurface": "file_search",
+        "expectedSurface": "file_search",
+        "nativeFooterHostInstalled": true,
+        "buttonCount": 2,
+        "activationPrimitiveAvailable": false,
+        "missingPrimitive": "nativeFooterActivationReceipt"
+      },
+      "submitDiagnostics": null,
+      "keyboardOwner": {
+        "inputValue": "",
+        "promptType": "fileSearch",
+        "surfaceKind": "FileSearchMini",
+        "inputOwnership": "LauncherFilter",
+        "keyboardPolicy": "LauncherListKeyboard"
+      },
+      "missingPrimitives": [
+        "strictTargetIdentity",
+        "nativeFooterActivationReceipt"
+      ],
+      "warnings": [],
+      "errors": []
+    },
+    "parentAfter": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.inspect",
+      "session": "liquid-file-search-mini-rekey-current",
+      "classification": "blocked-by-target-ambiguity",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "resolvedTarget": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "FileSearchMini",
+        "appViewVariant": "FileSearchView",
+        "nativeFooterSurface": "file_search",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 585,
+          "y": 177,
+          "width": 750,
+          "height": 480
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 75921,
+        "strictTargetMatch": false,
+        "ambiguity": []
+      },
+      "windows": [
+        {
+          "index": 0,
+          "automationId": "main",
+          "windowKind": "Main",
+          "title": "Script Kit",
+          "visible": true,
+          "focused": false,
+          "bounds": {
+            "x": 585,
+            "y": 177,
+            "width": 750,
+            "height": 480
+          },
+          "surfaceKind": null,
+          "appViewVariant": null,
+          "parentAutomationId": null,
+          "parentKind": null,
+          "pid": 75921
+        }
+      ],
+      "rawInspect": {
+        "type": "automationInspectResult",
+        "requestId": "devtools-targets-inspect-1780135179774-d7023e",
+        "schemaVersion": 3,
+        "windowId": "main",
+        "windowKind": "Main",
+        "surfaceKind": "FileSearchMini",
+        "appViewVariant": "FileSearchView",
+        "nativeFooterSurface": "file_search",
+        "title": "Script Kit",
+        "resolvedBounds": {
+          "x": 585,
+          "y": 177,
+          "width": 750,
+          "height": 480
+        },
+        "targetBoundsInScreenshot": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "surfaceHitPoint": {
+          "x": 375,
+          "y": 240
+        },
+        "suggestedHitPoints": [
+          {
+            "semanticId": "panel:window",
+            "x": 375,
+            "y": 240,
+            "reason": "surface_center"
+          }
+        ],
+        "elements": [
+          {
+            "semanticId": "input:file-search-input",
+            "type": "input",
+            "value": "",
+            "focused": true
+          },
+          {
+            "semanticId": "list:file-results",
+            "type": "list",
+            "text": "0 items"
+          },
+          {
+            "semanticId": "footer:native:row",
+            "type": "panel",
+            "text": "native",
+            "value": "file_search",
+            "role": "footer",
+            "kind": "nativeFooterRow",
+            "selectable": false
+          },
+          {
+            "semanticId": "footer:native:run",
+            "type": "button",
+            "text": "↵ Run",
+            "value": "run",
+            "selected": false,
+            "index": 0,
+            "role": "footer",
+            "kind": "nativeFooterButton",
+            "source": "file_search",
+            "sourceName": "file_search",
+            "selectable": true
+          },
+          {
+            "semanticId": "footer:native:actions",
+            "type": "button",
+            "text": "⌘K Actions",
+            "value": "actions",
+            "selected": false,
+            "index": 1,
+            "role": "footer",
+            "kind": "nativeFooterButton",
+            "source": "file_search",
+            "sourceName": "file_search",
+            "selectable": true
+          }
+        ],
+        "totalCount": 5,
+        "focusedSemanticId": "input:file-search-input",
+        "semanticQuality": "full",
+        "warnings": [
+          "screenshot_capture_failed: Ambiguous OS window match for automation target main (Main); '' and '' tied at score 5100"
+        ],
+        "pid": 75921
+      },
+      "sessionLifecycle": [],
+      "errors": []
+    }
+  },
+  "postActionLifecycle": {
+    "state": "failed",
+    "reason": "post-submit target not inspectable",
+    "actionId": "open-file-search",
+    "sourceAfter": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "classification": "blocked-by-target-ambiguity",
+      "session": "liquid-file-search-mini-rekey-current",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "target": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "FileSearchMini",
+        "appViewVariant": "FileSearchView",
+        "nativeFooterSurface": "file_search",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 585,
+          "y": 177,
+          "width": 750,
+          "height": 480
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 75921,
+        "strictTargetMatch": false,
+        "ambiguity": []
+      },
+      "windowFocused": true,
+      "windowVisible": true,
+      "focusedSemanticId": "input:file-search-input",
+      "selectedSemanticId": null,
+      "focusedNode": {
+        "semanticId": "input:file-search-input",
+        "type": "input",
+        "value": "",
+        "focused": true
+      },
+      "selectedNode": null,
+      "activeFooter": {
+        "schemaVersion": 1,
+        "owner": "native",
+        "expectedSurface": "file_search",
+        "requestedSurface": "file_search",
+        "activeSurface": "file_search",
+        "nativeFooterHostInstalled": true,
+        "gpuiFallbackVisible": false,
+        "leftInfo": null,
+        "buttonCount": 2,
+        "buttons": [
+          {
+            "action": "run",
+            "key": "↵",
+            "label": "Run",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "actions",
+            "key": "⌘K",
+            "label": "Actions",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          }
+        ],
+        "mismatch": null
+      },
+      "nativeFooter": {
+        "owner": "native",
+        "activeSurface": "file_search",
+        "expectedSurface": "file_search",
+        "nativeFooterHostInstalled": true,
+        "buttonCount": 2,
+        "activationPrimitiveAvailable": false,
+        "missingPrimitive": "nativeFooterActivationReceipt"
+      },
+      "submitDiagnostics": null,
+      "keyboardOwner": {
+        "inputValue": "",
+        "promptType": "fileSearch",
+        "surfaceKind": "FileSearchMini",
+        "inputOwnership": "LauncherFilter",
+        "keyboardPolicy": "LauncherListKeyboard"
+      },
+      "missingPrimitives": [
+        "strictTargetIdentity",
+        "nativeFooterActivationReceipt"
+      ],
+      "warnings": [],
+      "errors": []
+    },
+    "parentAfter": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.inspect",
+      "session": "liquid-file-search-mini-rekey-current",
+      "classification": "blocked-by-target-ambiguity",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "resolvedTarget": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "FileSearchMini",
+        "appViewVariant": "FileSearchView",
+        "nativeFooterSurface": "file_search",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 585,
+          "y": 177,
+          "width": 750,
+          "height": 480
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 75921,
+        "strictTargetMatch": false,
+        "ambiguity": []
+      },
+      "windows": [
+        {
+          "index": 0,
+          "automationId": "main",
+          "windowKind": "Main",
+          "title": "Script Kit",
+          "visible": true,
+          "focused": false,
+          "bounds": {
+            "x": 585,
+            "y": 177,
+            "width": 750,
+            "height": 480
+          },
+          "surfaceKind": null,
+          "appViewVariant": null,
+          "parentAutomationId": null,
+          "parentKind": null,
+          "pid": 75921
+        }
+      ],
+      "rawInspect": {
+        "type": "automationInspectResult",
+        "requestId": "devtools-targets-inspect-1780135179774-d7023e",
+        "schemaVersion": 3,
+        "windowId": "main",
+        "windowKind": "Main",
+        "surfaceKind": "FileSearchMini",
+        "appViewVariant": "FileSearchView",
+        "nativeFooterSurface": "file_search",
+        "title": "Script Kit",
+        "resolvedBounds": {
+          "x": 585,
+          "y": 177,
+          "width": 750,
+          "height": 480
+        },
+        "targetBoundsInScreenshot": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "surfaceHitPoint": {
+          "x": 375,
+          "y": 240
+        },
+        "suggestedHitPoints": [
+          {
+            "semanticId": "panel:window",
+            "x": 375,
+            "y": 240,
+            "reason": "surface_center"
+          }
+        ],
+        "elements": [
+          {
+            "semanticId": "input:file-search-input",
+            "type": "input",
+            "value": "",
+            "focused": true
+          },
+          {
+            "semanticId": "list:file-results",
+            "type": "list",
+            "text": "0 items"
+          },
+          {
+            "semanticId": "footer:native:row",
+            "type": "panel",
+            "text": "native",
+            "value": "file_search",
+            "role": "footer",
+            "kind": "nativeFooterRow",
+            "selectable": false
+          },
+          {
+            "semanticId": "footer:native:run",
+            "type": "button",
+            "text": "↵ Run",
+            "value": "run",
+            "selected": false,
+            "index": 0,
+            "role": "footer",
+            "kind": "nativeFooterButton",
+            "source": "file_search",
+            "sourceName": "file_search",
+            "selectable": true
+          },
+          {
+            "semanticId": "footer:native:actions",
+            "type": "button",
+            "text": "⌘K Actions",
+            "value": "actions",
+            "selected": false,
+            "index": 1,
+            "role": "footer",
+            "kind": "nativeFooterButton",
+            "source": "file_search",
+            "sourceName": "file_search",
+            "selectable": true
+          }
+        ],
+        "totalCount": 5,
+        "focusedSemanticId": "input:file-search-input",
+        "semanticQuality": "full",
+        "warnings": [
+          "screenshot_capture_failed: Ambiguous OS window match for automation target main (Main); '' and '' tied at score 5100"
+        ],
+        "pid": 75921
+      },
+      "sessionLifecycle": [],
+      "errors": []
+    }
+  },
+  "dismissLifecycle": null,
+  "expected": {
+    "protocolResponse": "stdin_command_parsed",
+    "submitAllowed": true,
+    "noNativeEscalation": true,
+    "prePostReceipts": [
+      "focus.inspect",
+      "focus.inspect.submitDiagnostics",
+      "scroll.inspect"
+    ]
+  },
+  "actionReceipt": {
+    "schemaVersion": 1,
+    "status": "ok",
+    "session": "liquid-file-search-mini-rekey-current",
+    "sent": true,
+    "parseOutcome": "parsed",
+    "commandType": "simulateKey"
+  },
+  "targetAfter": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "FileSearchMini",
+    "appViewVariant": "FileSearchView",
+    "nativeFooterSurface": "file_search",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": null,
+      "height": null,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 75921,
+    "strictTargetMatch": false,
+    "ambiguity": []
+  },
+  "submitDiagnostics": {
+    "before": null,
+    "after": null
+  },
+  "visibleResult": {
+    "focusChanged": true,
+    "selectionChanged": true,
+    "inputChanged": true,
+    "windowVisibleBefore": true,
+    "windowVisibleAfter": true,
+    "scrollChanged": true,
+    "submitDiagnosticsChanged": false
+  },
+  "before": {
+    "focus": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "classification": "ok",
+      "session": "liquid-file-search-mini-rekey-current",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "target": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "ScriptList",
+        "appViewVariant": "ScriptList",
+        "nativeFooterSurface": "script_list",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 585,
+          "y": 177,
+          "width": 750,
+          "height": 480
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 75921,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "windowFocused": true,
+      "windowVisible": true,
+      "focusedSemanticId": "input:filter",
+      "selectedSemanticId": "choice:0:open-file-search",
+      "focusedNode": {
+        "semanticId": "input:filter",
+        "type": "input",
+        "value": "~",
+        "focused": true
+      },
+      "selectedNode": {
+        "semanticId": "choice:0:open-file-search",
+        "type": "choice",
+        "text": "Open File Search",
+        "value": "Browse files",
+        "selected": true,
+        "index": 0,
+        "role": "row",
+        "kind": "hint",
+        "sourceName": "Spine",
+        "selectable": true
+      },
+      "activeFooter": {
+        "schemaVersion": 1,
+        "owner": "native",
+        "expectedSurface": "script_list",
+        "requestedSurface": "script_list",
+        "activeSurface": "script_list",
+        "nativeFooterHostInstalled": true,
+        "gpuiFallbackVisible": false,
+        "leftInfo": null,
+        "buttonCount": 4,
+        "buttons": [
+          {
+            "action": "cwd",
+            "key": "⇥",
+            "label": "~/dev/script-kit-gpui",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "agentModel",
+            "key": "⇧⇥",
+            "label": "Claude · Sonnet 4.6",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "run",
+            "key": "↵",
+            "label": "Open",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "actions",
+            "key": "⌘K",
+            "label": "Actions",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          }
+        ],
+        "mismatch": null
+      },
+      "nativeFooter": {
+        "owner": "native",
+        "activeSurface": "script_list",
+        "expectedSurface": "script_list",
+        "nativeFooterHostInstalled": true,
+        "buttonCount": 4,
+        "activationPrimitiveAvailable": false,
+        "missingPrimitive": "nativeFooterActivationReceipt"
+      },
+      "submitDiagnostics": null,
+      "keyboardOwner": {
+        "inputValue": "~",
+        "promptType": "none",
+        "surfaceKind": "ScriptList",
+        "inputOwnership": "LauncherFilter",
+        "keyboardPolicy": "LauncherListKeyboard"
+      },
+      "missingPrimitives": [
+        "nativeFooterActivationReceipt"
+      ],
+      "warnings": [],
+      "errors": []
+    },
+    "scroll": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.scroll",
+      "command": "scroll.inspect",
+      "classification": "ok",
+      "session": "liquid-file-search-mini-rekey-current",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "target": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "ScriptList",
+        "appViewVariant": "ScriptList",
+        "nativeFooterSurface": "script_list",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 585,
+          "y": 177,
+          "width": 750,
+          "height": 480
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 75921,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "scroll": {
+        "scrollTop": 0,
+        "scrollTopItem": 0,
+        "contentHeight": 66,
+        "viewportHeight": 0,
+        "safeViewportHeight": 0,
+        "footerHeight": 38,
+        "maxScrollTop": 66,
+        "canScrollY": true,
+        "selectedIndex": 1,
+        "selectedRowTop": 26,
+        "selectedRowBottom": 66,
+        "selectedRowVisible": false,
+        "selectedRowAboveFooter": false,
+        "itemCount": 2
+      },
+      "resizePressure": {
+        "overflowY": true,
+        "hiddenContentHeight": 66,
+        "selectedRowOccluded": true
+      },
+      "missingPrimitives": [],
+      "errors": [],
+      "state": {
+        "type": "stateResult",
+        "requestId": "devtools-scroll-state-1780135177934-f9ca8a",
+        "promptType": "none",
+        "surfaceContract": {
+          "schemaVersion": 1,
+          "surfaceKind": "ScriptList",
+          "family": "MainMenu",
+          "inputOwnership": "LauncherFilter",
+          "previewRole": "OptionalInfoPanel",
+          "focusPolicy": "LauncherFilterFocus",
+          "keyboardPolicy": "LauncherListKeyboard",
+          "actionsPolicy": "MainMenuActions",
+          "proofPolicy": "StateAndElementsProof",
+          "visualPolicy": "CompactLauncherVisual",
+          "automationSemanticSurface": "scriptList",
+          "nativeFooterSurface": "script_list"
+        },
+        "activeFooter": {
+          "schemaVersion": 1,
+          "owner": "native",
+          "expectedSurface": "script_list",
+          "requestedSurface": "script_list",
+          "activeSurface": "script_list",
+          "nativeFooterHostInstalled": true,
+          "gpuiFallbackVisible": false,
+          "leftInfo": null,
+          "buttonCount": 4,
+          "buttons": [
+            {
+              "action": "cwd",
+              "key": "⇥",
+              "label": "~/dev/script-kit-gpui",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            },
+            {
+              "action": "agentModel",
+              "key": "⇧⇥",
+              "label": "Claude · Sonnet 4.6",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            },
+            {
+              "action": "run",
+              "key": "↵",
+              "label": "Open",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            },
+            {
+              "action": "actions",
+              "key": "⌘K",
+              "label": "Actions",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            }
+          ],
+          "mismatch": null
+        },
+        "inputValue": "~",
+        "choiceCount": 552,
+        "visibleChoiceCount": 1,
+        "selectedIndex": 1,
+        "selectedValue": "Open File Search",
+        "isFocused": true,
+        "windowVisible": true,
+        "miniAi": {
+          "visible": false,
+          "promptId": null,
+          "mainWindowMode": "mini",
+          "draftLen": 0,
+          "pendingSubmit": false,
+          "handoffSource": "mini_ai_launcher",
+          "returnOrigin": "scriptList",
+          "lastCloseSource": null
+        },
+        "filterInputDecorations": {
+          "text": "~",
+          "chips": []
+        },
+        "rootFileSearch": {
+          "query": "~",
+          "mode": "DirectoryBrowse",
+          "loading": false,
+          "visibleLoading": false,
+          "generation": 1,
+          "visibleResultCount": 96,
+          "cacheEntryCount": 0,
+          "cacheResultCount": 0
+        },
+        "mainListScroll": {
+          "scrollTop": 0,
+          "scrollTopItem": 0,
+          "scrollTopOffset": 0,
+          "contentHeight": 66,
+          "viewportHeight": 0,
+          "footerHeight": 38,
+          "safeViewportHeight": 0,
+          "maxScrollTop": 66,
+          "selectedIndex": 1,
+          "selectedRowTop": 26,
+          "selectedRowBottom": 66,
+          "selectedRowVisible": false,
+          "selectedRowAboveFooter": false,
+          "itemCount": 2
+        },
+        "dictation": {
+          "schemaVersion": 1,
+          "source": "runtime.dictation.automationState",
+          "passive": true,
+          "redacted": true,
+          "generation": 1,
+          "recordingStateGeneration": 1,
+          "isRecording": false,
+          "phase": "idle",
+          "target": null,
+          "targetLabel": null,
+          "elapsedMs": null,
+          "audioLevels": {
+            "available": false,
+            "bars": [],
+            "barCount": 0,
+            "source": "runtime.session.lastBars",
+            "stopReason": "not recording"
+          },
+          "setup": {
+            "ready": true,
+            "model": {
+              "status": "available",
+              "generation": 1,
+              "source": "parakeetModelAvailability"
+            },
+            "microphone": {
+              "permissionStatus": "Granted",
+              "status": "ready",
+              "deviceSnapshot": {
+                "available": true,
+                "deviceCount": 6,
+                "defaultDevice": {
+                  "labelFingerprint": "fnv1a64:d132e98fb83bff35",
+                  "idFingerprint": "fnv1a64:0ea48593437fd49d",
+                  "transport": "Virtual"
+                },
+                "selected": {
+                  "labelFingerprint": "fnv1a64:44ecc44b3e60abce",
+                  "idFingerprint": "fnv1a64:ecb307f9ac8c5fe2",
+                  "transport": "BuiltIn",
+                  "fellBack": false
+                },
+                "savedPreference": {
+                  "configured": true,
+                  "idFingerprint": "fnv1a64:ecb307f9ac8c5fe2",
+                  "resolved": true
+                },
+                "rawDeviceIdsRedacted": true,
+                "deviceLabelsReturned": false
+              },
+              "generation": 1,
+              "source": "passiveAVFoundationEnumeration",
+              "noPermissionPrompt": true
+            },
+            "hotkey": {
+              "enabled": true,
+              "configured": true,
+              "display": "⇧⌘Semicolon",
+              "status": "Ready(\"meta+shift+Semicolon\")",
+              "generation": 1,
+              "source": "config.dictationHotkey"
+            },
+            "configFingerprint": {
+              "pathFingerprint": "fnv1a64:2937adb9e9e825ed",
+              "len": 13945,
+              "modifiedMs": 1780090293554
+            }
+          },
+          "lastDelivery": null,
+          "deliveryReceiptAvailable": false,
+          "stop": null,
+          "cleanup": {
+            "captureActive": false,
+            "captureStopInProgress": false,
+            "transcriberCached": false,
+            "generation": 1,
+            "source": "runtime.dictation.cleanupState"
+          },
+          "safety": {
+            "noMicrophoneCaptureStarted": true,
+            "noSystemSettingsOpened": true,
+            "noTccMutation": true,
+            "noTranscriptContent": true,
+            "rawDeviceIdsRedacted": true,
+            "deviceLabelsReturned": false
+          }
+        }
+      }
+    }
+  },
+  "after": {
+    "focus": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "classification": "blocked-by-target-ambiguity",
+      "session": "liquid-file-search-mini-rekey-current",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "target": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "FileSearchMini",
+        "appViewVariant": "FileSearchView",
+        "nativeFooterSurface": "file_search",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 585,
+          "y": 177,
+          "width": 750,
+          "height": 480
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 75921,
+        "strictTargetMatch": false,
+        "ambiguity": []
+      },
+      "windowFocused": true,
+      "windowVisible": true,
+      "focusedSemanticId": "input:file-search-input",
+      "selectedSemanticId": null,
+      "focusedNode": {
+        "semanticId": "input:file-search-input",
+        "type": "input",
+        "value": "",
+        "focused": true
+      },
+      "selectedNode": null,
+      "activeFooter": {
+        "schemaVersion": 1,
+        "owner": "native",
+        "expectedSurface": "file_search",
+        "requestedSurface": "file_search",
+        "activeSurface": "file_search",
+        "nativeFooterHostInstalled": true,
+        "gpuiFallbackVisible": false,
+        "leftInfo": null,
+        "buttonCount": 2,
+        "buttons": [
+          {
+            "action": "run",
+            "key": "↵",
+            "label": "Run",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "actions",
+            "key": "⌘K",
+            "label": "Actions",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          }
+        ],
+        "mismatch": null
+      },
+      "nativeFooter": {
+        "owner": "native",
+        "activeSurface": "file_search",
+        "expectedSurface": "file_search",
+        "nativeFooterHostInstalled": true,
+        "buttonCount": 2,
+        "activationPrimitiveAvailable": false,
+        "missingPrimitive": "nativeFooterActivationReceipt"
+      },
+      "submitDiagnostics": null,
+      "keyboardOwner": {
+        "inputValue": "",
+        "promptType": "fileSearch",
+        "surfaceKind": "FileSearchMini",
+        "inputOwnership": "LauncherFilter",
+        "keyboardPolicy": "LauncherListKeyboard"
+      },
+      "missingPrimitives": [
+        "strictTargetIdentity",
+        "nativeFooterActivationReceipt"
+      ],
+      "warnings": [],
+      "errors": []
+    },
+    "scroll": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.scroll",
+      "command": "scroll.inspect",
+      "classification": "blocked-by-target-ambiguity",
+      "session": "liquid-file-search-mini-rekey-current",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "target": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "FileSearchMini",
+        "appViewVariant": "FileSearchView",
+        "nativeFooterSurface": "file_search",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 585,
+          "y": 177,
+          "width": 750,
+          "height": 480
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 75921,
+        "strictTargetMatch": false,
+        "ambiguity": []
+      },
+      "scroll": {
+        "scrollTop": null,
+        "scrollTopItem": null,
+        "contentHeight": null,
+        "viewportHeight": null,
+        "safeViewportHeight": null,
+        "footerHeight": null,
+        "maxScrollTop": null,
+        "canScrollY": null,
+        "selectedIndex": 0,
+        "selectedRowTop": null,
+        "selectedRowBottom": null,
+        "selectedRowVisible": null,
+        "selectedRowAboveFooter": null,
+        "itemCount": 0
+      },
+      "resizePressure": {
+        "overflowY": null,
+        "hiddenContentHeight": null,
+        "selectedRowOccluded": false
+      },
+      "missingPrimitives": [
+        "mainListScroll",
+        "strictTargetIdentity"
+      ],
+      "errors": [],
+      "state": {
+        "type": "stateResult",
+        "requestId": "devtools-scroll-state-1780135179676-aedf84",
+        "promptType": "fileSearch",
+        "promptId": "file-search",
+        "surfaceContract": {
+          "schemaVersion": 1,
+          "surfaceKind": "FileSearchMini",
+          "family": "UtilityWorkspace",
+          "inputOwnership": "LauncherFilter",
+          "previewRole": "NoPersistentPreview",
+          "focusPolicy": "LauncherFilterFocus",
+          "keyboardPolicy": "LauncherListKeyboard",
+          "actionsPolicy": "HostRowActions",
+          "proofPolicy": "StateAndElementsProof",
+          "visualPolicy": "CompactLauncherVisual",
+          "automationSemanticSurface": "fileSearch",
+          "nativeFooterSurface": "file_search"
+        },
+        "activeFooter": {
+          "schemaVersion": 1,
+          "owner": "native",
+          "expectedSurface": "file_search",
+          "requestedSurface": "file_search",
+          "activeSurface": "file_search",
+          "nativeFooterHostInstalled": true,
+          "gpuiFallbackVisible": false,
+          "leftInfo": null,
+          "buttonCount": 2,
+          "buttons": [
+            {
+              "action": "run",
+              "key": "↵",
+              "label": "Run",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            },
+            {
+              "action": "actions",
+              "key": "⌘K",
+              "label": "Actions",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            }
+          ],
+          "mismatch": null
+        },
+        "inputValue": "",
+        "choiceCount": 0,
+        "visibleChoiceCount": 0,
+        "selectedIndex": 0,
+        "isFocused": true,
+        "windowVisible": true,
+        "miniAi": {
+          "visible": false,
+          "promptId": null,
+          "mainWindowMode": "mini",
+          "draftLen": 0,
+          "pendingSubmit": false,
+          "handoffSource": "mini_ai_launcher",
+          "returnOrigin": "scriptList",
+          "lastCloseSource": null
+        },
+        "filterInputDecorations": {
+          "text": "~",
+          "chips": []
+        },
+        "dictation": {
+          "schemaVersion": 1,
+          "source": "runtime.dictation.automationState",
+          "passive": true,
+          "redacted": true,
+          "generation": 1,
+          "recordingStateGeneration": 1,
+          "isRecording": false,
+          "phase": "idle",
+          "target": null,
+          "targetLabel": null,
+          "elapsedMs": null,
+          "audioLevels": {
+            "available": false,
+            "bars": [],
+            "barCount": 0,
+            "source": "runtime.session.lastBars",
+            "stopReason": "not recording"
+          },
+          "setup": {
+            "ready": true,
+            "model": {
+              "status": "available",
+              "generation": 1,
+              "source": "parakeetModelAvailability"
+            },
+            "microphone": {
+              "permissionStatus": "Granted",
+              "status": "ready",
+              "deviceSnapshot": {
+                "available": true,
+                "deviceCount": 6,
+                "defaultDevice": {
+                  "labelFingerprint": "fnv1a64:d132e98fb83bff35",
+                  "idFingerprint": "fnv1a64:0ea48593437fd49d",
+                  "transport": "Virtual"
+                },
+                "selected": {
+                  "labelFingerprint": "fnv1a64:44ecc44b3e60abce",
+                  "idFingerprint": "fnv1a64:ecb307f9ac8c5fe2",
+                  "transport": "BuiltIn",
+                  "fellBack": false
+                },
+                "savedPreference": {
+                  "configured": true,
+                  "idFingerprint": "fnv1a64:ecb307f9ac8c5fe2",
+                  "resolved": true
+                },
+                "rawDeviceIdsRedacted": true,
+                "deviceLabelsReturned": false
+              },
+              "generation": 1,
+              "source": "passiveAVFoundationEnumeration",
+              "noPermissionPrompt": true
+            },
+            "hotkey": {
+              "enabled": true,
+              "configured": true,
+              "display": "⇧⌘Semicolon",
+              "status": "Ready(\"meta+shift+Semicolon\")",
+              "generation": 1,
+              "source": "config.dictationHotkey"
+            },
+            "configFingerprint": {
+              "pathFingerprint": "fnv1a64:2937adb9e9e825ed",
+              "len": 13945,
+              "modifiedMs": 1780090293554
+            }
+          },
+          "lastDelivery": null,
+          "deliveryReceiptAvailable": false,
+          "stop": null,
+          "cleanup": {
+            "captureActive": false,
+            "captureStopInProgress": false,
+            "transcriberCached": false,
+            "generation": 1,
+            "source": "runtime.dictation.cleanupState"
+          },
+          "safety": {
+            "noMicrophoneCaptureStarted": true,
+            "noSystemSettingsOpened": true,
+            "noTccMutation": true,
+            "noTranscriptContent": true,
+            "rawDeviceIdsRedacted": true,
+            "deviceLabelsReturned": false
+          }
+        }
+      }
+    }
+  },
+  "warnings": [],
+  "errors": []
+}

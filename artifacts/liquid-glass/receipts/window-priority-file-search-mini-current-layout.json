@@ -3,20 +3,22 @@
   "tool": "script-kit-devtools.layout",
   "command": "layout.measure",
   "classification": "ok",
-  "session": "liquid-file-search-refresh",
+  "session": "liquid-file-search-mini-rekey-current",
   "include": [
     "nodes",
     "regions",
+    "scroll",
+    "anchors",
     "resize",
     "overlaps"
   ],
-  "limit": 200,
+  "limit": 220,
   "requestedTarget": {
     "selector": {
       "type": "main"
     },
     "strict": true,
-    "expectedSurfaceKind": "ScriptList"
+    "expectedSurfaceKind": "FileSearchMini"
   },
   "target": {
     "automationId": "main",
@@ -25,9 +27,9 @@
     "hostKind": null,
     "parentAutomationId": null,
     "openerAutomationId": null,
-    "surfaceKind": "ScriptList",
-    "appViewVariant": "ScriptList",
-    "nativeFooterSurface": "script_list",
+    "surfaceKind": "FileSearchMini",
+    "appViewVariant": "FileSearchView",
+    "nativeFooterSurface": "file_search",
     "surfaceFamily": null,
     "routeId": null,
     "routeStack": [],
@@ -56,12 +58,40 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 52036,
+    "pid": 75921,
     "strictTargetMatch": true,
     "ambiguity": []
   },
-  "promptType": "mainMenu",
-  "timestamp": "2026-05-30T09:31:32.900666+00:00",
+  "layoutEvidenceFreshness": {
+    "schemaVersion": 1,
+    "generatedAt": "2026-05-30T10:00:02.493Z",
+    "auditSchema": "panel-radius-v2",
+    "requiredPanelRadiusNodes": [
+      "ContentArea",
+      "ScriptList",
+      "PreviewPanel"
+    ],
+    "sourceFingerprint": {
+      "schemaVersion": 1,
+      "algorithm": "sha256",
+      "files": [
+        {
+          "path": "src/app_layout/build_layout_info.rs",
+          "sha256": "7e779892e76bbf8bbea404339673839d53197fb4dedccab74eca8c2081372e39"
+        },
+        {
+          "path": "scripts/devtools/layout.ts",
+          "sha256": "10fc886f0677c720d31e020a1afce824008c8767aaf451d427ae4f259469257e"
+        },
+        {
+          "path": "src/ui/chrome/tokens.rs",
+          "sha256": "42e274081636cb27743c06ddd80e7142fd3110e5462851b0998e885968a22220"
+        }
+      ]
+    }
+  },
+  "promptType": "fileSearch",
+  "timestamp": "2026-05-30T10:00:02.471562+00:00",
   "componentCount": 14,
   "window": {
     "rect": {
@@ -1813,10 +1843,10 @@
   "errors": [],
   "rawLayout": {
     "type": "layoutInfoResult",
-    "requestId": "devtools-layout-measure-1780133492859-1607cd",
+    "requestId": "devtools-layout-measure-1780135202430-cf058b",
     "windowWidth": 750,
     "windowHeight": 480,
-    "promptType": "mainMenu",
+    "promptType": "fileSearch",
     "components": [
       {
         "name": "Window",
@@ -2442,6 +2472,6 @@
         }
       }
     ],
-    "timestamp": "2026-05-30T09:31:32.900666+00:00"
+    "timestamp": "2026-05-30T10:00:02.471562+00:00"
   }
 }

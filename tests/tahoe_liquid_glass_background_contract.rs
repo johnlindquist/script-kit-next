@@ -181,6 +181,12 @@ fn proof_matrix_filters_image_diff_receipts_by_receipt_assertions() {
         "appRenderReadbackBlocked",
         "appRenderBlockedSurfaceCount",
         "numeric-proof-app-render-blocked",
+        "osScreenshotBlockers",
+        "osScreenshotBlockerCounts",
+        "macos-windowserver-capture-blocked",
+        "layoutReceiptFreshnessLimitationSurfaceCount",
+        "staleLayoutEvidenceSurfaceCount",
+        "legacy layout receipt lacks explicit cornerRadiusTokens",
         "GPUI render readback was unavailable or unsupported",
     ] {
         assert!(

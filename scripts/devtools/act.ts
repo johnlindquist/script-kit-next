@@ -430,6 +430,7 @@ const lifecycleCodes = new Set([
 ]);
 
 const nonDestructiveLauncherSubmitIds = new Set([
+  "open-file-search",
   "search-files",
 ]);
 

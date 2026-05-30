@@ -133,6 +133,11 @@ fn proof_matrix_splits_guidance_proof_from_diagnostics() {
             && PROOF_MATRIX.contains("strong-guidance-proof")
             && PROOF_MATRIX.contains("sourceUiGaps")
             && PROOF_MATRIX.contains("devtoolsCaptureLimitations")
+            && PROOF_MATRIX.contains("osScreenshotBlockers")
+            && PROOF_MATRIX.contains("osScreenshotBlockerCounts")
+            && PROOF_MATRIX.contains("layoutReceiptFreshnessLimitations")
+            && PROOF_MATRIX.contains("stale-layout-evidence")
+            && PROOF_MATRIX.contains("function isRadiusBearingNode")
             && PROOF_MATRIX.contains("diagnosticLimitations")
             && PROOF_MATRIX.contains("guidanceEvidenceNeeded")
             && PROOF_MATRIX.contains("diagnosticEvidenceNeeded")
@@ -142,4 +147,21 @@ fn proof_matrix_splits_guidance_proof_from_diagnostics() {
             ),
         "Liquid Glass proof matrix must separate Apple guidance evidence from diagnostic GPUI readback limitations"
     );
+}
+
+#[test]
+fn proof_matrix_preserves_os_capture_blocker_taxonomy() {
+    for needle in [
+        "function osScreenshotBlockerFromReceipt",
+        "function captureAttemptSummary",
+        "macos-windowserver-capture-blocked",
+        "screencapture_window_failed",
+        "screencapture_rect_failed",
+        "WindowServer screenshot permission",
+    ] {
+        assert!(
+            PROOF_MATRIX.contains(needle),
+            "Liquid Glass proof matrix must preserve OS capture blocker taxonomy marker `{needle}`"
+        );
+    }
 }
