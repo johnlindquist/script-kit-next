@@ -41,3 +41,13 @@ fn proof_matrix_summary_reports_visual_tier_debt() {
         "Liquid Glass proof matrix summary must expose failed or missing visual proof tiers instead of hiding them behind overall surface status"
     );
 }
+
+#[test]
+fn proof_matrix_classification_fails_when_visual_tier_debt_remains() {
+    assert!(
+        PROOF_MATRIX.contains(
+            "summary.missingProofSurfaceCount === 0 && summary.visualTierDebtSurfaceCount === 0 ? \"ok\" : \"incomplete\"",
+        ),
+        "Liquid Glass proof matrix classification must stay incomplete while explicit visual-tier debt remains"
+    );
+}

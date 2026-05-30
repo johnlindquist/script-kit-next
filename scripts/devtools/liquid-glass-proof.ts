@@ -677,7 +677,7 @@ async function main() {
     schemaVersion: 1,
     tool: "script-kit-devtools.liquid-glass-proof",
     command: "proof.matrix",
-    classification: summary.missingProofSurfaceCount === 0 ? "ok" : "incomplete",
+    classification: summary.missingProofSurfaceCount === 0 && summary.visualTierDebtSurfaceCount === 0 ? "ok" : "incomplete",
     inventoryPath: args.inventory,
     artifactRoot: args.artifactRoot,
     generatedAt: new Date().toISOString(),
