@@ -27,3 +27,17 @@ fn proof_matrix_does_not_promote_windowserver_blockers_to_visual_proof() {
         "Liquid Glass proof matrix must classify WindowServer screenshot blockers without promoting them to visual proof"
     );
 }
+
+#[test]
+fn proof_matrix_summary_reports_visual_tier_debt() {
+    assert!(
+        PROOF_MATRIX.contains("appRenderFailedSurfaceCount")
+            && PROOF_MATRIX.contains("appRenderMissingSurfaceCount")
+            && PROOF_MATRIX.contains("offscreenRenderFailedSurfaceCount")
+            && PROOF_MATRIX.contains("offscreenRenderMissingSurfaceCount")
+            && PROOF_MATRIX.contains("visualTierDebtSurfaceCount")
+            && PROOF_MATRIX.contains("explicit visual-tier debt")
+            && PROOF_MATRIX.contains("attempted app-render proof and failed or returned unsupported"),
+        "Liquid Glass proof matrix summary must expose failed or missing visual proof tiers instead of hiding them behind overall surface status"
+    );
+}

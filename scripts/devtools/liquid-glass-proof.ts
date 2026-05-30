@@ -656,6 +656,17 @@ async function main() {
     missingProofSurfaceCount: surfaces.filter((surface) => surface.proofStatus === "missing-proof").length,
     osScreenshotBlockedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.osScreenshotProof === "blocked").length,
     appRenderProofSurfaceCount: surfaces.filter((surface) => surface.proofTiers.appRenderProof === "pass").length,
+    appRenderFailedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.appRenderProof === "fail").length,
+    appRenderMissingSurfaceCount: surfaces.filter((surface) => surface.proofTiers.appRenderProof === "missing").length,
+    offscreenRenderFailedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.offscreenRenderProof === "fail").length,
+    offscreenRenderMissingSurfaceCount: surfaces.filter((surface) => surface.proofTiers.offscreenRenderProof === "missing").length,
+    visualTierDebtSurfaceCount: surfaces.filter((surface) =>
+      surface.proofTiers.osScreenshotProof === "blocked" ||
+      surface.proofTiers.appRenderProof === "fail" ||
+      surface.proofTiers.offscreenRenderProof === "fail" ||
+      surface.proofTiers.numericProof === "fail" ||
+      surface.proofTiers.imageDiffProof === "blocked"
+    ).length,
     batchCount: batches.length,
     strongProofBatchCount: batches.filter((batch) => batch.proofStatus === "strong-proof").length,
     partialProofBatchCount: batches.filter((batch) => batch.proofStatus === "partial-proof").length,
@@ -676,6 +687,8 @@ async function main() {
     practicalTargets,
     warnings: [
       summary.missingProofSurfaceCount === 0 ? "" : `${summary.missingProofSurfaceCount} contract surfaces still lack proof artifacts`,
+      summary.visualTierDebtSurfaceCount === 0 ? "" : `${summary.visualTierDebtSurfaceCount} contract surfaces have explicit visual-tier debt; inspect proofTiers before claiming exhaustive Liquid Glass proof`,
+      summary.appRenderFailedSurfaceCount === 0 ? "" : `${summary.appRenderFailedSurfaceCount} contract surfaces attempted app-render proof and failed or returned unsupported`,
       "strong-proof means current artifacts include screenshot, numeric layout visualAudit, and image diff evidence; it is not an Apple conformance claim by itself",
       "proofTiers separate OS screenshots from GPUI app-render proof so WindowServer-blocked captures cannot become false visual evidence",
     ].filter(Boolean),
