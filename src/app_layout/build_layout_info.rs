@@ -759,6 +759,12 @@ impl ScriptListApp {
             components.push(
                 LayoutComponentInfo::new(component_name, LayoutComponentType::Prompt)
                     .with_bounds(0.0, content_top, window_width, content_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token("content.promptBody")
                     .with_flex_column()
                     .with_flex_grow(1.0)
                     .with_depth(2)

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 2,
+  "status": "ok",
+  "command": "list",
+  "data": {
+    "surfaces": [
+      {
+        "surfaceId": "main",
+        "kind": "popup",
+        "windowId": 84132,
+        "title": "",
+        "frontmost": true,
+        "focused": true,
+        "visible": true,
+        "bounds": {
+          "x": 2097,
+          "y": -903,
+          "width": 750,
+          "height": 500
+        }
+      },
+      {
+        "surfaceId": "main:84131",
+        "kind": "popup",
+        "windowId": 84131,
+        "title": "",
+        "frontmost": false,
+        "focused": false,
+        "visible": false,
+        "bounds": {
+          "x": 2262,
+          "y": -157,
+          "width": 420,
+          "height": 41
+        }
+      },
+      {
+        "surfaceId": "main:84094",
+        "kind": "popup",
+        "windowId": 84094,
+        "title": "",
+        "frontmost": false,
+        "focused": false,
+        "visible": false,
+        "bounds": {
+          "x": 2097,
+          "y": -903,
+          "width": 750,
+          "height": 500
+        }
+      }
+    ],
+    "appRunning": true,
+    "focusedSurfaceId": "main"
+  }
+}
