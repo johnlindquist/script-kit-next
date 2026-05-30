@@ -51,6 +51,16 @@ pub struct GhostContext {
     pub cwd_label: Option<String>,
     pub has_agents_md: bool,
     pub has_readme_md: bool,
+    pub project_hint: GhostProjectHint,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GhostProjectHint {
+    #[default]
+    General,
+    Rust,
+    TypeScript,
+    JavaScript,
 }
 
 impl GhostContext {
@@ -60,12 +70,50 @@ impl GhostContext {
             .and_then(|name| name.to_str())
             .map(|name| name.to_string())
             .or_else(|| Some(cwd.display().to_string()));
+        let agents_content = read_context_doc(&cwd.join("AGENTS.md"));
+        let readme_content = read_context_doc(&cwd.join("README.md"));
+        let project_hint = infer_project_hint(
+            agents_content.as_deref().unwrap_or_default(),
+            readme_content.as_deref().unwrap_or_default(),
+        );
         Self {
             cwd_label,
-            has_agents_md: cwd.join("AGENTS.md").is_file(),
-            has_readme_md: cwd.join("README.md").is_file(),
+            has_agents_md: agents_content.is_some(),
+            has_readme_md: readme_content.is_some(),
+            project_hint,
         }
     }
+}
+
+fn read_context_doc(path: &std::path::Path) -> Option<String> {
+    let content = std::fs::read_to_string(path).ok()?;
+    Some(content.chars().take(24_000).collect())
+}
+
+fn infer_project_hint(agents_content: &str, readme_content: &str) -> GhostProjectHint {
+    let combined = format!("{agents_content}\n{readme_content}").to_ascii_lowercase();
+    if combined.contains("cargo")
+        || combined.contains("rust")
+        || combined.contains("gpui")
+        || combined.contains(".rs")
+    {
+        return GhostProjectHint::Rust;
+    }
+    if combined.contains("typescript")
+        || combined.contains("tsconfig")
+        || combined.contains(".tsx")
+        || combined.contains(".ts")
+    {
+        return GhostProjectHint::TypeScript;
+    }
+    if combined.contains("javascript")
+        || combined.contains("package.json")
+        || combined.contains("node")
+        || combined.contains("bun")
+    {
+        return GhostProjectHint::JavaScript;
+    }
+    GhostProjectHint::General
 }
 
 static GHOST_ID_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -298,22 +346,23 @@ fn prompt_completion_for_seed(query: &str, context: &GhostContext) -> Option<Str
     let lower = query.to_ascii_lowercase();
     let words = lower.split_whitespace().collect::<Vec<_>>();
     let first = words.first().copied().unwrap_or_default();
+    let project_phrase = context_project_phrase(context);
 
     let base = match first {
-        "fix" => Some("fix the issue in this project"),
-        "debug" => Some("debug this issue in this project"),
-        "test" => Some("test this change"),
-        "review" => Some("review the current changes"),
-        "explain" => Some("explain this project"),
-        "summarize" => Some("summarize this project"),
-        "write" => Some("write a Script Kit script"),
-        "create" => Some("create a Script Kit script"),
-        "make" => Some("make a Script Kit script"),
-        "find" => Some("find the relevant code"),
-        "where" => Some("where is this implemented"),
-        "how" => Some("how does this work"),
-        "why" => Some("why is this happening"),
-        "what" => Some("what should I change next"),
+        "fix" => Some(format!("fix the issue {project_phrase}")),
+        "debug" => Some(format!("debug this issue {project_phrase}")),
+        "test" => Some("test this change".to_string()),
+        "review" => Some("review the current changes".to_string()),
+        "explain" => Some("explain this project".to_string()),
+        "summarize" => Some("summarize this project".to_string()),
+        "write" => Some("write a small script".to_string()),
+        "create" => Some("create a new tool".to_string()),
+        "make" => Some("make a useful helper".to_string()),
+        "find" => Some("find the relevant code".to_string()),
+        "where" => Some("where is this implemented".to_string()),
+        "how" => Some("how does this work".to_string()),
+        "why" => Some("why is this happening".to_string()),
+        "what" => Some("what should I change next".to_string()),
         _ => None,
     }?;
 
@@ -321,16 +370,15 @@ fn prompt_completion_for_seed(query: &str, context: &GhostContext) -> Option<Str
         return None;
     }
 
-    let doc_suffix = context_doc_suffix(context);
-    Some(format!("{base}{doc_suffix}"))
+    Some(base)
 }
 
-fn context_doc_suffix(context: &GhostContext) -> &'static str {
-    match (context.has_agents_md, context.has_readme_md) {
-        (true, true) => " using AGENTS.md and README.md",
-        (true, false) => " using AGENTS.md",
-        (false, true) => " using README.md",
-        (false, false) => "",
+fn context_project_phrase(context: &GhostContext) -> &'static str {
+    match context.project_hint {
+        GhostProjectHint::Rust => "in this Rust project",
+        GhostProjectHint::TypeScript => "in this TypeScript project",
+        GhostProjectHint::JavaScript => "in this JavaScript project",
+        GhostProjectHint::General => "in this project",
     }
 }
 
@@ -555,7 +603,7 @@ mod tests {
     }
 
     #[test]
-    fn prompt_completion_uses_cwd_docs_when_present() {
+    fn prompt_completion_uses_cwd_docs_as_context_without_naming_them() {
         let mut dir = std::env::temp_dir();
         dir.push(format!(
             "script-kit-ghost-test-{}",
@@ -565,31 +613,59 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&dir).expect("create temp ghost test dir");
-        std::fs::write(dir.join("AGENTS.md"), "agent instructions").expect("write AGENTS.md");
-        std::fs::write(dir.join("README.md"), "project readme").expect("write README.md");
+        std::fs::write(
+            dir.join("AGENTS.md"),
+            "Use the cargo wrapper for Rust checks.",
+        )
+        .expect("write AGENTS.md");
+        std::fs::write(dir.join("README.md"), "A GPUI app written in Rust.")
+            .expect("write README.md");
 
         let context = GhostContext::from_cwd(&dir);
         let results = vec![make_send_to_ai_fallback_result()];
         let pred = compute_ghost_prediction_with_context(
-            "explain",
+            "debug",
             &results,
             PredictionRevision::default(),
             &context,
         )
         .expect("cwd docs should enrich basic agent prompt completion");
 
-        assert_eq!(
-            pred.full_label,
-            "explain this project using AGENTS.md and README.md"
-        );
-        assert_eq!(
-            pred.ghost_suffix,
-            " this project using AGENTS.md and README.md"
+        assert_eq!(pred.full_label, "debug this issue in this Rust project");
+        assert_eq!(pred.ghost_suffix, " this issue in this Rust project");
+        assert!(
+            !pred.full_label.contains("AGENTS.md") && !pred.full_label.contains("README.md"),
+            "context source filenames must not be injected into ghost text"
         );
         assert_eq!(pred.kind, GhostPredictionKind::AgentPromptCompletion);
         assert!(pred.accepts_tab());
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn how_completion_does_not_name_context_source_files() {
+        let context = GhostContext {
+            cwd_label: Some("script-kit-gpui".to_string()),
+            has_agents_md: true,
+            has_readme_md: true,
+            project_hint: GhostProjectHint::Rust,
+        };
+        let results = vec![make_send_to_ai_fallback_result()];
+        let pred = compute_ghost_prediction_with_context(
+            "How",
+            &results,
+            PredictionRevision::default(),
+            &context,
+        )
+        .expect("basic question seed should produce prompt completion");
+
+        assert_eq!(pred.full_label, "how does this work");
+        assert_eq!(pred.ghost_suffix, " does this work");
+        assert!(
+            !pred.full_label.contains("AGENTS.md") && !pred.full_label.contains("README.md"),
+            "context source filenames must not be suggested as literal completion text"
+        );
     }
 
     #[test]
