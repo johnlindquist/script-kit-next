@@ -86,9 +86,9 @@ test("search input WITH measured text inset below 8pt is outOfBand", () => {
   expect(d.classification).toBe("outOfBand");
 });
 
-test("the real main-launcher SearchInput (0pt flush text inset) is outOfBand vs the 9pt native target", () => {
-  // Mirrors build_layout_info.rs SearchInput: 22pt-tall input whose text is a
-  // flush flex_1 child (0pt horizontal inset, CURSOR_MARGIN_Y=2pt vertical).
+test("PRE-FIX: a 0pt flush text inset is outOfBand vs the 9pt native target (the proven gap)", () => {
+  // The pre-slice-5 SearchInput state: text was a flush flex_1 child (0pt
+  // horizontal inset). Retained as the engine proof of the failure the fix closes.
   const searchInput: NodeLike[] = [
     {
       name: "SearchInput",
@@ -104,6 +104,25 @@ test("the real main-launcher SearchInput (0pt flush text inset) is outOfBand vs 
   expect(d.deltaPt).toBe(-9);
   expect(d.classification).toBe("outOfBand");
   expect(d.normativeStrength).toBe("hard");
+});
+
+test("POST-FIX: the real main-launcher SearchInput now emits a 9pt inset and is withinBand", () => {
+  // Mirrors build_layout_info.rs SearchInput after slice 5: horizontal inset =
+  // SEARCH_INPUT_TEXT_INSET_X_PX (9pt), matching the native NSTextField baseline.
+  const searchInput: NodeLike[] = [
+    {
+      name: "SearchInput",
+      type: "input",
+      parent: "Header",
+      bounds: { x: 16, y: 11, width: 498, height: 22 },
+      visualStyle: { cornerRadius: 14, contentInsets: { top: 2, right: 9, bottom: 2, left: 9 } },
+    },
+  ];
+  const d = searchPaddingDeviations(searchInput, 2)[0];
+  expect(d.observedPt).toBe(9);
+  expect(d.targetPt).toBe(9);
+  expect(d.deltaPt).toBe(0);
+  expect(d.classification).toBe("withinBand");
 });
 
 test("the real main-launcher MainFooter (6pt item gap) is outOfBand vs the soft 12pt floor (SOFT, not hard)", () => {

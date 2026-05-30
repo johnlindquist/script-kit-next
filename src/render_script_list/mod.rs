@@ -1748,6 +1748,11 @@ impl ScriptListApp {
                             .child(
                                 div()
                                     .flex_1()
+                                    // Internal text inset matching the measured native
+                                    // regular NSTextField (9pt, macOS 26.5). Before this
+                                    // the search text rendered flush at 0pt — the proven
+                                    // "input lacks padding" gap (tahoe-apple-guideline-metrics).
+                                    .pl(px(crate::ui::chrome::SEARCH_INPUT_TEXT_INSET_X_PX))
                                     .flex()
                                     .flex_row()
                                     .items_center()

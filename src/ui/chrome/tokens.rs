@@ -22,6 +22,14 @@ pub const LIQUID_GLASS_PANEL_PADDING_PX: f32 = 16.0;
 /// Canonical dense gap between stacked controls/labels inside chrome.
 pub const LIQUID_GLASS_DENSE_GAP_PX: f32 = 8.0;
 
+/// Internal horizontal text inset for the main search input, matching the
+/// MEASURED native regular `NSTextField` content inset on macOS 26.5 (9pt;
+/// see `artifacts/liquid-glass/receipts/tahoe-native-baseline.json` and the
+/// `control.searchField.textInset.horizontal` guideline metric). Before this
+/// token the search text rendered flush (0pt) — the proven "input lacks
+/// padding" gap (Oracle-Session tahoe-apple-guideline-metrics, slice 5).
+pub const SEARCH_INPUT_TEXT_INSET_X_PX: f32 = 9.0;
+
 pub const CHROME_LAYER_CONTENT: &str = "content";
 pub const CHROME_LAYER_FUNCTIONAL: &str = "functionalChrome";
 pub const CHROME_LAYER_FLOATING: &str = "floatingTransient";

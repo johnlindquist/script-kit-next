@@ -168,20 +168,36 @@ fn measured_native_baselines_are_probe_backed_and_pinned() {
     );
 }
 
-/// Slice 3 (Oracle session `tahoe-apple-guideline-metrics`): the main-launcher
-/// SearchInput must EMIT its internal text inset so the conformance engine can
-/// MEASURE it (instead of reporting `unmeasured`). The search text renders as a
-/// flush flex_1 child with no left padding, so the horizontal inset is 0pt — the
-/// measured evidence for the user's "input lacks padding" concern (outOfBand vs
-/// the 9pt native NSTextField target). This pins the emission + the 0pt value.
+/// Slice 5 (Oracle session `tahoe-apple-guideline-metrics`): the proven input
+/// padding fix. The main-launcher SearchInput now both RENDERS and EMITS the
+/// measured native NSTextField inset (SEARCH_INPUT_TEXT_INSET_X_PX = 9pt) instead
+/// of flush 0pt text. The conformance engine therefore classifies it withinBand.
+/// This pins the token, the render-layer left padding, and the layout emission so
+/// the audit can never claim 9pt while the UI still renders 0pt (no fake-green).
 #[test]
-fn search_input_emits_measured_zero_horizontal_content_inset() {
+fn search_input_renders_and_emits_native_nine_point_content_inset() {
+    let tokens = fs::read_to_string("src/ui/chrome/tokens.rs")
+        .expect("failed to read chrome tokens.rs");
+    assert!(
+        tokens.contains("pub const SEARCH_INPUT_TEXT_INSET_X_PX: f32 = 9.0;"),
+        "the search-input inset token must be the measured native 9pt"
+    );
+
     let style = fs::read_to_string("src/protocol/types/grid_layout.rs")
         .expect("failed to read grid_layout.rs");
     assert!(
         style.contains("pub content_insets: Option<BoxModelSides>")
             && style.contains("fn with_content_insets"),
         "LayoutVisualStyle must carry an emittable content_insets field + builder"
+    );
+
+    // The REAL render layer must apply the padding (not just the audit emission),
+    // so the audit cannot fake-green.
+    let render = fs::read_to_string("src/render_script_list/mod.rs")
+        .expect("failed to read render_script_list/mod.rs");
+    assert!(
+        render.contains(".pl(px(crate::ui::chrome::SEARCH_INPUT_TEXT_INSET_X_PX))"),
+        "the search input must render its 9pt left padding, not only emit it in the audit"
     );
 
     let layout = fs::read_to_string("src/app_layout/build_layout_info.rs")
@@ -195,15 +211,13 @@ fn search_input_emits_measured_zero_horizontal_content_inset() {
         .expect("SearchInput should declare its visual token");
     let node = &node[..end];
     assert!(
-        node.contains(".with_content_insets("),
-        "SearchInput must emit a measured content inset for guideline conformance"
+        node.contains(".with_content_insets(")
+            && node.contains("chrome_tokens::SEARCH_INPUT_TEXT_INSET_X_PX"),
+        "SearchInput must emit the 9pt native content inset, matching the render layer"
     );
-    // Horizontal inset is 0pt (flush flex_1 text, no left padding) — the right
-    // and left args (2nd and 4th) must be literal 0.0.
     assert!(
-        node.contains("0.0,\n                    crate::panel::CURSOR_MARGIN_Y,\n                    0.0,")
-            || node.matches("0.0,").count() >= 2,
-        "SearchInput horizontal content inset must be the measured 0.0pt (flush text)"
+        !node.contains("0.0,\n                    crate::panel::CURSOR_MARGIN_Y,\n                    0.0,"),
+        "SearchInput must no longer emit the pre-fix flush 0.0pt horizontal inset"
     );
 }
 
