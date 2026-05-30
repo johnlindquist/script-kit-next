@@ -148,6 +148,7 @@ function stableWindowKind(value: unknown) {
   if (value === "actionsDialog") return "ActionsDialog";
   if (value === "promptPopup") return "PromptPopup";
   if (value === "acpDetached") return "AcpDetached";
+  if (value === "dictation") return "Dictation";
   if (value === "main") return "Main";
   if (value === "notes") return "Notes";
   return value ?? null;

@@ -165,8 +165,11 @@ fn automation_kind_to_window_role(
         AutomationWindowKind::Ai => Some(WindowRole::Ai),
         AutomationWindowKind::MiniAi => Some(WindowRole::AiMini),
         AutomationWindowKind::AcpDetached => Some(WindowRole::AcpChat),
-        // Attached surfaces — no independent window handle
-        AutomationWindowKind::ActionsDialog | AutomationWindowKind::PromptPopup => None,
+        // Attached surfaces and popup-only windows use exact runtime handles
+        // when available and do not map to the shared role registry.
+        AutomationWindowKind::ActionsDialog
+        | AutomationWindowKind::Dictation
+        | AutomationWindowKind::PromptPopup => None,
     }
 }
 
@@ -494,6 +497,7 @@ pub(crate) fn dispatch_gpui_event(
         if matches!(
             resolved.kind,
             crate::protocol::AutomationWindowKind::AcpDetached
+                | crate::protocol::AutomationWindowKind::Dictation
         ) {
             return dispatch_with_any_handle_deferred(
                 handle,

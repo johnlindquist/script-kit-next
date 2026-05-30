@@ -695,6 +695,14 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
+    /// Open the Dictation overlay with synthetic visual state only.
+    ///
+    /// This is a DevTools visual fixture: it does not request microphone
+    /// permission, start audio capture, invoke transcription, or deliver text.
+    OpenDictationOverlayFixture {
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Read-only probe exposing the current `~/.kit/config.ts`
     /// fingerprint so automation can verify a write landed on disk
     /// without shelling out to `bun` or `stat`. The handler emits a
@@ -784,6 +792,7 @@ impl ExternalCommand {
             | Self::ExecuteFallback { request_id, .. }
             | Self::TriggerAction { request_id, .. }
             | Self::PushDictationResult { request_id, .. }
+            | Self::OpenDictationOverlayFixture { request_id, .. }
             | Self::GetConfigFingerprint { request_id, .. }
             | Self::PasteClipboardIntoAcp { request_id, .. }
             | Self::OpenFocusedTextAgentChatWithMockData { request_id, .. }
@@ -843,6 +852,7 @@ impl ExternalCommand {
             Self::TriggerAction { .. } => "triggerAction",
             Self::PasteClipboardIntoAcp { .. } => "pasteClipboardIntoAcp",
             Self::PushDictationResult { .. } => "pushDictationResult",
+            Self::OpenDictationOverlayFixture { .. } => "openDictationOverlayFixture",
             Self::GetConfigFingerprint { .. } => "getConfigFingerprint",
         }
     }
@@ -893,6 +903,7 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "triggerAction",
     "pasteClipboardIntoAcp",
     "pushDictationResult",
+    "openDictationOverlayFixture",
     "getConfigFingerprint",
 ];
 

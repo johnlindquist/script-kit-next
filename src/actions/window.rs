@@ -1322,6 +1322,7 @@ fn record_actions_popup_automation_snapshot(
             AutomationWindowKind::Ai => "ai.actions",
             AutomationWindowKind::MiniAi => "miniAi.actions",
             AutomationWindowKind::AcpDetached => "acpDetached.actions",
+            AutomationWindowKind::Dictation => "dictation.actions",
             AutomationWindowKind::ActionsDialog => "actionsDialog.actions",
             AutomationWindowKind::PromptPopup => "promptPopup.actions",
         },

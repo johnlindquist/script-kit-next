@@ -4968,6 +4968,17 @@ impl ScriptListApp {
                             return;
                         }
                         Ok(resolved)
+                            if resolved.kind == crate::protocol::AutomationWindowKind::Dictation =>
+                        {
+                            let layout_info = crate::dictation::automation_layout_info(&resolved);
+                            let response =
+                                Message::layout_info_result(request_id.clone(), layout_info);
+                            if let Some(ref sender) = self.response_sender {
+                                let _ = sender.try_send(response);
+                            }
+                            return;
+                        }
+                        Ok(resolved)
                             if resolved.kind == crate::protocol::AutomationWindowKind::Main =>
                         { /* main window — proceed */ }
                         Ok(resolved) => {

@@ -743,6 +743,7 @@ fn is_detached_window(kind: crate::protocol::AutomationWindowKind) -> bool {
     matches!(
         kind,
         crate::protocol::AutomationWindowKind::AcpDetached
+            | crate::protocol::AutomationWindowKind::Dictation
             | crate::protocol::AutomationWindowKind::Notes
     )
 }

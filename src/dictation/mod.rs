@@ -69,9 +69,10 @@ pub use visualizer::{animate_bars, silent_bars};
 pub(crate) use window::overlay_phase_copy;
 pub(crate) use window::render_dictation_overlay_state_preview;
 pub use window::{
-    begin_overlay_session, close_dictation_overlay, is_dictation_overlay_open,
-    open_dictation_overlay, overlay_generation, set_overlay_abort_callback,
-    set_overlay_submit_callback, update_dictation_overlay, DictationOverlay, DictationOverlayState,
+    automation_layout_info, begin_overlay_session, close_dictation_overlay,
+    is_dictation_overlay_open, open_dictation_overlay, overlay_generation,
+    set_overlay_abort_callback, set_overlay_submit_callback, update_dictation_overlay,
+    DictationOverlay, DictationOverlayState,
 };
 
 #[cfg(test)]

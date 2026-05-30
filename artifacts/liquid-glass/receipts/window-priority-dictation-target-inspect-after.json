@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.inspect",
+  "session": "liquid-dictation",
+  "classification": "ok",
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "dictation"
+    },
+    "strict": true,
+    "expectedSurfaceKind": null
+  },
+  "resolvedTarget": {
+    "automationId": "dictation",
+    "stableTargetId": "dictation",
+    "targetKind": "Dictation",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 520,
+      "height": 72
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 520,
+      "height": 72,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 520,
+        "height": 72
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 33992,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "windows": [
+    {
+      "index": 0,
+      "automationId": "main",
+      "windowKind": "Main",
+      "title": "Script Kit",
+      "visible": true,
+      "focused": false,
+      "bounds": {
+        "x": 585,
+        "y": 177,
+        "width": 750,
+        "height": 480
+      },
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "parentAutomationId": null,
+      "parentKind": null,
+      "pid": 33992
+    },
+    {
+      "index": 1,
+      "automationId": "dictation",
+      "windowKind": "Dictation",
+      "title": "Script Kit Dictation",
+      "visible": true,
+      "focused": false,
+      "bounds": {
+        "x": 585,
+        "y": 177,
+        "width": 520,
+        "height": 72
+      },
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "parentAutomationId": null,
+      "parentKind": null,
+      "pid": 33992
+    }
+  ],
+  "rawInspect": {
+    "type": "automationInspectResult",
+    "requestId": "devtools-targets-inspect-1780116168840-73c8e5",
+    "schemaVersion": 3,
+    "windowId": "dictation",
+    "windowKind": "Dictation",
+    "title": "Script Kit Dictation",
+    "resolvedBounds": {
+      "x": 585,
+      "y": 177,
+      "width": 520,
+      "height": 72
+    },
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 520,
+      "height": 72
+    },
+    "surfaceHitPoint": {
+      "x": 260,
+      "y": 36
+    },
+    "suggestedHitPoints": [
+      {
+        "semanticId": "panel:window",
+        "x": 260,
+        "y": 36,
+        "reason": "surface_center"
+      }
+    ],
+    "elements": [
+      {
+        "semanticId": "panel:dictation-overlay",
+        "type": "panel",
+        "text": "Script Kit Dictation",
+        "focused": false,
+        "kind": "overlay",
+        "statusKind": "Idle"
+      },
+      {
+        "semanticId": "panel:dictation-signal-band",
+        "type": "panel",
+        "text": "Idle",
+        "kind": "signal"
+      },
+      {
+        "semanticId": "button:dictation-target",
+        "type": "button",
+        "text": "App",
+        "index": 0,
+        "role": "target",
+        "selectable": false
+      }
+    ],
+    "totalCount": 3,
+    "focusedSemanticId": "panel:dictation-overlay",
+    "screenshotWidth": 520,
+    "screenshotHeight": 72,
+    "osWindowId": 84105,
+    "semanticQuality": "full",
+    "pid": 33992
+  },
+  "sessionLifecycle": [],
+  "errors": []
+}

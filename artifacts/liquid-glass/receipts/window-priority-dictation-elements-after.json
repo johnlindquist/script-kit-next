@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.elements",
+  "command": "elements.snapshot",
+  "classification": "ok",
+  "session": "liquid-dictation",
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "dictation"
+    },
+    "strict": false,
+    "expectedSurfaceKind": null
+  },
+  "target": {
+    "automationId": "dictation",
+    "stableTargetId": "dictation",
+    "targetKind": "Dictation",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 520,
+      "height": 72
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 520,
+      "height": 72,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 520,
+        "height": 72
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 33992,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "semanticSurface": {
+    "surfaceKind": null,
+    "appViewVariant": null
+  },
+  "totalCount": 3,
+  "returnedCount": 3,
+  "truncated": false,
+  "focusedSemanticId": "panel:dictation-overlay",
+  "selectedSemanticId": null,
+  "duplicateSemanticIds": [],
+  "missingPrimitives": [
+    "elementBounds"
+  ],
+  "nodes": [
+    {
+      "semanticId": "panel:dictation-overlay",
+      "role": "panel",
+      "type": "panel",
+      "label": "Script Kit Dictation",
+      "text": "Script Kit Dictation",
+      "value": null,
+      "selected": null,
+      "focused": false,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "panel:dictation-overlay",
+        "type": "panel",
+        "text": "Script Kit Dictation",
+        "focused": false,
+        "kind": "overlay",
+        "statusKind": "Idle"
+      }
+    },
+    {
+      "semanticId": "panel:dictation-signal-band",
+      "role": "panel",
+      "type": "panel",
+      "label": "Idle",
+      "text": "Idle",
+      "value": null,
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "panel:dictation-signal-band",
+        "type": "panel",
+        "text": "Idle",
+        "kind": "signal"
+      }
+    },
+    {
+      "semanticId": "button:dictation-target",
+      "role": "target",
+      "type": "button",
+      "label": "App",
+      "text": "App",
+      "value": null,
+      "selected": null,
+      "focused": null,
+      "index": 0,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "button:dictation-target",
+        "type": "button",
+        "text": "App",
+        "index": 0,
+        "role": "target",
+        "selectable": false
+      }
+    }
+  ],
+  "warnings": [
+    "getElements does not expose bounds yet; use devtools.layout.measure for geometry."
+  ],
+  "errors": []
+}

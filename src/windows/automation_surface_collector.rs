@@ -371,6 +371,7 @@ pub fn collect_surface_snapshot(
                     "panel_only_prompt_popup",
                 )
             }),
+        AutomationWindowKind::Dictation => collect_dictation_snapshot(resolved),
         AutomationWindowKind::MiniAi
             if resolved.id == crate::inline_agent::window::INLINE_AGENT_WINDOW_AUTOMATION_ID =>
         {
@@ -397,6 +398,59 @@ pub fn collect_surface_snapshot(
     );
 
     Some(snapshot)
+}
+
+fn collect_dictation_snapshot(resolved: &AutomationWindowInfo) -> SurfaceElementSnapshot {
+    let state = crate::dictation::snapshot_overlay_state().unwrap_or_default();
+    let phase = format!("{:?}", state.phase);
+    let target = state.target.overlay_label().to_string();
+
+    let mut panel = element(
+        "panel:dictation-overlay",
+        ElementType::Panel,
+        resolved
+            .title
+            .clone()
+            .or_else(|| Some("Dictation".to_string())),
+        None,
+        None,
+        Some(resolved.focused),
+        None,
+    );
+    panel.kind = Some("overlay".to_string());
+    panel.status_kind = Some(phase.clone());
+
+    let mut signal = element(
+        "panel:dictation-signal-band",
+        ElementType::Panel,
+        Some(phase),
+        None,
+        None,
+        None,
+        None,
+    );
+    signal.kind = Some("signal".to_string());
+
+    let mut target_badge = element(
+        "button:dictation-target",
+        ElementType::Button,
+        Some(target),
+        None,
+        None,
+        None,
+        Some(0),
+    );
+    target_badge.role = Some("target".to_string());
+    target_badge.selectable = Some(crate::dictation::can_cycle_dictation_target());
+
+    SurfaceElementSnapshot {
+        elements: vec![panel, signal, target_badge],
+        total_count: 3,
+        focused_semantic_id: Some("panel:dictation-overlay".to_string()),
+        selected_semantic_id: None,
+        warnings: Vec::new(),
+        quality: SnapshotQuality::Full,
+    }
 }
 
 fn collect_inline_agent_snapshot(resolved: &AutomationWindowInfo) -> SurfaceElementSnapshot {

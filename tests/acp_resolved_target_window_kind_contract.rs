@@ -71,6 +71,7 @@ fn as_camel_case_matches_serde_for_every_variant() {
         (AutomationWindowKind::Ai, "ai"),
         (AutomationWindowKind::MiniAi, "miniAi"),
         (AutomationWindowKind::AcpDetached, "acpDetached"),
+        (AutomationWindowKind::Dictation, "dictation"),
         (AutomationWindowKind::ActionsDialog, "actionsDialog"),
         (AutomationWindowKind::PromptPopup, "promptPopup"),
     ];

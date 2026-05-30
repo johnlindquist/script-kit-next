@@ -5,7 +5,7 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T04:26:06.082Z",
+  "generatedAt": "2026-05-30T04:44:36.051Z",
   "summary": {
     "surfaceCount": 29,
     "strongProofSurfaceCount": 4,
@@ -1457,12 +1457,12 @@
     },
     {
       "id": "dictation",
-      "proofStatus": "media-proof-missing-visual",
+      "proofStatus": "numeric-window-proof-screenshot-blocked",
       "requiredEvidence": {
         "screenshot": false,
-        "numericLayout": false,
+        "numericLayout": true,
         "imageDiff": false,
-        "visualAudit": false,
+        "visualAudit": true,
         "mediaProof": true,
         "syntheticDelivery": true
       },
@@ -1526,16 +1526,39 @@
       },
       "evidence": {
         "screenshots": [],
-        "layoutReceipts": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/window-priority-dictation-layout-after.json"
+        ],
         "inspectReceipts": [
           "artifacts/liquid-glass/receipts/dictation-next-inspect.json",
           "artifacts/liquid-glass/receipts/dictation-next-post-delivery-inspect.json",
-          "artifacts/liquid-glass/receipts/dictation-next-window-inspect.json"
+          "artifacts/liquid-glass/receipts/dictation-next-window-inspect.json",
+          "artifacts/liquid-glass/receipts/window-priority-dictation-capture-screenshot-rpc.json",
+          "artifacts/liquid-glass/receipts/window-priority-dictation-elements-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-dictation-isolated-build.json",
+          "artifacts/liquid-glass/receipts/window-priority-dictation-layout-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-dictation-open-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-dictation-screenshot-after.json",
+          "artifacts/liquid-glass/receipts/window-priority-dictation-target-inspect-after.json"
         ],
         "imageDiffReceipts": [],
         "diffMasks": [],
-        "visualAudit": null,
-        "notes": []
+        "visualAudit": {
+          "nodeCount": 6,
+          "styledNodeCount": 6,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 2,
+            "floatingTransient": 1,
+            "functionalChrome": 3
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/window-priority-dictation-layout-after.json"
+        ]
       }
     },
     {

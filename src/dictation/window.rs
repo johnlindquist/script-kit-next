@@ -14,9 +14,11 @@ pub(crate) const OVERLAY_WIDTH_PX: f32 = 520.0;
 pub(crate) const OVERLAY_HEIGHT_PX: f32 = 72.0;
 /// Local footer/debug identity for the live overlay, separate from AppView footer ownership.
 pub(crate) const DICTATION_OVERLAY_FOOTER_SURFACE: &str = "dictation_overlay";
+/// Stable automation target id for the live dictation overlay window.
+pub(crate) const DICTATION_OVERLAY_AUTOMATION_ID: &str = "dictation";
 /// Confirming phase uses the same bar height so content swaps inline.
 /// Rounded corner radius for the standalone glass bar.
-pub(crate) const OVERLAY_RADIUS_PX: f32 = 12.0;
+pub(crate) const OVERLAY_RADIUS_PX: f32 = crate::ui::chrome::LIQUID_GLASS_PANEL_RADIUS_PX;
 /// Horizontal padding inside the signal band content.
 pub(crate) const OVERLAY_HORIZONTAL_PADDING_PX: f32 = 11.0;
 /// Font size for timer, status, and transcript text.
@@ -2404,6 +2406,20 @@ pub fn open_dictation_overlay(
         let mut guard = slot.lock();
         *guard = Some(handle);
     }
+    let overlay_any: gpui::AnyWindowHandle = handle.into();
+    crate::windows::upsert_runtime_window_handle(DICTATION_OVERLAY_AUTOMATION_ID, overlay_any);
+    crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
+        id: DICTATION_OVERLAY_AUTOMATION_ID.to_string(),
+        kind: crate::protocol::AutomationWindowKind::Dictation,
+        title: Some("Script Kit Dictation".to_string()),
+        focused: should_key_overlay,
+        visible: true,
+        semantic_surface: Some("dictation".to_string()),
+        bounds: Some(dictation_automation_bounds(bounds)),
+        parent_window_id: None,
+        parent_kind: None,
+        pid: Some(std::process::id()),
+    });
     tracing::info!(
         category = "DICTATION",
         generation,
@@ -2482,8 +2498,138 @@ pub fn close_dictation_overlay(cx: &mut App) -> anyhow::Result<()> {
             );
         }
     }
+    crate::windows::remove_runtime_window_handle(DICTATION_OVERLAY_AUTOMATION_ID);
+    crate::windows::remove_automation_window(DICTATION_OVERLAY_AUTOMATION_ID);
 
     Ok(())
+}
+
+fn dictation_automation_bounds(
+    bounds: gpui::Bounds<gpui::Pixels>,
+) -> crate::protocol::AutomationWindowBounds {
+    crate::protocol::AutomationWindowBounds {
+        x: f32::from(bounds.origin.x) as f64,
+        y: f32::from(bounds.origin.y) as f64,
+        width: f32::from(bounds.size.width) as f64,
+        height: f32::from(bounds.size.height) as f64,
+    }
+}
+
+pub fn automation_layout_info(
+    resolved: &crate::protocol::AutomationWindowInfo,
+) -> crate::protocol::LayoutInfo {
+    use crate::protocol::{LayoutComponentInfo, LayoutComponentType, LayoutInfo};
+    use crate::ui::chrome as chrome_tokens;
+
+    let bounds = resolved
+        .bounds
+        .clone()
+        .unwrap_or(crate::protocol::AutomationWindowBounds {
+            x: 0.0,
+            y: 0.0,
+            width: OVERLAY_WIDTH_PX as f64,
+            height: OVERLAY_HEIGHT_PX as f64,
+        });
+    let width = bounds.width as f32;
+    let height = bounds.height as f32;
+    let footer_height =
+        crate::components::footer_chrome::footer_rail_chrome(&get_cached_theme()).height_px;
+    let signal_height = (height - footer_height).max(0.0);
+
+    let mut components = Vec::new();
+    components.push(
+        LayoutComponentInfo::new("DictationOverlayWindow", LayoutComponentType::Container)
+            .with_bounds(0.0, 0.0, width, height)
+            .with_visual_style(
+                chrome_tokens::CHROME_LAYER_FLOATING,
+                chrome_tokens::MATERIAL_NS_VISUAL_EFFECT,
+                Some(OVERLAY_RADIUS_PX),
+            )
+            .with_hit_bounds(0.0, 0.0, width, height)
+            .with_padding(0.0, 0.0, 0.0, 0.0),
+    );
+    components.push(
+        LayoutComponentInfo::new("DictationSignalBand", LayoutComponentType::Container)
+            .with_bounds(0.0, 0.0, width, signal_height)
+            .with_visual_style(
+                chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                Some(OVERLAY_RADIUS_PX),
+            )
+            .with_hit_bounds(0.0, 0.0, width, signal_height)
+            .with_padding(
+                6.0,
+                OVERLAY_HORIZONTAL_PADDING_PX,
+                6.0,
+                OVERLAY_HORIZONTAL_PADDING_PX,
+            ),
+    );
+    components.push(
+        LayoutComponentInfo::new("DictationTimerSlot", LayoutComponentType::Other)
+            .with_bounds(
+                OVERLAY_HORIZONTAL_PADDING_PX,
+                6.0,
+                TARGET_BADGE_SLOT_WIDTH_PX,
+                signal_height.max(12.0) - 12.0,
+            )
+            .with_visual_style(
+                chrome_tokens::CHROME_LAYER_CONTENT,
+                chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                None,
+            )
+            .with_padding(0.0, 0.0, 0.0, 0.0),
+    );
+    components.push(
+        LayoutComponentInfo::new("DictationWaveform", LayoutComponentType::Container)
+            .with_bounds((width - 48.0) / 2.0, 12.0, 48.0, WAVEFORM_BAR_MAX_HEIGHT_PX)
+            .with_visual_style(
+                chrome_tokens::CHROME_LAYER_CONTENT,
+                chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+            )
+            .with_gap(WAVEFORM_BAR_GAP_PX),
+    );
+    components.push(
+        LayoutComponentInfo::new("DictationTargetBadge", LayoutComponentType::Button)
+            .with_bounds(
+                width - TARGET_BADGE_SLOT_WIDTH_PX - OVERLAY_HORIZONTAL_PADDING_PX,
+                10.0,
+                TARGET_BADGE_SLOT_WIDTH_PX,
+                28.0,
+            )
+            .with_visual_style(
+                chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
+            )
+            .with_hit_bounds(
+                width - TARGET_BADGE_SLOT_WIDTH_PX - OVERLAY_HORIZONTAL_PADDING_PX,
+                10.0,
+                TARGET_BADGE_SLOT_WIDTH_PX,
+                28.0,
+            )
+            .with_padding(2.0, 8.0, 2.0, 8.0),
+    );
+    components.push(
+        LayoutComponentInfo::new("DictationFooterRail", LayoutComponentType::Panel)
+            .with_bounds(0.0, signal_height, width, footer_height)
+            .with_visual_style(
+                chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+            )
+            .with_hit_bounds(0.0, signal_height, width, footer_height)
+            .with_padding(0.0, 0.0, 0.0, 0.0),
+    );
+
+    LayoutInfo {
+        window_width: width,
+        window_height: height,
+        prompt_type: "dictation".to_string(),
+        components,
+        handler_form: None,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+    }
 }
 
 /// Check whether the dictation overlay window is currently open.

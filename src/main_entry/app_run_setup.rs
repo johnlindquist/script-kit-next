@@ -3158,6 +3158,54 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
+                            ExternalCommand::OpenDictationOverlayFixture { ref request_id } => {
+                                let rid = request_id.as_ref().map(|id| id.as_str());
+                                match crate::dictation::open_dictation_overlay(ctx) {
+                                    Ok(handle) => {
+                                        let fixture_bounds = gpui::Bounds {
+                                            origin: gpui::point(gpui::px(585.0), gpui::px(177.0)),
+                                            size: gpui::size(gpui::px(520.0), gpui::px(72.0)),
+                                        };
+                                        let _ = handle.update(ctx, |_view, window, cx| {
+                                            crate::components::inline_popup_window::set_inline_popup_window_bounds(window, fixture_bounds, cx);
+                                        });
+                                        crate::windows::set_automation_bounds(
+                                            "dictation",
+                                            Some(crate::protocol::AutomationWindowBounds {
+                                                x: 585.0,
+                                                y: 177.0,
+                                                width: 520.0,
+                                                height: 72.0,
+                                            }),
+                                        );
+                                        let state = crate::dictation::DictationOverlayState {
+                                            phase: crate::dictation::DictationSessionPhase::Recording,
+                                            elapsed: std::time::Duration::from_secs(7),
+                                            bars: [0.12, 0.34, 0.62, 0.88, 0.55, 0.31, 0.74, 0.42, 0.18],
+                                            transcript: gpui::SharedString::default(),
+                                            target: crate::dictation::DictationTarget::ExternalApp,
+                                        };
+                                        let _ = crate::dictation::update_dictation_overlay(state, ctx);
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "dictation_overlay_fixture_opened",
+                                            command = "openDictationOverlayFixture",
+                                            request_id = ?rid,
+                                            "Dictation overlay fixture opened without media capture"
+                                        );
+                                    }
+                                    Err(error) => {
+                                        tracing::error!(
+                                            category = "STDIN",
+                                            event = "dictation_overlay_fixture_failed",
+                                            command = "openDictationOverlayFixture",
+                                            request_id = ?rid,
+                                            error = %error,
+                                            "Dictation overlay fixture failed"
+                                        );
+                                    }
+                                }
+                            }
                             ExternalCommand::GetConfigFingerprint { ref request_id } => {
                                 let rid = request_id.as_ref().map(|id| id.as_str());
                                 match crate::config::current_config_fingerprint_receipt() {

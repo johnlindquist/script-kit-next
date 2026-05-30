@@ -1,0 +1,1069 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.layout",
+  "command": "layout.measure",
+  "classification": "blocked-by-timeout",
+  "session": "liquid-dictation",
+  "include": [
+    "nodes",
+    "regions",
+    "scroll",
+    "anchors",
+    "resize",
+    "overlaps"
+  ],
+  "limit": 200,
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "dictation"
+    },
+    "strict": false,
+    "expectedSurfaceKind": null
+  },
+  "target": {
+    "automationId": "dictation",
+    "stableTargetId": "dictation",
+    "targetKind": "Dictation",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 520,
+      "height": 72
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 520,
+      "height": 72,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 520,
+        "height": 72
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 33992,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "promptType": "dictation",
+  "timestamp": "2026-05-30T04:42:30.758709+00:00",
+  "componentCount": 6,
+  "window": {
+    "rect": {
+      "x": 585,
+      "y": 177,
+      "width": 520,
+      "height": 72
+    },
+    "visible": null,
+    "focused": null
+  },
+  "viewport": {
+    "clientWidth": 520,
+    "clientHeight": 72,
+    "contentWidth": 520,
+    "contentHeight": 72,
+    "scrollWidth": 520,
+    "scrollHeight": 72,
+    "canScrollX": false,
+    "canScrollY": false,
+    "scrollTop": null,
+    "maxScrollTop": 0,
+    "overflowPolicyY": "hidden"
+  },
+  "pressure": {
+    "overflowY": false,
+    "hiddenContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 8,
+    "footerOverlapCount": 1,
+    "inputOverlapCount": 0,
+    "pressureScore": 8
+  },
+  "viewportRect": {
+    "x": 0,
+    "y": 0,
+    "width": 520,
+    "height": 72
+  },
+  "windowRect": {
+    "x": 585,
+    "y": 177,
+    "width": 520,
+    "height": 72
+  },
+  "regions": [
+    {
+      "name": "DictationOverlayWindow",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 520,
+        "height": 72
+      }
+    },
+    {
+      "name": "DictationSignalBand",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 520,
+        "height": 42
+      }
+    },
+    {
+      "name": "DictationTimerSlot",
+      "type": "other",
+      "bounds": {
+        "x": 11,
+        "y": 6,
+        "width": 108,
+        "height": 30
+      }
+    },
+    {
+      "name": "DictationWaveform",
+      "type": "container",
+      "bounds": {
+        "x": 236,
+        "y": 12,
+        "width": 48,
+        "height": 18
+      }
+    },
+    {
+      "name": "DictationTargetBadge",
+      "type": "button",
+      "bounds": {
+        "x": 401,
+        "y": 10,
+        "width": 108,
+        "height": 28
+      }
+    },
+    {
+      "name": "DictationFooterRail",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 42,
+        "width": 520,
+        "height": 30
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "name": "DictationOverlayWindow",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 520,
+        "height": 72
+      },
+      "depth": 0,
+      "parent": null,
+      "children": [],
+      "explanation": null,
+      "visualStyle": {
+        "chromeLayer": "floatingTransient",
+        "materialSource": "NSVisualEffectView",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 520,
+          "height": 72
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 520,
+          "height": 72
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 520,
+          "height": 72
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 520,
+          "height": 72
+        },
+        "hitWidth": 520,
+        "hitHeight": 72,
+        "visualWidth": 520,
+        "visualHeight": 72,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "DictationOverlayWindow",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 520,
+          "height": 72
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "depth": 0,
+        "visualStyle": {
+          "chromeLayer": "floatingTransient",
+          "materialSource": "NSVisualEffectView",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 520,
+            "height": 72
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 520,
+            "height": 72
+          }
+        }
+      }
+    },
+    {
+      "name": "DictationSignalBand",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 520,
+        "height": 42
+      },
+      "depth": 0,
+      "parent": null,
+      "children": [],
+      "explanation": null,
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 520,
+          "height": 42
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 520,
+          "height": 42
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 520,
+          "height": 42
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 520,
+          "height": 42
+        },
+        "hitWidth": 520,
+        "hitHeight": 42,
+        "visualWidth": 520,
+        "visualHeight": 42,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "DictationSignalBand",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 520,
+          "height": 42
+        },
+        "boxModel": {
+          "padding": {
+            "top": 6,
+            "right": 11,
+            "bottom": 6,
+            "left": 11
+          }
+        },
+        "depth": 0,
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 520,
+            "height": 42
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 520,
+            "height": 42
+          }
+        }
+      }
+    },
+    {
+      "name": "DictationTimerSlot",
+      "type": "other",
+      "bounds": {
+        "x": 11,
+        "y": 6,
+        "width": 108,
+        "height": 30
+      },
+      "depth": 0,
+      "parent": null,
+      "children": [],
+      "explanation": null,
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "visualBounds": {
+          "x": 11,
+          "y": 6,
+          "width": 108,
+          "height": 30
+        },
+        "hitBounds": {
+          "x": 11,
+          "y": 6,
+          "width": 108,
+          "height": 30
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 11,
+          "y": 6,
+          "width": 108,
+          "height": 30
+        },
+        "visualBounds": {
+          "x": 11,
+          "y": 6,
+          "width": 108,
+          "height": 30
+        },
+        "hitWidth": 108,
+        "hitHeight": 30,
+        "visualWidth": 108,
+        "visualHeight": 30,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "DictationTimerSlot",
+        "type": "other",
+        "bounds": {
+          "x": 11,
+          "y": 6,
+          "width": 108,
+          "height": 30
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "depth": 0,
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "visualBounds": {
+            "x": 11,
+            "y": 6,
+            "width": 108,
+            "height": 30
+          },
+          "hitBounds": {
+            "x": 11,
+            "y": 6,
+            "width": 108,
+            "height": 30
+          }
+        }
+      }
+    },
+    {
+      "name": "DictationWaveform",
+      "type": "container",
+      "bounds": {
+        "x": 236,
+        "y": 12,
+        "width": 48,
+        "height": 18
+      },
+      "depth": 0,
+      "parent": null,
+      "children": [],
+      "explanation": null,
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 236,
+          "y": 12,
+          "width": 48,
+          "height": 18
+        },
+        "hitBounds": {
+          "x": 236,
+          "y": 12,
+          "width": 48,
+          "height": 18
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 236,
+          "y": 12,
+          "width": 48,
+          "height": 18
+        },
+        "visualBounds": {
+          "x": 236,
+          "y": 12,
+          "width": 48,
+          "height": 18
+        },
+        "hitWidth": 48,
+        "hitHeight": 18,
+        "visualWidth": 48,
+        "visualHeight": 18,
+        "minHitPass": false,
+        "minVisualPass": false,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "DictationWaveform",
+        "type": "container",
+        "bounds": {
+          "x": 236,
+          "y": 12,
+          "width": 48,
+          "height": 18
+        },
+        "boxModel": {
+          "gap": 3
+        },
+        "depth": 0,
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 236,
+            "y": 12,
+            "width": 48,
+            "height": 18
+          },
+          "hitBounds": {
+            "x": 236,
+            "y": 12,
+            "width": 48,
+            "height": 18
+          }
+        }
+      }
+    },
+    {
+      "name": "DictationTargetBadge",
+      "type": "button",
+      "bounds": {
+        "x": 401,
+        "y": 10,
+        "width": 108,
+        "height": 28
+      },
+      "depth": 0,
+      "parent": null,
+      "children": [],
+      "explanation": null,
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "cornerRadius": {
+          "topLeft": 14,
+          "topRight": 14,
+          "bottomRight": 14,
+          "bottomLeft": 14
+        },
+        "visualBounds": {
+          "x": 401,
+          "y": 10,
+          "width": 108,
+          "height": 28
+        },
+        "hitBounds": {
+          "x": 401,
+          "y": 10,
+          "width": 108,
+          "height": 28
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 401,
+          "y": 10,
+          "width": 108,
+          "height": 28
+        },
+        "visualBounds": {
+          "x": 401,
+          "y": 10,
+          "width": 108,
+          "height": 28
+        },
+        "hitWidth": 108,
+        "hitHeight": 28,
+        "visualWidth": 108,
+        "visualHeight": 28,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "DictationTargetBadge",
+        "type": "button",
+        "bounds": {
+          "x": 401,
+          "y": 10,
+          "width": 108,
+          "height": 28
+        },
+        "boxModel": {
+          "padding": {
+            "top": 2,
+            "right": 8,
+            "bottom": 2,
+            "left": 8
+          }
+        },
+        "depth": 0,
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 401,
+            "y": 10,
+            "width": 108,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 401,
+            "y": 10,
+            "width": 108,
+            "height": 28
+          }
+        }
+      }
+    },
+    {
+      "name": "DictationFooterRail",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 42,
+        "width": 520,
+        "height": 30
+      },
+      "depth": 0,
+      "parent": null,
+      "children": [],
+      "explanation": null,
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 42,
+          "width": 520,
+          "height": 30
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 42,
+          "width": 520,
+          "height": 30
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 42,
+          "width": 520,
+          "height": 30
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 42,
+          "width": 520,
+          "height": 30
+        },
+        "hitWidth": 520,
+        "hitHeight": 30,
+        "visualWidth": 520,
+        "visualHeight": 30,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "DictationFooterRail",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 42,
+          "width": 520,
+          "height": 30
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "depth": 0,
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 42,
+            "width": 520,
+            "height": 30
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 42,
+            "width": 520,
+            "height": 30
+          }
+        }
+      }
+    }
+  ],
+  "overlaps": [
+    {
+      "a": "DictationOverlayWindow",
+      "b": "DictationSignalBand"
+    },
+    {
+      "a": "DictationOverlayWindow",
+      "b": "DictationTimerSlot"
+    },
+    {
+      "a": "DictationOverlayWindow",
+      "b": "DictationWaveform"
+    },
+    {
+      "a": "DictationOverlayWindow",
+      "b": "DictationTargetBadge"
+    },
+    {
+      "a": "DictationOverlayWindow",
+      "b": "DictationFooterRail"
+    },
+    {
+      "a": "DictationSignalBand",
+      "b": "DictationTimerSlot"
+    },
+    {
+      "a": "DictationSignalBand",
+      "b": "DictationWaveform"
+    },
+    {
+      "a": "DictationSignalBand",
+      "b": "DictationTargetBadge"
+    }
+  ],
+  "resizePressure": {
+    "windowCanGrow": null,
+    "overflowY": false,
+    "desiredContentHeight": 72,
+    "measuredContentHeight": 72,
+    "clippedNodeCount": 0,
+    "overlapCount": 8,
+    "pressureScore": 8
+  },
+  "visualAudit": {
+    "nodeCount": 6,
+    "styledNodeCount": 6,
+    "unstyledNodeCount": 0,
+    "controlsWithHitFailures": [],
+    "contentGlassNodes": [],
+    "missingStyleNodeNames": [],
+    "chromeLayers": {
+      "content": 2,
+      "floatingTransient": 1,
+      "functionalChrome": 3
+    }
+  },
+  "handlerForm": null,
+  "missingPrimitives": [
+    "strictTargetIdentity"
+  ],
+  "warnings": [
+    "layout components overlap"
+  ],
+  "errors": [],
+  "rawLayout": {
+    "type": "layoutInfoResult",
+    "requestId": "devtools-layout-measure-1780116150725-a57924",
+    "windowWidth": 520,
+    "windowHeight": 72,
+    "promptType": "dictation",
+    "components": [
+      {
+        "name": "DictationOverlayWindow",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 520,
+          "height": 72
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "depth": 0,
+        "visualStyle": {
+          "chromeLayer": "floatingTransient",
+          "materialSource": "NSVisualEffectView",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 520,
+            "height": 72
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 520,
+            "height": 72
+          }
+        }
+      },
+      {
+        "name": "DictationSignalBand",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 520,
+          "height": 42
+        },
+        "boxModel": {
+          "padding": {
+            "top": 6,
+            "right": 11,
+            "bottom": 6,
+            "left": 11
+          }
+        },
+        "depth": 0,
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 520,
+            "height": 42
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 520,
+            "height": 42
+          }
+        }
+      },
+      {
+        "name": "DictationTimerSlot",
+        "type": "other",
+        "bounds": {
+          "x": 11,
+          "y": 6,
+          "width": 108,
+          "height": 30
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "depth": 0,
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "visualBounds": {
+            "x": 11,
+            "y": 6,
+            "width": 108,
+            "height": 30
+          },
+          "hitBounds": {
+            "x": 11,
+            "y": 6,
+            "width": 108,
+            "height": 30
+          }
+        }
+      },
+      {
+        "name": "DictationWaveform",
+        "type": "container",
+        "bounds": {
+          "x": 236,
+          "y": 12,
+          "width": 48,
+          "height": 18
+        },
+        "boxModel": {
+          "gap": 3
+        },
+        "depth": 0,
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 236,
+            "y": 12,
+            "width": 48,
+            "height": 18
+          },
+          "hitBounds": {
+            "x": 236,
+            "y": 12,
+            "width": 48,
+            "height": 18
+          }
+        }
+      },
+      {
+        "name": "DictationTargetBadge",
+        "type": "button",
+        "bounds": {
+          "x": 401,
+          "y": 10,
+          "width": 108,
+          "height": 28
+        },
+        "boxModel": {
+          "padding": {
+            "top": 2,
+            "right": 8,
+            "bottom": 2,
+            "left": 8
+          }
+        },
+        "depth": 0,
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "cornerRadius": {
+            "topLeft": 14,
+            "topRight": 14,
+            "bottomRight": 14,
+            "bottomLeft": 14
+          },
+          "visualBounds": {
+            "x": 401,
+            "y": 10,
+            "width": 108,
+            "height": 28
+          },
+          "hitBounds": {
+            "x": 401,
+            "y": 10,
+            "width": 108,
+            "height": 28
+          }
+        }
+      },
+      {
+        "name": "DictationFooterRail",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 42,
+          "width": 520,
+          "height": 30
+        },
+        "boxModel": {
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "depth": 0,
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 42,
+            "width": 520,
+            "height": 30
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 42,
+            "width": 520,
+            "height": 30
+          }
+        }
+      }
+    ],
+    "timestamp": "2026-05-30T04:42:30.758709+00:00"
+  }
+}

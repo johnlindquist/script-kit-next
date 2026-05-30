@@ -180,6 +180,10 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-feedback-layout-after.json`,
       ]);
+    } else if (surfaceKind === "Dictation") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-dictation-layout-after.json`,
+      ]);
     }
     const status = classify(evidence);
     return {
@@ -219,6 +223,10 @@ async function main() {
         `${RECEIPT_ROOT}/notes-acp-next-actions-open-inspect.json`,
         `${RECEIPT_ROOT}/notes-acp-actions-open-inspect.json`,
       ]);
+    } else if (target.id === "dictation") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-dictation-layout-after.json`,
+      ]);
     }
     const dictationMedia = target.id === "dictation"
       ? await readJsonIfExists(`${RECEIPT_ROOT}/dictation-next-post-delivery-media.json`)
@@ -227,8 +235,10 @@ async function main() {
       ? await readJsonIfExists(`${RECEIPT_ROOT}/dictation-next-deliver-fixture.json`)
       : null;
     const baseStatus = classify(evidence);
-    const proofStatus = target.id === "dictation" && dictationMedia
-      ? "media-proof-missing-visual"
+    const proofStatus = target.id === "dictation" && evidence.visualAudit && evidence.layoutReceipts.length > 0
+      ? "numeric-window-proof-screenshot-blocked"
+      : target.id === "dictation" && dictationMedia
+        ? "media-proof-missing-visual"
       : target.id === "inline-agent" && evidence.visualAudit && evidence.layoutReceipts.length > 0
         ? "numeric-proof-missing-visual-capture"
         : target.id === "notes-acp" && evidence.visualAudit && evidence.inspectReceipts.length > 0

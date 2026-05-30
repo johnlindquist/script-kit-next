@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 3,
+  "status": "error",
+  "label": "window-priority-dictation-after",
+  "timestamp": "2026-05-30T04:42:34.910Z",
+  "durationMs": 4118,
+  "requiresVisionReview": false,
+  "resolvedTarget": {
+    "windowId": "dictation",
+    "windowKind": "Dictation",
+    "title": "Script Kit Dictation",
+    "surfaceId": null
+  },
+  "dispatchPath": "window_role_fallback",
+  "resolvedWindowId": "dictation",
+  "osWindowId": 84105,
+  "inspectionOsWindowId": 84105,
+  "captureRouting": "inspection-os-window-id",
+  "requestedAutomationWindowId": "dictation",
+  "requestedOsWindowId": 84105,
+  "showIssuedBeforeCapture": true,
+  "state": {
+    "type": "acpStateResult",
+    "requestId": "verify-window-priority-dictation-after-1780116150792",
+    "schemaVersion": 2,
+    "status": "idle",
+    "uiVariant": "standard",
+    "inputText": "",
+    "cursorIndex": 0,
+    "hasSelection": false,
+    "messageCount": 0,
+    "awaitingFirstAssistantText": false,
+    "contextChipCount": 0,
+    "contextReady": true,
+    "hasPendingPermission": false,
+    "warnings": [
+      "target_unsupported: getAcpState supports only Main, Ai, AcpDetached, and Notes targets; resolved dictation (Dictation)"
+    ]
+  },
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-dictation-after.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowId": null
+  },
+  "captureTarget": {
+    "requestedWindowId": 84105,
+    "actualWindowId": null
+  },
+  "inspection": {
+    "automationWindowId": "dictation",
+    "windowKind": "Dictation",
+    "title": "Script Kit Dictation",
+    "osWindowId": 84105,
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 520,
+      "height": 72
+    },
+    "screenshotWidth": 520,
+    "screenshotHeight": 72,
+    "pixelProbes": [],
+    "warnings": []
+  },
+  "popupCapture": {
+    "strategy": "not_applicable",
+    "windowKind": "Dictation",
+    "targetBounds": null,
+    "semanticReceiptsArePrimary": false
+  },
+  "visionCrops": [],
+  "stateReceipt": {
+    "queried": true,
+    "snapshot": {
+      "type": "acpStateResult",
+      "requestId": "verify-window-priority-dictation-after-1780116150792",
+      "schemaVersion": 2,
+      "status": "idle",
+      "uiVariant": "standard",
+      "inputText": "",
+      "cursorIndex": 0,
+      "hasSelection": false,
+      "messageCount": 0,
+      "awaitingFirstAssistantText": false,
+      "contextChipCount": 0,
+      "contextReady": true,
+      "hasPendingPermission": false,
+      "warnings": [
+        "target_unsupported: getAcpState supports only Main, Ai, AcpDetached, and Notes targets; resolved dictation (Dictation)"
+      ]
+    },
+    "error": null
+  },
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": false,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-dictation-after.png",
+    "sizeBytes": null,
+    "width": null,
+    "height": null,
+    "contentAudit": null,
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowFrontmost": null,
+    "windowFocused": null,
+    "windowId": null,
+    "error": "Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T04:42:33.192Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-dictation-after.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84105}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T04:42:33.192Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T04:42:33.879Z\",\"attempt\":1,\"windowId\":84105}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T04:42:33.968Z\",\"attempt\":1,\"windowId\":84105,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T04:42:34.170Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-dictation-after.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84105}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T04:42:34.170Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T04:42:34.821Z\",\"attempt\":1,\"windowId\":84105}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T04:42:34.909Z\",\"attempt\":2,\"windowId\":84105,\"exitCode\":1,\"stderr\":\"could not create image from window\"}"
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "state: queried | screenshot: FAILED (Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T04:42:33.192Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-dictation-after.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84105}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T04:42:33.192Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T04:42:33.879Z\",\"attempt\":1,\"windowId\":84105}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T04:42:33.968Z\",\"attempt\":1,\"windowId\":84105,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T04:42:34.170Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-dictation-after.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84105}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T04:42:34.170Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T04:42:34.821Z\",\"attempt\":1,\"windowId\":84105}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T04:42:34.909Z\",\"attempt\":2,\"windowId\":84105,\"exitCode\":1,\"stderr\":\"could not create image from window\"})"
+}
