@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Script Kit GPUI Liquid Glass Audit</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f5f7;
+      --panel: rgba(255, 255, 255, 0.78);
+      --panel-strong: rgba(255, 255, 255, 0.92);
+      --text: #1d1d1f;
+      --muted: #5f6368;
+      --line: rgba(0, 0, 0, 0.12);
+      --accent: #007aff;
+      --warn: #b26a00;
+      --ok: #1f7a3d;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --radius-sm: 10px;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111114;
+        --panel: rgba(34, 34, 38, 0.72);
+        --panel-strong: rgba(42, 42, 46, 0.9);
+        --text: #f5f5f7;
+        --muted: #a1a1a6;
+        --line: rgba(255, 255, 255, 0.16);
+        --accent: #0a84ff;
+        --warn: #ffd60a;
+        --ok: #32d74b;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 16% 12%, rgba(10, 132, 255, 0.18), transparent 28rem),
+        radial-gradient(circle at 85% 8%, rgba(255, 69, 58, 0.12), transparent 26rem),
+        linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg) 86%, #000 14%));
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding: 20px 28px 16px;
+      backdrop-filter: blur(24px) saturate(1.25);
+      background: color-mix(in srgb, var(--bg) 74%, transparent);
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    p { line-height: 1.5; }
+
+    a { color: var(--accent); }
+
+    code {
+      padding: 1px 5px;
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--panel-strong) 86%, var(--text) 7%);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    main {
+      display: grid;
+      gap: 18px;
+      padding: 22px 28px 48px;
+      max-width: 1480px;
+      margin: 0 auto;
+    }
+
+    .subhead {
+      margin: 0;
+      color: var(--muted);
+      max-width: 920px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--panel);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.12);
+      backdrop-filter: blur(22px) saturate(1.2);
+      padding: 18px;
+    }
+
+    .compact {
+      border-radius: var(--radius-md);
+      padding: 14px;
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      font-size: 13px;
+      background: var(--panel-strong);
+    }
+
+    .todo { color: var(--warn); }
+    .done { color: var(--ok); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: var(--radius-md);
+    }
+
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      background: color-mix(in srgb, var(--panel-strong) 86%, var(--accent) 5%);
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    ul, ol {
+      margin: 0;
+      padding-left: 20px;
+      line-height: 1.55;
+    }
+
+    .shot-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    figure {
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      background: var(--panel-strong);
+    }
+
+    .placeholder {
+      display: grid;
+      min-height: 160px;
+      place-items: center;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+      background:
+        linear-gradient(135deg, rgba(0, 122, 255, 0.12), transparent),
+        color-mix(in srgb, var(--panel-strong) 88%, var(--text) 6%);
+    }
+
+    figcaption {
+      padding: 10px 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .log {
+      display: grid;
+      gap: 10px;
+    }
+
+    .entry {
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      background: var(--panel-strong);
+    }
+
+    .entry time {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Script Kit GPUI Liquid Glass Audit</h1>
+    <p class="subhead">Long-running Tahoe visual modernization record: guideline research, surface inventory, baseline screenshots, implementation slices, after screenshots, measurements, and verification receipts.</p>
+  </header>
+
+  <main>
+    <section class="grid">
+      <div class="panel">
+        <h2>Run State</h2>
+        <p><span class="status done">clean worktree at start</span></p>
+        <table>
+          <tbody>
+            <tr><th>Branch</th><td><code>main</code></td></tr>
+            <tr><th>Head</th><td><code>5c4b1f15c</code> Enable Tahoe liquid glass backgrounds</td></tr>
+          <tr><th>CI</th><td><a href="https://github.com/johnlindquist/script-kit-next/actions/runs/26670410182">26670410182</a>, in progress at artifact creation; Format, Check, Clippy, TypeScript SDK Tests green when last checked</td></tr>
+            <tr><th>Artifact root</th><td><code>artifacts/liquid-glass/</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h2>Guideline Baseline</h2>
+        <ul>
+          <li>Liquid Glass is a functional layer for controls and navigation, not general content chrome.</li>
+          <li>Controls should remain legible over content and preserve hierarchy between functional and content layers.</li>
+          <li>Prefer circular or capsule buttons; use rounded rectangles for stacked text buttons.</li>
+          <li>Button centers should be at least 60 pt apart where applicable; large buttons need extra hover padding.</li>
+          <li>macOS accessibility minimum target is 28x28 pt, with 20x20 pt visual minimum; spacing matters as much as size.</li>
+        </ul>
+        <p>Sources queued for Oracle synthesis: Apple HIG, Buttons, Materials/Liquid Glass, Color, Accessibility.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Surface Inventory</h2>
+      <p>Source-backed inventory from <code>bun scripts/devtools/surfaces.ts</code>: 31 surface contracts, 48 AppView variants, 47 feature-map entries, 23 owner skills, and 7 explicit DevTools coverage entries.</p>
+      <table>
+        <thead>
+          <tr><th>Batch</th><th>Surface families</th><th>Status</th><th>Oracle / Evidence</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Launcher main actions</td><td>ScriptList, ActionsDialog, ConfirmPrompt, footer, source filters, shortcuts, aliases</td><td class="done">before captured</td><td><code>before-main-*.json</code>, <code>before-actions-*.json</code>, screenshot paths below</td></tr>
+          <tr><td>Prompt runtime</td><td>arg/div/form/select/path/drop/template/chat/mini/micro, terminal, editor, webcam</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
+          <tr><td>Built-ins</td><td>Clipboard, App Launcher, Window Switcher, Browser Tabs, Settings, Kit Store, Process Manager, Current App, Theme, Emoji, ACP History</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
+          <tr><td>Portals/resources</td><td>File search mini/full, attachment portals, SDK reference, script templates, MCP resources</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
+          <tr><td>ACP/chat</td><td>ACP chat, composer, model setup/switch, history, context parts</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
+          <tr><td>Notes/dictation/media</td><td>Notes window, notes ACP, dictation overlay/history, media target delivery</td><td class="done">notes before captured</td><td><code>before-notes-*.json</code>, screenshot path below</td></tr>
+          <tr><td>Platform windows</td><td>Window material, resizing, tray, permissions, screenshots, lifecycle, About, Feedback</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
+          <tr><td>Design/theme</td><td>Storybook, design gallery/explorer, theme chooser, settings visual lab</td><td class="todo">baseline pending</td><td>planned Oracle batch</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Baseline Screenshots</h2>
+      <div class="shot-grid">
+        <figure>
+          <a href="artifacts/liquid-glass/screenshots/before-main-launcher.png"><img src="artifacts/liquid-glass/screenshots/before-main-launcher.png" alt="Before screenshot of the main launcher" style="display:block;width:100%;height:auto"></a>
+          <figcaption>Main launcher before: <code>artifacts/liquid-glass/screenshots/before-main-launcher.png</code>. Receipt: <code>artifacts/liquid-glass/receipts/before-main-screenshot.json</code>.</figcaption>
+        </figure>
+        <figure>
+          <a href="artifacts/liquid-glass/screenshots/before-actions-dialog.png"><img src="artifacts/liquid-glass/screenshots/before-actions-dialog.png" alt="Before screenshot of the actions dialog" style="display:block;width:100%;height:auto"></a>
+          <figcaption>Actions dialog before: <code>artifacts/liquid-glass/screenshots/before-actions-dialog.png</code>. Receipt: <code>artifacts/liquid-glass/receipts/before-actions-screenshot.json</code>.</figcaption>
+        </figure>
+        <figure>
+          <div class="placeholder">ACP/model switch before screenshot pending</div>
+          <figcaption>ACP guarded entry attempted via <code>open-acp-act.json</code>; no ACP target appeared. Needs a reliable baseline recipe or DevTools primitive.</figcaption>
+        </figure>
+        <figure>
+          <a href="artifacts/liquid-glass/screenshots/before-notes.png"><img src="artifacts/liquid-glass/screenshots/before-notes.png" alt="Before screenshot of the notes window" style="display:block;width:100%;height:auto"></a>
+          <figcaption>Notes before: <code>artifacts/liquid-glass/screenshots/before-notes.png</code>. Receipt: <code>artifacts/liquid-glass/receipts/before-notes-screenshot.json</code>.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Measurements</h2>
+      <table>
+        <thead>
+          <tr><th>Surface</th><th>Primitive</th><th>Before</th><th>After</th><th>Gap</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Main launcher</td><td><code>layout.ts measure</code>, <code>inspect.ts</code>, <code>verify-shot.ts</code></td><td>Window 750x480; Header 45 high; SearchInput 534x22 at 16,11; list rows 40 high; LogoButton 20x28; ActionsButton 85x28; RunButton 55x28; screenshot nonblack ratio 0.705</td><td>pending</td><td>Need corner/material tokens in semantic/layout receipts.</td></tr>
+          <tr><td>Actions dialog</td><td><code>actions.ts inspect</code>, <code>automation-window.ts inspect</code>, <code>verify-shot.ts</code></td><td>Target 320x338 at 800,221; screenshot nonblack ratio 0.803; action layout fields mostly null</td><td>pending</td><td>Need first-class popup layout, disabled-reason geometry, material metadata, corner radius.</td></tr>
+          <tr><td>Notes</td><td><code>notes.ts inspect</code>, <code>verify-shot.ts</code></td><td>Target 350x280 at 1112,50; screenshot nonblack ratio 0.673; inspect classified blocked-by-missing-primitive for deeper layout state</td><td>pending</td><td>Need visual material/corner extraction and Notes layout pressure fields.</td></tr>
+          <tr><td>Dictation</td><td><code>dictation.ts inspect</code></td><td>pending</td><td>pending</td><td>Need overlay screenshot and measured compact controls.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Oracle Sessions</h2>
+      <table>
+        <thead>
+          <tr><th>Slug</th><th>Scope</th><th>Status</th><th>Files</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>tahoe-guidelines-map</code></td><td>Apple HIG + Script Kit design-system mapping</td><td class="todo">running in browser Oracle</td><td><code>~/.oracle/bundles/tahoe-guidelines-map.txt</code>, <code>~/.oracle/sessions/tahoe-guidelines-map/output.log</code>, <a href="https://chatgpt.com/c/6a1a3ce3-3650-83e8-ab5d-9d7110421417">conversation</a></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Progress Log</h2>
+      <div class="log">
+        <div class="entry">
+          <time>2026-05-29 19:23 MDT</time>
+          <p>Started dedicated Liquid Glass worker. Verified clean worktree on <code>main</code> at <code>5c4b1f15c</code>; latest CI run <code>26670410182</code> is in progress with Format, Check, Clippy, and TypeScript SDK Tests green, Test still compiling.</p>
+        </div>
+        <div class="entry">
+          <time>2026-05-29 19:25 MDT</time>
+          <p>Created artifact directories and initial <code>liquid-glass.html</code>. Surface inventory command identified 31 contract surface kinds and 8 practical Oracle batches for visual modernization.</p>
+        </div>
+        <div class="entry">
+          <time>2026-05-29 19:28 MDT</time>
+          <p>Built <code>~/.oracle/bundles/tahoe-guidelines-map.txt</code> with 238 files and about 795k tokens, then started browser-mode Oracle session <code>tahoe-guidelines-map</code>. The MCP wrapper timed out at 120s while the browser session continued normally.</p>
+        </div>
+        <div class="entry">
+          <time>2026-05-29 19:32 MDT</time>
+          <p>Captured before screenshots and receipts for main launcher, actions dialog, and notes. Main layout receipts expose bounds and hit sizes, but not corner radius or material identity. Actions/Notes receipts expose screenshot proof but still miss deeper layout/style primitives needed for Tahoe numeric verification.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 3,
+  "status": "pass",
+  "label": "before-actions-dialog",
+  "timestamp": "2026-05-30T01:30:43.872Z",
+  "durationMs": 1876,
+  "requiresVisionReview": false,
+  "resolvedTarget": {
+    "windowId": "actions-dialog",
+    "windowKind": "ActionsDialog",
+    "title": "Actions",
+    "surfaceId": null
+  },
+  "dispatchPath": "window_role_fallback",
+  "resolvedWindowId": "actions-dialog",
+  "osWindowId": 82885,
+  "inspectionOsWindowId": 82885,
+  "captureRouting": "cli-window-id",
+  "requestedAutomationWindowId": "actions-dialog",
+  "requestedOsWindowId": 82885,
+  "showIssuedBeforeCapture": false,
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/before-actions-dialog.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": "quartz",
+    "windowId": 82885
+  },
+  "captureTarget": {
+    "requestedWindowId": 82885,
+    "actualWindowId": 82885
+  },
+  "inspection": {
+    "automationWindowId": "actions-dialog",
+    "windowKind": "ActionsDialog",
+    "title": "Actions",
+    "osWindowId": 82885,
+    "targetBoundsInScreenshot": {
+      "x": 215,
+      "y": 44,
+      "width": 320,
+      "height": 338
+    },
+    "screenshotWidth": 320,
+    "screenshotHeight": 338,
+    "pixelProbes": [],
+    "warnings": []
+  },
+  "popupCapture": {
+    "strategy": "parent_capture_with_crop",
+    "windowKind": "ActionsDialog",
+    "targetBounds": {
+      "x": 215,
+      "y": 44,
+      "width": 320,
+      "height": 338
+    },
+    "semanticReceiptsArePrimary": true
+  },
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": true,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/before-actions-dialog.png",
+    "sizeBytes": 454991,
+    "width": 1636,
+    "height": 1096,
+    "contentAudit": {
+      "sampledPixels": 1793056,
+      "nonBlackPixels": 1438978,
+      "nonTransparentPixels": 1735727,
+      "uniqueBucketCount": 35,
+      "meanLuma": 72.70107006624788,
+      "maxLuma": 254.99999999999997,
+      "nonBlackRatio": 0.8025281976692307,
+      "blank": false
+    },
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": "quartz",
+    "windowFrontmost": true,
+    "windowFocused": true,
+    "windowId": 82885,
+    "error": null
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: /Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/before-actions-dialog.png (454991B)"
+}

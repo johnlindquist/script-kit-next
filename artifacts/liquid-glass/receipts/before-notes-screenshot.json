@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 3,
+  "status": "pass",
+  "label": "before-notes",
+  "timestamp": "2026-05-30T01:31:12.777Z",
+  "durationMs": 2431,
+  "requiresVisionReview": false,
+  "resolvedTarget": {
+    "windowId": "notes",
+    "windowKind": "Notes",
+    "title": "Notes",
+    "surfaceId": null
+  },
+  "dispatchPath": "window_role_fallback",
+  "resolvedWindowId": "notes",
+  "osWindowId": 82886,
+  "inspectionOsWindowId": 82886,
+  "captureRouting": "cli-window-id",
+  "requestedAutomationWindowId": "notes",
+  "requestedOsWindowId": 82886,
+  "showIssuedBeforeCapture": true,
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/before-notes.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": "quartz",
+    "windowId": 82886
+  },
+  "captureTarget": {
+    "requestedWindowId": 82886,
+    "actualWindowId": 82886
+  },
+  "inspection": {
+    "automationWindowId": "notes",
+    "windowKind": "Notes",
+    "title": "Notes",
+    "osWindowId": 82886,
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 350,
+      "height": 280
+    },
+    "screenshotWidth": 350,
+    "screenshotHeight": 280,
+    "pixelProbes": [],
+    "warnings": []
+  },
+  "popupCapture": {
+    "strategy": "direct_window_capture",
+    "windowKind": "Notes",
+    "targetBounds": null,
+    "semanticReceiptsArePrimary": true
+  },
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": true,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/before-notes.png",
+    "sizeBytes": 127888,
+    "width": 836,
+    "height": 696,
+    "contentAudit": {
+      "sampledPixels": 581856,
+      "nonBlackPixels": 391548,
+      "nonTransparentPixels": 545576,
+      "uniqueBucketCount": 11,
+      "meanLuma": 49.1718229448177,
+      "maxLuma": 254.99999999999997,
+      "nonBlackRatio": 0.6729293845900016,
+      "blank": false
+    },
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": "quartz",
+    "windowFrontmost": true,
+    "windowFocused": true,
+    "windowId": 82886,
+    "error": null
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: /Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/before-notes.png (127888B)"
+}
