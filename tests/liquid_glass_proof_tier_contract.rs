@@ -133,6 +133,7 @@ fn proof_matrix_splits_guidance_proof_from_diagnostics() {
             && PROOF_MATRIX.contains("strong-guidance-proof")
             && PROOF_MATRIX.contains("sourceUiGaps")
             && PROOF_MATRIX.contains("devtoolsCaptureLimitations")
+            && PROOF_MATRIX.contains("osCapture")
             && PROOF_MATRIX.contains("osScreenshotBlockers")
             && PROOF_MATRIX.contains("osScreenshotBlockerCounts")
             && PROOF_MATRIX.contains("layoutReceiptFreshnessLimitations")
@@ -157,11 +158,35 @@ fn proof_matrix_preserves_os_capture_blocker_taxonomy() {
         "macos-windowserver-capture-blocked",
         "screencapture_window_failed",
         "screencapture_rect_failed",
-        "WindowServer screenshot permission",
+        "resolve OS compositor capture blocker",
     ] {
         assert!(
             PROOF_MATRIX.contains(needle),
             "Liquid Glass proof matrix must preserve OS capture blocker taxonomy marker `{needle}`"
+        );
+    }
+}
+
+#[test]
+fn proof_matrix_reports_precise_os_capture_blocker_codes() {
+    for needle in [
+        "osCaptureBlockerCode",
+        "target-identity-blocked",
+        "target-not-capture-candidate",
+        "window-id-api-blocked",
+        "screen-rect-capture-blocked",
+        "screen-recording-permission-blocked",
+        "blank-compositor-capture",
+        "occlusion-or-space-blocked",
+        "pixel-audit-failed",
+        "unknown-capture-failure",
+        "countsAsCompositorEvidence",
+        "captureKind",
+        "screen-rect",
+    ] {
+        assert!(
+            PROOF_MATRIX.contains(needle),
+            "Liquid Glass proof matrix must report precise OS capture blocker code marker `{needle}`"
         );
     }
 }
