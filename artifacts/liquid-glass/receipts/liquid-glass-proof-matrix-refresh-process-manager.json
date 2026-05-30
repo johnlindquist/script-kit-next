@@ -5,7 +5,7 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-latest.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T06:17:40.698Z",
+  "generatedAt": "2026-05-30T06:17:32.493Z",
   "summary": {
     "surfaceCount": 29,
     "strongProofSurfaceCount": 4,
@@ -1297,7 +1297,6 @@
           "artifacts/liquid-glass/receipts/window-priority-process-manager-current-layout.json"
         ],
         "inspectReceipts": [
-          "artifacts/liquid-glass/receipts/window-priority-process-manager-current-cleanup.json",
           "artifacts/liquid-glass/receipts/window-priority-process-manager-current-elements.json",
           "artifacts/liquid-glass/receipts/window-priority-process-manager-current-layout.json",
           "artifacts/liquid-glass/receipts/window-priority-process-manager-current-screenshot.json",
