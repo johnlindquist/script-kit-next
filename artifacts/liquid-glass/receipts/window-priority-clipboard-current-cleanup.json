@@ -1,1 +1,1 @@
-{"schemaVersion":1,"status":"ok","session":"liquid-clipboard-current","wasRunning":true}
+{"schemaVersion":1,"tool":"devtools-session","status":"ok","phase":"cleanup","session":"liquid-clipboard-current","cleanup":{"command":"bash scripts/agentic/session.sh stop liquid-clipboard-current"}}
