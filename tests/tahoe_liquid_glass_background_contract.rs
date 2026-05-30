@@ -17,8 +17,9 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
         "Liquid Glass must only be enabled when the macOS 26 NSGlassEffectView API is present"
     );
     assert!(
-        platform.contains("setStyle: 0isize") && platform.contains("NSGlassEffectViewStyleRegular"),
-        "Tahoe backgrounds must use the public regular Liquid Glass style"
+        platform.contains("unsafe fn liquid_glass_tint_color()")
+            && platform.contains("crate::ui_foundation::main_window_matched_background_rgba(&theme)"),
+        "Tahoe glass capability code must preserve the shared theme tint helper for future contentView-backed glass elements"
     );
     assert!(
         ui_foundation.contains("pub fn main_window_matched_background_rgba(theme: &Theme) -> u32")
@@ -28,25 +29,88 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
         "GPUI and native liquid-glass backgrounds must share one theme-derived tint helper"
     );
     assert!(
-        platform.contains("crate::ui_foundation::main_window_matched_background_rgba(&theme)")
-            && platform.contains("setTintColor: tint_color"),
-        "Native Liquid Glass tint must be resolved from the shared main-window matched theme value"
-    );
-    assert!(
-        platform.contains("configure_tahoe_liquid_glass_background(window, log_target, window_name)")
+        platform.contains("configure_tahoe_window_backdrop(window, log_target, window_name)")
             && main_vibrancy
-                .contains("configure_tahoe_liquid_glass_background(window, \"PANEL\", \"Main window\")"),
-        "Both shared secondary-window vibrancy and main-window vibrancy paths must install Tahoe Liquid Glass"
+                .contains("configure_tahoe_window_backdrop(window, \"PANEL\", \"Main window\")"),
+        "Both shared secondary-window vibrancy and main-window vibrancy paths must use the semantic Tahoe window-backdrop hook"
     );
     assert!(
-        platform.contains("configure_tahoe_liquid_glass_background(\n                        window,\n                        \"APPEARANCE\",")
+        platform.contains("configure_tahoe_window_backdrop(window, \"APPEARANCE\", &title_string)")
             && platform.contains("title_string.contains(\"Script Kit Dictation\")"),
-        "Theme/appearance refresh must retint existing secondary Liquid Glass backgrounds, including Dictation"
+        "Theme/appearance refresh must revisit existing secondary native backdrops, including Dictation"
+    );
+    assert!(
+        platform.contains("pub unsafe fn configure_hud_window_vibrancy(window: id, is_dark: bool)")
+            && platform.contains("c\"Script Kit HUD\".as_ptr()")
+            && platform.contains("title_string.contains(\"Script Kit HUD\")"),
+        "HUD Liquid Glass must use the shared native material path and remain discoverable for theme/appearance refresh"
     );
     assert!(
         main_vibrancy
             .contains("crate::ui_foundation::main_window_matched_background_rgba(&theme)")
             && main_vibrancy.contains("material, background_tint"),
         "Main-window Liquid Glass refresh de-dupe must include the shared theme tint, not just dark/material state"
+    );
+    for forbidden in [
+        "unsafe fn configure_tahoe_liquid_glass_background",
+        "find_existing_liquid_glass_background",
+        "Tahoe Liquid Glass background configured",
+        "fitted to GPUI content without participating in app layout",
+        "addSubview: view positioned: -1isize relativeTo: cocoa::base::nil",
+    ] {
+        assert!(
+            !platform.contains(forbidden),
+            "NSGlassEffectView must not be installed or named as a full-window background sibling; forbidden marker: {forbidden}"
+        );
+    }
+    assert!(
+        !main_vibrancy
+            .contains("configure_tahoe_liquid_glass_background(window, \"PANEL\", \"Main window\")"),
+        "Main-window vibrancy must not install NSGlassEffectView as a full-window content background"
+    );
+}
+
+#[test]
+fn root_window_layout_material_is_backdrop_not_content_glass() {
+    let layout = read_source("src/app_layout/build_layout_info.rs");
+    let tokens = read_source("src/ui/chrome/tokens.rs");
+    let devtools_layout = read_source("scripts/devtools/layout.ts");
+
+    assert!(
+        tokens.contains("CHROME_LAYER_WINDOW_BACKDROP")
+            && tokens.contains("MATERIAL_NATIVE_WINDOW_BACKDROP"),
+        "Liquid Glass layout receipts need explicit window-backdrop vocabulary so backdrop material is not reported as content"
+    );
+
+    let root_window = layout
+        .split("LayoutComponentInfo::new(\"Window\"")
+        .nth(1)
+        .and_then(|tail| tail.split(");").next())
+        .expect("build_layout_info must expose the root Window layout component");
+    assert!(
+        root_window.contains("CHROME_LAYER_WINDOW_BACKDROP")
+            && root_window.contains("MATERIAL_NATIVE_WINDOW_BACKDROP")
+            && root_window.contains("window.backdrop"),
+        "Root Window must be classified as a system/window backdrop layer, not content glass"
+    );
+    assert!(
+        !root_window.contains("CHROME_LAYER_CONTENT")
+            && !root_window.contains("MATERIAL_NS_VISUAL_EFFECT"),
+        "Root Window layout metadata must not report CHROME_LAYER_CONTENT + NS visual effect material"
+    );
+    assert!(
+        devtools_layout.contains("glassLayerViolations")
+            && devtools_layout.contains("contentNativeMaterialNodes")
+            && devtools_layout.contains("NSVisualEffectView")
+            && devtools_layout.contains("NSGlassEffectView")
+            && devtools_layout.contains("nativeWindowBackdrop"),
+        "layout.ts must fail content-layer native/AppKit material instead of silently treating it as content"
+    );
+    let proof = read_source("scripts/devtools/liquid-glass-proof.ts");
+    assert!(
+        proof.contains("glassLayerViolations")
+            && proof.contains("contentNativeMaterialNodes")
+            && proof.contains("glassLayerViolations === 0"),
+        "Liquid Glass proof classification must fail layouts with content-layer AppKit glass/material violations"
     );
 }

@@ -56,7 +56,7 @@ unsafe fn configure_window_vibrancy_common(
         );
     }
 
-    configure_tahoe_liquid_glass_background(window, log_target, window_name);
+    configure_tahoe_window_backdrop(window, log_target, window_name);
 
     let appearance_name = if is_dark {
         "VibrantDark"
@@ -114,28 +114,6 @@ fn tahoe_liquid_glass_class() -> Option<id> {
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn find_existing_liquid_glass_background(content_view: id, glass_class: id) -> Option<id> {
-    let subviews: id = msg_send![content_view, subviews];
-    if subviews.is_null() {
-        return None;
-    }
-
-    let subview_count: usize = msg_send![subviews, count];
-    for i in 0..subview_count {
-        let subview: id = msg_send![subviews, objectAtIndex: i];
-        if subview.is_null() {
-            continue;
-        }
-        let is_glass: bool = msg_send![subview, isKindOfClass: glass_class];
-        if is_glass {
-            return Some(subview);
-        }
-    }
-
-    None
-}
-
-#[cfg(target_os = "macos")]
 unsafe fn liquid_glass_tint_color() -> id {
     let theme = crate::theme::get_cached_theme();
     let rgba = crate::ui_foundation::main_window_matched_background_rgba(&theme);
@@ -153,7 +131,7 @@ unsafe fn liquid_glass_tint_color() -> id {
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn configure_tahoe_liquid_glass_background(
+unsafe fn configure_tahoe_window_backdrop(
     window: id,
     log_target: &str,
     window_name: &str,
@@ -166,49 +144,21 @@ unsafe fn configure_tahoe_liquid_glass_background(
         return;
     };
 
-    let content_view: id = msg_send![window, contentView];
-    if content_view.is_null() {
-        return;
-    }
-
-    let frame: cocoa::foundation::NSRect = msg_send![content_view, bounds];
-    let glass_view = match find_existing_liquid_glass_background(content_view, glass_class) {
-        Some(existing) => existing,
-        None => {
-            let view: id = msg_send![glass_class, alloc];
-            let view: id = msg_send![view, initWithFrame: frame];
-            if view.is_null() {
-                return;
-            }
-            // NSViewWidthSizable | NSViewHeightSizable keeps the glass background
-            // fitted to GPUI content without participating in app layout.
-            let autoresizing_mask: u64 = (1 << 1) | (1 << 4);
-            let _: () = msg_send![view, setAutoresizingMask: autoresizing_mask];
-            let _: () = msg_send![content_view, addSubview: view positioned: -1isize relativeTo: cocoa::base::nil];
-            view
-        }
-    };
-
     let tint_color = liquid_glass_tint_color();
-    if !tint_color.is_null() {
-        let _: () = msg_send![glass_view, setTintColor: tint_color];
-    }
-    let _: () = msg_send![glass_view, setFrame: frame];
-    let _: () = msg_send![glass_view, setStyle: 0isize]; // NSGlassEffectViewStyleRegular
-    let _: () = msg_send![glass_view, setCornerRadius: 12.0_f64];
-    let _: () = msg_send![glass_view, setHidden: false];
+    let _ = glass_class;
 
     logging::log(
         log_target,
         &format!(
-            "{}: Tahoe Liquid Glass background configured with shared theme tint",
-            window_name
+            "{}: Tahoe native window backdrop uses shared theme tint (tint ready={})",
+            window_name,
+            !tint_color.is_null()
         ),
     );
 }
 
 #[cfg(not(target_os = "macos"))]
-fn configure_tahoe_liquid_glass_background(
+fn configure_tahoe_window_backdrop(
     _window: *mut std::ffi::c_void,
     _log_target: &str,
     _window_name: &str,
@@ -492,6 +442,14 @@ pub unsafe fn configure_hud_window_vibrancy(window: id, is_dark: bool) {
     }
 
     configure_window_vibrancy_common(window, "HUD", "HUD", is_dark);
+
+    let title: id = msg_send![
+        class!(NSString),
+        stringWithUTF8String: c"Script Kit HUD".as_ptr()
+    ];
+    if title != nil {
+        let _: () = msg_send![window, setTitle: title];
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -549,6 +507,11 @@ mod secondary_window_config_tests {
         assert!(
             body.contains("configure_window_vibrancy_common(window, \"HUD\", \"HUD\", is_dark)"),
             "HUD window vibrancy must reuse the shared native background/material configuration"
+        );
+        assert!(
+            body.contains("c\"Script Kit HUD\".as_ptr()")
+                && source.contains("title_string.contains(\"Script Kit HUD\")"),
+            "HUD windows need a stable title so theme/appearance refresh can retint them with the shared material path"
         );
         assert!(
             source.contains("fn current_window_material()")
@@ -617,6 +580,7 @@ pub fn update_all_secondary_windows_appearance(is_dark: bool) {
                 || title_string.contains("Actions")
                 || title_string.contains("Script Kit Footer")
                 || title_string.contains("Script Kit Dictation")
+                || title_string.contains("Script Kit HUD")
             {
                 // Clear window appearance so GPUI can detect system appearance changes.
                 // Set appearance on individual NSVisualEffectViews instead.
@@ -633,11 +597,7 @@ pub fn update_all_secondary_windows_appearance(is_dark: bool) {
                         is_dark,
                         material,
                     );
-                    configure_tahoe_liquid_glass_background(
-                        window,
-                        "APPEARANCE",
-                        &title_string,
-                    );
+                    configure_tahoe_window_backdrop(window, "APPEARANCE", &title_string);
                     logging::log(
                         "APPEARANCE",
                         &format!(

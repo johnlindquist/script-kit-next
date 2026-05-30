@@ -297,13 +297,24 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
       node.hitMetrics.exception == null
     );
   });
-  const contentGlassNodes = nodesWithVisualStyle.filter((node) => {
+  const nativeMaterialSources = new Set([
+    "NSGlassEffectView",
+    "NSVisualEffectView",
+    "nativeWindowBackdrop",
+  ]);
+  const contentNativeMaterialNodes = nodesWithVisualStyle.filter((node) => {
     const style = node.visualStyle as JsonObject;
+    const materialSource = String(style.materialSource ?? "");
     return (
       style.chromeLayer === "content" &&
-      style.materialSource === "NSGlassEffectView"
+      nativeMaterialSources.has(materialSource)
     );
   });
+  const glassLayerViolations = contentNativeMaterialNodes.map((node) => ({
+    name: node.name,
+    chromeLayer: (node.visualStyle as JsonObject).chromeLayer ?? null,
+    materialSource: (node.visualStyle as JsonObject).materialSource ?? null,
+  }));
   return {
     promptType: info.promptType ?? null,
     timestamp: info.timestamp ?? null,
@@ -334,7 +345,9 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
         type: node.type,
         hitMetrics: node.hitMetrics,
       })),
-      contentGlassNodes: contentGlassNodes.map((node) => node.name),
+      contentGlassNodes: contentNativeMaterialNodes.map((node) => node.name),
+      contentNativeMaterialNodes: contentNativeMaterialNodes.map((node) => node.name),
+      glassLayerViolations,
       missingStyleNodeNames: nodes
         .filter((node) => node.visualStyle == null)
         .map((node) => node.name),

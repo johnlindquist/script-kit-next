@@ -131,14 +131,16 @@ impl ScriptListApp {
             LayoutComponentInfo::new("Window", LayoutComponentType::Container)
                 .with_bounds(0.0, 0.0, window_width, window_height)
                 .with_visual_style(
-                    chrome_tokens::CHROME_LAYER_CONTENT,
-                    chrome_tokens::MATERIAL_NS_VISUAL_EFFECT,
+                    chrome_tokens::CHROME_LAYER_WINDOW_BACKDROP,
+                    chrome_tokens::MATERIAL_NATIVE_WINDOW_BACKDROP,
                     Some(chrome_tokens::LIQUID_GLASS_WINDOW_RADIUS_PX),
                 )
-                .with_visual_token("window.vibrancy")
+                .with_visual_token("window.backdrop")
                 .with_flex_column()
                 .with_depth(0)
-                .with_explanation("Root window container. Uses flex-column layout."),
+                .with_explanation(
+                    "Root native window backdrop. Not a content layer or Liquid Glass content surface.",
+                ),
         );
 
         if matches!(self.current_view, AppView::About { .. }) {

@@ -18,9 +18,11 @@ pub const LIQUID_GLASS_COMPACT_RADIUS_PX: f32 = 10.0;
 pub const CHROME_LAYER_CONTENT: &str = "content";
 pub const CHROME_LAYER_FUNCTIONAL: &str = "functionalChrome";
 pub const CHROME_LAYER_FLOATING: &str = "floatingTransient";
+pub const CHROME_LAYER_WINDOW_BACKDROP: &str = "windowBackdrop";
 
 pub const MATERIAL_SOLID_THEME_TOKEN: &str = "solidThemeToken";
 pub const MATERIAL_NS_VISUAL_EFFECT: &str = "NSVisualEffectView";
+pub const MATERIAL_NATIVE_WINDOW_BACKDROP: &str = "nativeWindowBackdrop";
 
 pub fn alpha_from_opacity(opacity: f32) -> u32 {
     (opacity.clamp(0.0, 1.0) * 255.0).round() as u32
