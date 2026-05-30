@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.inspect",
+  "session": "liquid-about-guideline-current2",
+  "classification": "ok",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "About"
+  },
+  "resolvedTarget": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "About",
+    "appViewVariant": "About",
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 2097,
+      "y": -903,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": null,
+      "height": null,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 825,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "windows": [
+    {
+      "index": 0,
+      "automationId": "main",
+      "windowKind": "Main",
+      "title": "Script Kit",
+      "visible": true,
+      "focused": true,
+      "bounds": {
+        "x": 2097,
+        "y": -903,
+        "width": 750,
+        "height": 480
+      },
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "parentAutomationId": null,
+      "parentKind": null,
+      "pid": 825
+    }
+  ],
+  "rawInspect": {
+    "type": "automationInspectResult",
+    "requestId": "devtools-targets-inspect-1780136202894-d15d8f",
+    "schemaVersion": 3,
+    "windowId": "main",
+    "windowKind": "Main",
+    "surfaceKind": "About",
+    "appViewVariant": "About",
+    "title": "Script Kit",
+    "resolvedBounds": {
+      "x": 2097,
+      "y": -903,
+      "width": 750,
+      "height": 480
+    },
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 750,
+      "height": 480
+    },
+    "surfaceHitPoint": {
+      "x": 375,
+      "y": 240
+    },
+    "suggestedHitPoints": [
+      {
+        "semanticId": "panel:window",
+        "x": 375,
+        "y": 240,
+        "reason": "surface_center"
+      }
+    ],
+    "elements": [
+      {
+        "semanticId": "panel:current-view",
+        "type": "panel"
+      },
+      {
+        "semanticId": "footer:content:row",
+        "type": "panel",
+        "text": "content",
+        "role": "footer",
+        "kind": "contentFooterRow",
+        "selectable": false
+      }
+    ],
+    "totalCount": 2,
+    "semanticQuality": "full",
+    "warnings": [
+      "screenshot_capture_failed: Ambiguous OS window match for automation target main (Main); '' and '' tied at score 5000",
+      "collector_used_current_view_fallback"
+    ],
+    "pid": 825
+  },
+  "sessionLifecycle": [],
+  "errors": []
+}

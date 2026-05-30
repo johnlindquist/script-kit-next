@@ -10,9 +10,12 @@ type Args = {
   greenCrop: string;
   redCropFromReceipt: string;
   greenCropFromReceipt: string;
+  redReceipt: string;
+  greenReceipt: string;
   redReferenceWidth: number | null;
   greenReferenceWidth: number | null;
   requireSameSize: boolean;
+  requireOsEvidence: boolean;
 };
 
 type Dimensions = {
@@ -25,6 +28,7 @@ function usage() {
     "Usage:",
     "  bun scripts/devtools/image-diff.ts compare --red <before.png> --green <after.png> --out <diff.png> [--label <name>] [--fuzz <percent>] [--red-crop <WxH+X+Y>] [--green-crop <WxH+X+Y>]",
     "  bun scripts/devtools/image-diff.ts compare --red <before.png> --green <after.png> --out <diff.png> --red-crop-from-receipt <inspect.json> --green-crop-from-receipt <inspect.json> --red-reference-width <logical px> --green-reference-width <logical px>",
+    "  bun scripts/devtools/image-diff.ts compare --red <before.png> --green <after.png> --out <diff.png> --red-receipt <verify-shot.json> --green-receipt <verify-shot.json> --require-os-evidence",
     "",
     "Creates an ImageMagick compare mask and emits a JSON receipt with dimensions, changed-pixel count, ratio, and diff bounding box.",
   ].join("\n");
@@ -50,9 +54,12 @@ function parseArgs(argv: string[]): Args {
     greenCrop: "",
     redCropFromReceipt: "",
     greenCropFromReceipt: "",
+    redReceipt: "",
+    greenReceipt: "",
     redReferenceWidth: null,
     greenReferenceWidth: null,
     requireSameSize: false,
+    requireOsEvidence: false,
   };
 
   for (let index = 1; index < argv.length; index += 1) {
@@ -75,12 +82,18 @@ function parseArgs(argv: string[]): Args {
       args.redCropFromReceipt = argv[++index] ?? "";
     } else if (arg === "--green-crop-from-receipt") {
       args.greenCropFromReceipt = argv[++index] ?? "";
+    } else if (arg === "--red-receipt") {
+      args.redReceipt = argv[++index] ?? "";
+    } else if (arg === "--green-receipt") {
+      args.greenReceipt = argv[++index] ?? "";
     } else if (arg === "--red-reference-width") {
       args.redReferenceWidth = Number(argv[++index] ?? "");
     } else if (arg === "--green-reference-width") {
       args.greenReferenceWidth = Number(argv[++index] ?? "");
     } else if (arg === "--require-same-size") {
       args.requireSameSize = true;
+    } else if (arg === "--require-os-evidence") {
+      args.requireOsEvidence = true;
     }
   }
 
@@ -155,14 +168,22 @@ async function cropFromReceipt(path: string, imageWidth: number, referenceWidth:
   }
   const receipt = JSON.parse(await Bun.file(path).text()) as Record<string, unknown>;
   const root = asObject(receipt);
-  const bounds =
-    asObject(asObject(asObject(root.target).screenshotIdentity).targetBoundsInScreenshot);
-  const x = typeof bounds.x === "number" ? bounds.x : numberAt(root, "resolvedTarget.screenshotIdentity.targetBoundsInScreenshot.x");
-  const y = typeof bounds.y === "number" ? bounds.y : numberAt(root, "resolvedTarget.screenshotIdentity.targetBoundsInScreenshot.y");
-  const width = typeof bounds.width === "number" ? bounds.width : numberAt(root, "resolvedTarget.screenshotIdentity.targetBoundsInScreenshot.width");
-  const height = typeof bounds.height === "number" ? bounds.height : numberAt(root, "resolvedTarget.screenshotIdentity.targetBoundsInScreenshot.height");
+  const boundsCandidates = [
+    asObject(asObject(asObject(root.visualEvidence).captureIdentity).crop),
+    asObject(asObject(root.inspection).targetBoundsInScreenshot),
+    asObject(asObject(root.popupCapture).targetBounds),
+    asObject(asObject(asObject(root.target).screenshotIdentity).targetBoundsInScreenshot),
+    asObject(asObject(asObject(root.resolvedTarget).screenshotIdentity).targetBoundsInScreenshot),
+  ];
+  const bounds = boundsCandidates.find((candidate) =>
+    ["x", "y", "width", "height"].every((key) => typeof candidate[key] === "number")
+  ) ?? {};
+  const x = typeof bounds.x === "number" ? bounds.x : null;
+  const y = typeof bounds.y === "number" ? bounds.y : null;
+  const width = typeof bounds.width === "number" ? bounds.width : null;
+  const height = typeof bounds.height === "number" ? bounds.height : null;
   if (![x, y, width, height].every((value) => typeof value === "number" && Number.isFinite(value))) {
-    throw new Error(`Could not find target.screenshotIdentity.targetBoundsInScreenshot in ${path}`);
+    throw new Error(`Could not find a supported target crop in ${path}`);
   }
   const scale = imageWidth / referenceWidth;
   return {
@@ -172,6 +193,56 @@ async function cropFromReceipt(path: string, imageWidth: number, referenceWidth:
     referenceWidth,
     scale,
   };
+}
+
+async function osEvidenceFromReceipt(path: string) {
+  if (!path) return null;
+  const receipt = JSON.parse(await Bun.file(path).text()) as Record<string, unknown>;
+  const visualEvidence = asObject(receipt.visualEvidence);
+  const pixelAudit = asObject(visualEvidence.pixelAudit);
+  return {
+    receiptPath: path,
+    source: visualEvidence.source ?? null,
+    classification: visualEvidence.classification ?? null,
+    captureKind: visualEvidence.captureKind ?? null,
+    countsAsOsScreenshotEvidence: visualEvidence.countsAsOsScreenshotEvidence === true,
+    countsAsCompositorEvidence: visualEvidence.countsAsCompositorEvidence === true,
+    pixelAuditBlank: typeof pixelAudit.blank === "boolean" ? pixelAudit.blank : null,
+    blockerCode: visualEvidence.blockerCode ?? null,
+  };
+}
+
+async function emitBlockedReceipt(args: Args, blockerCode: string, inputEvidence: Record<string, unknown>) {
+  const red = asObject(inputEvidence.red);
+  const green = asObject(inputEvidence.green);
+  const receipt = {
+    schemaVersion: 1,
+    tool: "script-kit-devtools.image-diff",
+    command: "image-diff.compare",
+    classification: "blocked",
+    blockerCode,
+    proofKind: args.requireSameSize ? "capture-stability" : "visual-diff",
+    sameSizeRequired: args.requireSameSize,
+    label: args.label,
+    redPath: args.red,
+    greenPath: args.green,
+    diffPath: args.out,
+    inputEvidence,
+    assertions: {
+      redCountsAsOsScreenshotEvidence: red.countsAsOsScreenshotEvidence === true,
+      greenCountsAsOsScreenshotEvidence: green.countsAsOsScreenshotEvidence === true,
+      redNonBlank: red.pixelAuditBlank === false,
+      greenNonBlank: green.pixelAuditBlank === false,
+      cropResolvedFromReceipts: false,
+      diffMaskWritten: false,
+      changedPixelsMeasured: false,
+      sameSizeWhenRequired: false,
+    },
+    errors: [blockerCode],
+    timestamp: new Date().toISOString(),
+  };
+  console.log(JSON.stringify(receipt, null, 2));
+  process.exit(2);
 }
 
 async function prepareInput(path: string, crop: string, tmpDir: string, name: string) {
@@ -192,6 +263,26 @@ async function main() {
   await Bun.$`rm -f ${args.out}`;
   const tmpDir = `/tmp/script-kit-image-diff-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   await Bun.$`mkdir -p ${tmpDir}`;
+
+  const redEvidence = await osEvidenceFromReceipt(args.redReceipt || args.redCropFromReceipt);
+  const greenEvidence = await osEvidenceFromReceipt(args.greenReceipt || args.greenCropFromReceipt);
+  if (args.requireOsEvidence) {
+    const inputEvidence = { red: redEvidence, green: greenEvidence };
+    const redOk = redEvidence?.countsAsOsScreenshotEvidence === true &&
+      redEvidence.countsAsCompositorEvidence === true &&
+      redEvidence.classification === "captured" &&
+      redEvidence.pixelAuditBlank !== true;
+    const greenOk = greenEvidence?.countsAsOsScreenshotEvidence === true &&
+      greenEvidence.countsAsCompositorEvidence === true &&
+      greenEvidence.classification === "captured" &&
+      greenEvidence.pixelAuditBlank !== true;
+    if (!redOk) {
+      await emitBlockedReceipt(args, "red-os-evidence-missing", inputEvidence);
+    }
+    if (!greenOk) {
+      await emitBlockedReceipt(args, "green-os-evidence-missing", inputEvidence);
+    }
+  }
 
   const sourceRedDimensions = identify(args.red);
   const sourceGreenDimensions = identify(args.green);
@@ -254,6 +345,10 @@ async function main() {
       redSource: redReceiptCrop,
       greenSource: greenReceiptCrop,
     },
+    inputEvidence: {
+      red: redEvidence,
+      green: greenEvidence,
+    },
     dimensions: {
       red: redDimensions,
       green: greenDimensions,
@@ -268,9 +363,21 @@ async function main() {
     changedPixelPercent: changedPixelRatio == null ? null : changedPixelRatio * 100,
     diffBoundingBox,
     assertions: {
+      redCountsAsOsScreenshotEvidence: args.requireOsEvidence
+        ? redEvidence?.countsAsOsScreenshotEvidence === true
+        : true,
+      greenCountsAsOsScreenshotEvidence: args.requireOsEvidence
+        ? greenEvidence?.countsAsOsScreenshotEvidence === true
+        : true,
+      redNonBlank: args.requireOsEvidence ? redEvidence?.pixelAuditBlank === false : true,
+      greenNonBlank: args.requireOsEvidence ? greenEvidence?.pixelAuditBlank === false : true,
+      cropResolvedFromReceipts: args.redCropFromReceipt || args.greenCropFromReceipt
+        ? redReceiptCrop != null || greenReceiptCrop != null
+        : true,
       diffMaskWritten: await Bun.file(args.out).exists(),
       changedPixelsMeasured: Number.isFinite(changedPixels),
       dimensionsMeasured: true,
+      sameSizeWhenRequired: args.requireSameSize ? sameSize : true,
     },
     warnings: [
       sameSize

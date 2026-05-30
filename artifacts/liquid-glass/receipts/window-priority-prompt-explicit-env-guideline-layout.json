@@ -1,0 +1,243 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.layout",
+  "command": "layout.measure",
+  "classification": "blocked-by-timeout",
+  "session": "liquid-explicit-env-pool-current",
+  "include": [
+    "nodes",
+    "regions",
+    "scroll",
+    "anchors",
+    "resize",
+    "overlaps"
+  ],
+  "limit": 200,
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ExplicitPromptEntity"
+  },
+  "target": {
+    "automationId": null,
+    "stableTargetId": null,
+    "targetKind": null,
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": null,
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": null,
+      "height": null,
+      "targetBoundsInScreenshot": null,
+      "nonBlankRatio": null
+    },
+    "pid": null,
+    "strictTargetMatch": false,
+    "ambiguity": []
+  },
+  "layoutEvidenceFreshness": {
+    "schemaVersion": 1,
+    "generatedAt": "2026-05-30T10:19:21.489Z",
+    "auditSchema": "panel-radius-v2",
+    "requiredPanelRadiusNodes": [
+      "ContentArea",
+      "ScriptList",
+      "PreviewPanel"
+    ],
+    "sourceFingerprint": {
+      "schemaVersion": 1,
+      "algorithm": "sha256",
+      "files": [
+        {
+          "path": "src/app_layout/build_layout_info.rs",
+          "sha256": "40455188d86a70362f468dbb6e5f3aadf0c3c0114665cefe8eff05c06aedb852"
+        },
+        {
+          "path": "scripts/devtools/layout.ts",
+          "sha256": "10fc886f0677c720d31e020a1afce824008c8767aaf451d427ae4f259469257e"
+        },
+        {
+          "path": "src/ui/chrome/tokens.rs",
+          "sha256": "42e274081636cb27743c06ddd80e7142fd3110e5462851b0998e885968a22220"
+        }
+      ]
+    }
+  },
+  "promptType": null,
+  "timestamp": null,
+  "componentCount": 0,
+  "window": {
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0
+    },
+    "visible": null,
+    "focused": null
+  },
+  "viewport": {
+    "clientWidth": 0,
+    "clientHeight": 0,
+    "contentWidth": 0,
+    "contentHeight": 0,
+    "scrollWidth": 0,
+    "scrollHeight": 0,
+    "canScrollX": false,
+    "canScrollY": false,
+    "scrollTop": null,
+    "maxScrollTop": 0,
+    "overflowPolicyY": "hidden"
+  },
+  "pressure": {
+    "overflowY": false,
+    "hiddenContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "footerOverlapCount": 0,
+    "inputOverlapCount": 0,
+    "pressureScore": 0
+  },
+  "viewportRect": {
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0
+  },
+  "windowRect": {
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0
+  },
+  "regions": [],
+  "nodes": [],
+  "overlaps": [],
+  "resizePressure": {
+    "windowCanGrow": null,
+    "overflowY": false,
+    "desiredContentHeight": 0,
+    "measuredContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "pressureScore": 0
+  },
+  "visualAudit": {
+    "nodeCount": 0,
+    "styledNodeCount": 0,
+    "unstyledNodeCount": 0,
+    "controlsWithHitFailures": [],
+    "contentGlassNodes": [],
+    "contentNativeMaterialNodes": [],
+    "glassLayerViolations": [],
+    "missingStyleNodeNames": [],
+    "chromeLayers": {},
+    "guidelineAssertions": {
+      "appleDocumented": {
+        "hitTargets": {
+          "source": "apple-documented",
+          "macosMinimumHitSize": {
+            "width": 28,
+            "height": 28
+          },
+          "macosMinimumVisualSize": {
+            "width": 20,
+            "height": 20
+          },
+          "failures": []
+        },
+        "buttonCenterDistance": {
+          "source": "apple-documented",
+          "requiredCenterDistance": 60,
+          "failures": []
+        },
+        "materialLayering": {
+          "source": "apple-documented",
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": []
+        },
+        "colorAdaptivity": {
+          "source": "apple-documented",
+          "hardcodedColorNodes": []
+        },
+        "safeAreaLayout": {
+          "source": "apple-documented",
+          "clippedNodeCount": 0,
+          "overflowY": false
+        },
+        "buttonShapeFamilies": {
+          "source": "apple-documented",
+          "exactAppleRadiusConstants": null
+        }
+      },
+      "projectLocal": {
+        "cornerRadiusTokens": {
+          "source": "project-local",
+          "failures": []
+        },
+        "paddingTokens": {
+          "source": "project-local",
+          "minimumPanelPadding": 16,
+          "minimumCompactRowHorizontalPadding": 10
+        },
+        "spacingTokens": {
+          "source": "project-local",
+          "minimumFooterActionGap": 8
+        },
+        "windowBackdropPolicy": {
+          "source": "project-local",
+          "contentGlassNodeCount": 0
+        },
+        "themeTokenUsage": {
+          "source": "project-local",
+          "hardcodedColorNodes": []
+        },
+        "renderReadbackPixelThresholds": {
+          "source": "project-local",
+          "minimumNonBlackRatio": 0.01
+        }
+      }
+    }
+  },
+  "handlerForm": null,
+  "missingPrimitives": [
+    "layoutComponents",
+    "layoutInfoResult",
+    "strictTargetIdentity"
+  ],
+  "warnings": [],
+  "errors": [
+    {
+      "status": "error",
+      "label": "getLayoutInfo",
+      "exitCode": 1,
+      "stdout": "{\"schemaVersion\":1,\"status\":\"error\",\"session\":\"liquid-explicit-env-pool-current\",\"requestId\":\"devtools-layout-measure-1780136353399-2bc2e2\",\"error\":{\"code\":\"response_timeout\",\"message\":\"No response matching requestId 'devtools-layout-measure-1780136353399-2bc2e2' and type 'layoutInfoResult' within 8000ms\"}}",
+      "stderr": ""
+    }
+  ],
+  "rawLayout": {
+    "status": "error",
+    "label": "getLayoutInfo",
+    "exitCode": 1,
+    "stdout": "{\"schemaVersion\":1,\"status\":\"error\",\"session\":\"liquid-explicit-env-pool-current\",\"requestId\":\"devtools-layout-measure-1780136353399-2bc2e2\",\"error\":{\"code\":\"response_timeout\",\"message\":\"No response matching requestId 'devtools-layout-measure-1780136353399-2bc2e2' and type 'layoutInfoResult' within 8000ms\"}}",
+    "stderr": ""
+  }
+}

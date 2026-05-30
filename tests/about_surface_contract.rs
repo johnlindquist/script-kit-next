@@ -219,6 +219,26 @@ fn about_layout_info_uses_about_specific_window_geometry() {
             && about_layout.contains("LIQUID_GLASS_COMPACT_RADIUS_PX"),
         "About layout receipt should report Liquid Glass control and compact radii"
     );
+    for node in [
+        "AboutScrollContainer",
+        "AboutContentStack",
+        "AboutTitle",
+        "AboutTagline",
+        "AboutCreatorRow",
+        "AboutQuickActions",
+    ] {
+        let node_start = about_layout
+            .find(node)
+            .unwrap_or_else(|| panic!("About layout should include {node}"));
+        let node_source = &about_layout[node_start..];
+        let token_end = node_source
+            .find(".with_visual_token")
+            .expect("About visual nodes should declare visual tokens");
+        assert!(
+            node_source[..token_end].contains("Some(chrome_tokens::LIQUID_GLASS_"),
+            "About visual node {node} should expose a positive Liquid Glass radius before its visual token"
+        );
+    }
 }
 
 #[test]

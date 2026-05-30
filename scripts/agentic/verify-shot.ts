@@ -252,6 +252,19 @@ type VisualCaptureClassification =
   | "gpui-readback-unavailable"
   | "unknown-capture-failure";
 
+type OsCaptureKind = "window-id" | "screen-rect" | "fullscreen-crop" | null;
+type OsCaptureBlockerCode =
+  | "none"
+  | "target-identity-blocked"
+  | "target-not-capture-candidate"
+  | "window-id-api-blocked"
+  | "screen-rect-capture-blocked"
+  | "screen-recording-permission-blocked"
+  | "blank-compositor-capture"
+  | "occlusion-or-space-blocked"
+  | "pixel-audit-failed"
+  | "unknown-capture-failure";
+
 interface CaptureAttemptReceipt {
   source:
     | "computer/capture_native_window"
@@ -271,9 +284,14 @@ interface VisualEvidenceReceipt {
   source: VisualSource;
   available: boolean;
   countsAsOsScreenshotEvidence: boolean;
+  countsAsCompositorEvidence?: boolean;
   countsAsAppRenderEvidence: boolean;
   countsAsOffscreenRenderEvidence: boolean;
   classification: VisualCaptureClassification;
+  captureKind?: OsCaptureKind;
+  blockerCode?: OsCaptureBlockerCode;
+  windowIdCaptureProof?: "pass" | "blocked" | "missing";
+  compositorCaptureProof?: "pass" | "blocked" | "missing";
   attempts: CaptureAttemptReceipt[];
   path?: string | null;
   sha256?: string | null;
@@ -281,6 +299,7 @@ interface VisualEvidenceReceipt {
   height?: number | null;
   pixelAudit?: ScreenshotContentAudit | Record<string, unknown> | null;
   target?: Record<string, unknown> | null;
+  captureIdentity?: Record<string, unknown> | null;
   assertions?: Record<string, boolean>;
   limitation: string | null;
 }
@@ -780,6 +799,52 @@ function classifyOsCaptureBlocker(
   return "unknown-capture-failure";
 }
 
+function osCaptureKind(
+  screenshotResult: ScreenshotResult | null,
+  capturePlan: CapturePlan | null
+): OsCaptureKind {
+  if (!screenshotResult?.captured) return null;
+  if (capturePlan?.routing === "screen-rect-from-inspection" || capturePlan?.screenRectFallback?.used) {
+    return "screen-rect";
+  }
+  if (
+    screenshotResult.captureMethod === "computer/capture_native_window" ||
+    screenshotResult.windowCaptureMethod === "quartz" ||
+    screenshotResult.windowCaptureMethod === "native-xcap"
+  ) {
+    return "window-id";
+  }
+  return null;
+}
+
+function osCaptureBlockerCode(
+  screenshotResult: ScreenshotResult | null,
+  capturePlan: CapturePlan | null,
+  classification: VisualCaptureClassification
+): OsCaptureBlockerCode {
+  if (classification === "captured") return "none";
+  const error = screenshotResult?.error ?? "";
+  if (classification === "target-identity-blocked") return "target-identity-blocked";
+  if (classification === "target-not-capture-candidate") return "target-not-capture-candidate";
+  if (classification === "blank-image-rejected") return "blank-compositor-capture";
+  if (error.includes("Screen Recording") || error.includes("screen recording")) {
+    return "screen-recording-permission-blocked";
+  }
+  if (capturePlan?.screenRectFallback?.attempted && capturePlan.screenRectFallback.used !== true) {
+    return "screen-rect-capture-blocked";
+  }
+  if (error.includes("could not create image from rect") || error.includes("screenRect=")) {
+    return "screen-rect-capture-blocked";
+  }
+  if (error.includes("could not create image from window")) {
+    return "window-id-api-blocked";
+  }
+  if (error.includes("notCaptureCandidate") || error.includes("not_capture_candidate")) {
+    return "target-not-capture-candidate";
+  }
+  return "unknown-capture-failure";
+}
+
 function buildOsVisualEvidence(
   screenshotResult: ScreenshotResult | null,
   capturePlan: CapturePlan | null
@@ -789,6 +854,8 @@ function buildOsVisualEvidence(
   }
   const classification = classifyOsCaptureBlocker(screenshotResult, capturePlan);
   const captured = classification === "captured";
+  const captureKind = osCaptureKind(screenshotResult, capturePlan);
+  const blockerCode = osCaptureBlockerCode(screenshotResult, capturePlan, classification);
   const requestedWindowId = capturePlan?.requestedOsWindowId ?? null;
   const actualWindowId = screenshotResult?.windowId ?? null;
   const attempts: CaptureAttemptReceipt[] = [];
@@ -851,18 +918,68 @@ function buildOsVisualEvidence(
     });
   }
 
+  const windowIdCaptureFailed = attempts.some((attempt) =>
+    attempt.source === "screencapture-window-id" &&
+    attempt.status === "failed"
+  );
+  const screenRectCaptureAttempted = capturePlan?.screenRectFallback?.attempted === true;
+  const screenRectCaptureFailed = attempts.some((attempt) =>
+    attempt.source === "screencapture-screen-rect" &&
+    attempt.status === "failed"
+  );
+
   return {
     source: "os-window-capture",
     available: captured,
     countsAsOsScreenshotEvidence: captured,
+    countsAsCompositorEvidence: captured && captureKind != null,
     countsAsAppRenderEvidence: false,
     countsAsOffscreenRenderEvidence: false,
     classification,
+    captureKind,
+    blockerCode,
+    windowIdCaptureProof: captureKind === "window-id"
+      ? "pass"
+      : windowIdCaptureFailed
+        ? "blocked"
+        : "missing",
+    compositorCaptureProof: captured
+      ? "pass"
+      : attempts.length > 0 || blockerCode !== "target-identity-blocked"
+        ? "blocked"
+        : "missing",
     attempts,
     path: screenshotResult?.path ?? null,
     width: screenshotResult?.width ?? null,
     height: screenshotResult?.height ?? null,
     pixelAudit: screenshotResult?.contentAudit ?? null,
+    captureIdentity: {
+      requested: {
+        automationWindowId: capturePlan?.requestedAutomationWindowId ?? null,
+        osWindowId: requestedWindowId,
+      },
+      nativeWindow: {
+        nativeWindowId: actualWindowId,
+        osWindowId: actualWindowId,
+      },
+      crop: capturePlan?.screenRectFallback?.bounds ?? null,
+      identityAssertions: {
+        targetJsonProvided: capturePlan?.requestedAutomationWindowId != null,
+        osWindowIdMatched: requestedWindowId != null && actualWindowId === requestedWindowId,
+        boundsResolved: capturePlan?.screenRectFallback?.bounds != null,
+        nonBlankPixels: screenshotResult?.contentAudit?.blank === false,
+      },
+    },
+    assertions: {
+      targetIdentity: requestedWindowId != null || capturePlan?.requestedAutomationWindowId != null,
+      countsAsOsScreenshotEvidence: captured,
+      countsAsCompositorEvidence: captured && captureKind != null,
+      nonBlankPixels: screenshotResult?.contentAudit?.blank === false,
+      windowIdCaptureAttempted: requestedWindowId != null,
+      windowIdCaptureFailed,
+      screenRectCaptureAttempted,
+      screenRectCaptureFailed,
+    },
     limitation: captured
       ? null
       : "macOS WindowServer screenshot capture did not produce usable pixels; do not count this as OS screenshot proof.",

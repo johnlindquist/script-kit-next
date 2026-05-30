@@ -164,6 +164,7 @@ fn file_search_mini_layout_receipt_uses_window_backdrop() {
 
 #[test]
 fn proof_matrix_filters_image_diff_receipts_by_receipt_assertions() {
+    let image_diff = read_source("scripts/devtools/image-diff.ts");
     assert!(
         PROOF_MATRIX.contains("function imageDiffUsability"),
         "Liquid Glass matrix must validate image-diff receipts before counting them"
@@ -195,6 +196,20 @@ fn proof_matrix_filters_image_diff_receipts_by_receipt_assertions() {
         assert!(
             PROOF_MATRIX.contains(needle),
             "Liquid Glass proof matrix must inspect `{needle}`"
+        );
+    }
+    for needle in [
+        "--require-os-evidence",
+        "--red-receipt",
+        "--green-receipt",
+        "red-os-evidence-missing",
+        "green-os-evidence-missing",
+        "countsAsCompositorEvidence",
+        "captureIdentity",
+    ] {
+        assert!(
+            image_diff.contains(needle),
+            "image-diff must inspect OS compositor evidence marker `{needle}`"
         );
     }
 }

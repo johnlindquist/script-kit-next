@@ -304,6 +304,7 @@ function osScreenshotBlockerFromReceipt(receiptPath: string): JsonObject | null 
       receipt: receiptPath,
       source: "os-window-capture",
       classification: String(visualEvidence.classification ?? MACOS_WINDOWSERVER_CAPTURE_BLOCKED),
+      blockerCode: visualEvidence.blockerCode ?? null,
       limitation: visualEvidence.limitation ?? null,
       attempts: captureAttemptSummary(visualEvidence.attempts),
     };
@@ -428,6 +429,18 @@ function imageDiffUsability(path: string): ImageDiffUsability {
     return {
       usable: false,
       note: `ignored image diff ${path}: diffMaskWritten assertion is not true`,
+    };
+  }
+  if (assertions.redCountsAsOsScreenshotEvidence === false) {
+    return {
+      usable: false,
+      note: `ignored image diff ${path}: red-os-evidence-missing`,
+    };
+  }
+  if (assertions.greenCountsAsOsScreenshotEvidence === false) {
+    return {
+      usable: false,
+      note: `ignored image diff ${path}: green-os-evidence-missing`,
     };
   }
   if (assertions.changedPixelsMeasured !== true) {
@@ -576,9 +589,13 @@ function flattenOsCaptureAttempts(blockers: unknown[]) {
 
 function osCaptureBlockerCode(blockers: JsonObject[]) {
   const classifications = new Set(blockers.map((blocker) => String(blocker.classification ?? "")));
+  const blockerCodes = new Set(blockers.map((blocker) => String(blocker.blockerCode ?? "")).filter(Boolean));
   const attempts = flattenOsCaptureAttempts(blockers);
   const errorCodes = new Set(attempts.map((attempt) => String(attempt.errorCode ?? "")));
   const errorText = blockers.map((blocker) => JSON.stringify(blocker.error ?? "")).join("\n");
+  for (const code of OS_CAPTURE_BLOCKER_CODES) {
+    if (blockerCodes.has(code)) return code;
+  }
   if (classifications.has("blank-image-rejected") || classifications.has("low-content-capture-rejected")) {
     return "blank-compositor-capture";
   }
@@ -1006,6 +1023,7 @@ async function main() {
       }
     } else if (surfaceKind === "About") {
       await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-about-current-layout.json`,
         `${RECEIPT_ROOT}/window-priority-about-layout-after.json`,
       ]);
     } else if (surfaceKind === "Feedback") {

@@ -201,7 +201,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
                     .with_visual_token("about.scrollContainer")
                     .with_padding(
@@ -221,7 +221,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
                     .with_visual_token("about.contentStack")
                     .with_gap(ABOUT_ITEM_GAP)
@@ -256,7 +256,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
                     )
                     .with_visual_token("about.titleVersion")
                     .with_depth(3)
@@ -271,7 +271,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
                     )
                     .with_visual_token("about.tagline")
                     .with_depth(3)
@@ -286,7 +286,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
                     )
                     .with_visual_token("about.creatorRow")
                     .with_depth(3)
@@ -302,7 +302,7 @@ impl ScriptListApp {
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_FUNCTIONAL,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
                     )
                     .with_visual_token("about.quickActions")
                     .with_gap(ABOUT_BUTTON_GAP)
