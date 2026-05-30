@@ -290,6 +290,23 @@
     </section>
 
     <section class="panel">
+      <h2>Proof Matrix</h2>
+      <p>Machine-readable coverage from <code>bun scripts/devtools/liquid-glass-proof.ts</code>: <code>artifacts/liquid-glass/receipts/liquid-glass-proof-matrix.json</code>. This is an incompleteness ledger, not a pass certificate.</p>
+      <table>
+        <thead>
+          <tr><th>Metric</th><th>Current count</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Contract surfaces</td><td><span class="metric">31</span></td><td>Source-backed surface contracts from <code>surfaces.ts</code>.</td></tr>
+          <tr><td>Strong proof surfaces</td><td><span class="metric">2</span></td><td><code>ScriptList</code> and <code>ActionsDialog</code> currently have screenshots, numeric layout visual audits, and image-diff receipts.</td></tr>
+          <tr><td>Missing proof surfaces</td><td><span class="metric">29</span></td><td>These still lack the minimum screenshot + numeric layout + image-diff evidence set.</td></tr>
+          <tr><td>Recommended Oracle batches</td><td><span class="metric">9</span></td><td>Only the launcher/actions batch is partial; the other 8 batches remain missing proof.</td></tr>
+          <tr><td>Practical non-contract targets</td><td><span class="metric">notes baseline only</span></td><td>Notes has a before screenshot/inspect receipt but no after/layout/diff proof. Dictation, inline-agent, and notes ACP are still missing proof.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
       <h2>Baseline Screenshots</h2>
       <div class="shot-grid">
         <figure>
@@ -491,6 +508,10 @@
         <div class="entry">
           <time>2026-05-29 21:02 MDT</time>
           <p>Added receipt-driven target crop support to <code>image-diff.ts</code>. The actions popup diff now derives its crop from <code>before-actions-inspect.json</code> and <code>tahoe-next-actions-inspect.json</code> instead of manual coordinates, preserving logical target bounds, reference width, scale factor, final pixel crop, changed-pixel count, and the remaining dimension warning in <code>image-diff-actions-popup-receipt-crop-before-to-tahoe-next.json</code>.</p>
+        </div>
+        <div class="entry">
+          <time>2026-05-29 21:10 MDT</time>
+          <p>Added <code>scripts/devtools/liquid-glass-proof.ts</code> and generated <code>liquid-glass-proof-matrix.json</code>. The current machine-readable state is intentionally incomplete: 2 of 31 contract surfaces have strong proof (<code>ScriptList</code>, <code>ActionsDialog</code>), 29 contract surfaces still lack proof artifacts, and only 1 of 9 recommended Oracle batches is partial. This is now the completion ledger for the remaining exhaustive pass.</p>
         </div>
       </div>
     </section>
