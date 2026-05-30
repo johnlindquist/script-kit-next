@@ -1153,15 +1153,10 @@ impl ScriptListApp {
             };
         }
 
-        if let AppView::FavoritesBrowseView {
-            filter,
-            selected_index,
-        }
-        | AppView::SearchAiPresetsView {
-            filter,
-            selected_index,
-        } = &self.current_view
-        {
+        if matches!(
+            self.current_view,
+            AppView::FavoritesBrowseView { .. } | AppView::SearchAiPresetsView { .. }
+        ) {
             const GENERIC_HEADER_HEIGHT: f32 = 44.0;
             const GENERIC_HEADER_PADDING_X: f32 = 16.0;
             const GENERIC_HEADER_PADDING_Y: f32 = 8.0;

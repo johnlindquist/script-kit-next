@@ -198,7 +198,14 @@ async function main() {
     AppLauncher: ["app-launcher", "applauncher"],
     WindowSwitcher: ["window-switcher", "windowswitcher"],
     BrowserTabs: ["browser-tabs", "browsertabs"],
-    GenericFilterableList: ["generic-filterable", "generic-filterable-list", "favorites", "search-ai-presets"],
+    GenericFilterableList: [
+      "generic-filterable",
+      "generic-filterable-list",
+      "favorites",
+      "favoritesBrowse",
+      "search-ai-presets",
+      "searchAiPresets",
+    ],
     ProcessManager: ["process-manager", "processmanager"],
     CurrentAppCommands: ["current-app", "current-app-commands", "currentappcommands"],
     Settings: ["settings"],
@@ -208,6 +215,7 @@ async function main() {
     ThemeChooser: ["theme", "choose-theme", "theme-chooser", "themechooser"],
     FileSearchMini: ["file-search-mini"],
     FileSearchFull: ["file-search-full"],
+    SdkReference: ["sdk-reference"],
     NotesWindow: ["notes"],
     Dictation: ["dictation"],
   };
@@ -264,6 +272,7 @@ async function main() {
     } else if (surfaceKind === "GenericFilterableList") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-generic-filterable-favorites-current-layout.json`,
+        `${RECEIPT_ROOT}/window-priority-generic-filterable-search-ai-presets-current-layout.json`,
       ]);
     } else if (surfaceKind === "ProcessManager") {
       await attachVisualAudit(evidence, [
@@ -296,6 +305,10 @@ async function main() {
     } else if (surfaceKind === "FileSearchFull") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-file-search-full-current-layout.json`,
+      ]);
+    } else if (surfaceKind === "SdkReference") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-sdk-reference-current-layout.json`,
       ]);
     } else if (surfaceKind === "EmojiPicker") {
       await attachVisualAudit(evidence, [

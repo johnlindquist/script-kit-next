@@ -13,6 +13,8 @@
 {"input":"builtin/settings","expected":"ExecuteBuiltin::builtin/settings"}
 {"input":"builtin/browse-kit-store","expected":"ShowFilterableView::KitStoreBrowse"}
 {"input":"builtin/manage-installed-kits","expected":"ShowFilterableView::KitStoreInstalled"}
+{"input":"builtin/favorites","expected":"ShowFilterableView::Favorites"}
+{"input":"builtin/search-ai-presets","expected":"ShowFilterableView::SearchAiPresets"}
 {"input":"builtin/choose-theme","expected":"ExecuteBuiltin::builtin/choose-theme"}
 {"input":"builtin/script-kit-selfie","expected":"ExecuteBuiltin::builtin/script-kit-selfie"}
 {"input":"builtin/main-window","expected":"ExecuteBuiltin::builtin/main-window"}

@@ -66,6 +66,8 @@ pub enum FilterableView {
     ProcessManager,
     KitStoreBrowse,
     KitStoreInstalled,
+    Favorites,
+    SearchAiPresets,
 }
 
 impl FilterableView {
@@ -81,6 +83,8 @@ impl FilterableView {
         FilterableView::ProcessManager,
         FilterableView::KitStoreBrowse,
         FilterableView::KitStoreInstalled,
+        FilterableView::Favorites,
+        FilterableView::SearchAiPresets,
     ];
 
     /// Stable variant name used by the golden-JSONL fixture. Keep
@@ -98,6 +102,8 @@ impl FilterableView {
             FilterableView::ProcessManager => "ProcessManager",
             FilterableView::KitStoreBrowse => "KitStoreBrowse",
             FilterableView::KitStoreInstalled => "KitStoreInstalled",
+            FilterableView::Favorites => "Favorites",
+            FilterableView::SearchAiPresets => "SearchAiPresets",
         }
     }
 }
@@ -188,6 +194,10 @@ pub const fn plan_trigger_builtin_route(id: TriggerBuiltin) -> AppRoute {
         }
         TriggerBuiltin::ManageInstalledKits => {
             AppRoute::ShowFilterableView(FilterableView::KitStoreInstalled)
+        }
+        TriggerBuiltin::Favorites => AppRoute::ShowFilterableView(FilterableView::Favorites),
+        TriggerBuiltin::SearchAiPresets => {
+            AppRoute::ShowFilterableView(FilterableView::SearchAiPresets)
         }
         TriggerBuiltin::ChooseTheme => AppRoute::ExecuteBuiltin("builtin/choose-theme"),
         TriggerBuiltin::ScriptKitSelfie => AppRoute::ExecuteBuiltin("builtin/script-kit-selfie"),

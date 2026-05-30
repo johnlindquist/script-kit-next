@@ -1,8 +1,6 @@
 // Element collection for getElements protocol support.
 // Returns a bounded list of visible UI elements with semantic IDs.
 
-use crate::render_builtins::{AiPresetSearchEmptyState, FavoritesEmptyState};
-
 /// Outcome of collecting visible UI elements, carrying receipt metadata
 /// for the `elementsResult` protocol response.
 #[derive(Debug, Clone)]

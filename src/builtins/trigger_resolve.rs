@@ -193,6 +193,8 @@ fn render_variant(id: TriggerBuiltin) -> &'static str {
         TriggerBuiltin::Settings => "Settings",
         TriggerBuiltin::BrowseKitStore => "BrowseKitStore",
         TriggerBuiltin::ManageInstalledKits => "ManageInstalledKits",
+        TriggerBuiltin::Favorites => "Favorites",
+        TriggerBuiltin::SearchAiPresets => "SearchAiPresets",
         TriggerBuiltin::ChooseTheme => "ChooseTheme",
         TriggerBuiltin::ScriptKitSelfie => "ScriptKitSelfie",
         TriggerBuiltin::MainWindow => "MainWindow",

@@ -40,6 +40,8 @@ pub enum TriggerBuiltin {
     Settings,
     BrowseKitStore,
     ManageInstalledKits,
+    Favorites,
+    SearchAiPresets,
     ChooseTheme,
     ScriptKitSelfie,
     MainWindow,
@@ -66,6 +68,8 @@ impl TriggerBuiltin {
         TriggerBuiltin::Settings,
         TriggerBuiltin::BrowseKitStore,
         TriggerBuiltin::ManageInstalledKits,
+        TriggerBuiltin::Favorites,
+        TriggerBuiltin::SearchAiPresets,
         TriggerBuiltin::ChooseTheme,
         TriggerBuiltin::ScriptKitSelfie,
         TriggerBuiltin::MainWindow,
@@ -92,6 +96,8 @@ impl TriggerBuiltin {
             TriggerBuiltin::Settings => "builtin/settings",
             TriggerBuiltin::BrowseKitStore => "builtin/browse-kit-store",
             TriggerBuiltin::ManageInstalledKits => "builtin/manage-installed-kits",
+            TriggerBuiltin::Favorites => "builtin/favorites",
+            TriggerBuiltin::SearchAiPresets => "builtin/search-ai-presets",
             TriggerBuiltin::ChooseTheme => "builtin/choose-theme",
             TriggerBuiltin::ScriptKitSelfie => "builtin/script-kit-selfie",
             TriggerBuiltin::MainWindow => "builtin/main-window",
@@ -130,7 +136,9 @@ impl TriggerBuiltin {
             TriggerBuiltin::CurrentAppCommands => false,
             // Kit Store launcher stubs are intentionally pruned, but
             // triggerBuiltin still needs deterministic proof entry points.
-            TriggerBuiltin::BrowseKitStore | TriggerBuiltin::ManageInstalledKits => false,
+            TriggerBuiltin::BrowseKitStore
+            | TriggerBuiltin::ManageInstalledKits
+            | TriggerBuiltin::SearchAiPresets => false,
             _ => true,
         }
     }
@@ -169,6 +177,13 @@ impl TriggerBuiltin {
                 "installed-kits",
                 "kit-store-installed",
                 "manage-kits",
+            ],
+            TriggerBuiltin::Favorites => &["favorites", "favorite", "starred"],
+            TriggerBuiltin::SearchAiPresets => &[
+                "search-ai-presets",
+                "ai-presets",
+                "presets",
+                "agent-presets",
             ],
             TriggerBuiltin::ChooseTheme => &["choose-theme", "theme", "theme-designer"],
             TriggerBuiltin::ScriptKitSelfie => &[

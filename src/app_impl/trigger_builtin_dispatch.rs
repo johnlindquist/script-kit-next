@@ -388,6 +388,28 @@ impl ScriptListApp {
                 clear_hover: true,
                 resize: true,
             },
+            FilterableView::Favorites => FilterableRoutePlan {
+                next_view: AppView::FavoritesBrowseView {
+                    filter: String::new(),
+                    selected_index: 0,
+                },
+                reset_shared_filter: true,
+                pending_placeholder: Some("Search favorites..."),
+                pending_focus: Some(FocusTarget::MainFilter),
+                clear_hover: true,
+                resize: true,
+            },
+            FilterableView::SearchAiPresets => FilterableRoutePlan {
+                next_view: AppView::SearchAiPresetsView {
+                    filter: String::new(),
+                    selected_index: 0,
+                },
+                reset_shared_filter: true,
+                pending_placeholder: Some("Search AI presets..."),
+                pending_focus: Some(FocusTarget::MainFilter),
+                clear_hover: true,
+                resize: true,
+            },
         };
         Ok(plan)
     }

@@ -165,6 +165,38 @@ fn matrix_declares_stable_sibling_filterable_surface_cases() {
 }
 
 #[test]
+fn matrix_declares_generic_filterable_variant_cases() {
+    for (id, prompt_type, list_id, builtin_id, filter_text) in [
+        (
+            "favorites-visible-rows",
+            "favorites",
+            "list:favorites",
+            "builtin/favorites",
+            "__liquid_no_favorite_match__",
+        ),
+        (
+            "search-ai-presets-visible-rows",
+            "searchAiPresets",
+            "list:ai-presets",
+            "builtin/search-ai-presets",
+            "coder",
+        ),
+    ] {
+        assert!(
+            MATRIX.contains(&format!("id: \"{id}\""))
+                && MATRIX.contains(&format!("promptType: \"{prompt_type}\""))
+                && MATRIX.contains("surfaceKind: \"GenericFilterableList\"")
+                && MATRIX.contains(&format!("listSemanticId: \"{list_id}\""))
+                && MATRIX.contains(&format!(
+                    "entryCommand: {{ type: \"triggerBuiltin\", builtinId: \"{builtin_id}\" }}"
+                ))
+                && MATRIX.contains(&format!("filterText: \"{filter_text}\"")),
+            "GenericFilterable case {id} must declare promptType, list id, triggerBuiltin entry, and stable filter text."
+        );
+    }
+}
+
+#[test]
 fn matrix_runner_checks_state_and_elements_count_parity() {
     let body = function_body(MATRIX, "observeCounts", "runEntry");
     assert!(
