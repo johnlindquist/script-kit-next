@@ -1,0 +1,280 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.inspect",
+  "session": "liquid-attachment-portal-guideline",
+  "classification": "ok",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "AttachmentPortalBrowser"
+  },
+  "resolvedTarget": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "AttachmentPortalBrowser",
+    "appViewVariant": "DictationHistoryView",
+    "nativeFooterSurface": "dictation_history",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": null,
+      "height": null,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 25795,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "windows": [
+    {
+      "index": 0,
+      "automationId": "main",
+      "windowKind": "Main",
+      "title": "Script Kit",
+      "visible": false,
+      "focused": false,
+      "bounds": {
+        "x": 585,
+        "y": 177,
+        "width": 750,
+        "height": 480
+      },
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "parentAutomationId": null,
+      "parentKind": null,
+      "pid": 25795
+    }
+  ],
+  "rawInspect": {
+    "type": "automationInspectResult",
+    "requestId": "devtools-targets-inspect-1780137940083-b95d32",
+    "schemaVersion": 3,
+    "windowId": "main",
+    "windowKind": "Main",
+    "surfaceKind": "AttachmentPortalBrowser",
+    "appViewVariant": "DictationHistoryView",
+    "nativeFooterSurface": "dictation_history",
+    "title": "Script Kit",
+    "resolvedBounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 750,
+      "height": 480
+    },
+    "surfaceHitPoint": {
+      "x": 375,
+      "y": 240
+    },
+    "suggestedHitPoints": [
+      {
+        "semanticId": "panel:window",
+        "x": 375,
+        "y": 240,
+        "reason": "surface_center"
+      }
+    ],
+    "elements": [
+      {
+        "semanticId": "input:dictation-history-fi",
+        "type": "input",
+        "value": "",
+        "focused": true
+      },
+      {
+        "semanticId": "list:dictation-history",
+        "type": "list",
+        "text": "14 items"
+      },
+      {
+        "semanticId": "choice:0:devtools-fixture-tra",
+        "type": "choice",
+        "text": "DevTools fixture transcript",
+        "value": "DevTools fixture transcript",
+        "selected": true,
+        "index": 0
+      },
+      {
+        "semanticId": "choice:1:because-i-think-that",
+        "type": "choice",
+        "text": "Because I think that'd be pretty neat myself, but I am not really sure how this is all gonna work out.",
+        "value": "Because I think that'd be pretty neat myself, but I am not really sure how this is all gonna work out.",
+        "selected": false,
+        "index": 1
+      },
+      {
+        "semanticId": "choice:2:because-i-think-that",
+        "type": "choice",
+        "text": "Because I think that'd be pretty neat myself, but I am not really sure how this is all gonna work out.",
+        "value": "Because I think that'd be pretty neat myself, but I am not really sure how this is all gonna work out.",
+        "selected": false,
+        "index": 2
+      },
+      {
+        "semanticId": "choice:3:are-you-sure-this-is",
+        "type": "choice",
+        "text": "Are you sure this is going to paste the frontmost app?",
+        "value": "Are you sure this is going to paste the frontmost app?",
+        "selected": false,
+        "index": 3
+      },
+      {
+        "semanticId": "choice:4:hello-friends-good-l",
+        "type": "choice",
+        "text": "Hello friends, good luck shipping.",
+        "value": "Hello friends, good luck shipping.",
+        "selected": false,
+        "index": 4
+      },
+      {
+        "semanticId": "choice:5:hello-there-friends",
+        "type": "choice",
+        "text": "Hello there friends.",
+        "value": "Hello there friends.",
+        "selected": false,
+        "index": 5
+      },
+      {
+        "semanticId": "choice:6:hello-there-um-and-t",
+        "type": "choice",
+        "text": "Hello there. Um and then",
+        "value": "Hello there. Um and then",
+        "selected": false,
+        "index": 6
+      },
+      {
+        "semanticId": "choice:7:hello-how-are-you",
+        "type": "choice",
+        "text": "Hello, how are you?",
+        "value": "Hello, how are you?",
+        "selected": false,
+        "index": 7
+      },
+      {
+        "semanticId": "choice:8:hello-hello-hello",
+        "type": "choice",
+        "text": "Hello, hello, hello.",
+        "value": "Hello, hello, hello.",
+        "selected": false,
+        "index": 8
+      },
+      {
+        "semanticId": "choice:9:hello-everybody-how",
+        "type": "choice",
+        "text": "Hello, everybody. How are you doing?",
+        "value": "Hello, everybody. How are you doing?",
+        "selected": false,
+        "index": 9
+      },
+      {
+        "semanticId": "choice:10:devtools-fixture-tra",
+        "type": "choice",
+        "text": "DevTools fixture transcript",
+        "value": "DevTools fixture transcript",
+        "selected": false,
+        "index": 10
+      },
+      {
+        "semanticId": "choice:11:devtools-fixture-tra",
+        "type": "choice",
+        "text": "DevTools fixture transcript",
+        "value": "DevTools fixture transcript",
+        "selected": false,
+        "index": 11
+      },
+      {
+        "semanticId": "choice:12:devtools-fixture-tra",
+        "type": "choice",
+        "text": "DevTools fixture transcript",
+        "value": "DevTools fixture transcript",
+        "selected": false,
+        "index": 12
+      },
+      {
+        "semanticId": "choice:13:devtools-synthetic-d",
+        "type": "choice",
+        "text": "devtools synthetic dictation delivery probe",
+        "value": "devtools synthetic dictation delivery probe",
+        "selected": false,
+        "index": 13
+      },
+      {
+        "semanticId": "footer:prompt:row",
+        "type": "panel",
+        "text": "prompt",
+        "value": "dictation_history",
+        "role": "footer",
+        "kind": "promptFooterRow",
+        "selectable": false
+      },
+      {
+        "semanticId": "footer:prompt:run",
+        "type": "button",
+        "text": "↵ Paste into Google Chrome",
+        "value": "run",
+        "selected": false,
+        "index": 0,
+        "role": "footer",
+        "kind": "promptFooterButton",
+        "source": "dictation_history",
+        "selectable": true
+      },
+      {
+        "semanticId": "footer:prompt:actions",
+        "type": "button",
+        "text": "⌘K Actions",
+        "value": "actions",
+        "selected": false,
+        "index": 1,
+        "role": "footer",
+        "kind": "promptFooterButton",
+        "source": "dictation_history",
+        "selectable": true
+      }
+    ],
+    "totalCount": 19,
+    "focusedSemanticId": "input:dictation-history-fi",
+    "selectedSemanticId": "choice:0:devtools-fixture-tra",
+    "semanticQuality": "full",
+    "warnings": [
+      "screenshot_capture_failed: Ambiguous OS window match for automation target main (Main); '' and '' tied at score 5100"
+    ],
+    "pid": 25795
+  },
+  "sessionLifecycle": [],
+  "errors": []
+}

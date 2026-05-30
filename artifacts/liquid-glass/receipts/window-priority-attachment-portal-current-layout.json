@@ -3,14 +3,15 @@
   "tool": "script-kit-devtools.layout",
   "command": "layout.measure",
   "classification": "ok",
-  "session": "liquid-attachment-portal-current",
+  "session": "liquid-attachment-portal-guideline",
   "include": [
     "nodes",
     "regions",
+    "scroll",
     "resize",
     "overlaps"
   ],
-  "limit": 500,
+  "limit": 120,
   "requestedTarget": {
     "selector": {
       "type": "main"
@@ -56,12 +57,40 @@
       },
       "nonBlankRatio": null
     },
-    "pid": 73119,
+    "pid": 25795,
     "strictTargetMatch": true,
     "ambiguity": []
   },
+  "layoutEvidenceFreshness": {
+    "schemaVersion": 1,
+    "generatedAt": "2026-05-30T10:45:41.411Z",
+    "auditSchema": "panel-radius-v2",
+    "requiredPanelRadiusNodes": [
+      "ContentArea",
+      "ScriptList",
+      "PreviewPanel"
+    ],
+    "sourceFingerprint": {
+      "schemaVersion": 1,
+      "algorithm": "sha256",
+      "files": [
+        {
+          "path": "src/app_layout/build_layout_info.rs",
+          "sha256": "abfa491a7bce581eea584af241599dd374a0321d53e4cec8a65062ff9ef6391b"
+        },
+        {
+          "path": "scripts/devtools/layout.ts",
+          "sha256": "10fc886f0677c720d31e020a1afce824008c8767aaf451d427ae4f259469257e"
+        },
+        {
+          "path": "src/ui/chrome/tokens.rs",
+          "sha256": "42e274081636cb27743c06ddd80e7142fd3110e5462851b0998e885968a22220"
+        }
+      ]
+    }
+  },
   "promptType": "dictationHistory",
-  "timestamp": "2026-05-30T08:05:51.844125+00:00",
+  "timestamp": "2026-05-30T10:45:41.394661+00:00",
   "componentCount": 15,
   "window": {
     "rect": {
@@ -677,6 +706,12 @@
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
         "tokenSource": "attachmentPortal.dictationHistory.content",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
         "visualBounds": {
           "x": 0,
           "y": 45,
@@ -733,6 +768,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "attachmentPortal.dictationHistory.content",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -765,6 +806,12 @@
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
         "tokenSource": "attachmentPortal.dictationHistory.list",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
         "visualBounds": {
           "x": 0,
           "y": 45,
@@ -820,6 +867,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "attachmentPortal.dictationHistory.list",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -852,6 +905,12 @@
         "chromeLayer": "content",
         "materialSource": "solidThemeToken",
         "tokenSource": "attachmentPortal.dictationHistory.preview",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
         "visualBounds": {
           "x": 375,
           "y": 45,
@@ -915,6 +974,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "attachmentPortal.dictationHistory.preview",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 375,
             "y": 45,
@@ -1808,6 +1873,73 @@
       "content": 9,
       "functionalChrome": 5,
       "windowBackdrop": 1
+    },
+    "guidelineAssertions": {
+      "appleDocumented": {
+        "hitTargets": {
+          "source": "apple-documented",
+          "macosMinimumHitSize": {
+            "width": 28,
+            "height": 28
+          },
+          "macosMinimumVisualSize": {
+            "width": 20,
+            "height": 20
+          },
+          "failures": []
+        },
+        "buttonCenterDistance": {
+          "source": "apple-documented",
+          "requiredCenterDistance": 60,
+          "failures": []
+        },
+        "materialLayering": {
+          "source": "apple-documented",
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": []
+        },
+        "colorAdaptivity": {
+          "source": "apple-documented",
+          "hardcodedColorNodes": []
+        },
+        "safeAreaLayout": {
+          "source": "apple-documented",
+          "clippedNodeCount": 0,
+          "overflowY": false
+        },
+        "buttonShapeFamilies": {
+          "source": "apple-documented",
+          "exactAppleRadiusConstants": null
+        }
+      },
+      "projectLocal": {
+        "cornerRadiusTokens": {
+          "source": "project-local",
+          "failures": []
+        },
+        "paddingTokens": {
+          "source": "project-local",
+          "minimumPanelPadding": 16,
+          "minimumCompactRowHorizontalPadding": 10
+        },
+        "spacingTokens": {
+          "source": "project-local",
+          "minimumFooterActionGap": 8
+        },
+        "windowBackdropPolicy": {
+          "source": "project-local",
+          "contentGlassNodeCount": 0
+        },
+        "themeTokenUsage": {
+          "source": "project-local",
+          "hardcodedColorNodes": []
+        },
+        "renderReadbackPixelThresholds": {
+          "source": "project-local",
+          "minimumNonBlackRatio": 0.01
+        }
+      }
     }
   },
   "handlerForm": null,
@@ -1816,7 +1948,7 @@
   "errors": [],
   "rawLayout": {
     "type": "layoutInfoResult",
-    "requestId": "devtools-layout-measure-1780128351813-35b682",
+    "requestId": "devtools-layout-measure-1780137941370-0e7c1a",
     "windowWidth": 750,
     "windowHeight": 480,
     "promptType": "dictationHistory",
@@ -2001,6 +2133,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "attachmentPortal.dictationHistory.content",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -2034,6 +2172,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "attachmentPortal.dictationHistory.list",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 0,
             "y": 45,
@@ -2075,6 +2219,12 @@
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
           "tokenSource": "attachmentPortal.dictationHistory.preview",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
           "visualBounds": {
             "x": 375,
             "y": 45,
@@ -2463,6 +2613,6 @@
         }
       }
     ],
-    "timestamp": "2026-05-30T08:05:51.844125+00:00"
+    "timestamp": "2026-05-30T10:45:41.394661+00:00"
   }
 }

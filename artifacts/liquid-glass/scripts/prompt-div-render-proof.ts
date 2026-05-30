@@ -18,6 +18,8 @@ const waitOut = arg("--wait-out", `${receiptRoot}/${label}-wait-render.json`);
 const layoutOut = arg("--layout-out", `${receiptRoot}/${label}-layout-devtools.json`);
 const renderOut = arg("--render-out", `${receiptRoot}/${label}-render.json`);
 const renderPng = arg("--render-png", `${screenshotRoot}/${label}-render.png`);
+const captureOut = arg("--capture-out", `${receiptRoot}/${label}-capture.json`);
+const capturePng = arg("--capture-png", `${screenshotRoot}/${label}-capture.png`);
 const matrixOut = arg("--matrix-out", `${receiptRoot}/liquid-glass-proof-matrix.json`);
 const matrixRefreshOut = arg(
   "--matrix-refresh-out",
@@ -171,6 +173,33 @@ writeFileSync(renderOut, `${JSON.stringify({
   ...renderReceipt,
 }, null, 2)}\n`);
 
+const captureReceipt = await run([
+  "bun",
+  "scripts/agentic/verify-shot.ts",
+  "--session",
+  session,
+  "--label",
+  `${label}-capture`,
+  "--target-json",
+  JSON.stringify({ type: "main" }),
+  "--strict-window",
+  "--skip-state",
+  "--skip-probe",
+  "--out",
+  capturePng,
+  "--json",
+], true);
+writeFileSync(captureOut, `${JSON.stringify({
+  schemaVersion: 1,
+  label,
+  command: "prompt-div.os-window-capture",
+  target: {
+    surfaceKind: "PromptEntity",
+    appViewVariant: "DivPrompt",
+  },
+  ...captureReceipt,
+}, null, 2)}\n`);
+
 const matrixReceipt = await run([
   "bun",
   "scripts/devtools/liquid-glass-proof.ts",
@@ -190,6 +219,7 @@ console.log(JSON.stringify({
     wait: waitOut,
     layout: layoutOut,
     render: renderOut,
+    capture: captureOut,
     matrix: matrixOut,
     matrixRefresh: matrixRefreshOut,
   },

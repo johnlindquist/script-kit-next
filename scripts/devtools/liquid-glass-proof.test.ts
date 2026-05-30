@@ -14,6 +14,8 @@ type ProofFixture = {
   screenshotReceipt?: Record<string, unknown>;
   screenshotFile?: boolean;
   imageDiffReceipt?: Record<string, unknown>;
+  extraReceiptName?: string;
+  extraReceipt?: Record<string, unknown>;
 };
 
 function passingVisualAudit(overrides: Record<string, unknown> = {}) {
@@ -69,6 +71,9 @@ function runProofFixture(fixture: ProofFixture) {
     }
     if (fixture.imageDiffReceipt) {
       writeFileSync(join(receipts, `image-diff-${term}.json`), JSON.stringify(fixture.imageDiffReceipt));
+    }
+    if (fixture.extraReceiptName && fixture.extraReceipt) {
+      writeFileSync(join(receipts, fixture.extraReceiptName), JSON.stringify(fixture.extraReceipt));
     }
 
     const proc = Bun.spawnSync([
@@ -381,6 +386,32 @@ describe("liquid-glass-proof guidance domain split", () => {
     expect(surface.proofTiers.osScreenshotProof).toBe("missing");
     expect(surface.guidanceProofStatus).toBe("numeric-guidance-proof-missing-os-visual");
     expect(queueEntry.blockingClass).toBe("missing-guidance-visual-evidence");
+  });
+
+  test("counts explicit OS visualEvidence blockers even when receipt filename is not capture-named", () => {
+    const matrix = runProofFixture({
+      surfaceKind: "PromptEntity",
+      visualAudit: passingVisualAudit(),
+      extraReceiptName: "fixture-prompt-entity-proof.json",
+      extraReceipt: {
+        visualEvidence: {
+          source: "os-window-capture",
+          available: false,
+          countsAsOsScreenshotEvidence: false,
+          countsAsCompositorEvidence: false,
+          classification: "macos-windowserver-capture-blocked",
+          blockerCode: "screen-rect-capture-blocked",
+          attempts: [
+            { status: "failed", errorCode: "screencapture_rect_failed" },
+          ],
+        },
+      },
+    });
+    const surface = matrix.surfaces[0];
+
+    expect(surface.proofTiers.osScreenshotProof).toBe("blocked");
+    expect(surface.osCapture.blockerCode).toBe("screen-rect-capture-blocked");
+    expect(surface.osCapture.assertions.screenRectCaptureAttempted).toBe(true);
   });
 });
 

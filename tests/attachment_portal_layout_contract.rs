@@ -34,6 +34,30 @@ fn attachment_portal_layout_uses_dedicated_split_nodes_before_generic_script_lis
 }
 
 #[test]
+fn attachment_portal_split_nodes_use_liquid_glass_panel_radius() {
+    let source = fs::read_to_string("src/app_layout/build_layout_info.rs")
+        .expect("build_layout_info source should be readable");
+
+    for node in [
+        "AttachmentPortalContent",
+        "AttachmentPortalList",
+        "AttachmentPortalPreview",
+    ] {
+        let start = source
+            .find(&format!("LayoutComponentInfo::new(\"{node}\""))
+            .unwrap_or_else(|| panic!("{node} layout node should exist"));
+        let node_source = &source[start..];
+        let end = node_source
+            .find(".with_visual_token")
+            .unwrap_or_else(|| panic!("{node} should declare visual metadata"));
+        assert!(
+            node_source[..end].contains("Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX)"),
+            "{node} must use the shared Liquid Glass panel radius token"
+        );
+    }
+}
+
+#[test]
 fn attachment_portal_proof_matrix_uses_attachment_portal_receipt() {
     let source = fs::read_to_string("scripts/devtools/liquid-glass-proof.ts")
         .expect("liquid-glass proof source should be readable");

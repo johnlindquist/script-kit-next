@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "label": "window-priority-prompt-div-target-proof-v1",
+  "command": "prompt-div.wait-render-fixture",
+  "target": {
+    "surfaceKind": "PromptEntity",
+    "appViewVariant": "DivPrompt"
+  },
+  "receipt": {
+    "schemaVersion": 1,
+    "status": "ok",
+    "session": "liquid-glass-promptentity-render",
+    "requestId": "window-priority-prompt-div-target-proof-v1-wait-render",
+    "responseType": "waitForResult",
+    "response": {
+      "type": "waitForResult",
+      "requestId": "window-priority-prompt-div-target-proof-v1-wait-render",
+      "success": true,
+      "elapsed": 0
+    },
+    "_command": [
+      "bash",
+      "scripts/agentic/session.sh",
+      "rpc",
+      "liquid-glass-promptentity-render",
+      "{\"type\":\"waitFor\",\"requestId\":\"window-priority-prompt-div-target-proof-v1-wait-render\",\"condition\":{\"type\":\"stateMatch\",\"state\":{\"promptType\":\"div\",\"windowVisible\":true}},\"timeout\":8000,\"pollInterval\":50}",
+      "--expect",
+      "waitForResult",
+      "--timeout",
+      "9000"
+    ],
+    "_exitCode": 0,
+    "_stderr": ""
+  }
+}

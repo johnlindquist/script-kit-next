@@ -287,9 +287,6 @@ function captureBlockerClassification(defaultClassification: string, attempts: J
 
 function osScreenshotBlockerFromReceipt(receiptPath: string): JsonObject | null {
   const name = receiptPath.split("/").pop() ?? receiptPath;
-  if (!name.includes("screenshot") && !name.includes("capture")) {
-    return null;
-  }
   const json = readJsonSync(receiptPath);
   if (!json) {
     return null;
@@ -308,6 +305,9 @@ function osScreenshotBlockerFromReceipt(receiptPath: string): JsonObject | null 
       limitation: visualEvidence.limitation ?? null,
       attempts: captureAttemptSummary(visualEvidence.attempts),
     };
+  }
+  if (!name.includes("screenshot") && !name.includes("capture")) {
+    return null;
   }
   const screenshotReceipt = asObject(json.screenshotReceipt);
   const nestedScreenshotReceipt = asObject(asObject(json.screenshot).receipt);

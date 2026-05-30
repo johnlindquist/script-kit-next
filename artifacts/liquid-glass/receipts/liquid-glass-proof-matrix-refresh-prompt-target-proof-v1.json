@@ -5,7 +5,7 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T10:46:02.621Z",
+  "generatedAt": "2026-05-30T10:44:39.421Z",
   "summary": {
     "surfaceCount": 29,
     "strongProofSurfaceCount": 2,
@@ -642,7 +642,6 @@
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-inspect-after.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-layout-devtools.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-open-render.json",
-        "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-os.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-render.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-wait-render.json"
       ],
@@ -3395,7 +3394,6 @@
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-trigger.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-window-find.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-window-inspect.json",
-        "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-cleanup.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-session-start.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-show.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-target.json",
@@ -4047,7 +4045,6 @@
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-inspect-after.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-layout-devtools.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-open-render.json",
-        "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-os.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-render.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-wait-render.json"
       ],
@@ -7136,7 +7133,6 @@
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-trigger.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-window-find.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-window-inspect.json",
-        "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-cleanup.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-session-start.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-show.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-target.json",
@@ -7701,7 +7697,6 @@
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-inspect-after.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-layout-devtools.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-open-render.json",
-        "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-os.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-render.json",
         "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-wait-render.json"
       ],
@@ -8657,7 +8652,6 @@
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-trigger.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-window-find.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-window-inspect.json",
-        "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-cleanup.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-session-start.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-show.json",
         "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-target.json",
@@ -12194,7 +12188,6 @@
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-inspect-after.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-layout-devtools.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-open-render.json",
-          "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-os.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-render.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-wait-render.json"
         ],
@@ -12249,7 +12242,6 @@
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-inspect-after.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-layout-devtools.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-open-render.json",
-          "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-os.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-render.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-target-proof-v1-wait-render.json"
         ],
@@ -17942,7 +17934,6 @@
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-trigger.json",
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-window-find.json",
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-window-inspect.json",
-          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-cleanup.json",
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-session-start.json",
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-show.json",
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-target.json",
@@ -17967,7 +17958,6 @@
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-trigger.json",
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-window-find.json",
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-current-window-inspect.json",
-          "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-cleanup.json",
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-session-start.json",
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-show.json",
           "artifacts/liquid-glass/receipts/window-priority-attachment-portal-guideline-target.json",
@@ -19591,5 +19581,13 @@
     "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor output or native Liquid Glass blur",
     "proofTiers separate OS screenshots from GPUI app-render proof so WindowServer-blocked captures cannot become false visual evidence"
   ],
-  "errors": []
+  "errors": [],
+  "_command": [
+    "bun",
+    "scripts/devtools/liquid-glass-proof.ts",
+    "--out",
+    "artifacts/liquid-glass/receipts/liquid-glass-proof-matrix.json"
+  ],
+  "_exitCode": 0,
+  "_stderr": ""
 }
