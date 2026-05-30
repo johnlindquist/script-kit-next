@@ -238,8 +238,8 @@
             <tr><th>Branch</th><td><code>main</code></td></tr>
             <tr><th>Head at start</th><td><code>5c4b1f15c</code> Enable Tahoe liquid glass backgrounds</td></tr>
             <tr><th>Audit baseline commit</th><td><code>15f8a410c</code> Start Liquid Glass visual audit</td></tr>
-            <tr><th>Latest observed head</th><td><code>d9a7a75d0</code> Use cwd docs as ghost text context</td></tr>
-            <tr><th>CI</th><td><a href="https://github.com/johnlindquist/script-kit-next/actions/runs/26670803596">26670803596</a>, in progress when GitHub API rate limit was hit locally</td></tr>
+            <tr><th>Latest observed head</th><td><code>456ed6e34</code> Add Liquid Glass visual style receipts</td></tr>
+            <tr><th>CI</th><td><a href="https://github.com/johnlindquist/script-kit-next/actions/runs/26671235849">26671235849</a>, artifact build in progress at last manager poll</td></tr>
             <tr><th>Artifact root</th><td><code>artifacts/liquid-glass/</code></td></tr>
           </tbody>
         </table>
@@ -316,6 +316,18 @@
     </section>
 
     <section class="panel">
+      <h2>Image Diffing Recommendation</h2>
+      <p>Next audit slices should add an image-diffing library to make before/after comparisons explicit instead of relying on visual inspection alone.</p>
+      <ul>
+        <li>Use a perceptual screenshot diff tool such as <code>pixelmatch</code> with <code>pngjs</code>, or an equivalent structural/perceptual diff library, and save masks beside each before/after pair.</li>
+        <li>Generate focused overlays that call out rounded-corner deltas, padding shifts, hit-target expansion, row-height changes, popup anchor movement, and material/blur region changes.</li>
+        <li>Record numeric summaries in this log: changed-pixel count, changed-pixel ratio, bounding boxes of differences, per-corner radius evidence, and expected-vs-actual padding/token deltas.</li>
+        <li>Prefer component-cropped diffs for buttons, selected rows, input chrome, footers, popups, and window corners so tiny Tahoe/Liquid Glass regressions are easy to see.</li>
+        <li>Keep raw screenshots, diff masks, and JSON diff receipts under <code>artifacts/liquid-glass/</code>, then link them from each surface row.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
       <h2>Oracle Sessions</h2>
       <table>
         <thead>
@@ -372,6 +384,10 @@
         <div class="entry">
           <time>2026-05-29 19:50 MDT</time>
           <p>Focused Oracle session <code>launcher-glass-audit</code> completed. It confirmed the next visual implementation wave should update footer chrome constants, actions popup radii/row metrics, launcher row selected treatment, popup anchor receipts, and contrast/center-distance measurement. Added compare receipts: <code>compare-main-layout-visual-style.json</code> and <code>compare-actions-inspect-visual-style.json</code>.</p>
+        </div>
+        <div class="entry">
+          <time>2026-05-29 20:00 MDT</time>
+          <p>Added a standing recommendation for future Tahoe slices to use an image-diffing library, with diff masks and JSON receipts that explicitly call out rounded-corner, padding, hit-target, row-height, popup-anchor, and material-region changes.</p>
         </div>
       </div>
     </section>
