@@ -25,6 +25,16 @@ pub struct ComputerUseCaptureNativeWindowArgs {
     pub expected_bundle_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ComputerUseCaptureRenderWindowArgs {
+    pub target: AutomationWindowTarget,
+    #[serde(rename = "hiDpi", default)]
+    pub hi_dpi: bool,
+    #[serde(default)]
+    pub include_image: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,6 +107,31 @@ mod tests {
                 "unexpected": true
             }))
             .expect_err("unknown fields should be rejected");
+
+        assert!(error.to_string().contains("unknown field"));
+    }
+
+    #[test]
+    fn capture_render_window_args_defaults_optional_flags() {
+        let parsed: ComputerUseCaptureRenderWindowArgs =
+            serde_json::from_value(serde_json::json!({
+                "target": { "type": "focused" }
+            }))
+            .expect("capture render window args");
+
+        assert_eq!(parsed.target, AutomationWindowTarget::Focused);
+        assert!(!parsed.hi_dpi);
+        assert!(!parsed.include_image);
+    }
+
+    #[test]
+    fn capture_render_window_args_reject_unknown_fields() {
+        let error =
+            serde_json::from_value::<ComputerUseCaptureRenderWindowArgs>(serde_json::json!({
+                "target": { "type": "focused" },
+                "focus": true
+            }))
+            .expect_err("unknown mutating fields should be rejected");
 
         assert!(error.to_string().contains("unknown field"));
     }

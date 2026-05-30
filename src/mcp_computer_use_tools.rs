@@ -5,11 +5,15 @@
 //! remain deferred until they can cite stable inspection receipts.
 
 use crate::computer_use::runtime_bridge::{
-    ComputerUseAppWindowInfo, ComputerUseCaptureNativeWindowRequest, ComputerUseInspectRequest,
-    ComputerUseListAppWindowsRequest, ComputerUseListAppsRequest, ComputerUseRunningAppInfo,
-    ComputerUseRuntimeBridge, ComputerUseRuntimeError,
+    ComputerUseAppWindowInfo, ComputerUseCaptureNativeWindowError,
+    ComputerUseCaptureNativeWindowRequest, ComputerUseCaptureRenderWindowRequest,
+    ComputerUseCaptureRenderWindowSnapshot, ComputerUseCaptureRenderWindowStatus,
+    ComputerUseInspectRequest, ComputerUseListAppWindowsRequest, ComputerUseListAppsRequest,
+    ComputerUseRunningAppInfo, ComputerUseRuntimeBridge, ComputerUseRuntimeError,
 };
-use crate::computer_use::types::{ComputerUseCaptureNativeWindowArgs, ComputerUseSeeArgs};
+use crate::computer_use::types::{
+    ComputerUseCaptureNativeWindowArgs, ComputerUseCaptureRenderWindowArgs, ComputerUseSeeArgs,
+};
 use crate::frontmost_app_tracker::{get_cached_menu_snapshot, get_last_real_app};
 use crate::mcp_kit_tools::{ToolContent, ToolDefinition, ToolResult};
 use crate::menu_bar::MenuBarItem;
@@ -31,6 +35,7 @@ pub const COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL: &str =
     "computer/list_app_windows_by_bundle_id";
 pub const COMPUTER_GET_APP_WINDOW_BY_BUNDLE_ID_TOOL: &str = "computer/get_app_window_by_bundle_id";
 pub const COMPUTER_CAPTURE_NATIVE_WINDOW_TOOL: &str = "computer/capture_native_window";
+pub const COMPUTER_CAPTURE_RENDER_WINDOW_TOOL: &str = "computer/capture_render_window";
 pub const COMPUTER_LIST_NATIVE_WINDOWS_TOOL: &str = "computer/list_native_windows";
 pub const COMPUTER_GET_NATIVE_WINDOW_TOOL: &str = "computer/get_native_window";
 pub const COMPUTER_GET_APP_WINDOW_TOOL: &str = "computer/get_app_window";
@@ -128,6 +133,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             description: "Capture a PNG screenshot of one exact native macOS window after PID, nativeWindowId, optional bundle-id ownership, and capture-candidate revalidation. Does not focus, activate, move, resize, click, type, request permissions, or fall back to another window."
                 .to_string(),
             input_schema: computer_capture_native_window_input_schema(),
+        },
+        ToolDefinition {
+            name: COMPUTER_CAPTURE_RENDER_WINDOW_TOOL.to_string(),
+            description: "Capture app-rendered GPUI pixels for one resolved Script Kit automation window from inside the live runtime. Does not focus, activate, move, resize, click, type, request permissions, or use macOS WindowServer screenshot capture. This does not prove macOS WindowServer compositor/native blur output."
+                .to_string(),
+            input_schema: computer_capture_render_window_input_schema(),
         },
         ToolDefinition {
             name: COMPUTER_LIST_NATIVE_WINDOWS_TOOL.to_string(),
@@ -265,6 +276,7 @@ pub fn handle_computer_use_tool_call(
             handle_get_app_window_by_bundle_id(arguments, runtime)
         }
         COMPUTER_CAPTURE_NATIVE_WINDOW_TOOL => handle_capture_native_window(arguments, runtime),
+        COMPUTER_CAPTURE_RENDER_WINDOW_TOOL => handle_capture_render_window(arguments, runtime),
         COMPUTER_LIST_NATIVE_WINDOWS_TOOL => handle_list_native_windows(arguments, runtime),
         COMPUTER_GET_NATIVE_WINDOW_TOOL => handle_get_native_window(arguments, runtime),
         COMPUTER_GET_APP_WINDOW_TOOL => handle_get_app_window(arguments, runtime),
@@ -1588,6 +1600,81 @@ fn handle_capture_native_window(
     }
 }
 
+fn handle_capture_render_window(
+    arguments: &Value,
+    runtime: Option<&dyn ComputerUseRuntimeBridge>,
+) -> ToolResult {
+    let args: ComputerUseCaptureRenderWindowArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    let correlation_id = format!(
+        "mcp-computer-capture-render-window:{}",
+        uuid::Uuid::new_v4()
+    );
+    let target = args.target.clone();
+    let request = ComputerUseCaptureRenderWindowRequest {
+        target: target.clone(),
+        hi_dpi: args.hi_dpi,
+        include_image: args.include_image,
+        correlation_id: correlation_id.clone(),
+    };
+
+    let Some(runtime) = runtime else {
+        let snapshot = ComputerUseCaptureRenderWindowSnapshot {
+                schema_version: 1,
+                source: "gpuiRenderReadback",
+                scope: "liveAutomationWindowRenderReadback",
+                status: ComputerUseCaptureRenderWindowStatus::Unsupported,
+                correlation_id,
+                target,
+            capture: None,
+            error: Some(ComputerUseCaptureNativeWindowError {
+                code: "runtime_unavailable",
+                message: "computer/capture_render_window requires the live GPUI runtime bridge"
+                    .to_string(),
+                reason: Some("runtime_unavailable".to_string()),
+                pixel_audit: None,
+            }),
+            warnings: vec![
+                "No pixels were captured; do not count this as app-render visual proof."
+                    .to_string(),
+            ],
+            limitation: "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor/native blur output.",
+        };
+        return json_tool_result(&snapshot);
+    };
+
+    match runtime.capture_render_window(request) {
+        Ok(snapshot) => json_tool_result(&snapshot),
+        Err(ComputerUseRuntimeError::Unavailable) => {
+            let snapshot = ComputerUseCaptureRenderWindowSnapshot {
+                schema_version: 1,
+                source: "gpuiRenderReadback",
+                scope: "liveAutomationWindowRenderReadback",
+                status: ComputerUseCaptureRenderWindowStatus::Unsupported,
+                correlation_id,
+                target,
+                capture: None,
+                error: Some(ComputerUseCaptureNativeWindowError {
+                    code: "gpui_readback_unavailable",
+                    message: "GPUI render readback is not implemented in this runtime".to_string(),
+                    reason: Some("unsupported".to_string()),
+                    pixel_audit: None,
+                }),
+                warnings: vec![
+                    "No pixels were captured; do not count this as app-render visual proof."
+                        .to_string(),
+                ],
+                limitation: "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor/native blur output.",
+            };
+            json_tool_result(&snapshot)
+        }
+        Err(error) => error_result(error.error_code(), &error.message()),
+    }
+}
+
 fn handle_get_frontmost_native_window(
     arguments: &Value,
     runtime: Option<&dyn ComputerUseRuntimeBridge>,
@@ -2434,6 +2521,57 @@ fn error_result(code: &str, message: &str) -> ToolResult {
     }
 }
 
+fn automation_window_target_schema() -> Value {
+    serde_json::json!({
+        "description": "AutomationWindowTarget. Omit to use the focused automation window where the caller schema allows omission.",
+        "oneOf": [
+            {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": { "type": { "const": "main" } },
+                "required": ["type"]
+            },
+            {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": { "type": { "const": "focused" } },
+                "required": ["type"]
+            },
+            {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "type": { "const": "id" },
+                    "id": { "type": "string" }
+                },
+                "required": ["type", "id"]
+            },
+            {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "type": { "const": "kind" },
+                    "kind": {
+                        "type": "string",
+                        "enum": ["main", "notes", "ai", "miniAi", "acpDetached", "actionsDialog", "promptPopup"]
+                    },
+                    "index": { "type": "integer", "minimum": 0 }
+                },
+                "required": ["type", "kind"]
+            },
+            {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "type": { "const": "titleContains" },
+                    "text": { "type": "string" }
+                },
+                "required": ["type", "text"]
+            }
+        ]
+    })
+}
+
 fn computer_see_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -2655,6 +2793,27 @@ fn computer_capture_native_window_input_schema() -> Value {
             }
         },
         "required": ["pid", "nativeWindowId"]
+    })
+}
+
+fn computer_capture_render_window_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "target": automation_window_target_schema(),
+            "hiDpi": {
+                "type": "boolean",
+                "default": false,
+                "description": "Return high-DPI app-render pixels when the runtime readback path supports them."
+            },
+            "includeImage": {
+                "type": "boolean",
+                "default": false,
+                "description": "Include pngBase64 in the JSON receipt. When false, return only dimensions, SHA-256, and pixel audit."
+            }
+        },
+        "required": ["target"]
     })
 }
 
@@ -3706,6 +3865,7 @@ mod tests {
                 COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL.to_string(),
                 COMPUTER_GET_APP_WINDOW_BY_BUNDLE_ID_TOOL.to_string(),
                 COMPUTER_CAPTURE_NATIVE_WINDOW_TOOL.to_string(),
+                COMPUTER_CAPTURE_RENDER_WINDOW_TOOL.to_string(),
                 COMPUTER_LIST_NATIVE_WINDOWS_TOOL.to_string(),
                 COMPUTER_GET_NATIVE_WINDOW_TOOL.to_string(),
                 COMPUTER_GET_APP_WINDOW_TOOL.to_string(),
@@ -3741,6 +3901,74 @@ mod tests {
                 .and_then(Value::as_bool),
             Some(false)
         );
+    }
+
+    #[test]
+    fn computer_capture_render_window_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_CAPTURE_RENDER_WINDOW_TOOL)
+            .expect("computer/capture_render_window tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            tool.input_schema
+                .get("required")
+                .and_then(Value::as_array)
+                .and_then(|items| items.first())
+                .and_then(Value::as_str),
+            Some("target")
+        );
+        assert!(tool
+            .description
+            .contains("does not prove macOS WindowServer compositor"));
+    }
+
+    #[test]
+    fn computer_capture_render_window_rejects_mutating_arguments() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_CAPTURE_RENDER_WINDOW_TOOL,
+            &serde_json::json!({
+                "target": { "type": "focused" },
+                "focus": true
+            }),
+            None,
+        );
+
+        assert_eq!(result.is_error, Some(true));
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid error json");
+        assert_eq!(value["errorCode"], "invalid_arguments");
+        assert!(value["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("unknown field"));
+    }
+
+    #[test]
+    fn computer_capture_render_window_without_runtime_returns_unsupported_receipt() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_CAPTURE_RENDER_WINDOW_TOOL,
+            &serde_json::json!({ "target": { "type": "focused" } }),
+            None,
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid render receipt");
+        assert_eq!(value["source"], "gpuiRenderReadback");
+        assert_eq!(value["status"], "unsupported");
+        assert_eq!(value["error"]["code"], "runtime_unavailable");
+        assert_eq!(value["capture"], serde_json::Value::Null);
+        assert!(value["limitation"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("does not prove macOS WindowServer compositor"));
     }
 
     #[test]

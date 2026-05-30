@@ -48,6 +48,7 @@
  *   --skip-state                Only capture screenshot, skip ACP state query
  *   --skip-probe                Skip ACP test probe query
  *   --strict-window             Require exact target/window identity for non-ACP captures
+ *   --visual-source SOURCE      os|render|auto (default: os)
  *   --target-json JSON           ACP window target for getAcpState/getAcpTestProbe RPCs
  *                               (same AutomationWindowTarget shape as the Rust protocol)
  *   --capture-window-id N        Exact native window ID for screencapture
@@ -93,6 +94,21 @@ interface WindowBounds {
   height: number;
 }
 
+type ScreenRectSource =
+  | "computer/get_native_window.bounds"
+  | "computer/list_native_windows.bounds"
+  | "automationInspect.resolvedBounds";
+
+interface ScreenRectFallbackReceipt {
+  attempted: boolean;
+  used: boolean;
+  source: ScreenRectSource | null;
+  bounds: WindowBounds | null;
+  nativeWindowId: number | null;
+  automationResolvedBounds: WindowBounds | null;
+  error: string | null;
+}
+
 interface InspectionReceipt {
   automationWindowId: string;
   windowKind: string;
@@ -113,6 +129,7 @@ interface CapturePlan {
   requestedOsWindowId: number | null;
   inspectionOsWindowId: number | null;
   showIssuedBeforeCapture: boolean;
+  screenRectFallback?: ScreenRectFallbackReceipt | null;
 }
 
 /**
@@ -176,6 +193,10 @@ interface VerifyReceipt {
   inspection: InspectionReceipt | null;
   /** Deterministic popup capture strategy receipt. */
   popupCapture: PopupCaptureReceipt | null;
+  /** Machine-readable visual evidence classification for OS/window capture attempts. */
+  visualEvidence: VisualEvidenceReceipt | null;
+  /** Machine-readable visual evidence classification for GPUI app-render readback attempts. */
+  renderEvidence: VisualEvidenceReceipt | null;
   visionCrops: VisionCheck[];
   // Detailed receipts (full diagnostics)
   stateReceipt: AcpStateResult | null;
@@ -215,6 +236,50 @@ interface ScreenshotResult {
   windowFocused: boolean | null;
   windowId: number | null;
   error: string | null;
+}
+
+type VisualSource =
+  | "os-window-capture"
+  | "gpui-render-readback"
+  | "gpui-offscreen-render";
+
+type VisualCaptureClassification =
+  | "captured"
+  | "target-identity-blocked"
+  | "target-not-capture-candidate"
+  | "macos-windowserver-capture-blocked"
+  | "blank-image-rejected"
+  | "gpui-readback-unavailable"
+  | "unknown-capture-failure";
+
+interface CaptureAttemptReceipt {
+  source:
+    | "computer/capture_native_window"
+    | "screencapture-window-id"
+    | "screencapture-screen-rect"
+    | "runtime-capture-window"
+    | "gpui-render-readback";
+  status: "captured" | "failed" | "blankRejected" | "skipped" | "unsupported";
+  requestedWindowId: number | null;
+  actualWindowId: number | null;
+  errorCode: string | null;
+  message: string | null;
+  pixelAudit?: ScreenshotContentAudit | null;
+}
+
+interface VisualEvidenceReceipt {
+  source: VisualSource;
+  available: boolean;
+  countsAsOsScreenshotEvidence: boolean;
+  countsAsAppRenderEvidence: boolean;
+  classification: VisualCaptureClassification;
+  attempts: CaptureAttemptReceipt[];
+  path?: string | null;
+  sha256?: string | null;
+  width?: number | null;
+  height?: number | null;
+  pixelAudit?: ScreenshotContentAudit | Record<string, unknown> | null;
+  limitation: string | null;
 }
 
 interface ScreenshotContentAudit {
@@ -504,18 +569,151 @@ function inspectionScreenRect(inspection: InspectionReceipt | null): WindowBound
   };
 }
 
+function toWindowBounds(value: unknown): WindowBounds | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const bounds = value as Record<string, unknown>;
+  const x = Number(bounds.x);
+  const y = Number(bounds.y);
+  const width = Number(bounds.width);
+  const height = Number(bounds.height);
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    return null;
+  }
+  return {
+    x: Math.floor(x),
+    y: Math.floor(y),
+    width: Math.max(1, Math.round(width)),
+    height: Math.max(1, Math.round(height)),
+  };
+}
+
+async function nativeScreenRectFromWindowId(
+  nativeWindowId: number,
+  expectedPid: number | null
+): Promise<{ bounds: WindowBounds; source: ScreenRectSource } | null> {
+  const fromGetNative = await callMcpTool("computer/get_native_window", {
+    nativeWindowId,
+  });
+  const app = asRecord(fromGetNative.app);
+  if (
+    expectedPid != null &&
+    typeof app?.pid === "number" &&
+    app.pid !== expectedPid
+  ) {
+    throw new Error(
+      `native window ${nativeWindowId} pid mismatch: expected ${expectedPid}, got ${app.pid}`
+    );
+  }
+  const getNativeBounds = toWindowBounds(asRecord(fromGetNative.window)?.bounds);
+  if (getNativeBounds) {
+    return {
+      source: "computer/get_native_window.bounds",
+      bounds: getNativeBounds,
+    };
+  }
+
+  const list = await callMcpTool("computer/list_native_windows", {
+    includeHidden: true,
+    includeBackground: true,
+  });
+  for (const appEntry of list.apps ?? []) {
+    const listedApp = appEntry.app ?? appEntry;
+    if (
+      expectedPid != null &&
+      typeof listedApp?.pid === "number" &&
+      listedApp.pid !== expectedPid
+    ) {
+      continue;
+    }
+    for (const window of appEntry.windows ?? []) {
+      if (window.nativeWindowId !== nativeWindowId) {
+        continue;
+      }
+      const bounds = toWindowBounds(window.bounds);
+      if (bounds) {
+        return {
+          source: "computer/list_native_windows.bounds",
+          bounds,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function newScreenRectFallbackReceipt(
+  inspection: InspectionReceipt | null,
+  nativeWindowId: number | null
+): ScreenRectFallbackReceipt {
+  return {
+    attempted: false,
+    used: false,
+    source: null,
+    bounds: null,
+    nativeWindowId,
+    automationResolvedBounds: inspectionScreenRect(inspection),
+    error: null,
+  };
+}
+
+function asRecord(value: unknown): Record<string, any> | null {
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, any>)
+    : null;
+}
+
 async function captureScreenRectFromInspection(
   inspection: InspectionReceipt | null,
   outPath: string,
-  settleMs: number
-): Promise<{ ok: true; bounds: WindowBounds } | { ok: false; error: string }> {
-  const bounds = inspectionScreenRect(inspection);
+  settleMs: number,
+  nativeWindowId: number | null
+): Promise<
+  | { ok: true; bounds: WindowBounds; receipt: ScreenRectFallbackReceipt }
+  | { ok: false; error: string; receipt: ScreenRectFallbackReceipt }
+> {
+  const receipt = newScreenRectFallbackReceipt(inspection, nativeWindowId);
+  receipt.attempted = true;
+  let bounds: WindowBounds | null = null;
+  if (nativeWindowId != null && nativeWindowId > 0) {
+    try {
+      const nativeBounds = await nativeScreenRectFromWindowId(
+        nativeWindowId,
+        typeof inspection?.pid === "number" ? inspection.pid : null
+      );
+      if (nativeBounds) {
+        bounds = nativeBounds.bounds;
+        receipt.source = nativeBounds.source;
+      }
+    } catch (error) {
+      receipt.error = error instanceof Error ? error.message : String(error);
+    }
+  }
   if (!bounds) {
+    bounds = inspectionScreenRect(inspection);
+    if (bounds) {
+      receipt.source = "automationInspect.resolvedBounds";
+    }
+  }
+  if (!bounds) {
+    receipt.error =
+      receipt.error ?? "inspection did not include usable resolvedBounds";
     return {
       ok: false,
-      error: "inspection did not include usable resolvedBounds",
+      error: receipt.error,
+      receipt,
     };
   }
+  receipt.bounds = bounds;
 
   if (settleMs > 0) {
     await Bun.sleep(settleMs);
@@ -539,13 +737,191 @@ async function captureScreenRectFromInspection(
   const stderr = await new Response(proc.stderr).text();
   const code = await proc.exited;
   if (code !== 0 || !existsSync(outPath)) {
+    receipt.error = stderr.trim() || stdout.trim() || `screencapture -R exited ${code}`;
     return {
       ok: false,
-      error: stderr.trim() || stdout.trim() || `screencapture -R exited ${code}`,
+      error: receipt.error,
+      receipt,
     };
   }
 
-  return { ok: true, bounds };
+  receipt.used = true;
+  return { ok: true, bounds, receipt };
+}
+
+function classifyOsCaptureBlocker(
+  screenshotResult: ScreenshotResult | null,
+  capturePlan: CapturePlan | null
+): VisualCaptureClassification {
+  if (screenshotResult?.captured && screenshotResult.contentAudit?.blank === false) {
+    return "captured";
+  }
+  const error = screenshotResult?.error ?? "";
+  if (error.includes("Strict window capture requires")) {
+    return "target-identity-blocked";
+  }
+  if (error.includes("blankImageRejected") || screenshotResult?.contentAudit?.blank) {
+    return "blank-image-rejected";
+  }
+  if (
+    capturePlan?.screenRectFallback?.attempted ||
+    error.includes("could not create image from window") ||
+    error.includes("could not create image from rect") ||
+    error.includes("screenRect=")
+  ) {
+    return "macos-windowserver-capture-blocked";
+  }
+  if (error.includes("notCaptureCandidate") || error.includes("capture candidate")) {
+    return "target-not-capture-candidate";
+  }
+  return "unknown-capture-failure";
+}
+
+function buildOsVisualEvidence(
+  screenshotResult: ScreenshotResult | null,
+  capturePlan: CapturePlan | null
+): VisualEvidenceReceipt | null {
+  if (!screenshotResult && !capturePlan) {
+    return null;
+  }
+  const classification = classifyOsCaptureBlocker(screenshotResult, capturePlan);
+  const captured = classification === "captured";
+  const requestedWindowId = capturePlan?.requestedOsWindowId ?? null;
+  const actualWindowId = screenshotResult?.windowId ?? null;
+  const attempts: CaptureAttemptReceipt[] = [];
+  if (requestedWindowId != null) {
+    attempts.push({
+      source: "computer/capture_native_window",
+      status: screenshotResult?.captureMethod === "computer/capture_native_window"
+        ? captured ? "captured" : "failed"
+        : screenshotResult?.error?.includes("blankImageRejected")
+          ? "blankRejected"
+          : "failed",
+      requestedWindowId,
+      actualWindowId,
+      errorCode: screenshotResult?.error?.includes("blankImageRejected")
+        ? "blankImageRejected"
+        : captured ? null : "capture_failed",
+      message: screenshotResult?.error ?? null,
+      pixelAudit: screenshotResult?.contentAudit ?? null,
+    });
+    attempts.push({
+      source: "screencapture-window-id",
+      status: captured && screenshotResult?.windowCaptureMethod === "quartz"
+        ? "captured"
+        : screenshotResult?.error?.includes("could not create image from window")
+          ? "failed"
+          : "skipped",
+      requestedWindowId,
+      actualWindowId,
+      errorCode: screenshotResult?.error?.includes("could not create image from window")
+        ? "screencapture_window_failed"
+        : null,
+      message: screenshotResult?.error ?? null,
+      pixelAudit: screenshotResult?.contentAudit ?? null,
+    });
+  }
+  if (capturePlan?.screenRectFallback?.attempted) {
+    attempts.push({
+      source: "screencapture-screen-rect",
+      status: captured && screenshotResult?.windowCaptureMethod === "screencapture"
+        ? "captured"
+        : "failed",
+      requestedWindowId,
+      actualWindowId,
+      errorCode: capturePlan.screenRectFallback.error
+        ? "screencapture_rect_failed"
+        : captured ? null : "capture_failed",
+      message: capturePlan.screenRectFallback.error ?? screenshotResult?.error ?? null,
+      pixelAudit: screenshotResult?.contentAudit ?? null,
+    });
+  }
+  if (capturePlan?.routing === "runtime-capture-window") {
+    attempts.push({
+      source: "runtime-capture-window",
+      status: captured ? "captured" : "failed",
+      requestedWindowId,
+      actualWindowId,
+      errorCode: captured ? null : "capture_failed",
+      message: screenshotResult?.error ?? null,
+      pixelAudit: screenshotResult?.contentAudit ?? null,
+    });
+  }
+
+  return {
+    source: "os-window-capture",
+    available: captured,
+    countsAsOsScreenshotEvidence: captured,
+    countsAsAppRenderEvidence: false,
+    classification,
+    attempts,
+    path: screenshotResult?.path ?? null,
+    width: screenshotResult?.width ?? null,
+    height: screenshotResult?.height ?? null,
+    pixelAudit: screenshotResult?.contentAudit ?? null,
+    limitation: captured
+      ? null
+      : "macOS WindowServer screenshot capture did not produce usable pixels; do not count this as OS screenshot proof.",
+  };
+}
+
+async function captureRenderReadbackViaMcp(
+  target: Record<string, unknown>,
+  outPath: string
+): Promise<VisualEvidenceReceipt> {
+  try {
+    const capture = await callMcpTool("computer/capture_render_window", {
+      target,
+      includeImage: true,
+      hiDpi: false,
+    });
+    const status = String(capture.status ?? "unknown");
+    const image = capture.capture?.pngBase64;
+    if (status === "captured" && typeof image === "string" && image.length > 0) {
+      const decoded = Buffer.from(image, "base64");
+      writeFileSync(outPath, decoded);
+    }
+    return {
+      source: "gpui-render-readback",
+      available: status === "captured",
+      countsAsOsScreenshotEvidence: false,
+      countsAsAppRenderEvidence: status === "captured",
+      classification: status === "captured" ? "captured" : "gpui-readback-unavailable",
+      attempts: [{
+        source: "gpui-render-readback",
+        status: status === "captured" ? "captured" : status === "unsupported" ? "unsupported" : "failed",
+        requestedWindowId: null,
+        actualWindowId: null,
+        errorCode: capture.error?.code ?? null,
+        message: capture.error?.message ?? null,
+      }],
+      path: status === "captured" ? outPath : null,
+      sha256: capture.capture?.sha256 ?? null,
+      width: capture.capture?.width ?? null,
+      height: capture.capture?.height ?? null,
+      pixelAudit: capture.capture?.pixelAudit ?? null,
+      limitation: capture.limitation
+        ?? "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor/native blur output.",
+    };
+  } catch (error) {
+    return {
+      source: "gpui-render-readback",
+      available: false,
+      countsAsOsScreenshotEvidence: false,
+      countsAsAppRenderEvidence: false,
+      classification: "gpui-readback-unavailable",
+      attempts: [{
+        source: "gpui-render-readback",
+        status: "failed",
+        requestedWindowId: null,
+        actualWindowId: null,
+        errorCode: "mcp_call_failed",
+        message: error instanceof Error ? error.message : String(error),
+      }],
+      path: null,
+      limitation: "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor/native blur output.",
+    };
+  }
 }
 
 async function queryAcpState(
@@ -1020,6 +1396,7 @@ async function captureScreenshot(
   let windowId: number | null = null;
   let nativeCaptureFailure: string | null = null;
   let screenRectFailure: string | null = null;
+  let screenRectFallback: ScreenRectFallbackReceipt | null = null;
   const strictWindowProof = opts.strictWindow === true || hasAcpAssertions(opts);
   const inspectionOsWindowId =
     typeof inspection?.osWindowId === "number" && inspection.osWindowId > 0
@@ -1295,25 +1672,32 @@ async function captureScreenshot(
       };
     }
   } else {
-    if (inspectionScreenRect(inspection) && inspectionOsWindowId != null) {
+    if (targetJson && (inspectionScreenRect(inspection) || requestedOsWindowId != null)) {
       captureRouting = "screen-rect-from-inspection";
       captureMethod = "window.ts";
       windowCaptureMethod = "screencapture";
-      windowId = inspectionOsWindowId;
+      windowId = requestedOsWindowId;
     }
-    const rectCapture = await captureScreenRectFromInspection(inspection, outPath, 200);
-    if (rectCapture.ok && inspectionOsWindowId != null) {
+    const rectCapture = await captureScreenRectFromInspection(
+      inspection,
+      outPath,
+      200,
+      requestedOsWindowId
+    );
+    screenRectFallback = rectCapture.receipt;
+    if (rectCapture.ok && requestedOsWindowId != null) {
       diag("verify_shot_screen_rect_fallback", {
         label,
         reason: "strict-window-helper-failed",
         requestedOsWindowId,
         inspectionOsWindowId,
+        source: rectCapture.receipt.source,
         bounds: rectCapture.bounds,
       });
     } else {
       screenRectFailure =
         rectCapture.ok
-          ? "screen-rect fallback captured but inspection lacked osWindowId"
+          ? "screen-rect fallback captured but no target-bound native window id was available"
           : rectCapture.error;
       // Strict mode: window.ts failed and we have ACP assertions — do not fall back to generic frontmost capture.
       const primaryFailure = stderr.trim() || stdout.trim() || "window.ts capture failed";
@@ -1343,6 +1727,7 @@ async function captureScreenshot(
           requestedOsWindowId,
           inspectionOsWindowId,
           showIssuedBeforeCapture,
+          screenRectFallback,
         },
       };
     }
@@ -1493,15 +1878,21 @@ async function captureScreenshot(
     contentAudit.blank &&
     strictWindowProof &&
     captureRouting !== "screen-rect-from-inspection" &&
-    inspectionOsWindowId != null
+    requestedOsWindowId != null
   ) {
-    if (inspectionScreenRect(inspection)) {
+    if (targetJson && (inspectionScreenRect(inspection) || requestedOsWindowId != null)) {
       captureRouting = "screen-rect-from-inspection";
       captureMethod = "window.ts";
       windowCaptureMethod = "screencapture";
-      windowId = inspectionOsWindowId;
+      windowId = requestedOsWindowId;
     }
-    const rectCapture = await captureScreenRectFromInspection(inspection, outPath, 200);
+    const rectCapture = await captureScreenRectFromInspection(
+      inspection,
+      outPath,
+      200,
+      requestedOsWindowId
+    );
+    screenRectFallback = rectCapture.receipt;
     if (rectCapture.ok) {
       stats = statSync(outPath);
       dims = await getImageDimensions(outPath);
@@ -1530,6 +1921,7 @@ async function captureScreenshot(
             requestedOsWindowId,
             inspectionOsWindowId,
             showIssuedBeforeCapture,
+            screenRectFallback,
           },
         };
       }
@@ -1538,6 +1930,7 @@ async function captureScreenshot(
         reason: "blank-primary-capture",
         requestedOsWindowId,
         inspectionOsWindowId,
+        source: rectCapture.receipt.source,
         bounds: rectCapture.bounds,
         contentAudit,
       });
@@ -1572,6 +1965,7 @@ async function captureScreenshot(
         requestedOsWindowId,
         inspectionOsWindowId,
         showIssuedBeforeCapture,
+        screenRectFallback,
       },
     };
   }
@@ -1597,6 +1991,7 @@ async function captureScreenshot(
       requestedOsWindowId,
       inspectionOsWindowId,
       showIssuedBeforeCapture,
+      screenRectFallback,
     },
   };
 }
@@ -2225,12 +2620,13 @@ if (opts.help) {
       schemaVersion: 1,
       script: "verify-shot",
       commands: [
-        { name: "run", description: "Collect state/probe/screenshot proof", flags: ["--session", "--label", "--out", "--target-json", "--capture-window-id", "--strict-window", "--vision", "--skip-screenshot", "--skip-state", "--skip-probe", "--json"] },
+        { name: "run", description: "Collect state/probe/screenshot proof", flags: ["--session", "--label", "--out", "--target-json", "--capture-window-id", "--strict-window", "--visual-source", "--vision", "--skip-screenshot", "--skip-state", "--skip-probe", "--json"] },
       ],
       contracts: [
         "popup-capture-receipts",
         "detached-proof-contract",
         "screenshot-pixel-content-audit",
+        "structured-visual-evidence-tiers",
       ],
       receipts: [
         "popupCapture.strategy",
@@ -2281,6 +2677,7 @@ Options:
   --skip-state                Only capture screenshot, skip state query
   --skip-probe                Skip ACP test probe query
   --strict-window             Require --target-json or --capture-window-id and forbid generic fallback
+  --visual-source SOURCE      os|render|auto (default: os). auto tries GPUI app-render readback after OS capture is blocked.
   --target-json JSON          ACP window target for getAcpState/getAcpTestProbe RPCs
   --capture-window-id N       Exact native window ID for screencapture
                               (the inspected osWindowId, not automationWindowId)
@@ -2312,6 +2709,13 @@ const captureWindowId = typeof opts.captureWindowId === "string"
       return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
     })()
   : undefined;
+const visualSource = typeof opts.visualSource === "string"
+  ? String(opts.visualSource)
+  : "os";
+if (!["os", "render", "auto"].includes(visualSource)) {
+  console.error(`Invalid --visual-source ${visualSource}; expected os, render, or auto`);
+  process.exit(2);
+}
 
 // Parse --target-json for ACP window targeting
 let targetJson: Record<string, unknown> | undefined;
@@ -2384,6 +2788,8 @@ if (targetJson || opts.emitVisionCrops) {
 // Step 3: Capture screenshot (unless skipped)
 let screenshotResult: ScreenshotResult | null = null;
 let capturePlan: CapturePlan | null = null;
+let visualEvidence: VisualEvidenceReceipt | null = null;
+let renderEvidence: VisualEvidenceReceipt | null = null;
 if (!skipScreenshot) {
   const captureOutcome = await captureScreenshot(
     session,
@@ -2396,6 +2802,15 @@ if (!skipScreenshot) {
   );
   screenshotResult = captureOutcome.result;
   capturePlan = captureOutcome.plan;
+  visualEvidence = buildOsVisualEvidence(screenshotResult, capturePlan);
+  if (
+    targetJson &&
+    (visualSource === "render" ||
+      (visualSource === "auto" && visualEvidence?.available === false))
+  ) {
+    const renderOutPath = outPath.replace(/\.png$/i, ".render.png");
+    renderEvidence = await captureRenderReadbackViaMcp(targetJson, renderOutPath);
+  }
 }
 
 // Step 4: Run assertions against state + probe
@@ -2540,6 +2955,9 @@ const receipt: VerifyReceipt = {
   ...(capturePlan ? { requestedAutomationWindowId: capturePlan.requestedAutomationWindowId } : {}),
   ...(capturePlan ? { requestedOsWindowId: capturePlan.requestedOsWindowId } : {}),
   ...(capturePlan ? { showIssuedBeforeCapture: capturePlan.showIssuedBeforeCapture } : {}),
+  ...(capturePlan?.screenRectFallback
+    ? { screenRectFallback: capturePlan.screenRectFallback }
+    : {}),
   // Stable proof bundle fields
   state: stateResult?.snapshot ?? null,
   probe: probeResult?.snapshot ?? null,
@@ -2559,6 +2977,8 @@ const receipt: VerifyReceipt = {
     : null,
   inspection,
   popupCapture,
+  visualEvidence,
+  renderEvidence,
   visionCrops: visionChecks,
   // Detailed receipts
   stateReceipt: stateResult,

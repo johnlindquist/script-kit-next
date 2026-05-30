@@ -31,6 +31,14 @@ pub struct ComputerUseCaptureNativeWindowRequest {
     pub correlation_id: String,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ComputerUseCaptureRenderWindowRequest {
+    pub target: AutomationWindowTarget,
+    pub hi_dpi: bool,
+    pub include_image: bool,
+    pub correlation_id: String,
+}
+
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ComputerUseRunningAppInfo {
@@ -85,6 +93,33 @@ pub struct ComputerUseCaptureNativeWindowSnapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<ComputerUseCaptureNativeWindowError>,
     pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComputerUseCaptureRenderWindowSnapshot {
+    pub schema_version: u32,
+    pub source: &'static str,
+    pub scope: &'static str,
+    pub status: ComputerUseCaptureRenderWindowStatus,
+    pub correlation_id: String,
+    pub target: AutomationWindowTarget,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capture: Option<ComputerUseNativeWindowCaptureInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ComputerUseCaptureNativeWindowError>,
+    pub warnings: Vec<String>,
+    pub limitation: &'static str,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ComputerUseCaptureRenderWindowStatus {
+    Captured,
+    Unsupported,
+    TargetNotFound,
+    BlankImageRejected,
+    CaptureFailed,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -191,6 +226,13 @@ pub trait ComputerUseRuntimeBridge: Send + Sync {
     ) -> Result<ComputerUseCaptureNativeWindowSnapshot, ComputerUseRuntimeError> {
         Err(ComputerUseRuntimeError::Unavailable)
     }
+
+    fn capture_render_window(
+        &self,
+        _request: ComputerUseCaptureRenderWindowRequest,
+    ) -> Result<ComputerUseCaptureRenderWindowSnapshot, ComputerUseRuntimeError> {
+        Err(ComputerUseRuntimeError::Unavailable)
+    }
 }
 
 #[cfg(test)]
@@ -260,5 +302,36 @@ mod tests {
 
         let json = serde_json::to_value(&info).expect("serialize capture info");
         assert!(json.get("pngBase64").is_none());
+    }
+
+    #[test]
+    fn capture_render_window_snapshot_serializes_limitation_contract() {
+        let snapshot = ComputerUseCaptureRenderWindowSnapshot {
+            schema_version: 1,
+            source: "gpuiRenderReadback",
+            scope: "liveAutomationWindowRenderReadback",
+            status: ComputerUseCaptureRenderWindowStatus::Unsupported,
+            correlation_id: "render-1".to_string(),
+            target: AutomationWindowTarget::Focused,
+            capture: None,
+            error: Some(ComputerUseCaptureNativeWindowError {
+                code: "gpui_readback_unavailable",
+                message: "GPUI render readback is not implemented yet".to_string(),
+                reason: Some("unsupported".to_string()),
+                pixel_audit: None,
+            }),
+            warnings: vec!["app-render proof is not OS compositor proof".to_string()],
+            limitation: "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor/native blur output.",
+        };
+
+        let json = serde_json::to_value(&snapshot).expect("serialize render snapshot");
+        assert_eq!(json["source"], "gpuiRenderReadback");
+        assert_eq!(json["status"], "unsupported");
+        assert_eq!(json["target"]["type"], "focused");
+        assert_eq!(json["error"]["code"], "gpui_readback_unavailable");
+        assert_eq!(
+            json["limitation"],
+            "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor/native blur output."
+        );
     }
 }

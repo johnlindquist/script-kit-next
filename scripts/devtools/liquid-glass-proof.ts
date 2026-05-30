@@ -11,6 +11,7 @@ type Args = {
 };
 
 type Evidence = {
+  receipts: string[];
   screenshots: string[];
   layoutReceipts: string[];
   inspectReceipts: string[];
@@ -18,6 +19,14 @@ type Evidence = {
   diffMasks: string[];
   visualAudit: JsonObject | null;
   notes: string[];
+};
+
+type ProofTiers = {
+  osScreenshotProof: "pass" | "blocked" | "missing";
+  appRenderProof: "pass" | "fail" | "missing";
+  offscreenRenderProof: "pass" | "fail" | "missing";
+  numericProof: "pass" | "fail" | "missing";
+  imageDiffProof: "pass" | "blocked" | "missing";
 };
 
 const RECEIPT_ROOT = "artifacts/liquid-glass/receipts";
@@ -99,6 +108,11 @@ type ScreenshotUsability = {
   note?: string;
 };
 
+type ImageDiffUsability = {
+  usable: boolean;
+  note?: string;
+};
+
 function auditFromReceipt(json: JsonObject | null): JsonObject {
   const screenshot = asObject(json?.screenshot);
   const screenshotReceipt = asObject(json?.screenshotReceipt);
@@ -146,6 +160,53 @@ function screenshotUsability(path: string, receipts: string[]): ScreenshotUsabil
   return { usable: true };
 }
 
+function imageDiffUsability(path: string): ImageDiffUsability {
+  const json = readJsonSync(path);
+  if (!json) {
+    return {
+      usable: false,
+      note: `ignored image diff ${path}: receipt could not be parsed`,
+    };
+  }
+  const assertions = asObject(json.assertions);
+  const errors = asArray(json.errors);
+  const dimensions = asObject(json.dimensions);
+  const sameSizeRequired = json.sameSizeRequired === true;
+  const sameSize = dimensions.sameSize;
+  if (json.classification !== "ok") {
+    return {
+      usable: false,
+      note: `ignored image diff ${path}: classification is ${String(json.classification ?? "missing")}`,
+    };
+  }
+  if (assertions.diffMaskWritten !== true) {
+    return {
+      usable: false,
+      note: `ignored image diff ${path}: diffMaskWritten assertion is not true`,
+    };
+  }
+  if (assertions.changedPixelsMeasured !== true) {
+    return {
+      usable: false,
+      note: `ignored image diff ${path}: changedPixelsMeasured assertion is not true`,
+    };
+  }
+  if (errors.length > 0) {
+    return {
+      usable: false,
+      note: `ignored image diff ${path}: receipt has errors`,
+    };
+  }
+  if (sameSizeRequired && sameSize !== true) {
+    return {
+      usable: false,
+      note: `ignored image diff ${path}: sameSizeRequired is true but dimensions.sameSize is not true`,
+    };
+  }
+
+  return { usable: true };
+}
+
 function evidenceFor(terms: string[], files: { receipts: string[]; screenshots: string[]; diffs: string[] }, visualAuditPath?: string): Evidence {
   const receipts = files.receipts.filter((path) => includesAny(path, terms));
   const screenshots: string[] = [];
@@ -158,17 +219,79 @@ function evidenceFor(terms: string[], files: { receipts: string[]; screenshots: 
       screenshotNotes.push(usability.note);
     }
   }
+  const imageDiffReceipts: string[] = [];
+  const imageDiffNotes: string[] = [];
+  for (const path of receipts.filter((receiptPath) => receiptPath.includes("image-diff"))) {
+    const usability = imageDiffUsability(path);
+    if (usability.usable) {
+      imageDiffReceipts.push(path);
+    } else if (usability.note) {
+      imageDiffNotes.push(usability.note);
+    }
+  }
   return {
+    receipts,
     screenshots,
     layoutReceipts: receipts.filter((path) => path.includes("layout")),
     inspectReceipts: receipts.filter((path) => path.includes("inspect") || path.includes("window")),
-    imageDiffReceipts: receipts.filter((path) => path.includes("image-diff")),
+    imageDiffReceipts,
     diffMasks: files.diffs.filter((path) => includesAny(path, terms)),
     visualAudit: null,
     notes: [
       ...screenshotNotes,
+      ...imageDiffNotes,
       ...(visualAuditPath ? [`visualAudit sourced from ${visualAuditPath}`] : []),
     ],
+  };
+}
+
+function proofTiers(evidence: Evidence): ProofTiers {
+  let osBlocked = false;
+  let appRenderPass = false;
+  let appRenderFail = false;
+  let offscreenPass = false;
+  let offscreenFail = false;
+  for (const receipt of evidence.receipts) {
+    const json = readJsonSync(receipt);
+    const visualEvidence = asObject(json?.visualEvidence);
+    if (visualEvidence.classification === "macos-windowserver-capture-blocked") {
+      osBlocked = true;
+    }
+    if (visualEvidence.countsAsOsScreenshotEvidence === true) {
+      osBlocked = false;
+    }
+    const renderEvidence = asObject(json?.renderEvidence);
+    if (renderEvidence.countsAsAppRenderEvidence === true) {
+      appRenderPass = true;
+    } else if (Object.keys(renderEvidence).length > 0) {
+      appRenderFail = true;
+    }
+    if (String(renderEvidence.source ?? "").includes("offscreen")) {
+      if (renderEvidence.available === true) {
+        offscreenPass = true;
+      } else {
+        offscreenFail = true;
+      }
+    }
+  }
+  const audit = asObject(evidence.visualAudit);
+  const styled = typeof audit.styledNodeCount === "number" ? audit.styledNodeCount : null;
+  const nodeCount = typeof audit.nodeCount === "number" ? audit.nodeCount : null;
+  const numericPass =
+    evidence.layoutReceipts.length > 0 &&
+    nodeCount != null &&
+    styled === nodeCount &&
+    asArray(audit.controlsWithHitFailures).length === 0 &&
+    asArray(audit.contentGlassNodes).length === 0 &&
+    asArray(audit.contentNativeMaterialNodes).length === 0 &&
+    asArray(audit.glassLayerViolations).length === 0 &&
+    asArray(audit.missingStyleNodeNames).length === 0;
+  return {
+    osScreenshotProof: evidence.screenshots.length > 0 ? "pass" : osBlocked ? "blocked" : "missing",
+    appRenderProof: appRenderPass ? "pass" : appRenderFail ? "fail" : "missing",
+    offscreenRenderProof: offscreenPass ? "pass" : offscreenFail ? "fail" : "missing",
+    numericProof: numericPass ? "pass" : evidence.layoutReceipts.length > 0 ? "fail" : "missing",
+    imageDiffProof: evidence.imageDiffReceipts.length > 0 ? "pass" : osBlocked ? "blocked" : "missing",
   };
 }
 
@@ -396,6 +519,7 @@ async function main() {
       ]);
     }
     const status = classify(evidence);
+    const tiers = proofTiers(evidence);
     return {
       surfaceKind,
       appViewVariants: contract.appViewVariants ?? [],
@@ -404,10 +528,16 @@ async function main() {
       proofStatus: status,
       requiredEvidence: {
         screenshot: evidence.screenshots.length > 0,
+        osScreenshotProof: tiers.osScreenshotProof,
+        appRenderProof: tiers.appRenderProof,
+        offscreenRenderProof: tiers.offscreenRenderProof,
         numericLayout: evidence.layoutReceipts.length > 0,
+        numericProof: tiers.numericProof,
         imageDiff: evidence.imageDiffReceipts.length > 0,
+        imageDiffProof: tiers.imageDiffProof,
         visualAudit: evidence.visualAudit != null,
       },
+      proofTiers: tiers,
       visualAudit: evidence.visualAudit,
       evidence,
     };
@@ -450,6 +580,7 @@ async function main() {
       ? await readJsonIfExists(`${RECEIPT_ROOT}/dictation-next-deliver-fixture.json`)
       : null;
     const baseStatus = classify(evidence);
+    const tiers = proofTiers(evidence);
     const proofStatus = target.id === "dictation" && evidence.visualAudit && evidence.layoutReceipts.length > 0
       ? "numeric-window-proof-screenshot-blocked"
       : target.id === "acp-detached" && evidence.visualAudit && evidence.layoutReceipts.length > 0
@@ -466,12 +597,18 @@ async function main() {
       proofStatus,
       requiredEvidence: {
         screenshot: evidence.screenshots.length > 0,
+        osScreenshotProof: tiers.osScreenshotProof,
+        appRenderProof: tiers.appRenderProof,
+        offscreenRenderProof: tiers.offscreenRenderProof,
         numericLayout: evidence.layoutReceipts.length > 0,
+        numericProof: tiers.numericProof,
         imageDiff: evidence.imageDiffReceipts.length > 0,
+        imageDiffProof: tiers.imageDiffProof,
         visualAudit: evidence.visualAudit != null,
         mediaProof: dictationMedia != null,
         syntheticDelivery: dictationDelivery != null,
       },
+      proofTiers: tiers,
       mediaProof: dictationMedia
         ? {
           status: dictationMedia.status ?? null,
@@ -517,6 +654,8 @@ async function main() {
     strongProofSurfaceCount: surfaces.filter((surface) => surface.proofStatus === "strong-proof").length,
     partialProofSurfaceCount: surfaces.filter((surface) => surface.proofStatus !== "missing-proof" && surface.proofStatus !== "strong-proof").length,
     missingProofSurfaceCount: surfaces.filter((surface) => surface.proofStatus === "missing-proof").length,
+    osScreenshotBlockedSurfaceCount: surfaces.filter((surface) => surface.proofTiers.osScreenshotProof === "blocked").length,
+    appRenderProofSurfaceCount: surfaces.filter((surface) => surface.proofTiers.appRenderProof === "pass").length,
     batchCount: batches.length,
     strongProofBatchCount: batches.filter((batch) => batch.proofStatus === "strong-proof").length,
     partialProofBatchCount: batches.filter((batch) => batch.proofStatus === "partial-proof").length,
@@ -538,6 +677,7 @@ async function main() {
     warnings: [
       summary.missingProofSurfaceCount === 0 ? "" : `${summary.missingProofSurfaceCount} contract surfaces still lack proof artifacts`,
       "strong-proof means current artifacts include screenshot, numeric layout visualAudit, and image diff evidence; it is not an Apple conformance claim by itself",
+      "proofTiers separate OS screenshots from GPUI app-render proof so WindowServer-blocked captures cannot become false visual evidence",
     ].filter(Boolean),
     errors: [],
   };
