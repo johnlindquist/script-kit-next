@@ -5,7 +5,7 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-latest.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T07:12:32.164Z",
+  "generatedAt": "2026-05-30T07:12:03.012Z",
   "summary": {
     "surfaceCount": 29,
     "strongProofSurfaceCount": 4,
@@ -451,6 +451,7 @@
           "artifacts/liquid-glass/receipts/inline-agent-main-target-inspect.json",
           "artifacts/liquid-glass/receipts/tahoe-next-main-inspect.json",
           "artifacts/liquid-glass/receipts/tahoe-next-main-window-inspect.json",
+          "artifacts/liquid-glass/receipts/window-priority-main-backdrop-current-session-start.json",
           "artifacts/liquid-glass/receipts/window-priority-prompt-div-fixed-rect-maincoords-capture.json"
         ],
         "imageDiffReceipts": [
@@ -2447,7 +2448,7 @@
     }
   ],
   "warnings": [
-    "6 contract surfaces still lack proof artifacts",
+    "5 contract surfaces still lack proof artifacts",
     "strong-proof means current artifacts include screenshot, numeric layout visualAudit, and image diff evidence; it is not an Apple conformance claim by itself"
   ],
   "errors": []

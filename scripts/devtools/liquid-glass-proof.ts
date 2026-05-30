@@ -281,6 +281,10 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-kit-store-installed-current-layout.json`,
       ]);
+    } else if (surfaceKind === "AcpHistory") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-acp-history-current-layout.json`,
+      ]);
     } else if (surfaceKind === "EmojiPicker") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-emoji-current-layout.json`,
