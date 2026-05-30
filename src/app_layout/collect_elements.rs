@@ -1,6 +1,8 @@
 // Element collection for getElements protocol support.
 // Returns a bounded list of visible UI elements with semantic IDs.
 
+use crate::render_builtins::{AiPresetSearchEmptyState, FavoritesEmptyState};
+
 /// Outcome of collecting visible UI elements, carrying receipt metadata
 /// for the `elementsResult` protocol response.
 #[derive(Debug, Clone)]
@@ -461,6 +463,42 @@ impl ScriptListApp {
                     "current-app-commands-filter",
                     filter.clone(),
                     "menu-commands",
+                    &rows,
+                    *selected_index,
+                    limit,
+                )
+                .into()
+            }
+
+            AppView::SearchAiPresetsView {
+                filter,
+                selected_index,
+            } => {
+                let rows = Self::ai_preset_search_visible_row_labels(filter);
+                self.collect_generic_filterable_rows(
+                    "ai-presets-filter",
+                    filter.clone(),
+                    "ai-presets",
+                    "ai-presets-empty",
+                    AiPresetSearchEmptyState::from_filter(filter).message(),
+                    &rows,
+                    *selected_index,
+                    limit,
+                )
+                .into()
+            }
+
+            AppView::FavoritesBrowseView {
+                filter,
+                selected_index,
+            } => {
+                let rows = self.filtered_favorite_ids_for_filter(filter);
+                self.collect_generic_filterable_rows(
+                    "favorites-filter",
+                    filter.clone(),
+                    "favorites",
+                    "favorites-empty",
+                    FavoritesEmptyState::from_filter(filter).message(),
                     &rows,
                     *selected_index,
                     limit,
@@ -1385,6 +1423,86 @@ impl ScriptListApp {
                 source: None,
                 source_name: None,
                 selectable: None,
+                status_kind: None,
+                action_disabled: None,
+            });
+        }
+
+        (elements, total_count)
+    }
+
+    fn collect_generic_filterable_rows(
+        &self,
+        input_name: &str,
+        input_value: String,
+        list_name: &str,
+        empty_panel_name: &str,
+        empty_text: &str,
+        rows: &[String],
+        selected_index: usize,
+        limit: usize,
+    ) -> (Vec<protocol::ElementInfo>, usize) {
+        let empty_panel_count = usize::from(rows.is_empty());
+        let total_count = rows.len() + 2 + empty_panel_count;
+        let mut elements = Vec::with_capacity(limit.min(total_count));
+
+        Self::push_limited_element(
+            &mut elements,
+            limit,
+            protocol::ElementInfo::input(
+                input_name,
+                Some(input_value.as_str()),
+                self.focused_input != FocusedInput::None,
+            ),
+        );
+
+        Self::push_limited_element(
+            &mut elements,
+            limit,
+            protocol::ElementInfo::list(list_name, rows.len()),
+        );
+
+        if rows.is_empty() {
+            Self::push_limited_element(
+                &mut elements,
+                limit,
+                protocol::ElementInfo {
+                    semantic_id: protocol::generate_semantic_id_named("panel", empty_panel_name),
+                    element_type: protocol::ElementType::Panel,
+                    text: Some(empty_text.to_string()),
+                    value: Some(list_name.to_string()),
+                    selected: None,
+                    focused: None,
+                    index: None,
+                    role: Some("empty-state".to_string()),
+                    kind: Some("genericFilterableEmptyState".to_string()),
+                    source: Some(list_name.to_string()),
+                    source_name: None,
+                    selectable: Some(false),
+                    status_kind: None,
+                    action_disabled: None,
+                },
+            );
+            return (elements, total_count);
+        }
+
+        for (index, row) in rows.iter().enumerate() {
+            if elements.len() >= limit {
+                break;
+            }
+            elements.push(protocol::ElementInfo {
+                semantic_id: protocol::generate_semantic_id("choice", index, row),
+                element_type: protocol::ElementType::Choice,
+                text: Some(row.clone()),
+                value: Some(row.clone()),
+                selected: Some(index == selected_index),
+                focused: None,
+                index: Some(index),
+                role: Some("generic-filterable-row".to_string()),
+                kind: Some(list_name.to_string()),
+                source: Some(list_name.to_string()),
+                source_name: None,
+                selectable: Some(true),
                 status_kind: None,
                 action_disabled: None,
             });

@@ -18,13 +18,13 @@ impl CreateAiPresetFormAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AiPresetSearchEmptyState {
+pub(crate) enum AiPresetSearchEmptyState {
     NoPresetsAvailable,
     NoFilteredMatches,
 }
 
 impl AiPresetSearchEmptyState {
-    fn from_filter(filter: &str) -> Self {
+    pub(crate) fn from_filter(filter: &str) -> Self {
         if filter.is_empty() {
             Self::NoPresetsAvailable
         } else {
@@ -32,7 +32,7 @@ impl AiPresetSearchEmptyState {
         }
     }
 
-    fn message(self) -> &'static str {
+    pub(crate) fn message(self) -> &'static str {
         match self {
             Self::NoPresetsAvailable => "No presets available",
             Self::NoFilteredMatches => "No presets match your filter",
@@ -64,6 +64,64 @@ impl<'a> AiPresetModelSelection<'a> {
 }
 
 impl ScriptListApp {
+    pub(crate) fn ai_preset_search_visible_row_labels(filter: &str) -> Vec<String> {
+        let all_presets = crate::ai::presets::load_presets().unwrap_or_default();
+        let default_presets: Vec<(&str, &str, &str)> = vec![
+            (
+                "general",
+                "General Assistant",
+                "Helpful AI assistant for any task",
+            ),
+            ("coder", "Code Assistant", "Expert programmer and debugger"),
+            (
+                "writer",
+                "Writing Assistant",
+                "Help with writing and editing",
+            ),
+            (
+                "researcher",
+                "Research Assistant",
+                "Deep analysis and research",
+            ),
+            (
+                "creative",
+                "Creative Partner",
+                "Brainstorming and creative ideas",
+            ),
+        ];
+
+        let mut rows: Vec<(String, String, String)> = default_presets
+            .iter()
+            .map(|(id, name, desc)| ((*id).to_string(), (*name).to_string(), (*desc).to_string()))
+            .collect();
+        for preset in &all_presets {
+            if !default_presets.iter().any(|(did, _, _)| *did == preset.id) {
+                rows.push((
+                    preset.id.clone(),
+                    preset.name.clone(),
+                    preset.description.clone(),
+                ));
+            }
+        }
+
+        let filter_lower = filter.to_lowercase();
+        rows.into_iter()
+            .filter(|(id, name, desc)| {
+                filter.is_empty()
+                    || name.to_lowercase().contains(&filter_lower)
+                    || desc.to_lowercase().contains(&filter_lower)
+                    || id.to_lowercase().contains(&filter_lower)
+            })
+            .map(|(_, name, desc)| {
+                if desc.is_empty() {
+                    name
+                } else {
+                    format!("{name} — {desc}")
+                }
+            })
+            .collect()
+    }
+
     /// Render the searchable AI presets list view.
     fn render_search_ai_presets(
         &mut self,

@@ -50,13 +50,13 @@ impl FavoritesBrowseListAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FavoritesEmptyState {
+pub(crate) enum FavoritesEmptyState {
     NoFavoritesYet,
     NoFilteredMatches,
 }
 
 impl FavoritesEmptyState {
-    fn from_filter(filter: &str) -> Self {
+    pub(crate) fn from_filter(filter: &str) -> Self {
         if filter.is_empty() {
             Self::NoFavoritesYet
         } else {
@@ -64,7 +64,7 @@ impl FavoritesEmptyState {
         }
     }
 
-    fn message(self) -> &'static str {
+    pub(crate) fn message(self) -> &'static str {
         match self {
             Self::NoFavoritesYet => "No favorites yet \u{00b7} Star scripts from the actions menu (Cmd+K)",
             Self::NoFilteredMatches => "No favorites match your filter",
