@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 3,
+  "status": "error",
+  "label": "window-priority-acp-detached-after",
+  "timestamp": "2026-05-30T04:59:45.611Z",
+  "durationMs": 4899,
+  "requiresVisionReview": false,
+  "resolvedTarget": {
+    "windowId": "acpDetached:placeholder",
+    "windowKind": "AcpDetached",
+    "title": "Script Kit Agent Chat",
+    "surfaceId": null
+  },
+  "dispatchPath": "window_role_fallback",
+  "resolvedWindowId": "acpDetached:placeholder",
+  "osWindowId": 84116,
+  "inspectionOsWindowId": 84116,
+  "captureRouting": "inspection-os-window-id",
+  "requestedAutomationWindowId": "acpDetached:placeholder",
+  "requestedOsWindowId": 84116,
+  "showIssuedBeforeCapture": true,
+  "state": {
+    "type": "acpStateResult",
+    "requestId": "verify-window-priority-acp-detached-after-1780117180712",
+    "schemaVersion": 2,
+    "status": "idle",
+    "uiVariant": "standard",
+    "inputText": "",
+    "cursorIndex": 0,
+    "hasSelection": false,
+    "messageCount": 0,
+    "awaitingFirstAssistantText": false,
+    "contextChipCount": 0,
+    "contextReady": true,
+    "hasPendingPermission": false,
+    "warnings": [
+      "target_unsupported: getAcpState resolved detached ACP target acpDetached:placeholder but no live view entity is available (window may be a placeholder or closed)"
+    ]
+  },
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-acp-detached-after.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowId": null
+  },
+  "captureTarget": {
+    "requestedWindowId": 84116,
+    "actualWindowId": null
+  },
+  "inspection": {
+    "automationWindowId": "acpDetached:placeholder",
+    "windowKind": "AcpDetached",
+    "title": "Script Kit Agent Chat",
+    "osWindowId": 84116,
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 520
+    },
+    "screenshotWidth": 640,
+    "screenshotHeight": 520,
+    "pixelProbes": [],
+    "warnings": [
+      "panel_only_acp_detached"
+    ]
+  },
+  "popupCapture": {
+    "strategy": "direct_window_capture",
+    "windowKind": "AcpDetached",
+    "targetBounds": null,
+    "semanticReceiptsArePrimary": true
+  },
+  "visionCrops": [],
+  "stateReceipt": {
+    "queried": true,
+    "snapshot": {
+      "type": "acpStateResult",
+      "requestId": "verify-window-priority-acp-detached-after-1780117180712",
+      "schemaVersion": 2,
+      "status": "idle",
+      "uiVariant": "standard",
+      "inputText": "",
+      "cursorIndex": 0,
+      "hasSelection": false,
+      "messageCount": 0,
+      "awaitingFirstAssistantText": false,
+      "contextChipCount": 0,
+      "contextReady": true,
+      "hasPendingPermission": false,
+      "warnings": [
+        "target_unsupported: getAcpState resolved detached ACP target acpDetached:placeholder but no live view entity is available (window may be a placeholder or closed)"
+      ]
+    },
+    "error": null
+  },
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": false,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-acp-detached-after.png",
+    "sizeBytes": null,
+    "width": null,
+    "height": null,
+    "contentAudit": null,
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowFrontmost": null,
+    "windowFocused": null,
+    "windowId": null,
+    "error": "Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T04:59:43.786Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-acp-detached-after.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84116}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T04:59:43.787Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T04:59:44.581Z\",\"attempt\":1,\"windowId\":84116}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T04:59:44.672Z\",\"attempt\":1,\"windowId\":84116,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T04:59:44.874Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-acp-detached-after.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84116}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T04:59:44.874Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T04:59:45.526Z\",\"attempt\":1,\"windowId\":84116}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T04:59:45.609Z\",\"attempt\":2,\"windowId\":84116,\"exitCode\":1,\"stderr\":\"could not create image from window\"}"
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "state: queried | screenshot: FAILED (Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T04:59:43.786Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-acp-detached-after.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84116}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T04:59:43.787Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T04:59:44.581Z\",\"attempt\":1,\"windowId\":84116}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T04:59:44.672Z\",\"attempt\":1,\"windowId\":84116,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T04:59:44.874Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-acp-detached-after.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84116}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T04:59:44.874Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T04:59:45.526Z\",\"attempt\":1,\"windowId\":84116}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T04:59:45.609Z\",\"attempt\":2,\"windowId\":84116,\"exitCode\":1,\"stderr\":\"could not create image from window\"})"
+}

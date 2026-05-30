@@ -1,0 +1,730 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.layout",
+  "command": "layout.measure",
+  "classification": "ok",
+  "session": "liquid-acp-detached",
+  "include": [
+    "nodes",
+    "regions",
+    "scroll",
+    "anchors",
+    "resize",
+    "overlaps"
+  ],
+  "limit": 200,
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "acpDetached"
+    },
+    "strict": false,
+    "expectedSurfaceKind": null
+  },
+  "target": {
+    "automationId": "acpDetached:placeholder",
+    "stableTargetId": "acpDetached:placeholder",
+    "targetKind": "AcpDetached",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 640,
+      "height": 520
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 640,
+      "height": 520,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 640,
+        "height": 520
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 63722,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "promptType": "acpDetached",
+  "timestamp": "2026-05-30T04:59:15.603849+00:00",
+  "componentCount": 4,
+  "window": {
+    "rect": {
+      "x": 585,
+      "y": 177,
+      "width": 640,
+      "height": 520
+    },
+    "visible": null,
+    "focused": null
+  },
+  "viewport": {
+    "clientWidth": 640,
+    "clientHeight": 520,
+    "contentWidth": 640,
+    "contentHeight": 520,
+    "scrollWidth": 640,
+    "scrollHeight": 520,
+    "canScrollX": false,
+    "canScrollY": false,
+    "scrollTop": null,
+    "maxScrollTop": 0,
+    "overflowPolicyY": "hidden"
+  },
+  "pressure": {
+    "overflowY": false,
+    "hiddenContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "footerOverlapCount": 0,
+    "inputOverlapCount": 0,
+    "pressureScore": 0
+  },
+  "viewportRect": {
+    "x": 0,
+    "y": 0,
+    "width": 640,
+    "height": 520
+  },
+  "windowRect": {
+    "x": 585,
+    "y": 177,
+    "width": 640,
+    "height": 520
+  },
+  "regions": [
+    {
+      "name": "AcpDetachedWindow",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 640,
+        "height": 520
+      }
+    },
+    {
+      "name": "AcpMessageViewport",
+      "type": "list",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 640,
+        "height": 448
+      }
+    },
+    {
+      "name": "AcpComposerBar",
+      "type": "input",
+      "bounds": {
+        "x": 0,
+        "y": 448,
+        "width": 640,
+        "height": 42
+      }
+    },
+    {
+      "name": "AcpFooterRail",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 490,
+        "width": 640,
+        "height": 30
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "name": "AcpDetachedWindow",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 640,
+        "height": 520
+      },
+      "depth": 0,
+      "parent": null,
+      "children": [],
+      "explanation": "Detached ACP placeholder window root measured from the resolved automation target bounds.",
+      "visualStyle": {
+        "chromeLayer": "floatingTransient",
+        "materialSource": "NSVisualEffectView",
+        "tokenSource": "chrome.acpDetachedWindow",
+        "cornerRadius": {
+          "topLeft": 22,
+          "topRight": 22,
+          "bottomRight": 22,
+          "bottomLeft": 22
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 640,
+          "height": 520
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 640,
+          "height": 520
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 640,
+          "height": 520
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 640,
+          "height": 520
+        },
+        "hitWidth": 640,
+        "hitHeight": 520,
+        "visualWidth": 640,
+        "visualHeight": 520,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AcpDetachedWindow",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 640,
+          "height": 520
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Detached ACP placeholder window root measured from the resolved automation target bounds.",
+        "visualStyle": {
+          "chromeLayer": "floatingTransient",
+          "materialSource": "NSVisualEffectView",
+          "tokenSource": "chrome.acpDetachedWindow",
+          "cornerRadius": {
+            "topLeft": 22,
+            "topRight": 22,
+            "bottomRight": 22,
+            "bottomLeft": 22
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 640,
+            "height": 520
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 640,
+            "height": 520
+          }
+        }
+      }
+    },
+    {
+      "name": "AcpMessageViewport",
+      "type": "list",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 640,
+        "height": 448
+      },
+      "depth": 1,
+      "parent": "AcpDetachedWindow",
+      "children": [],
+      "explanation": "Placeholder ACP transcript region above the composer and footer.",
+      "visualStyle": {
+        "chromeLayer": "content",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "content.acpMessages",
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 640,
+          "height": 448
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 640,
+          "height": 448
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 640,
+          "height": 448
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 640,
+          "height": 448
+        },
+        "hitWidth": 640,
+        "hitHeight": 448,
+        "visualWidth": 640,
+        "visualHeight": 448,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": true,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AcpMessageViewport",
+        "type": "list",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 640,
+          "height": 448
+        },
+        "flex": {
+          "grow": 1
+        },
+        "depth": 1,
+        "parent": "AcpDetachedWindow",
+        "explanation": "Placeholder ACP transcript region above the composer and footer.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.acpMessages",
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 640,
+            "height": 448
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 640,
+            "height": 448
+          }
+        }
+      }
+    },
+    {
+      "name": "AcpComposerBar",
+      "type": "input",
+      "bounds": {
+        "x": 0,
+        "y": 448,
+        "width": 640,
+        "height": 42
+      },
+      "depth": 1,
+      "parent": "AcpDetachedWindow",
+      "children": [],
+      "explanation": "ACP composer row: vertical padding plus the measured single-line input height.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.acpComposer",
+        "cornerRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomRight": 16,
+          "bottomLeft": 16
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 448,
+          "width": 640,
+          "height": 42
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 448,
+          "width": 640,
+          "height": 42
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 448,
+          "width": 640,
+          "height": 42
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 448,
+          "width": 640,
+          "height": 42
+        },
+        "hitWidth": 640,
+        "hitHeight": 42,
+        "visualWidth": 640,
+        "visualHeight": 42,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AcpComposerBar",
+        "type": "input",
+        "bounds": {
+          "x": 0,
+          "y": 448,
+          "width": 640,
+          "height": 42
+        },
+        "boxModel": {
+          "padding": {
+            "top": 10,
+            "right": 12,
+            "bottom": 10,
+            "left": 12
+          }
+        },
+        "depth": 1,
+        "parent": "AcpDetachedWindow",
+        "explanation": "ACP composer row: vertical padding plus the measured single-line input height.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.acpComposer",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 448,
+            "width": 640,
+            "height": 42
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 448,
+            "width": 640,
+            "height": 42
+          }
+        }
+      }
+    },
+    {
+      "name": "AcpFooterRail",
+      "type": "panel",
+      "bounds": {
+        "x": 0,
+        "y": 490,
+        "width": 640,
+        "height": 30
+      },
+      "depth": 1,
+      "parent": "AcpDetachedWindow",
+      "children": [],
+      "explanation": "Placeholder ACP footer rail for window-shell proof.",
+      "visualStyle": {
+        "chromeLayer": "functionalChrome",
+        "materialSource": "solidThemeToken",
+        "tokenSource": "chrome.acpFooterRail",
+        "cornerRadius": {
+          "topLeft": 10,
+          "topRight": 10,
+          "bottomRight": 10,
+          "bottomLeft": 10
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 490,
+          "width": 640,
+          "height": 30
+        },
+        "hitBounds": {
+          "x": 0,
+          "y": 490,
+          "width": 640,
+          "height": 30
+        }
+      },
+      "hitMetrics": {
+        "hitBounds": {
+          "x": 0,
+          "y": 490,
+          "width": 640,
+          "height": 30
+        },
+        "visualBounds": {
+          "x": 0,
+          "y": 490,
+          "width": 640,
+          "height": 30
+        },
+        "hitWidth": 640,
+        "hitHeight": 30,
+        "visualWidth": 640,
+        "visualHeight": 30,
+        "minHitPass": true,
+        "minVisualPass": true,
+        "preferredHitPass": false,
+        "exception": null
+      },
+      "clipped": false,
+      "raw": {
+        "name": "AcpFooterRail",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 490,
+          "width": 640,
+          "height": 30
+        },
+        "depth": 1,
+        "parent": "AcpDetachedWindow",
+        "explanation": "Placeholder ACP footer rail for window-shell proof.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.acpFooterRail",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 490,
+            "width": 640,
+            "height": 30
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 490,
+            "width": 640,
+            "height": 30
+          }
+        }
+      }
+    }
+  ],
+  "overlaps": [],
+  "resizePressure": {
+    "windowCanGrow": null,
+    "overflowY": false,
+    "desiredContentHeight": 520,
+    "measuredContentHeight": 520,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "pressureScore": 0
+  },
+  "visualAudit": {
+    "nodeCount": 4,
+    "styledNodeCount": 4,
+    "unstyledNodeCount": 0,
+    "controlsWithHitFailures": [],
+    "contentGlassNodes": [],
+    "missingStyleNodeNames": [],
+    "chromeLayers": {
+      "content": 1,
+      "floatingTransient": 1,
+      "functionalChrome": 2
+    }
+  },
+  "handlerForm": null,
+  "missingPrimitives": [],
+  "warnings": [],
+  "errors": [],
+  "rawLayout": {
+    "type": "layoutInfoResult",
+    "requestId": "devtools-layout-measure-1780117155578-aa3287",
+    "windowWidth": 640,
+    "windowHeight": 520,
+    "promptType": "acpDetached",
+    "components": [
+      {
+        "name": "AcpDetachedWindow",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 640,
+          "height": 520
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Detached ACP placeholder window root measured from the resolved automation target bounds.",
+        "visualStyle": {
+          "chromeLayer": "floatingTransient",
+          "materialSource": "NSVisualEffectView",
+          "tokenSource": "chrome.acpDetachedWindow",
+          "cornerRadius": {
+            "topLeft": 22,
+            "topRight": 22,
+            "bottomRight": 22,
+            "bottomLeft": 22
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 640,
+            "height": 520
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 640,
+            "height": 520
+          }
+        }
+      },
+      {
+        "name": "AcpMessageViewport",
+        "type": "list",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 640,
+          "height": 448
+        },
+        "flex": {
+          "grow": 1
+        },
+        "depth": 1,
+        "parent": "AcpDetachedWindow",
+        "explanation": "Placeholder ACP transcript region above the composer and footer.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.acpMessages",
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 640,
+            "height": 448
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 640,
+            "height": 448
+          }
+        }
+      },
+      {
+        "name": "AcpComposerBar",
+        "type": "input",
+        "bounds": {
+          "x": 0,
+          "y": 448,
+          "width": 640,
+          "height": 42
+        },
+        "boxModel": {
+          "padding": {
+            "top": 10,
+            "right": 12,
+            "bottom": 10,
+            "left": 12
+          }
+        },
+        "depth": 1,
+        "parent": "AcpDetachedWindow",
+        "explanation": "ACP composer row: vertical padding plus the measured single-line input height.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.acpComposer",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 448,
+            "width": 640,
+            "height": 42
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 448,
+            "width": 640,
+            "height": 42
+          }
+        }
+      },
+      {
+        "name": "AcpFooterRail",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 490,
+          "width": 640,
+          "height": 30
+        },
+        "depth": 1,
+        "parent": "AcpDetachedWindow",
+        "explanation": "Placeholder ACP footer rail for window-shell proof.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.acpFooterRail",
+          "cornerRadius": {
+            "topLeft": 10,
+            "topRight": 10,
+            "bottomRight": 10,
+            "bottomLeft": 10
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 490,
+            "width": 640,
+            "height": 30
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 490,
+            "width": 640,
+            "height": 30
+          }
+        }
+      }
+    ],
+    "timestamp": "2026-05-30T04:59:15.603849+00:00"
+  }
+}
