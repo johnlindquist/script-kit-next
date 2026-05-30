@@ -328,7 +328,7 @@
 
     <section class="panel">
       <h2>Image Diffing Recommendation</h2>
-      <p>The audit now has a local ImageMagick-backed DevTools primitive at <code>scripts/devtools/image-diff.ts</code> so before/after screenshots can produce numeric receipts and diff masks instead of relying on visual inspection alone. It supports full-image comparison and explicit per-side crops for component-level proof.</p>
+      <p>The audit now has a local ImageMagick-backed DevTools primitive at <code>scripts/devtools/image-diff.ts</code> so before/after screenshots can produce numeric receipts and diff masks instead of relying on visual inspection alone. It supports full-image comparison, explicit per-side crops, and receipt-driven target crops for component-level proof.</p>
       <ul>
         <li>Save masks beside each before/after pair and keep the JSON receipt next to the layout and screenshot receipts.</li>
         <li>Generate focused overlays that call out rounded-corner deltas, padding shifts, hit-target expansion, row-height changes, popup anchor movement, and material/blur region changes.</li>
@@ -373,6 +373,13 @@
             <td><code>image-diff-actions-popup-estimated-crop-before-to-tahoe-next.json</code></td>
             <td>Confirms the popup target region changed substantially, but still warns on dimensions. Next DevTools work should emit target-native pixel crop bounds for actions popups before using this for fine-grained visual claims.</td>
           </tr>
+          <tr>
+            <td>Actions popup receipt-driven target crop</td>
+            <td><span class="metric">698x737 -> 782x924</span></td>
+            <td><span class="metric">707,435 / 722,568 = 97.91%</span></td>
+            <td><code>image-diff-actions-popup-receipt-crop-before-to-tahoe-next.json</code></td>
+            <td>Same pixel result as the estimated crop, now sourced from <code>target.screenshotIdentity.targetBoundsInScreenshot</code>: before logical 320x338+215+44 scaled by 2.1813, after logical 340x402+205+44 scaled by 2.2987.</td>
+          </tr>
         </tbody>
       </table>
       <div class="shot-grid" style="margin-top:14px">
@@ -391,6 +398,10 @@
         <figure>
           <a href="artifacts/liquid-glass/diffs/actions-popup-estimated-crop-before-to-tahoe-next.png"><img src="artifacts/liquid-glass/diffs/actions-popup-estimated-crop-before-to-tahoe-next.png" alt="Estimated crop diff mask for actions popup before to Tahoe metric slice"></a>
           <figcaption>Actions estimated popup crop diff: <code>artifacts/liquid-glass/diffs/actions-popup-estimated-crop-before-to-tahoe-next.png</code>. Useful for geometry drift, not yet enough for pixel-perfect corner claims.</figcaption>
+        </figure>
+        <figure>
+          <a href="artifacts/liquid-glass/diffs/actions-popup-receipt-crop-before-to-tahoe-next.png"><img src="artifacts/liquid-glass/diffs/actions-popup-receipt-crop-before-to-tahoe-next.png" alt="Receipt-driven target crop diff mask for actions popup before to Tahoe metric slice"></a>
+          <figcaption>Actions receipt-driven target crop diff: <code>artifacts/liquid-glass/diffs/actions-popup-receipt-crop-before-to-tahoe-next.png</code>. Crop provenance is recorded in <code>image-diff-actions-popup-receipt-crop-before-to-tahoe-next.json</code>.</figcaption>
         </figure>
       </div>
     </section>
@@ -476,6 +487,10 @@
         <div class="entry">
           <time>2026-05-29 20:54 MDT</time>
           <p>Extended <code>image-diff.ts</code> with explicit per-side crops. Generated a focused main-header diff at <code>image-diff-main-header-before-to-tahoe-next.json</code>: 15,727 changed pixels out of 413,760 (3.80%). Generated an estimated actions-popup crop at <code>image-diff-actions-popup-estimated-crop-before-to-tahoe-next.json</code>, which intentionally remains warning-class evidence because the popup crop dimensions changed; this defines the next missing primitive as target-native pixel crop bounds for attached popups.</p>
+        </div>
+        <div class="entry">
+          <time>2026-05-29 21:02 MDT</time>
+          <p>Added receipt-driven target crop support to <code>image-diff.ts</code>. The actions popup diff now derives its crop from <code>before-actions-inspect.json</code> and <code>tahoe-next-actions-inspect.json</code> instead of manual coordinates, preserving logical target bounds, reference width, scale factor, final pixel crop, changed-pixel count, and the remaining dimension warning in <code>image-diff-actions-popup-receipt-crop-before-to-tahoe-next.json</code>.</p>
         </div>
       </div>
     </section>

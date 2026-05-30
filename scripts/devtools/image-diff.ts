@@ -8,6 +8,10 @@ type Args = {
   fuzz: string;
   redCrop: string;
   greenCrop: string;
+  redCropFromReceipt: string;
+  greenCropFromReceipt: string;
+  redReferenceWidth: number | null;
+  greenReferenceWidth: number | null;
 };
 
 type Dimensions = {
@@ -19,6 +23,7 @@ function usage() {
   return [
     "Usage:",
     "  bun scripts/devtools/image-diff.ts compare --red <before.png> --green <after.png> --out <diff.png> [--label <name>] [--fuzz <percent>] [--red-crop <WxH+X+Y>] [--green-crop <WxH+X+Y>]",
+    "  bun scripts/devtools/image-diff.ts compare --red <before.png> --green <after.png> --out <diff.png> --red-crop-from-receipt <inspect.json> --green-crop-from-receipt <inspect.json> --red-reference-width <logical px> --green-reference-width <logical px>",
     "",
     "Creates an ImageMagick compare mask and emits a JSON receipt with dimensions, changed-pixel count, ratio, and diff bounding box.",
   ].join("\n");
@@ -42,6 +47,10 @@ function parseArgs(argv: string[]): Args {
     fuzz: "0%",
     redCrop: "",
     greenCrop: "",
+    redCropFromReceipt: "",
+    greenCropFromReceipt: "",
+    redReferenceWidth: null,
+    greenReferenceWidth: null,
   };
 
   for (let index = 1; index < argv.length; index += 1) {
@@ -60,6 +69,14 @@ function parseArgs(argv: string[]): Args {
       args.redCrop = argv[++index] ?? "";
     } else if (arg === "--green-crop") {
       args.greenCrop = argv[++index] ?? "";
+    } else if (arg === "--red-crop-from-receipt") {
+      args.redCropFromReceipt = argv[++index] ?? "";
+    } else if (arg === "--green-crop-from-receipt") {
+      args.greenCropFromReceipt = argv[++index] ?? "";
+    } else if (arg === "--red-reference-width") {
+      args.redReferenceWidth = Number(argv[++index] ?? "");
+    } else if (arg === "--green-reference-width") {
+      args.greenReferenceWidth = Number(argv[++index] ?? "");
     }
   }
 
@@ -115,6 +132,44 @@ function parseBoundingBox(value: string) {
   };
 }
 
+function asObject(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+}
+
+function numberAt(source: Record<string, unknown>, path: string): number | null {
+  const value = path.split(".").reduce<unknown>((current, part) => {
+    if (typeof current !== "object" || current === null) return undefined;
+    return (current as Record<string, unknown>)[part];
+  }, source);
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+async function cropFromReceipt(path: string, imageWidth: number, referenceWidth: number | null) {
+  if (!path) return null;
+  if (!Number.isFinite(referenceWidth) || referenceWidth == null || referenceWidth <= 0) {
+    throw new Error(`--*-crop-from-receipt requires a positive --*-reference-width`);
+  }
+  const receipt = JSON.parse(await Bun.file(path).text()) as Record<string, unknown>;
+  const root = asObject(receipt);
+  const bounds =
+    asObject(asObject(asObject(root.target).screenshotIdentity).targetBoundsInScreenshot);
+  const x = typeof bounds.x === "number" ? bounds.x : numberAt(root, "resolvedTarget.screenshotIdentity.targetBoundsInScreenshot.x");
+  const y = typeof bounds.y === "number" ? bounds.y : numberAt(root, "resolvedTarget.screenshotIdentity.targetBoundsInScreenshot.y");
+  const width = typeof bounds.width === "number" ? bounds.width : numberAt(root, "resolvedTarget.screenshotIdentity.targetBoundsInScreenshot.width");
+  const height = typeof bounds.height === "number" ? bounds.height : numberAt(root, "resolvedTarget.screenshotIdentity.targetBoundsInScreenshot.height");
+  if (![x, y, width, height].every((value) => typeof value === "number" && Number.isFinite(value))) {
+    throw new Error(`Could not find target.screenshotIdentity.targetBoundsInScreenshot in ${path}`);
+  }
+  const scale = imageWidth / referenceWidth;
+  return {
+    crop: `${Math.round(width * scale)}x${Math.round(height * scale)}+${Math.round(x * scale)}+${Math.round(y * scale)}`,
+    sourceReceipt: path,
+    logicalBounds: { x, y, width, height },
+    referenceWidth,
+    scale,
+  };
+}
+
 async function prepareInput(path: string, crop: string, tmpDir: string, name: string) {
   if (!crop) {
     return path;
@@ -134,8 +189,14 @@ async function main() {
   const tmpDir = `/tmp/script-kit-image-diff-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   await Bun.$`mkdir -p ${tmpDir}`;
 
-  const redInput = await prepareInput(args.red, args.redCrop, tmpDir, "red");
-  const greenInput = await prepareInput(args.green, args.greenCrop, tmpDir, "green");
+  const sourceRedDimensions = identify(args.red);
+  const sourceGreenDimensions = identify(args.green);
+  const redReceiptCrop = await cropFromReceipt(args.redCropFromReceipt, sourceRedDimensions.width, args.redReferenceWidth);
+  const greenReceiptCrop = await cropFromReceipt(args.greenCropFromReceipt, sourceGreenDimensions.width, args.greenReferenceWidth);
+  const redCrop = args.redCrop || redReceiptCrop?.crop || "";
+  const greenCrop = args.greenCrop || greenReceiptCrop?.crop || "";
+  const redInput = await prepareInput(args.red, redCrop, tmpDir, "red");
+  const greenInput = await prepareInput(args.green, greenCrop, tmpDir, "green");
   const redDimensions = identify(redInput);
   const greenDimensions = identify(greenInput);
   const canvas = {
@@ -177,8 +238,10 @@ async function main() {
     diffPath: args.out,
     fuzz: args.fuzz,
     crop: {
-      red: args.redCrop || null,
-      green: args.greenCrop || null,
+      red: redCrop || null,
+      green: greenCrop || null,
+      redSource: redReceiptCrop,
+      greenSource: greenReceiptCrop,
     },
     dimensions: {
       red: redDimensions,
