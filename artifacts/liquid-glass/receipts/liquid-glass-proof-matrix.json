@@ -5,7 +5,7 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T02:58:52.219Z",
+  "generatedAt": "2026-05-30T03:03:35.841Z",
   "summary": {
     "surfaceCount": 31,
     "strongProofSurfaceCount": 2,
@@ -1355,26 +1355,49 @@
   "practicalTargets": [
     {
       "id": "notes",
-      "proofStatus": "baseline-only",
+      "proofStatus": "strong-proof",
       "requiredEvidence": {
         "screenshot": true,
-        "numericLayout": false,
-        "imageDiff": false,
-        "visualAudit": false
+        "numericLayout": true,
+        "imageDiff": true,
+        "visualAudit": true
       },
       "evidence": {
         "screenshots": [
-          "artifacts/liquid-glass/screenshots/before-notes.png"
+          "artifacts/liquid-glass/screenshots/before-notes.png",
+          "artifacts/liquid-glass/screenshots/notes-next.png"
         ],
-        "layoutReceipts": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/notes-next-layout.json"
+        ],
         "inspectReceipts": [
           "artifacts/liquid-glass/receipts/before-notes-inspect.json",
-          "artifacts/liquid-glass/receipts/before-notes-window-inspect.json"
+          "artifacts/liquid-glass/receipts/before-notes-window-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-next-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-next-window-inspect.json"
         ],
-        "imageDiffReceipts": [],
-        "diffMasks": [],
-        "visualAudit": null,
-        "notes": []
+        "imageDiffReceipts": [
+          "artifacts/liquid-glass/receipts/image-diff-notes-before-to-next.json"
+        ],
+        "diffMasks": [
+          "artifacts/liquid-glass/diffs/notes-before-to-next.png"
+        ],
+        "visualAudit": {
+          "nodeCount": 4,
+          "styledNodeCount": 4,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 1,
+            "floatingTransient": 1,
+            "functionalChrome": 2
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/notes-next-layout.json"
+        ]
       }
     },
     {

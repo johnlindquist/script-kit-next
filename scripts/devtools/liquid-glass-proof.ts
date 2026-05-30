@@ -194,6 +194,11 @@ async function main() {
     { id: "notes-acp", terms: ["notes-acp"] },
   ].map(async (target) => {
     const evidence = evidenceFor(target.terms, files);
+    if (target.id === "notes") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/notes-next-layout.json`,
+      ]);
+    }
     return {
       id: target.id,
       proofStatus: classify(evidence),

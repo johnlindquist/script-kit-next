@@ -469,6 +469,7 @@ impl NotesApp {
         target: &crate::protocol::AutomationWindowInfo,
     ) -> crate::protocol::LayoutInfo {
         use crate::protocol::{LayoutComponentInfo, LayoutComponentType, LayoutInfo};
+        use crate::ui::chrome as chrome_tokens;
 
         let (window_width, window_height) = target
             .bounds
@@ -487,6 +488,12 @@ impl NotesApp {
         components.push(
             LayoutComponentInfo::new("NotesWindow", LayoutComponentType::Container)
                 .with_bounds(0.0, 0.0, window_width, window_height)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FLOATING,
+                    chrome_tokens::MATERIAL_NS_VISUAL_EFFECT,
+                    Some(chrome_tokens::LIQUID_GLASS_WINDOW_RADIUS_PX),
+                )
+                .with_visual_token("chrome.notesWindow")
                 .with_flex_column()
                 .with_depth(0)
                 .with_explanation(
@@ -496,6 +503,12 @@ impl NotesApp {
         components.push(
             LayoutComponentInfo::new("NotesTitlebar", LayoutComponentType::Header)
                 .with_bounds(0.0, 0.0, window_width, titlebar_height)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                )
+                .with_visual_token("chrome.notesTitlebar")
                 .with_depth(1)
                 .with_parent("NotesWindow")
                 .with_explanation(
@@ -507,6 +520,12 @@ impl NotesApp {
             components.push(
                 LayoutComponentInfo::new("NotesSearchBar", LayoutComponentType::Input)
                     .with_bounds(0.0, titlebar_height, window_width, search_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
+                    )
+                    .with_visual_token("chrome.notesSearch")
                     .with_depth(1)
                     .with_parent("NotesWindow")
                     .with_explanation("Editor find/search row shown by Cmd+F."),
@@ -522,6 +541,12 @@ impl NotesApp {
                         window_width,
                         toolbar_height,
                     )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                    )
+                    .with_visual_token("chrome.notesFormatToolbar")
                     .with_depth(1)
                     .with_parent("NotesWindow")
                     .with_explanation(
@@ -540,6 +565,12 @@ impl NotesApp {
         components.push(
             LayoutComponentInfo::new(editor_name, LayoutComponentType::Prompt)
                 .with_bounds(0.0, content_top, window_width, editor_height)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_CONTENT,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    None,
+                )
+                .with_visual_token("content.notesEditor")
                 .with_flex_column()
                 .with_flex_grow(1.0)
                 .with_depth(1)
@@ -557,6 +588,12 @@ impl NotesApp {
                     window_width,
                     footer_height,
                 )
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                )
+                .with_visual_token("chrome.notesFooter")
                 .with_depth(1)
                 .with_parent("NotesWindow")
                 .with_explanation("Status/footer strip with save state, counts, and mode hints."),
@@ -571,6 +608,12 @@ impl NotesApp {
                         (window_width - 32.0).max(0.0),
                         super::ACTIONS_PANEL_WINDOW_MARGIN.min(window_height),
                     )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FLOATING,
+                        chrome_tokens::MATERIAL_NS_VISUAL_EFFECT,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("chrome.notesActionsPanel")
                     .with_depth(2)
                     .with_parent("NotesWindow")
                     .with_explanation("Notes actions command surface anchored under the titlebar."),
@@ -587,6 +630,12 @@ impl NotesApp {
                         super::BROWSE_PANEL_MAX_HEIGHT
                             .min((window_height - titlebar_height).max(0.0)),
                     )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FLOATING,
+                        chrome_tokens::MATERIAL_NS_VISUAL_EFFECT,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("chrome.notesBrowsePanel")
                     .with_depth(2)
                     .with_parent("NotesWindow")
                     .with_explanation("Notes switcher/browse panel overlay."),
