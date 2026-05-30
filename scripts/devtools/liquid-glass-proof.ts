@@ -161,6 +161,7 @@ async function main() {
     AcpHistory: ["acp-history"],
     ClipboardHistory: ["clipboard"],
     AppLauncher: ["app-launcher", "applauncher"],
+    WindowSwitcher: ["window-switcher", "windowswitcher"],
     NotesWindow: ["notes"],
     Dictation: ["dictation"],
   };
@@ -204,6 +205,10 @@ async function main() {
     } else if (surfaceKind === "AppLauncher") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-app-launcher-current-layout.json`,
+      ]);
+    } else if (surfaceKind === "WindowSwitcher") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-window-switcher-current-layout.json`,
       ]);
     } else if (surfaceKind === "PromptEntity") {
       await attachVisualAudit(evidence, [

@@ -1,0 +1,373 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.inspect",
+  "session": "liquid-window-switcher-current",
+  "classification": "ok",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "WindowSwitcher"
+  },
+  "resolvedTarget": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "WindowSwitcher",
+    "appViewVariant": "WindowSwitcherView",
+    "nativeFooterSurface": "window_switcher",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 750,
+      "height": 480,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 750,
+        "height": 480
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 92343,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "windows": [
+    {
+      "index": 0,
+      "automationId": "main",
+      "windowKind": "Main",
+      "title": "Script Kit",
+      "visible": true,
+      "focused": false,
+      "bounds": {
+        "x": 585,
+        "y": 177,
+        "width": 750,
+        "height": 480
+      },
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "parentAutomationId": null,
+      "parentKind": null,
+      "pid": 92343
+    }
+  ],
+  "rawInspect": {
+    "type": "automationInspectResult",
+    "requestId": "devtools-targets-inspect-1780121256723-e9e21e",
+    "schemaVersion": 3,
+    "windowId": "main",
+    "windowKind": "Main",
+    "surfaceKind": "WindowSwitcher",
+    "appViewVariant": "WindowSwitcherView",
+    "nativeFooterSurface": "window_switcher",
+    "title": "Script Kit",
+    "resolvedBounds": {
+      "x": 585,
+      "y": 177,
+      "width": 750,
+      "height": 480
+    },
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 750,
+      "height": 480
+    },
+    "surfaceHitPoint": {
+      "x": 375,
+      "y": 240
+    },
+    "suggestedHitPoints": [
+      {
+        "semanticId": "panel:window",
+        "x": 375,
+        "y": 240,
+        "reason": "surface_center"
+      }
+    ],
+    "elements": [
+      {
+        "semanticId": "input:window-filter",
+        "type": "input",
+        "value": "",
+        "focused": true
+      },
+      {
+        "semanticId": "list:windows",
+        "type": "list",
+        "text": "27 items"
+      },
+      {
+        "semanticId": "choice:0:system-settings-abou",
+        "type": "choice",
+        "text": "System Settings — About",
+        "value": "System Settings — About",
+        "selected": true,
+        "index": 0
+      },
+      {
+        "semanticId": "choice:1:google-chrome-google",
+        "type": "choice",
+        "text": "Google Chrome — Google Gemini",
+        "value": "Google Chrome — Google Gemini",
+        "selected": false,
+        "index": 1
+      },
+      {
+        "semanticId": "choice:2:google-chrome-for-te",
+        "type": "choice",
+        "text": "Google Chrome for Testing — Sign in - Google Accounts",
+        "value": "Google Chrome for Testing — Sign in - Google Accounts",
+        "selected": false,
+        "index": 2
+      },
+      {
+        "semanticId": "choice:3:google-chrome-for-te",
+        "type": "choice",
+        "text": "Google Chrome for Testing — Google Gemini",
+        "value": "Google Chrome for Testing — Google Gemini",
+        "selected": false,
+        "index": 3
+      },
+      {
+        "semanticId": "choice:4:codex-codex",
+        "type": "choice",
+        "text": "Codex — Codex",
+        "value": "Codex — Codex",
+        "selected": false,
+        "index": 4
+      },
+      {
+        "semanticId": "choice:5:cmux-agents-019e74c6",
+        "type": "choice",
+        "text": "cmux — .agents | 019e74c6-ebe3-7601-9c8d-c172928300ee | main",
+        "value": "cmux — .agents | 019e74c6-ebe3-7601-9c8d-c172928300ee | main",
+        "selected": false,
+        "index": 5
+      },
+      {
+        "semanticId": "choice:6:google-chrome-cmux-e",
+        "type": "choice",
+        "text": "Google Chrome — cmux-extensions/extensions/qui… johnlindquist/cmux-extensions",
+        "value": "Google Chrome — cmux-extensions/extensions/qui… johnlindquist/cmux-extensions",
+        "selected": false,
+        "index": 6
+      },
+      {
+        "semanticId": "choice:7:quicktime-player-gmt",
+        "type": "choice",
+        "text": "QuickTime Player — GMT20260529-155513_Recording_1920x1080.mp4",
+        "value": "QuickTime Player — GMT20260529-155513_Recording_1920x1080.mp4",
+        "selected": false,
+        "index": 7
+      },
+      {
+        "semanticId": "choice:8:zoom-us-zoom-workpla",
+        "type": "choice",
+        "text": "zoom.us — Zoom Workplace",
+        "value": "zoom.us — Zoom Workplace",
+        "selected": false,
+        "index": 8
+      },
+      {
+        "semanticId": "choice:9:zoom-us-login",
+        "type": "choice",
+        "text": "zoom.us — Login",
+        "value": "zoom.us — Login",
+        "selected": false,
+        "index": 9
+      },
+      {
+        "semanticId": "choice:10:zoom-us-zoom-client",
+        "type": "choice",
+        "text": "zoom.us — Zoom Client Healthcheck",
+        "value": "zoom.us — Zoom Client Healthcheck",
+        "selected": false,
+        "index": 10
+      },
+      {
+        "semanticId": "choice:11:zed-codex-workshop-w",
+        "type": "choice",
+        "text": "Zed — codex-workshop — workshop-agenda-draft.md",
+        "value": "Zed — codex-workshop — workshop-agenda-draft.md",
+        "selected": false,
+        "index": 11
+      },
+      {
+        "semanticId": "choice:12:zoom-us-zoom",
+        "type": "choice",
+        "text": "zoom.us — Zoom",
+        "value": "zoom.us — Zoom",
+        "selected": false,
+        "index": 12
+      },
+      {
+        "semanticId": "choice:13:google-chrome-karpat",
+        "type": "choice",
+        "text": "Google Chrome — karpathy/autoresearch: AI agent…nanochat training automatically",
+        "value": "Google Chrome — karpathy/autoresearch: AI agent…nanochat training automatically",
+        "selected": false,
+        "index": 13
+      },
+      {
+        "semanticId": "choice:14:antigravity-ide-laun",
+        "type": "choice",
+        "text": "Antigravity IDE — Launchpad",
+        "value": "Antigravity IDE — Launchpad",
+        "selected": false,
+        "index": 14
+      },
+      {
+        "semanticId": "choice:15:vlc-vlc-media-player",
+        "type": "choice",
+        "text": "VLC — VLC media player",
+        "value": "VLC — VLC media player",
+        "selected": false,
+        "index": 15
+      },
+      {
+        "semanticId": "choice:16:1password-lock-scree",
+        "type": "choice",
+        "text": "1Password — Lock Screen — 1Password",
+        "value": "1Password — Lock Screen — 1Password",
+        "selected": false,
+        "index": 16
+      },
+      {
+        "semanticId": "choice:17:google-chrome-script",
+        "type": "choice",
+        "text": "Google Chrome — Script Kit GPUI Liquid Glass Audit",
+        "value": "Google Chrome — Script Kit GPUI Liquid Glass Audit",
+        "selected": false,
+        "index": 17
+      },
+      {
+        "semanticId": "choice:18:granola-granola",
+        "type": "choice",
+        "text": "Granola — Granola",
+        "value": "Granola — Granola",
+        "selected": false,
+        "index": 18
+      },
+      {
+        "semanticId": "choice:19:screen-sharing-tv",
+        "type": "choice",
+        "text": "Screen Sharing — tv",
+        "value": "Screen Sharing — tv",
+        "selected": false,
+        "index": 19
+      },
+      {
+        "semanticId": "choice:20:cmux-settings",
+        "type": "choice",
+        "text": "cmux — Settings",
+        "value": "cmux — Settings",
+        "selected": false,
+        "index": 20
+      },
+      {
+        "semanticId": "choice:21:cmux-script-kit-gpui",
+        "type": "choice",
+        "text": "cmux — ⠏ script-kit-gpui | Taho | main",
+        "value": "cmux — ⠏ script-kit-gpui | Taho | main",
+        "selected": false,
+        "index": 21
+      },
+      {
+        "semanticId": "choice:22:uad-meter-control-pa",
+        "type": "choice",
+        "text": "UAD Meter & Control Panel — UAD Meter",
+        "value": "UAD Meter & Control Panel — UAD Meter",
+        "selected": false,
+        "index": 22
+      },
+      {
+        "semanticId": "choice:23:finder-downloads",
+        "type": "choice",
+        "text": "Finder — Downloads",
+        "value": "Finder — Downloads",
+        "selected": false,
+        "index": 23
+      },
+      {
+        "semanticId": "choice:24:loopback-loopback",
+        "type": "choice",
+        "text": "Loopback — Loopback",
+        "value": "Loopback — Loopback",
+        "selected": false,
+        "index": 24
+      },
+      {
+        "semanticId": "choice:25:screen-sharing-all-c",
+        "type": "choice",
+        "text": "Screen Sharing — All Connections",
+        "value": "Screen Sharing — All Connections",
+        "selected": false,
+        "index": 25
+      },
+      {
+        "semanticId": "choice:26:slack-lc-egghead-cha",
+        "type": "choice",
+        "text": "Slack — ! lc-egghead (Channel) - egghead.io - 1 new item - Slack",
+        "value": "Slack — ! lc-egghead (Channel) - egghead.io - 1 new item - Slack",
+        "selected": false,
+        "index": 26
+      },
+      {
+        "semanticId": "footer:native:row",
+        "type": "panel",
+        "text": "native",
+        "value": "window_switcher",
+        "role": "footer",
+        "kind": "nativeFooterRow",
+        "selectable": false
+      },
+      {
+        "semanticId": "footer:native:run",
+        "type": "button",
+        "text": "↵ Run",
+        "value": "run",
+        "selected": false,
+        "index": 0,
+        "role": "footer",
+        "kind": "nativeFooterButton",
+        "source": "window_switcher",
+        "sourceName": "window_switcher",
+        "selectable": true
+      }
+    ],
+    "totalCount": 31,
+    "focusedSemanticId": "input:window-filter",
+    "selectedSemanticId": "choice:0:system-settings-abou",
+    "screenshotWidth": 750,
+    "screenshotHeight": 480,
+    "osWindowId": 84195,
+    "semanticQuality": "full",
+    "pid": 92343
+  },
+  "sessionLifecycle": [],
+  "errors": []
+}
