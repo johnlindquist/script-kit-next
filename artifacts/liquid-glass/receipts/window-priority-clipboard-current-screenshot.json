@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 3,
+  "status": "error",
+  "label": "window-priority-clipboard-current",
+  "timestamp": "2026-05-30T06:00:53.864Z",
+  "durationMs": 5148,
+  "requiresVisionReview": false,
+  "resolvedTarget": {
+    "windowId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "surfaceId": null
+  },
+  "dispatchPath": "window_role_fallback",
+  "resolvedWindowId": "main",
+  "osWindowId": 84181,
+  "inspectionOsWindowId": 84181,
+  "captureRouting": "inspection-os-window-id",
+  "requestedAutomationWindowId": "main",
+  "requestedOsWindowId": 84181,
+  "showIssuedBeforeCapture": true,
+  "state": null,
+  "probe": null,
+  "screenshot": {
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-clipboard-current.png",
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowId": null
+  },
+  "captureTarget": {
+    "requestedWindowId": 84181,
+    "actualWindowId": null
+  },
+  "inspection": {
+    "automationWindowId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "osWindowId": 84181,
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 750,
+      "height": 480
+    },
+    "screenshotWidth": 750,
+    "screenshotHeight": 480,
+    "pixelProbes": [],
+    "warnings": []
+  },
+  "popupCapture": {
+    "strategy": "not_applicable",
+    "windowKind": "Main",
+    "targetBounds": null,
+    "semanticReceiptsArePrimary": false
+  },
+  "visionCrops": [],
+  "stateReceipt": null,
+  "probeReceipt": null,
+  "screenshotReceipt": {
+    "captured": false,
+    "path": "/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-clipboard-current.png",
+    "sizeBytes": null,
+    "width": null,
+    "height": null,
+    "contentAudit": null,
+    "captureMethod": "window.ts",
+    "windowCaptureMethod": null,
+    "windowFrontmost": null,
+    "windowFocused": null,
+    "windowId": null,
+    "error": "Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T06:00:51.524Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-clipboard-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84181}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T06:00:51.524Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T06:00:52.856Z\",\"attempt\":1,\"windowId\":84181}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T06:00:52.953Z\",\"attempt\":1,\"windowId\":84181,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T06:00:53.154Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-clipboard-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84181}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T06:00:53.155Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T06:00:53.788Z\",\"attempt\":1,\"windowId\":84181}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T06:00:53.862Z\",\"attempt\":2,\"windowId\":84181,\"exitCode\":1,\"stderr\":\"could not create image from window\"}"
+  },
+  "visionChecks": [],
+  "assertions": [],
+  "summary": "screenshot: FAILED (Strict window capture failed: {\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T06:00:51.524Z\",\"attempt\":1,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-clipboard-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84181}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T06:00:51.524Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T06:00:52.856Z\",\"attempt\":1,\"windowId\":84181}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T06:00:52.953Z\",\"attempt\":1,\"windowId\":84181,\"exitCode\":1,\"stderr\":\"could not create image from window\"}\n{\"event\":\"window_capture_attempt\",\"ts\":\"2026-05-30T06:00:53.154Z\",\"attempt\":2,\"retryCount\":2,\"path\":\"/Users/johnlindquist/dev/script-kit-gpui/artifacts/liquid-glass/screenshots/window-priority-clipboard-current.png\",\"titleSubstr\":\"\",\"activateFirst\":true,\"exactWindowId\":84181}\n{\"event\":\"window_focus_attempt\",\"ts\":\"2026-05-30T06:00:53.155Z\",\"attempt\":1,\"retryCount\":1,\"titleSubstr\":\"\"}\n{\"event\":\"window_focus_panel_already_visible\",\"ts\":\"2026-05-30T06:00:53.788Z\",\"attempt\":1,\"windowId\":84181}\n{\"event\":\"window_capture_screencapture_l_failed\",\"ts\":\"2026-05-30T06:00:53.862Z\",\"attempt\":2,\"windowId\":84181,\"exitCode\":1,\"stderr\":\"could not create image from window\"})"
+}

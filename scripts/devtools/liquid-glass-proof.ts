@@ -196,6 +196,10 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-acp-detached-layout-after.json`,
       ]);
+    } else if (surfaceKind === "ClipboardHistory") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-clipboard-current-layout.json`,
+      ]);
     } else if (surfaceKind === "PromptEntity") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-prompt-div-fixed-layout-sdk.json`,
