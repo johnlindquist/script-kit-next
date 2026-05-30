@@ -83,6 +83,26 @@ test("search input WITH measured text inset below 8pt is outOfBand", () => {
   expect(d.classification).toBe("outOfBand");
 });
 
+test("the real main-launcher SearchInput (0pt flush text inset) is outOfBand vs the 9pt native target", () => {
+  // Mirrors build_layout_info.rs SearchInput: 22pt-tall input whose text is a
+  // flush flex_1 child (0pt horizontal inset, CURSOR_MARGIN_Y=2pt vertical).
+  const searchInput: NodeLike[] = [
+    {
+      name: "SearchInput",
+      type: "input",
+      parent: "Header",
+      bounds: { x: 16, y: 11, width: 498, height: 22 },
+      visualStyle: { cornerRadius: 14, contentInsets: { top: 2, right: 0, bottom: 2, left: 0 } },
+    },
+  ];
+  const d = searchPaddingDeviations(searchInput, 2)[0];
+  expect(d.observedPt).toBe(0);
+  expect(d.targetPt).toBe(9);
+  expect(d.deltaPt).toBe(-9);
+  expect(d.classification).toBe("outOfBand");
+  expect(d.normativeStrength).toBe("hard");
+});
+
 test("classifyDeviation respects retina pixel-quantization tolerance", () => {
   // target 6, tolerance absPt 1 on a 2x display -> passBand max(1, 2*0.5)=1
   expect(classifyDeviation(0.5, 6, { absPt: 1, nearAbsPt: 2 }, 2)).toBe("withinBand");

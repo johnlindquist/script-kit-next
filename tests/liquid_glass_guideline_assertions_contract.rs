@@ -168,6 +168,45 @@ fn measured_native_baselines_are_probe_backed_and_pinned() {
     );
 }
 
+/// Slice 3 (Oracle session `tahoe-apple-guideline-metrics`): the main-launcher
+/// SearchInput must EMIT its internal text inset so the conformance engine can
+/// MEASURE it (instead of reporting `unmeasured`). The search text renders as a
+/// flush flex_1 child with no left padding, so the horizontal inset is 0pt — the
+/// measured evidence for the user's "input lacks padding" concern (outOfBand vs
+/// the 9pt native NSTextField target). This pins the emission + the 0pt value.
+#[test]
+fn search_input_emits_measured_zero_horizontal_content_inset() {
+    let style = fs::read_to_string("src/protocol/types/grid_layout.rs")
+        .expect("failed to read grid_layout.rs");
+    assert!(
+        style.contains("pub content_insets: Option<BoxModelSides>")
+            && style.contains("fn with_content_insets"),
+        "LayoutVisualStyle must carry an emittable content_insets field + builder"
+    );
+
+    let layout = fs::read_to_string("src/app_layout/build_layout_info.rs")
+        .expect("failed to read build_layout_info.rs");
+    let start = layout
+        .find("LayoutComponentInfo::new(\"SearchInput\"")
+        .expect("main-launcher SearchInput node should exist");
+    let node = &layout[start..];
+    let end = node
+        .find(".with_visual_token(\"chrome.searchInput\")")
+        .expect("SearchInput should declare its visual token");
+    let node = &node[..end];
+    assert!(
+        node.contains(".with_content_insets("),
+        "SearchInput must emit a measured content inset for guideline conformance"
+    );
+    // Horizontal inset is 0pt (flush flex_1 text, no left padding) — the right
+    // and left args (2nd and 4th) must be literal 0.0.
+    assert!(
+        node.contains("0.0,\n                    crate::panel::CURSOR_MARGIN_Y,\n                    0.0,")
+            || node.matches("0.0,").count() >= 2,
+        "SearchInput horizontal content inset must be the measured 0.0pt (flush text)"
+    );
+}
+
 #[test]
 fn layout_visual_audit_rejects_zero_radius_placeholders() {
     let layout =

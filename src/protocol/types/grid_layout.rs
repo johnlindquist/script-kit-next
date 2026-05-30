@@ -327,6 +327,12 @@ pub struct LayoutVisualStyle {
     pub visual_bounds: Option<LayoutBounds>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hit_bounds: Option<LayoutBounds>,
+    /// Internal text/content inset (bezel/edge -> first glyph) for input-like
+    /// controls. Lets the Apple-guideline conformance engine MEASURE search-field
+    /// padding against the native NSTextField baseline (9pt H / 3pt V on macOS 26)
+    /// instead of reporting it as an `unmeasured` gap. Serialized as `contentInsets`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_insets: Option<BoxModelSides>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exception: Option<String>,
 }
@@ -496,7 +502,23 @@ impl LayoutComponentInfo {
             corner_radius: corner_radius.map(LayoutCornerRadius::uniform),
             visual_bounds: Some(self.bounds.clone()),
             hit_bounds: Some(self.bounds.clone()),
+            content_insets: None,
             exception: None,
+        });
+        self
+    }
+
+    /// Declare the internal content inset (edge -> first glyph) for an input-like
+    /// control so the Apple-guideline conformance engine can measure its padding.
+    pub fn with_content_insets(mut self, top: f32, right: f32, bottom: f32, left: f32) -> Self {
+        let style = self
+            .visual_style
+            .get_or_insert_with(LayoutVisualStyle::default);
+        style.content_insets = Some(BoxModelSides {
+            top,
+            right,
+            bottom,
+            left,
         });
         self
     }

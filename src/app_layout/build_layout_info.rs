@@ -1640,6 +1640,19 @@ impl ScriptListApp {
                     chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
                     Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
                 )
+                // Measured internal text inset so the Apple-guideline conformance
+                // engine can compare against the native NSTextField baseline
+                // (9pt H / 3pt V, macOS 26). The search text is a flush flex_1 child
+                // with NO left padding (render_script_list/mod.rs), so the horizontal
+                // inset is 0pt; the vertical inset is CURSOR_MARGIN_Y. The 0pt
+                // horizontal value is the measured evidence for the "input lacks
+                // padding" concern (outOfBand vs the 9pt native target).
+                .with_content_insets(
+                    crate::panel::CURSOR_MARGIN_Y,
+                    0.0,
+                    crate::panel::CURSOR_MARGIN_Y,
+                    0.0,
+                )
                 .with_visual_token("chrome.searchInput")
                 .with_hit_bounds(HEADER_PADDING_X, HEADER_PADDING_Y, input_width, BUTTON_HEIGHT)
                 .with_flex_grow(1.0)
