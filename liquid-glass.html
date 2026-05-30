@@ -643,6 +643,10 @@
           <time>2026-05-30 00:01 MDT</time>
           <p>Promoted <code>ExplicitPromptEntity</code> into numeric proof with EnvPrompt as the representative explicit prompt. The red baseline <code>window-priority-prompt-explicit-env-current-layout-sdk.json</code> exposed a semantic layout bug: EnvPrompt receipts reported generic launcher <code>ScriptList</code>, <code>PreviewPanel</code>, and list rows. The fixed receipt <code>window-priority-prompt-explicit-env-fixed-layout-sdk.json</code> now reports <code>EnvPromptContent</code> with 5/5 styled nodes, zero hit failures, zero content-glass nodes, and no missing style names. The proof matrix now has 5 partial surfaces and 20 missing surfaces.</p>
         </div>
+        <div class="entry">
+          <time>2026-05-30 00:11 MDT</time>
+          <p>Promoted <code>UtilityChildContent</code> into numeric proof using Quick Terminal as the representative utility child. <code>window-priority-utility-quick-current-layout.json</code> captured the red state with 4/5 styled nodes and stale 750x500 bounds. After aligning layout receipts with runtime sizing for <code>QuickTerminalView</code> and <code>ScratchPadView</code>, <code>window-priority-utility-quick-fixed-layout.json</code> reports a 750x700 viewport, <code>TerminalContent</code> 750x655, 5/5 styled nodes, zero hit failures, zero content-glass nodes, and no missing style names. The remaining prompt-runtime missing surface is <code>Webcam</code>.</p>
+        </div>
       </div>
     </section>
   </main>
