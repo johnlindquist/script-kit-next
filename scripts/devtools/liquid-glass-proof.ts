@@ -165,6 +165,7 @@ async function main() {
     BrowserTabs: ["browser-tabs", "browsertabs"],
     ProcessManager: ["process-manager", "processmanager"],
     CurrentAppCommands: ["current-app", "current-app-commands", "currentappcommands"],
+    Settings: ["settings"],
     NotesWindow: ["notes"],
     Dictation: ["dictation"],
   };
@@ -224,6 +225,10 @@ async function main() {
     } else if (surfaceKind === "CurrentAppCommands") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-current-app-current-layout.json`,
+      ]);
+    } else if (surfaceKind === "Settings") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-settings-current-layout.json`,
       ]);
     } else if (surfaceKind === "PromptEntity") {
       await attachVisualAudit(evidence, [
