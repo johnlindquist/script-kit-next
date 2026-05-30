@@ -70,7 +70,13 @@ fn supported_command_lists_are_named_by_target_kind() {
         ),
         (
             "AutomationBatchTargetKind::Notes",
-            &["\"setInput\"", "\"waitFor\""][..],
+            &[
+                "\"setInput\"",
+                "\"openActions\"",
+                "\"togglePreview\"",
+                "\"openNotesAcp\"",
+                "\"waitFor\"",
+            ][..],
         ),
         (
             "AutomationBatchTargetKind::ActionsDialog",

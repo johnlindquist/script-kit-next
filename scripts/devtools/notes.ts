@@ -7,6 +7,7 @@ type Args = {
   session: string;
   open: boolean;
   openActions: boolean;
+  openAcp: boolean;
   start: boolean;
   sandbox: boolean;
   sandboxPath: string;
@@ -21,7 +22,7 @@ type Args = {
 function usage() {
   return [
     "Usage:",
-    "  bun scripts/devtools/notes.ts inspect [--session <name>] [--open] [--open-actions] [--start] [--limit <n>]",
+    "  bun scripts/devtools/notes.ts inspect [--session <name>] [--open] [--open-actions] [--open-acp] [--start] [--limit <n>]",
     "  bun scripts/devtools/notes.ts resize-compare --session <name> --start --sandbox [--short-line-count <n>] [--tall-line-count <n>]",
   ].join("\n");
 }
@@ -40,6 +41,7 @@ function parseArgs(argv: string[]): Args {
     session: "default",
     open: false,
     openActions: false,
+    openAcp: false,
     start: false,
     sandbox: false,
     sandboxPath: "",
@@ -58,6 +60,8 @@ function parseArgs(argv: string[]): Args {
       args.open = true;
     } else if (arg === "--open-actions") {
       args.openActions = true;
+    } else if (arg === "--open-acp" || arg === "--open-notes-acp") {
+      args.openAcp = true;
     } else if (arg === "--start") {
       args.start = true;
     } else if (arg === "--sandbox") {
@@ -138,6 +142,32 @@ async function maybeOpenActions(args: Args) {
     String(args.timeoutMs),
   ], "open-actions");
   await Bun.sleep(250);
+  return receipt;
+}
+
+async function maybeOpenAcp(args: Args) {
+  if (!args.openAcp) {
+    return null;
+  }
+  const receipt = await run([
+    "bash",
+    "scripts/agentic/session.sh",
+    "rpc",
+    args.session,
+    JSON.stringify({
+      type: "batch",
+      requestId: `devtools-notes-open-acp-${Date.now()}`,
+      target: { type: "kind", kind: "notes" },
+      commands: [{ type: "openNotesAcp" }],
+      options: { stopOnError: true, rollbackOnError: false, timeout: args.timeoutMs },
+      trace: "on",
+    }),
+    "--expect",
+    "batchResult",
+    "--timeout",
+    String(args.timeoutMs),
+  ], "open-acp");
+  await Bun.sleep(350);
   return receipt;
 }
 
@@ -680,6 +710,7 @@ async function runInspect(args: Args) {
     shortcutBeforeEnvelope,
     shortcutAfterEnvelope,
   );
+  const openAcpReceipt = await maybeOpenAcp(args);
   const targetArgs = ["--session", args.session, "--target-id", notesTargetId, "--strict"];
   const elements = await run(["bun", "scripts/devtools/elements.ts", "snapshot", ...targetArgs, "--limit", String(args.limit)], "elements.snapshot");
   const focus = await run(["bun", "scripts/devtools/focus.ts", "inspect", ...targetArgs], "focus.inspect");
@@ -733,11 +764,17 @@ async function runInspect(args: Args) {
     session: args.session,
     openReceipt,
     openActionsReceipt,
+    openAcpReceipt,
     shortcutActivation,
     availableActions: {
       togglePreview: {
         channel: "protocol.batch.togglePreview",
         command: "togglePreview",
+        target: { type: "kind", kind: "notes" },
+      },
+      openAcp: {
+        channel: "protocol.batch.openNotesAcp",
+        command: "openNotesAcp",
         target: { type: "kind", kind: "notes" },
       },
     },

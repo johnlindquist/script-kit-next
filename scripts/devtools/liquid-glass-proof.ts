@@ -123,7 +123,9 @@ function classify(evidence: Evidence) {
 async function attachVisualAudit(evidence: Evidence, preferred: string[]) {
   for (const path of preferred) {
     const json = await readJsonIfExists(path);
-    const audit = asObject(json?.visualAudit);
+    const audit = Object.keys(asObject(json?.visualAudit)).length > 0
+      ? asObject(json?.visualAudit)
+      : asObject(asObject(asObject(json?.receipts).layout).visualAudit);
     if (Object.keys(audit).length > 0) {
       evidence.visualAudit = audit;
       evidence.notes.push(`visualAudit: ${path}`);
@@ -202,6 +204,11 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/inline-agent-main-layout.json`,
       ]);
+    } else if (target.id === "notes-acp") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/notes-acp-next-actions-open-inspect.json`,
+        `${RECEIPT_ROOT}/notes-acp-actions-open-inspect.json`,
+      ]);
     }
     const dictationMedia = target.id === "dictation"
       ? await readJsonIfExists(`${RECEIPT_ROOT}/dictation-next-post-delivery-media.json`)
@@ -214,6 +221,8 @@ async function main() {
       ? "media-proof-missing-visual"
       : target.id === "inline-agent" && evidence.visualAudit && evidence.layoutReceipts.length > 0
         ? "numeric-proof-missing-visual-capture"
+        : target.id === "notes-acp" && evidence.visualAudit && evidence.inspectReceipts.length > 0
+          ? "actions-panel-proof-acp-startup-blocked"
         : baseStatus;
     return {
       id: target.id,

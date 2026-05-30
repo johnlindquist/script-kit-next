@@ -273,6 +273,7 @@ fn command_name(command: &BatchCommand) -> &'static str {
         BatchCommand::SetInput { .. } => "setInput",
         BatchCommand::OpenActions => "openActions",
         BatchCommand::TogglePreview => "togglePreview",
+        BatchCommand::OpenNotesAcp => "openNotesAcp",
         BatchCommand::ForceSubmit { .. } => "forceSubmit",
         BatchCommand::WaitFor { .. } => "waitFor",
         BatchCommand::SelectByValue { .. } => "selectByValue",
@@ -821,6 +822,7 @@ pub fn execute_batch<P: TransactionStateProvider>(
             BatchCommand::ForceSubmit { .. }
             | BatchCommand::OpenActions
             | BatchCommand::TogglePreview
+            | BatchCommand::OpenNotesAcp
             | BatchCommand::SetThemeControl { .. }
             | BatchCommand::FilterAndSelect { .. }
             | BatchCommand::TypeAndSubmit { .. } => {

@@ -5,7 +5,7 @@
   "classification": "incomplete",
   "inventoryPath": "artifacts/liquid-glass/receipts/surface-inventory-2026-05-29-2050.json",
   "artifactRoot": "artifacts/liquid-glass",
-  "generatedAt": "2026-05-30T03:16:18.089Z",
+  "generatedAt": "2026-05-30T03:38:50.705Z",
   "summary": {
     "surfaceCount": 31,
     "strongProofSurfaceCount": 2,
@@ -601,6 +601,13 @@
           "artifacts/liquid-glass/receipts/before-actions-inspect.json",
           "artifacts/liquid-glass/receipts/before-actions-window-inspect.json",
           "artifacts/liquid-glass/receipts/compare-actions-inspect-visual-style.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-actions-cmd-shift-a-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-panel-inspect.json",
           "artifacts/liquid-glass/receipts/tahoe-next-actions-inspect.json",
           "artifacts/liquid-glass/receipts/tahoe-next-actions-window-inspect.json"
         ],
@@ -1313,15 +1320,35 @@
       "proofStatus": "missing-proof",
       "requiredEvidence": {
         "screenshot": false,
-        "numericLayout": false,
+        "numericLayout": true,
         "imageDiff": false,
         "visualAudit": false
       },
       "visualAudit": null,
       "evidence": {
         "screenshots": [],
-        "layoutReceipts": [],
-        "inspectReceipts": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/notes-acp-after-open-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/notes-acp-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-actions-cmd-shift-a-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-activation-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-cmd-enter-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-select-send-to-ai-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-before-notes-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-before-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-failclosed-before-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-open-acp-failclosed-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-open-acp-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-post-open-acp-inspect.json"
+        ],
         "imageDiffReceipts": [],
         "diffMasks": [],
         "visualAudit": null,
@@ -1374,11 +1401,29 @@
           "artifacts/liquid-glass/screenshots/notes-next.png"
         ],
         "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/notes-acp-after-open-layout.json",
           "artifacts/liquid-glass/receipts/notes-next-layout.json"
         ],
         "inspectReceipts": [
           "artifacts/liquid-glass/receipts/before-notes-inspect.json",
           "artifacts/liquid-glass/receipts/before-notes-window-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-actions-cmd-shift-a-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-activation-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-cmd-enter-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-select-send-to-ai-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-before-notes-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-before-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-failclosed-before-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-open-acp-failclosed-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-open-acp-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-post-open-acp-inspect.json",
           "artifacts/liquid-glass/receipts/notes-next-inspect.json",
           "artifacts/liquid-glass/receipts/notes-next-window-inspect.json"
         ],
@@ -1535,12 +1580,12 @@
     },
     {
       "id": "notes-acp",
-      "proofStatus": "missing-proof",
+      "proofStatus": "actions-panel-proof-acp-startup-blocked",
       "requiredEvidence": {
         "screenshot": false,
-        "numericLayout": false,
+        "numericLayout": true,
         "imageDiff": false,
-        "visualAudit": false,
+        "visualAudit": true,
         "mediaProof": false,
         "syntheticDelivery": false
       },
@@ -1548,12 +1593,46 @@
       "syntheticDelivery": null,
       "evidence": {
         "screenshots": [],
-        "layoutReceipts": [],
-        "inspectReceipts": [],
+        "layoutReceipts": [
+          "artifacts/liquid-glass/receipts/notes-acp-after-open-layout.json"
+        ],
+        "inspectReceipts": [
+          "artifacts/liquid-glass/receipts/notes-acp-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-actions-cmd-shift-a-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-activation-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-cmd-enter-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-after-select-send-to-ai-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-before-notes-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-filter-send-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-open-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-actions-panel-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-before-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-failclosed-before-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-open-acp-failclosed-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-open-acp-inspect.json",
+          "artifacts/liquid-glass/receipts/notes-acp-next-post-open-acp-inspect.json"
+        ],
         "imageDiffReceipts": [],
         "diffMasks": [],
-        "visualAudit": null,
-        "notes": []
+        "visualAudit": {
+          "nodeCount": 5,
+          "styledNodeCount": 5,
+          "unstyledNodeCount": 0,
+          "controlsWithHitFailures": [],
+          "contentGlassNodes": [],
+          "missingStyleNodeNames": [],
+          "chromeLayers": {
+            "content": 1,
+            "floatingTransient": 2,
+            "functionalChrome": 2
+          }
+        },
+        "notes": [
+          "visualAudit: artifacts/liquid-glass/receipts/notes-acp-next-actions-open-inspect.json"
+        ]
       }
     }
   ],

@@ -41,7 +41,7 @@ impl NotesApp {
     ///
     /// If an ACP view is already cached, reuses it (sets input if provided).
     /// Otherwise spawns a fresh hosted view via the host-neutral bootstrap.
-    pub(super) fn open_or_focus_embedded_acp(
+    pub(crate) fn open_or_focus_embedded_acp(
         &mut self,
         initial_input: Option<String>,
         _window: &mut Window,

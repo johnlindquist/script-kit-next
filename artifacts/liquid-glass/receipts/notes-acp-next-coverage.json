@@ -1,0 +1,299 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.coverage",
+  "generatedAt": "2026-05-30T03:35:50.185Z",
+  "philosophy": "Chrome DevTools-style protocol and API coverage first; recipes are smoke/regression wrappers after direct primitives exist.",
+  "primitiveFamilies": [
+    "devtools.inspect",
+    "devtools.measure",
+    "devtools.act",
+    "devtools.compare",
+    "devtools.investigate"
+  ],
+  "domains": [
+    {
+      "id": "targets",
+      "name": "Targets and Windows",
+      "chromeAnalogue": "Target/Page",
+      "purpose": "Discover exact app windows, attached popups, detached panels, parentage, bounds, and screenshot identity.",
+      "currentPrimitives": [
+        "listAutomationWindows",
+        "inspectAutomationWindow",
+        "devtools.inspect"
+      ],
+      "nextPrimitives": [
+        "devtools.targets.watch",
+        "target capability discovery",
+        "window lifetime timeline"
+      ]
+    },
+    {
+      "id": "elements",
+      "name": "Elements and Semantics",
+      "chromeAnalogue": "DOM/Accessibility tree",
+      "purpose": "Expose visible UI nodes, roles, labels, selected/focused ids, disabled reasons, actions, owners, and stable semantic ids.",
+      "currentPrimitives": [
+        "getElements",
+        "inspectAutomationWindow.semanticQuality"
+      ],
+      "nextPrimitives": [
+        "target-scoped semantic collectors",
+        "stable action ids",
+        "semantic tree diff"
+      ]
+    },
+    {
+      "id": "layout",
+      "name": "Layout and Box Model",
+      "chromeAnalogue": "Elements box model / Overlay",
+      "purpose": "Measure bounds, scroll extents, anchor rects, safe areas, overlap pairs, footer/input/list geometry, and resize deltas.",
+      "currentPrimitives": [
+        "getLayoutInfo"
+      ],
+      "nextPrimitives": [
+        "devtools.measure.layout",
+        "target-scoped layout info",
+        "scroll geometry",
+        "anchor and overlap reports"
+      ]
+    },
+    {
+      "id": "storage",
+      "name": "Storage, Resources, and Privacy",
+      "chromeAnalogue": "Application/Storage",
+      "purpose": "Inspect redacted resource rows, cache/store identities, context resources, attachment provenance, and privacy boundaries.",
+      "currentPrimitives": [
+        "kit://context resources",
+        "surface-specific state receipts"
+      ],
+      "nextPrimitives": [
+        "devtools.resources.inspect",
+        "redaction fingerprints",
+        "cache/store generation ids"
+      ]
+    },
+    {
+      "id": "accessibility",
+      "name": "Accessibility",
+      "chromeAnalogue": "Accessibility",
+      "purpose": "Compare semantic nodes with AX roles, labels, focus order, disabled state, activation affordances, and keyboard reachability.",
+      "currentPrimitives": [
+        "native computer observation",
+        "semantic roles"
+      ],
+      "nextPrimitives": [
+        "devtools.ax.snapshot",
+        "semantic-to-AX parity diff",
+        "tab order graph"
+      ]
+    },
+    {
+      "id": "input",
+      "name": "Input, Focus, and Actions",
+      "chromeAnalogue": "Input/Runtime",
+      "purpose": "Drive user-like keys, text, selection, safe clicks, popup dismissal, focus ownership, and wrong-target refusal.",
+      "currentPrimitives": [
+        "batch",
+        "waitFor",
+        "simulateKey",
+        "target-scoped batch.setInput"
+      ],
+      "nextPrimitives": [
+        "devtools.act",
+        "focus owner transitions",
+        "safe click receipts",
+        "shortcut registry snapshot"
+      ]
+    },
+    {
+      "id": "screenshots",
+      "name": "Screenshots and Visual Proof",
+      "chromeAnalogue": "Page.captureScreenshot / Overlay",
+      "purpose": "Capture strict target screenshots, crop identity, nonblank checks, pixel probes, visual agreement with semantic state, and before/after evidence.",
+      "currentPrimitives": [
+        "captureScreenshot",
+        "captureWindow",
+        "verify-shot.ts",
+        "inspectAutomationWindow screenshot metadata"
+      ],
+      "nextPrimitives": [
+        "devtools.visual.compare",
+        "semantic text agreement",
+        "occlusion candidates"
+      ]
+    },
+    {
+      "id": "investigation",
+      "name": "Investigation Records",
+      "chromeAnalogue": "Recorder/Protocol Monitor",
+      "purpose": "Store bug intake, hypotheses, actions, receipts, missing primitives, classification, likely owner, and red/green proof.",
+      "currentPrimitives": [
+        "manual reports",
+        "scenario receipts"
+      ],
+      "nextPrimitives": [
+        "devtools.investigate",
+        "paired red/green artifact schema",
+        "missing primitive backlog export"
+      ]
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "notes",
+      "name": "Notes window",
+      "status": "partial",
+      "domains": [
+        "targets",
+        "elements",
+        "layout",
+        "input",
+        "storage",
+        "screenshots",
+        "accessibility",
+        "investigation"
+      ],
+      "sourceFiles": [
+        "src/notes/window.rs",
+        "src/notes/window/keyboard.rs",
+        "src/notes/window/acp_host.rs",
+        "src/notes/window/window_ops.rs",
+        "src/notes/window/render_ui.rs",
+        "src/notes/actions_panel.rs",
+        "src/notes/browse_panel.rs",
+        "src/notes/storage.rs",
+        "src/notes/model.rs"
+      ],
+      "features": [
+        "floating notes host",
+        "editor mode",
+        "browse/list mode",
+        "trash mode",
+        "markdown editor",
+        "markdown preview",
+        "editor find",
+        "global search",
+        "format toolbar",
+        "focus mode",
+        "pinning",
+        "sort cycling",
+        "command bar",
+        "actions panel",
+        "recent note switcher",
+        "note cart",
+        "clipboard-backed note creation",
+        "embedded ACP mode",
+        "ACP actions popup",
+        "ACP history portal",
+        "attachment/context chips",
+        "draft snapshots",
+        "auto-resize",
+        "autosave and dirty state",
+        "history back/forward",
+        "scroll collapse after deleting trailing lines",
+        "independent app-hide behavior"
+      ],
+      "shortcuts": [
+        "Cmd+K",
+        "Cmd+P",
+        "Cmd+Shift+P",
+        "Cmd+F",
+        "Cmd+Shift+F",
+        "Cmd+N",
+        "Cmd+Shift+N",
+        "Cmd+Shift+T",
+        "Cmd+W",
+        "Cmd+.",
+        "Cmd+Shift+.",
+        "Cmd+Shift+S",
+        "Cmd+Z",
+        "Cmd+D",
+        "Cmd+Shift+D",
+        "Cmd+Shift+X",
+        "Cmd+Shift+L",
+        "Cmd+L",
+        "Cmd+Shift+-",
+        "Cmd+Shift+H",
+        "Cmd+V",
+        "Cmd+Shift+C",
+        "Cmd+E",
+        "Cmd+/",
+        "Cmd+J",
+        "Cmd+Shift+U",
+        "Cmd+B",
+        "Cmd+I",
+        "Cmd+Shift+I",
+        "Cmd+Enter",
+        "Cmd+Shift+A",
+        "Cmd+Shift+O",
+        "Cmd+Up",
+        "Cmd+Down",
+        "Cmd+Shift+Up",
+        "Cmd+Shift+Down",
+        "Cmd+[",
+        "Cmd+]",
+        "Cmd+Shift+Backspace",
+        "Cmd+Shift+Delete",
+        "Cmd+Shift+7",
+        "Cmd+Shift+8",
+        "Cmd+1..Cmd+9",
+        "Tab",
+        "Shift+Tab",
+        "Alt+Up",
+        "Alt+Down",
+        "Alt+Shift+Up",
+        "Alt+Shift+Down",
+        "Ctrl+Shift+K",
+        "Escape",
+        "Enter",
+        "ArrowUp",
+        "ArrowDown",
+        "Home",
+        "End",
+        "PageUp",
+        "PageDown",
+        "Backspace",
+        "Delete"
+      ],
+      "supportedNow": [
+        "stable notes automation parent",
+        "inspectAutomationWindow target id notes",
+        "getElements(target) for notes-owned surfaces when registered",
+        "getState(target notes) redacted active note, dirty state, selection, focus, and autosize envelope",
+        "getState(target notes) command bar route stack, filtered actions, selection, shortcuts, and redacted search fingerprints",
+        "getState(target notes) shortcut registry scopes and active focus owner",
+        "getState(target notes) focus owner transition timeline",
+        "getState(target notes) redacted draft snapshot fingerprint",
+        "getState(target notes) editor scroll metrics and mounted preview anchor availability",
+        "target-scoped batch togglePreview for mounting markdown preview before measurement",
+        "target-scoped simulateKey Cmd+Shift+P Notes preview activation receipt",
+        "notes.resize-compare sandboxed auto-resize before/after receipt",
+        "notes.inspect --open-actions target-scoped batch openActions receipt",
+        "notes.inspect --open-acp target-scoped batch openNotesAcp receipt",
+        "getLayoutInfo(target notes) NotesWindow/titlebar/editor/footer/panel bounds and resize pressure",
+        "notes storage generation and redacted sandbox identity",
+        "notes-window-resize-stress regression receipt"
+      ],
+      "missingRuntimePrimitives": [
+        "preview scroll handle populated content bounds under mounted markdown preview",
+        "ACP embedded origin receipts beyond openNotesAcp surface activation",
+        "portal session provenance",
+        "remaining Notes shortcut activation parity receipts beyond Cmd+Shift+P"
+      ],
+      "regressionRecipeRole": "Keep notes recipes as regression guards for resize, ACP handoff, preview sync, and origin safety after DevTools receipts exist."
+    }
+  ],
+  "criticalGaps": [
+    "target-scoped layout and scroll geometry for Notes, popups, detached ACP, prompt containers, and Dictation",
+    "text-fit, contrast, overlap, and occlusion measurements tied to semantic ids",
+    "passive media permission/model readiness and transcript delivery receipts for Dictation",
+    "red/green investigation artifacts with stable metric names and missing-primitive classification",
+    "semantic-to-AX parity and tab-order graphs for keyboard and accessibility bugs"
+  ],
+  "recommendedNext": [
+    "Build devtools.measure layout/text/scroll/contrast around stable target ids.",
+    "Build devtools.act with safe protocol-first user actions and explicit native escalation.",
+    "Build devtools.media.inspect before treating live Dictation bugs as verifiable.",
+    "Add Notes target-scoped layout, editor selection, scroll anchors, and ACP generation receipts."
+  ]
+}

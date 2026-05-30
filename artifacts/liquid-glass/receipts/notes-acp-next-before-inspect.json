@@ -1,0 +1,2681 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.notes",
+  "command": "notes.inspect",
+  "classification": "blocked-by-missing-primitive",
+  "session": "liquid-glass-notes-acp-next",
+  "openReceipt": {
+    "schemaVersion": 1,
+    "status": "ok",
+    "session": "liquid-glass-notes-acp-next",
+    "sent": true
+  },
+  "openActionsReceipt": null,
+  "openAcpReceipt": null,
+  "shortcutActivation": null,
+  "availableActions": {
+    "togglePreview": {
+      "channel": "protocol.batch.togglePreview",
+      "command": "togglePreview",
+      "target": {
+        "type": "kind",
+        "kind": "notes"
+      }
+    },
+    "openAcp": {
+      "channel": "protocol.batch.openNotesAcp",
+      "command": "openNotesAcp",
+      "target": {
+        "type": "kind",
+        "kind": "notes"
+      }
+    }
+  },
+  "target": {
+    "automationId": "notes",
+    "stableTargetId": "notes",
+    "targetKind": "Notes",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 1550,
+      "y": 50,
+      "width": 350,
+      "height": 600
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 350,
+      "height": 600,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 350,
+        "height": 600
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 43619,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "notes"
+    },
+    "strict": true,
+    "expectedSurfaceKind": null
+  },
+  "notesState": {
+    "panelPresent": true,
+    "editorPresent": true,
+    "editorFocused": true,
+    "focusedSemanticId": "input:notes-editor",
+    "activeNoteId": "ee88df79-79c7-40a7-b1ac-c8dde5c1ea17",
+    "dirtyState": {
+      "hasUnsavedChanges": false,
+      "lastSaveConfirmedMsAgo": 4334,
+      "lastSaveAttemptMsAgo": 4334
+    },
+    "editorTextLength": 2051,
+    "editorFingerprint": "fnv1a64:568b10f113da5f8c",
+    "selectionRange": [
+      2051,
+      2051
+    ],
+    "cursorLine": {
+      "line": 43,
+      "total": 42
+    },
+    "draftSnapshot": {
+      "schemaVersion": 1,
+      "source": "runtime.notes.automationState",
+      "redacted": true,
+      "contentReturned": false,
+      "titleReturned": false,
+      "noteIdFingerprint": "fnv1a64:337b63c0d4725acb",
+      "noteIdLength": 36,
+      "storageGeneration": 3,
+      "focusTransitionGeneration": 0,
+      "dirty": false,
+      "draft": {
+        "bodyLength": 2051,
+        "bodyByteLength": 2051,
+        "bodyFingerprint": "fnv1a64:568b10f113da5f8c",
+        "lineCount": 42,
+        "selectionRange": [
+          2051,
+          2051
+        ],
+        "selectionUnit": "utf8ByteOffset",
+        "selectionFingerprint": "fnv1a64:c76b7c4e898802dd"
+      },
+      "persisted": {
+        "titleLength": 16,
+        "titleFingerprint": "fnv1a64:aee2cfb25044d8b5",
+        "contentLength": 2051,
+        "contentFingerprint": "fnv1a64:568b10f113da5f8c",
+        "updatedAtMs": 1780112150336,
+        "deleted": false,
+        "isPinned": false
+      }
+    },
+    "editorAnchor": {
+      "schemaVersion": 1,
+      "source": "runtime.notes.automationState",
+      "redacted": true,
+      "available": true,
+      "anchor": {
+        "schemaVersion": 1,
+        "redacted": true,
+        "cursor": 2051,
+        "offsetUnit": "utf8ByteOffset",
+        "line": {
+          "index": 42,
+          "total": 42,
+          "start": 2051,
+          "end": 2051,
+          "length": 0,
+          "byteLength": 0,
+          "fingerprint": "fnv1a64:cbf29ce484222325"
+        },
+        "selectionRange": [
+          2051,
+          2051
+        ],
+        "selectionUnit": "utf8ByteOffset",
+        "selectionFingerprint": "fnv1a64:c76b7c4e898802dd"
+      },
+      "scrollMetricsAvailable": true,
+      "scrollTopAvailable": true,
+      "scrollHeightAvailable": true,
+      "clientHeightAvailable": true,
+      "scroll": {
+        "schemaVersion": 1,
+        "source": "gpui_component.input.InputState",
+        "available": true,
+        "offsetUnit": "logicalPx",
+        "scrollTop": 1584,
+        "scrollLeft": 0,
+        "liveScrollTop": 1584,
+        "liveScrollLeft": 0,
+        "hasDeferredScrollOffset": false,
+        "scrollHeight": 2080,
+        "scrollWidth": 284,
+        "clientHeight": 496,
+        "clientWidth": 294,
+        "maxScrollTop": 1584,
+        "maxScrollLeft": 0,
+        "canScrollY": true,
+        "canScrollX": false
+      },
+      "stopReason": null
+    },
+    "previewAnchor": {
+      "schemaVersion": 1,
+      "source": "runtime.notes.automationState",
+      "redacted": true,
+      "available": false,
+      "previewEnabled": false,
+      "anchor": null,
+      "scrollMetricsAvailable": false,
+      "scrollTopAvailable": false,
+      "scrollHeightAvailable": false,
+      "clientHeightAvailable": false,
+      "scroll": null,
+      "stopReason": "Notes markdown preview is not mounted"
+    },
+    "view": {
+      "viewMode": "AllNotes",
+      "surfaceMode": "Notes",
+      "focusSurface": "Editor",
+      "focusMode": false,
+      "sortMode": "Updated",
+      "showSearch": false,
+      "showFormatToolbar": false,
+      "previewEnabled": false,
+      "showActionsPanel": false,
+      "showBrowsePanel": false,
+      "autoSizingEnabled": true,
+      "initialHeight": 280,
+      "lastWindowHeight": 600,
+      "notesAcpGeneration": 0
+    },
+    "commandBars": {
+      "actions": {
+        "schemaVersion": 1,
+        "surface": "notes.actions",
+        "redacted": true,
+        "open": false,
+        "configuredActionCount": 12,
+        "configuredSectionCount": 5,
+        "configuredSections": {
+          "AI": 1,
+          "Copy": 4,
+          "Edit": 2,
+          "Export": 1,
+          "Notes": 4
+        },
+        "configuredShortcutCount": 11,
+        "closePolicy": {
+          "closeOnSelect": true,
+          "closeOnClickOutside": true,
+          "closeOnEscape": true
+        },
+        "config": {
+          "searchPosition": "top",
+          "sectionMode": "headers",
+          "anchor": "top",
+          "showIcons": true,
+          "showFooter": false,
+          "maxHeight": 400
+        }
+      },
+      "noteSwitcher": {
+        "schemaVersion": 1,
+        "surface": "notes.switcher",
+        "redacted": true,
+        "open": false,
+        "configuredActionCount": 1,
+        "configuredSectionCount": 1,
+        "configuredSections": {
+          "Recent": 1
+        },
+        "configuredShortcutCount": 0,
+        "closePolicy": {
+          "closeOnSelect": true,
+          "closeOnClickOutside": true,
+          "closeOnEscape": true
+        },
+        "config": {
+          "searchPosition": "top",
+          "sectionMode": "headers",
+          "anchor": "top",
+          "showIcons": true,
+          "showFooter": false,
+          "maxHeight": 560
+        }
+      }
+    },
+    "shortcutRegistry": {
+      "schemaVersion": 1,
+      "redacted": true,
+      "activeScope": "editor",
+      "currentFocusSurface": "Editor",
+      "pendingFocusSurface": null,
+      "modalGuard": {
+        "activeDialogFirst": true,
+        "handles": [
+          "Enter",
+          "Escape",
+          "Tab",
+          "Shift+Tab"
+        ]
+      },
+      "scopes": [
+        {
+          "id": "actionsPanel",
+          "open": false,
+          "owner": "Notes CommandBar",
+          "toggle": "Cmd+K",
+          "handles": [
+            "Escape",
+            "Cmd+K",
+            "Enter",
+            "ArrowUp",
+            "ArrowDown",
+            "Home",
+            "End",
+            "PageUp",
+            "PageDown",
+            "Backspace",
+            "Delete",
+            "text input"
+          ]
+        },
+        {
+          "id": "noteSwitcher",
+          "open": false,
+          "owner": "Notes note switcher",
+          "toggle": "Cmd+P",
+          "handles": [
+            "Escape",
+            "Cmd+P",
+            "Enter",
+            "ArrowUp",
+            "ArrowDown",
+            "Home",
+            "End",
+            "PageUp",
+            "PageDown",
+            "Backspace",
+            "Delete",
+            "text input"
+          ]
+        },
+        {
+          "id": "embeddedAcp",
+          "open": false,
+          "owner": "Notes-hosted ACP",
+          "toggle": "Cmd+Enter",
+          "handles": [
+            "Escape",
+            "Cmd+K",
+            "Cmd+W",
+            "Cmd+Shift+A"
+          ]
+        },
+        {
+          "id": "editor",
+          "open": true,
+          "owner": "Notes editor",
+          "handles": [
+            "Escape",
+            "Tab",
+            "Shift+Tab",
+            "Alt+Up",
+            "Alt+Down",
+            "Alt+Shift+Up",
+            "Alt+Shift+Down",
+            "Ctrl+Shift+K",
+            "Cmd+Enter",
+            "Cmd+K",
+            "Cmd+Shift+O",
+            "Cmd+P",
+            "Cmd+Shift+P",
+            "Cmd+F",
+            "Cmd+Shift+F",
+            "Cmd+Shift+A",
+            "Cmd+N",
+            "Cmd+Shift+N",
+            "Cmd+Shift+T",
+            "Cmd+W",
+            "Cmd+.",
+            "Cmd+Shift+.",
+            "Cmd+Shift+S",
+            "Cmd+Z",
+            "Cmd+D",
+            "Cmd+Shift+D",
+            "Cmd+Shift+X",
+            "Cmd+L",
+            "Cmd+Shift+L",
+            "Cmd+Shift+-",
+            "Cmd+Shift+H",
+            "Cmd+V",
+            "Cmd+Shift+C",
+            "Cmd+E",
+            "Cmd+J",
+            "Cmd+Shift+U",
+            "Cmd+B",
+            "Cmd+I",
+            "Cmd+Shift+I",
+            "Cmd+Up",
+            "Cmd+Down",
+            "Cmd+Shift+Up",
+            "Cmd+Shift+Down",
+            "Cmd+[",
+            "Cmd+]",
+            "Cmd+Shift+Backspace",
+            "Cmd+Shift+Delete",
+            "Cmd+Shift+7",
+            "Cmd+Shift+8",
+            "Cmd+1..Cmd+9"
+          ]
+        }
+      ]
+    },
+    "focusTransitions": {
+      "schemaVersion": 1,
+      "redacted": true,
+      "generation": 0,
+      "entryCount": 0,
+      "entries": []
+    },
+    "autosize": {
+      "schemaVersion": 1,
+      "redacted": true,
+      "generation": 1,
+      "enabled": true,
+      "lastWindowHeight": 600,
+      "initialHeight": 280,
+      "minHeight": 280,
+      "maxHeight": 600,
+      "lineCount": 42,
+      "desiredHeight": 928,
+      "clampedHeight": 600,
+      "threshold": 5,
+      "lastCause": "editor-input",
+      "lastAppliedHeight": 600,
+      "lastAppliedAt": "runtime-relative"
+    },
+    "generations": {
+      "schemaVersion": 1,
+      "state": 3,
+      "editorText": "fnv1a64:568b10f113da5f8c",
+      "autosize": 1,
+      "storage": 3,
+      "focus": 0,
+      "target": null,
+      "surface": null
+    },
+    "lastAutosizeTransition": {
+      "generation": 1,
+      "cause": "editor-input",
+      "beforeHeight": 280,
+      "afterHeight": 600,
+      "beforeWidth": 350,
+      "afterWidth": 350,
+      "lineCount": 42,
+      "desiredHeight": 928,
+      "clampedHeight": 600,
+      "applied": true,
+      "skippedReason": null,
+      "ageMs": 5307
+    },
+    "layout": {
+      "classification": "ok",
+      "componentCount": 4,
+      "editorRegion": {
+        "name": "NotesEditor",
+        "bounds": {
+          "x": 0,
+          "y": 36,
+          "width": 350,
+          "height": 536
+        }
+      },
+      "pressure": {
+        "overflowY": false,
+        "hiddenContentHeight": 0,
+        "clippedNodeCount": 0,
+        "overlapCount": 0,
+        "footerOverlapCount": 0,
+        "inputOverlapCount": 0,
+        "pressureScore": 0
+      },
+      "viewport": {
+        "clientWidth": 350,
+        "clientHeight": 600,
+        "contentWidth": 350,
+        "contentHeight": 600,
+        "scrollWidth": 350,
+        "scrollHeight": 600,
+        "canScrollX": false,
+        "canScrollY": false,
+        "scrollTop": null,
+        "maxScrollTop": 0,
+        "overflowPolicyY": "hidden"
+      }
+    },
+    "storage": {
+      "schemaVersion": 1,
+      "redacted": true,
+      "generation": 3,
+      "rootSearchCacheGeneration": 3,
+      "dbPathFingerprint": "fnv1a64:fc97e3af85a84b41",
+      "dbPathLength": 42,
+      "testSandbox": true
+    },
+    "counts": {
+      "notes": 1,
+      "deletedNotes": 0,
+      "visibleNotes": 1,
+      "historyBack": 0,
+      "historyForward": 0
+    },
+    "redacted": true,
+    "footerTexts": []
+  },
+  "runtimeState": {
+    "type": "stateResult",
+    "requestId": "devtools-notes-state-1780112155619-f96f3b",
+    "promptType": "notes",
+    "promptId": "target:Notes:notes",
+    "inputValue": "",
+    "choiceCount": 0,
+    "visibleChoiceCount": 0,
+    "selectedIndex": -1,
+    "isFocused": true,
+    "windowVisible": true,
+    "notes": {
+      "schemaVersion": 1,
+      "passive": true,
+      "redacted": true,
+      "activeNoteId": "ee88df79-79c7-40a7-b1ac-c8dde5c1ea17",
+      "dirtyState": {
+        "hasUnsavedChanges": false,
+        "lastSaveConfirmedMsAgo": 4334,
+        "lastSaveAttemptMsAgo": 4334
+      },
+      "selectedNote": {
+        "id": "ee88df79-79c7-40a7-b1ac-c8dde5c1ea17",
+        "titleLength": 16,
+        "titleFingerprint": "fnv1a64:aee2cfb25044d8b5",
+        "contentLength": 2051,
+        "contentFingerprint": "fnv1a64:568b10f113da5f8c",
+        "isPinned": false,
+        "deleted": false,
+        "metadata": {
+          "tags": [],
+          "aliases": [
+            "Welcome to Notes"
+          ],
+          "tagCount": 0,
+          "aliasCount": 1,
+          "outboundLinkCount": 0,
+          "backlinkCount": 0
+        },
+        "position": {
+          "index": 1,
+          "total": 1
+        }
+      },
+      "editor": {
+        "textLength": 2051,
+        "textFingerprint": "fnv1a64:568b10f113da5f8c",
+        "selectionRange": [
+          2051,
+          2051
+        ],
+        "selectionLength": 0,
+        "hasSelection": false,
+        "cursor": 2051,
+        "cursorLine": {
+          "line": 43,
+          "total": 42
+        },
+        "lastLineCount": 42
+      },
+      "draftSnapshot": {
+        "schemaVersion": 1,
+        "source": "runtime.notes.automationState",
+        "redacted": true,
+        "contentReturned": false,
+        "titleReturned": false,
+        "noteIdFingerprint": "fnv1a64:337b63c0d4725acb",
+        "noteIdLength": 36,
+        "storageGeneration": 3,
+        "focusTransitionGeneration": 0,
+        "dirty": false,
+        "draft": {
+          "bodyLength": 2051,
+          "bodyByteLength": 2051,
+          "bodyFingerprint": "fnv1a64:568b10f113da5f8c",
+          "lineCount": 42,
+          "selectionRange": [
+            2051,
+            2051
+          ],
+          "selectionUnit": "utf8ByteOffset",
+          "selectionFingerprint": "fnv1a64:c76b7c4e898802dd"
+        },
+        "persisted": {
+          "titleLength": 16,
+          "titleFingerprint": "fnv1a64:aee2cfb25044d8b5",
+          "contentLength": 2051,
+          "contentFingerprint": "fnv1a64:568b10f113da5f8c",
+          "updatedAtMs": 1780112150336,
+          "deleted": false,
+          "isPinned": false
+        }
+      },
+      "editorAnchor": {
+        "schemaVersion": 1,
+        "source": "runtime.notes.automationState",
+        "redacted": true,
+        "available": true,
+        "anchor": {
+          "schemaVersion": 1,
+          "redacted": true,
+          "cursor": 2051,
+          "offsetUnit": "utf8ByteOffset",
+          "line": {
+            "index": 42,
+            "total": 42,
+            "start": 2051,
+            "end": 2051,
+            "length": 0,
+            "byteLength": 0,
+            "fingerprint": "fnv1a64:cbf29ce484222325"
+          },
+          "selectionRange": [
+            2051,
+            2051
+          ],
+          "selectionUnit": "utf8ByteOffset",
+          "selectionFingerprint": "fnv1a64:c76b7c4e898802dd"
+        },
+        "scrollMetricsAvailable": true,
+        "scrollTopAvailable": true,
+        "scrollHeightAvailable": true,
+        "clientHeightAvailable": true,
+        "scroll": {
+          "schemaVersion": 1,
+          "source": "gpui_component.input.InputState",
+          "available": true,
+          "offsetUnit": "logicalPx",
+          "scrollTop": 1584,
+          "scrollLeft": 0,
+          "liveScrollTop": 1584,
+          "liveScrollLeft": 0,
+          "hasDeferredScrollOffset": false,
+          "scrollHeight": 2080,
+          "scrollWidth": 284,
+          "clientHeight": 496,
+          "clientWidth": 294,
+          "maxScrollTop": 1584,
+          "maxScrollLeft": 0,
+          "canScrollY": true,
+          "canScrollX": false
+        },
+        "stopReason": null
+      },
+      "previewAnchor": {
+        "schemaVersion": 1,
+        "source": "runtime.notes.automationState",
+        "redacted": true,
+        "available": false,
+        "previewEnabled": false,
+        "anchor": null,
+        "scrollMetricsAvailable": false,
+        "scrollTopAvailable": false,
+        "scrollHeightAvailable": false,
+        "clientHeightAvailable": false,
+        "scroll": null,
+        "stopReason": "Notes markdown preview is not mounted"
+      },
+      "view": {
+        "viewMode": "AllNotes",
+        "surfaceMode": "Notes",
+        "focusSurface": "Editor",
+        "focusMode": false,
+        "sortMode": "Updated",
+        "showSearch": false,
+        "showFormatToolbar": false,
+        "previewEnabled": false,
+        "showActionsPanel": false,
+        "showBrowsePanel": false,
+        "autoSizingEnabled": true,
+        "initialHeight": 280,
+        "lastWindowHeight": 600,
+        "notesAcpGeneration": 0
+      },
+      "autosize": {
+        "schemaVersion": 1,
+        "redacted": true,
+        "generation": 1,
+        "enabled": true,
+        "lastWindowHeight": 600,
+        "initialHeight": 280,
+        "minHeight": 280,
+        "maxHeight": 600,
+        "lineCount": 42,
+        "desiredHeight": 928,
+        "clampedHeight": 600,
+        "threshold": 5,
+        "lastCause": "editor-input",
+        "lastAppliedHeight": 600,
+        "lastAppliedAt": "runtime-relative"
+      },
+      "generations": {
+        "schemaVersion": 1,
+        "state": 3,
+        "editorText": "fnv1a64:568b10f113da5f8c",
+        "autosize": 1,
+        "storage": 3,
+        "focus": 0,
+        "target": null,
+        "surface": null
+      },
+      "lastAutosizeTransition": {
+        "generation": 1,
+        "cause": "editor-input",
+        "beforeHeight": 280,
+        "afterHeight": 600,
+        "beforeWidth": 350,
+        "afterWidth": 350,
+        "lineCount": 42,
+        "desiredHeight": 928,
+        "clampedHeight": 600,
+        "applied": true,
+        "skippedReason": null,
+        "ageMs": 5307
+      },
+      "commandBars": {
+        "actions": {
+          "schemaVersion": 1,
+          "surface": "notes.actions",
+          "redacted": true,
+          "open": false,
+          "configuredActionCount": 12,
+          "configuredSectionCount": 5,
+          "configuredSections": {
+            "AI": 1,
+            "Copy": 4,
+            "Edit": 2,
+            "Export": 1,
+            "Notes": 4
+          },
+          "configuredShortcutCount": 11,
+          "closePolicy": {
+            "closeOnSelect": true,
+            "closeOnClickOutside": true,
+            "closeOnEscape": true
+          },
+          "config": {
+            "searchPosition": "top",
+            "sectionMode": "headers",
+            "anchor": "top",
+            "showIcons": true,
+            "showFooter": false,
+            "maxHeight": 400
+          }
+        },
+        "noteSwitcher": {
+          "schemaVersion": 1,
+          "surface": "notes.switcher",
+          "redacted": true,
+          "open": false,
+          "configuredActionCount": 1,
+          "configuredSectionCount": 1,
+          "configuredSections": {
+            "Recent": 1
+          },
+          "configuredShortcutCount": 0,
+          "closePolicy": {
+            "closeOnSelect": true,
+            "closeOnClickOutside": true,
+            "closeOnEscape": true
+          },
+          "config": {
+            "searchPosition": "top",
+            "sectionMode": "headers",
+            "anchor": "top",
+            "showIcons": true,
+            "showFooter": false,
+            "maxHeight": 560
+          }
+        }
+      },
+      "shortcutRegistry": {
+        "schemaVersion": 1,
+        "redacted": true,
+        "activeScope": "editor",
+        "currentFocusSurface": "Editor",
+        "pendingFocusSurface": null,
+        "modalGuard": {
+          "activeDialogFirst": true,
+          "handles": [
+            "Enter",
+            "Escape",
+            "Tab",
+            "Shift+Tab"
+          ]
+        },
+        "scopes": [
+          {
+            "id": "actionsPanel",
+            "open": false,
+            "owner": "Notes CommandBar",
+            "toggle": "Cmd+K",
+            "handles": [
+              "Escape",
+              "Cmd+K",
+              "Enter",
+              "ArrowUp",
+              "ArrowDown",
+              "Home",
+              "End",
+              "PageUp",
+              "PageDown",
+              "Backspace",
+              "Delete",
+              "text input"
+            ]
+          },
+          {
+            "id": "noteSwitcher",
+            "open": false,
+            "owner": "Notes note switcher",
+            "toggle": "Cmd+P",
+            "handles": [
+              "Escape",
+              "Cmd+P",
+              "Enter",
+              "ArrowUp",
+              "ArrowDown",
+              "Home",
+              "End",
+              "PageUp",
+              "PageDown",
+              "Backspace",
+              "Delete",
+              "text input"
+            ]
+          },
+          {
+            "id": "embeddedAcp",
+            "open": false,
+            "owner": "Notes-hosted ACP",
+            "toggle": "Cmd+Enter",
+            "handles": [
+              "Escape",
+              "Cmd+K",
+              "Cmd+W",
+              "Cmd+Shift+A"
+            ]
+          },
+          {
+            "id": "editor",
+            "open": true,
+            "owner": "Notes editor",
+            "handles": [
+              "Escape",
+              "Tab",
+              "Shift+Tab",
+              "Alt+Up",
+              "Alt+Down",
+              "Alt+Shift+Up",
+              "Alt+Shift+Down",
+              "Ctrl+Shift+K",
+              "Cmd+Enter",
+              "Cmd+K",
+              "Cmd+Shift+O",
+              "Cmd+P",
+              "Cmd+Shift+P",
+              "Cmd+F",
+              "Cmd+Shift+F",
+              "Cmd+Shift+A",
+              "Cmd+N",
+              "Cmd+Shift+N",
+              "Cmd+Shift+T",
+              "Cmd+W",
+              "Cmd+.",
+              "Cmd+Shift+.",
+              "Cmd+Shift+S",
+              "Cmd+Z",
+              "Cmd+D",
+              "Cmd+Shift+D",
+              "Cmd+Shift+X",
+              "Cmd+L",
+              "Cmd+Shift+L",
+              "Cmd+Shift+-",
+              "Cmd+Shift+H",
+              "Cmd+V",
+              "Cmd+Shift+C",
+              "Cmd+E",
+              "Cmd+J",
+              "Cmd+Shift+U",
+              "Cmd+B",
+              "Cmd+I",
+              "Cmd+Shift+I",
+              "Cmd+Up",
+              "Cmd+Down",
+              "Cmd+Shift+Up",
+              "Cmd+Shift+Down",
+              "Cmd+[",
+              "Cmd+]",
+              "Cmd+Shift+Backspace",
+              "Cmd+Shift+Delete",
+              "Cmd+Shift+7",
+              "Cmd+Shift+8",
+              "Cmd+1..Cmd+9"
+            ]
+          }
+        ]
+      },
+      "focusTransitions": {
+        "schemaVersion": 1,
+        "redacted": true,
+        "generation": 0,
+        "entryCount": 0,
+        "entries": []
+      },
+      "search": {
+        "visible": false,
+        "queryLength": 0,
+        "queryFingerprint": "fnv1a64:cbf29ce484222325"
+      },
+      "storage": {
+        "schemaVersion": 1,
+        "redacted": true,
+        "generation": 3,
+        "rootSearchCacheGeneration": 3,
+        "dbPathFingerprint": "fnv1a64:fc97e3af85a84b41",
+        "dbPathLength": 42,
+        "testSandbox": true
+      },
+      "counts": {
+        "notes": 1,
+        "deletedNotes": 0,
+        "visibleNotes": 1,
+        "historyBack": 0,
+        "historyForward": 0
+      }
+    }
+  },
+  "coverage": {
+    "status": "partial",
+    "sourceFiles": [
+      "src/notes/window.rs",
+      "src/notes/window/keyboard.rs",
+      "src/notes/window/acp_host.rs",
+      "src/notes/window/window_ops.rs",
+      "src/notes/window/render_ui.rs",
+      "src/notes/actions_panel.rs",
+      "src/notes/browse_panel.rs",
+      "src/notes/storage.rs",
+      "src/notes/model.rs"
+    ],
+    "features": [
+      "floating notes host",
+      "editor mode",
+      "browse/list mode",
+      "trash mode",
+      "markdown editor",
+      "markdown preview",
+      "editor find",
+      "global search",
+      "format toolbar",
+      "focus mode",
+      "pinning",
+      "sort cycling",
+      "command bar",
+      "actions panel",
+      "recent note switcher",
+      "note cart",
+      "clipboard-backed note creation",
+      "embedded ACP mode",
+      "ACP actions popup",
+      "ACP history portal",
+      "attachment/context chips",
+      "draft snapshots",
+      "auto-resize",
+      "autosave and dirty state",
+      "history back/forward",
+      "scroll collapse after deleting trailing lines",
+      "independent app-hide behavior"
+    ],
+    "shortcuts": [
+      "Cmd+K",
+      "Cmd+P",
+      "Cmd+Shift+P",
+      "Cmd+F",
+      "Cmd+Shift+F",
+      "Cmd+N",
+      "Cmd+Shift+N",
+      "Cmd+Shift+T",
+      "Cmd+W",
+      "Cmd+.",
+      "Cmd+Shift+.",
+      "Cmd+Shift+S",
+      "Cmd+Z",
+      "Cmd+D",
+      "Cmd+Shift+D",
+      "Cmd+Shift+X",
+      "Cmd+Shift+L",
+      "Cmd+L",
+      "Cmd+Shift+-",
+      "Cmd+Shift+H",
+      "Cmd+V",
+      "Cmd+Shift+C",
+      "Cmd+E",
+      "Cmd+/",
+      "Cmd+J",
+      "Cmd+Shift+U",
+      "Cmd+B",
+      "Cmd+I",
+      "Cmd+Shift+I",
+      "Cmd+Enter",
+      "Cmd+Shift+A",
+      "Cmd+Shift+O",
+      "Cmd+Up",
+      "Cmd+Down",
+      "Cmd+Shift+Up",
+      "Cmd+Shift+Down",
+      "Cmd+[",
+      "Cmd+]",
+      "Cmd+Shift+Backspace",
+      "Cmd+Shift+Delete",
+      "Cmd+Shift+7",
+      "Cmd+Shift+8",
+      "Cmd+1..Cmd+9",
+      "Tab",
+      "Shift+Tab",
+      "Alt+Up",
+      "Alt+Down",
+      "Alt+Shift+Up",
+      "Alt+Shift+Down",
+      "Ctrl+Shift+K",
+      "Escape",
+      "Enter",
+      "ArrowUp",
+      "ArrowDown",
+      "Home",
+      "End",
+      "PageUp",
+      "PageDown",
+      "Backspace",
+      "Delete"
+    ],
+    "supportedNow": [
+      "stable notes automation parent",
+      "inspectAutomationWindow target id notes",
+      "getElements(target) for notes-owned surfaces when registered",
+      "getState(target notes) redacted active note, dirty state, selection, focus, and autosize envelope",
+      "getState(target notes) command bar route stack, filtered actions, selection, shortcuts, and redacted search fingerprints",
+      "getState(target notes) shortcut registry scopes and active focus owner",
+      "getState(target notes) focus owner transition timeline",
+      "getState(target notes) redacted draft snapshot fingerprint",
+      "getState(target notes) editor scroll metrics and mounted preview anchor availability",
+      "target-scoped batch togglePreview for mounting markdown preview before measurement",
+      "target-scoped simulateKey Cmd+Shift+P Notes preview activation receipt",
+      "notes.resize-compare sandboxed auto-resize before/after receipt",
+      "notes.inspect --open-actions target-scoped batch openActions receipt",
+      "notes.inspect --open-acp target-scoped batch openNotesAcp receipt",
+      "getLayoutInfo(target notes) NotesWindow/titlebar/editor/footer/panel bounds and resize pressure",
+      "notes storage generation and redacted sandbox identity",
+      "notes-window-resize-stress regression receipt"
+    ],
+    "missingRuntimePrimitives": [
+      "preview scroll handle populated content bounds under mounted markdown preview",
+      "ACP embedded origin receipts beyond openNotesAcp surface activation",
+      "portal session provenance",
+      "remaining Notes shortcut activation parity receipts beyond Cmd+Shift+P"
+    ],
+    "regressionRecipeRole": "Keep notes recipes as regression guards for resize, ACP handoff, preview sync, and origin safety after DevTools receipts exist."
+  },
+  "receipts": {
+    "target": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.inspect",
+      "session": "liquid-glass-notes-acp-next",
+      "classification": "ok",
+      "requestedTarget": {
+        "selector": {
+          "type": "kind",
+          "kind": "notes"
+        },
+        "strict": true,
+        "expectedSurfaceKind": null
+      },
+      "resolvedTarget": {
+        "automationId": "notes",
+        "stableTargetId": "notes",
+        "targetKind": "Notes",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 1550,
+          "y": 50,
+          "width": 350,
+          "height": 600
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 350,
+          "height": 600,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 350,
+            "height": 600
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 43619,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "windows": [
+        {
+          "index": 0,
+          "automationId": "main",
+          "windowKind": "Main",
+          "title": "Script Kit",
+          "visible": false,
+          "focused": false,
+          "bounds": {
+            "x": 2097,
+            "y": -903,
+            "width": 750,
+            "height": 152
+          },
+          "surfaceKind": null,
+          "appViewVariant": null,
+          "parentAutomationId": null,
+          "parentKind": null,
+          "pid": 43619
+        },
+        {
+          "index": 1,
+          "automationId": "notes",
+          "windowKind": "Notes",
+          "title": "Notes",
+          "visible": true,
+          "focused": true,
+          "bounds": {
+            "x": 3062,
+            "y": -1030,
+            "width": 350,
+            "height": 280
+          },
+          "surfaceKind": null,
+          "appViewVariant": null,
+          "parentAutomationId": null,
+          "parentKind": null,
+          "pid": 43619
+        }
+      ],
+      "rawInspect": {
+        "type": "automationInspectResult",
+        "requestId": "devtools-targets-inspect-1780112150359-53613c",
+        "schemaVersion": 3,
+        "windowId": "notes",
+        "windowKind": "Notes",
+        "title": "Notes",
+        "resolvedBounds": {
+          "x": 1550,
+          "y": 50,
+          "width": 350,
+          "height": 600
+        },
+        "targetBoundsInScreenshot": {
+          "x": 0,
+          "y": 0,
+          "width": 350,
+          "height": 600
+        },
+        "surfaceHitPoint": {
+          "x": 175,
+          "y": 300
+        },
+        "suggestedHitPoints": [
+          {
+            "semanticId": "input:notes-editor",
+            "x": 175,
+            "y": 300,
+            "reason": "surface_center"
+          }
+        ],
+        "elements": [
+          {
+            "semanticId": "panel:notes-window",
+            "type": "panel",
+            "text": "Notes"
+          },
+          {
+            "semanticId": "input:notes-editor",
+            "type": "input",
+            "value": "# Welcome to Notes\n\n## What Notes is\n\nNotes is a fast, keyboard-first place for ideas, drafts, and working context. It stores Markdown notes, supports fast switching, and can hand note context to AI.\n\n> Start with messy thoughts. Use the actions menu as your command center (Cmd+K).\n\n---\n\n## Write fast\n\nUse Markdown for structure without leaving the editor:\n\n### A tiny example\n\n- [x] Capture one useful idea\n- [ ] Turn it into a script, plan, or checklist\n- Use inline `code` for commands, names, and snippets\n\nFormat as you type, then preview the result when you want to read instead of edit (Cmd+Shift+P). Smart paste can clean up copied text into useful Markdown when possible (Cmd+V). Focus mode hides the chrome so the note can take over (Cmd+.).\n\n## Navigate\n\nCreate a note whenever the thought arrives (Cmd+N). Create one from the clipboard when the clipboard is the thought (Cmd+Shift+N). Switch notes quickly from the note switcher (Cmd+P), jump through history (Cmd+[ and Cmd+]), and pin important notes so they stay at the top (Cmd+Shift+I).\n\nJump to pinned notes by number (Cmd+1 through Cmd+9). Cycle sorting between updated, created, and alphabetical when the list needs a different shape (Cmd+Shift+S).\n\n## Find things\n\nFind text inside the current note (Cmd+F). Search across notes with the notes search field (Cmd+Shift+F). Open Trash when something should be out of the way but not gone forever (Cmd+Shift+T).\n\nDelete carefully; Notes uses Trash first, then permanent delete from Trash. Restore a trashed note while viewing Trash (Cmd+Z).\n\n## Extend\n\nThe actions menu is the source of truth for commands, shortcuts, and anything added later (Cmd+K). Use it when you are unsure what Notes can do.\n\nSend note context into ACP/AI when you want help rewriting, summarizing, planning, or turning notes into next actions (Cmd+Enter). Reference other notes with `@note` mentions from the notes portal when you are building context across notes (Cmd+Shift+O).\n\nMake this your own: replace this tour with the first note you actually need.\n\n",
+            "focused": true
+          }
+        ],
+        "totalCount": 2,
+        "focusedSemanticId": "input:notes-editor",
+        "screenshotWidth": 350,
+        "screenshotHeight": 600,
+        "osWindowId": 83832,
+        "semanticQuality": "full",
+        "pid": 43619
+      },
+      "sessionLifecycle": [],
+      "errors": []
+    },
+    "elements": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "classification": "ok",
+      "session": "liquid-glass-notes-acp-next",
+      "requestedTarget": {
+        "selector": {
+          "type": "id",
+          "id": "notes"
+        },
+        "strict": true,
+        "expectedSurfaceKind": null
+      },
+      "target": {
+        "automationId": "notes",
+        "stableTargetId": "notes",
+        "targetKind": "Notes",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 1550,
+          "y": 50,
+          "width": 350,
+          "height": 600
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 350,
+          "height": 600,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 350,
+            "height": 600
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 43619,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "semanticSurface": {
+        "surfaceKind": null,
+        "appViewVariant": null
+      },
+      "totalCount": 2,
+      "returnedCount": 2,
+      "truncated": false,
+      "focusedSemanticId": "input:notes-editor",
+      "selectedSemanticId": null,
+      "duplicateSemanticIds": [],
+      "missingPrimitives": [
+        "elementBounds"
+      ],
+      "nodes": [
+        {
+          "semanticId": "panel:notes-window",
+          "role": "panel",
+          "type": "panel",
+          "label": "Notes",
+          "text": "Notes",
+          "value": null,
+          "selected": null,
+          "focused": null,
+          "index": null,
+          "owner": null,
+          "actions": [],
+          "bounds": null,
+          "raw": {
+            "semanticId": "panel:notes-window",
+            "type": "panel",
+            "text": "Notes"
+          }
+        },
+        {
+          "semanticId": "input:notes-editor",
+          "role": "input",
+          "type": "input",
+          "label": "# Welcome to Notes\n\n## What Notes is\n\nNotes is a fast, keyboard-first place for ideas, drafts, and working context. It stores Markdown notes, supports fast switching, and can hand note context to AI.\n\n> Start with messy thoughts. Use the actions menu as your command center (Cmd+K).\n\n---\n\n## Write fast\n\nUse Markdown for structure without leaving the editor:\n\n### A tiny example\n\n- [x] Capture one useful idea\n- [ ] Turn it into a script, plan, or checklist\n- Use inline `code` for commands, names, and snippets\n\nFormat as you type, then preview the result when you want to read instead of edit (Cmd+Shift+P). Smart paste can clean up copied text into useful Markdown when possible (Cmd+V). Focus mode hides the chrome so the note can take over (Cmd+.).\n\n## Navigate\n\nCreate a note whenever the thought arrives (Cmd+N). Create one from the clipboard when the clipboard is the thought (Cmd+Shift+N). Switch notes quickly from the note switcher (Cmd+P), jump through history (Cmd+[ and Cmd+]), and pin important notes so they stay at the top (Cmd+Shift+I).\n\nJump to pinned notes by number (Cmd+1 through Cmd+9). Cycle sorting between updated, created, and alphabetical when the list needs a different shape (Cmd+Shift+S).\n\n## Find things\n\nFind text inside the current note (Cmd+F). Search across notes with the notes search field (Cmd+Shift+F). Open Trash when something should be out of the way but not gone forever (Cmd+Shift+T).\n\nDelete carefully; Notes uses Trash first, then permanent delete from Trash. Restore a trashed note while viewing Trash (Cmd+Z).\n\n## Extend\n\nThe actions menu is the source of truth for commands, shortcuts, and anything added later (Cmd+K). Use it when you are unsure what Notes can do.\n\nSend note context into ACP/AI when you want help rewriting, summarizing, planning, or turning notes into next actions (Cmd+Enter). Reference other notes with `@note` mentions from the notes portal when you are building context across notes (Cmd+Shift+O).\n\nMake this your own: replace this tour with the first note you actually need.\n\n",
+          "text": null,
+          "value": "# Welcome to Notes\n\n## What Notes is\n\nNotes is a fast, keyboard-first place for ideas, drafts, and working context. It stores Markdown notes, supports fast switching, and can hand note context to AI.\n\n> Start with messy thoughts. Use the actions menu as your command center (Cmd+K).\n\n---\n\n## Write fast\n\nUse Markdown for structure without leaving the editor:\n\n### A tiny example\n\n- [x] Capture one useful idea\n- [ ] Turn it into a script, plan, or checklist\n- Use inline `code` for commands, names, and snippets\n\nFormat as you type, then preview the result when you want to read instead of edit (Cmd+Shift+P). Smart paste can clean up copied text into useful Markdown when possible (Cmd+V). Focus mode hides the chrome so the note can take over (Cmd+.).\n\n## Navigate\n\nCreate a note whenever the thought arrives (Cmd+N). Create one from the clipboard when the clipboard is the thought (Cmd+Shift+N). Switch notes quickly from the note switcher (Cmd+P), jump through history (Cmd+[ and Cmd+]), and pin important notes so they stay at the top (Cmd+Shift+I).\n\nJump to pinned notes by number (Cmd+1 through Cmd+9). Cycle sorting between updated, created, and alphabetical when the list needs a different shape (Cmd+Shift+S).\n\n## Find things\n\nFind text inside the current note (Cmd+F). Search across notes with the notes search field (Cmd+Shift+F). Open Trash when something should be out of the way but not gone forever (Cmd+Shift+T).\n\nDelete carefully; Notes uses Trash first, then permanent delete from Trash. Restore a trashed note while viewing Trash (Cmd+Z).\n\n## Extend\n\nThe actions menu is the source of truth for commands, shortcuts, and anything added later (Cmd+K). Use it when you are unsure what Notes can do.\n\nSend note context into ACP/AI when you want help rewriting, summarizing, planning, or turning notes into next actions (Cmd+Enter). Reference other notes with `@note` mentions from the notes portal when you are building context across notes (Cmd+Shift+O).\n\nMake this your own: replace this tour with the first note you actually need.\n\n",
+          "selected": null,
+          "focused": true,
+          "index": null,
+          "owner": null,
+          "actions": [],
+          "bounds": null,
+          "raw": {
+            "semanticId": "input:notes-editor",
+            "type": "input",
+            "value": "# Welcome to Notes\n\n## What Notes is\n\nNotes is a fast, keyboard-first place for ideas, drafts, and working context. It stores Markdown notes, supports fast switching, and can hand note context to AI.\n\n> Start with messy thoughts. Use the actions menu as your command center (Cmd+K).\n\n---\n\n## Write fast\n\nUse Markdown for structure without leaving the editor:\n\n### A tiny example\n\n- [x] Capture one useful idea\n- [ ] Turn it into a script, plan, or checklist\n- Use inline `code` for commands, names, and snippets\n\nFormat as you type, then preview the result when you want to read instead of edit (Cmd+Shift+P). Smart paste can clean up copied text into useful Markdown when possible (Cmd+V). Focus mode hides the chrome so the note can take over (Cmd+.).\n\n## Navigate\n\nCreate a note whenever the thought arrives (Cmd+N). Create one from the clipboard when the clipboard is the thought (Cmd+Shift+N). Switch notes quickly from the note switcher (Cmd+P), jump through history (Cmd+[ and Cmd+]), and pin important notes so they stay at the top (Cmd+Shift+I).\n\nJump to pinned notes by number (Cmd+1 through Cmd+9). Cycle sorting between updated, created, and alphabetical when the list needs a different shape (Cmd+Shift+S).\n\n## Find things\n\nFind text inside the current note (Cmd+F). Search across notes with the notes search field (Cmd+Shift+F). Open Trash when something should be out of the way but not gone forever (Cmd+Shift+T).\n\nDelete carefully; Notes uses Trash first, then permanent delete from Trash. Restore a trashed note while viewing Trash (Cmd+Z).\n\n## Extend\n\nThe actions menu is the source of truth for commands, shortcuts, and anything added later (Cmd+K). Use it when you are unsure what Notes can do.\n\nSend note context into ACP/AI when you want help rewriting, summarizing, planning, or turning notes into next actions (Cmd+Enter). Reference other notes with `@note` mentions from the notes portal when you are building context across notes (Cmd+Shift+O).\n\nMake this your own: replace this tour with the first note you actually need.\n\n",
+            "focused": true
+          }
+        }
+      ],
+      "warnings": [
+        "getElements does not expose bounds yet; use devtools.layout.measure for geometry."
+      ],
+      "errors": []
+    },
+    "focus": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "classification": "ok",
+      "session": "liquid-glass-notes-acp-next",
+      "requestedTarget": {
+        "selector": {
+          "type": "id",
+          "id": "notes"
+        },
+        "strict": true,
+        "expectedSurfaceKind": null
+      },
+      "target": {
+        "automationId": "notes",
+        "stableTargetId": "notes",
+        "targetKind": "Notes",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 1550,
+          "y": 50,
+          "width": 350,
+          "height": 600
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 350,
+          "height": 600,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 350,
+            "height": 600
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 43619,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "windowFocused": true,
+      "windowVisible": true,
+      "focusedSemanticId": "input:notes-editor",
+      "selectedSemanticId": null,
+      "focusedNode": {
+        "semanticId": "input:notes-editor",
+        "type": "input",
+        "value": "# Welcome to Notes\n\n## What Notes is\n\nNotes is a fast, keyboard-first place for ideas, drafts, and working context. It stores Markdown notes, supports fast switching, and can hand note context to AI.\n\n> Start with messy thoughts. Use the actions menu as your command center (Cmd+K).\n\n---\n\n## Write fast\n\nUse Markdown for structure without leaving the editor:\n\n### A tiny example\n\n- [x] Capture one useful idea\n- [ ] Turn it into a script, plan, or checklist\n- Use inline `code` for commands, names, and snippets\n\nFormat as you type, then preview the result when you want to read instead of edit (Cmd+Shift+P). Smart paste can clean up copied text into useful Markdown when possible (Cmd+V). Focus mode hides the chrome so the note can take over (Cmd+.).\n\n## Navigate\n\nCreate a note whenever the thought arrives (Cmd+N). Create one from the clipboard when the clipboard is the thought (Cmd+Shift+N). Switch notes quickly from the note switcher (Cmd+P), jump through history (Cmd+[ and Cmd+]), and pin important notes so they stay at the top (Cmd+Shift+I).\n\nJump to pinned notes by number (Cmd+1 through Cmd+9). Cycle sorting between updated, created, and alphabetical when the list needs a different shape (Cmd+Shift+S).\n\n## Find things\n\nFind text inside the current note (Cmd+F). Search across notes with the notes search field (Cmd+Shift+F). Open Trash when something should be out of the way but not gone forever (Cmd+Shift+T).\n\nDelete carefully; Notes uses Trash first, then permanent delete from Trash. Restore a trashed note while viewing Trash (Cmd+Z).\n\n## Extend\n\nThe actions menu is the source of truth for commands, shortcuts, and anything added later (Cmd+K). Use it when you are unsure what Notes can do.\n\nSend note context into ACP/AI when you want help rewriting, summarizing, planning, or turning notes into next actions (Cmd+Enter). Reference other notes with `@note` mentions from the notes portal when you are building context across notes (Cmd+Shift+O).\n\nMake this your own: replace this tour with the first note you actually need.\n\n",
+        "focused": true
+      },
+      "selectedNode": null,
+      "activeFooter": null,
+      "nativeFooter": {
+        "owner": null,
+        "activeSurface": null,
+        "expectedSurface": null,
+        "nativeFooterHostInstalled": null,
+        "buttonCount": null,
+        "activationPrimitiveAvailable": false,
+        "missingPrimitive": "nativeFooterActivationReceipt"
+      },
+      "submitDiagnostics": null,
+      "keyboardOwner": {
+        "inputValue": "",
+        "promptType": "notes",
+        "surfaceKind": null,
+        "inputOwnership": null,
+        "keyboardPolicy": null
+      },
+      "missingPrimitives": [],
+      "warnings": [],
+      "errors": []
+    },
+    "text": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.text",
+      "command": "text.measure",
+      "classification": "ok",
+      "session": "liquid-glass-notes-acp-next",
+      "requestedTarget": {
+        "selector": {
+          "type": "id",
+          "id": "notes"
+        },
+        "strict": true,
+        "expectedSurfaceKind": null
+      },
+      "target": {
+        "automationId": "notes",
+        "stableTargetId": "notes",
+        "targetKind": "Notes",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 1550,
+          "y": 50,
+          "width": 350,
+          "height": 600
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 350,
+          "height": 600,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 350,
+            "height": 600
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 43619,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "textSummary": {
+        "inputValue": "",
+        "inputLength": 0,
+        "inputFingerprint": "811c9dc5",
+        "selectedValue": "",
+        "selectedLength": 0,
+        "selectedFingerprint": "811c9dc5",
+        "textNodeCount": 2,
+        "longestTextLength": 2051
+      },
+      "rows": [
+        {
+          "semanticId": "panel:notes-window",
+          "role": "panel",
+          "text": "Notes",
+          "textLength": 5,
+          "lineCount": 1,
+          "selected": null,
+          "focused": null,
+          "fingerprint": "0ff01b6a"
+        },
+        {
+          "semanticId": "input:notes-editor",
+          "role": "input",
+          "text": "# Welcome to Notes\n\n## What Notes is\n\nNotes is a fast, keyboard-first place for ideas, drafts, and working context. It stores Markdown notes, supports fast switching, and can hand note context to AI.\n\n> Start with messy thoughts. Use the actions menu as your command center (Cmd+K).\n\n---\n\n## Write fast\n\nUse Markdown for structure without leaving the editor:\n\n### A tiny example\n\n- [x] Capture one useful idea\n- [ ] Turn it into a script, plan, or checklist\n- Use inline `code` for commands, names, and snippets\n\nFormat as you type, then preview the result when you want to read instead of edit (Cmd+Shift+P). Smart paste can clean up copied text into useful Markdown when possible (Cmd+V). Focus mode hides the chrome so the note can take over (Cmd+.).\n\n## Navigate\n\nCreate a note whenever the thought arrives (Cmd+N). Create one from the clipboard when the clipboard is the thought (Cmd+Shift+N). Switch notes quickly from the note switcher (Cmd+P), jump through history (Cmd+[ and Cmd+]), and pin important notes so they stay at the top (Cmd+Shift+I).\n\nJump to pinned notes by number (Cmd+1 through Cmd+9). Cycle sorting between updated, created, and alphabetical when the list needs a different shape (Cmd+Shift+S).\n\n## Find things\n\nFind text inside the current note (Cmd+F). Search across notes with the notes search field (Cmd+Shift+F). Open Trash when something should be out of the way but not gone forever (Cmd+Shift+T).\n\nDelete carefully; Notes uses Trash first, then permanent delete from Trash. Restore a trashed note while viewing Trash (Cmd+Z).\n\n## Extend\n\nThe actions menu is the source of truth for commands, shortcuts, and anything added later (Cmd+K). Use it when you are unsure what Notes can do.\n\nSend note context into ACP/AI when you want help rewriting, summarizing, planning, or turning notes into next actions (Cmd+Enter). Reference other notes with `@note` mentions from the notes portal when you are building context across notes (Cmd+Shift+O).\n\nMake this your own: replace this tour with the first note you actually need.\n\n",
+          "textLength": 2051,
+          "lineCount": 43,
+          "selected": null,
+          "focused": true,
+          "fingerprint": "7e9b2a6c"
+        }
+      ],
+      "footerTexts": [],
+      "missingPrimitives": [
+        "textBounds"
+      ],
+      "warnings": [
+        "Text bounds are not exposed by getElements yet; pair this with devtools.layout.measure for geometry."
+      ],
+      "errors": []
+    },
+    "layout": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "classification": "ok",
+      "session": "liquid-glass-notes-acp-next",
+      "include": [
+        "nodes",
+        "regions",
+        "scroll",
+        "resize",
+        "overlaps"
+      ],
+      "limit": 200,
+      "requestedTarget": {
+        "selector": {
+          "type": "id",
+          "id": "notes"
+        },
+        "strict": true,
+        "expectedSurfaceKind": null
+      },
+      "target": {
+        "automationId": "notes",
+        "stableTargetId": "notes",
+        "targetKind": "Notes",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 1550,
+          "y": 50,
+          "width": 350,
+          "height": 600
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 350,
+          "height": 600,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 350,
+            "height": 600
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 43619,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "promptType": "notes",
+      "timestamp": "2026-05-30T03:35:55.601584+00:00",
+      "componentCount": 4,
+      "window": {
+        "rect": {
+          "x": 1550,
+          "y": 50,
+          "width": 350,
+          "height": 600
+        },
+        "visible": null,
+        "focused": null
+      },
+      "viewport": {
+        "clientWidth": 350,
+        "clientHeight": 600,
+        "contentWidth": 350,
+        "contentHeight": 600,
+        "scrollWidth": 350,
+        "scrollHeight": 600,
+        "canScrollX": false,
+        "canScrollY": false,
+        "scrollTop": null,
+        "maxScrollTop": 0,
+        "overflowPolicyY": "hidden"
+      },
+      "pressure": {
+        "overflowY": false,
+        "hiddenContentHeight": 0,
+        "clippedNodeCount": 0,
+        "overlapCount": 0,
+        "footerOverlapCount": 0,
+        "inputOverlapCount": 0,
+        "pressureScore": 0
+      },
+      "viewportRect": {
+        "x": 0,
+        "y": 0,
+        "width": 350,
+        "height": 600
+      },
+      "windowRect": {
+        "x": 1550,
+        "y": 50,
+        "width": 350,
+        "height": 600
+      },
+      "regions": [
+        {
+          "name": "NotesWindow",
+          "type": "container",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 350,
+            "height": 600
+          }
+        },
+        {
+          "name": "NotesTitlebar",
+          "type": "header",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 350,
+            "height": 36
+          }
+        },
+        {
+          "name": "NotesEditor",
+          "type": "prompt",
+          "bounds": {
+            "x": 0,
+            "y": 36,
+            "width": 350,
+            "height": 536
+          }
+        },
+        {
+          "name": "NotesFooter",
+          "type": "panel",
+          "bounds": {
+            "x": 0,
+            "y": 572,
+            "width": 350,
+            "height": 28
+          }
+        }
+      ],
+      "nodes": [
+        {
+          "name": "NotesWindow",
+          "type": "container",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 350,
+            "height": 600
+          },
+          "depth": 0,
+          "parent": null,
+          "children": [],
+          "explanation": "Floating Notes window root measured from the resolved target bounds.",
+          "visualStyle": {
+            "chromeLayer": "floatingTransient",
+            "materialSource": "NSVisualEffectView",
+            "tokenSource": "chrome.notesWindow",
+            "cornerRadius": {
+              "topLeft": 22,
+              "topRight": 22,
+              "bottomRight": 22,
+              "bottomLeft": 22
+            },
+            "visualBounds": {
+              "x": 0,
+              "y": 0,
+              "width": 350,
+              "height": 600
+            },
+            "hitBounds": {
+              "x": 0,
+              "y": 0,
+              "width": 350,
+              "height": 600
+            }
+          },
+          "hitMetrics": {
+            "hitBounds": {
+              "x": 0,
+              "y": 0,
+              "width": 350,
+              "height": 600
+            },
+            "visualBounds": {
+              "x": 0,
+              "y": 0,
+              "width": 350,
+              "height": 600
+            },
+            "hitWidth": 350,
+            "hitHeight": 600,
+            "visualWidth": 350,
+            "visualHeight": 600,
+            "minHitPass": true,
+            "minVisualPass": true,
+            "preferredHitPass": true,
+            "exception": null
+          },
+          "clipped": false,
+          "raw": {
+            "name": "NotesWindow",
+            "type": "container",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 350,
+              "height": 600
+            },
+            "flex": {
+              "direction": "column"
+            },
+            "depth": 0,
+            "explanation": "Floating Notes window root measured from the resolved target bounds.",
+            "visualStyle": {
+              "chromeLayer": "floatingTransient",
+              "materialSource": "NSVisualEffectView",
+              "tokenSource": "chrome.notesWindow",
+              "cornerRadius": {
+                "topLeft": 22,
+                "topRight": 22,
+                "bottomRight": 22,
+                "bottomLeft": 22
+              },
+              "visualBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 350,
+                "height": 600
+              },
+              "hitBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 350,
+                "height": 600
+              }
+            }
+          }
+        },
+        {
+          "name": "NotesTitlebar",
+          "type": "header",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 350,
+            "height": 36
+          },
+          "depth": 1,
+          "parent": "NotesWindow",
+          "children": [],
+          "explanation": "Titlebar area that hosts note title and hover-revealed controls.",
+          "visualStyle": {
+            "chromeLayer": "functionalChrome",
+            "materialSource": "solidThemeToken",
+            "tokenSource": "chrome.notesTitlebar",
+            "cornerRadius": {
+              "topLeft": 16,
+              "topRight": 16,
+              "bottomRight": 16,
+              "bottomLeft": 16
+            },
+            "visualBounds": {
+              "x": 0,
+              "y": 0,
+              "width": 350,
+              "height": 36
+            },
+            "hitBounds": {
+              "x": 0,
+              "y": 0,
+              "width": 350,
+              "height": 36
+            }
+          },
+          "hitMetrics": {
+            "hitBounds": {
+              "x": 0,
+              "y": 0,
+              "width": 350,
+              "height": 36
+            },
+            "visualBounds": {
+              "x": 0,
+              "y": 0,
+              "width": 350,
+              "height": 36
+            },
+            "hitWidth": 350,
+            "hitHeight": 36,
+            "visualWidth": 350,
+            "visualHeight": 36,
+            "minHitPass": true,
+            "minVisualPass": true,
+            "preferredHitPass": false,
+            "exception": null
+          },
+          "clipped": false,
+          "raw": {
+            "name": "NotesTitlebar",
+            "type": "header",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 350,
+              "height": 36
+            },
+            "depth": 1,
+            "parent": "NotesWindow",
+            "explanation": "Titlebar area that hosts note title and hover-revealed controls.",
+            "visualStyle": {
+              "chromeLayer": "functionalChrome",
+              "materialSource": "solidThemeToken",
+              "tokenSource": "chrome.notesTitlebar",
+              "cornerRadius": {
+                "topLeft": 16,
+                "topRight": 16,
+                "bottomRight": 16,
+                "bottomLeft": 16
+              },
+              "visualBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 350,
+                "height": 36
+              },
+              "hitBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 350,
+                "height": 36
+              }
+            }
+          }
+        },
+        {
+          "name": "NotesEditor",
+          "type": "prompt",
+          "bounds": {
+            "x": 0,
+            "y": 36,
+            "width": 350,
+            "height": 536
+          },
+          "depth": 1,
+          "parent": "NotesWindow",
+          "children": [],
+          "explanation": "Primary Notes content region after titlebar/search/toolbar reservations.",
+          "visualStyle": {
+            "chromeLayer": "content",
+            "materialSource": "solidThemeToken",
+            "tokenSource": "content.notesEditor",
+            "visualBounds": {
+              "x": 0,
+              "y": 36,
+              "width": 350,
+              "height": 536
+            },
+            "hitBounds": {
+              "x": 0,
+              "y": 36,
+              "width": 350,
+              "height": 536
+            }
+          },
+          "hitMetrics": {
+            "hitBounds": {
+              "x": 0,
+              "y": 36,
+              "width": 350,
+              "height": 536
+            },
+            "visualBounds": {
+              "x": 0,
+              "y": 36,
+              "width": 350,
+              "height": 536
+            },
+            "hitWidth": 350,
+            "hitHeight": 536,
+            "visualWidth": 350,
+            "visualHeight": 536,
+            "minHitPass": true,
+            "minVisualPass": true,
+            "preferredHitPass": true,
+            "exception": null
+          },
+          "clipped": false,
+          "raw": {
+            "name": "NotesEditor",
+            "type": "prompt",
+            "bounds": {
+              "x": 0,
+              "y": 36,
+              "width": 350,
+              "height": 536
+            },
+            "flex": {
+              "direction": "column",
+              "grow": 1
+            },
+            "depth": 1,
+            "parent": "NotesWindow",
+            "explanation": "Primary Notes content region after titlebar/search/toolbar reservations.",
+            "visualStyle": {
+              "chromeLayer": "content",
+              "materialSource": "solidThemeToken",
+              "tokenSource": "content.notesEditor",
+              "visualBounds": {
+                "x": 0,
+                "y": 36,
+                "width": 350,
+                "height": 536
+              },
+              "hitBounds": {
+                "x": 0,
+                "y": 36,
+                "width": 350,
+                "height": 536
+              }
+            }
+          }
+        },
+        {
+          "name": "NotesFooter",
+          "type": "panel",
+          "bounds": {
+            "x": 0,
+            "y": 572,
+            "width": 350,
+            "height": 28
+          },
+          "depth": 1,
+          "parent": "NotesWindow",
+          "children": [],
+          "explanation": "Status/footer strip with save state, counts, and mode hints.",
+          "visualStyle": {
+            "chromeLayer": "functionalChrome",
+            "materialSource": "solidThemeToken",
+            "tokenSource": "chrome.notesFooter",
+            "cornerRadius": {
+              "topLeft": 10,
+              "topRight": 10,
+              "bottomRight": 10,
+              "bottomLeft": 10
+            },
+            "visualBounds": {
+              "x": 0,
+              "y": 572,
+              "width": 350,
+              "height": 28
+            },
+            "hitBounds": {
+              "x": 0,
+              "y": 572,
+              "width": 350,
+              "height": 28
+            }
+          },
+          "hitMetrics": {
+            "hitBounds": {
+              "x": 0,
+              "y": 572,
+              "width": 350,
+              "height": 28
+            },
+            "visualBounds": {
+              "x": 0,
+              "y": 572,
+              "width": 350,
+              "height": 28
+            },
+            "hitWidth": 350,
+            "hitHeight": 28,
+            "visualWidth": 350,
+            "visualHeight": 28,
+            "minHitPass": true,
+            "minVisualPass": true,
+            "preferredHitPass": false,
+            "exception": null
+          },
+          "clipped": false,
+          "raw": {
+            "name": "NotesFooter",
+            "type": "panel",
+            "bounds": {
+              "x": 0,
+              "y": 572,
+              "width": 350,
+              "height": 28
+            },
+            "depth": 1,
+            "parent": "NotesWindow",
+            "explanation": "Status/footer strip with save state, counts, and mode hints.",
+            "visualStyle": {
+              "chromeLayer": "functionalChrome",
+              "materialSource": "solidThemeToken",
+              "tokenSource": "chrome.notesFooter",
+              "cornerRadius": {
+                "topLeft": 10,
+                "topRight": 10,
+                "bottomRight": 10,
+                "bottomLeft": 10
+              },
+              "visualBounds": {
+                "x": 0,
+                "y": 572,
+                "width": 350,
+                "height": 28
+              },
+              "hitBounds": {
+                "x": 0,
+                "y": 572,
+                "width": 350,
+                "height": 28
+              }
+            }
+          }
+        }
+      ],
+      "overlaps": [],
+      "resizePressure": {
+        "windowCanGrow": null,
+        "overflowY": false,
+        "desiredContentHeight": 600,
+        "measuredContentHeight": 600,
+        "clippedNodeCount": 0,
+        "overlapCount": 0,
+        "pressureScore": 0
+      },
+      "visualAudit": {
+        "nodeCount": 4,
+        "styledNodeCount": 4,
+        "unstyledNodeCount": 0,
+        "controlsWithHitFailures": [],
+        "contentGlassNodes": [],
+        "missingStyleNodeNames": [],
+        "chromeLayers": {
+          "content": 1,
+          "floatingTransient": 1,
+          "functionalChrome": 2
+        }
+      },
+      "handlerForm": null,
+      "missingPrimitives": [],
+      "warnings": [],
+      "errors": [],
+      "rawLayout": {
+        "type": "layoutInfoResult",
+        "requestId": "devtools-layout-measure-1780112155576-c286c3",
+        "windowWidth": 350,
+        "windowHeight": 600,
+        "promptType": "notes",
+        "components": [
+          {
+            "name": "NotesWindow",
+            "type": "container",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 350,
+              "height": 600
+            },
+            "flex": {
+              "direction": "column"
+            },
+            "depth": 0,
+            "explanation": "Floating Notes window root measured from the resolved target bounds.",
+            "visualStyle": {
+              "chromeLayer": "floatingTransient",
+              "materialSource": "NSVisualEffectView",
+              "tokenSource": "chrome.notesWindow",
+              "cornerRadius": {
+                "topLeft": 22,
+                "topRight": 22,
+                "bottomRight": 22,
+                "bottomLeft": 22
+              },
+              "visualBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 350,
+                "height": 600
+              },
+              "hitBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 350,
+                "height": 600
+              }
+            }
+          },
+          {
+            "name": "NotesTitlebar",
+            "type": "header",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 350,
+              "height": 36
+            },
+            "depth": 1,
+            "parent": "NotesWindow",
+            "explanation": "Titlebar area that hosts note title and hover-revealed controls.",
+            "visualStyle": {
+              "chromeLayer": "functionalChrome",
+              "materialSource": "solidThemeToken",
+              "tokenSource": "chrome.notesTitlebar",
+              "cornerRadius": {
+                "topLeft": 16,
+                "topRight": 16,
+                "bottomRight": 16,
+                "bottomLeft": 16
+              },
+              "visualBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 350,
+                "height": 36
+              },
+              "hitBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 350,
+                "height": 36
+              }
+            }
+          },
+          {
+            "name": "NotesEditor",
+            "type": "prompt",
+            "bounds": {
+              "x": 0,
+              "y": 36,
+              "width": 350,
+              "height": 536
+            },
+            "flex": {
+              "direction": "column",
+              "grow": 1
+            },
+            "depth": 1,
+            "parent": "NotesWindow",
+            "explanation": "Primary Notes content region after titlebar/search/toolbar reservations.",
+            "visualStyle": {
+              "chromeLayer": "content",
+              "materialSource": "solidThemeToken",
+              "tokenSource": "content.notesEditor",
+              "visualBounds": {
+                "x": 0,
+                "y": 36,
+                "width": 350,
+                "height": 536
+              },
+              "hitBounds": {
+                "x": 0,
+                "y": 36,
+                "width": 350,
+                "height": 536
+              }
+            }
+          },
+          {
+            "name": "NotesFooter",
+            "type": "panel",
+            "bounds": {
+              "x": 0,
+              "y": 572,
+              "width": 350,
+              "height": 28
+            },
+            "depth": 1,
+            "parent": "NotesWindow",
+            "explanation": "Status/footer strip with save state, counts, and mode hints.",
+            "visualStyle": {
+              "chromeLayer": "functionalChrome",
+              "materialSource": "solidThemeToken",
+              "tokenSource": "chrome.notesFooter",
+              "cornerRadius": {
+                "topLeft": 10,
+                "topRight": 10,
+                "bottomRight": 10,
+                "bottomLeft": 10
+              },
+              "visualBounds": {
+                "x": 0,
+                "y": 572,
+                "width": 350,
+                "height": 28
+              },
+              "hitBounds": {
+                "x": 0,
+                "y": 572,
+                "width": 350,
+                "height": 28
+              }
+            }
+          }
+        ],
+        "timestamp": "2026-05-30T03:35:55.601584+00:00"
+      }
+    },
+    "state": {
+      "schemaVersion": 1,
+      "status": "ok",
+      "session": "liquid-glass-notes-acp-next",
+      "requestId": "devtools-notes-state-1780112155619-f96f3b",
+      "responseType": "stateResult",
+      "response": {
+        "type": "stateResult",
+        "requestId": "devtools-notes-state-1780112155619-f96f3b",
+        "promptType": "notes",
+        "promptId": "target:Notes:notes",
+        "inputValue": "",
+        "choiceCount": 0,
+        "visibleChoiceCount": 0,
+        "selectedIndex": -1,
+        "isFocused": true,
+        "windowVisible": true,
+        "notes": {
+          "schemaVersion": 1,
+          "passive": true,
+          "redacted": true,
+          "activeNoteId": "ee88df79-79c7-40a7-b1ac-c8dde5c1ea17",
+          "dirtyState": {
+            "hasUnsavedChanges": false,
+            "lastSaveConfirmedMsAgo": 4334,
+            "lastSaveAttemptMsAgo": 4334
+          },
+          "selectedNote": {
+            "id": "ee88df79-79c7-40a7-b1ac-c8dde5c1ea17",
+            "titleLength": 16,
+            "titleFingerprint": "fnv1a64:aee2cfb25044d8b5",
+            "contentLength": 2051,
+            "contentFingerprint": "fnv1a64:568b10f113da5f8c",
+            "isPinned": false,
+            "deleted": false,
+            "metadata": {
+              "tags": [],
+              "aliases": [
+                "Welcome to Notes"
+              ],
+              "tagCount": 0,
+              "aliasCount": 1,
+              "outboundLinkCount": 0,
+              "backlinkCount": 0
+            },
+            "position": {
+              "index": 1,
+              "total": 1
+            }
+          },
+          "editor": {
+            "textLength": 2051,
+            "textFingerprint": "fnv1a64:568b10f113da5f8c",
+            "selectionRange": [
+              2051,
+              2051
+            ],
+            "selectionLength": 0,
+            "hasSelection": false,
+            "cursor": 2051,
+            "cursorLine": {
+              "line": 43,
+              "total": 42
+            },
+            "lastLineCount": 42
+          },
+          "draftSnapshot": {
+            "schemaVersion": 1,
+            "source": "runtime.notes.automationState",
+            "redacted": true,
+            "contentReturned": false,
+            "titleReturned": false,
+            "noteIdFingerprint": "fnv1a64:337b63c0d4725acb",
+            "noteIdLength": 36,
+            "storageGeneration": 3,
+            "focusTransitionGeneration": 0,
+            "dirty": false,
+            "draft": {
+              "bodyLength": 2051,
+              "bodyByteLength": 2051,
+              "bodyFingerprint": "fnv1a64:568b10f113da5f8c",
+              "lineCount": 42,
+              "selectionRange": [
+                2051,
+                2051
+              ],
+              "selectionUnit": "utf8ByteOffset",
+              "selectionFingerprint": "fnv1a64:c76b7c4e898802dd"
+            },
+            "persisted": {
+              "titleLength": 16,
+              "titleFingerprint": "fnv1a64:aee2cfb25044d8b5",
+              "contentLength": 2051,
+              "contentFingerprint": "fnv1a64:568b10f113da5f8c",
+              "updatedAtMs": 1780112150336,
+              "deleted": false,
+              "isPinned": false
+            }
+          },
+          "editorAnchor": {
+            "schemaVersion": 1,
+            "source": "runtime.notes.automationState",
+            "redacted": true,
+            "available": true,
+            "anchor": {
+              "schemaVersion": 1,
+              "redacted": true,
+              "cursor": 2051,
+              "offsetUnit": "utf8ByteOffset",
+              "line": {
+                "index": 42,
+                "total": 42,
+                "start": 2051,
+                "end": 2051,
+                "length": 0,
+                "byteLength": 0,
+                "fingerprint": "fnv1a64:cbf29ce484222325"
+              },
+              "selectionRange": [
+                2051,
+                2051
+              ],
+              "selectionUnit": "utf8ByteOffset",
+              "selectionFingerprint": "fnv1a64:c76b7c4e898802dd"
+            },
+            "scrollMetricsAvailable": true,
+            "scrollTopAvailable": true,
+            "scrollHeightAvailable": true,
+            "clientHeightAvailable": true,
+            "scroll": {
+              "schemaVersion": 1,
+              "source": "gpui_component.input.InputState",
+              "available": true,
+              "offsetUnit": "logicalPx",
+              "scrollTop": 1584,
+              "scrollLeft": 0,
+              "liveScrollTop": 1584,
+              "liveScrollLeft": 0,
+              "hasDeferredScrollOffset": false,
+              "scrollHeight": 2080,
+              "scrollWidth": 284,
+              "clientHeight": 496,
+              "clientWidth": 294,
+              "maxScrollTop": 1584,
+              "maxScrollLeft": 0,
+              "canScrollY": true,
+              "canScrollX": false
+            },
+            "stopReason": null
+          },
+          "previewAnchor": {
+            "schemaVersion": 1,
+            "source": "runtime.notes.automationState",
+            "redacted": true,
+            "available": false,
+            "previewEnabled": false,
+            "anchor": null,
+            "scrollMetricsAvailable": false,
+            "scrollTopAvailable": false,
+            "scrollHeightAvailable": false,
+            "clientHeightAvailable": false,
+            "scroll": null,
+            "stopReason": "Notes markdown preview is not mounted"
+          },
+          "view": {
+            "viewMode": "AllNotes",
+            "surfaceMode": "Notes",
+            "focusSurface": "Editor",
+            "focusMode": false,
+            "sortMode": "Updated",
+            "showSearch": false,
+            "showFormatToolbar": false,
+            "previewEnabled": false,
+            "showActionsPanel": false,
+            "showBrowsePanel": false,
+            "autoSizingEnabled": true,
+            "initialHeight": 280,
+            "lastWindowHeight": 600,
+            "notesAcpGeneration": 0
+          },
+          "autosize": {
+            "schemaVersion": 1,
+            "redacted": true,
+            "generation": 1,
+            "enabled": true,
+            "lastWindowHeight": 600,
+            "initialHeight": 280,
+            "minHeight": 280,
+            "maxHeight": 600,
+            "lineCount": 42,
+            "desiredHeight": 928,
+            "clampedHeight": 600,
+            "threshold": 5,
+            "lastCause": "editor-input",
+            "lastAppliedHeight": 600,
+            "lastAppliedAt": "runtime-relative"
+          },
+          "generations": {
+            "schemaVersion": 1,
+            "state": 3,
+            "editorText": "fnv1a64:568b10f113da5f8c",
+            "autosize": 1,
+            "storage": 3,
+            "focus": 0,
+            "target": null,
+            "surface": null
+          },
+          "lastAutosizeTransition": {
+            "generation": 1,
+            "cause": "editor-input",
+            "beforeHeight": 280,
+            "afterHeight": 600,
+            "beforeWidth": 350,
+            "afterWidth": 350,
+            "lineCount": 42,
+            "desiredHeight": 928,
+            "clampedHeight": 600,
+            "applied": true,
+            "skippedReason": null,
+            "ageMs": 5307
+          },
+          "commandBars": {
+            "actions": {
+              "schemaVersion": 1,
+              "surface": "notes.actions",
+              "redacted": true,
+              "open": false,
+              "configuredActionCount": 12,
+              "configuredSectionCount": 5,
+              "configuredSections": {
+                "AI": 1,
+                "Copy": 4,
+                "Edit": 2,
+                "Export": 1,
+                "Notes": 4
+              },
+              "configuredShortcutCount": 11,
+              "closePolicy": {
+                "closeOnSelect": true,
+                "closeOnClickOutside": true,
+                "closeOnEscape": true
+              },
+              "config": {
+                "searchPosition": "top",
+                "sectionMode": "headers",
+                "anchor": "top",
+                "showIcons": true,
+                "showFooter": false,
+                "maxHeight": 400
+              }
+            },
+            "noteSwitcher": {
+              "schemaVersion": 1,
+              "surface": "notes.switcher",
+              "redacted": true,
+              "open": false,
+              "configuredActionCount": 1,
+              "configuredSectionCount": 1,
+              "configuredSections": {
+                "Recent": 1
+              },
+              "configuredShortcutCount": 0,
+              "closePolicy": {
+                "closeOnSelect": true,
+                "closeOnClickOutside": true,
+                "closeOnEscape": true
+              },
+              "config": {
+                "searchPosition": "top",
+                "sectionMode": "headers",
+                "anchor": "top",
+                "showIcons": true,
+                "showFooter": false,
+                "maxHeight": 560
+              }
+            }
+          },
+          "shortcutRegistry": {
+            "schemaVersion": 1,
+            "redacted": true,
+            "activeScope": "editor",
+            "currentFocusSurface": "Editor",
+            "pendingFocusSurface": null,
+            "modalGuard": {
+              "activeDialogFirst": true,
+              "handles": [
+                "Enter",
+                "Escape",
+                "Tab",
+                "Shift+Tab"
+              ]
+            },
+            "scopes": [
+              {
+                "id": "actionsPanel",
+                "open": false,
+                "owner": "Notes CommandBar",
+                "toggle": "Cmd+K",
+                "handles": [
+                  "Escape",
+                  "Cmd+K",
+                  "Enter",
+                  "ArrowUp",
+                  "ArrowDown",
+                  "Home",
+                  "End",
+                  "PageUp",
+                  "PageDown",
+                  "Backspace",
+                  "Delete",
+                  "text input"
+                ]
+              },
+              {
+                "id": "noteSwitcher",
+                "open": false,
+                "owner": "Notes note switcher",
+                "toggle": "Cmd+P",
+                "handles": [
+                  "Escape",
+                  "Cmd+P",
+                  "Enter",
+                  "ArrowUp",
+                  "ArrowDown",
+                  "Home",
+                  "End",
+                  "PageUp",
+                  "PageDown",
+                  "Backspace",
+                  "Delete",
+                  "text input"
+                ]
+              },
+              {
+                "id": "embeddedAcp",
+                "open": false,
+                "owner": "Notes-hosted ACP",
+                "toggle": "Cmd+Enter",
+                "handles": [
+                  "Escape",
+                  "Cmd+K",
+                  "Cmd+W",
+                  "Cmd+Shift+A"
+                ]
+              },
+              {
+                "id": "editor",
+                "open": true,
+                "owner": "Notes editor",
+                "handles": [
+                  "Escape",
+                  "Tab",
+                  "Shift+Tab",
+                  "Alt+Up",
+                  "Alt+Down",
+                  "Alt+Shift+Up",
+                  "Alt+Shift+Down",
+                  "Ctrl+Shift+K",
+                  "Cmd+Enter",
+                  "Cmd+K",
+                  "Cmd+Shift+O",
+                  "Cmd+P",
+                  "Cmd+Shift+P",
+                  "Cmd+F",
+                  "Cmd+Shift+F",
+                  "Cmd+Shift+A",
+                  "Cmd+N",
+                  "Cmd+Shift+N",
+                  "Cmd+Shift+T",
+                  "Cmd+W",
+                  "Cmd+.",
+                  "Cmd+Shift+.",
+                  "Cmd+Shift+S",
+                  "Cmd+Z",
+                  "Cmd+D",
+                  "Cmd+Shift+D",
+                  "Cmd+Shift+X",
+                  "Cmd+L",
+                  "Cmd+Shift+L",
+                  "Cmd+Shift+-",
+                  "Cmd+Shift+H",
+                  "Cmd+V",
+                  "Cmd+Shift+C",
+                  "Cmd+E",
+                  "Cmd+J",
+                  "Cmd+Shift+U",
+                  "Cmd+B",
+                  "Cmd+I",
+                  "Cmd+Shift+I",
+                  "Cmd+Up",
+                  "Cmd+Down",
+                  "Cmd+Shift+Up",
+                  "Cmd+Shift+Down",
+                  "Cmd+[",
+                  "Cmd+]",
+                  "Cmd+Shift+Backspace",
+                  "Cmd+Shift+Delete",
+                  "Cmd+Shift+7",
+                  "Cmd+Shift+8",
+                  "Cmd+1..Cmd+9"
+                ]
+              }
+            ]
+          },
+          "focusTransitions": {
+            "schemaVersion": 1,
+            "redacted": true,
+            "generation": 0,
+            "entryCount": 0,
+            "entries": []
+          },
+          "search": {
+            "visible": false,
+            "queryLength": 0,
+            "queryFingerprint": "fnv1a64:cbf29ce484222325"
+          },
+          "storage": {
+            "schemaVersion": 1,
+            "redacted": true,
+            "generation": 3,
+            "rootSearchCacheGeneration": 3,
+            "dbPathFingerprint": "fnv1a64:fc97e3af85a84b41",
+            "dbPathLength": 42,
+            "testSandbox": true
+          },
+          "counts": {
+            "notes": 1,
+            "deletedNotes": 0,
+            "visibleNotes": 1,
+            "historyBack": 0,
+            "historyForward": 0
+          }
+        }
+      }
+    }
+  },
+  "missingPrimitives": [
+    "elementBounds",
+    "textBounds",
+    "preview scroll handle populated content bounds under mounted markdown preview",
+    "ACP embedded origin receipts beyond openNotesAcp surface activation",
+    "portal session provenance",
+    "remaining Notes shortcut activation parity receipts beyond Cmd+Shift+P"
+  ],
+  "warnings": [
+    "getElements does not expose bounds yet; use devtools.layout.measure for geometry.",
+    "Text bounds are not exposed by getElements yet; pair this with devtools.layout.measure for geometry.",
+    "Notes inspection remains fail-closed until missing primitives are available: elementBounds, textBounds, preview scroll handle populated content bounds under mounted markdown preview, ACP embedded origin receipts beyond openNotesAcp surface activation, portal session provenance, remaining Notes shortcut activation parity receipts beyond Cmd+Shift+P."
+  ],
+  "errors": []
+}

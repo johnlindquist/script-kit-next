@@ -23,7 +23,10 @@ const NOTES_WINDOW: &str = include_str!("../src/notes/window.rs");
 const NOTES_PANELS: &str = include_str!("../src/notes/window/panels.rs");
 const BATCH_WAIT: &str = include_str!("../src/protocol/types/batch_wait.rs");
 const STDIN_COMMANDS: &str = include_str!("../src/stdin_commands/mod.rs");
-const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
+const RUNTIME_STDIN: &str = concat!(
+    include_str!("../src/main_entry/runtime_stdin.rs"),
+    include_str!("../src/app_impl/simulate_key_dispatch.rs"),
+);
 
 #[test]
 fn state_result_exposes_redacted_notes_envelope() {
@@ -179,7 +182,7 @@ fn notes_batch_supports_target_scoped_open_actions() {
     }
 
     for needle in [
-        "supported_commands: &[\"setInput\", \"openActions\", \"togglePreview\", \"waitFor\"]",
+        "supported_commands: &[\"setInput\", \"openActions\", \"togglePreview\", \"openNotesAcp\", \"waitFor\"]",
         "protocol::BatchCommand::OpenActions",
         "transaction_notes_open_actions",
         "window.defer(cx, move |window, cx|",
@@ -209,6 +212,22 @@ fn notes_batch_supports_target_scoped_open_actions() {
 }
 
 #[test]
+fn notes_batch_supports_target_scoped_open_acp() {
+    for needle in [
+        "OpenNotesAcp",
+        "openNotesAcp",
+        "protocol::BatchCommand::OpenNotesAcp",
+        "transaction_notes_open_acp",
+        "app.open_or_focus_embedded_acp(",
+    ] {
+        assert!(
+            BATCH_WAIT.contains(needle) || PROMPT_HANDLER.contains(needle),
+            "Batch protocol must define target-scoped Notes ACP primitive: {needle}"
+        );
+    }
+}
+
+#[test]
 fn simulate_key_supports_target_scoped_notes_shortcuts() {
     for needle in [
         "target: Option<protocol::AutomationWindowTarget>",
@@ -222,7 +241,7 @@ fn simulate_key_supports_target_scoped_notes_shortcuts() {
 
     for needle in [
         "ref target",
-        "resolve_automation_window(Some(target))",
+        "resolve_automation_window(Some(target_val))",
         "AutomationWindowKind::Notes",
         "SimulateKey: Cmd+Shift+P - toggle Notes preview",
         "app.toggle_preview(notes_window, cx)",

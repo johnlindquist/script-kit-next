@@ -586,6 +586,12 @@ function isNonDestructiveActionsDialogSubmit(actionId: string | null, parentSubj
   });
 }
 
+function isNotesSendToAgentChatRoute(args: Args, actionId: string | null, parentFocus: JsonObject | null) {
+  if (args.submitIntent !== "notes-send-to-ai" || actionId !== "send_to_ai") return false;
+  const parentTarget = targetInfo(parentFocus ?? {});
+  return parentTarget?.automationId === "notes" || parentTarget?.targetKind === "Notes";
+}
+
 function requestedActivationSemanticId(args: Args, before: JsonObject) {
   if (args.actionKind === "select" && args.semanticId) return args.semanticId;
   return typeof before.selectedSemanticId === "string" ? before.selectedSemanticId : null;
@@ -660,6 +666,16 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
   }
   const parentFocus = await parentFocusForTarget(args, targetReceipt);
   const parentSubject = selectedSubjectFromFocus(parentFocus);
+  if (isNotesSendToAgentChatRoute(args, actionId, parentFocus)) {
+    return {
+      state: "dispatched",
+      actionId,
+      allowedBy: "submitIntent:notes-send-to-ai",
+      proofIntent: args.submitIntent,
+      parentSubjectId: parentSubject.id,
+      parentSubjectText: parentSubject.text,
+    };
+  }
   if (!isNonDestructiveActionsDialogSubmit(actionId, parentSubject.text)) {
     return {
       state: "blocked-before-dispatch",

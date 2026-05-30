@@ -1,0 +1,1889 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.act",
+  "command": "act.select",
+  "classification": "ok",
+  "session": "liquid-glass-notes-acp",
+  "startedAt": "2026-05-30T03:26:44.834Z",
+  "endedAt": "2026-05-30T03:26:52.973Z",
+  "actionId": "devtools-act-select-1780111615593-4be522",
+  "actionKind": "select",
+  "proofIntent": "notes-send-to-ai",
+  "preflightOnly": true,
+  "submitGate": {
+    "gateName": "submit.preflight",
+    "actionKind": "select",
+    "key": null,
+    "modifiers": [],
+    "allowSubmit": true,
+    "allowSubmitReason": "Open Notes hosted Agent Chat from the explicit Send to Agent Chat action; non-destructive route proof only.",
+    "submitIntent": "notes-send-to-ai",
+    "selectedSemanticId": "choice:0:send_to_ai",
+    "selectedActionId": "send_to_ai",
+    "target": {
+      "automationId": "actions-dialog",
+      "targetKind": "ActionsDialog",
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "nativeFooterSurface": null
+    }
+  },
+  "blockedAction": {
+    "gateName": "submit.preflight",
+    "reason": "submit requires named non-destructive ActionsDialog parent/action allowlist",
+    "requiredFlags": [],
+    "nextSafeCommand": null,
+    "missingPrimitive": null,
+    "requestedIntent": "notes-send-to-ai"
+  },
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "actionsDialog"
+    },
+    "strict": true,
+    "expectedSurfaceKind": null
+  },
+  "targetBefore": {
+    "automationId": "actions-dialog",
+    "stableTargetId": "actions-dialog",
+    "targetKind": "ActionsDialog",
+    "hostKind": null,
+    "parentAutomationId": "notes",
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 43,
+      "y": 1052,
+      "width": 340,
+      "height": 100
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 340,
+      "height": 100,
+      "targetBoundsInScreenshot": {
+        "x": -3019,
+        "y": 2082,
+        "width": 340,
+        "height": 100
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 33854,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "input": {
+    "text": null,
+    "semanticId": "choice:0:send_to_ai",
+    "control": null,
+    "value": null,
+    "key": null,
+    "modifiers": []
+  },
+  "safety": {
+    "channel": "batch",
+    "destructive": true,
+    "submitAllowed": true,
+    "submitIntent": "notes-send-to-ai",
+    "allowSubmitReason": "Open Notes hosted Agent Chat from the explicit Send to Agent Chat action; non-destructive route proof only.",
+    "nativeEscalation": false,
+    "errors": [
+      "submit requires named non-destructive ActionsDialog parent/action allowlist"
+    ],
+    "warnings": [
+      "selection will submit because --allow-submit was passed"
+    ],
+    "submitAttempted": false,
+    "submitPreflightSelectedSemanticId": "choice:0:send_to_ai"
+  },
+  "submitLifecycle": {
+    "state": "blocked-before-dispatch",
+    "reason": "submit requires named non-destructive ActionsDialog parent/action allowlist",
+    "selectedSemanticId": "choice:0:send_to_ai"
+  },
+  "postActionLifecycle": {
+    "state": "blocked-before-dispatch",
+    "reason": "submit requires named non-destructive ActionsDialog parent/action allowlist",
+    "selectedSemanticId": "choice:0:send_to_ai"
+  },
+  "dismissLifecycle": null,
+  "expected": {
+    "protocolResponse": "batchResult",
+    "submitAllowed": true,
+    "noNativeEscalation": true,
+    "prePostReceipts": [
+      "focus.inspect",
+      "focus.inspect.submitDiagnostics",
+      "scroll.inspect"
+    ]
+  },
+  "actionReceipt": {
+    "status": "ok",
+    "label": "act.preflight-only",
+    "skippedDispatch": true,
+    "reason": "preflight-only requested"
+  },
+  "targetAfter": {
+    "automationId": "actions-dialog",
+    "stableTargetId": "actions-dialog",
+    "targetKind": "ActionsDialog",
+    "hostKind": null,
+    "parentAutomationId": "notes",
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 43,
+      "y": 1052,
+      "width": 340,
+      "height": 100
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 340,
+      "height": 100,
+      "targetBoundsInScreenshot": {
+        "x": -3019,
+        "y": 2082,
+        "width": 340,
+        "height": 100
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 33854,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "submitDiagnostics": {
+    "before": null,
+    "after": null
+  },
+  "visibleResult": {
+    "focusChanged": false,
+    "selectionChanged": false,
+    "inputChanged": false,
+    "windowVisibleBefore": true,
+    "windowVisibleAfter": true,
+    "scrollChanged": false,
+    "submitDiagnosticsChanged": false
+  },
+  "before": {
+    "focus": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "classification": "ok",
+      "session": "liquid-glass-notes-acp",
+      "requestedTarget": {
+        "selector": {
+          "type": "kind",
+          "kind": "actionsDialog"
+        },
+        "strict": true,
+        "expectedSurfaceKind": null
+      },
+      "target": {
+        "automationId": "actions-dialog",
+        "stableTargetId": "actions-dialog",
+        "targetKind": "ActionsDialog",
+        "hostKind": null,
+        "parentAutomationId": "notes",
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 43,
+          "y": 1052,
+          "width": 340,
+          "height": 100
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 340,
+          "height": 100,
+          "targetBoundsInScreenshot": {
+            "x": -3019,
+            "y": 2082,
+            "width": 340,
+            "height": 100
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 33854,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "windowFocused": false,
+      "windowVisible": true,
+      "focusedSemanticId": "input:actions-search",
+      "selectedSemanticId": "choice:0:send_to_ai",
+      "focusedNode": {
+        "semanticId": "input:actions-search",
+        "type": "input",
+        "value": "send",
+        "focused": true
+      },
+      "selectedNode": {
+        "semanticId": "choice:0:send_to_ai",
+        "type": "choice",
+        "text": "Send to Agent Chat",
+        "value": "send_to_ai",
+        "selected": true,
+        "index": 0
+      },
+      "activeFooter": null,
+      "nativeFooter": {
+        "owner": null,
+        "activeSurface": null,
+        "expectedSurface": null,
+        "nativeFooterHostInstalled": null,
+        "buttonCount": null,
+        "activationPrimitiveAvailable": false,
+        "missingPrimitive": "nativeFooterActivationReceipt"
+      },
+      "submitDiagnostics": null,
+      "keyboardOwner": {
+        "inputValue": "",
+        "promptType": "actionsDialog",
+        "surfaceKind": null,
+        "inputOwnership": null,
+        "keyboardPolicy": null
+      },
+      "missingPrimitives": [],
+      "warnings": [
+        "window is visible but not focused"
+      ],
+      "errors": []
+    },
+    "scroll": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.scroll",
+      "command": "scroll.inspect",
+      "classification": "blocked-by-missing-primitive",
+      "session": "liquid-glass-notes-acp",
+      "requestedTarget": {
+        "selector": {
+          "type": "kind",
+          "kind": "actionsDialog"
+        },
+        "strict": true,
+        "expectedSurfaceKind": null
+      },
+      "target": {
+        "automationId": "actions-dialog",
+        "stableTargetId": "actions-dialog",
+        "targetKind": "ActionsDialog",
+        "hostKind": null,
+        "parentAutomationId": "notes",
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 43,
+          "y": 1052,
+          "width": 340,
+          "height": 100
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 340,
+          "height": 100,
+          "targetBoundsInScreenshot": {
+            "x": -3019,
+            "y": 2082,
+            "width": 340,
+            "height": 100
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 33854,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "scroll": {
+        "scrollTop": null,
+        "scrollTopItem": null,
+        "contentHeight": null,
+        "viewportHeight": null,
+        "safeViewportHeight": null,
+        "footerHeight": null,
+        "maxScrollTop": null,
+        "canScrollY": null,
+        "selectedIndex": -1,
+        "selectedRowTop": null,
+        "selectedRowBottom": null,
+        "selectedRowVisible": null,
+        "selectedRowAboveFooter": null,
+        "itemCount": 0
+      },
+      "resizePressure": {
+        "overflowY": null,
+        "hiddenContentHeight": null,
+        "selectedRowOccluded": false
+      },
+      "missingPrimitives": [
+        "mainListScroll"
+      ],
+      "errors": [],
+      "state": {
+        "type": "stateResult",
+        "requestId": "devtools-scroll-state-1780111604775-8a48fd",
+        "promptType": "actionsDialog",
+        "promptId": "target:ActionsDialog:actions-dialog",
+        "inputValue": "",
+        "choiceCount": 0,
+        "visibleChoiceCount": 0,
+        "selectedIndex": -1,
+        "isFocused": false,
+        "windowVisible": true,
+        "actionsDialog": {
+          "schemaVersion": 1,
+          "surface": "actionsDialog",
+          "redacted": true,
+          "search": {
+            "textLength": 4,
+            "textFingerprint": "fnv1a64:2d1ff318d40c162f",
+            "placeholderLength": null,
+            "placeholderFingerprint": null,
+            "hidden": false,
+            "position": "top"
+          },
+          "selection": {
+            "groupedIndex": 1,
+            "filteredIndex": 0,
+            "actionId": "send_to_ai",
+            "actionTitleLength": 18,
+            "actionTitleFingerprint": "fnv1a64:7bdd40a89150f8b9",
+            "shouldClose": true
+          },
+          "actions": {
+            "totalCount": 12,
+            "filteredCount": 1,
+            "groupedRowCount": 2,
+            "sectionHeaderCount": 1,
+            "sections": {
+              "AI": 1
+            },
+            "visibleSampleLimit": 1,
+            "visibleSample": [
+              {
+                "id": "send_to_ai",
+                "titleLength": 18,
+                "titleFingerprint": "fnv1a64:7bdd40a89150f8b9",
+                "descriptionLength": 76,
+                "descriptionFingerprint": "fnv1a64:a4ad918d20e7901d",
+                "section": "AI",
+                "category": "ScriptContext",
+                "hasShortcut": true,
+                "shortcut": "⇧⌘A",
+                "hasAction": false
+              }
+            ],
+            "shortcutCount": 11,
+            "sdkActionsActive": false
+          },
+          "route": {
+            "currentRouteId": null,
+            "depth": 0,
+            "canPop": false,
+            "hintLabel": "Esc Close",
+            "stack": [],
+            "registeredDrillDownRouteCount": 0
+          },
+          "config": {
+            "searchPosition": "top",
+            "sectionMode": "headers",
+            "anchor": "top",
+            "showIcons": true,
+            "showFooter": false,
+            "maxHeight": 400
+          },
+          "attachedPopup": {
+            "schemaVersion": 1,
+            "generation": 2,
+            "updatedStage": "resize",
+            "stale": false,
+            "host": "notes.actions",
+            "parentAutomationId": "notes",
+            "parentKind": "Notes",
+            "position": "TopCenter",
+            "displayId": "None",
+            "geometry": {
+              "popupRect": {
+                "x": 43,
+                "y": 1052,
+                "width": 340,
+                "height": 100
+              },
+              "parentRect": {
+                "x": 1550,
+                "y": 50,
+                "width": 350,
+                "height": 280
+              },
+              "anchorRect": {
+                "x": 1725,
+                "y": 94,
+                "width": 0,
+                "height": 0
+              },
+              "position": "TopCenter",
+              "pinnedEdge": "top",
+              "displayId": "None"
+            }
+          },
+          "rowGeometry": {
+            "schemaVersion": 1,
+            "available": true,
+            "source": "runtime.actionsDialog.render",
+            "generation": 2,
+            "attachedPopupGeneration": 2,
+            "stale": false,
+            "measurementSource": "runtime.actionsDialog.render",
+            "coordinateSpace": "popupLogicalPx",
+            "units": "logicalPx",
+            "ownerWindowId": "actions-dialog",
+            "stopReason": null,
+            "quality": "model",
+            "popupWidth": 340,
+            "listViewportRect": {
+              "x": 0,
+              "y": 40,
+              "width": 340,
+              "height": 58
+            },
+            "viewport": {
+              "containerBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 340,
+                "height": 98
+              },
+              "searchBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 340,
+                "height": 40
+              },
+              "contextHeaderBounds": null,
+              "listBounds": {
+                "x": 0,
+                "y": 40,
+                "width": 340,
+                "height": 58
+              },
+              "visibleRange": {
+                "firstGroupedIndex": 0,
+                "lastGroupedIndex": 1
+              },
+              "scroll": {
+                "topGroupedIndex": 0,
+                "pixelOffsetAvailable": false,
+                "pixelOffset": null
+              }
+            },
+            "contentHeight": 58,
+            "scrollTopItemIndex": 0,
+            "scrollTopContentY": 0,
+            "sectionBoundsAvailable": true,
+            "rowBoundsAvailable": true,
+            "selectedRowBoundsAvailable": true,
+            "hoverRowAvailable": true,
+            "hoveredRow": {
+              "available": true,
+              "state": "none",
+              "row": null
+            },
+            "shortcutBoundsAvailable": true,
+            "disabledReasonBoundsAvailable": false,
+            "shortcutLayout": {
+              "boundsAvailable": true,
+              "rowCount": 1,
+              "rows": [
+                {
+                  "visualIndex": 1,
+                  "actionId": "send_to_ai",
+                  "shortcut": "⇧⌘A",
+                  "shortcutTokens": [
+                    "⇧",
+                    "⌘",
+                    "A"
+                  ],
+                  "layout": {
+                    "tokens": [
+                      "⇧",
+                      "⌘",
+                      "A"
+                    ],
+                    "tokenBounds": [
+                      {
+                        "token": "⇧",
+                        "kind": "keycap",
+                        "bounds": {
+                          "x": 258,
+                          "y": 69,
+                          "width": 22,
+                          "height": 22
+                        },
+                        "widthExact": false,
+                        "widthSource": "footer-keycap-estimate",
+                        "heightSource": "footer-keycap-constant",
+                        "glyphNudgeY": 1,
+                        "borderWidth": 1,
+                        "radius": 6,
+                        "paddingX": 5,
+                        "fontSize": 12
+                      },
+                      {
+                        "token": "⌘",
+                        "kind": "keycap",
+                        "bounds": {
+                          "x": 284,
+                          "y": 69,
+                          "width": 22,
+                          "height": 22
+                        },
+                        "widthExact": false,
+                        "widthSource": "footer-keycap-estimate",
+                        "heightSource": "footer-keycap-constant",
+                        "glyphNudgeY": 1,
+                        "borderWidth": 1,
+                        "radius": 6,
+                        "paddingX": 5,
+                        "fontSize": 12
+                      },
+                      {
+                        "token": "A",
+                        "kind": "keycap",
+                        "bounds": {
+                          "x": 310,
+                          "y": 69,
+                          "width": 22,
+                          "height": 22
+                        },
+                        "widthExact": false,
+                        "widthSource": "footer-keycap-estimate",
+                        "heightSource": "footer-keycap-constant",
+                        "glyphNudgeY": 1,
+                        "borderWidth": 1,
+                        "radius": 6,
+                        "paddingX": 5,
+                        "fontSize": 12
+                      }
+                    ],
+                    "bounds": {
+                      "x": 258,
+                      "y": 69,
+                      "width": 74,
+                      "height": 22
+                    },
+                    "boundsAvailable": true,
+                    "coordinateSpace": "providedOriginLogicalPx",
+                    "units": "logicalPx",
+                    "gap": 4,
+                    "heightSource": "footer-keycap-constant",
+                    "widthSource": "footer-keycap-token-model",
+                    "exactTokenBounds": false,
+                    "measurementSource": "runtime.footerChrome.shortcutKeycapLayoutModel",
+                    "stopReason": "text glyph widths use the footer keycap font estimate until GPUI exposes measured text layout"
+                  },
+                  "rightAligned": true,
+                  "clipped": false
+                }
+              ],
+              "stopReason": null,
+              "measurementSource": "runtime.footerChrome.shortcutKeycapLayoutModel"
+            },
+            "disabledReasonLayout": {
+              "status": "no-visible-disabled-reasons",
+              "boundsAvailable": false,
+              "rowCount": 0,
+              "rows": []
+            },
+            "warnings": [],
+            "counts": {
+              "rows": 2,
+              "actions": 1,
+              "sections": 1
+            },
+            "selectedRow": {
+              "semanticId": "choice:1:send_to_ai",
+              "visualIndex": 1,
+              "groupedIndex": 1,
+              "kind": "action",
+              "labelLength": 18,
+              "labelFingerprint": "fnv1a64:7bdd40a89150f8b9",
+              "actionId": "send_to_ai",
+              "selected": true,
+              "hovered": false,
+              "visible": true,
+              "clipped": false,
+              "contentY": 22,
+              "bounds": {
+                "x": 0,
+                "y": 62,
+                "width": 340,
+                "height": 36
+              },
+              "rect": {
+                "x": 0,
+                "y": 62,
+                "width": 340,
+                "height": 36
+              },
+              "innerBounds": {
+                "x": 8,
+                "y": 64,
+                "width": 324,
+                "height": 32
+              },
+              "innerRect": {
+                "x": 8,
+                "y": 64,
+                "width": 324,
+                "height": 32
+              },
+              "shortcut": "⇧⌘A",
+              "shortcutTokens": [
+                "⇧",
+                "⌘",
+                "A"
+              ],
+              "shortcutBoundsAvailable": true,
+              "shortcutBounds": {
+                "x": 258,
+                "y": 69,
+                "width": 74,
+                "height": 22
+              },
+              "shortcutLayout": {
+                "visualIndex": 1,
+                "actionId": "send_to_ai",
+                "shortcut": "⇧⌘A",
+                "shortcutTokens": [
+                  "⇧",
+                  "⌘",
+                  "A"
+                ],
+                "layout": {
+                  "tokens": [
+                    "⇧",
+                    "⌘",
+                    "A"
+                  ],
+                  "tokenBounds": [
+                    {
+                      "token": "⇧",
+                      "kind": "keycap",
+                      "bounds": {
+                        "x": 258,
+                        "y": 69,
+                        "width": 22,
+                        "height": 22
+                      },
+                      "widthExact": false,
+                      "widthSource": "footer-keycap-estimate",
+                      "heightSource": "footer-keycap-constant",
+                      "glyphNudgeY": 1,
+                      "borderWidth": 1,
+                      "radius": 6,
+                      "paddingX": 5,
+                      "fontSize": 12
+                    },
+                    {
+                      "token": "⌘",
+                      "kind": "keycap",
+                      "bounds": {
+                        "x": 284,
+                        "y": 69,
+                        "width": 22,
+                        "height": 22
+                      },
+                      "widthExact": false,
+                      "widthSource": "footer-keycap-estimate",
+                      "heightSource": "footer-keycap-constant",
+                      "glyphNudgeY": 1,
+                      "borderWidth": 1,
+                      "radius": 6,
+                      "paddingX": 5,
+                      "fontSize": 12
+                    },
+                    {
+                      "token": "A",
+                      "kind": "keycap",
+                      "bounds": {
+                        "x": 310,
+                        "y": 69,
+                        "width": 22,
+                        "height": 22
+                      },
+                      "widthExact": false,
+                      "widthSource": "footer-keycap-estimate",
+                      "heightSource": "footer-keycap-constant",
+                      "glyphNudgeY": 1,
+                      "borderWidth": 1,
+                      "radius": 6,
+                      "paddingX": 5,
+                      "fontSize": 12
+                    }
+                  ],
+                  "bounds": {
+                    "x": 258,
+                    "y": 69,
+                    "width": 74,
+                    "height": 22
+                  },
+                  "boundsAvailable": true,
+                  "coordinateSpace": "providedOriginLogicalPx",
+                  "units": "logicalPx",
+                  "gap": 4,
+                  "heightSource": "footer-keycap-constant",
+                  "widthSource": "footer-keycap-token-model",
+                  "exactTokenBounds": false,
+                  "measurementSource": "runtime.footerChrome.shortcutKeycapLayoutModel",
+                  "stopReason": "text glyph widths use the footer keycap font estimate until GPUI exposes measured text layout"
+                },
+                "rightAligned": true,
+                "clipped": false
+              },
+              "disabledReasonBoundsAvailable": false
+            },
+            "sections": [
+              {
+                "semanticId": "section:0",
+                "visualIndex": 0,
+                "groupedIndex": 0,
+                "kind": "section",
+                "labelLength": 2,
+                "labelFingerprint": "fnv1a64:09085b07b5a0de5f",
+                "actionId": null,
+                "selected": false,
+                "hovered": false,
+                "visible": true,
+                "clipped": false,
+                "contentY": 0,
+                "bounds": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "rect": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "innerBounds": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "innerRect": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "shortcut": null,
+                "shortcutTokens": [],
+                "shortcutBoundsAvailable": false,
+                "shortcutBounds": null,
+                "shortcutLayout": null,
+                "disabledReasonBoundsAvailable": false
+              }
+            ],
+            "rows": [
+              {
+                "semanticId": "section:0",
+                "visualIndex": 0,
+                "groupedIndex": 0,
+                "kind": "section",
+                "labelLength": 2,
+                "labelFingerprint": "fnv1a64:09085b07b5a0de5f",
+                "actionId": null,
+                "selected": false,
+                "hovered": false,
+                "visible": true,
+                "clipped": false,
+                "contentY": 0,
+                "bounds": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "rect": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "innerBounds": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "innerRect": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "shortcut": null,
+                "shortcutTokens": [],
+                "shortcutBoundsAvailable": false,
+                "shortcutBounds": null,
+                "shortcutLayout": null,
+                "disabledReasonBoundsAvailable": false
+              },
+              {
+                "semanticId": "choice:1:send_to_ai",
+                "visualIndex": 1,
+                "groupedIndex": 1,
+                "kind": "action",
+                "labelLength": 18,
+                "labelFingerprint": "fnv1a64:7bdd40a89150f8b9",
+                "actionId": "send_to_ai",
+                "selected": true,
+                "hovered": false,
+                "visible": true,
+                "clipped": false,
+                "contentY": 22,
+                "bounds": {
+                  "x": 0,
+                  "y": 62,
+                  "width": 340,
+                  "height": 36
+                },
+                "rect": {
+                  "x": 0,
+                  "y": 62,
+                  "width": 340,
+                  "height": 36
+                },
+                "innerBounds": {
+                  "x": 8,
+                  "y": 64,
+                  "width": 324,
+                  "height": 32
+                },
+                "innerRect": {
+                  "x": 8,
+                  "y": 64,
+                  "width": 324,
+                  "height": 32
+                },
+                "shortcut": "⇧⌘A",
+                "shortcutTokens": [
+                  "⇧",
+                  "⌘",
+                  "A"
+                ],
+                "shortcutBoundsAvailable": true,
+                "shortcutBounds": {
+                  "x": 258,
+                  "y": 69,
+                  "width": 74,
+                  "height": 22
+                },
+                "shortcutLayout": {
+                  "visualIndex": 1,
+                  "actionId": "send_to_ai",
+                  "shortcut": "⇧⌘A",
+                  "shortcutTokens": [
+                    "⇧",
+                    "⌘",
+                    "A"
+                  ],
+                  "layout": {
+                    "tokens": [
+                      "⇧",
+                      "⌘",
+                      "A"
+                    ],
+                    "tokenBounds": [
+                      {
+                        "token": "⇧",
+                        "kind": "keycap",
+                        "bounds": {
+                          "x": 258,
+                          "y": 69,
+                          "width": 22,
+                          "height": 22
+                        },
+                        "widthExact": false,
+                        "widthSource": "footer-keycap-estimate",
+                        "heightSource": "footer-keycap-constant",
+                        "glyphNudgeY": 1,
+                        "borderWidth": 1,
+                        "radius": 6,
+                        "paddingX": 5,
+                        "fontSize": 12
+                      },
+                      {
+                        "token": "⌘",
+                        "kind": "keycap",
+                        "bounds": {
+                          "x": 284,
+                          "y": 69,
+                          "width": 22,
+                          "height": 22
+                        },
+                        "widthExact": false,
+                        "widthSource": "footer-keycap-estimate",
+                        "heightSource": "footer-keycap-constant",
+                        "glyphNudgeY": 1,
+                        "borderWidth": 1,
+                        "radius": 6,
+                        "paddingX": 5,
+                        "fontSize": 12
+                      },
+                      {
+                        "token": "A",
+                        "kind": "keycap",
+                        "bounds": {
+                          "x": 310,
+                          "y": 69,
+                          "width": 22,
+                          "height": 22
+                        },
+                        "widthExact": false,
+                        "widthSource": "footer-keycap-estimate",
+                        "heightSource": "footer-keycap-constant",
+                        "glyphNudgeY": 1,
+                        "borderWidth": 1,
+                        "radius": 6,
+                        "paddingX": 5,
+                        "fontSize": 12
+                      }
+                    ],
+                    "bounds": {
+                      "x": 258,
+                      "y": 69,
+                      "width": 74,
+                      "height": 22
+                    },
+                    "boundsAvailable": true,
+                    "coordinateSpace": "providedOriginLogicalPx",
+                    "units": "logicalPx",
+                    "gap": 4,
+                    "heightSource": "footer-keycap-constant",
+                    "widthSource": "footer-keycap-token-model",
+                    "exactTokenBounds": false,
+                    "measurementSource": "runtime.footerChrome.shortcutKeycapLayoutModel",
+                    "stopReason": "text glyph widths use the footer keycap font estimate until GPUI exposes measured text layout"
+                  },
+                  "rightAligned": true,
+                  "clipped": false
+                },
+                "disabledReasonBoundsAvailable": false
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "after": {
+    "focus": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "classification": "ok",
+      "session": "liquid-glass-notes-acp",
+      "requestedTarget": {
+        "selector": {
+          "type": "kind",
+          "kind": "actionsDialog"
+        },
+        "strict": true,
+        "expectedSurfaceKind": null
+      },
+      "target": {
+        "automationId": "actions-dialog",
+        "stableTargetId": "actions-dialog",
+        "targetKind": "ActionsDialog",
+        "hostKind": null,
+        "parentAutomationId": "notes",
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 43,
+          "y": 1052,
+          "width": 340,
+          "height": 100
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 340,
+          "height": 100,
+          "targetBoundsInScreenshot": {
+            "x": -3019,
+            "y": 2082,
+            "width": 340,
+            "height": 100
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 33854,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "windowFocused": false,
+      "windowVisible": true,
+      "focusedSemanticId": "input:actions-search",
+      "selectedSemanticId": "choice:0:send_to_ai",
+      "focusedNode": {
+        "semanticId": "input:actions-search",
+        "type": "input",
+        "value": "send",
+        "focused": true
+      },
+      "selectedNode": {
+        "semanticId": "choice:0:send_to_ai",
+        "type": "choice",
+        "text": "Send to Agent Chat",
+        "value": "send_to_ai",
+        "selected": true,
+        "index": 0
+      },
+      "activeFooter": null,
+      "nativeFooter": {
+        "owner": null,
+        "activeSurface": null,
+        "expectedSurface": null,
+        "nativeFooterHostInstalled": null,
+        "buttonCount": null,
+        "activationPrimitiveAvailable": false,
+        "missingPrimitive": "nativeFooterActivationReceipt"
+      },
+      "submitDiagnostics": null,
+      "keyboardOwner": {
+        "inputValue": "",
+        "promptType": "actionsDialog",
+        "surfaceKind": null,
+        "inputOwnership": null,
+        "keyboardPolicy": null
+      },
+      "missingPrimitives": [],
+      "warnings": [
+        "window is visible but not focused"
+      ],
+      "errors": []
+    },
+    "scroll": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.scroll",
+      "command": "scroll.inspect",
+      "classification": "blocked-by-missing-primitive",
+      "session": "liquid-glass-notes-acp",
+      "requestedTarget": {
+        "selector": {
+          "type": "kind",
+          "kind": "actionsDialog"
+        },
+        "strict": true,
+        "expectedSurfaceKind": null
+      },
+      "target": {
+        "automationId": "actions-dialog",
+        "stableTargetId": "actions-dialog",
+        "targetKind": "ActionsDialog",
+        "hostKind": null,
+        "parentAutomationId": "notes",
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 43,
+          "y": 1052,
+          "width": 340,
+          "height": 100
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 340,
+          "height": 100,
+          "targetBoundsInScreenshot": {
+            "x": -3019,
+            "y": 2082,
+            "width": 340,
+            "height": 100
+          },
+          "nonBlankRatio": null
+        },
+        "pid": 33854,
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "scroll": {
+        "scrollTop": null,
+        "scrollTopItem": null,
+        "contentHeight": null,
+        "viewportHeight": null,
+        "safeViewportHeight": null,
+        "footerHeight": null,
+        "maxScrollTop": null,
+        "canScrollY": null,
+        "selectedIndex": -1,
+        "selectedRowTop": null,
+        "selectedRowBottom": null,
+        "selectedRowVisible": null,
+        "selectedRowAboveFooter": null,
+        "itemCount": 0
+      },
+      "resizePressure": {
+        "overflowY": null,
+        "hiddenContentHeight": null,
+        "selectedRowOccluded": false
+      },
+      "missingPrimitives": [
+        "mainListScroll"
+      ],
+      "errors": [],
+      "state": {
+        "type": "stateResult",
+        "requestId": "devtools-scroll-state-1780111612919-ac22d0",
+        "promptType": "actionsDialog",
+        "promptId": "target:ActionsDialog:actions-dialog",
+        "inputValue": "",
+        "choiceCount": 0,
+        "visibleChoiceCount": 0,
+        "selectedIndex": -1,
+        "isFocused": false,
+        "windowVisible": true,
+        "actionsDialog": {
+          "schemaVersion": 1,
+          "surface": "actionsDialog",
+          "redacted": true,
+          "search": {
+            "textLength": 4,
+            "textFingerprint": "fnv1a64:2d1ff318d40c162f",
+            "placeholderLength": null,
+            "placeholderFingerprint": null,
+            "hidden": false,
+            "position": "top"
+          },
+          "selection": {
+            "groupedIndex": 1,
+            "filteredIndex": 0,
+            "actionId": "send_to_ai",
+            "actionTitleLength": 18,
+            "actionTitleFingerprint": "fnv1a64:7bdd40a89150f8b9",
+            "shouldClose": true
+          },
+          "actions": {
+            "totalCount": 12,
+            "filteredCount": 1,
+            "groupedRowCount": 2,
+            "sectionHeaderCount": 1,
+            "sections": {
+              "AI": 1
+            },
+            "visibleSampleLimit": 1,
+            "visibleSample": [
+              {
+                "id": "send_to_ai",
+                "titleLength": 18,
+                "titleFingerprint": "fnv1a64:7bdd40a89150f8b9",
+                "descriptionLength": 76,
+                "descriptionFingerprint": "fnv1a64:a4ad918d20e7901d",
+                "section": "AI",
+                "category": "ScriptContext",
+                "hasShortcut": true,
+                "shortcut": "⇧⌘A",
+                "hasAction": false
+              }
+            ],
+            "shortcutCount": 11,
+            "sdkActionsActive": false
+          },
+          "route": {
+            "currentRouteId": null,
+            "depth": 0,
+            "canPop": false,
+            "hintLabel": "Esc Close",
+            "stack": [],
+            "registeredDrillDownRouteCount": 0
+          },
+          "config": {
+            "searchPosition": "top",
+            "sectionMode": "headers",
+            "anchor": "top",
+            "showIcons": true,
+            "showFooter": false,
+            "maxHeight": 400
+          },
+          "attachedPopup": {
+            "schemaVersion": 1,
+            "generation": 2,
+            "updatedStage": "resize",
+            "stale": false,
+            "host": "notes.actions",
+            "parentAutomationId": "notes",
+            "parentKind": "Notes",
+            "position": "TopCenter",
+            "displayId": "None",
+            "geometry": {
+              "popupRect": {
+                "x": 43,
+                "y": 1052,
+                "width": 340,
+                "height": 100
+              },
+              "parentRect": {
+                "x": 1550,
+                "y": 50,
+                "width": 350,
+                "height": 280
+              },
+              "anchorRect": {
+                "x": 1725,
+                "y": 94,
+                "width": 0,
+                "height": 0
+              },
+              "position": "TopCenter",
+              "pinnedEdge": "top",
+              "displayId": "None"
+            }
+          },
+          "rowGeometry": {
+            "schemaVersion": 1,
+            "available": true,
+            "source": "runtime.actionsDialog.render",
+            "generation": 2,
+            "attachedPopupGeneration": 2,
+            "stale": false,
+            "measurementSource": "runtime.actionsDialog.render",
+            "coordinateSpace": "popupLogicalPx",
+            "units": "logicalPx",
+            "ownerWindowId": "actions-dialog",
+            "stopReason": null,
+            "quality": "model",
+            "popupWidth": 340,
+            "listViewportRect": {
+              "x": 0,
+              "y": 40,
+              "width": 340,
+              "height": 58
+            },
+            "viewport": {
+              "containerBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 340,
+                "height": 98
+              },
+              "searchBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 340,
+                "height": 40
+              },
+              "contextHeaderBounds": null,
+              "listBounds": {
+                "x": 0,
+                "y": 40,
+                "width": 340,
+                "height": 58
+              },
+              "visibleRange": {
+                "firstGroupedIndex": 0,
+                "lastGroupedIndex": 1
+              },
+              "scroll": {
+                "topGroupedIndex": 0,
+                "pixelOffsetAvailable": false,
+                "pixelOffset": null
+              }
+            },
+            "contentHeight": 58,
+            "scrollTopItemIndex": 0,
+            "scrollTopContentY": 0,
+            "sectionBoundsAvailable": true,
+            "rowBoundsAvailable": true,
+            "selectedRowBoundsAvailable": true,
+            "hoverRowAvailable": true,
+            "hoveredRow": {
+              "available": true,
+              "state": "none",
+              "row": null
+            },
+            "shortcutBoundsAvailable": true,
+            "disabledReasonBoundsAvailable": false,
+            "shortcutLayout": {
+              "boundsAvailable": true,
+              "rowCount": 1,
+              "rows": [
+                {
+                  "visualIndex": 1,
+                  "actionId": "send_to_ai",
+                  "shortcut": "⇧⌘A",
+                  "shortcutTokens": [
+                    "⇧",
+                    "⌘",
+                    "A"
+                  ],
+                  "layout": {
+                    "tokens": [
+                      "⇧",
+                      "⌘",
+                      "A"
+                    ],
+                    "tokenBounds": [
+                      {
+                        "token": "⇧",
+                        "kind": "keycap",
+                        "bounds": {
+                          "x": 258,
+                          "y": 69,
+                          "width": 22,
+                          "height": 22
+                        },
+                        "widthExact": false,
+                        "widthSource": "footer-keycap-estimate",
+                        "heightSource": "footer-keycap-constant",
+                        "glyphNudgeY": 1,
+                        "borderWidth": 1,
+                        "radius": 6,
+                        "paddingX": 5,
+                        "fontSize": 12
+                      },
+                      {
+                        "token": "⌘",
+                        "kind": "keycap",
+                        "bounds": {
+                          "x": 284,
+                          "y": 69,
+                          "width": 22,
+                          "height": 22
+                        },
+                        "widthExact": false,
+                        "widthSource": "footer-keycap-estimate",
+                        "heightSource": "footer-keycap-constant",
+                        "glyphNudgeY": 1,
+                        "borderWidth": 1,
+                        "radius": 6,
+                        "paddingX": 5,
+                        "fontSize": 12
+                      },
+                      {
+                        "token": "A",
+                        "kind": "keycap",
+                        "bounds": {
+                          "x": 310,
+                          "y": 69,
+                          "width": 22,
+                          "height": 22
+                        },
+                        "widthExact": false,
+                        "widthSource": "footer-keycap-estimate",
+                        "heightSource": "footer-keycap-constant",
+                        "glyphNudgeY": 1,
+                        "borderWidth": 1,
+                        "radius": 6,
+                        "paddingX": 5,
+                        "fontSize": 12
+                      }
+                    ],
+                    "bounds": {
+                      "x": 258,
+                      "y": 69,
+                      "width": 74,
+                      "height": 22
+                    },
+                    "boundsAvailable": true,
+                    "coordinateSpace": "providedOriginLogicalPx",
+                    "units": "logicalPx",
+                    "gap": 4,
+                    "heightSource": "footer-keycap-constant",
+                    "widthSource": "footer-keycap-token-model",
+                    "exactTokenBounds": false,
+                    "measurementSource": "runtime.footerChrome.shortcutKeycapLayoutModel",
+                    "stopReason": "text glyph widths use the footer keycap font estimate until GPUI exposes measured text layout"
+                  },
+                  "rightAligned": true,
+                  "clipped": false
+                }
+              ],
+              "stopReason": null,
+              "measurementSource": "runtime.footerChrome.shortcutKeycapLayoutModel"
+            },
+            "disabledReasonLayout": {
+              "status": "no-visible-disabled-reasons",
+              "boundsAvailable": false,
+              "rowCount": 0,
+              "rows": []
+            },
+            "warnings": [],
+            "counts": {
+              "rows": 2,
+              "actions": 1,
+              "sections": 1
+            },
+            "selectedRow": {
+              "semanticId": "choice:1:send_to_ai",
+              "visualIndex": 1,
+              "groupedIndex": 1,
+              "kind": "action",
+              "labelLength": 18,
+              "labelFingerprint": "fnv1a64:7bdd40a89150f8b9",
+              "actionId": "send_to_ai",
+              "selected": true,
+              "hovered": false,
+              "visible": true,
+              "clipped": false,
+              "contentY": 22,
+              "bounds": {
+                "x": 0,
+                "y": 62,
+                "width": 340,
+                "height": 36
+              },
+              "rect": {
+                "x": 0,
+                "y": 62,
+                "width": 340,
+                "height": 36
+              },
+              "innerBounds": {
+                "x": 8,
+                "y": 64,
+                "width": 324,
+                "height": 32
+              },
+              "innerRect": {
+                "x": 8,
+                "y": 64,
+                "width": 324,
+                "height": 32
+              },
+              "shortcut": "⇧⌘A",
+              "shortcutTokens": [
+                "⇧",
+                "⌘",
+                "A"
+              ],
+              "shortcutBoundsAvailable": true,
+              "shortcutBounds": {
+                "x": 258,
+                "y": 69,
+                "width": 74,
+                "height": 22
+              },
+              "shortcutLayout": {
+                "visualIndex": 1,
+                "actionId": "send_to_ai",
+                "shortcut": "⇧⌘A",
+                "shortcutTokens": [
+                  "⇧",
+                  "⌘",
+                  "A"
+                ],
+                "layout": {
+                  "tokens": [
+                    "⇧",
+                    "⌘",
+                    "A"
+                  ],
+                  "tokenBounds": [
+                    {
+                      "token": "⇧",
+                      "kind": "keycap",
+                      "bounds": {
+                        "x": 258,
+                        "y": 69,
+                        "width": 22,
+                        "height": 22
+                      },
+                      "widthExact": false,
+                      "widthSource": "footer-keycap-estimate",
+                      "heightSource": "footer-keycap-constant",
+                      "glyphNudgeY": 1,
+                      "borderWidth": 1,
+                      "radius": 6,
+                      "paddingX": 5,
+                      "fontSize": 12
+                    },
+                    {
+                      "token": "⌘",
+                      "kind": "keycap",
+                      "bounds": {
+                        "x": 284,
+                        "y": 69,
+                        "width": 22,
+                        "height": 22
+                      },
+                      "widthExact": false,
+                      "widthSource": "footer-keycap-estimate",
+                      "heightSource": "footer-keycap-constant",
+                      "glyphNudgeY": 1,
+                      "borderWidth": 1,
+                      "radius": 6,
+                      "paddingX": 5,
+                      "fontSize": 12
+                    },
+                    {
+                      "token": "A",
+                      "kind": "keycap",
+                      "bounds": {
+                        "x": 310,
+                        "y": 69,
+                        "width": 22,
+                        "height": 22
+                      },
+                      "widthExact": false,
+                      "widthSource": "footer-keycap-estimate",
+                      "heightSource": "footer-keycap-constant",
+                      "glyphNudgeY": 1,
+                      "borderWidth": 1,
+                      "radius": 6,
+                      "paddingX": 5,
+                      "fontSize": 12
+                    }
+                  ],
+                  "bounds": {
+                    "x": 258,
+                    "y": 69,
+                    "width": 74,
+                    "height": 22
+                  },
+                  "boundsAvailable": true,
+                  "coordinateSpace": "providedOriginLogicalPx",
+                  "units": "logicalPx",
+                  "gap": 4,
+                  "heightSource": "footer-keycap-constant",
+                  "widthSource": "footer-keycap-token-model",
+                  "exactTokenBounds": false,
+                  "measurementSource": "runtime.footerChrome.shortcutKeycapLayoutModel",
+                  "stopReason": "text glyph widths use the footer keycap font estimate until GPUI exposes measured text layout"
+                },
+                "rightAligned": true,
+                "clipped": false
+              },
+              "disabledReasonBoundsAvailable": false
+            },
+            "sections": [
+              {
+                "semanticId": "section:0",
+                "visualIndex": 0,
+                "groupedIndex": 0,
+                "kind": "section",
+                "labelLength": 2,
+                "labelFingerprint": "fnv1a64:09085b07b5a0de5f",
+                "actionId": null,
+                "selected": false,
+                "hovered": false,
+                "visible": true,
+                "clipped": false,
+                "contentY": 0,
+                "bounds": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "rect": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "innerBounds": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "innerRect": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "shortcut": null,
+                "shortcutTokens": [],
+                "shortcutBoundsAvailable": false,
+                "shortcutBounds": null,
+                "shortcutLayout": null,
+                "disabledReasonBoundsAvailable": false
+              }
+            ],
+            "rows": [
+              {
+                "semanticId": "section:0",
+                "visualIndex": 0,
+                "groupedIndex": 0,
+                "kind": "section",
+                "labelLength": 2,
+                "labelFingerprint": "fnv1a64:09085b07b5a0de5f",
+                "actionId": null,
+                "selected": false,
+                "hovered": false,
+                "visible": true,
+                "clipped": false,
+                "contentY": 0,
+                "bounds": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "rect": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "innerBounds": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "innerRect": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 340,
+                  "height": 22
+                },
+                "shortcut": null,
+                "shortcutTokens": [],
+                "shortcutBoundsAvailable": false,
+                "shortcutBounds": null,
+                "shortcutLayout": null,
+                "disabledReasonBoundsAvailable": false
+              },
+              {
+                "semanticId": "choice:1:send_to_ai",
+                "visualIndex": 1,
+                "groupedIndex": 1,
+                "kind": "action",
+                "labelLength": 18,
+                "labelFingerprint": "fnv1a64:7bdd40a89150f8b9",
+                "actionId": "send_to_ai",
+                "selected": true,
+                "hovered": false,
+                "visible": true,
+                "clipped": false,
+                "contentY": 22,
+                "bounds": {
+                  "x": 0,
+                  "y": 62,
+                  "width": 340,
+                  "height": 36
+                },
+                "rect": {
+                  "x": 0,
+                  "y": 62,
+                  "width": 340,
+                  "height": 36
+                },
+                "innerBounds": {
+                  "x": 8,
+                  "y": 64,
+                  "width": 324,
+                  "height": 32
+                },
+                "innerRect": {
+                  "x": 8,
+                  "y": 64,
+                  "width": 324,
+                  "height": 32
+                },
+                "shortcut": "⇧⌘A",
+                "shortcutTokens": [
+                  "⇧",
+                  "⌘",
+                  "A"
+                ],
+                "shortcutBoundsAvailable": true,
+                "shortcutBounds": {
+                  "x": 258,
+                  "y": 69,
+                  "width": 74,
+                  "height": 22
+                },
+                "shortcutLayout": {
+                  "visualIndex": 1,
+                  "actionId": "send_to_ai",
+                  "shortcut": "⇧⌘A",
+                  "shortcutTokens": [
+                    "⇧",
+                    "⌘",
+                    "A"
+                  ],
+                  "layout": {
+                    "tokens": [
+                      "⇧",
+                      "⌘",
+                      "A"
+                    ],
+                    "tokenBounds": [
+                      {
+                        "token": "⇧",
+                        "kind": "keycap",
+                        "bounds": {
+                          "x": 258,
+                          "y": 69,
+                          "width": 22,
+                          "height": 22
+                        },
+                        "widthExact": false,
+                        "widthSource": "footer-keycap-estimate",
+                        "heightSource": "footer-keycap-constant",
+                        "glyphNudgeY": 1,
+                        "borderWidth": 1,
+                        "radius": 6,
+                        "paddingX": 5,
+                        "fontSize": 12
+                      },
+                      {
+                        "token": "⌘",
+                        "kind": "keycap",
+                        "bounds": {
+                          "x": 284,
+                          "y": 69,
+                          "width": 22,
+                          "height": 22
+                        },
+                        "widthExact": false,
+                        "widthSource": "footer-keycap-estimate",
+                        "heightSource": "footer-keycap-constant",
+                        "glyphNudgeY": 1,
+                        "borderWidth": 1,
+                        "radius": 6,
+                        "paddingX": 5,
+                        "fontSize": 12
+                      },
+                      {
+                        "token": "A",
+                        "kind": "keycap",
+                        "bounds": {
+                          "x": 310,
+                          "y": 69,
+                          "width": 22,
+                          "height": 22
+                        },
+                        "widthExact": false,
+                        "widthSource": "footer-keycap-estimate",
+                        "heightSource": "footer-keycap-constant",
+                        "glyphNudgeY": 1,
+                        "borderWidth": 1,
+                        "radius": 6,
+                        "paddingX": 5,
+                        "fontSize": 12
+                      }
+                    ],
+                    "bounds": {
+                      "x": 258,
+                      "y": 69,
+                      "width": 74,
+                      "height": 22
+                    },
+                    "boundsAvailable": true,
+                    "coordinateSpace": "providedOriginLogicalPx",
+                    "units": "logicalPx",
+                    "gap": 4,
+                    "heightSource": "footer-keycap-constant",
+                    "widthSource": "footer-keycap-token-model",
+                    "exactTokenBounds": false,
+                    "measurementSource": "runtime.footerChrome.shortcutKeycapLayoutModel",
+                    "stopReason": "text glyph widths use the footer keycap font estimate until GPUI exposes measured text layout"
+                  },
+                  "rightAligned": true,
+                  "clipped": false
+                },
+                "disabledReasonBoundsAvailable": false
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "warnings": [
+    "selection will submit because --allow-submit was passed",
+    "window is visible but not focused",
+    "window is visible but not focused"
+  ],
+  "errors": [
+    {
+      "error": "submit requires named non-destructive ActionsDialog parent/action allowlist"
+    }
+  ]
+}

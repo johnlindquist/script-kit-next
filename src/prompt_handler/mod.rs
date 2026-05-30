@@ -459,7 +459,7 @@ impl BatchTargetCapabilities {
             AutomationBatchTargetKind::Notes => Self {
                 display_name: "Notes",
                 unsupported_target_name: "Notes",
-                supported_commands: &["setInput", "openActions", "togglePreview", "waitFor"],
+                supported_commands: &["setInput", "openActions", "togglePreview", "openNotesAcp", "waitFor"],
                 concise_unsupported_message: true,
             },
             AutomationBatchTargetKind::ActionsDialog => Self {
@@ -6192,6 +6192,65 @@ impl ScriptListApp {
                                         }
                                     }
                                 }
+                                protocol::BatchCommand::OpenNotesAcp => {
+                                    let ne = notes_entity.clone();
+                                    let nh = notes_handle;
+                                    let result = nh.update(cx, |_root, window, cx| {
+                                        let open_result = ne.update(cx, |app, cx| {
+                                            app.open_or_focus_embedded_acp(None, window, cx)
+                                        });
+                                        tracing::info!(
+                                            target: "script_kit::transaction",
+                                            event = "transaction_notes_open_acp",
+                                            request_id = %rid,
+                                            "Notes open_notes_acp dispatched"
+                                        );
+                                        open_result
+                                    });
+                                    match result {
+                                        Ok(Ok(())) => {
+                                            tracing::info!(category = "BATCH", request_id = %rid, index, command = "openNotesAcp", "batch.notes.step.ok");
+                                            results.push(protocol::BatchResultEntry {
+                                                index,
+                                                success: true,
+                                                command: "openNotesAcp".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: None,
+                                            });
+                                        }
+                                        Ok(Err(e)) => {
+                                            tracing::warn!(
+                                                target: "script_kit::transaction",
+                                                event = "transaction_notes_open_acp_failed",
+                                                error = %e,
+                                                "Notes open_notes_acp failed"
+                                            );
+                                            results.push(protocol::BatchResultEntry {
+                                                index,
+                                                success: false,
+                                                command: "openNotesAcp".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed(e)),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                        Err(e) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index,
+                                                success: false,
+                                                command: "openNotesAcp".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                    }
+                                }
                                 protocol::BatchCommand::WaitFor { condition, timeout, poll_interval } => {
                                     let wait_timeout = std::time::Duration::from_millis(timeout.unwrap_or(5_000));
                                     let wait_poll = std::time::Duration::from_millis(poll_interval.unwrap_or(25));
@@ -7328,6 +7387,24 @@ impl ScriptListApp {
                                 }
                             }
                             protocol::BatchCommand::TogglePreview => {
+                                let command = batch_command_name(cmd);
+                                results.push(protocol::BatchResultEntry {
+                                    index,
+                                    success: false,
+                                    command,
+                                    elapsed: Some(0),
+                                    value: None,
+                                    error: Some(unsupported_batch_command_error(
+                                        AutomationBatchTargetKind::Main,
+                                        cmd,
+                                    )),
+                                });
+                                failed = true;
+                                if opts.stop_on_error {
+                                    break;
+                                }
+                            }
+                            protocol::BatchCommand::OpenNotesAcp => {
                                 let command = batch_command_name(cmd);
                                 results.push(protocol::BatchResultEntry {
                                     index,
@@ -9741,6 +9818,7 @@ fn batch_command_name(cmd: &protocol::BatchCommand) -> String {
         protocol::BatchCommand::SetInput { .. } => "setInput".to_string(),
         protocol::BatchCommand::OpenActions => "openActions".to_string(),
         protocol::BatchCommand::TogglePreview => "togglePreview".to_string(),
+        protocol::BatchCommand::OpenNotesAcp => "openNotesAcp".to_string(),
         protocol::BatchCommand::ForceSubmit { .. } => "forceSubmit".to_string(),
         protocol::BatchCommand::WaitFor { .. } => "waitFor".to_string(),
         protocol::BatchCommand::SelectByValue { .. } => "selectByValue".to_string(),

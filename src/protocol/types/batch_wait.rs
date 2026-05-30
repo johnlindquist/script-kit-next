@@ -145,6 +145,7 @@ pub enum BatchCommand {
     },
     OpenActions,
     TogglePreview,
+    OpenNotesAcp,
     ForceSubmit {
         value: serde_json::Value,
     },
