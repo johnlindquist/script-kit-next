@@ -16,6 +16,10 @@ impl ScriptListApp {
             },
             AppView::About { .. } => crate::window_resize::ViewType::ScriptList,
             AppView::CreationFeedback { .. } => crate::window_resize::ViewType::DivPrompt,
+            AppView::EnvPrompt { .. } => crate::window_resize::ViewType::DivPrompt,
+            AppView::NamingPrompt { .. } | AppView::CreateAiPresetView { .. } => {
+                crate::window_resize::ViewType::ArgPromptNoChoices
+            }
             AppView::ClipboardHistoryView { .. }
             | AppView::ThemeChooserView { .. }
             | AppView::SdkReferenceView { .. }
@@ -811,6 +815,56 @@ impl ScriptListApp {
                         AppView::SelectPrompt { .. } => "content.promptChoices",
                         _ => "content.promptDrop",
                     })
+                    .with_flex_column()
+                    .with_flex_grow(1.0)
+                    .with_depth(2)
+                    .with_parent("ContentArea")
+                    .with_explanation(explanation.to_string()),
+            );
+
+            return LayoutInfo {
+                window_width,
+                window_height,
+                prompt_type: prompt_type.to_string(),
+                components,
+                handler_form: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            };
+        }
+
+        if matches!(
+            self.current_view,
+            AppView::EnvPrompt { .. }
+                | AppView::NamingPrompt { .. }
+                | AppView::CreateAiPresetView { .. }
+        ) {
+            let (component_name, explanation, token) = match &self.current_view {
+                AppView::EnvPrompt { .. } => (
+                    "EnvPromptContent",
+                    "EnvPrompt fills the standard prompt content area with setup text, a secret-aware input, and a prompt-owned submit footer.",
+                    "content.explicitEnvPrompt",
+                ),
+                AppView::NamingPrompt { .. } => (
+                    "NamingPromptContent",
+                    "NamingPrompt fills the compact explicit prompt content area with a name input and prompt-owned submit handling.",
+                    "content.explicitNamingPrompt",
+                ),
+                _ => (
+                    "CreateAiPresetContent",
+                    "CreateAiPresetView fills the compact explicit prompt content area with preset setup fields and prompt-owned submit handling.",
+                    "content.explicitCreateAiPreset",
+                ),
+            };
+
+            components.push(
+                LayoutComponentInfo::new(component_name, LayoutComponentType::Prompt)
+                    .with_bounds(0.0, content_top, window_width, content_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        None,
+                    )
+                    .with_visual_token(token)
                     .with_flex_column()
                     .with_flex_grow(1.0)
                     .with_depth(2)

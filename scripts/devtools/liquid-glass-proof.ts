@@ -152,6 +152,7 @@ async function main() {
     ConfirmPrompt: ["confirm"],
     PromptEntity: ["prompt-div", "promptentity"],
     PromptChildContent: ["prompt-child", "promptchildcontent"],
+    ExplicitPromptEntity: ["prompt-explicit", "explicitpromptentity"],
     About: ["about"],
     Feedback: ["feedback", "creation-feedback", "creationFeedback"],
     AcpChat: ["acp"],
@@ -201,6 +202,11 @@ async function main() {
     } else if (surfaceKind === "PromptChildContent") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-prompt-child-editor-fixed-layout-sdk.json`,
+      ]);
+    } else if (surfaceKind === "ExplicitPromptEntity") {
+      await attachVisualAudit(evidence, [
+        `${RECEIPT_ROOT}/window-priority-prompt-explicit-env-fixed-layout-sdk.json`,
+        `${RECEIPT_ROOT}/window-priority-prompt-explicit-env-current-layout-sdk.json`,
       ]);
     }
     const status = classify(evidence);

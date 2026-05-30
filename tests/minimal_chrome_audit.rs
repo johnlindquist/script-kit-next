@@ -481,6 +481,7 @@ fn path_native_footer_submits_path_prompt_without_launcher_ai() {
 #[test]
 fn env_footer_submits_env_prompt_without_launcher_ai() {
     let ui_window = include_str!("../src/app_impl/ui_window.rs");
+    let layout_info = include_str!("../src/app_layout/build_layout_info.rs");
     let outer_source = include_str!("../src/render_prompts/other.rs");
     let render_source = include_str!("../src/prompts/env/render.rs");
     let render_code = &render_source[..render_source
@@ -491,7 +492,11 @@ fn env_footer_submits_env_prompt_without_launcher_ai() {
     let run_start = ui_window
         .find("FooterAction::Run =>")
         .expect("footer Run branch exists");
-    let run_branch = &ui_window[run_start..run_start + 1700];
+    let run_end = ui_window[run_start..]
+        .find("crate::footer_popup::FooterAction::Actions =>")
+        .map(|offset| run_start + offset)
+        .expect("footer Actions branch follows Run branch");
+    let run_branch = &ui_window[run_start..run_end];
     let footer_branch_start = ui_window
         .find("Resolved EnvPrompt footer buttons")
         .expect("EnvPrompt native footer branch exists");
@@ -531,6 +536,15 @@ fn env_footer_submits_env_prompt_without_launcher_ai() {
     assert!(
         sizing.contains("AppView::EnvPrompt { .. } => Some((ViewType::DivPrompt, 0))"),
         "EnvPrompt should size as a form-like DivPrompt surface"
+    );
+    assert!(
+        layout_info
+            .contains("AppView::EnvPrompt { .. } => crate::window_resize::ViewType::DivPrompt")
+            && layout_info.contains("EnvPromptContent")
+            && layout_info.contains("content.explicitEnvPrompt")
+            && layout_info.contains("CHROME_LAYER_CONTENT")
+            && layout_info.contains("MATERIAL_SOLID_THEME_TOKEN"),
+        "EnvPrompt layout info should report explicit prompt content, not launcher list regions"
     );
     assert!(
         render_code.contains("prompt_text_palette(")
