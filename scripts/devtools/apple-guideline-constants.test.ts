@@ -125,9 +125,8 @@ test("POST-FIX: the real main-launcher SearchInput now emits a 9pt inset and is 
   expect(d.classification).toBe("withinBand");
 });
 
-test("the real main-launcher MainFooter (6pt item gap) is outOfBand vs the soft 12pt floor (SOFT, not hard)", () => {
-  // Mirrors build_layout_info.rs MainFooter: a footer panel whose inter-item gap
-  // is FOOTER_ACTION_ITEM_GAP_PX = 6pt, carried as boxModel.gap.
+test("PRE-FIX: a 6pt footer item gap is outOfBand vs the soft 12pt floor (SOFT, not hard)", () => {
+  // The pre-slice-5b MainFooter state: inter-item gap was 6pt.
   const footer: NodeLike[] = [
     {
       name: "MainFooter",
@@ -145,6 +144,26 @@ test("the real main-launcher MainFooter (6pt item gap) is outOfBand vs the soft 
   expect(d.classification).toBe("outOfBand");
   // Honest: footer hint chips are NOT regular buttons, so this is SOFT.
   expect(d.normativeStrength).toBe("soft");
+});
+
+test("POST-FIX: the real main-launcher MainFooter now uses a 12pt gap and is withinBand", () => {
+  // Mirrors build_layout_info.rs MainFooter after slice 5b: boxModel.gap =
+  // FOOTER_ACTION_ITEM_GAP_PX = 12pt, meeting Apple's soft bezel-padding floor.
+  const footer: NodeLike[] = [
+    {
+      name: "MainFooter",
+      type: "panel",
+      parent: "Window",
+      bounds: { x: 0, y: 458, width: 750, height: 22 },
+      visualStyle: { cornerRadius: 16, contentInsets: { top: 2, right: 14, bottom: 2, left: 14 } },
+      boxModel: { gap: 12 },
+    },
+  ];
+  const d = footerSpacingDeviations(footer, 2)[0];
+  expect(d.observedPt).toBe(12);
+  expect(d.targetPt).toBe(12);
+  expect(d.deltaPt).toBe(0);
+  expect(d.classification).toBe("withinBand");
 });
 
 test("a footer node with no boxModel.gap is an explicit unmeasured gap", () => {

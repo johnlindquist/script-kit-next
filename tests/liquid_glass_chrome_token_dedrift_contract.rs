@@ -64,10 +64,13 @@ fn footer_action_button_radius_references_shared_compact_token() {
 
 #[test]
 fn footer_action_item_gap_stays_pinned_literal() {
-    // FOOTER_ACTION_ITEM_GAP_PX is intentionally NOT de-drifted: it is a
-    // standalone, separately test-pinned 6px gap with no shared-token meaning.
+    // FOOTER_ACTION_ITEM_GAP_PX is a standalone, separately test-pinned gap with
+    // no shared-token meaning; the pin guards against ACCIDENTAL drift. It was
+    // deliberately raised 6 -> 12pt (slice 5b, Oracle-Session
+    // tahoe-apple-guideline-metrics) to meet Apple's soft ~12pt bezel-padding
+    // floor — the measured "footer lacks padding" concern.
     assert!(
-        FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 6.0;"),
-        "FOOTER_ACTION_ITEM_GAP_PX must remain its pinned 6.0 literal"
+        FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 12.0;"),
+        "FOOTER_ACTION_ITEM_GAP_PX must remain its pinned 12.0 literal"
     );
 }

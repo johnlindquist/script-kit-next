@@ -18,7 +18,13 @@ pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_SEMICOLON_GLYPH_NUDGE_Y_PX: f32 = -1.0;
 pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;
-pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 6.0;
+// Inter-item gap for footer hint chips. Raised 6 -> 12pt (slice 5b,
+// Oracle-Session tahoe-apple-guideline-metrics) to meet Apple's soft ~12pt
+// bezel-padding floor — the measured "footer lacks padding" concern. SOFT: footer
+// hint chips are compact, non-bezeled controls Apple's HIG does not size
+// explicitly, and there is no measured-native footer-gap baseline, so this is a
+// guideline-aligned taste change, not a hard Apple constant.
+pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 12.0;
 pub(crate) const FOOTER_ACTION_CONTENT_GAP_PX: f32 = 4.0;
 pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX: f32 = 4.0;
 pub(crate) const FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX: f32 = 6.0;
@@ -838,10 +844,10 @@ mod tests {
 
     #[test]
     fn footer_horizontal_run_width_uses_gap_only_between_items() {
-        // 40 + 20 + 20 + 2 gaps * 6px = 92
+        // 40 + 20 + 20 + 2 gaps * 12px = 104
         assert_eq!(
             footer_horizontal_run_width_px(&[40.0, 20.0, 20.0], FOOTER_ACTION_ITEM_GAP_PX),
-            92.0
+            104.0
         );
         assert_eq!(
             footer_horizontal_run_width_px(&[], FOOTER_ACTION_ITEM_GAP_PX),
@@ -858,12 +864,12 @@ mod tests {
     fn footer_horizontal_run_origins_use_constant_gap() {
         assert_eq!(
             footer_horizontal_run_origins_px(&[40.0, 20.0, 20.0], FOOTER_ACTION_ITEM_GAP_PX, 0.0),
-            vec![0.0, 46.0, 72.0]
+            vec![0.0, 52.0, 84.0]
         );
         // The same run anchored at a non-zero origin just shifts every item.
         assert_eq!(
             footer_horizontal_run_origins_px(&[40.0, 20.0], FOOTER_ACTION_ITEM_GAP_PX, 10.0),
-            vec![10.0, 56.0]
+            vec![10.0, 62.0]
         );
     }
 
@@ -881,7 +887,7 @@ mod tests {
 
     #[test]
     fn footer_action_chrome_tokens_match_native_footer_contract() {
-        assert_eq!(FOOTER_ACTION_ITEM_GAP_PX, 6.0);
+        assert_eq!(FOOTER_ACTION_ITEM_GAP_PX, 12.0);
         assert_eq!(FOOTER_ACTION_CONTENT_GAP_PX, 4.0);
         assert_eq!(FOOTER_ACTION_CONTENT_PADDING_X_PX, 4.0);
         assert_eq!(FOOTER_ACTION_BUTTON_RADIUS_PX, 10.0);
