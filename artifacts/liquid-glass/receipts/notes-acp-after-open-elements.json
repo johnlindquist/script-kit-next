@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.elements",
+  "command": "elements.snapshot",
+  "classification": "ok",
+  "session": "liquid-glass-notes-acp",
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "notes"
+    },
+    "strict": true,
+    "expectedSurfaceKind": null
+  },
+  "target": {
+    "automationId": "notes",
+    "stableTargetId": "notes",
+    "targetKind": "Notes",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 3062,
+      "y": -1030,
+      "width": 350,
+      "height": 280
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 350,
+      "height": 280,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 350,
+        "height": 280
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 33854,
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "semanticSurface": {
+    "surfaceKind": null,
+    "appViewVariant": null
+  },
+  "totalCount": 2,
+  "returnedCount": 2,
+  "truncated": false,
+  "focusedSemanticId": "input:notes-editor",
+  "selectedSemanticId": null,
+  "duplicateSemanticIds": [],
+  "missingPrimitives": [
+    "elementBounds"
+  ],
+  "nodes": [
+    {
+      "semanticId": "panel:notes-window",
+      "role": "panel",
+      "type": "panel",
+      "label": "Notes",
+      "text": "Notes",
+      "value": null,
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "panel:notes-window",
+        "type": "panel",
+        "text": "Notes"
+      }
+    },
+    {
+      "semanticId": "input:notes-editor",
+      "role": "input",
+      "type": "input",
+      "label": "# Welcome to Notes\n\n## What Notes is\n\nNotes is a fast, keyboard-first place for ideas, drafts, and working context. It stores Markdown notes, supports fast switching, and can hand note context to AI.\n\n> Start with messy thoughts. Use the actions menu as your command center (Cmd+K).\n\n---\n\n## Write fast\n\nUse Markdown for structure without leaving the editor:\n\n### A tiny example\n\n- [x] Capture one useful idea\n- [ ] Turn it into a script, plan, or checklist\n- Use inline `code` for commands, names, and snippets\n\nFormat as you type, then preview the result when you want to read instead of edit (Cmd+Shift+P). Smart paste can clean up copied text into useful Markdown when possible (Cmd+V). Focus mode hides the chrome so the note can take over (Cmd+.).\n\n## Navigate\n\nCreate a note whenever the thought arrives (Cmd+N). Create one from the clipboard when the clipboard is the thought (Cmd+Shift+N). Switch notes quickly from the note switcher (Cmd+P), jump through history (Cmd+[ and Cmd+]), and pin important notes so they stay at the top (Cmd+Shift+I).\n\nJump to pinned notes by number (Cmd+1 through Cmd+9). Cycle sorting between updated, created, and alphabetical when the list needs a different shape (Cmd+Shift+S).\n\n## Find things\n\nFind text inside the current note (Cmd+F). Search across notes with the notes search field (Cmd+Shift+F). Open Trash when something should be out of the way but not gone forever (Cmd+Shift+T).\n\nDelete carefully; Notes uses Trash first, then permanent delete from Trash. Restore a trashed note while viewing Trash (Cmd+Z).\n\n## Extend\n\nThe actions menu is the source of truth for commands, shortcuts, and anything added later (Cmd+K). Use it when you are unsure what Notes can do.\n\nSend note context into ACP/AI when you want help rewriting, summarizing, planning, or turning notes into next actions (Cmd+Enter). Reference other notes with `@note` mentions from the notes portal when you are building context across notes (Cmd+Shift+O).\n\nMake this your own: replace this tour with the first note you actually need.",
+      "text": null,
+      "value": "# Welcome to Notes\n\n## What Notes is\n\nNotes is a fast, keyboard-first place for ideas, drafts, and working context. It stores Markdown notes, supports fast switching, and can hand note context to AI.\n\n> Start with messy thoughts. Use the actions menu as your command center (Cmd+K).\n\n---\n\n## Write fast\n\nUse Markdown for structure without leaving the editor:\n\n### A tiny example\n\n- [x] Capture one useful idea\n- [ ] Turn it into a script, plan, or checklist\n- Use inline `code` for commands, names, and snippets\n\nFormat as you type, then preview the result when you want to read instead of edit (Cmd+Shift+P). Smart paste can clean up copied text into useful Markdown when possible (Cmd+V). Focus mode hides the chrome so the note can take over (Cmd+.).\n\n## Navigate\n\nCreate a note whenever the thought arrives (Cmd+N). Create one from the clipboard when the clipboard is the thought (Cmd+Shift+N). Switch notes quickly from the note switcher (Cmd+P), jump through history (Cmd+[ and Cmd+]), and pin important notes so they stay at the top (Cmd+Shift+I).\n\nJump to pinned notes by number (Cmd+1 through Cmd+9). Cycle sorting between updated, created, and alphabetical when the list needs a different shape (Cmd+Shift+S).\n\n## Find things\n\nFind text inside the current note (Cmd+F). Search across notes with the notes search field (Cmd+Shift+F). Open Trash when something should be out of the way but not gone forever (Cmd+Shift+T).\n\nDelete carefully; Notes uses Trash first, then permanent delete from Trash. Restore a trashed note while viewing Trash (Cmd+Z).\n\n## Extend\n\nThe actions menu is the source of truth for commands, shortcuts, and anything added later (Cmd+K). Use it when you are unsure what Notes can do.\n\nSend note context into ACP/AI when you want help rewriting, summarizing, planning, or turning notes into next actions (Cmd+Enter). Reference other notes with `@note` mentions from the notes portal when you are building context across notes (Cmd+Shift+O).\n\nMake this your own: replace this tour with the first note you actually need.",
+      "selected": null,
+      "focused": true,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "input:notes-editor",
+        "type": "input",
+        "value": "# Welcome to Notes\n\n## What Notes is\n\nNotes is a fast, keyboard-first place for ideas, drafts, and working context. It stores Markdown notes, supports fast switching, and can hand note context to AI.\n\n> Start with messy thoughts. Use the actions menu as your command center (Cmd+K).\n\n---\n\n## Write fast\n\nUse Markdown for structure without leaving the editor:\n\n### A tiny example\n\n- [x] Capture one useful idea\n- [ ] Turn it into a script, plan, or checklist\n- Use inline `code` for commands, names, and snippets\n\nFormat as you type, then preview the result when you want to read instead of edit (Cmd+Shift+P). Smart paste can clean up copied text into useful Markdown when possible (Cmd+V). Focus mode hides the chrome so the note can take over (Cmd+.).\n\n## Navigate\n\nCreate a note whenever the thought arrives (Cmd+N). Create one from the clipboard when the clipboard is the thought (Cmd+Shift+N). Switch notes quickly from the note switcher (Cmd+P), jump through history (Cmd+[ and Cmd+]), and pin important notes so they stay at the top (Cmd+Shift+I).\n\nJump to pinned notes by number (Cmd+1 through Cmd+9). Cycle sorting between updated, created, and alphabetical when the list needs a different shape (Cmd+Shift+S).\n\n## Find things\n\nFind text inside the current note (Cmd+F). Search across notes with the notes search field (Cmd+Shift+F). Open Trash when something should be out of the way but not gone forever (Cmd+Shift+T).\n\nDelete carefully; Notes uses Trash first, then permanent delete from Trash. Restore a trashed note while viewing Trash (Cmd+Z).\n\n## Extend\n\nThe actions menu is the source of truth for commands, shortcuts, and anything added later (Cmd+K). Use it when you are unsure what Notes can do.\n\nSend note context into ACP/AI when you want help rewriting, summarizing, planning, or turning notes into next actions (Cmd+Enter). Reference other notes with `@note` mentions from the notes portal when you are building context across notes (Cmd+Shift+O).\n\nMake this your own: replace this tour with the first note you actually need.",
+        "focused": true
+      }
+    }
+  ],
+  "warnings": [
+    "getElements does not expose bounds yet; use devtools.layout.measure for geometry."
+  ],
+  "errors": []
+}
