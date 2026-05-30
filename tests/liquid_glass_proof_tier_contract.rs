@@ -53,6 +53,7 @@ fn proof_matrix_guideline_assertions_gate_strong_proof() {
     assert!(
         PROOF_MATRIX.contains("function guidelineProof")
             && PROOF_MATRIX.contains("guidelineAssertionFailureCount")
+            && PROOF_MATRIX.contains("guidelineFailureDetails")
             && PROOF_MATRIX.contains("numeric-proof-guideline-failed")
             && PROOF_MATRIX.contains("numeric-proof-missing-guideline-assertions")
             && PROOF_MATRIX.contains("tiers.guidelineProof === \"pass\""),
@@ -93,6 +94,8 @@ fn proof_matrix_emits_ordered_debt_work_queue() {
             && PROOF_MATRIX.contains("window-container")
             && PROOF_MATRIX.contains("nextEvidenceNeeded")
             && PROOF_MATRIX.contains("guidelineProof")
+            && PROOF_MATRIX.contains("guidelineFailures")
+            && PROOF_MATRIX.contains("guidelineFailureDetails")
             && PROOF_MATRIX.contains("recommendedNextAction")
             && PROOF_MATRIX.contains("capture-blocker")
             && PROOF_MATRIX.contains("missing-proof-tier"),

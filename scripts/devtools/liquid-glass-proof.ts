@@ -289,6 +289,43 @@ function guidelineAssertionFailureCount(value: unknown): number {
   return count;
 }
 
+function guidelineFailureDetails(value: unknown, path: string[] = []): string[] {
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return [];
+    }
+    const label = path.join(".");
+    return value.map((entry) => `${label}: ${String(entry)}`);
+  }
+  if (typeof value !== "object" || value === null) {
+    return [];
+  }
+  const object = value as JsonObject;
+  const details: string[] = [];
+  for (const [key, child] of Object.entries(object)) {
+    if (
+      key === "failures" ||
+      key === "contentGlassNodes" ||
+      key === "contentNativeMaterialNodes" ||
+      key === "glassLayerViolations" ||
+      key === "hardcodedColorNodes"
+    ) {
+      details.push(...guidelineFailureDetails(child, path));
+      continue;
+    }
+    if (key === "clippedNodeCount" && typeof child === "number" && child > 0) {
+      details.push(`${path.join(".")}.clippedNodeCount: ${child}`);
+      continue;
+    }
+    if (key === "overflowY" && child === true) {
+      details.push(`${path.join(".")}.overflowY: true`);
+      continue;
+    }
+    details.push(...guidelineFailureDetails(child, [...path, key]));
+  }
+  return details;
+}
+
 function guidelineProof(audit: JsonObject): ProofTiers["guidelineProof"] {
   const assertions = asObject(audit.guidelineAssertions);
   if (Object.keys(assertions).length === 0) {
@@ -850,6 +887,7 @@ async function main() {
         surface.proofTiers.guidelineProof === "fail" ? "guidelineProof" : "",
         surface.proofTiers.imageDiffProof === "blocked" ? "imageDiffProof" : "",
       ].filter(Boolean),
+      guidelineFailures: guidelineFailureDetails(asObject(surface.visualAudit).guidelineAssertions),
       receipts: surface.evidence.receipts,
       screenshots: surface.evidence.screenshots,
       notes: surface.evidence.notes,
@@ -861,6 +899,7 @@ async function main() {
       proofStatus: surface.proofStatus,
       proofTiers: surface.proofTiers,
       requiredEvidence: surface.requiredEvidence,
+      guidelineFailures: guidelineFailureDetails(asObject(surface.visualAudit).guidelineAssertions),
       receipts: surface.evidence.receipts,
       screenshots: surface.evidence.screenshots,
       notes: surface.evidence.notes,
@@ -888,6 +927,7 @@ async function main() {
       proofStatus: surface.proofStatus,
       priority: visualCaptureBlocked ? "capture-blocker" : "missing-proof-tier",
       nextEvidenceNeeded: missingEvidence,
+      guidelineFailures: surface.guidelineFailures,
       recommendedNextAction: visualCaptureBlocked
         ? "fix capture/readback blocker, then rerun screenshot/layout/image-diff proof"
         : "capture missing screenshot/app-render/offscreen/image-diff evidence, then rerun proof matrix",
