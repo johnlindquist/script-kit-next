@@ -45,9 +45,10 @@ pub use runtime::{
     current_dictation_phase, cycle_dictation_target, dictation_elapsed, finish_stop_capture,
     get_active_dictation_device, get_dictation_target, is_dictation_busy, is_dictation_recording,
     is_dictation_stopping, last_delivery_receipt, last_stop_receipt, maybe_unload_transcriber,
-    record_delivery_receipt, redacted_transcript_fingerprint, set_dictation_target_cycle,
-    set_overlay_phase, snapshot_overlay_state, toggle_dictation, transcribe_captured_audio,
-    BeginStopCapture, DictationStopJob, DictationStopReason,
+    record_delivery_receipt, redacted_transcript_fingerprint, resolve_final_or_partial_transcript,
+    set_dictation_target_cycle, set_overlay_phase, snapshot_overlay_state, toggle_dictation,
+    transcribe_captured_audio, BeginStopCapture, DictationStopJob, DictationStopReason,
+    DictationTranscriptResolution,
 };
 pub use setup::{
     build_dictation_setup_state, DictationHotkeyStatus, DictationMicrophonePermissionStatus,

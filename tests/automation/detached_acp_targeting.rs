@@ -519,7 +519,8 @@ fn acp_detached_get_elements_not_rejected_as_main_only() {
 fn acp_detached_batch_not_rejected_as_main_only() {
     let source = include_str!("../../src/prompt_handler/mod.rs");
     assert!(
-        source.contains("resolve_automation_read_target(&rid, \"batch\""),
+        source.contains("resolve_automation_read_target(\n                        &rid,\n                        \"batch\"")
+            || source.contains("resolve_automation_read_target(&rid, \"batch\""),
         "batch handler must use resolve_automation_read_target (accepts AcpDetached)"
     );
     assert!(
@@ -532,7 +533,8 @@ fn acp_detached_batch_not_rejected_as_main_only() {
 fn acp_detached_wait_for_not_rejected_as_main_only() {
     let source = include_str!("../../src/prompt_handler/mod.rs");
     assert!(
-        source.contains("resolve_acp_read_target(&request_id, \"waitFor\"")
+        source.contains("resolve_acp_read_target(\n                            &rid,\n                            \"waitFor\"")
+            || source.contains("resolve_acp_read_target(&request_id, \"waitFor\"")
             || source.contains("resolve_acp_read_target(&rid, \"waitFor\""),
         "waitFor handler must use resolve_acp_read_target (accepts AcpDetached)"
     );

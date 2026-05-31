@@ -10,6 +10,7 @@ type Args = {
   session: string;
   limit: number;
   contains: string;
+  includeMcpAudit: boolean;
   start: boolean;
   show: boolean;
   timeoutMs: number;
@@ -34,8 +35,8 @@ const actionOutputFields = [
 function usage() {
   return [
     "Usage:",
-    "  bun scripts/devtools/events.ts tail [--session <name>] [--limit <n>] [--contains <text>]",
-    "  bun scripts/devtools/events.ts record [--session <name>] [--start] [--show] [--output <path>] [--preview-bytes <n>] [--inline-full-output] [--external-session <slug>] [--external-output-log <path>] [--wrapper-timeout-ms <n>] -- <devtools command...>",
+    "  bun scripts/devtools/events.ts tail [--session <name>] [--limit <n>] [--contains <text>] [--include-mcp-audit]",
+    "  bun scripts/devtools/events.ts record [--session <name>] [--start] [--show] [--output <path>] [--preview-bytes <n>] [--inline-full-output] [--include-mcp-audit] [--external-session <slug>] [--external-output-log <path>] [--wrapper-timeout-ms <n>] -- <devtools command...>",
   ].join("\n");
 }
 
@@ -56,6 +57,7 @@ function parseArgs(argv: string[]): Args {
     session: "default",
     limit: 80,
     contains: "",
+    includeMcpAudit: false,
     start: false,
     show: false,
     timeoutMs: 8000,
@@ -76,6 +78,8 @@ function parseArgs(argv: string[]): Args {
       args.limit = Number(options[++index] ?? args.limit);
     } else if (arg === "--contains") {
       args.contains = options[++index] ?? "";
+    } else if (arg === "--include-mcp-audit") {
+      args.includeMcpAudit = true;
     } else if (arg === "--start") {
       args.start = true;
     } else if (arg === "--show") {
@@ -158,13 +162,34 @@ async function readLines(path: string, offset: number, limit: number, contains =
   }
 }
 
+function defaultMcpAuditPath() {
+  const home = Bun.env.HOME || "";
+  return home ? `${home}/.scriptkit/logs/mcp-audit.jsonl` : "";
+}
+
 function parseLine(line: string, index: number) {
   const parsed = tryJson(line);
-  const eventType = /event_type=([^ ]+)/.exec(line)?.[1] ?? /\bevent=([^ ]+)/.exec(line)?.[1] ?? null;
-  const correlationId = /cid=([^ ]+)/.exec(line)?.[1] ?? null;
-  const commandType = /command_type=([^ ]+)/.exec(line)?.[1] ?? null;
+  const parsedFields = (parsed?.fields && typeof parsed.fields === "object" ? parsed.fields : {}) as JsonObject;
+  const eventType = stringValue(parsedFields.event_type)
+    ?? stringValue(parsed?.event_type)
+    ?? /event_type=([^ ]+)/.exec(line)?.[1]
+    ?? /\bevent=([^ ]+)/.exec(line)?.[1]
+    ?? (typeof parsed?.method === "string" ? "mcp_audit" : null);
+  const correlationId = stringValue(parsed?.correlation_id)
+    ?? stringValue(parsedFields.correlation_id)
+    ?? /cid=([^ ]+)/.exec(line)?.[1]
+    ?? null;
+  const commandType = stringValue(parsed?.method)
+    ?? stringValue(parsedFields.command_type)
+    ?? stringValue(parsed?.command_type)
+    ?? /command_type=([^ ]+)/.exec(line)?.[1]
+    ?? null;
   const compactLevel = /^\d+(?:\.\d+)?\|([iwedt])\|/.exec(line)?.[1] ?? null;
-  const level = /\b(INFO|WARN|ERROR|DEBUG|TRACE)\b/.exec(line)?.[1]?.toLowerCase() ?? compactLevelName(compactLevel);
+  const level = stringValue(parsed?.level)?.toLowerCase()
+    ?? (parsed?.success === false ? "error" : null)
+    ?? (parsed?.success === true ? "info" : null)
+    ?? /\b(INFO|WARN|ERROR|DEBUG|TRACE)\b/.exec(line)?.[1]?.toLowerCase()
+    ?? compactLevelName(compactLevel);
   return {
     index,
     kind: parsed ? "json" : "log",
@@ -175,6 +200,10 @@ function parseLine(line: string, index: number) {
     line,
     parsed,
   };
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function compactLevelName(level: string | null) {
@@ -374,9 +403,11 @@ async function main() {
   const status = await sessionStatus(args);
   const logPath = String(status.log ?? "");
   const responsesPath = String(status.responses ?? "");
+  const mcpAuditPath = args.includeMcpAudit ? defaultMcpAuditPath() : "";
   const startedAt = new Date().toISOString();
   const logOffset = args.command === "record" ? await fileSize(logPath) : 0;
   const responsesOffset = args.command === "record" ? await fileSize(responsesPath) : 0;
+  const mcpAuditOffset = args.command === "record" && mcpAuditPath ? await fileSize(mcpAuditPath) : 0;
 
   let child: JsonObject | null = null;
   let actionOutput: Awaited<ReturnType<typeof outputSummary>> | null = null;
@@ -392,10 +423,14 @@ async function main() {
 
   const appEvents = await readLines(logPath, logOffset, args.limit, args.contains);
   const responseEvents = await readLines(responsesPath, responsesOffset, args.limit, args.contains);
+  const mcpAuditEvents = mcpAuditPath
+    ? await readLines(mcpAuditPath, mcpAuditOffset, args.limit, args.contains)
+    : [];
   const endedAt = new Date().toISOString();
   const summary = {
     appLog: countEvents(appEvents),
     responses: countEvents(responseEvents),
+    mcpAudit: countEvents(mcpAuditEvents),
   };
   const externalSession = args.externalSession
     ? {
@@ -420,6 +455,9 @@ async function main() {
       responsesPath,
       logOffset,
       responsesOffset,
+      mcpAuditPath: mcpAuditPath || null,
+      mcpAuditOffset,
+      includeMcpAudit: args.includeMcpAudit,
       limit: args.limit,
       contains: args.contains || null,
     },
@@ -438,10 +476,12 @@ async function main() {
     events: {
       appLog: compactEventEntries(appEvents, args.previewBytes, args.inlineFullOutput),
       responses: compactEventEntries(responseEvents, args.previewBytes, args.inlineFullOutput),
+      mcpAudit: compactEventEntries(mcpAuditEvents, args.previewBytes, args.inlineFullOutput),
     },
     warnings: [
       ...summary.appLog.warnings,
       ...summary.responses.warnings,
+      ...summary.mcpAudit.warnings,
       appEvents.length === 0 && responseEvents.length === 0 ? "no session events matched the requested span" : "",
     ].filter(Boolean),
     errors: [

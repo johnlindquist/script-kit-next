@@ -97,11 +97,105 @@ impl std::fmt::Display for PermissionKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum PermissionRequirement {
     Required,
     Recommended,
     Optional,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PermissionGuideActionKind {
+    AlreadyGranted,
+    SystemPrompt,
+    SystemSettings,
+    ReadOnlyStatus,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionGuideInput {
+    pub kind: PermissionKind,
+    pub status: crate::platform::permiso_detect::PermissionStatus,
+    pub prompt_attempted: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionGuideStep {
+    pub kind: PermissionKind,
+    pub status: crate::platform::permiso_detect::PermissionStatus,
+    pub requirement: PermissionRequirement,
+    pub action: PermissionGuideActionKind,
+    pub settings_url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionGuideReceipt {
+    pub schema_version: u32,
+    pub primary_missing: Option<PermissionKind>,
+    pub steps: Vec<PermissionGuideStep>,
+    pub redacted: bool,
+}
+
+pub const PERMISSION_GUIDE_RECEIPT_SCHEMA_VERSION: u32 = 1;
+
+pub fn build_permission_guide_receipt(inputs: &[PermissionGuideInput]) -> PermissionGuideReceipt {
+    let steps: Vec<PermissionGuideStep> = inputs
+        .iter()
+        .map(|input| PermissionGuideStep {
+            kind: input.kind,
+            status: input.status,
+            requirement: input.kind.requirement(),
+            action: permission_guide_action(input.kind, input.status, input.prompt_attempted),
+            settings_url: input.kind.settings_url().to_string(),
+        })
+        .collect();
+
+    let primary_missing = steps
+        .iter()
+        .find(|step| {
+            step.requirement == PermissionRequirement::Required
+                && step.status != crate::platform::permiso_detect::PermissionStatus::Authorized
+        })
+        .map(|step| step.kind);
+
+    PermissionGuideReceipt {
+        schema_version: PERMISSION_GUIDE_RECEIPT_SCHEMA_VERSION,
+        primary_missing,
+        steps,
+        redacted: true,
+    }
+}
+
+pub fn permission_guide_action(
+    kind: PermissionKind,
+    status: crate::platform::permiso_detect::PermissionStatus,
+    prompt_attempted: bool,
+) -> PermissionGuideActionKind {
+    use crate::platform::permiso_detect::PermissionStatus;
+
+    if status == PermissionStatus::Authorized {
+        return PermissionGuideActionKind::AlreadyGranted;
+    }
+
+    if matches!(kind, PermissionKind::Microphone) {
+        return PermissionGuideActionKind::ReadOnlyStatus;
+    }
+
+    if matches!(status, PermissionStatus::Unknown) {
+        return PermissionGuideActionKind::Unavailable;
+    }
+
+    if prompt_attempted {
+        PermissionGuideActionKind::SystemSettings
+    } else {
+        PermissionGuideActionKind::SystemPrompt
+    }
 }
 
 // ============================================================================

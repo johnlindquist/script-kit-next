@@ -691,6 +691,9 @@ pub enum ExternalCommand {
     ///
     /// transcript: Synthetic transcript text. Only `.len()` is logged — content
     ///   is not emitted at info level (real transcripts carry PII).
+    /// partialTranscript: Optional partial text used only when `transcript` is
+    ///   empty. This lets tests prove final-empty fallback behavior without
+    ///   touching live microphone/provider code.
     /// target: Optional target label. Accepted values mirror `DictationTarget`:
     ///   "mainWindowFilter", "mainWindowPrompt", "notesEditor", "aiChatComposer",
     ///   "tabAiHarness", "externalApp", plus short aliases like "acp". Unknown
@@ -698,6 +701,8 @@ pub enum ExternalCommand {
     ///   current UI-derived target.
     PushDictationResult {
         transcript: String,
+        #[serde(default, rename = "partialTranscript")]
+        partial_transcript: Option<String>,
         #[serde(default)]
         target: Option<String>,
         #[serde(default, rename = "requestId")]

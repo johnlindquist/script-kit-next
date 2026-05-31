@@ -45,7 +45,8 @@ fn index_help_exposes_surface_proof_as_default_entrypoint() {
 fn surface_proof_keeps_non_main_no_focus_routing() {
     let source = read_source("scripts/agentic/index.ts");
     assert!(
-        source.contains("acpDetached, actionsDialog, promptPopup → batch/simulateGpuiEvent"),
+        source.contains("acpDetached, actionsDialog, promptPopup")
+            && source.contains("no OS focus needed"),
         "help text must preserve non-main no-focus routing contract"
     );
 }

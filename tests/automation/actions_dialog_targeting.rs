@@ -533,8 +533,9 @@ fn prompt_popup_batch_target_fails_closed() {
     // This proves it does NOT silently fall back to raw key injection.
     let source = include_str!("../../src/prompt_handler/mod.rs");
     assert!(
-        source
-            .contains("supports Main, AcpDetached, Notes, ActionsDialog, and PromptPopup targets"),
+        source.contains(
+            "supports Main, Ai, AcpDetached, Notes, ActionsDialog, and PromptPopup targets"
+        ),
         "unsupported kind error message must list all supported targets including PromptPopup"
     );
 }
@@ -749,7 +750,8 @@ fn open_confirm_popup_registers_in_automation_registry() {
 #[test]
 fn close_confirm_popup_unregisters_from_automation_registry() {
     let source = include_str!("../../src/confirm/window.rs");
-    assert!(source.contains("remove_automation_window(\"confirm-popup\")"));
+    assert!(source.contains("CONFIRM_POPUP_AUTOMATION_ID"));
+    assert!(source.contains("remove_automation_window(CONFIRM_POPUP_AUTOMATION_ID)"));
 }
 
 // ---------------------------------------------------------------------------

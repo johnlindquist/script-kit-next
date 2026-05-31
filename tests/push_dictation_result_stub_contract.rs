@@ -28,9 +28,9 @@ fn push_arm<'a>(source: &'a str, name: &str) -> &'a str {
 fn push_dictation_result_variant_is_defined_with_expected_fields() {
     assert!(
         STDIN_COMMANDS.contains(
-            "PushDictationResult {\n        transcript: String,\n        #[serde(default)]\n        target: Option<String>,\n        #[serde(default, rename = \"requestId\")]\n        request_id: Option<ExternalCommandRequestId>,\n    },"
+            "PushDictationResult {\n        transcript: String,\n        #[serde(default, rename = \"partialTranscript\")]\n        partial_transcript: Option<String>,\n        #[serde(default)]\n        target: Option<String>,\n        #[serde(default, rename = \"requestId\")]\n        request_id: Option<ExternalCommandRequestId>,\n    },"
         ),
-        "stdin protocol must keep the loose String target shape so aliases can be accepted without coupling serde to DictationTarget"
+        "stdin protocol must keep loose String target shape and optional partialTranscript fallback without coupling serde to DictationTarget"
     );
 }
 
@@ -60,6 +60,7 @@ fn push_dictation_result_routes_through_real_delivery_helper() {
         let arm = push_arm(source, name);
         assert!(
             arm.contains("view.deliver_stdin_dictation_result(")
+                && arm.contains("partial_transcript.as_deref()")
                 && arm.contains("event = \"push_dictation_result_delivered\"")
                 && arm.contains("event = \"push_dictation_result_failed\""),
             "{name} must deliver pushDictationResult through the real dictation pipeline and log success/failure receipts"
@@ -103,8 +104,11 @@ fn push_dictation_result_does_not_log_transcript_contents() {
     ] {
         let arm = push_arm(source, name);
         assert!(
-            arm.contains("transcript_len = transcript.len()"),
-            "{name} must log only transcript length"
+            arm.contains("transcript_len = resolution.transcript.as_ref().map_or(0, String::len)")
+                && arm.contains("final_transcript_len = resolution.final_len")
+                && arm.contains("partial_transcript_len = ?resolution.partial_len")
+                && arm.contains("partial_fallback_used = resolution.used_partial_fallback"),
+            "{name} must log only transcript and fallback lengths/flags"
         );
         assert!(
             !arm.contains("transcript = %transcript")

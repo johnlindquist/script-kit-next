@@ -102,6 +102,14 @@ static DICTATION_STATE_GENERATION: AtomicU64 = AtomicU64::new(1);
 /// and a one-way fingerprint; it never stores transcript text.
 static LAST_DELIVERY_RECEIPT: Mutex<Option<serde_json::Value>> = Mutex::new(None);
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DictationTranscriptResolution {
+    pub transcript: Option<String>,
+    pub used_partial_fallback: bool,
+    pub final_len: usize,
+    pub partial_len: Option<usize>,
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -350,6 +358,38 @@ pub fn record_delivery_receipt(
     *LAST_DELIVERY_RECEIPT.lock() = Some(receipt.clone());
     bump_dictation_state_generation();
     receipt
+}
+
+/// Resolve final transcription text with a partial fallback for stop/finalize
+/// races where the provider returns an empty final result.
+pub fn resolve_final_or_partial_transcript(
+    final_transcript: &str,
+    partial_transcript: Option<&str>,
+) -> DictationTranscriptResolution {
+    if !final_transcript.trim().is_empty() {
+        return DictationTranscriptResolution {
+            transcript: Some(final_transcript.to_string()),
+            used_partial_fallback: false,
+            final_len: final_transcript.len(),
+            partial_len: partial_transcript.map(str::len),
+        };
+    }
+
+    if let Some(partial) = partial_transcript.filter(|value| !value.trim().is_empty()) {
+        return DictationTranscriptResolution {
+            transcript: Some(partial.to_string()),
+            used_partial_fallback: true,
+            final_len: final_transcript.len(),
+            partial_len: Some(partial.len()),
+        };
+    }
+
+    DictationTranscriptResolution {
+        transcript: None,
+        used_partial_fallback: false,
+        final_len: final_transcript.len(),
+        partial_len: partial_transcript.map(str::len),
+    }
 }
 
 /// Return the latest content-safe dictation delivery receipt.

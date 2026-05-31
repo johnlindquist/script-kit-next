@@ -169,6 +169,15 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             mime_type: "application/json".to_string(),
         },
         McpResource {
+            uri: crate::computer_use::COMPUTER_USE_READINESS_RESOURCE_URI.to_string(),
+            name: "Computer Use Readiness".to_string(),
+            description: Some(
+                "Read-only fail-closed preflight receipt for third-party GUI Computer Use readiness."
+                    .to_string(),
+            ),
+            mime_type: "application/json".to_string(),
+        },
+        McpResource {
             uri: "kit://context".to_string(),
             name: "Current Context".to_string(),
             description: Some(
@@ -408,6 +417,9 @@ pub fn read_resource(
         "kit://git-status" => read_git_status_resource(),
         _ if is_notes_resource_uri(uri) => read_notes_resource(uri),
         _ if is_audit_resource_uri(uri) => read_audit_resource(uri),
+        crate::computer_use::COMPUTER_USE_READINESS_RESOURCE_URI => {
+            read_computer_use_readiness_resource()
+        }
         _ if uri == "kit://git-diff" || uri.starts_with("kit://git-diff?") => {
             read_git_diff_resource(uri)
         }
@@ -706,6 +718,19 @@ fn read_state_resource(app_state: Option<&AppStateResource>) -> Result<ResourceC
         text: json,
     })
 }
+
+fn read_computer_use_readiness_resource() -> Result<ResourceContent, String> {
+    let receipt = crate::computer_use::current_computer_use_readiness_receipt();
+    let text = serde_json::to_string_pretty(&receipt)
+        .map_err(|error| format!("Failed to serialize computer-use readiness: {error}"))?;
+
+    Ok(ResourceContent {
+        uri: crate::computer_use::COMPUTER_USE_READINESS_RESOURCE_URI.to_string(),
+        mime_type: "application/json".to_string(),
+        text,
+    })
+}
+
 /// Read scripts:// resource
 fn read_scripts_resource(scripts: &[Arc<Script>]) -> Result<ResourceContent, String> {
     let entries: Vec<ScriptResourceEntry> = scripts

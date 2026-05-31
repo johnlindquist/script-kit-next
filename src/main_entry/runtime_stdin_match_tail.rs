@@ -90,11 +90,8 @@
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenAiWithMockData => {
-                                logging::log(
-                                    "STDIN",
-                                    "Ignoring deprecated mock-data AI alias and opening Agent Chat",
-                                );
-                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
+                                logging::log("STDIN", "Opening standard Agent Chat mock fixture");
+                                view.open_standard_agent_chat_mock_fixture(ctx);
                             }
                             ExternalCommand::OpenMiniAiWithMockData => {
                                 logging::log(
@@ -616,13 +613,20 @@
                             }
                             ExternalCommand::PushDictationResult {
                                 ref transcript,
+                                ref partial_transcript,
                                 ref target,
                                 ref request_id,
                             } => {
                                 let rid = request_id.as_ref().map(|id| id.as_str());
                                 let target_label = target.as_deref().unwrap_or("unspecified");
+                                let resolution =
+                                    crate::dictation::resolve_final_or_partial_transcript(
+                                        transcript,
+                                        partial_transcript.as_deref(),
+                                    );
                                 match view.deliver_stdin_dictation_result(
                                     transcript.clone(),
+                                    partial_transcript.as_deref(),
                                     target.as_deref(),
                                     ctx,
                                 ) {
@@ -632,7 +636,10 @@
                                             event = "push_dictation_result_delivered",
                                             command = "pushDictationResult",
                                             request_id = ?rid,
-                                            transcript_len = transcript.len(),
+                                            transcript_len = resolution.transcript.as_ref().map_or(0, String::len),
+                                            final_transcript_len = resolution.final_len,
+                                            partial_transcript_len = ?resolution.partial_len,
+                                            partial_fallback_used = resolution.used_partial_fallback,
                                             requested_target = target_label,
                                             delivery_target = ?delivery_target,
                                             "pushDictationResult RPC delivered through dictation pipeline"
@@ -644,7 +651,10 @@
                                             event = "push_dictation_result_failed",
                                             command = "pushDictationResult",
                                             request_id = ?rid,
-                                            transcript_len = transcript.len(),
+                                            transcript_len = resolution.transcript.as_ref().map_or(0, String::len),
+                                            final_transcript_len = resolution.final_len,
+                                            partial_transcript_len = ?resolution.partial_len,
+                                            partial_fallback_used = resolution.used_partial_fallback,
                                             requested_target = target_label,
                                             error = %error,
                                             "pushDictationResult RPC failed"
