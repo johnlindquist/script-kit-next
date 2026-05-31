@@ -412,7 +412,7 @@ function notesState(elements: JsonObject, focus: JsonObject, text: JsonObject, r
   };
 }
 
-function classify(target: JsonObject, elements: JsonObject, coverage: ReturnType<typeof notesCoverage>) {
+function classify(target: JsonObject, elements: JsonObject, requiredMissing: string[]) {
   if (target.classification !== "ok") {
     return target.classification ?? "blocked-by-target-ambiguity";
   }
@@ -422,7 +422,7 @@ function classify(target: JsonObject, elements: JsonObject, coverage: ReturnType
   if (asArray(elements.nodes).length === 0) {
     return "blocked-by-missing-primitive";
   }
-  if (coverage.missingRuntimePrimitives.length > 0) {
+  if (requiredMissing.length > 0) {
     return "blocked-by-missing-primitive";
   }
   return "ok";
@@ -729,11 +729,10 @@ async function runInspect(args: Args) {
   const editorAnchor = asObject(state.editorAnchor);
   const editorScroll = asObject(editorAnchor.scroll);
   const previewAnchor = asObject(state.previewAnchor);
-  const missing = [
+  const requiredMissing = [
     ...new Set([
       ...(Array.isArray(elements.missingPrimitives) ? elements.missingPrimitives.map(String) : []),
       ...(Array.isArray(text.missingPrimitives) ? text.missingPrimitives.map(String) : []),
-      ...missingCoveragePrimitives(coverage, runtimeNotes),
       state.activeNoteId == null ? "active note id" : "",
       state.dirtyState == null ? "dirty state" : "",
       state.selectionRange == null ? "cursor and selection ranges" : "",
@@ -750,9 +749,19 @@ async function runInspect(args: Args) {
         : "",
       state.layout.editorRegion == null ? "notes editor layout region" : "",
       state.storage == null ? "note store generation and sandbox identity" : "",
+      state.focusTransitions == null ? "notes focus owner transition timeline" : "",
+    ].filter(Boolean)),
+  ];
+  const roadmapMissing = [
+    ...new Set([
+      ...missingCoveragePrimitives(coverage, runtimeNotes),
+      previewAnchor.previewEnabled === true && previewAnchor.scrollMetricsAvailable !== true
+        ? "preview scroll metrics"
+        : "",
+      "ACP embedded origin receipts",
+      "portal session provenance",
       state.commandBars == null ? "notes command bar runtime state" : "",
       state.shortcutRegistry == null ? "notes shortcut registry" : "",
-      state.focusTransitions == null ? "notes focus owner transition timeline" : "",
     ].filter(Boolean)),
   ];
 
@@ -760,7 +769,7 @@ async function runInspect(args: Args) {
     schemaVersion: 1,
     tool: "script-kit-devtools.notes",
     command: "notes.inspect",
-    classification: classify(target, elements, coverage),
+    classification: classify(target, elements, requiredMissing),
     session: args.session,
     openReceipt,
     openActionsReceipt,
@@ -791,12 +800,14 @@ async function runInspect(args: Args) {
       layout,
       state: stateEnvelope,
     },
-    missingPrimitives: missing,
+    missingPrimitives: requiredMissing,
+    roadmapMissingPrimitives: roadmapMissing,
     warnings: [
       ...(Array.isArray(elements.warnings) ? elements.warnings : []),
       ...(Array.isArray(focus.warnings) ? focus.warnings : []),
       ...(Array.isArray(text.warnings) ? text.warnings : []),
-      missing.length > 0 ? `Notes inspection remains fail-closed until missing primitives are available: ${missing.join(", ")}.` : "",
+      requiredMissing.length > 0 ? `Notes inspection remains fail-closed until required primitives are available: ${requiredMissing.join(", ")}.` : "",
+      roadmapMissing.length > 0 ? `Notes inspection roadmap primitives still missing: ${roadmapMissing.join(", ")}.` : "",
     ].filter(Boolean),
     errors: [target, elements, focus, text].filter((receipt) => receipt.status === "error"),
   }, null, 2));

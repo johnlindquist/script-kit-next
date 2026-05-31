@@ -149,6 +149,8 @@ function stableWindowKind(value: unknown) {
   if (value === "promptPopup") return "PromptPopup";
   if (value === "acpDetached") return "AcpDetached";
   if (value === "dictation") return "Dictation";
+  if (value === "miniAi") return "MiniAi";
+  if (value === "ai") return "Ai";
   if (value === "main") return "Main";
   if (value === "notes") return "Notes";
   return value ?? null;
@@ -164,6 +166,7 @@ function pickWindows(windows: JsonObject) {
     focused: window.focused ?? null,
     bounds: window.bounds ?? window.resolvedBounds ?? null,
     surfaceKind: window.surfaceKind ?? null,
+    semanticSurface: window.semanticSurface ?? null,
     appViewVariant: window.appViewVariant ?? null,
     parentAutomationId: window.parentAutomationId ?? window.parentWindowId ?? null,
     parentKind: window.parentKind ?? null,
@@ -209,6 +212,7 @@ function targetIdentity(args: Args, inspect: JsonObject, windows: JsonObject) {
       parentAutomationId: snapshot.parentAutomationId ?? snapshot.parentWindowId ?? listedWindow.parentAutomationId ?? null,
       openerAutomationId: snapshot.openerAutomationId ?? null,
       surfaceKind: snapshot.surfaceKind ?? null,
+      semanticSurface: snapshot.semanticSurface ?? listedWindow.semanticSurface ?? null,
       appViewVariant: snapshot.appViewVariant ?? null,
       nativeFooterSurface: snapshot.nativeFooterSurface ?? null,
       surfaceFamily: snapshot.surfaceFamily ?? null,

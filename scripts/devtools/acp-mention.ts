@@ -91,10 +91,70 @@ function responseOf(envelope: JsonObject): JsonObject {
   return (envelope.response as JsonObject | undefined) ?? envelope;
 }
 
+function asObject(value: unknown): JsonObject {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
+}
+
+function arrayOf(value: unknown): JsonObject[] {
+  return Array.isArray(value) ? value.filter((entry): entry is JsonObject => typeof entry === "object" && entry !== null) : [];
+}
+
 function assertFileToken(inputText: string, fileLabel: string) {
   const bad = inputText.match(/@(md|ts|rs|js|py):/);
   const good = inputText.includes(`@file:${fileLabel}`) || inputText.includes(`@file:"${fileLabel}"`);
   return { good, bad: bad?.[0] ?? null, inputText };
+}
+
+function acpTargetScore(window: JsonObject) {
+  const kind = String(window.windowKind ?? "").toLowerCase();
+  const semanticSurface = String(window.semanticSurface ?? window.surfaceKind ?? "").toLowerCase();
+  const automationId = String(window.automationId ?? "");
+  if (kind === "ai" || automationId === "ai") return 100;
+  if (semanticSurface === "acpchat") return 90;
+  if (kind === "acpdetached") return 80;
+  return 0;
+}
+
+export function resolveAcpTargetFromList(targetsReceipt: JsonObject) {
+  const targets = arrayOf(targetsReceipt.targets)
+    .map((window) => ({ window, score: acpTargetScore(window) }))
+    .filter(({ score, window }) => score > 0 && typeof window.automationId === "string")
+    .sort((left, right) => right.score - left.score);
+  const selected = targets[0]?.window ?? null;
+  return {
+    target: selected ? { type: "id", id: String(selected.automationId) } : null,
+    selected,
+    candidates: targets.map(({ window, score }) => ({ score, ...window })),
+  };
+}
+
+async function waitForAcpTarget(args: Args) {
+  const deadline = Date.now() + args.timeoutMs;
+  let lastTargets: JsonObject = {};
+  let lastResolution = resolveAcpTargetFromList(lastTargets);
+  while (Date.now() < deadline) {
+    lastTargets = await run(["bun", "scripts/devtools/targets.ts", "list", "--session", args.session], "targets.list");
+    lastResolution = resolveAcpTargetFromList(lastTargets);
+    if (lastResolution.target) {
+      return { targetsReceipt: lastTargets, targetResolution: lastResolution };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return { targetsReceipt: lastTargets, targetResolution: lastResolution };
+}
+
+async function waitForMainTarget(args: Args) {
+  const deadline = Date.now() + args.timeoutMs;
+  let lastTargets: JsonObject = {};
+  while (Date.now() < deadline) {
+    lastTargets = await run(["bun", "scripts/devtools/targets.ts", "list", "--session", args.session], "targets.list");
+    const main = arrayOf(lastTargets.targets).find((window) => window.automationId === "main");
+    if (main) {
+      return { targetsReceipt: lastTargets, main };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return { targetsReceipt: lastTargets, main: null };
 }
 
 async function main() {
@@ -104,19 +164,21 @@ async function main() {
     process.env.SCRIPT_KIT_SESSION_DIR = "/tmp/sk-agentic-sessions";
   }
 
+  const setupReceipts: JsonObject = {};
   if (args.start) {
-    await run(["bash", "scripts/agentic/session.sh", "start", args.session], "session-start");
+    setupReceipts.sessionStart = await run(["bash", "scripts/agentic/session.sh", "start", args.session], "session-start");
     for (let attempt = 0; attempt < 30; attempt += 1) {
       const status = await run(
         ["bash", "scripts/agentic/session.sh", "status", args.session],
         "session-status",
       );
+      setupReceipts.lastSessionStatus = status;
       if (status.healthy === true && status.alive === true) {
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-    await run(
+    setupReceipts.show = await run(
       [
         "bash",
         "scripts/agentic/session.sh",
@@ -129,7 +191,8 @@ async function main() {
       ],
       "session-show",
     );
-    await run(
+    setupReceipts.mainReady = await waitForMainTarget(args);
+    setupReceipts.openAi = await run(
       [
         "bash",
         "scripts/agentic/session.sh",
@@ -142,9 +205,8 @@ async function main() {
       ],
       "openAi",
     );
-    await new Promise((resolve) => setTimeout(resolve, 2000));
   } else {
-    await run(
+    setupReceipts.openAi = await run(
       [
         "bash",
         "scripts/agentic/session.sh",
@@ -157,10 +219,45 @@ async function main() {
       ],
       "openAi",
     );
-    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
-  const target = { type: "id", id: "ai" };
+  let { targetsReceipt, targetResolution } = await waitForAcpTarget(args);
+  const firstTargetResolution = targetResolution;
+  if (!targetResolution.target) {
+    setupReceipts.openAiRetry = await run(
+      [
+        "bash",
+        "scripts/agentic/session.sh",
+        "send",
+        args.session,
+        JSON.stringify({ type: "openAi" }),
+        "--await-parse",
+        "--timeout",
+        String(args.timeoutMs),
+      ],
+      "openAi-retry",
+    );
+    ({ targetsReceipt, targetResolution } = await waitForAcpTarget(args));
+  }
+  const target = targetResolution.target;
+  if (!target) {
+    console.log(JSON.stringify({
+      schemaVersion: 1,
+      tool: "script-kit-devtools.acp-mention",
+      command: "verify",
+      session: args.session,
+      classification: "blocked-by-target-ambiguity",
+      reason: "noAcpTargetAfterOpenAi",
+      fileLabel: args.fileLabel,
+      setupReceipts,
+      firstTargetResolution,
+      targetResolution,
+      targetsReceipt,
+      cleanup: { command: `bash scripts/agentic/session.sh stop ${args.session}` },
+    }, null, 2));
+    process.exit(1);
+  }
+
   // Picker is two-level: `@` → `@file` category → basename row (e.g. CLAUDE.md).
   const batchPayload = {
     type: "batch",
@@ -189,9 +286,16 @@ async function main() {
   const state = responseOf(stateEnvelope);
   const inputText = String(state.inputText ?? "");
   const tokenCheck = assertFileToken(inputText, args.fileLabel);
+  const batchFailure = asObject(batch.failure);
 
   const classification =
-    batch.success === true && tokenCheck.good && !tokenCheck.bad ? "fixed" : "blocked-by-missing-primitive";
+    batch.success === true && tokenCheck.good && !tokenCheck.bad
+      ? "ok"
+      : batch.success === true
+        ? "reproduced"
+        : String(batchFailure.message ?? "").includes("target resolution")
+          ? "blocked-by-target-ambiguity"
+          : "blocked-by-missing-primitive";
 
   const report = {
     schemaVersion: 1,
@@ -200,23 +304,29 @@ async function main() {
     session: args.session,
     classification,
     fileLabel: args.fileLabel,
+    setupReceipts,
+    firstTargetResolution,
+    targetResolution,
     batch,
     acpState: {
       inputText,
       lastAcceptedItem: state.lastAcceptedItem ?? null,
       picker: state.picker ?? null,
+      resolvedTarget: state.resolvedTarget ?? null,
     },
     tokenCheck,
     cleanup: { command: `bash scripts/agentic/session.sh stop ${args.session}` },
   };
 
   console.log(JSON.stringify(report, null, 2));
-  if (classification !== "fixed") {
+  if (classification !== "ok") {
     process.exit(1);
   }
 }
 
-main().catch((error) => {
+if (import.meta.main) {
+  main().catch((error) => {
   console.error(JSON.stringify({ status: "error", message: String(error) }, null, 2));
   process.exit(1);
-});
+  });
+}

@@ -98,6 +98,40 @@ function asNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+export function notesScrollFromState(state: JsonObject) {
+  const notes = asObject(state.notes);
+  const view = asObject(notes.view);
+  const editorAnchor = asObject(notes.editorAnchor);
+  const previewAnchor = asObject(notes.previewAnchor);
+  const previewEnabled = previewAnchor.previewEnabled === true || view.previewEnabled === true;
+  const owner = previewEnabled ? "notes.preview" : "notes.editor";
+  const anchor = previewEnabled ? previewAnchor : editorAnchor;
+  const scroll = asObject(anchor.scroll);
+  const scrollHeight = asNumber(scroll.scrollHeight);
+  const clientHeight = asNumber(scroll.clientHeight);
+  return {
+    owner,
+    activeNoteId: notes.activeNoteId ?? null,
+    generation: asObject(notes.generations).state ?? null,
+    scrollTop: asNumber(scroll.scrollTop),
+    contentHeight: scrollHeight,
+    viewportHeight: clientHeight,
+    safeViewportHeight: clientHeight,
+    maxScrollTop: scrollHeight != null && clientHeight != null ? Math.max(0, scrollHeight - clientHeight) : null,
+    selectedIndex: null,
+    selectedRowTop: null,
+    selectedRowBottom: null,
+    selectedRowVisible: null,
+    selectedRowAboveFooter: null,
+    itemCount: asObject(notes.counts).noteCount ?? null,
+    anchor,
+  };
+}
+
+function mainListScrollFromState(state: JsonObject) {
+  return asObject(state.mainListScroll);
+}
+
 function classify(targetReceipt: JsonObject, stateEnvelope: JsonObject, scroll: JsonObject) {
   if (targetReceipt.classification !== "ok") {
     return targetReceipt.classification ?? "blocked-by-target-ambiguity";
@@ -105,7 +139,7 @@ function classify(targetReceipt: JsonObject, stateEnvelope: JsonObject, scroll: 
   if (stateEnvelope.status === "error") {
     return "blocked-by-timeout";
   }
-  if (Object.keys(scroll).length === 0) {
+  if (Object.keys(scroll).length === 0 || scroll.scrollTop == null || scroll.viewportHeight == null) {
     return "blocked-by-missing-primitive";
   }
   return "ok";
@@ -122,7 +156,11 @@ async function main() {
     summaryOnly: true,
   }, "stateResult", args.timeoutMs);
   const state = responseOf(stateEnvelope);
-  const scroll = asObject(state.mainListScroll);
+  const resolved = asObject(targetReceipt.resolvedTarget);
+  const resolvedKind = String(resolved.targetKind ?? "").toLowerCase();
+  const resolvedSurface = String(resolved.semanticSurface ?? resolved.surfaceKind ?? "").toLowerCase();
+  const isNotesTarget = resolvedKind === "notes" || resolvedSurface === "notes";
+  const scroll = isNotesTarget ? notesScrollFromState(state) : mainListScrollFromState(state);
   const contentHeight = asNumber(scroll.contentHeight);
   const viewportHeight = asNumber(scroll.viewportHeight);
   const maxScrollTop = asNumber(scroll.maxScrollTop);
@@ -153,6 +191,9 @@ async function main() {
       selectedRowVisible: scroll.selectedRowVisible ?? null,
       selectedRowAboveFooter: scroll.selectedRowAboveFooter ?? null,
       itemCount: scroll.itemCount ?? state.visibleChoiceCount ?? null,
+      owner: scroll.owner ?? (isNotesTarget ? "notes.unknown" : "main.list"),
+      activeNoteId: scroll.activeNoteId ?? null,
+      generation: scroll.generation ?? null,
     },
     resizePressure: {
       overflowY: canScrollY,
@@ -160,7 +201,9 @@ async function main() {
       selectedRowOccluded: scroll.selectedRowVisible === false || scroll.selectedRowAboveFooter === false,
     },
     missingPrimitives: [
-      Object.keys(scroll).length === 0 ? "mainListScroll" : "",
+      Object.keys(scroll).length === 0 || scroll.scrollTop == null || scroll.viewportHeight == null
+        ? isNotesTarget ? "notesScrollMetrics" : "mainListScroll"
+        : "",
       stateEnvelope.status === "error" ? "stateResult" : "",
       targetReceipt.classification !== "ok" ? "strictTargetIdentity" : "",
     ].filter(Boolean),
@@ -169,4 +212,6 @@ async function main() {
   }, null, 2));
 }
 
-await main();
+if (import.meta.main) {
+  await main();
+}
