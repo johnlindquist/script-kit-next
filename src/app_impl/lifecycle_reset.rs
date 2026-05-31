@@ -41,8 +41,7 @@ impl ScriptListApp {
         self.reset_to_script_list(cx);
 
         let (grouped_items, _) = self.get_grouped_results_cached();
-        let sizing =
-            crate::window_resize::main_window_sizing_from_grouped_items(&grouped_items);
+        let sizing = crate::window_resize::main_window_sizing_from_grouped_items(&grouped_items);
         let target = crate::window_resize::MainMenuSizingTarget(sizing);
         let window_size = size(px(target.width()), target.height());
         let bounds = calculate_eye_line_bounds_on_mouse_display(window_size);
@@ -610,12 +609,12 @@ impl ScriptListApp {
             // Reset the flag since we're now in main menu
             self.opened_from_main_menu = false;
 
-            // Sync input and reset placeholder to the active accent variation id
-            let accent_placeholder = self.current_accent_variation.placeholder();
+            // Sync input and reset placeholder to the active main-menu theme id
+            let theme_placeholder = self.current_main_menu_theme.placeholder();
             self.gpui_input_state.update(cx, |state, cx| {
                 state.set_value("", window, cx);
                 state.set_selection(0, 0, window, cx);
-                state.set_placeholder(accent_placeholder, window, cx);
+                state.set_placeholder(theme_placeholder, window, cx);
             });
 
             // Clear actions popup state (prevents stale overlay on return to menu)
@@ -633,18 +632,12 @@ impl ScriptListApp {
     }
 
     pub(crate) fn mark_opened_from_main_menu(&mut self, reason: &'static str) {
-        logging::log(
-            "NAV",
-            &format!("launch_origin=main_menu reason={reason}"),
-        );
+        logging::log("NAV", &format!("launch_origin=main_menu reason={reason}"));
         self.opened_from_main_menu = true;
     }
 
     pub(crate) fn mark_opened_directly(&mut self, reason: &'static str) {
-        logging::log(
-            "NAV",
-            &format!("launch_origin=direct reason={reason}"),
-        );
+        logging::log("NAV", &format!("launch_origin=direct reason={reason}"));
         self.opened_from_main_menu = false;
     }
 }

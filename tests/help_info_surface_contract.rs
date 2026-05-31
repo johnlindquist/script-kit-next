@@ -49,6 +49,56 @@ fn info_state_keeps_context_first_acp_copy() {
 }
 
 #[test]
+fn composer_empty_info_state_uses_main_view_columns_not_centered_card() {
+    let info = fs::read_to_string("src/components/info_state.rs")
+        .expect("failed to read src/components/info_state.rs");
+
+    assert!(
+        !info.contains("InfoStateLayout::Centered | InfoStateLayout::ComposerEmpty"),
+        "ComposerEmpty must not alias the old centered narrow help-card branch"
+    );
+    assert!(info.contains("InfoStateLayout::MainViewColumns"));
+    assert!(info.contains("main_view_content_columns(def)"));
+    assert!(info.contains(".pl(px(cols.text_column_x))"));
+    assert!(info.contains(".pr(px(cols.content_right_inset_x))"));
+    assert!(info.contains(".pt(px(cols.top_inset_y))"));
+    assert!(
+        info.contains(
+            "render_info_content(&spec, theme, palette, metrics, !uses_main_view_columns)"
+        ),
+        "main-view info layouts should not keep the old fixed max-width cap"
+    );
+}
+
+#[test]
+fn acp_empty_guidance_uses_comfortable_main_view_density() {
+    let info = fs::read_to_string("src/components/info_state.rs")
+        .expect("failed to read src/components/info_state.rs");
+    let spec = section_between(
+        &info,
+        "pub(crate) fn acp_empty_guidance_spec",
+        "pub(crate) fn render_acp_empty_guidance",
+    );
+
+    assert!(spec.contains(".layout(InfoStateLayout::ComposerEmpty)"));
+    assert!(spec.contains(".density(InfoStateDensity::Comfortable)"));
+}
+
+#[test]
+fn acp_empty_guidance_slot_does_not_center_the_info_state() {
+    let acp = fs::read_to_string("src/ai/acp/view.rs").expect("failed to read src/ai/acp/view.rs");
+    let middle = section_between(&acp, "fn render_acp_middle_area", "if show_sidecar");
+
+    assert!(middle.contains("render_acp_empty_guidance"));
+    assert!(
+        !middle.contains(".items_center()") && !middle.contains(".justify_center()"),
+        "Acp middle area must not center ComposerEmpty; InfoState owns that layout"
+    );
+    assert!(middle.contains(".w_full()"));
+    assert!(middle.contains(".h_full()"));
+}
+
+#[test]
 fn info_guidance_shortcuts_use_footer_keycaps_not_hint_strip() {
     let info = fs::read_to_string("src/components/info_state.rs")
         .expect("failed to read src/components/info_state.rs");

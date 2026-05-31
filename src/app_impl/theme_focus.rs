@@ -28,57 +28,58 @@ impl ScriptListApp {
         }
     }
 
-    /// Cycle the live accent-color exploration variation for the main menu.
+    /// Cycle the live cohesive theme exploration variation for the main menu.
     ///
     /// Mirrors the old `cycle_design` pattern: mutate state, log, surface the
     /// active variation (as a toast and in the search placeholder), then notify.
     /// Triggered by `alt+left` (`forward = false`) / `alt+right`
     /// (`forward = true`) from the arrow interceptor and the ScriptList key
     /// handler.
-    pub(crate) fn cycle_accent_variation(
+    pub(crate) fn cycle_main_menu_theme(
         &mut self,
         forward: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let old_variation = self.current_accent_variation;
-        let new_variation = if forward {
-            old_variation.next()
+        let old_theme = self.current_main_menu_theme;
+        let new_theme = if forward {
+            old_theme.next()
         } else {
-            old_variation.prev()
+            old_theme.prev()
         };
 
         info!(
-            target: "ACCENT",
-            old_variation = old_variation.name(),
-            old_index = old_variation.index(),
-            new_variation = new_variation.name(),
-            new_index = new_variation.index(),
-            total_variations = crate::designs::AccentVariation::COUNT,
-            "Cycling accent variation"
+            target: "THEME",
+            old_theme = old_theme.name(),
+            old_index = old_theme.index(),
+            new_theme = new_theme.name(),
+            new_index = new_theme.index(),
+            total_themes = crate::designs::MainMenuThemeVariant::COUNT,
+            "Cycling main menu theme"
         );
 
-        self.current_accent_variation = new_variation;
+        self.current_main_menu_theme = new_theme;
         // Mirror into the process-global so the native AppKit footer host (which
-        // runs outside the GPUI render tree) can read the active variation when
+        // runs outside the GPUI render tree) can read the active theme when
         // it rebuilds on the next `sync_main_footer_popup`. See
-        // `crate::designs::current_accent_variation`.
-        crate::designs::set_current_accent_variation(new_variation);
+        // `crate::designs::current_main_menu_theme`.
+        crate::designs::set_current_main_menu_theme(new_theme);
+        self.refresh_main_menu_theme_layout_metrics("cycle_main_menu_theme", cx);
 
-        // Surface the active variation in the search placeholder so it stays
+        // Surface the active theme in the search placeholder so it stays
         // identifiable while browsing the (empty-filter) list.
         let input_state = self.gpui_input_state.clone();
         input_state.update(cx, |state, cx| {
-            state.set_placeholder(new_variation.placeholder(), window, cx);
+            state.set_placeholder(new_theme.placeholder(), window, cx);
         });
 
         self.toast_manager.push(
             components::toast::Toast::info(
                 format!(
-                    "Accent {}/{}: {}",
-                    new_variation.index() + 1,
-                    crate::designs::AccentVariation::COUNT,
-                    new_variation.name()
+                    "Theme {}/{}: {}",
+                    new_theme.index() + 1,
+                    crate::designs::MainMenuThemeVariant::COUNT,
+                    new_theme.name()
                 ),
                 &self.theme,
             )
@@ -86,6 +87,34 @@ impl ScriptListApp {
         );
 
         cx.notify();
+    }
+
+    pub(crate) fn refresh_main_menu_theme_layout_metrics(
+        &mut self,
+        reason: &'static str,
+        _cx: &mut Context<Self>,
+    ) {
+        let average_item_height =
+            crate::list_item::effective_average_item_height_for_scroll_for_theme(
+                self.current_main_menu_theme,
+            );
+        self.main_list_state = ListState::new(
+            self.main_list_state.item_count(),
+            ListAlignment::Top,
+            px(average_item_height),
+        );
+        self.main_list_row_generation = self.main_list_row_generation.wrapping_add(1);
+        self.last_scrolled_index = None;
+        self.wheel_accum = 0.0;
+        tracing::info!(
+            target: "THEME",
+            reason,
+            theme = self.current_main_menu_theme.name(),
+            row_height = self.current_main_menu_theme.def().list.item_height,
+            average_item_height,
+            row_generation = self.main_list_row_generation,
+            "refreshed main menu theme list metrics"
+        );
     }
 
     pub(crate) fn update_theme(&mut self, cx: &mut Context<Self>) {
@@ -158,11 +187,8 @@ impl ScriptListApp {
         // Show toast with current opacity level
         let percent = (new_opacity * 100.0).round() as i32;
         self.toast_manager.push(
-            components::toast::Toast::info(
-                format!("Opacity: {}%", percent),
-                &self.theme,
-            )
-            .duration_ms(Some(TOAST_INFO_MS)),
+            components::toast::Toast::info(format!("Opacity: {}%", percent), &self.theme)
+                .duration_ms(Some(TOAST_INFO_MS)),
         );
 
         cx.notify();
@@ -282,7 +308,11 @@ impl ScriptListApp {
     /// is focused. This applies focus exactly once, then clears pending_focus.
     ///
     /// Returns true if focus was applied (for logging/debugging).
-    pub(crate) fn apply_pending_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn apply_pending_focus(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let Some(target) = self.pending_focus.take() else {
             return false;
         };
@@ -415,7 +445,6 @@ impl ScriptListApp {
 
         true
     }
-
 }
 
 #[cfg(test)]

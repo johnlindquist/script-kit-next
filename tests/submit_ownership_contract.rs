@@ -4,6 +4,7 @@ const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
 const STARTUP_NEW_PRELUDE: &str = include_str!("../src/app_impl/startup_new_prelude.rs");
 const SELECTION_FALLBACK: &str = include_str!("../src/app_impl/selection_fallback.rs");
 const SUBMIT_DIAGNOSTICS: &str = include_str!("../src/app_impl/submit_diagnostics.rs");
+const FILTERING_CACHE: &str = include_str!("../src/app_impl/filtering_cache.rs");
 const THEME_CHOOSER: &str = include_str!("../src/render_builtins/theme_chooser.rs");
 const LIFECYCLE_RESET: &str = include_str!("../src/app_impl/lifecycle_reset.rs");
 const PROTOCOL_QUERY_VARIANTS: &str = include_str!("../src/protocol/message/variants/query_ops.rs");
@@ -187,5 +188,34 @@ fn get_state_exposes_submit_diagnostics_receipt() {
             && DEVTOOLS_ACT.contains("sourceAfter.submitDiagnostics")
             && DEVTOOLS_ACT.contains("submitDiagnostics: {\n      before: before.submitDiagnostics ?? null,\n      after: after.submitDiagnostics ?? null,"),
         "DevTools act/focus receipts must expose before/after submit diagnostics"
+    );
+}
+
+#[test]
+fn empty_spine_subsearch_prefixes_are_not_submit_armed() {
+    assert!(
+        FILTERING_CACHE.contains("gets a selected guard row before native recents")
+            && FILTERING_CACHE.contains("Down/click remains explicit")
+            && FILTERING_CACHE.contains("prepend_empty_context_subsearch_guard("),
+        "rich subsearch routing must document and install the neutral empty-prefix guard before native rows are armed"
+    );
+
+    let rich_classifier = source_window(FILTERING_CACHE, "fn active_rich_spine_subsearch(", 900);
+    assert!(
+        rich_classifier.contains("query.trim().to_string()"),
+        "empty @file:/@clipboard:/@history: prefixes must keep using the rich path so the selected guard can precede native rows"
+    );
+    assert!(
+        FILTERING_CACHE.contains("SpineListAction::AwaitContextSubsearchInput")
+            && FILTERING_CACHE.contains("spine:context-subsearch:{prefix}:empty-guard"),
+        "empty context subsearch guard must be a selectable Spine row with a consuming action"
+    );
+    assert!(
+        FILTERING_CACHE.contains("SpineListAction::AwaitContextSubsearchInput")
+            && include_str!("../src/app_impl/filter_input_updates.rs")
+                .contains("event = \"empty_context_subsearch_enter_consumed\"")
+            && include_str!("../src/app_impl/filter_input_updates.rs")
+                .contains("SpineListAction::AwaitContextSubsearchInput { source } =>"),
+        "empty context subsearch guard must consume Enter instead of falling through like Noop"
     );
 }

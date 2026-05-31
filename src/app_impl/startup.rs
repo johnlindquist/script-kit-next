@@ -100,12 +100,7 @@ impl ScriptListApp {
     /// Re-seed the cwd-pick FileSearchView with `query` (e.g. "/"), keeping the
     /// shared gpui input in sync without re-triggering the filter change
     /// handler.
-    fn reseed_cwd_pick_query(
-        &mut self,
-        query: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn reseed_cwd_pick_query(&mut self, query: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.open_file_search_view(query.to_string(), FileSearchPresentation::Full, cx);
         self.suppress_filter_events = true;
         self.gpui_input_state.update(cx, |state, cx| {
@@ -577,8 +572,8 @@ impl ScriptListApp {
 
         let gpui_input_state = cx.new(|cx| {
             InputState::new(window, cx)
-                // Placeholder identifies the active accent-exploration variation.
-                .placeholder(crate::designs::AccentVariation::default().placeholder())
+                // Placeholder identifies the active main-menu theme exploration variation.
+                .placeholder(crate::designs::MainMenuThemeVariant::default().placeholder())
                 .inline_completion_visible_without_focus(true)
         });
         let gpui_input_subscription = cx.subscribe_in(&gpui_input_state, window, {
@@ -718,6 +713,10 @@ impl ScriptListApp {
                                 "KEY",
                                 "Ignoring PressEnter: prompt submit already consumed this Enter",
                             );
+                            return;
+                        }
+                        if this.try_handle_spine_enter(window, cx) {
+                            logging::log("KEY", "PressEnter: spine consumed");
                             return;
                         }
                         // Check if we're in fallback mode first
@@ -998,8 +997,8 @@ impl ScriptListApp {
             scriptlet_preview_cache_lines: Vec::new(),
             // Design system: start with default design
             current_design: DesignVariant::default(),
-            // Accent-color exploration: start on the first variation (Row Tint)
-            current_accent_variation: crate::designs::AccentVariation::default(),
+            // Cohesive main-menu theme exploration: start on the first variation.
+            current_main_menu_theme: crate::designs::MainMenuThemeVariant::default(),
             // Toast manager: initialize for error notifications
             toast_manager: ToastManager::new(),
             // Clipboard image cache: decoded RenderImages for thumbnails/preview
@@ -1785,7 +1784,7 @@ impl ScriptListApp {
                             {
                                 return;
                             }
-                            this.cycle_accent_variation(is_right, window, cx);
+                            this.cycle_main_menu_theme(is_right, window, cx);
                         });
                     }
                     cx.stop_propagation();
@@ -2942,5 +2941,35 @@ impl ScriptListApp {
         app.rebuild_main_window_preflight_if_needed();
 
         app
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    #[test]
+    fn atfile_regression_input_press_enter_routes_spine_before_default_execute_selected() {
+        let source = fs::read_to_string("src/app_impl/startup.rs")
+            .expect("Failed to read src/app_impl/startup.rs");
+        let press_enter_pos = source
+            .find("InputEvent::PressEnter")
+            .expect("InputEvent::PressEnter handler not found");
+        let press_enter_section =
+            &source[press_enter_pos..(press_enter_pos + 4500).min(source.len())];
+        let consume_pos = press_enter_section
+            .find("should_consume_script_list_enter_after_submit")
+            .expect("submit-consume guard not found in PressEnter handler");
+        let spine_pos = press_enter_section
+            .find("this.try_handle_spine_enter(window, cx)")
+            .expect("PressEnter must route Spine row acceptance");
+        let execute_pos = press_enter_section
+            .find("this.execute_selected(cx);")
+            .expect("default execute_selected call not found in PressEnter handler");
+
+        assert!(
+            consume_pos < spine_pos && spine_pos < execute_pos,
+            "InputEvent::PressEnter must run submit guard, then Spine row acceptance, before default execute_selected"
+        );
     }
 }

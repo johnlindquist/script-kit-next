@@ -769,7 +769,8 @@ fn submit_with_scriptlet_authoring_intent_includes_artifact_authoring_guidance()
     .expect("submission should build");
 
     assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
-    assert!(submission.contains("~/.scriptkit/plugins/main/scriptlets/<name>.md"));
+    assert!(submission.contains("scripts/todo-app.ts"));
+    assert!(submission.contains("~/.scriptkit/plugins/main/scripts/<name>.ts"));
     assert!(submission.contains("~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md"));
     assert!(submission.contains("User intent:\nCreate a scriptlet bundle that copies today's date"));
 }
@@ -839,7 +840,8 @@ fn artifact_authoring_block_appears_between_context_and_intent() {
         "authoring block must come before user intent"
     );
     assert!(!submission.contains("<scriptKitHints>"));
-    assert!(submission.contains("~/.scriptkit/plugins/main/agents/<name>.<backend>.md"));
+    assert!(submission.contains("~/.scriptkit/plugins/main/scripts/<name>.ts"));
+    assert!(submission.contains("SK_VERIFY=1 bun ~/.scriptkit/plugins/main/scripts/<name>.ts"));
     assert!(submission.contains("User intent:\nGenerate a Script Kit agent for PR review"));
 }
 

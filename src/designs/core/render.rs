@@ -132,7 +132,7 @@ pub(crate) fn resolve_tool_badge(result: &SearchResult, is_filtering: bool) -> O
 #[allow(clippy::too_many_arguments)]
 pub fn render_design_item(
     variant: DesignVariant,
-    accent_variation: crate::designs::AccentVariation,
+    main_menu_theme: crate::designs::MainMenuThemeVariant,
     result: &SearchResult,
     index: usize,
     is_selected: bool,
@@ -443,7 +443,7 @@ pub fn render_design_item(
                 .description_opt(description)
                 .selected(is_selected)
                 .hovered(is_hovered)
-                .accent_variation(accent_variation)
+                .main_menu_theme(main_menu_theme)
                 .highlight_indices_opt(highlight_indices)
                 .description_highlight_indices_opt(description_highlight_indices)
                 .type_accessory_opt(type_accessory)

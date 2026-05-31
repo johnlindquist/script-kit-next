@@ -39,6 +39,7 @@
 //! the UMBRELLA functions one level up.
 
 const DISPATCH: &str = include_str!("../src/app_impl/trigger_builtin_dispatch.rs");
+const LIFECYCLE_RESET: &str = include_str!("../src/app_impl/lifecycle_reset.rs");
 
 fn body_of<'a>(fn_name: &str, file: &'a str) -> &'a str {
     let start = file.find(fn_name).unwrap_or_else(|| {
@@ -107,23 +108,30 @@ fn apply_trigger_builtin_body_has_no_current_view_gate() {
 #[test]
 fn dispatch_clears_opened_from_main_menu_before_registry_resolve() {
     let body = body_of("pub fn dispatch_trigger_builtin_name(", DISPATCH);
-    let clear_idx = body.find("self.opened_from_main_menu = false;").expect(
-        "`dispatch_trigger_builtin_name` must contain \
-             `self.opened_from_main_menu = false;` — that unconditional \
-             clear is what lets ESC close the window (not return to \
-             main) across all three legacy call sites the dispatcher \
-             collapsed. Removing it would re-introduce the Run 1-era \
-             ESC-returns-to-main bug for cross-view triggers.",
-    );
+    let clear_idx = body
+        .find("self.mark_opened_directly(\"protocol\");")
+        .expect(
+            "`dispatch_trigger_builtin_name` must mark the launch origin as \
+             direct — that unconditional clear is what lets ESC close the \
+             window (not return to main) across all three legacy call sites \
+             the dispatcher collapsed. Removing it would re-introduce the \
+             Run 1-era ESC-returns-to-main bug for cross-view triggers.",
+        );
     let resolve_idx = body
         .find("trigger_registry().resolve(")
         .expect("registry resolve call must exist in dispatch body");
     assert!(
         clear_idx < resolve_idx,
-        "`self.opened_from_main_menu = false;` must appear BEFORE the \
+        "`self.mark_opened_directly(\"protocol\");` must appear BEFORE the \
          `trigger_registry().resolve(` call. Reordering (or making the \
          clear conditional on resolve success) would restore the \
          ESC-returns-to-main bug for unknown-name triggers. Body was:\n{}",
         body
+    );
+    assert!(
+        LIFECYCLE_RESET.contains("pub(crate) fn mark_opened_directly")
+            && LIFECYCLE_RESET.contains("self.opened_from_main_menu = false;"),
+        "`mark_opened_directly` must remain the helper that clears \
+         opened_from_main_menu"
     );
 }

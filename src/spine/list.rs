@@ -126,6 +126,9 @@ pub enum SpineListAction {
     OpenConversation {
         conversation_id: SharedString,
     },
+    AwaitContextSubsearchInput {
+        source: SharedString,
+    },
     Noop,
 }
 
@@ -136,6 +139,7 @@ impl SpineListRow {
             .map(|label| label.as_ref())
             .unwrap_or(match self.action {
                 SpineListAction::Noop => "No Action",
+                SpineListAction::AwaitContextSubsearchInput { .. } => "Type",
                 SpineListAction::OpenModeExit { .. } => "Open",
                 SpineListAction::OpenConversation { .. } => "Open Conversation",
                 SpineListAction::InsertSegmentText { .. }

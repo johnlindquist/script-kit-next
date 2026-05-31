@@ -222,7 +222,9 @@ impl FocusedTextContextStatus {
                     "Unable to grab text from this field. Select text and try again."
                 }
                 "staleSession" => "The focused text session expired. Try again.",
-                "platform" => "Unable to grab text due to a system error. Select text and try again.",
+                "platform" => {
+                    "Unable to grab text due to a system error. Select text and try again."
+                }
                 _ => "Unable to grab text. Select text and try again.",
             }),
         }
@@ -7197,6 +7199,12 @@ impl AcpChatView {
         else {
             return false;
         };
+        Self::acp_spine_segment_kind_has_context_projection(kind)
+    }
+
+    fn acp_spine_segment_kind_has_context_projection(
+        kind: &crate::spine::SpineSegmentKind,
+    ) -> bool {
         matches!(
             kind,
             crate::spine::SpineSegmentKind::ContextMention { .. }
@@ -7204,6 +7212,7 @@ impl AcpChatView {
                 | crate::spine::SpineSegmentKind::Profile { .. }
                 | crate::spine::SpineSegmentKind::Style { .. }
                 | crate::spine::SpineSegmentKind::Capture { .. }
+                | crate::spine::SpineSegmentKind::ListFilter { .. }
                 | crate::spine::SpineSegmentKind::ProjectCwd { .. }
         )
     }
@@ -7662,6 +7671,7 @@ impl AcpChatView {
                 }
                 ok
             }
+            SpineListAction::AwaitContextSubsearchInput { .. } => true,
             SpineListAction::OpenModeExit { .. }
             | SpineListAction::OpenConversation { .. }
             | SpineListAction::Noop => false,
@@ -7974,11 +7984,10 @@ impl AcpChatView {
         }
         if is_empty {
             return div()
-                .flex_grow()
+                .flex_1()
                 .min_h(px(0.0))
-                .flex()
-                .items_center()
-                .justify_center()
+                .w_full()
+                .h_full()
                 .child(crate::components::render_acp_empty_guidance(theme))
                 .into_any_element();
         }
@@ -8264,6 +8273,64 @@ impl AcpChatView {
     }
 
     #[allow(clippy::too_many_arguments)]
+    fn render_composer_input_shell(
+        input_text: &str,
+        input_cursor: usize,
+        input_selection: TextSelection,
+        cursor_visible: bool,
+        is_empty: bool,
+        mention_highlights: &[TextHighlightRange],
+        pasted_text_pills: &[TextInlinePillRange],
+        placeholder_text: Rgba,
+        profile_icon_name: Option<&str>,
+        profile_active_pending: bool,
+        weak_view: WeakEntity<AcpChatView>,
+        theme: &crate::theme::Theme,
+    ) -> gpui::AnyElement {
+        let menu_def = crate::designs::current_main_menu_theme().def();
+        let input_body = Self::render_composer_input_text(
+            input_text,
+            input_cursor,
+            input_selection,
+            cursor_visible,
+            if is_empty {
+                "Ask anything\u{2026}"
+            } else {
+                "Follow up\u{2026}"
+            },
+            true,
+            mention_highlights,
+            pasted_text_pills,
+            placeholder_text,
+            theme,
+            None,
+        );
+        let profile_icon = Self::render_input_profile_icon(
+            "agent-chat-input-profile-icon",
+            profile_icon_name,
+            profile_active_pending,
+            weak_view,
+            theme,
+        );
+
+        crate::components::main_view_chrome::render_main_view_input_shell(
+            theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewInputChrome {
+                body: input_body,
+                leading: Some(
+                    crate::components::main_view_chrome::render_main_view_state_icon(
+                        theme,
+                        menu_def,
+                        "message-circle",
+                    ),
+                ),
+                trailing: vec![profile_icon],
+            },
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn render_composer_bar(
         input_text: &str,
         input_cursor: usize,
@@ -8278,43 +8345,29 @@ impl AcpChatView {
         weak_view: WeakEntity<AcpChatView>,
         theme: &crate::theme::Theme,
     ) -> gpui::AnyElement {
-        div()
-            .w_full()
-            .px(px(Self::ACP_INPUT_PADDING_X))
-            .py(px(Self::ACP_INPUT_PADDING_Y))
-            .flex()
-            .flex_row()
-            .items_center()
-            .child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .child(Self::render_composer_input_text(
-                        input_text,
-                        input_cursor,
-                        input_selection,
-                        cursor_visible,
-                        if is_empty {
-                            "Ask anything\u{2026}"
-                        } else {
-                            "Follow up\u{2026}"
-                        },
-                        true,
-                        mention_highlights,
-                        pasted_text_pills,
-                        placeholder_text,
-                        theme,
-                        None,
-                    )),
-            )
-            .child(Self::render_input_profile_icon(
-                "agent-chat-input-profile-icon",
-                profile_icon_name,
-                profile_active_pending,
-                weak_view,
-                theme,
-            ))
-            .into_any_element()
+        let menu_def = crate::designs::current_main_menu_theme().def();
+        let input = Self::render_composer_input_shell(
+            input_text,
+            input_cursor,
+            input_selection,
+            cursor_visible,
+            is_empty,
+            mention_highlights,
+            pasted_text_pills,
+            placeholder_text,
+            profile_icon_name,
+            profile_active_pending,
+            weak_view,
+            theme,
+        );
+        crate::components::main_view_chrome::render_main_view_header(
+            crate::components::main_view_chrome::MainViewHeaderChrome {
+                input,
+                padding_x: menu_def.shell.header_padding_x,
+                padding_y: menu_def.shell.header_padding_y,
+                gap: menu_def.shell.header_gap,
+            },
+        )
     }
 
     pub(crate) fn focused_text_mini_sizing_count(&self, cx: &App) -> Option<usize> {
@@ -13171,6 +13224,7 @@ impl Render for AcpChatView {
         let history_popup_open = self.history_menu.is_some();
         let _colors = Self::prompt_colors();
         let theme = theme::get_cached_theme();
+        let menu_def = crate::designs::current_main_menu_theme().def();
         let chrome = AppChromeColors::from_theme(&theme);
         let placeholder_text = rgba(chrome.placeholder_text_rgba);
         let mention_accent = theme.colors.accent.selected;
@@ -13285,11 +13339,7 @@ impl Render for AcpChatView {
                 .into_any_element();
         }
 
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .relative()
+        let root = crate::components::main_view_chrome::render_main_view_shell()
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
                 let key = event.keystroke.key.as_str();
@@ -13320,7 +13370,245 @@ impl Render for AcpChatView {
             }))
             .on_any_mouse_down(cx.listener(|this, _event, _window, cx| {
                 this.dismiss_mention_picker(cx);
-            }))
+            }));
+
+        if matches!(variant_config.composer, AcpComposerPlacement::Default) {
+            let input = Self::render_composer_input_shell(
+                &input_text,
+                input_cursor,
+                input_selection,
+                cursor_visible,
+                is_empty,
+                &mention_highlights,
+                &pasted_text_pills,
+                placeholder_text,
+                profile_icon_name.as_deref(),
+                profile_active_pending,
+                view_entity.clone(),
+                &theme,
+            );
+            let header = crate::components::main_view_chrome::MainViewHeaderChrome {
+                input,
+                padding_x: menu_def.shell.header_padding_x,
+                padding_y: menu_def.shell.header_padding_y,
+                gap: menu_def.shell.header_gap,
+            };
+            let divider = crate::components::main_view_chrome::MainViewDividerChrome {
+                margin_x: menu_def.shell.divider_margin_x,
+                height: menu_def.shell.divider_height,
+                visible: true,
+            };
+
+            let mut pre_main = Vec::new();
+            if variant_config.show_variant_badge {
+                pre_main.push(Self::render_variant_badge(ui_variant, &theme));
+            }
+            if let Some(preview) = self.focused_inline_mention_preview(cx) {
+                pre_main.push(
+                    div()
+                        .w_full()
+                        .px(px(12.0))
+                        .pb(px(4.0))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(theme.colors.text.muted))
+                                .child(preview.token)
+                                .child(" ")
+                                .child(preview.detail),
+                        )
+                        .into_any_element(),
+                );
+            }
+            pre_main.push(self.render_context_bootstrap_note(cx));
+            if let Some((query, current_idx)) = self.search_state.clone() {
+                let match_count = if query.is_empty() {
+                    0
+                } else {
+                    let q = query.to_lowercase();
+                    messages
+                        .iter()
+                        .filter(|m| m.body.to_lowercase().contains(&q))
+                        .count()
+                };
+                let display_idx = if match_count > 0 {
+                    (current_idx % match_count) + 1
+                } else {
+                    0
+                };
+                pre_main.push(
+                    div()
+                        .w_full()
+                        .px(px(12.0))
+                        .py(px(4.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .child(div().text_xs().opacity(0.50).child("\u{1F50D}"))
+                        .child(div().flex_grow().text_sm().child(if query.is_empty() {
+                            "Search conversation\u{2026}".to_string()
+                        } else {
+                            query.clone()
+                        }))
+                        .when(!query.is_empty(), |d| {
+                            d.child(div().text_xs().opacity(0.45).child(if match_count > 0 {
+                                format!("{display_idx}/{match_count}")
+                            } else {
+                                "0 matches".to_string()
+                            }))
+                        })
+                        .when(match_count > 1, |d| {
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .opacity(0.30)
+                                    .child("\u{21A9} next \u{00b7} \u{21E7}\u{21A9} prev"),
+                            )
+                        })
+                        .child(div().text_xs().opacity(0.25).child("esc \u{00d7}"))
+                        .into_any_element(),
+                );
+            }
+
+            let middle_area = self.render_acp_middle_area(
+                is_empty,
+                variant_config.show_sidecar,
+                ui_variant,
+                status_label,
+                message_count,
+                context_chip_count,
+                view_entity.clone(),
+                &theme,
+                cx,
+            );
+
+            let mut post_main = Vec::new();
+            if !plan_entries.is_empty() {
+                post_main.push(
+                    div()
+                        .w_full()
+                        .px(px(8.0))
+                        .pb(px(4.0))
+                        .child(Self::render_plan_strip(&plan_entries))
+                        .into_any_element(),
+                );
+            }
+            if let Some(request) = pending_permission
+                .clone()
+                .filter(|_| !pending_permission_has_message_target)
+            {
+                post_main.push(
+                    div()
+                        .w_full()
+                        .px(px(8.0))
+                        .pb(px(4.0))
+                        .child(Self::render_permission_inline_card(
+                            &request,
+                            self.permission_index,
+                            self.permission_options_open,
+                            view_entity.clone(),
+                        ))
+                        .into_any_element(),
+                );
+            }
+
+            let main = div()
+                .id("acp-conversation")
+                .flex_1()
+                .min_h(px(0.0))
+                .w_full()
+                .flex()
+                .flex_col()
+                .children(pre_main)
+                .child(middle_area)
+                .children(post_main)
+                .into_any_element();
+
+            let mut overlays = Vec::new();
+            if self.attach_menu_open {
+                overlays.push(self.render_attach_menu(cx));
+            }
+            if history_popup_open {
+                overlays.push(
+                    div()
+                        .id("acp-history-popup-backdrop")
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .bottom(px(self.inline_footer_height()))
+                        .on_mouse_down(
+                            gpui::MouseButton::Left,
+                            cx.listener(|this, _, _, cx| {
+                                this.dismiss_history_popup(cx);
+                                cx.stop_propagation();
+                            }),
+                        )
+                        .into_any_element(),
+                );
+            }
+
+            let footer = if self.uses_external_footer_host() {
+                None
+            } else {
+                let is_main_window = crate::get_main_window_handle()
+                    .is_some_and(|handle| handle == window.window_handle());
+
+                #[cfg(target_os = "macos")]
+                {
+                    if !is_main_window {
+                        self.ensure_native_footer_action_listener(window, cx);
+                        crate::footer_popup::sync_window_footer_popup(
+                            window,
+                            &self.acp_detached_native_footer_config(cx),
+                        );
+                        Some(
+                            crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(),
+                        )
+                    } else {
+                        let active_surface =
+                            crate::footer_popup::active_main_window_footer_surface();
+                        let use_native_footer_spacer = active_surface == Some("acp_chat");
+                        if use_native_footer_spacer {
+                            Some(
+                                crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(),
+                            )
+                        } else {
+                            Some(self.ensure_toolbar(cx).into_any_element())
+                        }
+                    }
+                }
+
+                #[cfg(not(target_os = "macos"))]
+                {
+                    let active_surface = crate::footer_popup::active_main_window_footer_surface();
+                    let use_native_footer_spacer =
+                        is_main_window && active_surface == Some("acp_chat");
+                    if use_native_footer_spacer {
+                        Some(
+                            crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(),
+                        )
+                    } else {
+                        Some(self.ensure_toolbar(cx).into_any_element())
+                    }
+                }
+            };
+
+            return crate::components::main_view_chrome::render_main_view_chrome(
+                root,
+                &theme,
+                menu_def,
+                crate::components::main_view_chrome::MainViewChrome {
+                    header,
+                    divider,
+                    main,
+                    footer,
+                    overlays,
+                },
+            );
+        }
+
+        root
             .when(variant_config.show_variant_badge, |d| {
                 d.child(Self::render_variant_badge(ui_variant, &theme))
             })
@@ -13341,6 +13629,19 @@ impl Render for AcpChatView {
                         view_entity.clone(),
                         &theme,
                     ))
+                },
+            )
+            .when(
+                matches!(variant_config.composer, AcpComposerPlacement::Default),
+                |d| {
+                    d.child(
+                        crate::components::main_view_chrome::render_main_view_header_divider(
+                            &theme,
+                            menu_def,
+                            menu_def.shell.divider_margin_x,
+                            menu_def.shell.divider_height,
+                        ),
+                    )
                 },
             )
             .when_some(self.focused_inline_mention_preview(cx), |d, preview| {
@@ -13407,17 +13708,22 @@ impl Render for AcpChatView {
                 )
             })
             // ── Message list / ACP Spine projection ───────────
-            .child(self.render_acp_middle_area(
-                is_empty,
-                variant_config.show_sidecar,
-                ui_variant,
-                status_label,
-                message_count,
-                context_chip_count,
-                view_entity.clone(),
-                &theme,
-                cx,
-            ))
+            .child(
+                crate::components::main_view_chrome::render_main_view_main_slot(
+                    menu_def,
+                    self.render_acp_middle_area(
+                        is_empty,
+                        variant_config.show_sidecar,
+                        ui_variant,
+                        status_label,
+                        message_count,
+                        context_chip_count,
+                        view_entity.clone(),
+                        &theme,
+                        cx,
+                    ),
+                ),
+            )
             // ── Plan strip ────────────────────────────────────
             .when(!plan_entries.is_empty(), |d| {
                 d.child(
@@ -13616,6 +13922,34 @@ mod tests {
         assert!(!AcpChatView::composer_is_active(true, false, false));
         assert!(!AcpChatView::composer_is_active(false, true, false));
         assert!(!AcpChatView::composer_is_active(true, true, true));
+    }
+
+    #[test]
+    fn acp_spine_accepts_colon_list_filter_projection() {
+        let projection =
+            crate::spine::input_projection::project_text_at_char_cursor(":type:script", 12);
+        let Some(kind) = projection
+            .projection
+            .as_ref()
+            .map(|projection| &projection.active_segment_kind)
+        else {
+            panic!("expected ':' to produce an active Spine projection");
+        };
+
+        assert!(matches!(
+            kind,
+            crate::spine::SpineSegmentKind::ListFilter { .. }
+        ));
+        assert!(
+            crate::spine::input_projection::projection_owns_prompt_builder_list(
+                projection.projection.as_ref(),
+                &projection.parse,
+            )
+        );
+        assert!(
+            AcpChatView::acp_spine_segment_kind_has_context_projection(kind),
+            "ACP should not filter ':' out before rendering shared Spine list sections"
+        );
     }
 
     #[test]

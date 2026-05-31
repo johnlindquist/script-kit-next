@@ -329,9 +329,9 @@ fn render_menu_syntax_form_field(
             .line_height(px(field_metrics.input_line_height))
             .px(px(0.0))
             .py(px(0.0))
-            .with_size(gpui_component::Size::Size(px(
-                field_metrics.input_font_size,
-            )))
+            .with_size(gpui_component::Size::Size(
+                px(field_metrics.input_font_size),
+            ))
             .appearance(false)
             .bordered(false)
             .focus_bordered(false);
@@ -638,9 +638,8 @@ fn spine_projection_icon_kind(
     row.icon
         .as_ref()
         .and_then(|icon: &gpui::SharedString| {
-            crate::list_item::IconKind::from_icon_hint(icon.as_ref()).or_else(|| {
-                Some(crate::list_item::IconKind::Svg(icon.as_ref().to_string()))
-            })
+            crate::list_item::IconKind::from_icon_hint(icon.as_ref())
+                .or_else(|| Some(crate::list_item::IconKind::Svg(icon.as_ref().to_string())))
         })
         .or_else(|| crate::list_item::IconKind::from_icon_hint(fallback_icon))
         .or_else(|| Some(crate::list_item::IconKind::Svg(fallback_icon.to_string())))
@@ -652,7 +651,7 @@ fn render_spine_projection_row(
     is_selected: bool,
     is_hovered: bool,
     colors: ListItemColors,
-    accent_variation: crate::designs::AccentVariation,
+    main_menu_theme: crate::designs::MainMenuThemeVariant,
 ) -> AnyElement {
     let (type_label, type_icon) = row.kind.type_accessory_info();
 
@@ -660,19 +659,57 @@ fn render_spine_projection_row(
         .index(ix)
         .selected(is_selected)
         .hovered(is_hovered)
-        .accent_variation(accent_variation)
+        .main_menu_theme(main_menu_theme)
         .semantic_id(row.id.to_string())
-        .description_opt(row.subtitle.as_ref().map(|subtitle: &gpui::SharedString| subtitle.to_string()))
+        .description_opt(
+            row.subtitle
+                .as_ref()
+                .map(|subtitle: &gpui::SharedString| subtitle.to_string()),
+        )
         .icon_kind_opt(spine_projection_icon_kind(row))
         .type_accessory(crate::list_item::TypeAccessory {
             label: type_label,
             icon_name: type_icon,
         })
-        .source_hint_opt(row.meta.as_ref().map(|meta: &gpui::SharedString| meta.to_string()))
+        .source_hint_opt(
+            row.meta
+                .as_ref()
+                .map(|meta: &gpui::SharedString| meta.to_string()),
+        )
         .into_any_element()
 }
 
 impl ScriptListApp {
+    fn main_view_state_icon_name_for_script_list(&self, filter_text: &str) -> &'static str {
+        let trimmed = filter_text.trim_start();
+        if trimmed.starts_with('~') {
+            return "folder-open";
+        }
+
+        let source_filter = self
+            .menu_syntax_mode
+            .advanced_query_for(filter_text)
+            .and_then(|query| query.source_filters.positive_includes().next());
+
+        match source_filter {
+            Some(crate::menu_syntax::RootUnifiedSourceFilter::Files) => "folder-open",
+            Some(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory) => "clipboard",
+            Some(crate::menu_syntax::RootUnifiedSourceFilter::Conversations) => "message-circle",
+            Some(crate::menu_syntax::RootUnifiedSourceFilter::Notes) => "file-code",
+            Some(crate::menu_syntax::RootUnifiedSourceFilter::Todo) => "check",
+            Some(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs)
+            | Some(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory) => "sidebar",
+            Some(crate::menu_syntax::RootUnifiedSourceFilter::Apps) => "play",
+            Some(crate::menu_syntax::RootUnifiedSourceFilter::Scripts)
+            | Some(crate::menu_syntax::RootUnifiedSourceFilter::Commands) => "code",
+            Some(crate::menu_syntax::RootUnifiedSourceFilter::AiVault) => "bolt",
+            Some(crate::menu_syntax::RootUnifiedSourceFilter::Dictation) => "message-circle",
+            Some(crate::menu_syntax::RootUnifiedSourceFilter::Windows)
+            | Some(crate::menu_syntax::RootUnifiedSourceFilter::Processes)
+            | None => "search",
+        }
+    }
+
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let render_list_start = std::time::Instant::now();
         let filter_for_log = self.filter_text.clone();
@@ -763,17 +800,16 @@ impl ScriptListApp {
         let tokens = get_tokens(self.current_design);
         let design_visual = tokens.visual();
 
-        // Accent exploration is row-level (threaded into the list renderer via
-        // current_accent_variation); no header/footer chrome treatments here.
+        // Theme exploration is row-level (threaded into the list renderer via
+        // current_main_menu_theme); no header/footer chrome treatments here.
 
-        // Unified color, typography, and spacing resolution
+        // Unified color and spacing resolution
         // Shell uses theme-first so non-default design variants keep the active
         // theme's colors while still using the variant's spacing and shape tokens.
         let color_resolver =
             crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
-        let spacing_resolver = crate::theme::SpacingResolver::new(self.current_design);
 
-        // For Default design, use header constants; for others, use spacing resolver
+        // For Default design, use header constants; for others, use design spacing
         let is_default_design = self.current_design == DesignVariant::Default;
         let design_spacing = tokens.spacing();
 
@@ -894,17 +930,19 @@ impl ScriptListApp {
             let grouped_items_clone = grouped_items.clone();
             let flat_results_clone = flat_results.clone();
 
+            let current_main_menu_theme = self.current_main_menu_theme;
             let effective_section_header_height =
-                crate::list_item::effective_section_header_height();
-            let effective_list_item_height = crate::list_item::effective_list_item_height();
+                crate::list_item::effective_section_header_height_for_theme(
+                    current_main_menu_theme,
+                );
+            let effective_list_item_height =
+                crate::list_item::effective_list_item_height_for_theme(current_main_menu_theme);
 
             // Capture entity handle for use in the render closure
             let entity = cx.entity();
 
             // theme_colors was pre-computed above to avoid borrow conflicts
             let current_design = self.current_design;
-            let current_accent_variation = self.current_accent_variation;
-
             // Track filter for closure logging and highlighting
             let filter_for_closure = filter_text_for_render.clone();
             let filter_for_highlight = filter_text_for_render.clone();
@@ -930,7 +968,9 @@ impl ScriptListApp {
                                     // or 20px if it is the first section header to pull it up closer to input.
                                     let is_first = ix == 0;
                                     let h_px = if is_first {
-                                        crate::list_item::effective_first_section_header_height()
+                                        crate::list_item::effective_first_section_header_height_for_theme(
+                                            current_main_menu_theme,
+                                        )
                                     } else {
                                         effective_section_header_height
                                     };
@@ -1055,12 +1095,12 @@ impl ScriptListApp {
                                                 is_selected,
                                                 is_hovered,
                                                 theme_colors,
-                                                current_accent_variation,
+                                                current_main_menu_theme,
                                             )
                                         } else {
                                             render_design_item(
                                                 current_design,
-                                                current_accent_variation,
+                                                current_main_menu_theme,
                                                 result,
                                                 ix,
                                                 is_selected,
@@ -1124,7 +1164,10 @@ impl ScriptListApp {
             // Average item height for delta-to-index conversion:
             // Most items are LIST_ITEM_HEIGHT (40px), headers are SECTION_HEADER_HEIGHT (32px)
             // Use 44px as a reasonable average that feels natural for scrolling
-            let avg_item_height = crate::list_item::effective_average_item_height_for_scroll();
+            let avg_item_height =
+                crate::list_item::effective_average_item_height_for_scroll_for_theme(
+                    current_main_menu_theme,
+                );
 
             // Capture item count for scroll handler logging
             let scroll_item_count = item_count;
@@ -1140,15 +1183,23 @@ impl ScriptListApp {
                     .map(|(ix, item)| match item {
                         GroupedListItem::SectionHeader(..) => {
                             if ix == 0 {
-                                crate::list_item::effective_first_section_header_height()
+                                crate::list_item::effective_first_section_header_height_for_theme(
+                                    current_main_menu_theme,
+                                )
                             } else {
-                                crate::list_item::effective_section_header_height()
+                                crate::list_item::effective_section_header_height_for_theme(
+                                    current_main_menu_theme,
+                                )
                             }
                         }
                         GroupedListItem::Status(..) => {
                             crate::list_item::effective_source_status_row_height()
                         }
-                        GroupedListItem::Item(..) => crate::list_item::effective_list_item_height(),
+                        GroupedListItem::Item(..) => {
+                            crate::list_item::effective_list_item_height_for_theme(
+                                current_main_menu_theme,
+                            )
+                        }
                     })
                     .sum::<f32>());
 
@@ -1306,7 +1357,7 @@ impl ScriptListApp {
                 let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
 
-                // Alt+Left / Alt+Right cycle the live accent-color exploration
+                // Alt+Left / Alt+Right cycle the live main-menu theme exploration
                 // variation. Real keyboard input is caught first by the global
                 // arrow interceptor (which stops propagation); this branch also
                 // serves automation (`simulateKey`), which routes directly here.
@@ -1319,7 +1370,7 @@ impl ScriptListApp {
                         || crate::ui_foundation::is_key_right(key_str))
                 {
                     let forward = crate::ui_foundation::is_key_right(key_str);
-                    this.cycle_accent_variation(forward, window, cx);
+                    this.cycle_main_menu_theme(forward, window, cx);
                     cx.stop_propagation();
                     return;
                 }
@@ -1661,7 +1712,6 @@ impl ScriptListApp {
         let text_primary = color_resolver.primary_text_color();
         let font_family = self.theme_font_family();
 
-        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
         let highlight_text = filter_text_for_render.clone();
         if self.main_menu_render_diagnostics.last_input_highlight_text != highlight_text {
             let capture_targets =
@@ -1683,8 +1733,7 @@ impl ScriptListApp {
                 .collect();
 
             if self.spine_enabled {
-                let accent_color: gpui::Hsla =
-                    rgb(self.theme.colors.accent.selected).into();
+                let accent_color: gpui::Hsla = rgb(self.theme.colors.accent.selected).into();
                 let spine_projection = self.spine_projection.as_ref();
                 let spine_accent_ranges = crate::spine::input_spans::accent_ranges_for_parse(
                     &self.spine_parse,
@@ -1722,163 +1771,122 @@ impl ScriptListApp {
 
         // NOTE: No .bg() here - Root provides vibrancy background for ALL content
         // This ensures main menu, AI chat, and all prompts have consistent styling
+        let menu_theme = self.current_main_menu_theme;
+        let menu_def = menu_theme.def();
+        let shell = menu_def.shell;
+        let search = menu_def.search;
 
-        let mut main_div = div()
-            .flex()
-            .flex_col()
+        let root = crate::components::main_view_chrome::render_main_view_shell()
             // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
-            .w_full()
-            .h_full()
             .text_color(rgb(text_primary))
             .font_family(font_family)
             .key_context("script_list")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
-            .on_key_up(handle_key_up)
-            // Header: Search Input + Run + Actions + Logo
-            // Use shared header layout constants for consistency with all prompts
-            .child({
-                // Use shared header constants for default design, design tokens for others
-                let header_padding_x = if is_default_design {
-                    if is_mini {
-                        crate::window_resize::main_layout::HEADER_PADDING_X
-                    } else {
-                        HEADER_PADDING_X
-                    }
-                } else {
-                    design_spacing.padding_lg
-                };
-                let header_padding_y = if is_default_design {
-                    if is_mini {
-                        crate::window_resize::main_layout::HEADER_PADDING_Y
-                    } else {
-                        HEADER_PADDING_Y
-                    }
-                } else {
-                    design_spacing.padding_sm
-                };
-                let header_gap = if is_default_design {
-                    HEADER_GAP
-                } else {
-                    design_spacing.gap_md
-                };
+            .on_key_up(handle_key_up);
 
-                div()
-                    .w_full()
-                    .px(px(header_padding_x))
-                    .py(px(header_padding_y))
-                    .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(header_gap))
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .items_center()
-                            // Search input with cursor and selection support
-                            .child(
-                                div()
-                                    .flex_1()
-                                    // Internal text inset matching the measured native
-                                    // regular NSTextField (9pt, macOS 26.5). Before this
-                                    // the search text rendered flush at 0pt — the proven
-                                    // "input lacks padding" gap (tahoe-apple-guideline-metrics).
-                                    .pl(px(crate::ui::chrome::SEARCH_INPUT_TEXT_INSET_X_PX))
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .child({
-                                        if handler_form_owns_input_for_render
-                                            && menu_syntax_text_contains_line_break(
-                                                &filter_text_for_render,
-                                            )
-                                        {
-                                            div()
-                                                .w_full()
-                                                .h(px(
-                                                    crate::panel::CURSOR_HEIGHT_LG
-                                                        + (crate::panel::CURSOR_MARGIN_Y * 2.0),
-                                                ))
-                                                .flex()
-                                                .items_center()
-                                                .overflow_hidden()
-                                                .text_ellipsis()
-                                                .text_size(px(self.theme_font_size_xl()))
-                                                .line_height(px(crate::panel::CURSOR_HEIGHT_LG))
-                                                .text_color(rgb(text_primary))
-                                                .child(menu_syntax_single_line_text_for_gpui(
-                                                    &filter_text_for_render,
-                                                ))
-                                                .into_any_element()
-                                        } else {
-                                            self.render_search_input_with_ghost(cx)
-                                                .into_any_element()
-                                        }
-                                    }),
-                            )
-                            .when(show_launcher_ask_ai_hint, |d| {
-                                d.child(crate::components::render_launcher_ask_ai_hint(
-                                    &self.theme,
-                                    cx.listener(|this, _event, _window, cx| {
-                                        this.open_tab_ai_chat(cx);
-                                    }),
-                                ))
-                            }),
-                    )
-            })
-            // Divider between header and list content
-            // Use unified resolver for border color and spacing
-            .child({
-                let divider_margin = if is_default_design {
-                    DIVIDER_MARGIN_DEFAULT
-                } else {
-                    spacing_resolver.margin_lg()
-                };
-                let border_width = if is_default_design {
-                    DIVIDER_BORDER_WIDTH_DEFAULT
-                } else {
-                    design_visual.border_thin
-                };
+        let header_padding_x = shell.header_padding_x;
+        let header_padding_y = if is_default_design {
+            if is_mini {
+                crate::window_resize::main_layout::HEADER_PADDING_Y
+            } else {
+                shell.header_padding_y
+            }
+        } else {
+            design_spacing.padding_sm
+        };
+        let header_gap = if is_default_design {
+            shell.header_gap
+        } else {
+            design_spacing.gap_md
+        };
 
-                div()
-                    .mx(px(divider_margin))
-                    .h(px(border_width))
-                    .bg(rgba(chrome.divider_rgba))
-            });
+        let input_body = if handler_form_owns_input_for_render
+            && menu_syntax_text_contains_line_break(&filter_text_for_render)
+        {
+            div()
+                .w_full()
+                .h(px(
+                    crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0),
+                ))
+                .flex()
+                .items_center()
+                .overflow_hidden()
+                .text_ellipsis()
+                .text_size(px(self.theme_font_size_xl()))
+                .font_weight(search.font_weight)
+                .line_height(px(crate::panel::CURSOR_HEIGHT_LG))
+                .text_color(rgb(text_primary))
+                .child(menu_syntax_single_line_text_for_gpui(
+                    &filter_text_for_render,
+                ))
+                .into_any_element()
+        } else {
+            self.render_search_input_with_ghost(cx).into_any_element()
+        };
+
+        let mut input_trailing = Vec::new();
+        if show_launcher_ask_ai_hint {
+            input_trailing.push(
+                crate::components::render_launcher_ask_ai_hint(
+                    &self.theme,
+                    cx.listener(|this, _event, _window, cx| {
+                        this.open_tab_ai_chat(cx);
+                    }),
+                )
+                .into_any_element(),
+            );
+        }
+
+        let input = crate::components::main_view_chrome::render_main_view_input_shell(
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewInputChrome {
+                body: input_body,
+                leading: Some(crate::components::main_view_chrome::render_main_view_state_icon(
+                    &self.theme,
+                    menu_def,
+                    self.main_view_state_icon_name_for_script_list(&filter_text_for_render),
+                )),
+                trailing: input_trailing,
+            },
+        );
+
+        let header = crate::components::main_view_chrome::MainViewHeaderChrome {
+            input,
+            padding_x: header_padding_x,
+            padding_y: header_padding_y,
+            gap: header_gap,
+        };
+        let divider = crate::components::main_view_chrome::MainViewDividerChrome {
+            margin_x: shell.divider_margin_x,
+            height: if is_default_design {
+                shell.divider_height
+            } else {
+                design_visual.border_thin
+            },
+            visible: true,
+        };
 
         if is_mini {
             // Mini mode: single column, toggle between list and info panel
-            if self.show_info_panel {
+            let main = if self.show_info_panel {
                 // Info panel replaces the list when toggled via Cmd+I
                 let info_panel = self.render_preview_panel(cx);
-                main_div = main_div.child(
-                    div()
-                        .flex_1()
-                        .min_h(px(0.))
-                        .w_full()
-                        .overflow_hidden()
-                        .child(div().w_full().h_full().min_h(px(0.)).child(info_panel)),
-                );
+                div()
+                    .w_full()
+                    .h_full()
+                    .min_h(px(0.))
+                    .child(info_panel)
+                    .into_any_element()
             } else {
-                main_div = main_div.child(
-                    div()
-                        .flex_1()
-                        .min_h(px(0.))
-                        .w_full()
-                        .overflow_hidden()
-                        .child(div().w_full().h_full().min_h(px(0.)).child(list_element)),
-                );
-            }
-
-            if let Some(panel) = log_panel {
-                main_div = main_div.child(panel);
-            }
-
-            main_div = main_div.child(
-                crate::components::prompt_layout_shell::render_native_main_window_footer_hover_blocker(),
-            );
+                div()
+                    .w_full()
+                    .h_full()
+                    .min_h(px(0.))
+                    .child(list_element)
+                    .into_any_element()
+            };
 
             if state_changed && crate::logging::filter_perf_trace_enabled() {
                 tracing::info!(
@@ -1905,70 +1913,80 @@ impl ScriptListApp {
                 self.main_menu_render_diagnostics.last_render_log_item_count = item_count_for_log;
             }
 
-            return main_div.into_any_element();
+            return crate::components::main_view_chrome::render_main_view_chrome(
+                root,
+                &self.theme,
+                menu_def,
+                crate::components::main_view_chrome::MainViewChrome {
+                    header,
+                    divider,
+                    main,
+                    footer: Some(
+                        crate::components::prompt_layout_shell::render_native_main_window_footer_hover_blocker(),
+                    ),
+                    overlays: log_panel
+                        .into_iter()
+                        .map(|panel| panel.into_any_element())
+                        .collect(),
+                },
+            );
         }
 
         // Main content area: list takes full width unless info panel is toggled (Cmd+I)
-        {
-            let content_row = div()
-                .flex()
-                .flex_row()
-                .flex_1()
-                .min_h(px(0.)) // Critical: allows flex container to shrink properly
-                .w_full()
-                .overflow_hidden()
-                // Left side: Script list — full width when info hidden, 50% when shown
-                .child(
+        let main = div()
+            .flex()
+            .flex_row()
+            .h_full()
+            .min_h(px(0.))
+            .w_full()
+            .overflow_hidden()
+            // Left side: Script list — full width when info hidden, 50% when shown
+            .child(
+                div()
+                    .when(self.show_info_panel, |d| d.w_1_2())
+                    .when(!self.show_info_panel, |d| d.w_full())
+                    .h_full()
+                    .min_h(px(0.))
+                    .child(list_element),
+            )
+            // Right side: Info panel (50% width), only rendered when toggled
+            .when(self.show_info_panel, |row| {
+                let preview_start = std::time::Instant::now();
+                let preview_panel = self.render_preview_panel(cx);
+                let preview_elapsed = preview_start.elapsed();
+                if state_changed {
+                    logging::log(
+                        "PREVIEW_PERF",
+                        &format!(
+                            "[PREVIEW_PANEL_DONE] filter='{}' took {:.2}ms",
+                            filter_for_log,
+                            preview_elapsed.as_secs_f64() * 1000.0
+                        ),
+                    );
+                }
+                row.child(
                     div()
-                        .when(self.show_info_panel, |d| d.w_1_2())
-                        .when(!self.show_info_panel, |d| d.w_full())
+                        .relative()
+                        .flex()
+                        .flex_col()
+                        .w_1_2()
                         .h_full()
                         .min_h(px(0.))
-                        .child(list_element),
-                )
-                // Right side: Info panel (50% width), only rendered when toggled
-                .when(self.show_info_panel, |row| {
-                    let preview_start = std::time::Instant::now();
-                    let preview_panel = self.render_preview_panel(cx);
-                    let preview_elapsed = preview_start.elapsed();
-                    if state_changed {
-                        logging::log(
-                            "PREVIEW_PERF",
-                            &format!(
-                                "[PREVIEW_PANEL_DONE] filter='{}' took {:.2}ms",
-                                filter_for_log,
-                                preview_elapsed.as_secs_f64() * 1000.0
-                            ),
-                        );
-                    }
-                    row.child(
-                        div()
-                            .relative()
-                            .flex()
-                            .flex_col()
-                            .w_1_2()
-                            .h_full()
-                            .min_h(px(0.))
-                            .overflow_hidden()
-                            .when_some(
-                                self.cached_main_window_preflight.clone(),
-                                |d, receipt| {
-                                    d.child(
-                                        crate::main_window_preflight::render_main_window_preflight_receipt(
-                                            self,
-                                            &receipt,
-                                        ),
-                                    )
-                                },
+                        .overflow_hidden()
+                        .when_some(self.cached_main_window_preflight.clone(), |d, receipt| {
+                            d.child(
+                                crate::main_window_preflight::render_main_window_preflight_receipt(
+                                    self, &receipt,
+                                ),
                             )
-                            .child(div().flex_1().min_h(px(0.)).child(preview_panel)),
-                    )
-                });
-            main_div = main_div.child(content_row);
-        }
+                        })
+                        .child(div().flex_1().min_h(px(0.)).child(preview_panel)),
+                )
+            })
+            .into_any_element();
 
         // Footer: Universal three-key hint strip — ↵ Run · ⌘K Actions · ⌘↵ AI
-        {
+        let footer = {
             let primary_label = self.main_window_primary_action_label();
             let hints =
                 crate::components::universal_prompt_hints_with_primary_label(&primary_label);
@@ -2010,14 +2028,8 @@ impl ScriptListApp {
                         this.open_tab_ai_acp_with_entry_intent(None, cx);
                     }),
                 );
-            if let Some(footer) = self.main_window_footer_slot(gpui_footer) {
-                main_div = main_div.child(footer);
-            }
-        }
-
-        if let Some(panel) = log_panel {
-            main_div = main_div.child(panel);
-        }
+            self.main_window_footer_slot(gpui_footer)
+        };
 
         // Note: Toast notifications are now handled by gpui-component's NotificationList
         // via the Root wrapper. Toasts are flushed in render() via flush_pending_toasts().
@@ -2041,7 +2053,21 @@ impl ScriptListApp {
             self.main_menu_render_diagnostics.last_render_log_item_count = item_count_for_log;
         }
 
-        main_div.into_any_element()
+        crate::components::main_view_chrome::render_main_view_chrome(
+            root,
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header,
+                divider,
+                main,
+                footer,
+                overlays: log_panel
+                    .into_iter()
+                    .map(|panel| panel.into_any_element())
+                    .collect(),
+            },
+        )
     }
 }
 
@@ -2201,11 +2227,8 @@ mod launcher_empty_info_state_contract_tests {
             .expect("failed to read src/render_script_list/mod.rs");
         let old_empty_title = concat!("No scripts or ", "snippets found");
         let old_empty_hint = concat!("Press ", "⌘N", " to create a new script");
-        let old_generic_fallback = concat!(
-            "Try a different search term or press ",
-            "⌘↵",
-            " to ask AI"
-        );
+        let old_generic_fallback =
+            concat!("Try a different search term or press ", "⌘↵", " to ask AI");
 
         assert!(
             source.contains("render_launcher_empty_or_no_results"),

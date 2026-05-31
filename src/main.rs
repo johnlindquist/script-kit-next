@@ -256,8 +256,8 @@ use components::{FormFieldColors, PromptFooterColors, PromptFooterConfig};
 use designs::{get_tokens, render_design_item, DesignVariant};
 use frecency::FrecencyStore;
 use list_item::{
-    render_section_header, GroupedListItem, ListItem, ListItemColors, DIVIDER_BORDER_WIDTH_DEFAULT,
-    DIVIDER_MARGIN_DEFAULT, FONT_MONO, LIST_ITEM_HEIGHT, LOG_PANEL_MAX_HEIGHT,
+    render_section_header, GroupedListItem, ListItem, ListItemColors, FONT_MONO, LIST_ITEM_HEIGHT,
+    LOG_PANEL_MAX_HEIGHT,
 };
 // strip_html_tags removed - DivPrompt now renders HTML properly
 

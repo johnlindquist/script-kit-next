@@ -42,6 +42,7 @@ pub mod inline_picker;
 pub mod inline_popup_window;
 pub mod inline_prompt_input;
 pub(crate) mod launcher_ask_ai_hint;
+pub(crate) mod main_view_chrome;
 pub mod minimal_prompt_shell;
 pub(crate) mod non_list_state;
 pub(crate) mod overlay_modal;

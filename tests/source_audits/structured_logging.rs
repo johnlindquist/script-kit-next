@@ -204,3 +204,74 @@ fn handle_action_logs_handler_for_sdk_fallback() {
         "handle_action must identify the SDK fallback handler"
     );
 }
+
+// ---------------------------------------------------------------------------
+// OpenClicky follow-up — structured log review audit gaps
+// ---------------------------------------------------------------------------
+
+#[test]
+fn devtools_events_can_include_mcp_audit_log() {
+    let content = read("scripts/devtools/events.ts");
+
+    assert!(
+        content.contains("--include-mcp-audit"),
+        "events.ts must expose an opt-in flag for tailing the MCP audit log"
+    );
+    assert!(
+        content.contains("mcp-audit.jsonl"),
+        "events.ts must know the MCP audit log path"
+    );
+    assert!(
+        content.contains("mcpAudit: countEvents(mcpAuditEvents)"),
+        "events.ts summary must count MCP audit entries separately from app/session logs"
+    );
+    assert!(
+        content.contains("mcpAudit: compactEventEntries(mcpAuditEvents"),
+        "events.ts output must expose compact MCP audit entries for DevTools receipts"
+    );
+}
+
+#[test]
+fn devtools_events_parse_json_structured_fields_and_mcp_methods() {
+    let content = read("scripts/devtools/events.ts");
+
+    assert!(
+        content.contains("const parsedFields ="),
+        "events.ts must inspect parsed JSON tracing fields, not only regex text"
+    );
+    assert!(
+        content.contains("stringValue(parsedFields.event_type)"),
+        "events.ts must read event_type from structured JSON fields"
+    );
+    assert!(
+        content.contains("stringValue(parsed?.method)"),
+        "events.ts must use MCP audit method as the command type"
+    );
+    assert!(
+        content.contains(r#""mcp_audit""#),
+        "events.ts must classify MCP audit JSON lines with a stable event type"
+    );
+    assert!(
+        content.contains("parsed?.success === false ? \"error\""),
+        "events.ts must treat failed MCP audit entries as error-level receipts"
+    );
+}
+
+#[test]
+fn mcp_audit_log_entries_preserve_machine_readable_outcome_fields() {
+    let content = read("src/mcp_streaming/mod.rs");
+
+    for expected in [
+        "pub timestamp: String",
+        "pub method: String",
+        "pub params: serde_json::Value",
+        "pub duration_ms: u64",
+        "pub success: bool",
+        "pub error: Option<String>",
+    ] {
+        assert!(
+            content.contains(expected),
+            "AuditLogEntry must preserve machine-readable field `{expected}`"
+        );
+    }
+}

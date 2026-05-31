@@ -670,6 +670,7 @@ impl ScriptListApp {
         // tracking from GPUI selection events will come in a later step.
         if self.spine_enabled {
             self.set_spine_parse_from_filter_and_cursor(&new_text, new_text.len());
+            self.maybe_start_spine_file_subsearch_for_current_projection(cx);
         }
 
         // Iter 019 D1 / iter 020 D2a — run the pure popup state machine on
@@ -1390,5 +1391,18 @@ mod tests {
                 view,
             );
         }
+    }
+
+    #[test]
+    fn atfile_regression_script_list_filter_changes_start_spine_file_subsearch_after_reparse() {
+        let source = read_filter_input_change_source();
+        let reparse_pos = source
+            .find("self.set_spine_parse_from_filter_and_cursor(&new_text, new_text.len());")
+            .expect("ScriptList live-input Spine reparse not found");
+        let section = &source[reparse_pos..(reparse_pos + 220).min(source.len())];
+        assert!(
+            section.contains("self.maybe_start_spine_file_subsearch_for_current_projection(cx);"),
+            "live ScriptList input changes must start @file: subsearch after reparsing Spine"
+        );
     }
 }

@@ -1,6 +1,90 @@
 use super::*;
 
+struct StandardAgentChatMockFixtureConnection;
+
+impl crate::ai::agent_chat::runtime::AgentChatConnection for StandardAgentChatMockFixtureConnection {
+    fn start_turn(
+        &self,
+        _request: crate::ai::agent_chat::runtime::AgentChatTurnRequest,
+    ) -> anyhow::Result<crate::ai::agent_chat::events::AgentChatEventRx> {
+        let (tx, rx) = async_channel::bounded(2);
+        let _ = tx.try_send(crate::ai::agent_chat::events::AgentChatEvent::AgentMessageDelta(
+            "Fixture Agent Chat response.".to_string(),
+        ));
+        let _ = tx.try_send(crate::ai::agent_chat::events::AgentChatEvent::TurnFinished {
+            stop_reason: "fixture".to_string(),
+        });
+        Ok(rx)
+    }
+
+    fn cancel_turn(&self, _ui_thread_id: String) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn prepare_session(
+        &self,
+        _ui_thread_id: String,
+        _cwd: std::path::PathBuf,
+    ) -> anyhow::Result<crate::ai::agent_chat::events::AgentChatEventRx> {
+        let (_tx, rx) = async_channel::bounded(1);
+        Ok(rx)
+    }
+}
+
 impl ScriptListApp {
+    /// Open a deterministic, provider-free standard Agent Chat surface for
+    /// DevTools and visual smoke tests. This intentionally bypasses Pi warm-up.
+    pub(crate) fn open_standard_agent_chat_mock_fixture(&mut self, cx: &mut Context<Self>) {
+        let source_view = self.current_view.clone();
+        self.seed_acp_return_origin_for_view(&source_view);
+
+        let (_broker, permission_rx) = crate::ai::agent_chat::ui::AgentChatPermissionBroker::new();
+        let thread = cx.new(|cx| {
+            crate::ai::agent_chat::ui::AgentChatThread::new(
+                std::sync::Arc::new(StandardAgentChatMockFixtureConnection),
+                permission_rx,
+                crate::ai::agent_chat::ui::AgentChatThreadInit {
+                    ui_thread_id: "standard-agent-chat-mock-fixture".to_string(),
+                    cwd: std::env::temp_dir().join("script-kit-agent-chat-fixture"),
+                    initial_input: Some("Fixture follow-up".to_string()),
+                    initial_context_parts: Vec::new(),
+                    display_name: "Agent Chat".into(),
+                    profile_display_name: Some("Agent Chat".into()),
+                    profile_icon_name: None,
+                    selected_agent: None,
+                    available_agents: Vec::new(),
+                    launch_requirements:
+                        crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
+                    available_models: Vec::new(),
+                    selected_model_id: None,
+                },
+                cx,
+            )
+        });
+        thread.update(cx, |thread, cx| {
+            thread.mark_context_bootstrap_ready(cx);
+            let _ = thread.apply_test_fixture(
+                "assistantText",
+                Some("Can you summarize this fixture?".to_string()),
+                Some("This is a deterministic Agent Chat fixture response.".to_string()),
+                cx,
+            );
+        });
+
+        let view_entity = cx.new(|cx| {
+            crate::ai::agent_chat::ui::AgentChatView::new(thread, cx)
+                .with_ui_variant(crate::ai::acp::ui_variant::AcpChatUiVariant::Standard)
+        });
+        self.wire_embedded_acp_footer_callbacks(&view_entity, cx);
+        self.embedded_acp_chat = Some(view_entity.clone());
+        self.tab_ai_harness_return_view = Some(source_view);
+        self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
+        self.enter_embedded_acp_chat_surface(view_entity, cx);
+        self.request_focus(FocusTarget::ChatPrompt, cx);
+        script_kit_gpui::request_show_main_window();
+        cx.notify();
+    }
+
     /// **Contract:** `AppView::AcpChatView` and `cx.notify()` happen
     /// *before* any deferred-capture await. The user sees the chat surface
     /// within one frame.

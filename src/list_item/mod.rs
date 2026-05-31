@@ -107,10 +107,27 @@ pub const SOURCE_STATUS_ROW_HEIGHT: f32 = 32.0;
 pub struct ListItemMetricsOverride {
     pub item_height: f32,
     pub section_header_height: f32,
+    pub first_section_header_height: f32,
+    pub average_scroll_height: f32,
     pub section_padding_top: f32,
     pub icon_container_size: f32,
     pub icon_svg_size: f32,
+    pub icon_tile_size: f32,
+    pub icon_tile_radius: f32,
+    pub icon_tile_fill_alpha: u32,
+    pub icon_tile_border_alpha: u32,
+    pub row_outer_padding_x: f32,
+    pub row_outer_padding_y: f32,
+    pub row_inner_padding_x: f32,
+    pub row_inner_padding_y: f32,
+    pub row_radius: f32,
+    pub row_selected_border_width: f32,
+    pub row_selected_border_alpha: u32,
+    pub row_selected_fill_alpha: u32,
+    pub row_hover_fill_alpha: u32,
     pub icon_text_gap: f32,
+    pub name_desc_gap: f32,
+    pub accessory_gap: f32,
     pub name_font_size: f32,
     pub name_line_height: f32,
     pub desc_font_size: f32,
@@ -129,10 +146,27 @@ impl ListItemMetricsOverride {
         Self {
             item_height: LIST_ITEM_HEIGHT,
             section_header_height: SECTION_HEADER_HEIGHT,
+            first_section_header_height: SECTION_HEADER_HEIGHT - (SECTION_PADDING_TOP / 2.0),
+            average_scroll_height: AVERAGE_ITEM_HEIGHT_FOR_SCROLL,
             section_padding_top: SECTION_PADDING_TOP,
             icon_container_size: ICON_CONTAINER_SIZE,
             icon_svg_size: ICON_SVG_SIZE,
+            icon_tile_size: ICON_CONTAINER_SIZE,
+            icon_tile_radius: 7.0,
+            icon_tile_fill_alpha: 0xE6,
+            icon_tile_border_alpha: 0x00,
+            row_outer_padding_x: 4.0,
+            row_outer_padding_y: 2.0,
+            row_inner_padding_x: ITEM_PADDING_X,
+            row_inner_padding_y: ITEM_PADDING_Y,
+            row_radius: LIST_ITEM_ROW_RADIUS_PX,
+            row_selected_border_width: 0.0,
+            row_selected_border_alpha: 0x00,
+            row_selected_fill_alpha: 0x20,
+            row_hover_fill_alpha: 0x12,
             icon_text_gap: ITEM_ICON_TEXT_GAP,
+            name_desc_gap: ITEM_NAME_DESC_GAP,
+            accessory_gap: ITEM_ACCESSORIES_GAP,
             name_font_size: NAME_FONT_SIZE,
             name_line_height: NAME_LINE_HEIGHT,
             desc_font_size: DESC_FONT_SIZE,
@@ -144,6 +178,46 @@ impl ListItemMetricsOverride {
             desc_weight: FontWeight::NORMAL,
             section_weight: FontWeight::NORMAL,
             desc_quiet_alpha: ALPHA_DESC_QUIET,
+        }
+    }
+
+    pub fn from_main_menu_theme(theme: crate::designs::MainMenuThemeVariant) -> Self {
+        let def = theme.def();
+        Self {
+            item_height: def.list.item_height,
+            section_header_height: def.list.section_header_height,
+            first_section_header_height: def.list.first_section_header_height,
+            average_scroll_height: def.list.average_scroll_height,
+            section_padding_top: SECTION_PADDING_TOP,
+            icon_container_size: def.icon.container_size,
+            icon_svg_size: def.icon.svg_size,
+            icon_tile_size: def.icon.tile_size,
+            icon_tile_radius: def.icon.tile_radius,
+            icon_tile_fill_alpha: def.icon.tile_fill_alpha,
+            icon_tile_border_alpha: def.icon.tile_border_alpha,
+            row_outer_padding_x: def.row.outer_padding_x,
+            row_outer_padding_y: def.row.outer_padding_y,
+            row_inner_padding_x: def.row.inner_padding_x,
+            row_inner_padding_y: def.row.inner_padding_y,
+            row_radius: def.row.radius,
+            row_selected_border_width: def.row.selected_border_width,
+            row_selected_border_alpha: def.row.selected_border_alpha,
+            row_selected_fill_alpha: def.row.selected_fill_alpha,
+            row_hover_fill_alpha: def.row.hover_fill_alpha,
+            icon_text_gap: def.row.icon_text_gap,
+            name_desc_gap: def.row.name_desc_gap,
+            accessory_gap: def.row.accessory_gap,
+            name_font_size: def.typography.name_font_size,
+            name_line_height: def.typography.name_line_height,
+            desc_font_size: def.typography.desc_font_size,
+            desc_line_height: def.typography.desc_line_height,
+            section_header_font_size: def.typography.section_font_size,
+            section_gap: SECTION_GAP,
+            name_weight: def.typography.name_weight,
+            selected_name_weight: def.typography.selected_name_weight,
+            desc_weight: def.typography.desc_weight,
+            section_weight: def.typography.section_weight,
+            desc_quiet_alpha: def.metadata.metadata_alpha,
         }
     }
 }
@@ -164,14 +238,33 @@ pub fn effective_list_item_height() -> f32 {
 }
 
 #[inline]
+pub fn effective_list_item_height_for_theme(theme: crate::designs::MainMenuThemeVariant) -> f32 {
+    ListItemMetricsOverride::from_main_menu_theme(theme).item_height
+}
+
+#[inline]
 pub fn effective_section_header_height() -> f32 {
     resolved_list_item_metrics().section_header_height
+}
+
+#[inline]
+pub fn effective_section_header_height_for_theme(
+    theme: crate::designs::MainMenuThemeVariant,
+) -> f32 {
+    ListItemMetricsOverride::from_main_menu_theme(theme).section_header_height
 }
 
 #[inline]
 pub fn effective_first_section_header_height() -> f32 {
     let metrics = resolved_list_item_metrics();
     metrics.section_header_height - (metrics.section_padding_top / 2.0)
+}
+
+#[inline]
+pub fn effective_first_section_header_height_for_theme(
+    theme: crate::designs::MainMenuThemeVariant,
+) -> f32 {
+    ListItemMetricsOverride::from_main_menu_theme(theme).first_section_header_height
 }
 
 #[inline]
@@ -183,6 +276,13 @@ pub fn effective_source_status_row_height() -> f32 {
 pub fn effective_average_item_height_for_scroll() -> f32 {
     let metrics = resolved_list_item_metrics();
     ((metrics.item_height * 3.0) + metrics.section_header_height) / 4.0
+}
+
+#[inline]
+pub fn effective_average_item_height_for_scroll_for_theme(
+    theme: crate::designs::MainMenuThemeVariant,
+) -> f32 {
+    ListItemMetricsOverride::from_main_menu_theme(theme).average_scroll_height
 }
 // =============================================================================
 // Layout & Spacing Constants (8px grid with 4px micro-steps)
@@ -1088,9 +1188,8 @@ pub struct ListItem {
     /// Deprecated: the left-edge selected-row accent bar has been removed.
     /// Retained as a no-op flag so existing call sites keep compiling.
     show_accent_bar: bool,
-    /// Live accent-color exploration variation (main menu). Controls which single
-    /// surface of the row carries the theme accent. Default is `RowTint`.
-    accent_variation: crate::designs::AccentVariation,
+    /// Live cohesive theme exploration variation (main menu).
+    main_menu_theme: crate::designs::MainMenuThemeVariant,
     /// Character indices in the name that match the search query (for fuzzy highlight)
     /// When present, matched characters are rendered with accent color for visual emphasis
     highlight_indices: Option<Vec<usize>>,
@@ -1162,7 +1261,7 @@ impl ListItem {
             on_hover: None,
             semantic_id: None,
             show_accent_bar: false,
-            accent_variation: crate::designs::AccentVariation::default(),
+            main_menu_theme: crate::designs::MainMenuThemeVariant::default(),
             highlight_indices: None,
             description_highlight_indices: None,
             type_accessory: None,
@@ -1174,15 +1273,15 @@ impl ListItem {
     }
 
     /// Deprecated no-op: the left-edge selected-row accent bar was removed in
-    /// favor of the [`AccentVariation`](crate::designs::AccentVariation) explorer.
+    /// favor of the main-menu theme explorer.
     /// Kept so existing call sites compile unchanged.
     pub fn with_accent_bar(self, _show: bool) -> Self {
         self
     }
 
-    /// Set the live accent-color exploration variation for this row.
-    pub fn accent_variation(mut self, variation: crate::designs::AccentVariation) -> Self {
-        self.accent_variation = variation;
+    /// Set the live cohesive theme exploration variation for this row.
+    pub fn main_menu_theme(mut self, theme: crate::designs::MainMenuThemeVariant) -> Self {
+        self.main_menu_theme = theme;
         self
     }
 
@@ -1399,7 +1498,7 @@ impl ListItem {
 }
 impl RenderOnce for ListItem {
     fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let metrics = resolved_list_item_metrics();
+        let metrics = ListItemMetricsOverride::from_main_menu_theme(self.main_menu_theme);
         let colors = self.colors;
         let index = self.index;
         let item_index = index.unwrap_or(0);
@@ -1410,46 +1509,107 @@ impl RenderOnce for ListItem {
         // This replaces per-view InputMode::Mouse gating — GPUI tracks modality natively.
         let hover_visible = self.hovered && !window.last_input_was_keyboard();
 
-        // Live accent exploration: which single surface of the row carries the
-        // theme accent. Every variation shares one baseline — no left-edge bar.
-        use crate::designs::AccentVariation;
-        // Footer-combo variations reuse the Icon Tile row look; collapse to the
-        // row kind so the matches below stay a small closed set.
-        let accent_variation = self.accent_variation.row_kind();
+        // Live main-menu theme exploration. Every variation shares one baseline
+        // — no left-edge bar — then coordinates row, icon, text, and metadata.
+        use crate::designs::MainMenuRowKind;
+        let row_kind = self.main_menu_theme.def().row_kind;
         // Pack the theme accent (0xRRGGBB) into an rgba color at the given alpha.
         let accent_at = |alpha: u32| rgba((colors.accent_selected << 8) | alpha);
         let selected = self.selected;
 
-        // --- Bold accent treatment decisions (see AccentVariation) ---
-        // Each flag lights up one row surface; deliberately high-contrast.
-        let on_accent_text = matches!(accent_variation, AccentVariation::SolidFill) && selected;
+        let on_accent_text = matches!(
+            row_kind,
+            MainMenuRowKind::CarbonNeon | MainMenuRowKind::OceanGlass
+        ) && selected
+            && matches!(row_kind, MainMenuRowKind::CarbonNeon);
         let name_is_accent = matches!(
-            accent_variation,
-            AccentVariation::AccentText | AccentVariation::AccentName | AccentVariation::Loud
+            row_kind,
+            MainMenuRowKind::CarbonNeon | MainMenuRowKind::OperatorMonoGlass
         ) && selected;
         let icon_is_accent_bright = matches!(
-            accent_variation,
-            AccentVariation::AccentText | AccentVariation::Loud
+            row_kind,
+            MainMenuRowKind::BlueGlass
+                | MainMenuRowKind::AuroraSlate
+                | MainMenuRowKind::OceanGlass
+                | MainMenuRowKind::CarbonNeon
+                | MainMenuRowKind::OperatorMonoGlass
         ) && selected;
-        let icon_all_accent = matches!(accent_variation, AccentVariation::AllIcons);
-        let icon_tile = matches!(accent_variation, AccentVariation::IconTile) && selected;
-        let ring = matches!(accent_variation, AccentVariation::Ring) && selected;
-        let left_block = matches!(accent_variation, AccentVariation::LeftBlock);
-        let name_underline_bold =
-            matches!(accent_variation, AccentVariation::AccentName) && selected;
-        let badges_accent = matches!(accent_variation, AccentVariation::Loud);
+        let icon_all_accent = matches!(row_kind, MainMenuRowKind::OperatorMonoGlass);
+        let icon_tile = !matches!(
+            row_kind,
+            MainMenuRowKind::Smoke
+                | MainMenuRowKind::GraphitePill
+                | MainMenuRowKind::OperatorMonoGlass
+        ) && selected;
+        let ring = matches!(
+            row_kind,
+            MainMenuRowKind::BlueGlass
+                | MainMenuRowKind::LiquidPrism
+                | MainMenuRowKind::AuroraSlate
+                | MainMenuRowKind::ProConsole
+                | MainMenuRowKind::OceanGlass
+                | MainMenuRowKind::CarbonNeon
+                | MainMenuRowKind::StudioPaperGlass
+                | MainMenuRowKind::OperatorMonoGlass
+        ) && selected;
+        let left_block = false;
+        let name_underline_bold = matches!(row_kind, MainMenuRowKind::CarbonNeon) && selected;
+        let badges_accent = matches!(
+            row_kind,
+            MainMenuRowKind::FrostedCommand
+                | MainMenuRowKind::AuroraSlate
+                | MainMenuRowKind::OceanGlass
+                | MainMenuRowKind::CarbonNeon
+        );
 
         // Both hover and selected use text_primary at different opacities by default.
-        let selected_alpha = (colors.selected_opacity * 255.0) as u8;
-        let hover_alpha = (colors.hover_opacity * 255.0) as u8;
-        // Fill-style variations replace the neutral selection fill with bold accent.
-        let (selected_bg, hover_bg): (Hsla, Hsla) = match accent_variation {
-            AccentVariation::SolidFill => (accent_at(0xCC).into(), accent_at(0x55).into()),
-            AccentVariation::Ring => (accent_at(0x24).into(), accent_at(0x14).into()),
-            AccentVariation::Loud => (accent_at(0x40).into(), accent_at(0x1E).into()),
-            _ => (
-                colors.text_primary.rgba8(selected_alpha),
-                colors.text_primary.rgba8(hover_alpha),
+        let hover_alpha = ((colors.hover_opacity * 255.0) as u32).max(metrics.row_hover_fill_alpha);
+        let (selected_bg, hover_bg): (Hsla, Hsla) = match row_kind {
+            MainMenuRowKind::IconTile => (
+                colors
+                    .text_primary
+                    .rgba8(metrics.row_selected_fill_alpha as u8),
+                colors.text_primary.rgba8(hover_alpha as u8),
+            ),
+            MainMenuRowKind::GraphitePill => (
+                colors
+                    .text_primary
+                    .rgba8(metrics.row_selected_fill_alpha as u8),
+                colors
+                    .text_primary
+                    .rgba8(metrics.row_hover_fill_alpha as u8),
+            ),
+            MainMenuRowKind::Smoke => (
+                colors
+                    .text_primary
+                    .rgba8(metrics.row_selected_fill_alpha as u8),
+                colors
+                    .text_primary
+                    .rgba8(metrics.row_hover_fill_alpha as u8),
+            ),
+            MainMenuRowKind::BlueGlass
+            | MainMenuRowKind::LiquidPrism
+            | MainMenuRowKind::MilkGlass
+            | MainMenuRowKind::SpotlightLuxe => (
+                colors
+                    .text_primary
+                    .rgba8(metrics.row_selected_fill_alpha as u8),
+                colors
+                    .text_primary
+                    .rgba8(metrics.row_hover_fill_alpha as u8),
+            ),
+            MainMenuRowKind::WarmGold
+            | MainMenuRowKind::FrostedCommand
+            | MainMenuRowKind::AuroraSlate
+            | MainMenuRowKind::OceanGlass
+            | MainMenuRowKind::StudioPaperGlass
+            | MainMenuRowKind::OperatorMonoGlass => (
+                accent_at(metrics.row_selected_fill_alpha).into(),
+                accent_at(metrics.row_hover_fill_alpha).into(),
+            ),
+            MainMenuRowKind::ProConsole | MainMenuRowKind::CarbonNeon => (
+                accent_at(metrics.row_selected_fill_alpha).into(),
+                accent_at(metrics.row_hover_fill_alpha).into(),
             ),
         };
 
@@ -1523,15 +1683,33 @@ impl RenderOnce for ListItem {
         };
 
         // Icon Tile: seat the selected icon inside a solid filled accent tile.
+        let icon_tile_alpha = match row_kind {
+            MainMenuRowKind::MilkGlass => 0xB8,
+            MainMenuRowKind::ProConsole => 0xC8,
+            MainMenuRowKind::LiquidPrism | MainMenuRowKind::StudioPaperGlass => 0xCC,
+            MainMenuRowKind::FrostedCommand => 0xD0,
+            MainMenuRowKind::AuroraSlate | MainMenuRowKind::OceanGlass => 0xD8,
+            MainMenuRowKind::SpotlightLuxe => 0xE0,
+            MainMenuRowKind::WarmGold | MainMenuRowKind::BlueGlass => 0xE6,
+            MainMenuRowKind::CarbonNeon => 0xF0,
+            _ => 0xF2,
+        };
+        let icon_tile_radius = match row_kind {
+            MainMenuRowKind::ProConsole
+            | MainMenuRowKind::CarbonNeon
+            | MainMenuRowKind::OperatorMonoGlass => 6.0,
+            MainMenuRowKind::SpotlightLuxe => 10.0,
+            _ => 7.0,
+        };
         let icon_element = if icon_tile && self.icon.is_some() {
             div()
-                .w(icon_size)
-                .h(icon_size)
+                .w(px(metrics.icon_tile_size))
+                .h(px(metrics.icon_tile_size))
                 .flex()
                 .items_center()
                 .justify_center()
-                .rounded(px(7.0))
-                .bg(accent_at(0xF2))
+                .rounded(px(metrics.icon_tile_radius.max(icon_tile_radius)))
+                .bg(accent_at(metrics.icon_tile_fill_alpha.max(icon_tile_alpha)))
                 .flex_shrink_0()
                 .child(icon_element)
         } else {
@@ -1550,7 +1728,7 @@ impl RenderOnce for ListItem {
             .overflow_hidden()
             .flex()
             .flex_col()
-            .gap(px(ITEM_NAME_DESC_GAP))
+            .gap(px(metrics.name_desc_gap))
             .justify_center();
 
         // Name rendering - 14px font size for better balance with description
@@ -1791,7 +1969,7 @@ impl RenderOnce for ListItem {
         // For selected items, we don't apply hover styles (they already have full focus styling).
         // The left-edge selected-row accent bar was removed; rows use uniform
         // leading padding regardless of selection.
-        let pl_val = ITEM_PADDING_X;
+        let pl_val = metrics.row_inner_padding_x;
 
         let inner_content_id = ElementId::NamedInteger("list-item-inner".into(), item_index as u64);
         let mut inner_content = div()
@@ -1799,10 +1977,10 @@ impl RenderOnce for ListItem {
             .w_full()
             .h_full()
             .pl(px(pl_val))
-            .pr(px(ITEM_PADDING_X))
-            .py(px(ITEM_PADDING_Y))
+            .pr(px(metrics.row_inner_padding_x))
+            .py(px(metrics.row_inner_padding_y))
             .bg(bg_color)
-            .rounded(px(LIST_ITEM_ROW_RADIUS_PX))
+            .rounded(px(metrics.row_radius))
             .text_color(rgb(colors.text_primary))
             .font_family(FONT_SYSTEM_UI)
             .cursor_pointer()
@@ -1857,7 +2035,7 @@ impl RenderOnce for ListItem {
                 .flex_row()
                 .items_center()
                 .flex_shrink_0()
-                .gap(px(ITEM_ACCESSORIES_GAP));
+                .gap(px(metrics.accessory_gap));
 
             // Tool badge, source hint, and type accessory use progressive disclosure.
             // Search mode intentionally strips noisy metadata to keep rows calm.
@@ -1880,7 +2058,7 @@ impl RenderOnce for ListItem {
                     };
                     accessories = accessories.child(
                         div()
-                            .text_size(px(TOOL_BADGE_FONT_SIZE))
+                            .text_size(px(metrics.desc_font_size.min(TOOL_BADGE_FONT_SIZE)))
                             .font_family(FONT_MONO)
                             .text_color(badge_text)
                             .px(px(TOOL_BADGE_PADDING_X))
@@ -1897,7 +2075,7 @@ impl RenderOnce for ListItem {
                 if let Some(ref hint) = self.source_hint {
                     accessories = accessories.child(
                         div()
-                            .text_size(px(SOURCE_HINT_FONT_SIZE))
+                            .text_size(px(metrics.desc_font_size.min(SOURCE_HINT_FONT_SIZE)))
                             .text_color(rgba((colors.text_primary << 8) | colors.alpha_hint))
                             .child(hint.clone()),
                     );
@@ -1926,7 +2104,7 @@ impl RenderOnce for ListItem {
                         .child(
                             svg()
                                 .external_path(svg_path)
-                                .size(px(TYPE_ACCESSORY_ICON_SIZE))
+                                .size(px(self.main_menu_theme.def().metadata.type_accessory_size))
                                 .text_color(accent_color),
                         ),
                 );
@@ -1941,7 +2119,7 @@ impl RenderOnce for ListItem {
             inner_content = inner_content.child(
                 div()
                     .flex_shrink_0()
-                    .ml(px(ITEM_ACCESSORIES_GAP))
+                    .ml(px(metrics.accessory_gap))
                     .child(trailing),
             );
         }
@@ -1970,12 +2148,21 @@ impl RenderOnce for ListItem {
             ElementId::NamedInteger("list-item".into(), item_index as u64)
         };
 
-        // Left-edge accent bar removed: accent usage is now governed by the
-        // AccentVariation explorer applied above, not a fixed selection strip.
+        // Left-edge accent bar removed: accent usage is governed by the
+        // main-menu theme explorer applied above, not a fixed selection strip.
 
         // Accent Ring: outline the selected row with a thick accent border.
-        if ring {
-            inner_content = inner_content.border_2().border_color(accent_at(0xE6));
+        if ring || metrics.row_selected_border_width > 0.0 {
+            let border_width = metrics
+                .row_selected_border_width
+                .max(if ring { 2.0 } else { 0.0 });
+            let border_alpha =
+                metrics
+                    .row_selected_border_alpha
+                    .max(if ring { 0xE6 } else { 0x00 });
+            inner_content = inner_content
+                .border(px(border_width))
+                .border_color(accent_at(border_alpha));
         }
 
         // Base container with ID for stateful interactivity
@@ -1983,8 +2170,8 @@ impl RenderOnce for ListItem {
             .w_full()
             .h(px(metrics.item_height))
             .overflow_hidden()
-            .px(px(4.0))
-            .py(px(2.0))
+            .px(px(metrics.row_outer_padding_x))
+            .py(px(metrics.row_outer_padding_y))
             .flex()
             .flex_row()
             .items_center()
@@ -2253,7 +2440,7 @@ mod selected_accent_bar_removed_tests {
     #[test]
     fn list_item_does_not_render_left_edge_accent_bar() {
         // The selected-row left-edge accent strip was removed in favor of the
-        // AccentVariation explorer. Guard against it sneaking back in.
+        // main-menu theme explorer. Guard against it sneaking back in.
         // NOTE: needle is assembled via concat! so this assertion does not
         // match itself in the included source text.
         let needle = concat!("border_l(px(ACCENT_", "BAR_WIDTH))");

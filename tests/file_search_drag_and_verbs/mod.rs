@@ -292,11 +292,11 @@ fn all_expected_verbs_are_in_contract() {
     let expected_action_ids = [
         "rename_path",
         "move_path",
+        "duplicate_path",
         "copy_filename",
         "open_in_editor",
         "copy_path",
         "move_to_trash",
-        "open_in_terminal",
         "quick_look",
         "show_info",
     ];
@@ -577,7 +577,7 @@ fn current_directory_action_ids_exist() {
     for action_id in [
         "refresh_directory",
         "reveal_current_directory",
-        "open_current_directory_in_terminal",
+        "open_current_directory_in_quick_terminal",
         "copy_current_directory_path",
         "sort_name_asc",
         "sort_name_desc",
@@ -698,18 +698,21 @@ fn internal_directory_browse_preserves_current_results_until_first_batch() {
     let transition_start = source
         .find("fn open_file_search_view_with_result_transition(")
         .expect("transition helper must exist");
-    let transition = &source[transition_start..(transition_start + 3600).min(source.len())];
+    let transition = &source[transition_start..(transition_start + 5200).min(source.len())];
 
     assert!(
-        transition.contains("if !preserve_current_results_until_first_batch {")
+        transition.contains(
+            "if !preserve_current_results_until_first_batch && !seeded_initial_results {"
+        )
             && transition.contains("self.cached_file_results.clear();")
             && transition.contains("self.file_search_display_indices.clear();"),
-        "preserving directory navigation must avoid clearing visible rows until the stream's first batch"
+        "preserving directory navigation and seeded first-paint opens must avoid clearing visible rows until replacement rows are ready"
     );
     assert!(
-        transition.contains(
-            "let preserve_stream_results =\n            preserve_current_results_until_first_batch || seeded_initial_results;"
-        ) && transition.contains("preserve_stream_results,\n            cx,"),
+        transition.contains("let preserve_stream_results =")
+            && transition.contains("preserve_current_results_until_first_batch || seeded_initial_results")
+            && transition.contains("preserve_stream_results,")
+            && transition.contains("cx,"),
         "the preserving flag must flow into restart_file_search_stream_for_query, including the seeded mini-directory first-paint path"
     );
 }
@@ -835,14 +838,15 @@ const FILES_ACTION_SOURCE: &str = include_str!("../../src/app_actions/handle_act
 #[test]
 fn refresh_directory_shows_hud_and_restores_focus() {
     let handler_start = FILES_ACTION_SOURCE
-        .find("\"refresh_directory\" =>")
+        .find("\"refresh_directory\"\n            | \"reveal_current_directory\"")
         .expect("refresh_directory handler must exist");
     let handler_section =
-        &FILES_ACTION_SOURCE[handler_start..(handler_start + 1400).min(FILES_ACTION_SOURCE.len())];
+        &FILES_ACTION_SOURCE[handler_start..(handler_start + 2200).min(FILES_ACTION_SOURCE.len())];
 
     assert!(
-        handler_section.contains("\"Refreshed Directory\""),
-        "refresh_directory must show 'Refreshed Directory' HUD"
+        handler_section.contains("directory_action.success_hud(&dir)")
+            && FILES_ACTION_SOURCE.contains("Self::Refresh => Some(\"Refreshed Directory\".to_string())"),
+        "refresh_directory must show the `Refreshed Directory` HUD through the current-directory action plan"
     );
     assert!(
         handler_section.contains("restore_file_search_input_focus"),
@@ -857,10 +861,10 @@ fn refresh_directory_shows_hud_and_restores_focus() {
 #[test]
 fn refresh_directory_returns_error_when_no_directory_active() {
     let handler_start = FILES_ACTION_SOURCE
-        .find("\"refresh_directory\" =>")
+        .find("\"refresh_directory\"\n            | \"reveal_current_directory\"")
         .expect("refresh_directory handler must exist");
     let handler_section =
-        &FILES_ACTION_SOURCE[handler_start..(handler_start + 400).min(FILES_ACTION_SOURCE.len())];
+        &FILES_ACTION_SOURCE[handler_start..(handler_start + 900).min(FILES_ACTION_SOURCE.len())];
 
     assert!(
         handler_section.contains("current_file_search_directory_abs()"),

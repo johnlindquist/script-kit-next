@@ -84,6 +84,7 @@ pub(crate) enum InfoStateDensity {
 pub(crate) enum InfoStateLayout {
     Centered,
     AnchoredTop,
+    MainViewColumns,
     ComposerEmpty,
     InlinePanel,
 }
@@ -320,7 +321,7 @@ impl InfoStateSpec {
 pub(crate) fn acp_empty_guidance_spec() -> InfoStateSpec {
     InfoStateSpec::new("acp-empty-composer-guidance")
         .layout(InfoStateLayout::ComposerEmpty)
-        .density(InfoStateDensity::Compact)
+        .density(InfoStateDensity::Comfortable)
         .tone(InfoStateTone::Help)
         .title("Ask with context")
         .body("Describe the result you want. Use / for skills or @ to attach context before you send.")
@@ -454,12 +455,25 @@ fn launcher_filter_display(filter_text: &str) -> String {
 }
 
 pub(crate) fn render_info_state(spec: InfoStateSpec, theme: &theme::Theme) -> AnyElement {
+    let def = crate::designs::current_main_menu_theme().def();
+    render_info_state_with_main_view_def(spec, theme, def)
+}
+
+pub(crate) fn render_info_state_with_main_view_def(
+    spec: InfoStateSpec,
+    theme: &theme::Theme,
+    def: crate::designs::MainMenuThemeDef,
+) -> AnyElement {
     let palette = info_palette(theme);
     let metrics = info_metrics(spec.density);
-    let content = render_info_content(&spec, theme, palette, metrics);
+    let uses_main_view_columns = matches!(
+        spec.layout,
+        InfoStateLayout::ComposerEmpty | InfoStateLayout::MainViewColumns
+    );
+    let content = render_info_content(&spec, theme, palette, metrics, !uses_main_view_columns);
 
     match spec.layout {
-        InfoStateLayout::Centered | InfoStateLayout::ComposerEmpty => div()
+        InfoStateLayout::Centered => div()
             .id(spec.id)
             .w_full()
             .h_full()
@@ -470,6 +484,23 @@ pub(crate) fn render_info_state(spec: InfoStateSpec, theme: &theme::Theme) -> An
             .px(px(INFO_SPACING.xl))
             .child(content)
             .into_any_element(),
+        InfoStateLayout::ComposerEmpty | InfoStateLayout::MainViewColumns => {
+            let cols = crate::components::main_view_chrome::main_view_content_columns(def);
+            div()
+                .id(spec.id)
+                .w_full()
+                .h_full()
+                .min_h(px(0.0))
+                .flex()
+                .items_start()
+                .justify_start()
+                .pl(px(cols.text_column_x))
+                .pr(px(cols.content_right_inset_x))
+                .pt(px(cols.top_inset_y))
+                .pb(px(def.shell.content_inset_bottom))
+                .child(content)
+                .into_any_element()
+        }
         InfoStateLayout::AnchoredTop => div()
             .id(spec.id)
             .w_full()
@@ -503,6 +534,7 @@ fn render_info_content(
     theme: &theme::Theme,
     palette: InfoPalette,
     metrics: InfoMetrics,
+    cap_width: bool,
 ) -> Div {
     let title_metric = match spec.density {
         InfoStateDensity::Compact => INFO_TYPE_SCALE.subhead,
@@ -511,12 +543,10 @@ fn render_info_content(
     };
     let body_metric = INFO_TYPE_SCALE.body;
 
-    let mut stack = div()
-        .w_full()
-        .max_w(px(metrics.max_width))
-        .flex()
-        .flex_col()
-        .gap(px(metrics.block_gap));
+    let mut stack = div().w_full().flex().flex_col().gap(px(metrics.block_gap));
+    if cap_width {
+        stack = stack.max_w(px(metrics.max_width));
+    }
 
     if let Some(eyebrow) = spec.eyebrow.clone() {
         stack = stack.child(

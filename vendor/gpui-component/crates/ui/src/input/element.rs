@@ -1596,7 +1596,8 @@ impl Element for TextElement {
                     // < line_height), so cursor_bounds.origin.y sits a couple pixels
                     // below the text row top. Subtract that centering so the ghost
                     // suffix shares the typed text's baseline instead of drifting down.
-                    let caret_centering = (line_height - cursor_bounds.size.height).max(px(0.)) / 2.;
+                    let caret_centering =
+                        (line_height - cursor_bounds.size.height).max(px(0.)) / 2.;
                     let p = point(first_line_x, cursor_bounds.origin.y - caret_centering);
 
                     // Only paint the editor background fill in multi-line editor mode,

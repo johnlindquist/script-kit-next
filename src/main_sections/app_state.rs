@@ -957,9 +957,9 @@ struct ScriptListApp {
     scriptlet_preview_cache_lines: Vec<syntax::HighlightedLine>,
     // Current design variant for hot-swappable UI designs
     current_design: DesignVariant,
-    // Live accent-color exploration variation for the main menu.
+    // Live cohesive theme exploration variation for the main menu.
     // Cycled with alt+left/alt+right; surfaced in the search placeholder.
-    pub(crate) current_accent_variation: crate::designs::AccentVariation,
+    pub(crate) current_main_menu_theme: crate::designs::MainMenuThemeVariant,
     // Toast manager for notification queue
     toast_manager: ToastManager,
     // Cache for decoded clipboard images (entry_id -> RenderImage)

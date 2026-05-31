@@ -379,24 +379,25 @@ fn mini_component_bounds_do_not_emit_preview_panel() {
 }
 
 #[test]
-fn header_layout_measurement_keeps_search_input_before_run_button() {
+fn header_layout_measurement_uses_shared_main_view_input_width() {
     let layout_info = include_str!("../src/app_layout/build_layout_info.rs");
     assert!(
-        layout_info.contains("let run_x = actions_x - 24.0 - run_width;")
-            && layout_info
-                .contains("let input_width = (run_x - input_to_run_gap - HEADER_PADDING_X).max(0.0);"),
-        "layout info must derive SearchInput width from the RunButton edge so overlap receipts stay meaningful"
+        layout_info.contains(
+            "let input_width = (window_width - (shell_horizontal_padding * 2.0)).max(0.0);"
+        ) && !layout_info.contains("LayoutComponentInfo::new(\"RunButton\""),
+        "layout info must derive MainViewInput width from shared header padding, not stale RunButton geometry"
     );
 
     let component_bounds = include_str!("../src/app_layout/build_component_bounds.rs");
     assert!(
-        component_bounds.contains("let run_x = actions_x - px(24.) - run_width;")
-            && component_bounds
-                .contains("let input_width = (run_x - input_to_run_gap - input_x).max(px(0.));"),
-        "debug component bounds must derive SearchInput width from the Run button edge"
+        component_bounds.contains("let input_x = px(menu_def.shell.header_padding_x);")
+            && component_bounds.contains("let input_width = (width - (input_x * 2.)).max(px(0.));")
+            && component_bounds.contains("\"MainViewInput\"")
+            && !component_bounds.contains("ComponentBounds::new(\n                    \"Run\""),
+        "debug component bounds must derive MainViewInput width from shared header padding"
     );
 
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"header_layout\",\"search_run_overlap\":false,\"status\":\"pass\"}}");
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"header_layout\",\"shared_main_view_input\":true,\"status\":\"pass\"}}");
 }
 
 #[test]

@@ -56,6 +56,9 @@ mod file_action_path_helpers;
 #[path = "source_audits/structured_logging.rs"]
 mod structured_logging;
 
+#[path = "source_audits/memory_skills_discoverability.rs"]
+mod memory_skills_discoverability;
+
 #[path = "source_audits/trace_propagation.rs"]
 mod trace_propagation;
 

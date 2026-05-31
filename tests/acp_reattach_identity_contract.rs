@@ -28,16 +28,21 @@ fn reattach_method_exists_and_reuses_cached_embedded_view_first() {
         "ScriptListApp must expose reattach_embedded_acp_from_detached as the single \
          entry point for the 'Return to Panel' flow"
     );
+    let reattach_start = TAB_AI_MODE_SOURCE
+        .find("pub(crate) fn reattach_embedded_acp_from_detached(")
+        .expect("reattach_embedded_acp_from_detached should exist");
+    let reattach_body =
+        &TAB_AI_MODE_SOURCE[reattach_start..TAB_AI_MODE_SOURCE.len().min(reattach_start + 1500)];
+
     assert!(
-        TAB_AI_MODE_SOURCE.contains("if self.try_reuse_embedded_acp_view(None, cx) {"),
+        reattach_body.contains("if self.try_reuse_embedded_acp_view(\n            None,"),
         "reattach_embedded_acp_from_detached must call try_reuse_embedded_acp_view with \
          None entry_intent first — that reuses the cached embedded view (same thread \
          entity, same identity, full history) instead of launching a fresh session"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("event = \"acp_reattach_embedded_reused\",")
-            && TAB_AI_MODE_SOURCE
-                .contains("event = \"acp_reattach_embedded_cache_miss_fresh_launch\","),
+        reattach_body.contains("event = \"acp_reattach_embedded_reused\",")
+            && reattach_body.contains("event = \"acp_reattach_embedded_cache_miss_fresh_launch\","),
         "both reuse-success and cache-miss branches must emit distinct telemetry \
          spans so the audit log can distinguish a preserved-identity reattach from \
          a fresh fallback launch"

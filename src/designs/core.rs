@@ -2,6 +2,7 @@
 use super::*;
 
 mod accent_variation;
+mod main_menu_theme;
 mod metadata;
 pub mod registry;
 mod render;
@@ -13,8 +14,17 @@ mod match_reason;
 #[cfg(test)]
 mod tests;
 
+#[allow(unused_imports)]
 pub use accent_variation::{
     current_accent_variation, set_current_accent_variation, AccentVariation,
+};
+#[allow(unused_imports)]
+pub use main_menu_theme::{
+    current_main_menu_theme, set_current_main_menu_theme, FooterButtonTheme, FooterMetricsTokens,
+    FooterTheme, MainMenuGeometrySignature, MainMenuIconTokens, MainMenuListTokens,
+    MainMenuMetadataTokens, MainMenuRowKind, MainMenuRowTokens, MainMenuSearchTokens,
+    MainMenuShellTokens, MainMenuThemeDef, MainMenuThemeTier, MainMenuThemeVariant,
+    MainMenuTypographyTokens,
 };
 // `FooterButtonFill` is part of the accent-variation API surface; re-exported for
 // callers that name the type even though the footer consumes it field-by-field.

@@ -6644,6 +6644,7 @@ impl ScriptListApp {
     pub(crate) fn deliver_stdin_dictation_result(
         &mut self,
         transcript: String,
+        partial_transcript: Option<&str>,
         target_label: Option<&str>,
         cx: &mut Context<Self>,
     ) -> Result<crate::dictation::DictationTarget, String> {
@@ -6656,11 +6657,19 @@ impl ScriptListApp {
                 .map_err(|error| format!("failed to stop active dictation capture: {error}"))?;
         }
 
-        let result = if transcript.trim().is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(transcript))
-        };
+        let resolution =
+            crate::dictation::resolve_final_or_partial_transcript(&transcript, partial_transcript);
+        if resolution.used_partial_fallback {
+            tracing::info!(
+                category = "DICTATION",
+                event = "dictation_partial_transcript_fallback_used",
+                final_transcript_len = resolution.final_len,
+                partial_transcript_len = ?resolution.partial_len,
+                "Using partial dictation transcript because final transcript was empty"
+            );
+        }
+
+        let result = Ok(resolution.transcript);
         self.handle_dictation_transcript(result, std::time::Duration::ZERO, target, cx);
         Ok(target)
     }
@@ -7256,7 +7265,9 @@ impl ScriptListApp {
                 crate::dictation::list_input_devices().map_err(|error| error.to_string())
             }
             crate::dictation::DictationMicrophonePermissionStatus::Denied
-            | crate::dictation::DictationMicrophonePermissionStatus::NotDetermined => Ok(Vec::new()),
+            | crate::dictation::DictationMicrophonePermissionStatus::NotDetermined => {
+                Ok(Vec::new())
+            }
         };
         let device_count = devices.as_ref().map(|devices| devices.len()).unwrap_or(0);
         let setup_state = crate::dictation::build_dictation_setup_state(

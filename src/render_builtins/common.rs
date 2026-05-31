@@ -46,23 +46,21 @@ impl ScriptListApp {
     }
 
     pub(crate) fn render_search_input(&self) -> gpui_component::input::Input {
-        let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
+        let search = self.current_main_menu_theme.def().search;
+        let input_font_size = self.theme_font_size_xl();
         gpui_component::input::Input::new(&self.gpui_input_state)
             .w_full()
-            .h(gpui::px(input_height))
-            .line_height(gpui::px(crate::panel::CURSOR_HEIGHT_LG))
+            .h(gpui::px(search.height))
+            .line_height(gpui::px(search.height))
             .px(gpui::px(0.))
             .py(gpui::px(0.))
-            .with_size(gpui_component::Size::Size(gpui::px(self.theme_font_size_xl())))
+            .with_size(gpui_component::Size::Size(gpui::px(input_font_size)))
             .appearance(false)
             .bordered(false)
             .focus_bordered(false)
     }
 
-    pub(crate) fn render_search_input_with_ghost(
-        &self,
-        _cx: &gpui::Context<Self>,
-    ) -> gpui::Div {
+    pub(crate) fn render_search_input_with_ghost(&self, _cx: &gpui::Context<Self>) -> gpui::Div {
         gpui::div().w_full().child(self.render_search_input())
     }
 

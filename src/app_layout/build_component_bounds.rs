@@ -9,6 +9,7 @@ impl ScriptListApp {
         let mut bounds = Vec::new();
         let width = window_size.width;
         let height = window_size.height;
+        let menu_def = self.current_main_menu_theme.def();
 
         // Layout constants from panel.rs and list_item.rs
         // Header: py(HEADER_PADDING_Y=8) + max(input=22px, buttons=28px) + py(8) + divider(1px)
@@ -85,7 +86,7 @@ impl ScriptListApp {
         // Header bounds (includes padding + input + divider) - common to all views
         bounds.push(
             ComponentBounds::new(
-                "Header",
+                "MainViewHeader",
                 gpui::Bounds {
                     origin: gpui::point(px(0.), px(0.)),
                     size: gpui::size(width, header_height),
@@ -99,7 +100,11 @@ impl ScriptListApp {
         match &self.current_view {
             AppView::ScriptList => {
                 let uses_split_preview = matches!(self.main_window_mode, MainWindowMode::Full);
-                let list_width = if uses_split_preview { width * 0.5 } else { width };
+                let list_width = if uses_split_preview {
+                    width * 0.5
+                } else {
+                    width
+                };
                 let item_height = px(LIST_ITEM_HEIGHT);
 
                 bounds.push(
@@ -294,6 +299,119 @@ impl ScriptListApp {
                 }
             }
 
+            AppView::AcpChatView { .. } => {
+                let info_columns =
+                    crate::components::main_view_chrome::main_view_content_columns(menu_def);
+                let info_metrics = crate::components::info_state::info_metrics(
+                    crate::components::info_state::InfoStateDensity::Comfortable,
+                );
+                let info_x = px(info_columns.text_column_x);
+                let info_y = content_top + px(info_columns.top_inset_y);
+                let info_width =
+                    (width - info_x - px(info_columns.content_right_inset_x)).max(px(0.));
+                let shortcut_slot_width = px(
+                    crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX * 2.0
+                        + crate::components::footer_chrome::FOOTER_ACTION_CONTENT_GAP_PX,
+                );
+                let guidance_label_x = info_x
+                    + shortcut_slot_width
+                    + px(crate::components::info_state::INFO_SPACING.sm);
+                let guidance_label_width = (info_width
+                    - shortcut_slot_width
+                    - px(crate::components::info_state::INFO_SPACING.sm))
+                .max(px(0.));
+
+                bounds.push(
+                    ComponentBounds::new(
+                        "MainViewMain",
+                        gpui::Bounds {
+                            origin: gpui::point(px(0.), content_top),
+                            size: gpui::size(width, content_height),
+                        },
+                    )
+                    .with_type(ComponentType::Container)
+                    .with_padding(BoxModel::uniform(0.0)),
+                );
+                bounds.push(
+                    ComponentBounds::new(
+                        "AcpConversation",
+                        gpui::Bounds {
+                            origin: gpui::point(px(0.), content_top),
+                            size: gpui::size(width, content_height),
+                        },
+                    )
+                    .with_type(ComponentType::List)
+                    .with_padding(BoxModel::uniform(0.0)),
+                );
+                bounds.push(
+                    ComponentBounds::new(
+                        "AcpEmptyGuidance",
+                        gpui::Bounds {
+                            origin: gpui::point(info_x, info_y),
+                            size: gpui::size(
+                                info_width,
+                                (content_height
+                                    - px(info_columns.top_inset_y)
+                                    - px(menu_def.shell.content_inset_bottom))
+                                .max(px(0.)),
+                            ),
+                        },
+                    )
+                    .with_type(ComponentType::Container)
+                    .with_padding(BoxModel::uniform(0.0)),
+                );
+                bounds.push(
+                    ComponentBounds::new(
+                        "AcpEmptyGuidanceTitle",
+                        gpui::Bounds {
+                            origin: gpui::point(info_x, info_y),
+                            size: gpui::size(
+                                info_width,
+                                px(crate::components::info_state::INFO_TYPE_SCALE.title.line),
+                            ),
+                        },
+                    )
+                    .with_type(ComponentType::Header)
+                    .with_padding(BoxModel::uniform(0.0)),
+                );
+                bounds.push(
+                    ComponentBounds::new(
+                        "AcpEmptyGuidanceShortcutSlot",
+                        gpui::Bounds {
+                            origin: gpui::point(
+                                info_x,
+                                info_y
+                                    + px(info_metrics.block_gap)
+                                    + px(crate::components::info_state::INFO_TYPE_SCALE.title.line)
+                                    + px(crate::components::info_state::INFO_SPACING.xs * 0.5)
+                                    + px(crate::components::info_state::INFO_TYPE_SCALE.body.line),
+                            ),
+                            size: gpui::size(shortcut_slot_width, px(info_metrics.row_min_h)),
+                        },
+                    )
+                    .with_type(ComponentType::Other)
+                    .with_padding(BoxModel::uniform(0.0)),
+                );
+                bounds.push(
+                    ComponentBounds::new(
+                        "AcpEmptyGuidanceLabelColumn",
+                        gpui::Bounds {
+                            origin: gpui::point(
+                                guidance_label_x,
+                                info_y
+                                    + px(info_metrics.block_gap)
+                                    + px(crate::components::info_state::INFO_TYPE_SCALE.title.line)
+                                    + px(crate::components::info_state::INFO_SPACING.xs * 0.5)
+                                    + px(crate::components::info_state::INFO_TYPE_SCALE.body.line),
+                            ),
+                            size: gpui::size(guidance_label_width, px(info_metrics.row_min_h)),
+                        },
+                    )
+                    .with_type(ComponentType::Other)
+                    .with_padding(BoxModel::uniform(0.0)),
+                );
+            }
+
             // Other prompts - generic full-width content
             _ => {
                 bounds.push(
@@ -310,40 +428,23 @@ impl ScriptListApp {
             }
         }
 
-        // Only add header detail bounds for ScriptList view (the original behavior)
-        if matches!(self.current_view, AppView::ScriptList) {
-            let uses_split_preview = matches!(self.main_window_mode, MainWindowMode::Full);
-            let list_width = if uses_split_preview { width * 0.5 } else { width };
-
-            // Header buttons (right side)
-            // Buttons are h(28px) positioned at top of content area (after top padding)
-            let button_height = px(BUTTON_HEIGHT);
-            let button_y = px(HEADER_PADDING_Y); // Buttons at top of content area
-
-            // Buttons layout from right to left:
-            // [SearchInput flex-1] [Run ~55px] [|] [Actions ~85px] [|] [Logo 16px] [padding 16px]
-            // Spacing: gap=12 before Run, divider groups use 24px between controls.
-            let logo_size = px(16.);
-            let right_padding = px(content_padding);
-            let logo_x = width - right_padding - logo_size;
-            let actions_width = px(85.);
-            let actions_x = logo_x - px(24.) - actions_width;
-            let run_width = px(55.);
-            let run_x = actions_x - px(24.) - run_width;
-            let input_to_run_gap = px(12.);
-
+        if matches!(
+            self.current_view,
+            AppView::ScriptList | AppView::AcpChatView { .. }
+        ) {
             // Input field in header
-            // Positioned at: px(HEADER_PADDING_X) = 16, py(HEADER_PADDING_Y) = 8
+            // Positioned from the same shared main-view theme inset used by
+            // the rendered chrome, so the input aligns with the app shell.
             // The input is vertically centered in the header (which has 28px content height)
             // Input height is ~22px (CURSOR_HEIGHT_LG=18 + CURSOR_MARGIN_Y*2=4)
             const INPUT_HEIGHT: f32 = 22.0;
-            let input_x = px(content_padding);
+            let input_x = px(menu_def.shell.header_padding_x);
             let input_y = px(HEADER_PADDING_Y + (BUTTON_HEIGHT - INPUT_HEIGHT) / 2.0); // Vertically centered
-            let input_width = (run_x - input_to_run_gap - input_x).max(px(0.));
+            let input_width = (width - (input_x * 2.)).max(px(0.));
 
             bounds.push(
                 ComponentBounds::new(
-                    "SearchInput",
+                    "MainViewInput",
                     gpui::Bounds {
                         origin: gpui::point(input_x, input_y),
                         size: gpui::size(input_width, px(INPUT_HEIGHT)),
@@ -353,49 +454,36 @@ impl ScriptListApp {
                 .with_padding(BoxModel::symmetric(0.0, 0.0)),
             );
 
-            // Logo (Script Kit icon) - rightmost, 16x16 vertically centered in button area
-            let logo_y = px(HEADER_PADDING_Y + (BUTTON_HEIGHT - 16.0) / 2.0); // Vertically centered
+            let state_icon_size = menu_def
+                .icon
+                .container_size
+                .min(menu_def.search.height)
+                .max(16.0);
+            let state_icon_x = input_x
+                + px(crate::components::main_view_chrome::main_view_state_icon_left(
+                    menu_def,
+                ));
+            let state_icon_y =
+                input_y + px(((menu_def.search.height - state_icon_size) * 0.5).max(0.0));
             bounds.push(
                 ComponentBounds::new(
-                    "Lg", // Short name for Logo to fit in small space
+                    "MainViewInputStateIcon",
                     gpui::Bounds {
-                        origin: gpui::point(logo_x, logo_y),
-                        size: gpui::size(logo_size, logo_size),
+                        origin: gpui::point(state_icon_x, state_icon_y),
+                        size: gpui::size(px(state_icon_size), px(state_icon_size)),
                     },
                 )
-                .with_type(ComponentType::Other)
-                .with_padding(BoxModel::uniform(0.0)),
+                .with_type(ComponentType::Other),
             );
+        }
 
-            // Actions button - left of divider, left of logo
-            // Actual button text "Actions ⌘K" is roughly 80-90px wide
-
-            bounds.push(
-                ComponentBounds::new(
-                    "Actions", // Shortened from ActionsButton
-                    gpui::Bounds {
-                        origin: gpui::point(actions_x, button_y),
-                        size: gpui::size(actions_width, button_height),
-                    },
-                )
-                .with_type(ComponentType::Button)
-                .with_padding(BoxModel::symmetric(4.0, 8.0)),
-            );
-
-            // Run button - left of divider, left of Actions
-            // Actual button text "Run ↵" is roughly 50-60px wide
-
-            bounds.push(
-                ComponentBounds::new(
-                    "Run", // Shortened from RunButton
-                    gpui::Bounds {
-                        origin: gpui::point(run_x, button_y),
-                        size: gpui::size(run_width, button_height),
-                    },
-                )
-                .with_type(ComponentType::Button)
-                .with_padding(BoxModel::symmetric(4.0, 8.0)),
-            );
+        if matches!(self.current_view, AppView::ScriptList) {
+            let uses_split_preview = matches!(self.main_window_mode, MainWindowMode::Full);
+            let list_width = if uses_split_preview {
+                width * 0.5
+            } else {
+                width
+            };
 
             if uses_split_preview {
                 // Preview panel contents (right 50% of window)
@@ -508,6 +596,25 @@ impl ScriptListApp {
                 );
             }
         } // End of ScriptList-specific bounds
+
+        {
+            use crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT;
+            let footer_height = px(NATIVE_MAIN_WINDOW_FOOTER_HEIGHT);
+            bounds.push(
+                ComponentBounds::new(
+                    "MainViewFooter",
+                    gpui::Bounds {
+                        origin: gpui::point(px(0.), (height - footer_height).max(px(0.))),
+                        size: gpui::size(width, footer_height),
+                    },
+                )
+                .with_type(ComponentType::Container)
+                .with_padding(BoxModel::symmetric(
+                    menu_def.footer.metrics.button_padding_y,
+                    menu_def.footer.metrics.side_inset_px,
+                )),
+            );
+        }
 
         bounds
     }

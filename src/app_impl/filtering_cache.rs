@@ -1081,9 +1081,11 @@ impl ScriptListApp {
                         projection,
                     ),
                 );
-                // Rich subsearch bypass: @file: and @clipboard: produce native
-                // SearchResult::File / SearchResult::ClipboardHistory rows instead
-                // of generic SpineProjection rows, giving proper icons and preview.
+                // Rich subsearch bypass: @file:/@clipboard:/etc. produce native
+                // rows with proper icons and preview. An empty @source: prefix
+                // gets a selected guard row before native recents, so accepting
+                // the root subsearch row does not auto-arm the first concrete
+                // file/clipboard/history result; Down/click remains explicit.
                 if let Some((rich_source, rich_query)) =
                     active_rich_spine_subsearch(projection)
                 {
@@ -1103,7 +1105,7 @@ impl ScriptListApp {
                         return self.main_menu_result_caches.clone_grouped_results();
                     }
 
-                    let (grouped_items, flat_results) = match rich_source {
+                    let (mut grouped_items, mut flat_results) = match rich_source {
                         crate::spine::catalog_subsearch::ContextSubsearchSource::File => {
                             let recent = self.recent_file_results_from_frecency(
                                 crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT,
@@ -1206,7 +1208,16 @@ impl ScriptListApp {
                         }
                     };
 
-                    let (first_sel, last_sel) = grouped_selectable_bounds(&grouped_items, &flat_results);
+                    if rich_query.trim().is_empty() {
+                        prepend_empty_context_subsearch_guard(
+                            rich_source,
+                            &mut grouped_items,
+                            &mut flat_results,
+                        );
+                    }
+
+                    let (first_sel, last_sel) =
+                        grouped_selectable_bounds(&grouped_items, &flat_results);
                     self.main_menu_result_caches.store_grouped_results(
                         rich_cache_key,
                         grouped_items,
@@ -2318,9 +2329,18 @@ impl ScriptListApp {
                     if app.computed_filter_text != query {
                         return;
                     }
-                    let Ok((model_id, raw_response)) = result else {
-                        // Silent fallback: the starter remains visible.
-                        return;
+                    let (model_id, raw_response) = match result {
+                        Ok(pair) => pair,
+                        Err(err) => {
+                            // Silent fallback: the starter remains visible.
+                            tracing::warn!(
+                                target: "script_kit::ghost_text",
+                                error = %format!("{err:#}"),
+                                query = %query,
+                                "ghost local llm generation failed; keeping starter"
+                            );
+                            return;
+                        }
                     };
                     let revision = crate::scripts::search::ghost::PredictionRevision {
                         query_rev: generation,
@@ -2532,6 +2552,101 @@ mod tests {
             Some(&alpha),
         ));
     }
+
+    #[test]
+    fn empty_context_subsearch_prefix_routes_to_guarded_rich_rows() {
+        for (input, expected_source) in [
+            (
+                "@file:",
+                crate::spine::catalog_subsearch::ContextSubsearchSource::File,
+            ),
+            (
+                "@clipboard:",
+                crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard,
+            ),
+            (
+                "@history:",
+                crate::spine::catalog_subsearch::ContextSubsearchSource::History,
+            ),
+        ] {
+            let parse = crate::spine::parse_spine(input);
+            let projection = crate::spine::project_cursor(&parse, input.len());
+
+            assert_eq!(
+                active_rich_spine_subsearch(&projection),
+                Some((expected_source, String::new())),
+                "{input} must route to rich rows so the empty guard can own selection"
+            );
+        }
+    }
+
+    #[test]
+    fn empty_context_subsearch_guard_precedes_concrete_rows() {
+        let mut grouped = vec![
+            GroupedListItem::SectionHeader("Recent Files".to_string(), Some("file".to_string())),
+            GroupedListItem::Item(0),
+        ];
+        let mut flat = vec![scripts::SearchResult::File(scripts::FileMatch {
+            file: crate::file_search::FileResult {
+                path: "/tmp/README.md".to_string(),
+                name: "README.md".to_string(),
+                size: 0,
+                modified: 0,
+                file_type: crate::file_search::FileType::Document,
+            },
+            score: 0,
+        })];
+
+        prepend_empty_context_subsearch_guard(
+            crate::spine::catalog_subsearch::ContextSubsearchSource::File,
+            &mut grouped,
+            &mut flat,
+        );
+
+        let Some(scripts::SearchResult::SpineProjection(row)) = flat.first() else {
+            panic!("first flat result must be the empty subsearch guard");
+        };
+        assert_eq!(
+            row.id.as_ref(),
+            "spine:context-subsearch:file:empty-guard"
+        );
+        assert!(matches!(
+            row.action,
+            crate::spine::SpineListAction::AwaitContextSubsearchInput { .. }
+        ));
+        assert!(matches!(grouped.first(), Some(GroupedListItem::Item(0))));
+        assert!(matches!(grouped.get(2), Some(GroupedListItem::Item(1))));
+    }
+
+    #[test]
+    fn typed_context_subsearch_arms_rich_rows() {
+        for (input, expected_source, expected_query) in [
+            (
+                "@file:readme",
+                crate::spine::catalog_subsearch::ContextSubsearchSource::File,
+                "readme",
+            ),
+            (
+                "@clipboard:snippet",
+                crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard,
+                "snippet",
+            ),
+            (
+                "@history:agent",
+                crate::spine::catalog_subsearch::ContextSubsearchSource::History,
+                "agent",
+            ),
+        ] {
+            let parse = crate::spine::parse_spine(input);
+            let projection = crate::spine::project_cursor(&parse, input.len());
+
+            assert_eq!(
+                active_rich_spine_subsearch(&projection),
+                Some((expected_source, expected_query.to_string())),
+                "{input} should still route typed subqueries to native rich rows"
+            );
+        }
+    }
 }
 
 fn active_rich_spine_subsearch(
@@ -2551,7 +2666,108 @@ fn active_rich_spine_subsearch(
         context_type,
         sub_query.as_deref(),
     )?;
-    Some((source, query.to_string()))
+    Some((source, query.trim().to_string()))
+}
+
+fn prepend_empty_context_subsearch_guard(
+    source: crate::spine::catalog_subsearch::ContextSubsearchSource,
+    grouped: &mut Vec<GroupedListItem>,
+    flat: &mut Vec<scripts::SearchResult>,
+) {
+    let mut shifted_grouped = Vec::with_capacity(grouped.len() + 1);
+    shifted_grouped.push(GroupedListItem::Item(0));
+    shifted_grouped.extend(grouped.iter().map(|item| match item {
+        GroupedListItem::Item(index) => GroupedListItem::Item(index + 1),
+        GroupedListItem::SectionHeader(..) | GroupedListItem::Status(_) => item.clone(),
+    }));
+
+    let mut shifted_flat = Vec::with_capacity(flat.len() + 1);
+    shifted_flat.push(scripts::SearchResult::SpineProjection(
+        empty_context_subsearch_guard_row(source),
+    ));
+    shifted_flat.extend(flat.iter().cloned());
+
+    *grouped = shifted_grouped;
+    *flat = shifted_flat;
+}
+
+fn empty_context_subsearch_guard_row(
+    source: crate::spine::catalog_subsearch::ContextSubsearchSource,
+) -> crate::spine::SpineListRow {
+    let prefix = source.prefix();
+    let (title, subtitle, icon) = match source {
+        crate::spine::catalog_subsearch::ContextSubsearchSource::File => (
+            "Type to search files",
+            "Press Down to choose a recent file",
+            "file-search",
+        ),
+        crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard => (
+            "Type to search clipboard",
+            "Press Down to choose a recent clipboard item",
+            "clipboard",
+        ),
+        crate::spine::catalog_subsearch::ContextSubsearchSource::History => (
+            "Type to search conversations",
+            "Press Down to choose a recent conversation",
+            "message-circle",
+        ),
+        crate::spine::catalog_subsearch::ContextSubsearchSource::BrowserHistory => (
+            "Type to search browser history",
+            "Press Down to choose a recent history item",
+            "globe",
+        ),
+        crate::spine::catalog_subsearch::ContextSubsearchSource::Notes => (
+            "Type to search notes",
+            "Press Down to choose a recent note",
+            "notebook-text",
+        ),
+        crate::spine::catalog_subsearch::ContextSubsearchSource::Dictation => (
+            "Type to search dictation",
+            "Press Down to choose a recent dictation",
+            "mic",
+        ),
+        crate::spine::catalog_subsearch::ContextSubsearchSource::Scripts => (
+            "Type to search scripts",
+            "Press Down to choose a script",
+            "file-code",
+        ),
+        crate::spine::catalog_subsearch::ContextSubsearchSource::Scriptlets => (
+            "Type to search scriptlets",
+            "Press Down to choose a scriptlet",
+            "scroll-text",
+        ),
+        crate::spine::catalog_subsearch::ContextSubsearchSource::Skills => (
+            "Type to search skills",
+            "Press Down to choose a skill",
+            "workflow",
+        ),
+        crate::spine::catalog_subsearch::ContextSubsearchSource::Calendar => (
+            "Type to search calendar",
+            "Press Down to choose an event",
+            "calendar",
+        ),
+        crate::spine::catalog_subsearch::ContextSubsearchSource::Notifications => (
+            "Type to search notifications",
+            "Press Down to choose a notification",
+            "bell",
+        ),
+    };
+
+    crate::spine::SpineListRow {
+        id: crate::spine::list::ss(format!("spine:context-subsearch:{prefix}:empty-guard")),
+        kind: crate::spine::list::SpineListRowKind::Hint,
+        title: crate::spine::list::ss(title),
+        subtitle: Some(crate::spine::list::ss(subtitle)),
+        meta: None,
+        icon: Some(crate::spine::list::ss(icon)),
+        badges: vec![crate::spine::list::ss("@")],
+        score: i32::MAX,
+        is_selectable: true,
+        action_label: Some(crate::spine::list::ss("Type")),
+        action: crate::spine::SpineListAction::AwaitContextSubsearchInput {
+            source: crate::spine::list::ss(prefix),
+        },
+    }
 }
 
 fn build_rich_file_subsearch_rows(

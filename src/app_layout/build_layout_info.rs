@@ -1,7 +1,13 @@
 impl ScriptListApp {
     pub fn build_layout_info(&self, _cx: &mut gpui::Context<Self>) -> protocol::LayoutInfo {
-        use crate::list_item::LIST_ITEM_HEIGHT;
         use protocol::{LayoutComponentInfo, LayoutComponentType, LayoutInfo};
+        let menu_theme = self.current_main_menu_theme;
+        let menu_def = menu_theme.def();
+        let shell = menu_def.shell;
+        let search = menu_def.search;
+        let row = menu_def.row;
+        let list = menu_def.list;
+        let footer_metrics = menu_def.footer.metrics;
 
         // Keep automation layout receipts aligned with the same sizing contract
         // used by real window resize paths.
@@ -30,7 +36,8 @@ impl ScriptListApp {
             | AppView::AcpHistoryView { .. }
             | AppView::BrowserHistoryView { .. }
             | AppView::DictationHistoryView { .. }
-            | AppView::NotesBrowseView { .. } => crate::window_resize::ViewType::MainWindow,
+            | AppView::NotesBrowseView { .. }
+            | AppView::AcpChatView { .. } => crate::window_resize::ViewType::MainWindow,
             AppView::AppLauncherView { .. }
             | AppView::WindowSwitcherView { .. }
             | AppView::BrowserTabsView { .. }
@@ -113,11 +120,9 @@ impl ScriptListApp {
 
         // Layout constants (same as build_component_bounds)
         use crate::ui::chrome as chrome_tokens;
-        const HEADER_PADDING_Y: f32 = 8.0;
-        const HEADER_PADDING_X: f32 = 16.0;
         const BUTTON_HEIGHT: f32 = 28.0;
-        const DIVIDER_HEIGHT: f32 = 1.0;
-        let header_height = HEADER_PADDING_Y * 2.0 + BUTTON_HEIGHT + DIVIDER_HEIGHT; // 45px
+        let shell_horizontal_padding = shell.header_padding_x;
+        let header_height = shell.header_padding_y * 2.0 + BUTTON_HEIGHT + shell.divider_height;
         let list_width = if uses_split_preview {
             window_width * 0.5
         } else {
@@ -179,7 +184,9 @@ impl ScriptListApp {
                     .with_flex_row()
                     .with_depth(1)
                     .with_parent("Window")
-                    .with_explanation("About header is 52px tall and owns only title and close control."),
+                    .with_explanation(
+                        "About header is 52px tall and owns only title and close control.",
+                    ),
             );
             components.push(
                 LayoutComponentInfo::new("AboutCloseButton", LayoutComponentType::Button)
@@ -193,7 +200,9 @@ impl ScriptListApp {
                     .with_hit_bounds(window_width - 44.0, 12.0, 28.0, 28.0)
                     .with_depth(2)
                     .with_parent("AboutHeader")
-                    .with_explanation("28x28 minimum macOS hit target; rounded as a circular icon control."),
+                    .with_explanation(
+                        "28x28 minimum macOS hit target; rounded as a circular icon control.",
+                    ),
             );
             components.push(
                 LayoutComponentInfo::new("AboutScrollContainer", LayoutComponentType::Container)
@@ -217,7 +226,12 @@ impl ScriptListApp {
             );
             components.push(
                 LayoutComponentInfo::new("AboutContentStack", LayoutComponentType::Container)
-                    .with_bounds(stack_x, cursor_y, stack_width, content_height - ABOUT_SCROLL_PADDING_Y * 2.0)
+                    .with_bounds(
+                        stack_x,
+                        cursor_y,
+                        stack_width,
+                        content_height - ABOUT_SCROLL_PADDING_Y * 2.0,
+                    )
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
@@ -228,13 +242,20 @@ impl ScriptListApp {
                     .with_flex_column()
                     .with_depth(2)
                     .with_parent("AboutScrollContainer")
-                    .with_explanation("Centered 560px max-width content stack with 10px item rhythm."),
+                    .with_explanation(
+                        "Centered 560px max-width content stack with 10px item rhythm.",
+                    ),
             );
 
             let centered_x = |width: f32| stack_x + (stack_width - width) / 2.0;
             components.push(
                 LayoutComponentInfo::new("AboutLogoTile", LayoutComponentType::Container)
-                    .with_bounds(centered_x(ABOUT_LOGO_SIZE), cursor_y, ABOUT_LOGO_SIZE, ABOUT_LOGO_SIZE)
+                    .with_bounds(
+                        centered_x(ABOUT_LOGO_SIZE),
+                        cursor_y,
+                        ABOUT_LOGO_SIZE,
+                        ABOUT_LOGO_SIZE,
+                    )
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
@@ -252,7 +273,12 @@ impl ScriptListApp {
 
             components.push(
                 LayoutComponentInfo::new("AboutTitle", LayoutComponentType::Other)
-                    .with_bounds(stack_x, cursor_y, stack_width, ABOUT_TITLE_HEIGHT + 6.0 + ABOUT_BADGE_HEIGHT)
+                    .with_bounds(
+                        stack_x,
+                        cursor_y,
+                        stack_width,
+                        ABOUT_TITLE_HEIGHT + 6.0 + ABOUT_BADGE_HEIGHT,
+                    )
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
@@ -267,7 +293,12 @@ impl ScriptListApp {
 
             components.push(
                 LayoutComponentInfo::new("AboutTagline", LayoutComponentType::Other)
-                    .with_bounds(centered_x(440.0), cursor_y, 440.0_f32.min(stack_width), ABOUT_TAGLINE_HEIGHT)
+                    .with_bounds(
+                        centered_x(440.0),
+                        cursor_y,
+                        440.0_f32.min(stack_width),
+                        ABOUT_TAGLINE_HEIGHT,
+                    )
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
@@ -282,7 +313,12 @@ impl ScriptListApp {
 
             components.push(
                 LayoutComponentInfo::new("AboutCreatorRow", LayoutComponentType::Other)
-                    .with_bounds(centered_x(260.0), cursor_y, 260.0_f32.min(stack_width), ABOUT_CREATOR_HEIGHT)
+                    .with_bounds(
+                        centered_x(260.0),
+                        cursor_y,
+                        260.0_f32.min(stack_width),
+                        ABOUT_CREATOR_HEIGHT,
+                    )
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
@@ -298,7 +334,12 @@ impl ScriptListApp {
             let quick_actions_width = ABOUT_BUTTON_WIDTH * 3.0 + ABOUT_BUTTON_GAP * 2.0;
             components.push(
                 LayoutComponentInfo::new("AboutQuickActions", LayoutComponentType::Container)
-                    .with_bounds(centered_x(quick_actions_width), cursor_y, quick_actions_width.min(stack_width), ABOUT_BUTTON_HEIGHT)
+                    .with_bounds(
+                        centered_x(quick_actions_width),
+                        cursor_y,
+                        quick_actions_width.min(stack_width),
+                        ABOUT_BUTTON_HEIGHT,
+                    )
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_FUNCTIONAL,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
@@ -315,7 +356,8 @@ impl ScriptListApp {
                 .into_iter()
                 .enumerate()
             {
-                let x = centered_x(quick_actions_width) + index as f32 * (ABOUT_BUTTON_WIDTH + ABOUT_BUTTON_GAP);
+                let x = centered_x(quick_actions_width)
+                    + index as f32 * (ABOUT_BUTTON_WIDTH + ABOUT_BUTTON_GAP);
                 components.push(
                     LayoutComponentInfo::new(name, LayoutComponentType::Button)
                         .with_bounds(x, cursor_y, ABOUT_BUTTON_WIDTH, ABOUT_BUTTON_HEIGHT)
@@ -328,14 +370,21 @@ impl ScriptListApp {
                         .with_hit_bounds(x, cursor_y, ABOUT_BUTTON_WIDTH, ABOUT_BUTTON_HEIGHT)
                         .with_depth(4)
                         .with_parent("AboutQuickActions")
-                        .with_explanation("34px tall compact text button; hit target exceeds 28px."),
+                        .with_explanation(
+                            "34px tall compact text button; hit target exceeds 28px.",
+                        ),
                 );
             }
             cursor_y += ABOUT_BUTTON_HEIGHT + ABOUT_ITEM_GAP;
 
             components.push(
                 LayoutComponentInfo::new("AboutUpdateCard", LayoutComponentType::Panel)
-                    .with_bounds(stack_x, cursor_y, 500.0_f32.min(stack_width), ABOUT_CARD_HEIGHT)
+                    .with_bounds(
+                        stack_x,
+                        cursor_y,
+                        500.0_f32.min(stack_width),
+                        ABOUT_CARD_HEIGHT,
+                    )
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
@@ -346,18 +395,30 @@ impl ScriptListApp {
                     .with_flex_row()
                     .with_depth(3)
                     .with_parent("AboutContentStack")
-                    .with_explanation("Update card uses compact 10px radius and content-layer material."),
+                    .with_explanation(
+                        "Update card uses compact 10px radius and content-layer material.",
+                    ),
             );
             components.push(
                 LayoutComponentInfo::new("AboutUpdateButton", LayoutComponentType::Button)
-                    .with_bounds(stack_x + 500.0_f32.min(stack_width) - 16.0 - 142.0, cursor_y + 13.0, 142.0, ABOUT_BUTTON_HEIGHT)
+                    .with_bounds(
+                        stack_x + 500.0_f32.min(stack_width) - 16.0 - 142.0,
+                        cursor_y + 13.0,
+                        142.0,
+                        ABOUT_BUTTON_HEIGHT,
+                    )
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_FUNCTIONAL,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
                         Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
                     )
                     .with_visual_token("about.actionButton")
-                    .with_hit_bounds(stack_x + 500.0_f32.min(stack_width) - 16.0 - 142.0, cursor_y + 13.0, 142.0, ABOUT_BUTTON_HEIGHT)
+                    .with_hit_bounds(
+                        stack_x + 500.0_f32.min(stack_width) - 16.0 - 142.0,
+                        cursor_y + 13.0,
+                        142.0,
+                        ABOUT_BUTTON_HEIGHT,
+                    )
                     .with_depth(4)
                     .with_parent("AboutUpdateCard")
                     .with_explanation("Update action is 34px high with 142px minimum width."),
@@ -366,7 +427,12 @@ impl ScriptListApp {
 
             components.push(
                 LayoutComponentInfo::new("AboutAcknowledgementsCard", LayoutComponentType::Panel)
-                    .with_bounds(stack_x, cursor_y, 500.0_f32.min(stack_width), ABOUT_ACK_HEIGHT)
+                    .with_bounds(
+                        stack_x,
+                        cursor_y,
+                        500.0_f32.min(stack_width),
+                        ABOUT_ACK_HEIGHT,
+                    )
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
@@ -441,26 +507,33 @@ impl ScriptListApp {
                     .with_visual_token("feedback.intro")
                     .with_depth(2)
                     .with_parent("CreationFeedbackPanel")
-                    .with_explanation("Title and supporting copy for the created-file confirmation."),
+                    .with_explanation(
+                        "Title and supporting copy for the created-file confirmation.",
+                    ),
             );
             cursor_y += FEEDBACK_INTRO_HEIGHT + FEEDBACK_STACK_GAP;
 
             let section_height =
                 FEEDBACK_SECTION_LABEL_HEIGHT + FEEDBACK_SECTION_GAP + FEEDBACK_PATH_HEIGHT;
             components.push(
-                LayoutComponentInfo::new("CreationFeedbackPathSection", LayoutComponentType::Container)
-                    .with_bounds(panel_x, cursor_y, panel_width, section_height)
-                    .with_visual_style(
-                        chrome_tokens::CHROME_LAYER_CONTENT,
-                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
-                    )
-                    .with_visual_token("feedback.pathSection")
-                    .with_gap(FEEDBACK_SECTION_GAP)
-                    .with_flex_column()
-                    .with_depth(2)
-                    .with_parent("CreationFeedbackPanel")
-                    .with_explanation("Path section owns the read-only path surface and label spacing."),
+                LayoutComponentInfo::new(
+                    "CreationFeedbackPathSection",
+                    LayoutComponentType::Container,
+                )
+                .with_bounds(panel_x, cursor_y, panel_width, section_height)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_CONTENT,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                )
+                .with_visual_token("feedback.pathSection")
+                .with_gap(FEEDBACK_SECTION_GAP)
+                .with_flex_column()
+                .with_depth(2)
+                .with_parent("CreationFeedbackPanel")
+                .with_explanation(
+                    "Path section owns the read-only path surface and label spacing.",
+                ),
             );
             components.push(
                 LayoutComponentInfo::new("CreationFeedbackPathSurface", LayoutComponentType::Input)
@@ -505,7 +578,9 @@ impl ScriptListApp {
                     .with_flex_row()
                     .with_depth(2)
                     .with_parent("CreationFeedbackPanel")
-                    .with_explanation("Action row keeps three 28px-tall controls on an 8px rhythm."),
+                    .with_explanation(
+                        "Action row keeps three 28px-tall controls on an 8px rhythm.",
+                    ),
             );
 
             let mut button_x = panel_x;
@@ -550,7 +625,8 @@ impl ScriptListApp {
             const CONFIRM_BUTTON_GAP: f32 = 8.0;
 
             let content_height = window_height - CONFIRM_FOOTER_HEIGHT;
-            let stack_width = CONFIRM_STACK_WIDTH.min(window_width - CONFIRM_CONTENT_PADDING_X * 2.0);
+            let stack_width =
+                CONFIRM_STACK_WIDTH.min(window_width - CONFIRM_CONTENT_PADDING_X * 2.0);
             let stack_height = CONFIRM_TITLE_HEIGHT + CONFIRM_STACK_GAP + CONFIRM_BODY_HEIGHT;
             let stack_x = (window_width - stack_width) / 2.0;
             let stack_y = (content_height - stack_height) / 2.0;
@@ -636,7 +712,9 @@ impl ScriptListApp {
                     .with_flex_row()
                     .with_depth(1)
                     .with_parent("Window")
-                    .with_explanation("Native footer region owns confirm/cancel button affordances."),
+                    .with_explanation(
+                        "Native footer region owns confirm/cancel button affordances.",
+                    ),
             );
             for (name, x) in [
                 ("ConfirmPromptConfirmButton", confirm_x),
@@ -687,21 +765,17 @@ impl ScriptListApp {
             const KIT_STORE_FOOTER_HEIGHT: f32 = 34.0;
 
             let divider_y = KIT_STORE_HEADER_HEIGHT;
-            let list_top =
-                divider_y + KIT_STORE_DIVIDER_HEIGHT + KIT_STORE_LIST_PADDING_Y;
+            let list_top = divider_y + KIT_STORE_DIVIDER_HEIGHT + KIT_STORE_LIST_PADDING_Y;
             let footer_y = window_height - KIT_STORE_FOOTER_HEIGHT;
-            let list_height =
-                (footer_y - list_top - KIT_STORE_LIST_PADDING_Y).max(0.0);
-            let input_x =
-                KIT_STORE_HEADER_PADDING_X + KIT_STORE_TITLE_WIDTH + KIT_STORE_HEADER_GAP;
+            let list_height = (footer_y - list_top - KIT_STORE_LIST_PADDING_Y).max(0.0);
+            let input_x = KIT_STORE_HEADER_PADDING_X + KIT_STORE_TITLE_WIDTH + KIT_STORE_HEADER_GAP;
             let input_width = (window_width
                 - input_x
                 - KIT_STORE_HEADER_GAP
                 - KIT_STORE_COUNT_WIDTH
                 - KIT_STORE_HEADER_PADDING_X)
                 .max(0.0);
-            let input_y =
-                KIT_STORE_HEADER_PADDING_Y + (KIT_STORE_INPUT_HEIGHT - 28.0) / 2.0;
+            let input_y = KIT_STORE_HEADER_PADDING_Y + (KIT_STORE_INPUT_HEIGHT - 28.0) / 2.0;
             let count_x = input_x + input_width + KIT_STORE_HEADER_GAP;
 
             components.push(
@@ -805,7 +879,9 @@ impl ScriptListApp {
                     .with_visual_token("kitStoreBrowse.divider")
                     .with_depth(2)
                     .with_parent("KitStoreBrowseSurface")
-                    .with_explanation("One-pixel divider inset to the same 16px horizontal header padding."),
+                    .with_explanation(
+                        "One-pixel divider inset to the same 16px horizontal header padding.",
+                    ),
             );
             components.push(
                 LayoutComponentInfo::new("KitStoreBrowseList", LayoutComponentType::List)
@@ -819,7 +895,9 @@ impl ScriptListApp {
                     .with_flex_column()
                     .with_depth(2)
                     .with_parent("KitStoreBrowseSurface")
-                    .with_explanation("Custom kit-store list region uses full width and 72px browse rows."),
+                    .with_explanation(
+                        "Custom kit-store list region uses full width and 72px browse rows.",
+                    ),
             );
 
             let visible_rows = ((list_height / KIT_STORE_ROW_HEIGHT) as usize)
@@ -942,13 +1020,10 @@ impl ScriptListApp {
             const KIT_STORE_FOOTER_HEIGHT: f32 = 34.0;
 
             let divider_y = KIT_STORE_HEADER_HEIGHT;
-            let list_top =
-                divider_y + KIT_STORE_DIVIDER_HEIGHT + KIT_STORE_LIST_PADDING_Y;
+            let list_top = divider_y + KIT_STORE_DIVIDER_HEIGHT + KIT_STORE_LIST_PADDING_Y;
             let footer_y = window_height - KIT_STORE_FOOTER_HEIGHT;
-            let list_height =
-                (footer_y - list_top - KIT_STORE_LIST_PADDING_Y).max(0.0);
-            let count_x =
-                window_width - KIT_STORE_HEADER_PADDING_X - KIT_STORE_COUNT_WIDTH;
+            let list_height = (footer_y - list_top - KIT_STORE_LIST_PADDING_Y).max(0.0);
+            let count_x = window_width - KIT_STORE_HEADER_PADDING_X - KIT_STORE_COUNT_WIDTH;
 
             components.push(
                 LayoutComponentInfo::new("KitStoreInstalledSurface", LayoutComponentType::Panel)
@@ -982,7 +1057,9 @@ impl ScriptListApp {
                     .with_flex_row()
                     .with_depth(2)
                     .with_parent("KitStoreInstalledSurface")
-                    .with_explanation("Custom installed-kits header owns the title and installed count."),
+                    .with_explanation(
+                        "Custom installed-kits header owns the title and installed count.",
+                    ),
             );
             components.push(
                 LayoutComponentInfo::new("KitStoreInstalledTitle", LayoutComponentType::Other)
@@ -1018,7 +1095,9 @@ impl ScriptListApp {
                     .with_visual_token("kitStoreInstalled.count")
                     .with_depth(3)
                     .with_parent("KitStoreInstalledHeader")
-                    .with_explanation("Installed count text remains in the functional header chrome."),
+                    .with_explanation(
+                        "Installed count text remains in the functional header chrome.",
+                    ),
             );
             components.push(
                 LayoutComponentInfo::new("KitStoreInstalledDivider", LayoutComponentType::Other)
@@ -1036,7 +1115,9 @@ impl ScriptListApp {
                     .with_visual_token("kitStoreInstalled.divider")
                     .with_depth(2)
                     .with_parent("KitStoreInstalledSurface")
-                    .with_explanation("One-pixel divider inset to the same 16px horizontal header padding."),
+                    .with_explanation(
+                        "One-pixel divider inset to the same 16px horizontal header padding.",
+                    ),
             );
             components.push(
                 LayoutComponentInfo::new("KitStoreInstalledList", LayoutComponentType::List)
@@ -1050,7 +1131,9 @@ impl ScriptListApp {
                     .with_flex_column()
                     .with_depth(2)
                     .with_parent("KitStoreInstalledSurface")
-                    .with_explanation("Custom installed-kits list region uses full width and 72px rows."),
+                    .with_explanation(
+                        "Custom installed-kits list region uses full width and 72px rows.",
+                    ),
             );
 
             let visible_rows = ((list_height / KIT_STORE_ROW_HEIGHT) as usize)
@@ -1076,8 +1159,7 @@ impl ScriptListApp {
             } else {
                 for i in 0..visible_rows {
                     let row_y = list_top + i as f32 * KIT_STORE_ROW_HEIGHT;
-                    let remove_x =
-                        window_width - KIT_STORE_ROW_PADDING_X - KIT_STORE_REMOVE_WIDTH;
+                    let remove_x = window_width - KIT_STORE_ROW_PADDING_X - KIT_STORE_REMOVE_WIDTH;
                     let update_x = remove_x - KIT_STORE_ACTION_GAP - KIT_STORE_UPDATE_WIDTH;
                     let action_y = row_y + (KIT_STORE_ROW_HEIGHT - KIT_STORE_ACTION_HEIGHT) / 2.0;
                     components.push(
@@ -1105,8 +1187,16 @@ impl ScriptListApp {
                         .with_explanation("Installed kit rows are 72px tall with 12px horizontal padding, 8px vertical padding, and a 12px text/action gap."),
                     );
                     for (name, x, width) in [
-                        ("KitStoreInstalledUpdateButton", update_x, KIT_STORE_UPDATE_WIDTH),
-                        ("KitStoreInstalledRemoveButton", remove_x, KIT_STORE_REMOVE_WIDTH),
+                        (
+                            "KitStoreInstalledUpdateButton",
+                            update_x,
+                            KIT_STORE_UPDATE_WIDTH,
+                        ),
+                        (
+                            "KitStoreInstalledRemoveButton",
+                            remove_x,
+                            KIT_STORE_REMOVE_WIDTH,
+                        ),
                     ] {
                         components.push(
                             LayoutComponentInfo::new(
@@ -1192,8 +1282,8 @@ impl ScriptListApp {
                 - GENERIC_HEADER_GAP
                 - GENERIC_COUNT_WIDTH)
                 .max(0.0);
-            let search_visual_y =
-                GENERIC_HEADER_PADDING_Y + (GENERIC_INPUT_HEIGHT - GENERIC_INPUT_VISUAL_HEIGHT) / 2.0;
+            let search_visual_y = GENERIC_HEADER_PADDING_Y
+                + (GENERIC_INPUT_HEIGHT - GENERIC_INPUT_VISUAL_HEIGHT) / 2.0;
             let count_x = search_x + search_width + GENERIC_HEADER_GAP;
 
             components.push(
@@ -1255,7 +1345,9 @@ impl ScriptListApp {
                     )
                     .with_depth(3)
                     .with_parent("GenericFilterableHeader")
-                    .with_explanation("Search uses a 22px visual text lane inside a 28px minimum hit target."),
+                    .with_explanation(
+                        "Search uses a 22px visual text lane inside a 28px minimum hit target.",
+                    ),
             );
             components.push(
                 LayoutComponentInfo::new("GenericFilterableCount", LayoutComponentType::Other)
@@ -1293,7 +1385,9 @@ impl ScriptListApp {
                     .with_visual_token(format!("genericFilterable.{variant}.divider"))
                     .with_depth(2)
                     .with_parent("GenericFilterableSurface")
-                    .with_explanation("One-pixel divider inset to the same 16px horizontal header padding."),
+                    .with_explanation(
+                        "One-pixel divider inset to the same 16px horizontal header padding.",
+                    ),
             );
             components.push(
                 LayoutComponentInfo::new("GenericFilterableList", LayoutComponentType::List)
@@ -1307,7 +1401,9 @@ impl ScriptListApp {
                     .with_flex_column()
                     .with_depth(2)
                     .with_parent("GenericFilterableSurface")
-                    .with_explanation("Generic filterable list uses full width and no preview panel."),
+                    .with_explanation(
+                        "Generic filterable list uses full width and no preview panel.",
+                    ),
             );
 
             let visible_rows = ((list_height / GENERIC_ROW_HEIGHT) as usize)
@@ -1315,19 +1411,22 @@ impl ScriptListApp {
                 .min(5);
             if visible_rows == 0 {
                 components.push(
-                    LayoutComponentInfo::new("GenericFilterableEmptyState", LayoutComponentType::Panel)
-                        .with_bounds(0.0, list_top, window_width, list_height)
-                        .with_visual_style(
-                            chrome_tokens::CHROME_LAYER_CONTENT,
-                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                            Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
-                        )
-                        .with_visual_token(format!("genericFilterable.{variant}.emptyState"))
-                        .with_depth(3)
-                        .with_parent("GenericFilterableList")
-                        .with_explanation(format!(
-                            "{variant} empty state occupies the full list viewport."
-                        )),
+                    LayoutComponentInfo::new(
+                        "GenericFilterableEmptyState",
+                        LayoutComponentType::Panel,
+                    )
+                    .with_bounds(0.0, list_top, window_width, list_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                    )
+                    .with_visual_token(format!("genericFilterable.{variant}.emptyState"))
+                    .with_depth(3)
+                    .with_parent("GenericFilterableList")
+                    .with_explanation(format!(
+                        "{variant} empty state occupies the full list viewport."
+                    )),
                 );
             } else {
                 for i in 0..visible_rows {
@@ -1415,8 +1514,8 @@ impl ScriptListApp {
             let run_width = 55.0;
             let run_x = actions_x - PORTAL_BUTTON_GAP - run_width;
             let input_width = (run_x - PORTAL_INPUT_TO_RUN_GAP - PORTAL_HEADER_PADDING_X).max(0.0);
-            let input_y = PORTAL_HEADER_PADDING_Y
-                + (PORTAL_BUTTON_HEIGHT - PORTAL_INPUT_VISUAL_HEIGHT) / 2.0;
+            let input_y =
+                PORTAL_HEADER_PADDING_Y + (PORTAL_BUTTON_HEIGHT - PORTAL_INPUT_VISUAL_HEIGHT) / 2.0;
 
             components.push(
                 LayoutComponentInfo::new("AttachmentPortalSurface", LayoutComponentType::Panel)
@@ -1476,7 +1575,9 @@ impl ScriptListApp {
                     )
                     .with_depth(3)
                     .with_parent("AttachmentPortalHeader")
-                    .with_explanation("Search keeps the 22px visual lane inside a 28px minimum hit target."),
+                    .with_explanation(
+                        "Search keeps the 22px visual lane inside a 28px minimum hit target.",
+                    ),
             );
             components.push(
                 LayoutComponentInfo::new("AttachmentPortalContent", LayoutComponentType::Container)
@@ -1597,48 +1698,43 @@ impl ScriptListApp {
 
         // Header
         components.push(
-            LayoutComponentInfo::new("Header", LayoutComponentType::Header)
+            LayoutComponentInfo::new("MainViewHeader", LayoutComponentType::Header)
                 .with_bounds(0.0, 0.0, window_width, header_height)
                 .with_visual_style(
                     chrome_tokens::CHROME_LAYER_FUNCTIONAL,
                     chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
                     Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                 )
-                .with_visual_token("chrome.header")
-                .with_padding(HEADER_PADDING_Y, HEADER_PADDING_X, HEADER_PADDING_Y, HEADER_PADDING_X)
+                .with_visual_token("chrome.mainViewHeader")
+                .with_padding(
+                    shell.header_padding_y,
+                    shell_horizontal_padding,
+                    shell.header_padding_y,
+                    shell_horizontal_padding,
+                )
                 .with_flex_row()
                 .with_depth(1)
                 .with_parent("Window")
                 .with_explanation(format!(
                     "Height = padding({}) + content({}) + padding({}) + divider({}) = {}px. Uses flex-row with items-center.",
-                    HEADER_PADDING_Y, BUTTON_HEIGHT, HEADER_PADDING_Y, DIVIDER_HEIGHT, header_height
+                    shell.header_padding_y, BUTTON_HEIGHT, shell.header_padding_y, shell.divider_height, header_height
                 )),
         );
 
-        // Header controls, right-to-left. Keep these before SearchInput so the
-        // measured input width is derived from the real button group edge.
-        let button_y = HEADER_PADDING_Y;
-        let button_height = BUTTON_HEIGHT;
-        let logo_x = window_width - HEADER_PADDING_X - 20.0;
-        let actions_width = 85.0;
-        let actions_x = logo_x - 24.0 - actions_width;
-        let run_width = 55.0;
-        let run_x = actions_x - 24.0 - run_width;
-        let input_to_run_gap = 12.0;
-
         // Search input in header
-        const INPUT_HEIGHT: f32 = 22.0;
-        let input_y = HEADER_PADDING_Y + (BUTTON_HEIGHT - INPUT_HEIGHT) / 2.0;
-        let input_width = (run_x - input_to_run_gap - HEADER_PADDING_X).max(0.0);
-        let buttons_area_width = window_width - HEADER_PADDING_X - input_width;
+        let input_height = search.height;
+        let input_y = shell.header_padding_y + (BUTTON_HEIGHT - input_height) / 2.0;
+        let input_width = (window_width - (shell_horizontal_padding * 2.0)).max(0.0);
+        let input_text_inset_left =
+            crate::components::main_view_chrome::main_view_input_text_inset_left(menu_def);
 
         components.push(
-            LayoutComponentInfo::new("SearchInput", LayoutComponentType::Input)
-                .with_bounds(HEADER_PADDING_X, input_y, input_width, INPUT_HEIGHT)
+            LayoutComponentInfo::new("MainViewInput", LayoutComponentType::Input)
+                .with_bounds(shell_horizontal_padding, input_y, input_width, input_height)
                 .with_visual_style(
                     chrome_tokens::CHROME_LAYER_FUNCTIONAL,
                     chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                    Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
+                    Some(search.radius),
                 )
                 // Measured internal text inset so the Apple-guideline conformance
                 // engine can compare against the native NSTextField baseline
@@ -1648,50 +1744,64 @@ impl ScriptListApp {
                 // the vertical inset is CURSOR_MARGIN_Y. (Before slice 5 this was
                 // 0pt flush — the proven outOfBand "input lacks padding" gap.)
                 .with_content_insets(
-                    crate::panel::CURSOR_MARGIN_Y,
-                    chrome_tokens::SEARCH_INPUT_TEXT_INSET_X_PX,
-                    crate::panel::CURSOR_MARGIN_Y,
-                    chrome_tokens::SEARCH_INPUT_TEXT_INSET_X_PX,
+                    search.text_inset_y,
+                    search.text_inset_x,
+                    search.text_inset_y,
+                    input_text_inset_left,
                 )
-                // Rendered typography, sourced from the SAME accessors the renderer
-                // uses (render_search_input: .with_size(theme_font_size_xl) +
-                // .line_height(CURSOR_HEIGHT_LG); the input sets no font weight, so it
-                // draws Regular/400 and is left-aligned). This lets the Apple-guideline
-                // engine classify it against the measured-native baseline (13pt Regular
-                // / 16pt line). The launcher's hero search field runs larger than 13pt
-                // BODY by design (Spotlight-style), which the engine reports as a SOFT
-                // divergence; the HARD check is that input text stays Regular, not bold.
+                // Rendered typography, sourced from the same larger theme input size
+                // that render_search_input uses. The theme tokens still vary search
+                // geometry, but the launcher input keeps its established XL text size.
                 .with_typography(
                     "searchInput",
                     Some(self.theme_font_family()),
                     self.theme_font_size_xl(),
                     "regular",
-                    400.0,
-                    crate::panel::CURSOR_HEIGHT_LG,
+                    search.font_weight.0,
+                    search.height,
                     "left",
                 )
-                .with_visual_token("chrome.searchInput")
-                .with_hit_bounds(HEADER_PADDING_X, HEADER_PADDING_Y, input_width, BUTTON_HEIGHT)
+                .with_visual_token("chrome.mainViewInput")
+                .with_hit_bounds(
+                    shell_horizontal_padding,
+                    shell.header_padding_y,
+                    input_width,
+                    search.height,
+                )
                 .with_flex_grow(1.0)
                 .with_depth(2)
-                .with_parent("Header")
+                .with_parent("MainViewHeader")
                 .with_explanation(format!(
-                    "flex-grow:1 fills remaining space. Width = window({}) - padding({}) - buttons_area({}) = {}px. Vertically centered in header.",
-                    window_width, HEADER_PADDING_X, buttons_area_width, input_width
+                    "Shared main-view input fills the header width. Width = window({}) - horizontal padding({} * 2) = {}px. Vertically centered in header.",
+                    window_width, shell_horizontal_padding, input_width
                 )),
+        );
+
+        let state_icon_size = menu_def.icon.container_size.min(search.height).max(16.0);
+        let state_icon_x = shell_horizontal_padding
+            + crate::components::main_view_chrome::main_view_state_icon_left(menu_def);
+        let state_icon_y = input_y + ((search.height - state_icon_size) * 0.5).max(0.0);
+        components.push(
+            LayoutComponentInfo::new("MainViewInputStateIcon", LayoutComponentType::Other)
+                .with_bounds(state_icon_x, state_icon_y, state_icon_size, state_icon_size)
+                .with_parent("MainViewInput")
+                .with_depth(3)
+                .with_explanation(
+                    "Absolutely positioned state icon shares the row icon column while MainViewInput keeps the text-column inset.",
+                ),
         );
 
         // Content area
         components.push(
             {
-                let component = LayoutComponentInfo::new("ContentArea", LayoutComponentType::Container)
+                let component = LayoutComponentInfo::new("MainViewMain", LayoutComponentType::Container)
                 .with_bounds(0.0, content_top, window_width, content_height)
                 .with_visual_style(
                     chrome_tokens::CHROME_LAYER_CONTENT,
                     chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
                     Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                 )
-                .with_visual_token("content.background")
+                .with_visual_token("content.mainViewMain")
                 .with_flex_grow(1.0)
                 .with_depth(1)
                 .with_parent("Window");
@@ -1761,7 +1871,7 @@ impl ScriptListApp {
                     .with_flex_column()
                     .with_flex_grow(1.0)
                     .with_depth(2)
-                    .with_parent("ContentArea")
+                    .with_parent("MainViewMain")
                     .with_explanation(explanation.to_string()),
             );
 
@@ -1807,7 +1917,7 @@ impl ScriptListApp {
                     .with_flex_column()
                     .with_flex_grow(1.0)
                     .with_depth(2)
-                    .with_parent("ContentArea")
+                    .with_parent("MainViewMain")
                     .with_explanation(explanation.to_string()),
             );
 
@@ -1857,7 +1967,7 @@ impl ScriptListApp {
                     .with_flex_column()
                     .with_flex_grow(1.0)
                     .with_depth(2)
-                    .with_parent("ContentArea")
+                    .with_parent("MainViewMain")
                     .with_explanation(explanation.to_string()),
             );
 
@@ -1871,135 +1981,246 @@ impl ScriptListApp {
             };
         }
 
-        // Script list: full width for MainWindow, left panel for split-preview surfaces.
-        components.push(
-            LayoutComponentInfo::new("ScriptList", LayoutComponentType::List)
-                .with_bounds(0.0, content_top, list_width, content_height)
-                .with_visual_style(
-                    chrome_tokens::CHROME_LAYER_CONTENT,
-                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                    Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
-                )
-                .with_visual_token("content.list")
-                .with_flex_column()
-                .with_depth(2)
-                .with_parent("ContentArea")
-                .with_explanation(format!(
-                    "Width = {}px. Uses uniform_list for virtualized scrolling with {}px item height.",
-                    list_width, LIST_ITEM_HEIGHT
-                )),
-        );
+        if matches!(self.current_view, AppView::AcpChatView { .. }) {
+            let info_metrics = crate::components::info_state::info_metrics(
+                crate::components::info_state::InfoStateDensity::Comfortable,
+            );
+            let info_columns =
+                crate::components::main_view_chrome::main_view_content_columns(menu_def);
+            let info_x = info_columns.text_column_x;
+            let info_y = content_top + info_columns.top_inset_y;
+            let info_width = (window_width - info_x - info_columns.content_right_inset_x).max(0.0);
+            let shortcut_slot_width = crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX
+                * 2.0
+                + crate::components::footer_chrome::FOOTER_ACTION_CONTENT_GAP_PX;
+            let guidance_label_x =
+                info_x + shortcut_slot_width + crate::components::info_state::INFO_SPACING.sm;
+            let guidance_label_width =
+                (info_width - shortcut_slot_width - crate::components::info_state::INFO_SPACING.sm)
+                    .max(0.0);
 
-        if uses_split_preview {
-            // Preview panel (right panel) - remaining 50%
-            let preview_width = window_width - list_width;
             components.push(
-                LayoutComponentInfo::new("PreviewPanel", LayoutComponentType::Panel)
-                    .with_bounds(list_width, content_top, preview_width, content_height)
+                LayoutComponentInfo::new("AcpConversation", LayoutComponentType::List)
+                    .with_bounds(
+                        0.0,
+                        content_top,
+                        window_width,
+                        (content_height - shell.content_inset_bottom).max(0.0),
+                    )
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
                         Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
-                    .with_visual_token("content.previewPanel")
-                    .with_padding(16.0, 16.0, 16.0, 16.0)
+                    .with_visual_token("content.acpConversation")
                     .with_flex_column()
+                    .with_flex_grow(1.0)
                     .with_depth(2)
-                    .with_parent("ContentArea")
-                    .with_explanation(format!(
-                        "Width = remaining 50% = {}px. Has 16px padding on all sides.",
-                        preview_width
-                    )),
-            );
-        }
+                    .with_parent("MainViewMain")
+                    .with_explanation(
+                        "AcpChat swaps the shared main-view main slot from the launcher list to the conversation transcript while keeping the same header/input/footer chrome."
+                            .to_string(),
+                ),
+        );
 
-        // List items (sample of first few visible)
-        let visible_items = ((content_height / LIST_ITEM_HEIGHT) as usize).min(5);
-        for i in 0..visible_items {
-            let item_top = content_top + (i as f32 * LIST_ITEM_HEIGHT);
             components.push(
-                LayoutComponentInfo::new(format!("ListItem[{}]", i), LayoutComponentType::ListItem)
-                    .with_bounds(0.0, item_top, list_width, LIST_ITEM_HEIGHT)
+                LayoutComponentInfo::new("AcpEmptyGuidance", LayoutComponentType::Container)
+                    .with_bounds(
+                        info_x,
+                        info_y,
+                        info_width,
+                        (content_height - info_columns.top_inset_y - shell.content_inset_bottom)
+                            .max(0.0),
+                    )
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_CONTENT,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("content.acpEmptyGuidance")
+                    .with_flex_column()
+                    .with_gap(info_metrics.block_gap)
+                    .with_depth(3)
+                    .with_parent("AcpConversation")
+                    .with_explanation(format!(
+                        "ComposerEmpty InfoState is anchored to the shared main-view text column: x={} = row outer + row inner + icon + gap. Width = window({}) - x({}) - right inset({}).",
+                        info_x, window_width, info_x, info_columns.content_right_inset_x
+                    )),
+            );
+            components.push(
+                LayoutComponentInfo::new("AcpEmptyGuidanceTitle", LayoutComponentType::Header)
+                    .with_bounds(
+                        info_x,
+                        info_y,
+                        info_width,
+                        crate::components::info_state::INFO_TYPE_SCALE.title.line,
+                    )
+                    .with_typography(
+                        "infoTitle",
+                        Some(self.theme_font_family()),
+                        crate::components::info_state::INFO_TYPE_SCALE.title.size,
+                        "semibold",
+                        gpui::FontWeight::SEMIBOLD.0,
+                        crate::components::info_state::INFO_TYPE_SCALE.title.line,
+                        "left",
+                    )
+                    .with_depth(4)
+                    .with_parent("AcpEmptyGuidance")
+                    .with_explanation(
+                        "Comfortable ComposerEmpty title uses the InfoState title scale and starts on the shared main-view text column."
+                            .to_string(),
+                    ),
+            );
+            components.push(
+                LayoutComponentInfo::new("AcpEmptyGuidanceBody", LayoutComponentType::Other)
+                    .with_bounds(
+                        info_x,
+                        info_y
+                            + crate::components::info_state::INFO_TYPE_SCALE.title.line
+                            + crate::components::info_state::INFO_SPACING.xs * 0.5,
+                        info_width,
+                        crate::components::info_state::INFO_TYPE_SCALE.body.line,
+                    )
+                    .with_typography(
+                        "infoBody",
+                        Some(self.theme_font_family()),
+                        crate::components::info_state::INFO_TYPE_SCALE.body.size,
+                        "regular",
+                        gpui::FontWeight::NORMAL.0,
+                        crate::components::info_state::INFO_TYPE_SCALE.body.line,
+                        "left",
+                    )
+                    .with_depth(4)
+                    .with_parent("AcpEmptyGuidance")
+                    .with_explanation(
+                        "ComposerEmpty body follows the title inside the same shared main-view column."
+                            .to_string(),
+                    ),
+            );
+            components.push(
+                LayoutComponentInfo::new("AcpEmptyGuidanceShortcutSlot", LayoutComponentType::Other)
+                    .with_bounds(
+                        info_x,
+                        info_y + info_metrics.block_gap + crate::components::info_state::INFO_TYPE_SCALE.title.line + crate::components::info_state::INFO_SPACING.xs * 0.5 + crate::components::info_state::INFO_TYPE_SCALE.body.line,
+                        shortcut_slot_width,
+                        info_metrics.row_min_h,
+                    )
+                    .with_depth(4)
+                    .with_parent("AcpEmptyGuidance")
+                    .with_explanation(
+                        "Shortcut slot width uses the same footer keycap geometry as InfoState guidance rows."
+                            .to_string(),
+                    ),
+            );
+            components.push(
+                LayoutComponentInfo::new("AcpEmptyGuidanceLabelColumn", LayoutComponentType::Other)
+                    .with_bounds(
+                        guidance_label_x,
+                        info_y + info_metrics.block_gap + crate::components::info_state::INFO_TYPE_SCALE.title.line + crate::components::info_state::INFO_SPACING.xs * 0.5 + crate::components::info_state::INFO_TYPE_SCALE.body.line,
+                        guidance_label_width,
+                        info_metrics.row_min_h,
+                    )
+                    .with_typography(
+                        "infoGuidanceLabel",
+                        Some(self.theme_font_family()),
+                        crate::components::info_state::INFO_TYPE_SCALE.caption.size,
+                        "regular",
+                        gpui::FontWeight::NORMAL.0,
+                        crate::components::info_state::INFO_TYPE_SCALE.caption.line,
+                        "left",
+                    )
+                    .with_depth(4)
+                    .with_parent("AcpEmptyGuidance")
+                    .with_explanation(
+                        "Guidance labels start after the footer-keycap shortcut slot and the InfoState row gap; the whole block remains anchored to the main-view text column."
+                            .to_string(),
+                    ),
+            );
+        } else {
+            // Script list: full width for MainWindow, left panel for split-preview surfaces.
+            components.push(
+                LayoutComponentInfo::new("ScriptList", LayoutComponentType::List)
+                    .with_bounds(
+                        0.0,
+                        content_top,
+                        list_width,
+                        (content_height - shell.content_inset_bottom).max(0.0),
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                    )
+                    .with_visual_token("content.list")
+                    .with_flex_column()
+                    .with_depth(2)
+                    .with_parent("MainViewMain")
+                    .with_explanation(format!(
+                        "Width = {}px. Uses uniform_list for virtualized scrolling with {}px item height.",
+                        list_width, list.item_height
+                    )),
+            );
+
+            if uses_split_preview {
+                // Preview panel (right panel) - remaining 50%
+                let preview_width = window_width - list_width;
+                components.push(
+                    LayoutComponentInfo::new("PreviewPanel", LayoutComponentType::Panel)
+                        .with_bounds(list_width, content_top, preview_width, content_height)
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_CONTENT,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                        )
+                        .with_visual_token("content.previewPanel")
+                        .with_padding(16.0, 16.0, 16.0, 16.0)
+                        .with_flex_column()
+                        .with_depth(2)
+                        .with_parent("MainViewMain")
+                        .with_explanation(format!(
+                            "Width = remaining 50% = {}px. Has 16px padding on all sides.",
+                            preview_width
+                        )),
+                );
+            }
+
+            // List items (sample of first few visible)
+            let visible_items = ((content_height / list.item_height) as usize).min(5);
+            for i in 0..visible_items {
+                let item_top = content_top + (i as f32 * list.item_height);
+                components.push(
+                    LayoutComponentInfo::new(
+                        format!("ListItem[{}]", i),
+                        LayoutComponentType::ListItem,
+                    )
+                    .with_bounds(row.outer_padding_x, item_top, list_width, list.item_height)
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_CONTENT,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(row.radius),
                     )
                     .with_visual_token("content.listItem")
-                    .with_padding(12.0, 16.0, 12.0, 16.0)
-                    .with_gap(8.0)
+                    .with_padding(
+                        row.inner_padding_y,
+                        row.inner_padding_x,
+                        row.inner_padding_y,
+                        row.inner_padding_x,
+                    )
+                    .with_gap(row.icon_text_gap)
                     .with_flex_row()
                     .with_depth(3)
                     .with_parent("ScriptList")
                     .with_explanation(format!(
-                        "Fixed height = {}px. Uses flex-row with gap:8px for icon + text layout. Padding: 12px vertical, 16px horizontal.",
-                        LIST_ITEM_HEIGHT
+                        "Fixed height = {}px for {}. Uses flex-row with theme gap {}px and padding {}px vertical / {}px horizontal.",
+                        list.item_height,
+                        menu_theme.name(),
+                        row.icon_text_gap,
+                        row.inner_padding_y,
+                        row.inner_padding_x
                     )),
-            );
+                );
+            }
         }
-
-        // Button group in header
-
-        // Logo button (rightmost)
-        components.push(
-            LayoutComponentInfo::new("LogoButton", LayoutComponentType::Button)
-                .with_bounds(logo_x, button_y, 20.0, button_height)
-                .with_visual_style(
-                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
-                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                    Some(button_height / 2.0),
-                )
-                .with_visual_token("chrome.headerButton")
-                .with_hit_bounds(
-                    logo_x,
-                    button_y,
-                    chrome_tokens::LIQUID_GLASS_MIN_HIT_PX,
-                    button_height,
-                )
-                .with_visual_exception("compactIconButton")
-                .with_padding(4.0, 4.0, 4.0, 4.0)
-                .with_depth(2)
-                .with_parent("Header")
-                .with_explanation("Fixed 20px width. Positioned at right edge with 16px margin."),
-        );
-
-        // Actions button
-        components.push(
-            LayoutComponentInfo::new("ActionsButton", LayoutComponentType::Button)
-                .with_bounds(actions_x, button_y, actions_width, button_height)
-                .with_visual_style(
-                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
-                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                    Some(button_height / 2.0),
-                )
-                .with_visual_token("chrome.headerButton")
-                .with_padding(4.0, 8.0, 4.0, 8.0)
-                .with_depth(2)
-                .with_parent("Header")
-                .with_explanation(format!(
-                    "Width = {}px. Positioned left of logo with 24px spacing (includes divider).",
-                    actions_width
-                )),
-        );
-
-        // Run button
-        components.push(
-            LayoutComponentInfo::new("RunButton", LayoutComponentType::Button)
-                .with_bounds(run_x, button_y, run_width, button_height)
-                .with_visual_style(
-                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
-                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                    Some(button_height / 2.0),
-                )
-                .with_visual_token("chrome.headerButton")
-                .with_padding(4.0, 8.0, 4.0, 8.0)
-                .with_depth(2)
-                .with_parent("Header")
-                .with_explanation(format!(
-                    "Width = {}px. Positioned left of Actions with 24px spacing.",
-                    run_width
-                )),
-        );
 
         // Main-launcher footer (hint strip). Emit it so the Apple-guideline
         // conformance engine can MEASURE the user's "footer lacks padding"
@@ -2008,27 +2229,24 @@ impl ScriptListApp {
         // (6pt) carried as boxModel.gap, which the engine classifies against the
         // soft ~12pt floor (Apple's hard regular-control gap is 16pt).
         {
-            use crate::components::footer_chrome::FOOTER_ACTION_ITEM_GAP_PX;
-            use crate::window_resize::main_layout::{
-                HINT_STRIP_PADDING_X, NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
-            };
+            use crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT;
             let footer_y = window_height - NATIVE_MAIN_WINDOW_FOOTER_HEIGHT;
             components.push(
-                LayoutComponentInfo::new("MainFooter", LayoutComponentType::Panel)
+                LayoutComponentInfo::new("MainViewFooter", LayoutComponentType::Panel)
                     .with_bounds(0.0, footer_y, window_width, NATIVE_MAIN_WINDOW_FOOTER_HEIGHT)
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_FUNCTIONAL,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
                         Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
-                    .with_visual_token("chrome.mainFooter")
+                    .with_visual_token("chrome.mainViewFooter")
                     .with_content_insets(
-                        crate::components::footer_chrome::FOOTER_BUTTON_VERTICAL_INSET_PX,
-                        HINT_STRIP_PADDING_X,
-                        crate::components::footer_chrome::FOOTER_BUTTON_VERTICAL_INSET_PX,
-                        HINT_STRIP_PADDING_X,
+                        footer_metrics.button_padding_y,
+                        footer_metrics.side_inset_px,
+                        footer_metrics.button_padding_y,
+                        footer_metrics.side_inset_px,
                     )
-                    .with_gap(FOOTER_ACTION_ITEM_GAP_PX)
+                    .with_gap(footer_metrics.item_gap_px)
                     // The hint strip is a FLOATING glass overlay (render_script_list
                     // positions it .absolute() and reduces the list safe_viewport by
                     // the footer height), so its geometric overlap with ContentArea is
@@ -2037,7 +2255,13 @@ impl ScriptListApp {
                     .with_depth(1)
                     .with_parent("Window")
                     .with_explanation(
-                        "Floating hint-strip footer overlay (absolute; the list safe-viewport is inset by its height). Side inset 14px; inter-item gap 12px (boxModel.gap = FOOTER_ACTION_ITEM_GAP_PX) now meets Apple's soft ~12pt bezel-padding floor (raised from 6px, the prior 'footer lacks padding' signal).".to_string(),
+                        format!(
+                            "Floating hint-strip footer overlay for {}. Side inset {}px; inter-item gap {}px; button radius {}px.",
+                            menu_theme.name(),
+                            footer_metrics.side_inset_px,
+                            footer_metrics.item_gap_px,
+                            footer_metrics.button_radius
+                        ),
                     ),
             );
         }

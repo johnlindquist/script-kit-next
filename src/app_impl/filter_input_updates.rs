@@ -775,6 +775,14 @@ impl ScriptListApp {
                 );
                 false
             }
+            SpineListAction::AwaitContextSubsearchInput { source } => {
+                tracing::info!(
+                    target: "script_kit::spine",
+                    event = "empty_context_subsearch_enter_consumed",
+                    source = %source,
+                );
+                true
+            }
             SpineListAction::Noop => false,
         }
     }

@@ -18,7 +18,11 @@ const MAX_COMPLETION_CHARS: usize = 96;
 const MAX_CONTEXT_CACHE_ENTRIES: usize = 16;
 
 /// Max chars of sanitized README/AGENTS excerpt sent to the LLM as a bias.
-const MAX_LLM_CONTEXT_EXCERPT_CHARS: usize = 4_000;
+/// Kept small: this is only a steering bias, and on the on-device (CPU until
+/// Metal lands) ghost engine every excerpt char is prompt-eval latency. A 4k
+/// excerpt added ~1k prompt tokens and pushed warm completions to multiple
+/// seconds; ~700 chars keeps the prompt short while still biasing suggestions.
+const MAX_LLM_CONTEXT_EXCERPT_CHARS: usize = 700;
 /// Hard client-side cap on the LLM completion suffix length.
 const MAX_LLM_COMPLETION_CHARS: usize = 120;
 /// LRU bound on the per-app LLM ghost cache.
@@ -584,6 +588,10 @@ fn contains_case_insensitive(haystack: &str, needle: &str) -> bool {
         .contains(&needle.to_ascii_lowercase())
 }
 
+fn has_alphanumeric(text: &str) -> bool {
+    text.chars().any(char::is_alphanumeric)
+}
+
 fn sanitize_completion_candidate(candidate: &str) -> Option<String> {
     let cleaned = sanitize_fragment(candidate)?;
     if cleaned.contains("README.md") || cleaned.contains("AGENTS.md") {
@@ -876,7 +884,7 @@ pub fn sanitize_llm_completion_suffix(raw_response: &str, query: &str) -> Option
         text.insert(0, ' ');
     }
     let capped = cap_completion_chars(&text, MAX_LLM_COMPLETION_CHARS);
-    if capped.trim().is_empty() {
+    if capped.trim().is_empty() || !has_alphanumeric(&capped) {
         return None;
     }
     Some(capped)
@@ -1924,6 +1932,21 @@ mod tests {
     fn sanitize_llm_completion_adds_space_after_alphanumeric_prefix() {
         let suffix = sanitize_llm_completion_suffix("the bug", "fix").expect("space inserted");
         assert_eq!(suffix, " the bug");
+    }
+
+    #[test]
+    fn sanitize_llm_completion_rejects_punctuation_only_suffixes() {
+        for raw in [".", "?", "!", "…", " - ", "..."] {
+            assert!(
+                sanitize_llm_completion_suffix(raw, "fix the login").is_none(),
+                "raw response {raw:?} should not become a punctuation-only ghost suffix"
+            );
+            assert!(
+                llm_prediction_from_response("fix the login", raw, PredictionRevision::default())
+                    .is_none(),
+                "raw response {raw:?} should not become a Tab-acceptable prediction"
+            );
+        }
     }
 
     #[test]

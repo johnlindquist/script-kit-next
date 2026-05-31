@@ -26,6 +26,7 @@
 
 pub(crate) mod acp;
 pub mod agent_chat;
+pub mod agent_task_dock;
 pub(crate) mod config;
 pub(crate) mod context_contract;
 #[cfg(test)]
@@ -45,6 +46,7 @@ pub(crate) mod presets;
 pub(crate) mod providers;
 #[cfg(test)]
 mod public_contract_tests;
+pub mod result_cards;
 pub(crate) mod script_generation;
 pub(crate) mod sdk_handlers;
 pub(crate) mod session;
@@ -54,6 +56,11 @@ pub(crate) mod tab_context;
 pub(crate) mod window;
 
 // Re-export commonly used types
+pub use self::agent_task_dock::{
+    AgentTaskDockArchiveDecision, AgentTaskDockResumeDecision, AgentTaskDockSelection,
+    AgentTaskDockState, AgentTaskDockStatus, AgentTaskDockSubmitDecision, AgentTaskDockSurface,
+    AgentTaskDockTask,
+};
 pub use self::config::{DetectedKeys, ModelInfo, ProviderConfig};
 pub use self::current_app_automation_memory::{
     current_app_automation_memory_index_path, read_current_app_automation_memory_index,
@@ -88,6 +95,10 @@ pub use self::preflight_audit::{
     ActionableContextFailure, AiPreflightAudit, AI_PREFLIGHT_AUDIT_SCHEMA_VERSION,
 };
 pub use self::providers::{AiProvider, ProviderMessage, ProviderRegistry};
+pub use self::result_cards::{
+    derive_acp_result_cards_from_assistant_message, AcpResultArtifact, AcpResultArtifactKind,
+    AcpResultCards, AcpResultFollowUp, RESULT_CARD_MAX_ARTIFACTS, RESULT_CARD_MAX_FOLLOW_UPS,
+};
 pub use self::script_generation::{
     extract_current_app_recipe_from_script, generate_script_from_prompt,
     generate_script_from_prompt_with_receipt, generated_script_receipt_path,

@@ -263,8 +263,8 @@ impl ScriptListApp {
         // script exit, causing the cursor to not show in the main filter.
         self.gpui_input_focused = false;
         self.request_script_list_main_filter_focus(cx);
-        // Reset placeholder back to the active accent variation id for main menu
-        self.pending_placeholder = Some(self.current_accent_variation.placeholder());
+        // Reset placeholder back to the active main-menu theme id
+        self.pending_placeholder = Some(self.current_main_menu_theme.placeholder());
         logging::log(
             "FOCUS",
             "Reset focused_input to MainFilter for cursor display",

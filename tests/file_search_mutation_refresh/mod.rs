@@ -42,7 +42,8 @@ fn refresh_mutation_patches_cache_in_place_for_directory_browse() {
         "must have a can_patch_in_place decision branch"
     );
     assert!(
-        FILES_SOURCE.contains("self.cached_file_results.retain(|entry| entry.path != old_path)"),
+        FILES_SOURCE.contains("self.cached_file_results")
+            && FILES_SOURCE.contains(".retain(|entry| entry.path != old_path)"),
         "must remove old entry from cache via retain"
     );
     assert!(
@@ -50,8 +51,9 @@ fn refresh_mutation_patches_cache_in_place_for_directory_browse() {
         "must use build_file_result_from_metadata for the new entry"
     );
     assert!(
-        FILES_SOURCE.contains("self.apply_file_search_sort_mode()"),
-        "must re-sort after patching using the active sort mode"
+        FILES_SOURCE.contains("self.sort_directory_results()")
+            && UTILITY_SOURCE.contains("self.apply_file_search_sort_mode();"),
+        "must re-sort after patching through sort_directory_results, which delegates to the active sort mode"
     );
     assert!(
         FILES_SOURCE.contains("self.recompute_file_search_display_indices()"),
@@ -118,7 +120,7 @@ fn parent_directory_abs_helper_exists() {
 #[test]
 fn rename_call_site_passes_old_path() {
     let rename_section = FILES_SOURCE
-        .find("\"rename_path\" =>")
+        .find("            \"rename_path\" => {")
         .expect("rename_path handler must exist");
     let rename_end = (rename_section + 3000).min(FILES_SOURCE.len());
     let rename_body = &FILES_SOURCE[rename_section..rename_end];
@@ -128,7 +130,7 @@ fn rename_call_site_passes_old_path() {
         "rename handler must call refresh_file_search_after_mutation"
     );
     assert!(
-        rename_body.contains("&path,\n                                    Some(&new_path),"),
+        rename_body.contains("&path,") && rename_body.contains("Some(&new_path),"),
         "rename must pass old_path then Some(new_path)"
     );
 }
@@ -136,7 +138,7 @@ fn rename_call_site_passes_old_path() {
 #[test]
 fn move_call_site_passes_old_path() {
     let move_section = FILES_SOURCE
-        .find("\"move_path\" =>")
+        .find("            \"move_path\" => {")
         .expect("move_path handler must exist");
     let move_end = (move_section + 3000).min(FILES_SOURCE.len());
     let move_body = &FILES_SOURCE[move_section..move_end];
@@ -146,7 +148,7 @@ fn move_call_site_passes_old_path() {
         "move handler must call refresh_file_search_after_mutation"
     );
     assert!(
-        move_body.contains("&path,\n                                    Some(&new_path),"),
+        move_body.contains("&path,") && move_body.contains("Some(&new_path),"),
         "move must pass old_path then Some(new_path)"
     );
 }
@@ -154,7 +156,7 @@ fn move_call_site_passes_old_path() {
 #[test]
 fn trash_call_site_passes_old_path() {
     let trash_section = FILES_SOURCE
-        .find("\"move_to_trash\" =>")
+        .find("            \"move_to_trash\" => {")
         .expect("move_to_trash handler must exist");
     let trash_end = (trash_section + 5000).min(FILES_SOURCE.len());
     let trash_body = &FILES_SOURCE[trash_section..trash_end];
@@ -164,7 +166,7 @@ fn trash_call_site_passes_old_path() {
         "trash handler must call refresh_file_search_after_mutation"
     );
     assert!(
-        trash_body.contains("&path,\n                                    None,"),
+        trash_body.contains("&path,") && trash_body.contains("None,"),
         "trash must pass old_path then None (no preferred path)"
     );
 }

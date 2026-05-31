@@ -104,7 +104,7 @@ fn explicit_reset_paths_clear_focus_loss_restore_intent() {
 
 #[test]
 fn close_and_reset_marks_window_hidden_before_script_list_reset() {
-    let close_path = source_block_after(LIFECYCLE_RESET, "fn close_and_reset_window", 3200);
+    let close_path = source_block_after(LIFECYCLE_RESET, "fn close_and_reset_window", 4200);
     let hidden = close_path
         .find("set_main_window_visible(false)")
         .expect("close_and_reset_window must mark the main window hidden");

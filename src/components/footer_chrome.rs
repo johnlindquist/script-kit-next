@@ -118,18 +118,74 @@ pub(crate) fn footer_action_slot_width(slot: FooterActionSlot) -> f32 {
     }
 }
 
+pub(crate) fn current_main_menu_footer_metrics() -> crate::designs::FooterMetricsTokens {
+    crate::designs::current_main_menu_theme()
+        .def()
+        .footer
+        .metrics
+}
+
 pub(crate) fn footer_rail_chrome(theme: &Theme) -> FooterRailChrome {
     let chrome = crate::theme::AppChromeColors::from_theme(theme);
+    let metrics = current_main_menu_footer_metrics();
     FooterRailChrome {
         height_px: crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
-        side_inset_px: crate::window_resize::main_layout::HINT_STRIP_PADDING_X,
-        item_gap_px: FOOTER_ACTION_ITEM_GAP_PX,
+        side_inset_px: metrics.side_inset_px,
+        item_gap_px: metrics.item_gap_px,
         surface_rgba: chrome.inline_dropdown_surface_rgba,
         divider_rgba: chrome.divider_rgba,
         hover_rgba: chrome.hover_rgba,
         active_rgba: chrome.selection_rgba,
-        button_radius_px: FOOTER_ACTION_BUTTON_RADIUS_PX,
+        button_radius_px: metrics.button_radius,
     }
+}
+
+fn current_footer_button_theme_rgba(theme: &Theme, alpha: u32) -> u32 {
+    let def = crate::designs::current_main_menu_theme().def();
+    let chrome = crate::theme::AppChromeColors::from_theme(theme);
+    let hex = if def.footer.button.uses_accent {
+        chrome.accent_hex
+    } else {
+        theme.colors.text.primary
+    };
+    (hex << 8) | alpha
+}
+
+pub(crate) fn themed_footer_button_rest_rgba(theme: &Theme) -> Option<u32> {
+    crate::designs::current_main_menu_theme()
+        .def()
+        .footer
+        .button
+        .rest
+        .map(|alpha| current_footer_button_theme_rgba(theme, alpha))
+}
+
+pub(crate) fn themed_footer_button_hover_rgba(theme: &Theme) -> u32 {
+    let alpha = crate::designs::current_main_menu_theme()
+        .def()
+        .footer
+        .button
+        .hover;
+    current_footer_button_theme_rgba(theme, alpha)
+}
+
+pub(crate) fn themed_footer_button_active_rgba(theme: &Theme) -> u32 {
+    let alpha = crate::designs::current_main_menu_theme()
+        .def()
+        .footer
+        .button
+        .active;
+    current_footer_button_theme_rgba(theme, alpha)
+}
+
+pub(crate) fn themed_footer_button_border_alpha(theme: &Theme, selected: bool) -> f32 {
+    let theme_alpha = crate::designs::current_main_menu_theme()
+        .def()
+        .footer
+        .button
+        .border_alpha as f32
+        / 255.0;
+    footer_keycap_border_alpha(theme, selected).max(theme_alpha)
 }
 
 fn normalize_footer_key_token(token: &str) -> String {
@@ -165,7 +221,7 @@ pub(crate) fn footer_hint_text_color(theme: &Theme) -> gpui::Rgba {
 }
 
 pub(crate) fn footer_keycap_border_color_for_state(theme: &Theme, selected: bool) -> gpui::Hsla {
-    let alpha = footer_keycap_border_alpha(theme, selected);
+    let alpha = themed_footer_button_border_alpha(theme, selected);
     theme.colors.text.primary.with_opacity(alpha)
 }
 
@@ -174,19 +230,16 @@ pub(crate) fn footer_keycap_border_color(theme: &Theme) -> gpui::Hsla {
 }
 
 pub(crate) fn footer_keycap_border_hover_color(theme: &Theme) -> gpui::Hsla {
-    theme
-        .colors
-        .text
-        .primary
-        .with_opacity(footer_keycap_border_hover_alpha(theme))
+    theme.colors.text.primary.with_opacity(
+        footer_keycap_border_hover_alpha(theme)
+            .max(themed_footer_button_border_alpha(theme, false)),
+    )
 }
 
 pub(crate) fn footer_labelcap_border_color(theme: &Theme) -> gpui::Hsla {
-    theme
-        .colors
-        .text
-        .primary
-        .with_opacity(FOOTER_LABELCAP_BORDER_ALPHA)
+    theme.colors.text.primary.with_opacity(
+        FOOTER_LABELCAP_BORDER_ALPHA.max(themed_footer_button_border_alpha(theme, false)),
+    )
 }
 
 pub(crate) fn split_footer_shortcut(shortcut: &str) -> Vec<String> {
@@ -271,7 +324,8 @@ pub(crate) fn footer_appkit_glyph_y(key: &str, chip_height: f64, glyph_height: f
 }
 
 pub(crate) fn footer_button_height(footer_height: f32) -> f32 {
-    (footer_height - (FOOTER_BUTTON_VERTICAL_INSET_PX * 2.0)).max(0.0)
+    let metrics = current_main_menu_footer_metrics();
+    (footer_height - (metrics.button_padding_y * 2.0)).max(0.0)
 }
 
 pub(crate) fn render_footer_hint_content(
@@ -325,10 +379,11 @@ fn render_footer_hint_content_impl(
     let key_width_px = match mode {
         FooterHintKeyMode::Shortcut => footer_shortcut_keycaps_width_px(key.as_ref()),
     };
+    let metrics = current_main_menu_footer_metrics();
     let edge_padding_x = if matches!(justify, FooterHintContentJustify::KeyAnchored) {
-        FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX
+        metrics.run_button_padding_x
     } else {
-        FOOTER_ACTION_CONTENT_PADDING_X_PX
+        metrics.button_padding_x
     };
     let label_max_width_px = slot_width_px.map(|slot| {
         if matches!(justify, FooterHintContentJustify::KeyAnchored) {
@@ -356,12 +411,12 @@ fn render_footer_hint_content_impl(
     let mut row = div()
         .pl(px(edge_padding_x))
         .pr(px(edge_padding_x))
-        .py(px(2.0))
-        .rounded(px(FOOTER_ACTION_BUTTON_RADIUS_PX))
+        .py(px(metrics.button_padding_y))
+        .rounded(px(metrics.button_radius))
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(FOOTER_ACTION_CONTENT_GAP_PX))
+        .gap(px(metrics.content_gap))
         .group("footer-action-button")
         .min_w(px(0.0))
         .overflow_hidden();
@@ -400,7 +455,8 @@ pub(crate) fn footer_shortcut_keycaps_width_px_from_tokens<'a>(
         .iter()
         .map(|token| footer_keycap_estimated_width_px(token))
         .sum::<f32>();
-    keys_width + tokens.len().saturating_sub(1) as f32 * FOOTER_ACTION_CONTENT_GAP_PX
+    keys_width
+        + tokens.len().saturating_sub(1) as f32 * current_main_menu_footer_metrics().content_gap
 }
 
 /// Total width of a horizontal run of items laid out with a constant gap
@@ -450,12 +506,13 @@ pub(crate) fn footer_hint_content_estimated_width_px(
         FooterHintKeyMode::Shortcut => footer_shortcut_keycaps_width_px(key),
     };
     let content_gap = if !label.trim().is_empty() && key_width_px > 0.0 {
-        FOOTER_ACTION_CONTENT_GAP_PX
+        current_main_menu_footer_metrics().content_gap
     } else {
         0.0
     };
 
-    FOOTER_ACTION_CONTENT_PADDING_X_PX * 2.0 + label_width_px + content_gap + key_width_px
+    let metrics = current_main_menu_footer_metrics();
+    metrics.button_padding_x * 2.0 + label_width_px + content_gap + key_width_px
 }
 
 fn footer_labelcap_estimated_width_px(label: &str) -> f32 {
@@ -472,7 +529,8 @@ fn footer_labelcap_estimated_width_px(label: &str) -> f32 {
         })
         .sum::<f32>();
 
-    (estimated_text_width + FOOTER_KEYCAP_PADDING_X_PX * 2.0)
+    let metrics = current_main_menu_footer_metrics();
+    (estimated_text_width + metrics.keycap_padding_x * 2.0)
         .max(FOOTER_KEYCAP_HEIGHT_PX)
         .ceil()
 }
@@ -492,7 +550,8 @@ fn footer_keycap_estimated_width_px(token: &str) -> f32 {
             }
         })
         .sum::<f32>();
-    (estimated_text_width + FOOTER_KEYCAP_PADDING_X_PX * 2.0)
+    let metrics = current_main_menu_footer_metrics();
+    (estimated_text_width + metrics.keycap_padding_x * 2.0)
         .max(FOOTER_KEYCAP_HEIGHT_PX)
         .ceil()
 }
@@ -532,7 +591,7 @@ pub(crate) fn footer_labelcap_max_width_for_slot(slot_width_px: f32, key_width_p
     footer_labelcap_max_width_for_slot_with_padding(
         slot_width_px,
         key_width_px,
-        FOOTER_ACTION_CONTENT_PADDING_X_PX,
+        current_main_menu_footer_metrics().button_padding_x,
     )
 }
 
@@ -542,7 +601,7 @@ pub(crate) fn footer_labelcap_max_width_for_slot_with_padding(
     edge_padding_x: f32,
 ) -> f32 {
     let key_gap = if key_width_px > 0.0 {
-        FOOTER_ACTION_CONTENT_GAP_PX
+        current_main_menu_footer_metrics().content_gap
     } else {
         0.0
     };
@@ -567,14 +626,16 @@ fn render_footer_labelcap_constrained(
     force_width: bool,
 ) -> AnyElement {
     let hover_border = footer_keycap_border_hover_color(theme);
+    let metrics = current_main_menu_footer_metrics();
     let mut cap = div()
         .flex_none()
         .min_w(px(FOOTER_KEYCAP_HEIGHT_PX))
         .min_h(px(FOOTER_KEYCAP_HEIGHT_PX))
         .h(px(FOOTER_KEYCAP_HEIGHT_PX))
         .line_height(px(FOOTER_KEYCAP_HEIGHT_PX))
-        .px(px(FOOTER_KEYCAP_PADDING_X_PX))
-        .rounded(px(FOOTER_KEYCAP_RADIUS_PX))
+        .px(px(metrics.keycap_padding_x))
+        .py(px(metrics.keycap_padding_y))
+        .rounded(px(metrics.keycap_radius))
         .border_1()
         .border_color(footer_labelcap_border_color(theme))
         .flex()
@@ -582,7 +643,7 @@ fn render_footer_labelcap_constrained(
         .justify_center()
         .font_family(FONT_SYSTEM_UI)
         .font_weight(FOOTER_HINT_FONT_WEIGHT_GPUI)
-        .text_size(px(FOOTER_HINT_FONT_SIZE_PX))
+        .text_size(px(metrics.label_font_size))
         .text_color(footer_text)
         .group_hover("footer-action-button", move |s| {
             s.text_color(full_text).border_color(hover_border)
@@ -633,7 +694,7 @@ pub(crate) fn render_footer_shortcut_keycaps_from_tokens<'a>(
         .flex_none()
         .flex_row()
         .items_center()
-        .gap(px(FOOTER_ACTION_CONTENT_GAP_PX))
+        .gap(px(current_main_menu_footer_metrics().content_gap))
         .children(
             tokens
                 .into_iter()
@@ -648,6 +709,7 @@ pub(crate) fn footer_shortcut_keycap_layout_model<'a>(
     origin_y: f32,
 ) -> serde_json::Value {
     let tokens = tokens.into_iter().collect::<Vec<_>>();
+    let metrics = current_main_menu_footer_metrics();
     let mut x = origin_x;
     let mut token_values = Vec::new();
     let mut token_bounds = Vec::new();
@@ -669,15 +731,15 @@ pub(crate) fn footer_shortcut_keycap_layout_model<'a>(
             "heightSource": "footer-keycap-constant",
             "glyphNudgeY": footer_key_glyph_nudge_y(token),
             "borderWidth": 1.0,
-            "radius": FOOTER_KEYCAP_RADIUS_PX,
-            "paddingX": FOOTER_KEYCAP_PADDING_X_PX,
-            "fontSize": FOOTER_HINT_FONT_SIZE_PX,
+            "radius": metrics.keycap_radius,
+            "paddingX": metrics.keycap_padding_x,
+            "fontSize": metrics.keycap_font_size,
         }));
-        x += width + FOOTER_ACTION_CONTENT_GAP_PX;
+        x += width + metrics.content_gap;
     }
 
     if !token_bounds.is_empty() {
-        x -= FOOTER_ACTION_CONTENT_GAP_PX;
+        x -= metrics.content_gap;
     }
 
     serde_json::json!({
@@ -692,7 +754,7 @@ pub(crate) fn footer_shortcut_keycap_layout_model<'a>(
         "boundsAvailable": true,
         "coordinateSpace": "providedOriginLogicalPx",
         "units": "logicalPx",
-        "gap": FOOTER_ACTION_CONTENT_GAP_PX,
+        "gap": metrics.content_gap,
         "heightSource": "footer-keycap-constant",
         "widthSource": "footer-keycap-token-model",
         "exactTokenBounds": false,
@@ -709,6 +771,7 @@ pub(crate) fn render_footer_keycap(
     let footer_text = footer_hint_text_color(theme);
     let full_text = theme.colors.text.primary.to_rgb();
     let hover_border = footer_keycap_border_hover_color(theme);
+    let metrics = current_main_menu_footer_metrics();
     let token_child: AnyElement = if let Some(path) = footer_icon_path(&token) {
         svg()
             .external_path(path)
@@ -732,8 +795,9 @@ pub(crate) fn render_footer_keycap(
         .min_h(px(FOOTER_KEYCAP_HEIGHT_PX))
         .h(px(FOOTER_KEYCAP_HEIGHT_PX))
         .line_height(px(FOOTER_KEYCAP_HEIGHT_PX))
-        .px(px(FOOTER_KEYCAP_PADDING_X_PX))
-        .rounded(px(FOOTER_KEYCAP_RADIUS_PX))
+        .px(px(metrics.keycap_padding_x))
+        .py(px(metrics.keycap_padding_y))
+        .rounded(px(metrics.keycap_radius))
         .border_1()
         .border_color(footer_keycap_border_color(theme))
         .flex()
@@ -741,7 +805,7 @@ pub(crate) fn render_footer_keycap(
         .justify_center()
         .font_family(FONT_SYSTEM_UI)
         .font_weight(FOOTER_HINT_FONT_WEIGHT_GPUI)
-        .text_size(px(FOOTER_HINT_FONT_SIZE_PX))
+        .text_size(px(metrics.keycap_font_size))
         .text_color(footer_text)
         .group_hover("footer-action-button", move |s| {
             s.text_color(full_text).border_color(hover_border)
