@@ -245,7 +245,9 @@ export default {
 
 ### Agent Chat Configuration
 
-Agent Chat uses the Agent Catalog and `~/.scriptkit/config.ts`. The stable config keys intentionally keep `acp` in their names because they back the ACP protocol contract.
+Agent Chat with Pi Backend uses the Agent Catalog and `~/.scriptkit/config.ts`.
+Some compatibility config keys still contain legacy adapter naming; treat those
+as storage/API names, not user-facing product language.
 
 ```typescript
 ai: {

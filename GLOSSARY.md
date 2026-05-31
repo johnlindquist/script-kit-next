@@ -56,7 +56,6 @@ Searchable utility lists available directly from the launcher.
 | **Window Switcher** | Switch focus between active application windows. | `WindowSwitcher` | [window_switcher.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/window_switcher.rs) |
 | **App Launcher** | Search and launch installed local applications. | `AppLauncher` | [app_launcher.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/app_launcher.rs) |
 | **Notes Browse** | List and search local Markdown notes. | `NotesBrowseView` | [notes_browse.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/notes_browse.rs) |
-| **Kit Store** | Browse and install community scripts. | `KitStore` | [kit_store.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/kit_store.rs) |
 | **File Search** | Browse files on the local filesystem. | `FileSearchView` | [file_search.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/file_search.rs) |
 
 ---
