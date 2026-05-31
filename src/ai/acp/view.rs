@@ -4941,22 +4941,24 @@ impl AcpChatView {
             self.model_selector_open = false;
             self.history_menu = None;
         }
-        if clear_slash_input && !self.is_setup_mode() {
-            self.live_thread().update(cx, |thread, cx| {
-                let text = thread.input.text().to_string();
-                if text.starts_with('/') {
-                    thread.input.set_text(String::new());
-                    thread.input.set_cursor(0);
-                }
-                cx.notify();
-            });
-        }
-        if insert_slash_input && !self.is_setup_mode() {
-            self.live_thread().update(cx, |thread, cx| {
-                thread.input.set_text("/".to_string());
-                thread.input.set_cursor(1);
-                cx.notify();
-            });
+        if !self.is_setup_mode() {
+            if clear_slash_input {
+                self.live_thread().update(cx, |thread, cx| {
+                    let text = thread.input.text().to_string();
+                    if text.starts_with('/') {
+                        thread.input.set_text(String::new());
+                        thread.input.set_cursor(0);
+                    }
+                    cx.notify();
+                });
+            }
+            if insert_slash_input {
+                self.live_thread().update(cx, |thread, cx| {
+                    thread.input.set_text("/".to_string());
+                    thread.input.set_cursor(1);
+                    cx.notify();
+                });
+            }
         }
         if let Some(reason) = log_visible_reason {
             self.log_mention_visible_range(reason);

@@ -1259,6 +1259,9 @@ impl ScriptListApp {
 
                 let key = event.keystroke.key.as_str();
                 let is_tab_key = key.eq_ignore_ascii_case("tab");
+                let is_backquote_key = key == "`"
+                    || key.eq_ignore_ascii_case("backquote")
+                    || key.eq_ignore_ascii_case("backtick");
                 let has_shift = event.keystroke.modifiers.shift;
                 let is_plain_enter = crate::ui_foundation::is_key_enter(key)
                     && !event.keystroke.modifiers.platform
@@ -1304,6 +1307,25 @@ impl ScriptListApp {
                     }
                     return;
                 }
+
+                if is_backquote_key
+                    && !event.keystroke.modifiers.platform
+                    && !event.keystroke.modifiers.alt
+                    && !event.keystroke.modifiers.control
+                    && !event.keystroke.modifiers.shift
+                {
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && this.accept_full_ghost_prediction(window, cx)
+                            {
+                                cx.stop_propagation();
+                            }
+                        });
+                    }
+                    return;
+                }
+
                 // Check for Tab key (no cmd/alt/ctrl modifiers, but shift is allowed)
                 if is_tab_key
                     && !event.keystroke.modifiers.platform

@@ -1080,15 +1080,15 @@ impl ScriptListApp {
 
             let _ = window_handle.update(cx, |_root, window, cx| {
                 entity.update(cx, |view, cx| {
-                    let sigil = match trigger {
-                        '/' | '@' | '|' | '.' | ';' | '>' => Some(trigger.to_string()),
-                        _ => None,
-                    };
-                    if let Some(s) = sigil {
-                        view.set_input(s, cx);
-                        view.refresh_acp_spine_from_composer(cx);
-                    } else {
-                        let _ = window;
+                    match trigger {
+                        '/' => view.open_slash_picker_in_window(window, cx),
+                        '@' => view.open_mention_picker_in_window(window, cx),
+                        '|' => view.open_profile_trigger_picker_in_window(window, cx),
+                        '.' | ';' | '>' => {
+                            view.set_input(trigger.to_string(), cx);
+                            view.refresh_acp_spine_from_composer(cx);
+                        }
+                        _ => {}
                     }
                 });
             });

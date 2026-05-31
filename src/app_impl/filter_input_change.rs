@@ -619,6 +619,8 @@ impl ScriptListApp {
                 ScriptListSpecialEntry::FileSearchMini { .. } => "file_search_mini",
                 ScriptListSpecialEntry::QuickTerminal => "quick_terminal",
                 ScriptListSpecialEntry::ActionsHelp => "actions_help",
+                ScriptListSpecialEntry::AcpMentionPicker => "acp_mention_picker",
+                ScriptListSpecialEntry::AcpProfilePicker => "acp_profile_picker",
             };
             tracing::info!(
                 target: "script_kit::do_in_trace",
@@ -650,6 +652,12 @@ impl ScriptListApp {
                     if self.has_actions() {
                         self.toggle_actions(cx, window);
                     }
+                }
+                ScriptListSpecialEntry::AcpMentionPicker => {
+                    self.open_tab_ai_acp_with_mention_picker(window, cx);
+                }
+                ScriptListSpecialEntry::AcpProfilePicker => {
+                    self.open_tab_ai_acp_with_profile_picker(window, cx);
                 }
             }
             return;
@@ -796,6 +804,8 @@ impl ScriptListApp {
                 // The popup window is still used by capture-form field
                 // suggestions, so close any stale trigger-owned popup here
                 // while preserving the snapshot that feeds the main area.
+                // Former detached flow:
+                // sync_menu_syntax_trigger_popup_window_for_filter(new_text.clone(), window, cx)
                 crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
                 // Ownership just flipped — invalidate the grouped results
                 // cache so the main launcher list is rebuilt with the

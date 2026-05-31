@@ -1,4 +1,5 @@
 use super::*;
+use crate::filter_input_core::ScriptListSpecialEntry;
 
 impl ScriptListApp {
     #[inline]
@@ -237,6 +238,33 @@ impl ScriptListApp {
 
         let mut handler_form_owns_input = false;
         if !handled_by_subview && matches!(self.current_view, AppView::ScriptList) {
+            if let Some(entry) = Self::special_entry_from_script_list_filter(&text) {
+                match entry {
+                    ScriptListSpecialEntry::AcpMentionPicker => {
+                        let entry_kind = "acp_mention_picker";
+                        crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "script_list_special_entry_routed",
+                            entry_kind,
+                        );
+                        self.open_tab_ai_acp_with_mention_picker(window, cx);
+                        return;
+                    }
+                    ScriptListSpecialEntry::AcpProfilePicker => {
+                        let entry_kind = "acp_profile_picker";
+                        crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "script_list_special_entry_routed",
+                            entry_kind,
+                        );
+                        self.open_tab_ai_acp_with_profile_picker(window, cx);
+                        return;
+                    }
+                    _ => {}
+                }
+            }
             self.set_menu_syntax_mode_from_filter(&text);
             if self.spine_enabled {
                 self.set_spine_parse_from_filter_and_cursor(&text, text.len());
@@ -306,20 +334,20 @@ impl ScriptListApp {
         // Skip when a subview handled the filter: `get_filtered_results_cached`
         // and `collect_fallbacks` are ScriptList-only and would incorrectly
         // flip a builtin subview into the script-list fallback mode.
-        if !handled_by_subview
-            && !handler_form_owns_input
-            && !text.is_empty()
-            && !self.menu_syntax_mode.is_menu_syntax_for(&text)
-            && self.menu_syntax_trigger_popup_state.snapshot.is_none()
-            && self.menu_syntax_object_selector_state.snapshot.is_none()
-        {
-            let results = self.get_filtered_results_cached();
-            if results.is_empty() {
-                // No matches - check if we should enter fallback mode
-                use crate::fallbacks::collect_fallbacks;
-                let fallbacks = collect_fallbacks(&text, self.scripts.as_slice());
-                if !fallbacks.is_empty() {
-                    self.main_menu_fallback_state.replace_items(fallbacks);
+        if !handled_by_subview && !text.is_empty() {
+            if !handler_form_owns_input
+                && !self.menu_syntax_mode.is_menu_syntax_for(&text)
+                && self.menu_syntax_trigger_popup_state.snapshot.is_none()
+                && self.menu_syntax_object_selector_state.snapshot.is_none()
+            {
+                let results = self.get_filtered_results_cached();
+                if results.is_empty() {
+                    // No matches - check if we should enter fallback mode
+                    use crate::fallbacks::collect_fallbacks;
+                    let fallbacks = collect_fallbacks(&text, self.scripts.as_slice());
+                    if !fallbacks.is_empty() {
+                        self.main_menu_fallback_state.replace_items(fallbacks);
+                    }
                 }
             }
         }

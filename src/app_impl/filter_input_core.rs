@@ -5,6 +5,8 @@ pub(crate) enum ScriptListSpecialEntry {
     FileSearchMini { query: String },
     QuickTerminal,
     ActionsHelp,
+    AcpMentionPicker,
+    AcpProfilePicker,
 }
 
 impl ScriptListApp {
@@ -120,6 +122,8 @@ impl ScriptListApp {
         match new_text {
             "!" => Some(ScriptListSpecialEntry::QuickTerminal),
             "?" => Some(ScriptListSpecialEntry::ActionsHelp),
+            "@" => Some(ScriptListSpecialEntry::AcpMentionPicker),
+            "|" => Some(ScriptListSpecialEntry::AcpProfilePicker),
             _ => None,
         }
     }
@@ -399,6 +403,39 @@ impl ScriptListApp {
         window: &mut gpui::Window,
         cx: &mut gpui::Context<Self>,
     ) -> bool {
+        let Some(accepted_suffix) = self
+            .ghost_prediction
+            .as_ref()
+            .filter(|prediction| prediction.accepts_tab())
+            .map(|prediction| {
+                crate::scripts::search::ghost::first_word_acceptance_suffix(
+                    &prediction.ghost_suffix,
+                )
+                .to_string()
+            })
+        else {
+            return false;
+        };
+        if accepted_suffix.is_empty() {
+            return false;
+        }
+        let accepted = self.gpui_input_state.update(cx, |state, window_cx| {
+            state.clear_inline_completion(window_cx);
+            state.insert(accepted_suffix.clone(), window, window_cx);
+            true
+        });
+        if accepted {
+            self.ghost_prediction = None;
+            cx.notify();
+        }
+        accepted
+    }
+
+    pub(crate) fn accept_full_ghost_prediction(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut gpui::Context<Self>,
+    ) -> bool {
         if self.ghost_prediction.is_none() {
             return false;
         }
@@ -461,12 +498,27 @@ mod tests {
             .expect("accept_ghost_prediction should exist");
         let body = &source[accept_pos..(accept_pos + 900).min(source.len())];
         assert!(
-            body.contains("accepts_tab()") && body.contains("accept_inline_completion"),
-            "accept_ghost_prediction must check accepts_tab() before accepting inline completion"
+            body.contains("accepts_tab()")
+                && body.contains("first_word_acceptance_suffix")
+                && body.contains("state.insert("),
+            "Tab ghost acceptance must gate on accepts_tab and insert only the first accepted suffix"
         );
         assert!(
-            body.find("accepts_tab()") < body.find("accept_inline_completion"),
-            "hint-only ghost predictions must be rejected before InputState accepts inline completion"
+            body.find("accepts_tab()") < body.find("state.insert("),
+            "hint-only ghost predictions must be rejected before inserting accepted ghost text"
+        );
+
+        let full_accept_pos = source
+            .find("pub(crate) fn accept_full_ghost_prediction")
+            .expect("accept_full_ghost_prediction should exist");
+        let full_body = &source[full_accept_pos..(full_accept_pos + 900).min(source.len())];
+        assert!(
+            full_body.contains("accepts_tab()") && full_body.contains("accept_inline_completion"),
+            "Backquote ghost acceptance must gate on accepts_tab before accepting the full inline completion"
+        );
+        assert!(
+            full_body.find("accepts_tab()") < full_body.find("accept_inline_completion"),
+            "hint-only ghost predictions must be rejected before full inline completion acceptance"
         );
     }
 
@@ -522,7 +574,11 @@ mod tests {
         );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter("@"),
-            None,
+            Some(ScriptListSpecialEntry::AcpMentionPicker),
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter("|"),
+            Some(ScriptListSpecialEntry::AcpProfilePicker),
         );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter("!"),

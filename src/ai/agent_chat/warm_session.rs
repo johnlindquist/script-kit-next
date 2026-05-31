@@ -451,9 +451,9 @@ impl AgentChatWarmSessionManager {
                     generation,
                     key = %spec.key,
                 );
-                let (state, failure_message) = match connection
-                    .prepare_session(ui_thread_id.clone(), spec.cwd.clone())
-                {
+                let prepare_events =
+                    connection.prepare_session(ui_thread_id.clone(), spec.cwd.clone());
+                let (state, failure_message) = match prepare_events {
                     Ok(events) => {
                         tracing::info!(
                             target: "script_kit::tab_ai",

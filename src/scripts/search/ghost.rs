@@ -89,6 +89,20 @@ impl GhostPrediction {
     }
 }
 
+pub fn first_word_acceptance_suffix(suffix: &str) -> &str {
+    let mut saw_non_whitespace = false;
+    for (idx, ch) in suffix.char_indices() {
+        if ch.is_whitespace() {
+            if saw_non_whitespace {
+                return &suffix[..idx];
+            }
+        } else {
+            saw_non_whitespace = true;
+        }
+    }
+    suffix
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GhostContext {
     pub cwd_label: Option<String>,
@@ -1519,6 +1533,13 @@ mod tests {
         assert_eq!(pred.full_label, "Clipboard History");
         assert_eq!(pred.kind, GhostPredictionKind::CommandCompletion);
         assert!(pred.accepts_tab());
+    }
+
+    #[test]
+    fn ghost_first_word_acceptance_suffix_matches_launcher_tab_contract() {
+        assert_eq!(first_word_acceptance_suffix("board history"), "board");
+        assert_eq!(first_word_acceptance_suffix(" history"), " history");
+        assert_eq!(first_word_acceptance_suffix("done"), "done");
     }
 
     #[test]

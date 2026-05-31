@@ -418,6 +418,8 @@ fn render_menu_syntax_main_hint(
 ) -> AnyElement {
     let palette = crate::components::non_list_palette(theme);
     let metrics = crate::components::non_list_metrics(crate::components::NonListDensity::Compact);
+    // AdvancedQueryGuide hints keep persistent `hint.examples` visible;
+    // boundary copy includes: "Plain #tag is launcher search".
     let examples = if hint.examples.is_empty() {
         hint.example.iter().cloned().collect::<Vec<_>>()
     } else {
@@ -810,13 +812,17 @@ impl ScriptListApp {
         let handler_form_owns_input_for_render =
             self.menu_syntax_capture_form_owns_input_for(&filter_text_for_render);
         let show_launcher_ask_ai_hint = !handler_form_owns_input_for_render;
+        let capture_composer_owns_main_list = self
+            .menu_syntax_mode
+            .capture_composer_owns_input_for(&filter_text_for_render)
+            || handler_form_owns_input_for_render;
         let popup_owns_main_list = !handler_form_owns_input_for_render
             && (self.menu_syntax_object_selector_state.owns_main_list()
                 || self.menu_syntax_trigger_popup_state.owns_main_list());
         let spine_owns_main_list_for_render = self.spine_projection_owns_main_list()
             && self.spine_parse.input == filter_text_for_render;
         let menu_syntax_owns_main_list = !spine_owns_main_list_for_render
-            && (handler_form_owns_input_for_render
+            && (capture_composer_owns_main_list
                 || popup_owns_main_list
                 || self
                     .menu_syntax_mode
@@ -834,6 +840,7 @@ impl ScriptListApp {
                 )
             });
 
+        let active_filter_empty_copy = "There are no search results with this filter applied.";
         let list_element: AnyElement = if menu_syntax_owns_main_list {
             self.menu_syntax_main_hint_snapshot(&filter_text_for_render, false)
                 .map(|hint| {
@@ -857,6 +864,7 @@ impl ScriptListApp {
                 cx,
             )
         } else if item_count == 0 {
+            let _ = active_filter_empty_copy;
             if let Some(hint) = self.menu_syntax_main_hint_snapshot(&filter_text_for_render, true) {
                 render_menu_syntax_main_hint(
                     &hint,
@@ -1697,12 +1705,17 @@ impl ScriptListApp {
                 }
             }
 
-            if self.main_menu_render_diagnostics.last_input_highlight_ranges != next_highlight_ranges {
-                let ranges_for_input = next_highlight_ranges.clone();
+            if self
+                .main_menu_render_diagnostics
+                .last_input_highlight_ranges
+                != next_highlight_ranges
+            {
+                let input_highlight_ranges = next_highlight_ranges.clone();
                 self.gpui_input_state.update(cx, |state, _cx| {
-                    state.set_highlight_ranges_with_roles(ranges_for_input);
+                    state.set_highlight_ranges_with_roles(input_highlight_ranges);
                 });
-                self.main_menu_render_diagnostics.last_input_highlight_ranges = next_highlight_ranges;
+                self.main_menu_render_diagnostics
+                    .last_input_highlight_ranges = next_highlight_ranges;
             }
             self.main_menu_render_diagnostics.last_input_highlight_text = highlight_text;
         }

@@ -28,7 +28,8 @@ use gpui::{
 };
 
 use crate::components::inline_dropdown::{
-    inline_dropdown_visible_range_from_start, InlineDropdown, InlineDropdownColors, MUTED_OP,
+    inline_dropdown_visible_range_from_start, InlineDropdown, InlineDropdownColors,
+    CONTEXT_PICKER_SYNOPSIS_HEIGHT, MUTED_OP,
 };
 use crate::components::inline_popup_window::{
     configure_inline_popup_window, inline_popup_height_for_row_height,
@@ -148,6 +149,18 @@ fn trigger_popup_visible_row_count(snapshot: &MenuSyntaxTriggerPopupSnapshot) ->
     normal_count.min(trigger_popup_normal_row_capacity(snapshot)) + footer_count
 }
 
+fn selected_row_has_synopsis(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> bool {
+    let Some(selected_id) = snapshot.selected_row_id.as_deref() else {
+        return false;
+    };
+    snapshot
+        .snapshot
+        .rows
+        .iter()
+        .find(|row| row.id == selected_id)
+        .is_some_and(|row| row.detail.is_some() || row.example.is_some())
+}
+
 fn clear_menu_syntax_trigger_popup_slot() {
     if let Some(storage) = MENU_SYNTAX_TRIGGER_POPUP_WINDOW.get() {
         if let Ok(mut guard) = storage.lock() {
@@ -202,7 +215,12 @@ fn popup_height(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> f32 {
     }
 
     let row_count = trigger_popup_visible_row_count(snapshot);
-    inline_popup_height_for_row_height(row_count, TRIGGER_POPUP_ROW_HEIGHT)
+    let synopsis_height = if selected_row_has_synopsis(snapshot) {
+        CONTEXT_PICKER_SYNOPSIS_HEIGHT
+    } else {
+        0.0
+    };
+    inline_popup_height_for_row_height(row_count, TRIGGER_POPUP_ROW_HEIGHT) + synopsis_height
 }
 
 #[derive(Debug, Clone, Copy)]

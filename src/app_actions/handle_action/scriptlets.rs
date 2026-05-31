@@ -146,7 +146,7 @@ impl ScriptletDynamicFailureDetail {
     fn message(self) -> String {
         match self {
             Self::Stderr(stderr) => stderr,
-            Self::Unknown => "No error output from scriptlet action; check its code.".to_string(),
+            Self::Unknown => "Unknown error".to_string(),
         }
     }
 }

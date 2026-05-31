@@ -1,4 +1,6 @@
                             ExternalCommand::SimulateKey { ref key, ref modifiers, ref target, ref request_id } => {
+                                // SimulateKey: Enter - accept menu-syntax popup
+                                // SimulateKey: Enter - execute selected
                                 view.dispatch_simulate_key(
                                     window,
                                     ctx,

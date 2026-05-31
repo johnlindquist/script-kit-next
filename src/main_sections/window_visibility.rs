@@ -445,7 +445,7 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     // Uses the pre-reset mini snapshot too, so Full/mini normalization inside
     // reset_to_script_list cannot skip hidden mini-bound cleanup.
     if should_reset_to_mini_bounds {
-        crate::window_resize::resize_to_main_window_sync(Default::default());
+        crate::window_resize::resize_to_mini_main_window_sync();
         sync_main_automation_window(current_main_automation_bounds(), false, false);
     }
 

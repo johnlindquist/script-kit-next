@@ -259,6 +259,12 @@ pub(crate) fn resize_to_main_window_sync(sizing: MainWindowSizing) {
     resize_first_window_to_size(target_height, Some(MAIN_WINDOW_WIDTH));
 }
 
+/// Resize the main window synchronously to its default ScriptList mini bounds.
+#[allow(dead_code)] // Called from hide paths that need hidden-phase automation bounds reset.
+pub(crate) fn resize_to_mini_main_window_sync() {
+    resize_to_main_window_sync(Default::default());
+}
+
 /// File search mode has no section headers, so sizing is a straight row cap.
 #[allow(dead_code)] // Called from include!()-ed code in app_impl/filter_input_*.rs
 pub(crate) fn file_search_sizing(result_count: usize) -> MainWindowSizing {

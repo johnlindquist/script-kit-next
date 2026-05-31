@@ -802,14 +802,14 @@ impl ExternalCommand {
             | Self::PushDictationResult { request_id, .. }
             | Self::OpenDictationOverlayFixture { request_id, .. }
             | Self::GetConfigFingerprint { request_id, .. }
-            | Self::PasteClipboardIntoAcp { request_id, .. }
             | Self::OpenFocusedTextAgentChatWithMockData { request_id, .. }
             | Self::OpenFocusedTextAgentChatWithPiData { request_id, .. }
             | Self::OpenInlineAgentWithMockData { request_id, .. }
             | Self::OpenInlineAgentWithPiData { request_id, .. }
             | Self::OpenCreationFeedback { request_id, .. }
             | Self::OpenConfirmPrompt { request_id, .. }
-            | Self::OpenAcpDetachedFixture { request_id, .. } => {
+            | Self::OpenAcpDetachedFixture { request_id, .. }
+            | Self::PasteClipboardIntoAcp { request_id, .. } => {
                 request_id.as_ref().map(ExternalCommandRequestId::as_str)
             }
             _ => None,
