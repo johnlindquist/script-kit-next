@@ -25,7 +25,144 @@ fn is_key_right_bracket(key: &str) -> bool {
     key == "]" || key.eq_ignore_ascii_case("bracketright")
 }
 
+#[inline]
+fn is_key_backtick(key: &str) -> bool {
+    key == "`" || key.eq_ignore_ascii_case("backtick")
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum NotesGhostAcceptMode {
+    Word,
+    Full,
+}
+
 impl NotesApp {
+    pub(super) fn handle_notes_escape_key_for_automation(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (&'static str, bool) {
+        if self.command_bar.is_open() || self.show_actions_panel {
+            self.close_actions_panel(window, cx);
+            return ("closeActionsPanel", true);
+        }
+        if self.note_switcher.is_open() {
+            self.close_browse_panel(window, cx);
+            return ("closeBrowsePanel", true);
+        }
+        if self.surface_mode == NotesSurfaceMode::Acp {
+            if let Some(ref entity) = self.embedded_acp_chat {
+                let dismissed = entity.update(cx, |chat, cx| chat.dismiss_escape_popup(cx));
+                if dismissed {
+                    return ("dismissAcpPopup", true);
+                }
+                let cancelled_streaming =
+                    entity.update(cx, |chat, cx| chat.cancel_streaming_from_escape(cx));
+                if cancelled_streaming {
+                    return ("cancelAcpStreaming", true);
+                }
+            }
+            self.switch_to_notes_surface(window, cx);
+            return ("switchAcpToNotes", true);
+        }
+        if self.dismiss_notes_ghost(cx) {
+            return ("dismissNotesGhost", true);
+        }
+        if self.show_search {
+            self.toggle_search(window, cx);
+            return ("closeSearch", true);
+        }
+        if self.focus_mode {
+            self.toggle_focus_mode(cx);
+            return ("exitFocusMode", true);
+        }
+        if self.view_mode == NotesViewMode::Trash {
+            self.set_view_mode(NotesViewMode::AllNotes, window, cx);
+            return ("exitTrash", true);
+        }
+        ("noNotesEscapeAction", false)
+    }
+
+    pub(super) fn dismiss_notes_ghost(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(prediction) = self.notes_ghost_prediction.take() else {
+            return false;
+        };
+        self.notes_ghost_last_action = Some(NotesGhostActionReceipt::dismissed(&prediction));
+        cx.notify();
+        true
+    }
+
+    pub(super) fn try_accept_notes_ghost(
+        &mut self,
+        mode: NotesGhostAcceptMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(prediction) = self.notes_ghost_prediction.clone() else {
+            return false;
+        };
+        if !prediction.accepts_tab || prediction.generation != self.notes_ghost_generation {
+            return false;
+        }
+
+        let (value, selection) = {
+            let editor = self.editor_state.read(cx);
+            (editor.value().to_string(), editor.selection())
+        };
+
+        let Some(line) = crate::notes::ghost::current_line_prefix(&value, selection.clone()) else {
+            self.notes_ghost_prediction = None;
+            self.notes_ghost_last_action = Some(NotesGhostActionReceipt::stale(&prediction));
+            return false;
+        };
+        if line.text != prediction.query_prefix {
+            self.notes_ghost_prediction = None;
+            self.notes_ghost_last_action = Some(NotesGhostActionReceipt::stale(&prediction));
+            return false;
+        }
+
+        let cursor = selection.start.min(value.len());
+        if !value.is_char_boundary(cursor) {
+            self.notes_ghost_prediction = None;
+            self.notes_ghost_last_action = Some(NotesGhostActionReceipt::stale(&prediction));
+            return false;
+        }
+
+        let accepted_suffix = match mode {
+            NotesGhostAcceptMode::Word => {
+                crate::notes::ghost::first_word_acceptance_suffix(&prediction.suffix).to_string()
+            }
+            NotesGhostAcceptMode::Full => prediction.suffix.clone(),
+        };
+        if accepted_suffix.is_empty() {
+            self.notes_ghost_prediction = None;
+            self.notes_ghost_last_action = Some(NotesGhostActionReceipt::stale(&prediction));
+            return false;
+        }
+
+        let next_value = format!(
+            "{}{}{}",
+            &value[..cursor],
+            accepted_suffix.as_str(),
+            &value[cursor..]
+        );
+        let next_cursor = cursor + accepted_suffix.len();
+        self.editor_state.update(cx, |state, cx| {
+            state.set_value(next_value, window, cx);
+            state.set_selection(next_cursor, next_cursor, window, cx);
+        });
+
+        self.notes_ghost_last_action = Some(match mode {
+            NotesGhostAcceptMode::Word => {
+                NotesGhostActionReceipt::accepted_word(&prediction, &accepted_suffix)
+            }
+            NotesGhostAcceptMode::Full => NotesGhostActionReceipt::accepted_full(&prediction),
+        });
+        self.notes_ghost_prediction = None;
+        self.on_editor_change(window, cx);
+        true
+    }
+
     fn close_notes_window_from_top_level_cmd_w(
         &mut self,
         reason: &'static str,
@@ -388,6 +525,9 @@ impl NotesApp {
 
         if is_key_escape(key) {
             cx.stop_propagation();
+            if self.dismiss_notes_ghost(cx) {
+                return;
+            }
             if self.show_actions_panel || self.command_bar.is_open() {
                 self.close_actions_panel(window, cx);
                 return;
@@ -416,7 +556,22 @@ impl NotesApp {
             return;
         }
 
+        if is_key_backtick(key) && !modifiers.platform && !modifiers.control && !modifiers.alt {
+            if self.try_accept_notes_ghost(NotesGhostAcceptMode::Full, window, cx) {
+                cx.stop_propagation();
+                return;
+            }
+            cx.propagate();
+            return;
+        }
+
         if is_key_tab(key) && !modifiers.platform && !modifiers.control && !modifiers.alt {
+            if !modifiers.shift
+                && self.try_accept_notes_ghost(NotesGhostAcceptMode::Word, window, cx)
+            {
+                cx.stop_propagation();
+                return;
+            }
             if modifiers.shift {
                 self.outdent_line(window, cx);
             } else {

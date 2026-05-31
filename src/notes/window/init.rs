@@ -191,6 +191,9 @@ impl NotesApp {
             pending_focus_surface: None,
             focus_transition_generation: 0,
             focus_transition_log: Vec::new(),
+            notes_ghost_prediction: None,
+            notes_ghost_generation: 0,
+            notes_ghost_last_action: None,
             surface_mode: NotesSurfaceMode::default(),
             embedded_acp_chat: None,
             notes_acp_generation: 0,
@@ -308,6 +311,7 @@ impl NotesApp {
             // Add to cache and select it
             self.notes.insert(0, note);
             self.selected_note_id = Some(id);
+            self.recompute_notes_ghost(cx);
             cx.notify();
             return;
         }
@@ -327,8 +331,60 @@ impl NotesApp {
                 }
             }
 
+            self.recompute_notes_ghost(cx);
             cx.notify();
         }
+    }
+
+    pub(super) fn recompute_notes_ghost(&mut self, cx: &mut Context<Self>) {
+        self.notes_ghost_generation = self.notes_ghost_generation.wrapping_add(1).max(1);
+
+        if self.preview_enabled
+            || self.view_mode == NotesViewMode::Trash
+            || self.surface_mode != NotesSurfaceMode::Notes
+            || self.show_search
+            || self.show_actions_panel
+            || self.show_browse_panel
+            || self.command_bar.is_open()
+            || self.note_switcher.is_open()
+        {
+            self.notes_ghost_prediction = None;
+            return;
+        }
+
+        let (editor_text, selection) = {
+            let editor = self.editor_state.read(cx);
+            (editor.value().to_string(), editor.selection())
+        };
+
+        let clipboard_texts = self.collect_notes_ghost_clipboard_texts();
+        self.notes_ghost_prediction = crate::notes::ghost::compute_notes_ghost_prediction(
+            crate::notes::ghost::NotesGhostInput {
+                editor_text: &editor_text,
+                selection,
+                selected_note_id: self.selected_note_id,
+                notes: &self.notes,
+                clipboard_texts: &clipboard_texts,
+                generation: self.notes_ghost_generation,
+            },
+        );
+    }
+
+    fn collect_notes_ghost_clipboard_texts(
+        &self,
+    ) -> Vec<crate::notes::ghost::NotesGhostClipboardText> {
+        crate::clipboard_history::get_clipboard_history_meta(20, 0)
+            .into_iter()
+            .filter(|entry| {
+                matches!(
+                    entry.content_type,
+                    crate::clipboard_history::ContentType::Text
+                        | crate::clipboard_history::ContentType::Link
+                )
+            })
+            .filter_map(|entry| crate::clipboard_history::get_entry_content(&entry.id))
+            .map(|text| crate::notes::ghost::NotesGhostClipboardText { text })
+            .collect()
     }
 
     pub(crate) fn set_editor_text_for_automation(
@@ -339,6 +395,7 @@ impl NotesApp {
     ) {
         self.editor_state.update(cx, |state, inner_cx| {
             state.set_value(text.clone(), window, inner_cx);
+            state.set_selection(text.len(), text.len(), window, inner_cx);
         });
         self.on_editor_change(window, cx);
 

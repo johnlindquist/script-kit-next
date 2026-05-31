@@ -62,8 +62,14 @@ fn resolve_automation_read_target_accepts_notes() {
 #[test]
 fn wait_for_uses_automation_read_target_for_non_acp_conditions() {
     let source = include_str!("../src/prompt_handler/mod.rs");
+    let wait_for_start = source
+        .find("let resolved_target: AutomationReadTarget = if target.is_some()")
+        .expect("waitFor target-resolution block must exist");
+    let wait_for_block = &source[wait_for_start..(wait_for_start + 1800).min(source.len())];
     assert!(
-        source.contains("resolve_automation_read_target(&rid, \"waitFor\""),
+        wait_for_block.contains("resolve_automation_read_target(")
+            && wait_for_block.contains("&rid,")
+            && wait_for_block.contains("\"waitFor\","),
         "waitFor should use resolve_automation_read_target for non-ACP conditions"
     );
 }
@@ -84,8 +90,14 @@ fn wait_for_checks_notes_condition_on_notes_target() {
 #[test]
 fn batch_uses_automation_read_target() {
     let source = include_str!("../src/prompt_handler/mod.rs");
+    let batch_start = source
+        .find("let batch_target: AutomationReadTarget = if target.is_some()")
+        .expect("batch target-resolution block must exist");
+    let batch_block = &source[batch_start..(batch_start + 900).min(source.len())];
     assert!(
-        source.contains("resolve_automation_read_target(&rid, \"batch\""),
+        batch_block.contains("resolve_automation_read_target(")
+            && batch_block.contains("&rid,")
+            && batch_block.contains("\"batch\","),
         "batch handler should use resolve_automation_read_target for target resolution"
     );
 }

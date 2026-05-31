@@ -112,11 +112,45 @@ impl NotesApp {
                 .into_any_element();
         }
 
-        Input::new(&self.editor_state)
+        let editor = Input::new(&self.editor_state)
             .h_full()
             .appearance(false)
             .font_family(cx.theme().mono_font_family.clone())
+            .text_size(cx.theme().mono_font_size);
+
+        div()
+            .relative()
+            .h_full()
+            .child(editor)
+            .when_some(self.notes_ghost_prediction.as_ref(), |this, prediction| {
+                this.child(self.render_notes_ghost_overlay(prediction, cx))
+            })
+            .into_any_element()
+    }
+
+    fn render_notes_ghost_overlay(
+        &self,
+        prediction: &crate::notes::ghost::NotesGhostPrediction,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let metrics = style::adopted_metrics();
+        let prefix_cols = prediction.query_prefix.chars().count() as f32;
+        let line_index = self
+            .get_cursor_line_info(cx)
+            .map(|(line, _)| line.saturating_sub(1))
+            .unwrap_or(0) as f32;
+        let x = metrics.editor_padding_x + prefix_cols * 7.4;
+        let y = metrics.editor_padding_y + line_index * metrics.auto_resize_line_height;
+
+        div()
+            .id("notes-ghost-autocomplete")
+            .absolute()
+            .left(px(x))
+            .top(px(y))
+            .font_family(cx.theme().mono_font_family.clone())
             .text_size(cx.theme().mono_font_size)
+            .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
+            .child(prediction.suffix.clone())
             .into_any_element()
     }
 }

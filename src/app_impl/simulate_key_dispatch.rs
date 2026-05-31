@@ -89,6 +89,40 @@ impl ScriptListApp {
                 return;
             }
         }
+        if !has_cmd
+            && !_has_alt
+            && !_has_ctrl
+            && simulate_key_target_is_notes
+            && (key_lower == "escape"
+                || key_lower == "esc"
+                || key_lower == "tab"
+                || key_lower == "`"
+                || key_lower == "backtick")
+        {
+            match notes::handle_notes_ghost_key_for_automation(ctx, key) {
+                Ok(result) => {
+                    let handled = result
+                        .get("handled")
+                        .and_then(|value| value.as_bool())
+                        .unwrap_or(false);
+                    logging::log(
+                        "STDIN",
+                        &format!("SimulateKey: {key} - Notes ghost autocomplete {result}"),
+                    );
+                    if handled {
+                        return;
+                    }
+                }
+                Err(error) => {
+                    logging::log(
+                        "STDIN",
+                        &format!(
+                            "SimulateKey: {key} - Notes ghost autocomplete unavailable: {error}"
+                        ),
+                    );
+                }
+            }
+        }
         // Mirror live GPUI Keystroke.key_char: Some(&str) only for
         // single-character keys (printable input like "a", "!", "A"),
         // None for named keys ("Escape", "Up", "Enter"). This lets
@@ -173,14 +207,14 @@ impl ScriptListApp {
                     && (crate::ui_foundation::is_key_left(&key_lower)
                         || crate::ui_foundation::is_key_right(&key_lower))
                 {
-                    // Alt+Left / Alt+Right cycle the accent-color exploration
+                    // Alt+Left / Alt+Right cycle the main-menu theme exploration
                     // variation (mirrors the live keyboard + interceptor paths).
                     let forward = crate::ui_foundation::is_key_right(&key_lower);
                     logging::log(
                         "STDIN",
-                        "SimulateKey: Alt+Arrow - cycle accent variation",
+                        "SimulateKey: Alt+Arrow - cycle main menu theme",
                     );
-                    view.cycle_accent_variation(forward, window, ctx);
+                    view.cycle_main_menu_theme(forward, window, ctx);
                 } else if view.try_execute_root_file_action_shortcut(
                     &key_lower, has_cmd, has_shift, _has_alt, _has_ctrl,
                     window, ctx,

@@ -332,6 +332,7 @@ impl NotesApp {
             });
         }
 
+        self.recompute_notes_ghost(cx);
         cx.notify();
     }
 

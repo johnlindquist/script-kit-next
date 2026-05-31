@@ -80,6 +80,64 @@ fn notes_automation_state_is_runtime_derived_and_redacted() {
 }
 
 #[test]
+fn notes_state_exposes_redacted_ghost_autocomplete_receipt() {
+    for needle in [
+        "notes_ghost_prediction",
+        "notes_ghost_generation",
+        "notes_ghost_last_action",
+    ] {
+        assert!(
+            NOTES_WINDOW.contains(needle),
+            "NotesApp must store ghost autocomplete runtime state: {needle}"
+        );
+    }
+
+    for needle in [
+        "\"ghostAutocomplete\"",
+        "automation_ghost_autocomplete_state",
+        "\"suffixReturned\": false",
+        "\"suffixFingerprint\"",
+        "\"suffixLength\"",
+        "\"insertedLength\"",
+        "\"remainingLength\"",
+        "\"acceptedLength\"",
+        "\"remainingSuffixLength\"",
+        "\"acceptedTextReturned\": false",
+        "\"acceptedFingerprint\"",
+        "\"acceptedLeadingWhitespaceLength\"",
+        "\"acceptedNonWhitespaceLength\"",
+        "\"queryPrefixFingerprint\"",
+        "\"acceptsTab\"",
+    ] {
+        assert!(
+            NOTES_NAVIGATION.contains(needle),
+            "Notes DevTools state must expose redacted ghost autocomplete field: {needle}"
+        );
+    }
+
+    assert!(
+        !NOTES_NAVIGATION.contains("\"suffix\": prediction.suffix")
+            && !NOTES_NAVIGATION.contains("\"ghostSuffix\""),
+        "Notes DevTools ghost state must not expose raw ghost suffix text"
+    );
+}
+
+#[test]
+fn notes_cli_reports_ghost_receipts_without_raw_suffix() {
+    for needle in ["ghostAutocomplete", "runtimeNotes.ghostAutocomplete"] {
+        assert!(
+            DEVTOOLS_NOTES.contains(needle),
+            "Notes DevTools CLI must surface redacted ghost autocomplete receipts: {needle}"
+        );
+    }
+
+    assert!(
+        !DEVTOOLS_NOTES.contains("ghostSuffix"),
+        "Notes DevTools CLI must not expose raw ghost suffix text"
+    );
+}
+
+#[test]
 fn notes_state_exposes_focus_owner_transition_timeline() {
     for needle in [
         "struct NotesFocusTransition",
@@ -245,6 +303,12 @@ fn simulate_key_supports_target_scoped_notes_shortcuts() {
         "AutomationWindowKind::Notes",
         "SimulateKey: Cmd+Shift+P - toggle Notes preview",
         "app.toggle_preview(notes_window, cx)",
+        "handle_notes_ghost_key_for_automation(ctx, key)",
+        "key_lower == \"escape\"",
+        "key_lower == \"tab\"",
+        "key_lower == \"`\"",
+        "key_lower == \"backtick\"",
+        "SimulateKey: {key} - Notes ghost autocomplete",
     ] {
         assert!(
             RUNTIME_STDIN.contains(needle),

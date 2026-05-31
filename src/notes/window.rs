@@ -206,6 +206,72 @@ struct NotesMentionPortalEditSession {
     original_token: String,
 }
 
+#[derive(Debug, Clone)]
+struct NotesGhostActionReceipt {
+    kind: &'static str,
+    source_kind: crate::notes::ghost::NotesGhostSourceKind,
+    suffix_len: usize,
+    inserted_len: usize,
+    remaining_len: usize,
+    accepted_fingerprint: Option<String>,
+    accepted_leading_whitespace_len: usize,
+    accepted_non_whitespace_len: usize,
+    suffix_fingerprint: String,
+    recorded_at: Instant,
+}
+
+impl NotesGhostActionReceipt {
+    fn accepted_word(
+        prediction: &crate::notes::ghost::NotesGhostPrediction,
+        inserted_suffix: &str,
+    ) -> Self {
+        Self::from_prediction("acceptedWord", prediction, inserted_suffix)
+    }
+
+    fn accepted_full(prediction: &crate::notes::ghost::NotesGhostPrediction) -> Self {
+        Self::from_prediction("acceptedFull", prediction, &prediction.suffix)
+    }
+
+    fn dismissed(prediction: &crate::notes::ghost::NotesGhostPrediction) -> Self {
+        Self::from_prediction("dismissed", prediction, "")
+    }
+
+    fn stale(prediction: &crate::notes::ghost::NotesGhostPrediction) -> Self {
+        Self::from_prediction("stale", prediction, "")
+    }
+
+    fn from_prediction(
+        kind: &'static str,
+        prediction: &crate::notes::ghost::NotesGhostPrediction,
+        inserted_suffix: &str,
+    ) -> Self {
+        let suffix_len = prediction.suffix.chars().count();
+        let inserted_len = inserted_suffix.chars().count();
+        Self {
+            kind,
+            source_kind: prediction.source_kind,
+            suffix_len,
+            inserted_len,
+            remaining_len: suffix_len.saturating_sub(inserted_len),
+            accepted_fingerprint: if inserted_suffix.is_empty() {
+                None
+            } else {
+                Some(NotesApp::devtools_text_fingerprint(inserted_suffix))
+            },
+            accepted_leading_whitespace_len: inserted_suffix
+                .chars()
+                .take_while(|ch| ch.is_whitespace())
+                .count(),
+            accepted_non_whitespace_len: inserted_suffix
+                .chars()
+                .filter(|ch| !ch.is_whitespace())
+                .count(),
+            suffix_fingerprint: NotesApp::devtools_text_fingerprint(&prediction.suffix),
+            recorded_at: Instant::now(),
+        }
+    }
+}
+
 /// Sort mode for the notes list
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NotesSortMode {
@@ -380,6 +446,13 @@ pub struct NotesApp {
     /// Bounded recent focus-owner transition timeline for runtime UX proof.
     focus_transition_log: Vec<NotesFocusTransition>,
 
+    /// Current deterministic ghost autocomplete prediction for the editor.
+    notes_ghost_prediction: Option<crate::notes::ghost::NotesGhostPrediction>,
+    /// Monotonic generation used to reject stale ghost autocomplete accepts.
+    notes_ghost_generation: u64,
+    /// Last ghost autocomplete action, redacted for DevTools receipts.
+    notes_ghost_last_action: Option<NotesGhostActionReceipt>,
+
     // ── ACP host surface ──────────────────────────────────────────────
     /// Which surface is currently visible (Notes editor or embedded ACP).
     surface_mode: NotesSurfaceMode,
@@ -421,10 +494,11 @@ mod window_ops;
 
 pub use acp_host::close_notes_embedded_acp;
 pub use window_ops::{
-    apply_mcp_notes_mutation_on_main_thread, close_notes_window, get_notes_app_entity_and_handle,
-    get_notes_editor_text, inject_text_into_notes, is_notes_window, is_notes_window_open,
-    open_note_in_notes_window, open_notes_window, open_notes_window_without_launcher_restore,
-    quick_capture, save_note_with_content,
+    accept_notes_ghost_for_automation, apply_mcp_notes_mutation_on_main_thread, close_notes_window,
+    get_notes_app_entity_and_handle, get_notes_editor_text, handle_notes_ghost_key_for_automation,
+    inject_text_into_notes, is_notes_window, is_notes_window_open, open_note_in_notes_window,
+    open_notes_window, open_notes_window_without_launcher_restore, quick_capture,
+    save_note_with_content,
 };
 
 #[cfg(test)]

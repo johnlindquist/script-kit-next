@@ -255,7 +255,8 @@ fn notes_get_elements_not_rejected_as_main_only() {
 fn notes_batch_not_rejected_as_main_only() {
     let source = include_str!("../../src/prompt_handler/mod.rs");
     assert!(
-        source.contains("resolve_automation_read_target(&rid, \"batch\""),
+        source.contains("resolve_automation_read_target(\n                        &rid,\n                        \"batch\"")
+            || source.contains("resolve_automation_read_target(&rid, \"batch\""),
         "batch handler must use resolve_automation_read_target (accepts Notes)"
     );
     assert!(
@@ -317,7 +318,8 @@ fn notes_acp_actions_use_notes_as_actions_parent() {
 fn notes_wait_for_not_rejected_as_main_only() {
     let source = include_str!("../../src/prompt_handler/mod.rs");
     assert!(
-        source.contains("resolve_automation_read_target(&rid, \"waitFor\""),
+        source.contains("resolve_automation_read_target(\n                            &rid,\n                            \"waitFor\"")
+            || source.contains("resolve_automation_read_target(&rid, \"waitFor\""),
         "waitFor handler must use resolve_automation_read_target (accepts Notes)"
     );
     assert!(

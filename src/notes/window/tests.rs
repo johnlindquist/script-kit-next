@@ -128,6 +128,138 @@ fn test_cmd_f_dispatches_search_on_window_when_notes_shortcut_runs() {
 }
 
 #[test]
+fn test_notes_keyboard_checks_ghost_acceptance_before_tab_indentation() {
+    const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    let dialog_guard = KEYBOARD_SOURCE
+        .find("if window.has_active_dialog(cx)")
+        .expect("dialog guard should own first key routing");
+    let indent = KEYBOARD_SOURCE
+        .find("self.indent_at_cursor(window, cx)")
+        .expect("plain Tab indentation should remain available");
+    let ghost_accept = KEYBOARD_SOURCE[dialog_guard..indent]
+        .find("NotesGhostAcceptMode::Word")
+        .expect("plain Tab should try accepting one ghost word")
+        + dialog_guard;
+
+    assert!(
+        dialog_guard < ghost_accept && ghost_accept < indent,
+        "Notes keyboard must keep dialog routing first, then ghost acceptance, then Tab indentation fallback"
+    );
+}
+
+#[test]
+fn test_notes_keyboard_escape_dismisses_ghost_after_higher_priority_surfaces() {
+    const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    let handle_key_down = KEYBOARD_SOURCE
+        .find("pub(super) fn handle_key_down(")
+        .expect("live keyboard handler should exist");
+    let live_keyboard = &KEYBOARD_SOURCE[handle_key_down..];
+    let dialog_guard = live_keyboard
+        .find("if window.has_active_dialog(cx)")
+        .expect("dialog guard should own first key routing");
+    let command_bar = live_keyboard
+        .find("if self.command_bar.is_open()")
+        .expect("command bar should own escape before editor");
+    let actions_panel = live_keyboard
+        .find("if self.show_actions_panel && self.actions_panel.is_some()")
+        .expect("actions panel should own escape before editor");
+    let note_switcher = live_keyboard
+        .find("if self.note_switcher.is_open()")
+        .expect("note switcher should own escape before editor");
+    let acp_surface = live_keyboard[note_switcher..]
+        .find("if self.surface_mode == NotesSurfaceMode::Acp")
+        .expect("ACP surface should own escape before editor")
+        + note_switcher;
+    let editor_escape = live_keyboard
+        .find("if is_key_escape(key) {\n            cx.stop_propagation();")
+        .expect("editor escape branch should exist");
+    let ghost_dismiss = live_keyboard[editor_escape..]
+        .find("if self.dismiss_notes_ghost(cx) {")
+        .expect("editor escape should dismiss ghost before fallback closing behavior")
+        + editor_escape;
+    let search_close = live_keyboard[ghost_dismiss..]
+        .find("if self.show_search {")
+        .expect("escape fallback should still close search")
+        + ghost_dismiss;
+
+    assert!(
+        dialog_guard < command_bar
+            && command_bar < actions_panel
+            && actions_panel < note_switcher
+            && note_switcher < acp_surface
+            && acp_surface < editor_escape
+            && editor_escape < ghost_dismiss
+            && ghost_dismiss < search_close,
+        "Notes ghost escape must run only inside the editor escape branch after higher-priority surfaces and before editor fallback closing"
+    );
+}
+
+#[test]
+fn test_notes_keyboard_backtick_accepts_full_ghost_without_swallowing_plain_backtick() {
+    const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    let backtick_branch = KEYBOARD_SOURCE
+        .find("if is_key_backtick(key) && !modifiers.platform && !modifiers.control && !modifiers.alt")
+        .expect("plain backtick should get a ghost-acceptance branch");
+    let full_accept = KEYBOARD_SOURCE[backtick_branch..]
+        .find("NotesGhostAcceptMode::Full")
+        .expect("backtick branch should accept the full ghost suffix")
+        + backtick_branch;
+    let stop_propagation = KEYBOARD_SOURCE[full_accept..]
+        .find("cx.stop_propagation();")
+        .expect("handled ghost backtick should stop propagation")
+        + full_accept;
+    let propagate = KEYBOARD_SOURCE[stop_propagation..]
+        .find("cx.propagate();")
+        .expect("unhandled ghost backtick should propagate to normal text input")
+        + stop_propagation;
+    let tab_branch = KEYBOARD_SOURCE[propagate..]
+        .find("if is_key_tab(key) && !modifiers.platform && !modifiers.control && !modifiers.alt")
+        .expect("plain Tab branch should remain after backtick");
+    let tab_branch = tab_branch + propagate;
+
+    assert!(
+        backtick_branch < full_accept
+            && full_accept < stop_propagation
+            && stop_propagation < propagate
+            && propagate < tab_branch,
+        "Backtick should stop propagation only when the full ghost suffix was accepted, otherwise normal text input can continue"
+    );
+}
+
+#[test]
+fn test_notes_render_wraps_editor_with_ghost_overlay() {
+    const RENDER_BODY: &str = include_str!("render_editor_body.rs");
+    for needle in [
+        "notes_ghost_prediction",
+        "render_notes_ghost_overlay",
+        ".relative()",
+        "Input::new(&self.editor_state)",
+        "\"notes-ghost-autocomplete\"",
+    ] {
+        assert!(
+            RENDER_BODY.contains(needle),
+            "Notes editor render path must expose ghost overlay hook: {needle}"
+        );
+    }
+}
+
+#[test]
+fn test_notes_automation_set_input_places_cursor_at_end_for_ghost_prefix() {
+    const INIT_SOURCE: &str = include_str!("init.rs");
+    let set_value = INIT_SOURCE
+        .find("state.set_value(text.clone(), window, inner_cx);")
+        .expect("automation setter should write the requested text");
+    let set_selection = INIT_SOURCE
+        .find("state.set_selection(text.len(), text.len(), window, inner_cx);")
+        .expect("automation setter should park cursor at the end for editor-like input");
+
+    assert!(
+        set_value < set_selection,
+        "Notes automation set-input must write text before moving the cursor to the end"
+    );
+}
+
+#[test]
 fn test_find_in_note_action_dispatches_search_on_window_when_action_executes() {
     const PANELS_SOURCE: &str = include_str!("panels.rs");
     assert!(

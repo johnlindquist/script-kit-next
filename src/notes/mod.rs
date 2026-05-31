@@ -36,6 +36,7 @@
 mod actions_panel;
 mod browse_panel;
 pub(crate) mod code_highlight;
+pub(crate) mod ghost;
 mod markdown;
 mod markdown_highlighting;
 pub(crate) mod menu_syntax_capture;
@@ -67,8 +68,9 @@ pub(crate) use storage::{
 // Re-export key types - suppress unused warnings since these are public API
 #[allow(unused_imports)]
 pub use window::{
-    apply_mcp_notes_mutation_on_main_thread, close_notes_embedded_acp, close_notes_window,
-    get_notes_app_entity_and_handle, get_notes_editor_text, inject_text_into_notes,
+    accept_notes_ghost_for_automation, apply_mcp_notes_mutation_on_main_thread,
+    close_notes_embedded_acp, close_notes_window, get_notes_app_entity_and_handle,
+    get_notes_editor_text, handle_notes_ghost_key_for_automation, inject_text_into_notes,
     is_notes_window, is_notes_window_open, open_note_in_notes_window, open_notes_window,
     open_notes_window_without_launcher_restore, quick_capture, save_note_with_content, NotesApp,
     NotesSurfaceMode,

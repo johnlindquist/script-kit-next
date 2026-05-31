@@ -395,6 +395,7 @@ function notesState(elements: JsonObject, focus: JsonObject, text: JsonObject, r
     commandBars: runtimeNotes.commandBars ?? null,
     shortcutRegistry: runtimeNotes.shortcutRegistry ?? null,
     focusTransitions: runtimeNotes.focusTransitions ?? null,
+    ghostAutocomplete: runtimeNotes.ghostAutocomplete ?? null,
     autosize: runtimeNotes.autosize ?? null,
     generations: runtimeNotes.generations ?? null,
     lastAutosizeTransition: runtimeNotes.lastAutosizeTransition ?? null,

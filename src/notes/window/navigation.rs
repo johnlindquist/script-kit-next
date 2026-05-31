@@ -3,7 +3,7 @@ use itertools::Itertools;
 use super::*;
 
 impl NotesApp {
-    fn devtools_text_fingerprint(value: &str) -> String {
+    pub(super) fn devtools_text_fingerprint(value: &str) -> String {
         let mut hash = 0xcbf29ce484222325_u64;
         for byte in value.as_bytes() {
             hash ^= u64::from(*byte);
@@ -99,6 +99,47 @@ impl NotesApp {
             "generation": self.focus_transition_generation,
             "entryCount": entries.len(),
             "entries": entries,
+        })
+    }
+
+    fn automation_ghost_autocomplete_state(&self) -> serde_json::Value {
+        let prediction = self.notes_ghost_prediction.as_ref();
+        let last_action = self.notes_ghost_last_action.as_ref().map(|action| {
+            serde_json::json!({
+                "kind": action.kind,
+                "sourceKind": action.source_kind.as_str(),
+                "suffixReturned": false,
+                "suffixLength": action.suffix_len,
+                "insertedLength": action.inserted_len,
+                "remainingLength": action.remaining_len,
+                "acceptedLength": action.inserted_len,
+                "remainingSuffixLength": action.remaining_len,
+                "acceptedTextReturned": false,
+                "acceptedFingerprint": action.accepted_fingerprint,
+                "acceptedLeadingWhitespaceLength": action.accepted_leading_whitespace_len,
+                "acceptedNonWhitespaceLength": action.accepted_non_whitespace_len,
+                "suffixFingerprint": action.suffix_fingerprint,
+                "ageMs": action.recorded_at.elapsed().as_millis() as u64,
+            })
+        });
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "source": "runtime.notes.automationState",
+            "redacted": true,
+            "visible": prediction.is_some(),
+            "kind": prediction.map(|_| "lineSuffix"),
+            "sourceKind": prediction.map(|prediction| prediction.source_kind.as_str()),
+            "sourceRank": prediction.map(|prediction| prediction.source_rank),
+            "acceptsTab": prediction.map(|prediction| prediction.accepts_tab).unwrap_or(false),
+            "confidence": prediction.map(|prediction| prediction.confidence),
+            "generation": self.notes_ghost_generation,
+            "suffixReturned": false,
+            "suffixLength": prediction.map(|prediction| prediction.suffix.chars().count()),
+            "suffixFingerprint": prediction.map(|prediction| Self::devtools_text_fingerprint(&prediction.suffix)),
+            "queryPrefixLength": prediction.map(|prediction| prediction.query_prefix.chars().count()),
+            "queryPrefixFingerprint": prediction.map(|prediction| Self::devtools_text_fingerprint(&prediction.query_prefix)),
+            "lastAction": last_action,
         })
     }
 
@@ -448,6 +489,7 @@ impl NotesApp {
             },
             "shortcutRegistry": self.automation_shortcut_registry(),
             "focusTransitions": self.automation_focus_transition_timeline(),
+            "ghostAutocomplete": self.automation_ghost_autocomplete_state(),
             "search": {
                 "visible": self.show_search,
                 "queryLength": search_text.chars().count(),

@@ -1128,3 +1128,51 @@ pub fn get_notes_app_entity_and_handle() -> Option<(Entity<NotesApp>, gpui::Wind
     };
     Some((entity, handle))
 }
+
+/// Handle the current Notes ghost autocomplete prediction through the live
+/// Notes window, for target-scoped DevTools `simulateKey` proof.
+pub fn handle_notes_ghost_key_for_automation(
+    cx: &mut App,
+    key: &str,
+) -> Result<serde_json::Value, String> {
+    let (entity, handle) =
+        get_notes_app_entity_and_handle().ok_or_else(|| "Notes window is not open".to_string())?;
+    handle
+        .update(cx, |_root, window, cx| {
+            entity.update(cx, |app, cx| {
+                let key = key.to_ascii_lowercase();
+                let (action, handled) = match key.as_str() {
+                    "escape" | "esc" => app.handle_notes_escape_key_for_automation(window, cx),
+                    "tab" => (
+                        "acceptNotesGhostWord",
+                        app.try_accept_notes_ghost(
+                            super::keyboard::NotesGhostAcceptMode::Word,
+                            window,
+                            cx,
+                        ),
+                    ),
+                    "`" | "backtick" => (
+                        "acceptNotesGhostFull",
+                        app.try_accept_notes_ghost(
+                            super::keyboard::NotesGhostAcceptMode::Full,
+                            window,
+                            cx,
+                        ),
+                    ),
+                    _ => ("unsupportedNotesGhostKey", false),
+                };
+                serde_json::json!({
+                    "handled": handled,
+                    "target": "notes",
+                    "action": action,
+                })
+            })
+        })
+        .map_err(|error| format!("Failed to handle Notes ghost autocomplete key: {error}"))
+}
+
+/// Backward-compatible helper for older target-scoped DevTools `simulateKey Tab`
+/// proof. New callers should use `handle_notes_ghost_key_for_automation`.
+pub fn accept_notes_ghost_for_automation(cx: &mut App) -> Result<serde_json::Value, String> {
+    handle_notes_ghost_key_for_automation(cx, "tab")
+}
