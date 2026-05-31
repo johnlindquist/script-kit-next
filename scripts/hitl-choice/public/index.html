@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HITL Choice Review</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="top">
+        <div class="title-block">
+          <p class="eyebrow">Human-in-the-loop review</p>
+          <h1 id="job-title">Loading...</h1>
+          <p id="job-description"></p>
+        </div>
+        <div class="status">
+          <span id="selected-count">0 selected</span>
+          <span id="save-status">Draft not saved yet</span>
+        </div>
+      </header>
+
+      <section class="controls" aria-label="Review controls">
+        <label>
+          Filter
+          <input id="filter" type="search" placeholder="Filter by title, surface, or tag" />
+        </label>
+      </section>
+
+      <form id="review-form">
+        <section id="options" class="options" aria-label="Choice options"></section>
+
+        <section class="overall">
+          <label for="overall-feedback">Overall feedback</label>
+          <textarea id="overall-feedback" rows="7" placeholder="Add overall guidance for the local agent. Enter inserts new lines and does not submit."></textarea>
+        </section>
+
+        <footer class="bottom">
+          <p id="message" role="status"></p>
+          <button id="submit" type="button">Submit choices</button>
+        </footer>
+      </form>
+    </main>
+
+    <template id="option-template">
+      <article class="option" tabindex="0" role="checkbox" aria-checked="false">
+        <div class="option-main">
+          <div class="check" aria-hidden="true">[ ]</div>
+          <div>
+            <div class="option-meta"></div>
+            <h2></h2>
+            <p class="description"></p>
+            <p class="goal"></p>
+            <p class="risk"></p>
+            <details>
+              <summary>Suggested proof</summary>
+              <pre class="proof"></pre>
+              <p class="evidence"></p>
+            </details>
+          </div>
+        </div>
+        <label class="feedback-label">
+          Per-option correction feedback
+          <textarea rows="3"></textarea>
+        </label>
+      </article>
+    </template>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

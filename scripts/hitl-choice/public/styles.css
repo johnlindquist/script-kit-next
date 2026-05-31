@@ -1,0 +1,211 @@
+:root {
+  color-scheme: light dark;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.45;
+}
+
+body {
+  margin: 0;
+  background: Canvas;
+  color: CanvasText;
+}
+
+.shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.top,
+.bottom {
+  position: sticky;
+  z-index: 10;
+  background: Canvas;
+  border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px color-mix(in srgb, CanvasText 8%, transparent);
+}
+
+.top {
+  top: 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+}
+
+.bottom {
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  margin-top: 18px;
+}
+
+.title-block {
+  min-width: 0;
+}
+
+.eyebrow,
+.option-meta {
+  opacity: 0.7;
+  font-size: 0.85rem;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 8px;
+  font-size: 1.6rem;
+}
+
+h2 {
+  margin-bottom: 6px;
+  font-size: 1.1rem;
+}
+
+.status {
+  display: grid;
+  gap: 4px;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+#save-status {
+  font-size: 0.82rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+#save-status.error {
+  color: LinkText;
+  opacity: 1;
+}
+
+.controls {
+  margin: 16px 0;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-weight: 650;
+}
+
+input,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  padding: 10px 12px;
+  background: Canvas;
+  color: CanvasText;
+}
+
+button {
+  min-height: 44px;
+  border-radius: 8px;
+  border: 0;
+  padding: 0 18px;
+  font-weight: 700;
+  background: Highlight;
+  color: HighlightText;
+}
+
+button:disabled {
+  opacity: 0.6;
+}
+
+.options {
+  display: grid;
+  gap: 12px;
+}
+
+.option {
+  border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.option:focus {
+  outline: 3px solid Highlight;
+  outline-offset: 3px;
+}
+
+.option.selected {
+  border-color: Highlight;
+  background: color-mix(in srgb, Highlight 10%, Canvas);
+}
+
+.option-main {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 10px;
+}
+
+.check {
+  font-weight: 800;
+  color: Highlight;
+}
+
+.description,
+.goal,
+.risk,
+.evidence {
+  margin-bottom: 8px;
+}
+
+details {
+  margin: 10px 0;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+pre {
+  overflow-x: auto;
+  padding: 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, CanvasText 8%, Canvas);
+}
+
+.feedback-label,
+.overall {
+  margin-top: 12px;
+}
+
+#message {
+  margin: 0;
+}
+
+@media (max-width: 700px) {
+  .shell {
+    padding: 10px;
+  }
+
+  .top,
+  .bottom {
+    position: static;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .option-main {
+    grid-template-columns: 32px 1fr;
+  }
+}

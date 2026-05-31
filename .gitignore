@@ -22,6 +22,7 @@ node_modules/
 .swarmmail.db
 .test-screenshots/
 .test-output/
+.hitl-choice/
 .mocks/
 session*.md
 oracle-questions.md
