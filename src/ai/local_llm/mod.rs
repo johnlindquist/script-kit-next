@@ -15,10 +15,10 @@ pub(crate) mod model_locator;
 mod runtime;
 mod types;
 
-#[cfg(all(target_os = "macos", feature = "local-llm"))]
-mod llama_cpp_backend;
 #[cfg(not(all(target_os = "macos", feature = "local-llm")))]
 mod stub_backend;
+#[cfg(all(target_os = "macos", feature = "local-llm"))]
+mod subprocess_backend;
 
 pub(crate) use types::{LocalGhostRequest, LocalGhostResponse};
 

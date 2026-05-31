@@ -1,3 +1,68 @@
+[workspace]
+members = [
+    ".",
+    "crates/ghost-llm-helper",
+]
+exclude = [
+    "vendor/gpui-component/crates/macros",
+    "vendor/gpui-component/crates/story",
+    "vendor/gpui-component/crates/ui",
+    "vendor/gpui-component/crates/assets",
+    "vendor/gpui-component/crates/webview",
+    "vendor/gpui-component/examples/app_assets",
+    "vendor/gpui-component/examples/hello_world",
+    "vendor/gpui-component/examples/input",
+    "vendor/gpui-component/examples/window_title",
+    "vendor/gpui-component/examples/dialog_overlay",
+    "vendor/gpui-component/examples/webview",
+    "vendor/gpui-component/examples/system_monitor",
+]
+resolver = "2"
+
+[workspace.package]
+publish = false
+edition = "2024"
+
+[workspace.dependencies]
+gpui-component = { path = "vendor/gpui-component/crates/ui", version = "0.5.0" }
+gpui-component-macros = { path = "vendor/gpui-component/crates/macros", version = "0.5.0" }
+gpui-component-assets = { path = "vendor/gpui-component/crates/assets", version = "0.5.0" }
+story = { path = "vendor/gpui-component/crates/story" }
+gpui = { path = "vendor/gpui" }
+gpui-macros = { path = "vendor/gpui_macros", package = "gpui_macros" }
+sum-tree = { version = "0.2.0", package = "zed-sum-tree" }
+reqwest = { git = "https://github.com/zed-industries/reqwest.git", rev = "c15662463bda39148ba154100dd44d3fba5873a4", default-features = false, features = ["charset", "http2", "macos-system-configuration", "multipart", "rustls-tls-native-roots", "socks", "stream"], package = "zed-reqwest", version = "0.12.15-zed" }
+anyhow = "1"
+log = "0.4"
+lsp-types = { version = "0.97.0", features = ["proposed"] }
+notify = "7.0.0"
+raw-window-handle = "0.6.2"
+ropey = { version = "=2.0.0-beta.1", features = ["metric_lines_lf", "metric_utf16"] }
+rust-i18n = "3"
+schemars = "1"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1"
+serde_repr = "0.1"
+smallvec = "1"
+smol = "2"
+tracing = "0.1.41"
+
+[workspace.lints.clippy]
+almost_complete_range = "allow"
+arc_with_non_send_sync = "allow"
+borrowed_box = "allow"
+dbg_macro = "deny"
+let_underscore_future = "allow"
+manual_is_multiple_of = "allow"
+map_entry = "allow"
+module_inception = "allow"
+non_canonical_partial_ord_impl = "allow"
+reversed_empty_ranges = "allow"
+single_range_in_vec_init = "allow"
+style = { level = "allow", priority = -1 }
+todo = "deny"
+type_complexity = "allow"
+
 [package]
 name = "script-kit-gpui"
 version = "0.1.8"
@@ -195,10 +260,6 @@ smappservice-rs = "0.1"
 # is deferred because VisibleWindows crop semantics differ from the active-display crop
 # Tab AI currently relies on.
 macos-screenshot-kit = { path = "oracle/macos-screenshot-kit" }
-# On-device GGUF inference for Ghost Text (Cotabby approach). Optional + gated by
-# the `local-llm` feature; default-features off (we don't want openmp) with metal
-# + sampler. Kept off by default until the ggml/whisper double-link is proven.
-llama-cpp-2 = { version = "0.1.146", default-features = false, features = ["metal", "sampler"], optional = true }
 
 [patch."https://github.com/zed-industries/zed"]
 gpui = { path = "vendor/gpui" }
@@ -212,7 +273,7 @@ default = ["ocr"]
 # On-device GGUF ghost-text engine via llama.cpp (Metal). OFF by default until
 # the ggml/whisper double-link is proven clean on macOS CI; enable with
 # `--features local-llm`. See src/ai/local_llm/.
-local-llm = ["dep:llama-cpp-2"]
+local-llm = []
 # Enable tests that interact with system APIs (clipboard, accessibility, hotkeys)
 # These tests may have side effects like modifying clipboard, opening dialogs, etc.
 # Run with: cargo test --features system-tests

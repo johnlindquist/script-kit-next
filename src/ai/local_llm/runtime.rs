@@ -11,10 +11,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock};
 
-#[cfg(all(target_os = "macos", feature = "local-llm"))]
-use super::llama_cpp_backend::LoadedLocalLlm;
 #[cfg(not(all(target_os = "macos", feature = "local-llm")))]
 use super::stub_backend::LoadedLocalLlm;
+#[cfg(all(target_os = "macos", feature = "local-llm"))]
+use super::subprocess_backend::LoadedLocalLlm;
 
 static LOCAL_GHOST_LLM: OnceLock<LocalLlmActor> = OnceLock::new();
 

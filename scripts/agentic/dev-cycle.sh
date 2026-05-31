@@ -192,6 +192,21 @@ if [ -n "${SCRIPT_KIT_CARGO_FEATURES:-}" ]; then
 fi
 
 build_start=$SECONDS
+if [[ " ${SCRIPT_KIT_CARGO_FEATURES:-} " == *"local-llm"* ]]; then
+    run_with_heartbeat helper-build \
+        cargo build -p script-kit-ghost-llm-helper --bin script-kit-ghost-llm-helper --message-format="${SCRIPT_KIT_CARGO_MESSAGE_FORMAT:-short}"
+    # Install the helper to a stable, non-purged location so the running app can
+    # always find it. target/ and target-agent/pools/* are reclaimed under disk
+    # pressure; ~/.scriptkit/bin survives, and resolve_helper_path() checks it.
+    helper_src="target/debug/script-kit-ghost-llm-helper"
+    helper_dst="$HOME/.scriptkit/bin/script-kit-ghost-llm-helper"
+    if [ -f "$helper_src" ]; then
+        mkdir -p "$HOME/.scriptkit/bin"
+        if [ "$helper_src" -nt "$helper_dst" ] || [ ! -f "$helper_dst" ]; then
+            cp -f "$helper_src" "$helper_dst" && echo "[dev.sh] installed ghost-llm helper → $helper_dst"
+        fi
+    fi
+fi
 run_with_heartbeat build \
     cargo build --bin script-kit-gpui "${feature_args[@]}" --message-format="${SCRIPT_KIT_CARGO_MESSAGE_FORMAT:-short}"
 build_elapsed=$((SECONDS - build_start))

@@ -1,16 +1,4 @@
-//! In-process GGUF inference backend via `llama-cpp-2` (llama.cpp + Metal).
-//!
-//! Compiled only for `--features local-llm` on macOS. Owns a leaked `LlamaModel`
-//! (process lifetime) and a `LlamaContext<'static>` so the !Send/!Sync context
-//! can live on the runtime actor thread. Generation is token-by-token with a
-//! cooperative cancel flag so a new keystroke aborts mid-decode.
-
-use super::types::{GhostSamplingParams, ResolvedLocalModel};
 use anyhow::{Context as _, Result};
-use std::num::NonZeroU32;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
-
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::context::LlamaContext;
 use llama_cpp_2::llama_backend::LlamaBackend;
@@ -18,14 +6,28 @@ use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::{AddBos, LlamaModel};
 use llama_cpp_2::sampling::LlamaSampler;
+use serde::{Deserialize, Serialize};
+use std::num::NonZeroU32;
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
-/// Fixed sampler seed: ghost text should be stable for a given prefix, and we
-/// avoid pulling an RNG dependency into the hot path.
 const GHOST_SAMPLER_SEED: u32 = 0x5C71_7ABB;
-/// Hard byte cap on raw output before the sanitizer runs (defense in depth).
 const RAW_OUTPUT_BYTE_CAP: usize = 160;
 
-/// Process-wide llama backend (init once; freed at exit).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub(crate) struct GhostSamplingParams {
+    pub max_prediction_tokens: usize,
+    pub temperature: f32,
+    pub top_k: i32,
+    pub top_p: f32,
+    pub min_p: f32,
+    pub repeat_penalty: f32,
+    pub ctx_tokens: u32,
+    pub batch_size: u32,
+    pub gpu_layers: u32,
+}
+
 fn backend() -> Result<&'static LlamaBackend> {
     static BACKEND: OnceLock<LlamaBackend> = OnceLock::new();
     if BACKEND.get().is_none() {
@@ -43,18 +45,19 @@ pub(crate) struct LoadedLocalLlm {
 }
 
 impl LoadedLocalLlm {
-    pub(crate) fn load(model: &ResolvedLocalModel) -> Result<Self> {
+    pub(crate) fn load(
+        model_path: &Path,
+        model_id: &str,
+        sampling: GhostSamplingParams,
+    ) -> Result<Self> {
         let backend = backend()?;
-        let sampling = GhostSamplingParams::default();
-
         let model_params = LlamaModelParams::default()
             .with_n_gpu_layers(sampling.gpu_layers)
             .with_use_mmap(true);
-        let loaded_model = LlamaModel::load_from_file(backend, &model.path, &model_params)
-            .with_context(|| format!("load gguf {}", model.path.display()))?;
-
+        let loaded_model = LlamaModel::load_from_file(backend, model_path, &model_params)
+            .with_context(|| format!("load gguf {}", model_path.display()))?;
         Ok(Self {
-            model_id: model.model_id.clone(),
+            model_id: model_id.to_string(),
             sampling,
             backend,
             model: loaded_model,
@@ -65,6 +68,7 @@ impl LoadedLocalLlm {
         &self.model_id
     }
 
+    #[allow(clippy::manual_unwrap_or_default, clippy::needless_range_loop)]
     pub(crate) fn generate_one_line(
         &mut self,
         prompt: &str,
@@ -73,7 +77,6 @@ impl LoadedLocalLlm {
         if cancel.load(Ordering::Relaxed) {
             anyhow::bail!("ghost_local_llm_cancelled");
         }
-
         let mut tokens = self
             .model
             .str_to_token(prompt, AddBos::Always)
@@ -81,19 +84,12 @@ impl LoadedLocalLlm {
         if tokens.is_empty() {
             anyhow::bail!("ghost_local_llm_empty_prompt");
         }
-
-        // Keep the most recent tokens within the context budget.
         let max_prompt = (self.sampling.ctx_tokens as usize)
             .saturating_sub(self.sampling.max_prediction_tokens + 4)
             .max(1);
         if tokens.len() > max_prompt {
             tokens = tokens.split_off(tokens.len() - max_prompt);
         }
-
-        // A fresh context per request (no KV reuse yet — later polish). Creating
-        // and dropping the context each call also frees its Metal residency sets
-        // promptly, which avoids the ggml metal-device teardown assert that fires
-        // when a context outlives the backend at process exit.
         let ctx_params = LlamaContextParams::default()
             .with_n_ctx(NonZeroU32::new(self.sampling.ctx_tokens))
             .with_n_batch(self.sampling.batch_size)
@@ -102,17 +98,21 @@ impl LoadedLocalLlm {
             .model
             .new_context(self.backend, ctx_params)
             .context("create llama context")?;
-
-        let batch_cap = tokens.len().max(self.sampling.batch_size as usize);
-        let mut batch = LlamaBatch::new(batch_cap, 1);
+        let n_batch = (self.sampling.batch_size as usize).max(1);
+        let mut batch = LlamaBatch::new(n_batch, 1);
         let last_index = tokens.len() - 1;
-        for (i, token) in tokens.iter().enumerate() {
-            batch
-                .add(*token, i as i32, &[0], i == last_index)
-                .context("add prompt token")?;
+        let mut chunk_start = 0usize;
+        while chunk_start < tokens.len() {
+            let chunk_end = (chunk_start + n_batch).min(tokens.len());
+            batch.clear();
+            for index in chunk_start..chunk_end {
+                batch
+                    .add(tokens[index], index as i32, &[0], index == last_index)
+                    .context("add prompt token")?;
+            }
+            ctx.decode(&mut batch).context("decode prompt")?;
+            chunk_start = chunk_end;
         }
-        ctx.decode(&mut batch).context("decode prompt")?;
-
         let mut sampler = LlamaSampler::chain_simple([
             LlamaSampler::penalties(64, self.sampling.repeat_penalty, 0.0, 0.0),
             LlamaSampler::top_k(self.sampling.top_k),
@@ -121,31 +121,22 @@ impl LoadedLocalLlm {
             LlamaSampler::temp(self.sampling.temperature),
             LlamaSampler::dist(GHOST_SAMPLER_SEED),
         ]);
-
-        // Accumulate raw bytes across tokens (a single token may be a UTF-8
-        // fragment) and decode once at the end to avoid mid-codepoint splits.
         let mut out_bytes: Vec<u8> = Vec::new();
-        let mut n_cur = batch.n_tokens();
+        let mut n_cur = tokens.len() as i32;
         let mut stop = false;
-
         for _ in 0..self.sampling.max_prediction_tokens {
             if cancel.load(Ordering::Relaxed) {
                 anyhow::bail!("ghost_local_llm_cancelled");
             }
-
             let token = sampler.sample(&ctx, batch.n_tokens() - 1);
             sampler.accept(token);
-
             if self.model.is_eog_token(token) {
                 break;
             }
-
-            let piece = self
-                .model
-                .token_to_piece_bytes(token, 32, false, None)
-                .unwrap_or_default();
-
-            // One line only: stop at the first newline byte.
+            let piece = match self.model.token_to_piece_bytes(token, 32, false, None) {
+                Ok(piece) => piece,
+                Err(_) => Vec::new(),
+            };
             if let Some(newline) = piece.iter().position(|b| *b == b'\n') {
                 out_bytes.extend_from_slice(&piece[..newline]);
                 break;
@@ -157,7 +148,6 @@ impl LoadedLocalLlm {
             if stop {
                 break;
             }
-
             batch.clear();
             batch
                 .add(token, n_cur, &[0], true)
@@ -165,7 +155,6 @@ impl LoadedLocalLlm {
             n_cur += 1;
             ctx.decode(&mut batch).context("decode token")?;
         }
-
         Ok(String::from_utf8_lossy(&out_bytes).to_string())
     }
 }
