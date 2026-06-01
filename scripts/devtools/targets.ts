@@ -240,7 +240,7 @@ function targetIdentity(args: Args, inspect: JsonObject, windows: JsonObject) {
   };
 }
 
-const lifecycleCodes = new Set([
+const SESSION_LIFECYCLE_CODES = new Set([
   "session_dead",
   "forwarder_dead",
   "no_session",
@@ -259,7 +259,7 @@ function errorCode(error: JsonObject): string {
 }
 
 function hasSessionLifecycleError(errors: JsonObject[]) {
-  return errors.some((error) => lifecycleCodes.has(errorCode(error)));
+  return errors.some((error) => SESSION_LIFECYCLE_CODES.has(errorCode(error)));
 }
 
 function lifecycleDetails(errors: JsonObject[]) {
@@ -267,7 +267,7 @@ function lifecycleDetails(errors: JsonObject[]) {
     .map((error) => {
       const parsed = (error.parsedError as JsonObject | undefined | null) ?? error;
       const code = errorCode(error);
-      if (!lifecycleCodes.has(code)) return null;
+      if (!SESSION_LIFECYCLE_CODES.has(code)) return null;
       return {
         label: error.label ?? null,
         code,
@@ -278,6 +278,26 @@ function lifecycleDetails(errors: JsonObject[]) {
       };
     })
     .filter(Boolean);
+}
+
+function lifecycleCodes(errors: JsonObject[]) {
+  return lifecycleDetails(errors)
+    .map((detail) => (detail as JsonObject).code)
+    .filter((code): code is string => typeof code === "string");
+}
+
+function primaryLifecycleDetails(errors: JsonObject[]) {
+  return (lifecycleDetails(errors)[0] as JsonObject | undefined) ?? null;
+}
+
+function primarySessionLifecycle(errors: JsonObject[]) {
+  const details = primaryLifecycleDetails(errors);
+  return (details?.sessionLifecycle as JsonObject | undefined) ?? null;
+}
+
+function primaryParsedError(errors: JsonObject[]) {
+  const lifecycleError = errors.find((error) => SESSION_LIFECYCLE_CODES.has(errorCode(error)));
+  return (lifecycleError?.parsedError as JsonObject | undefined) ?? null;
 }
 
 function classification(args: Args, identity: ReturnType<typeof targetIdentity>, errors: JsonObject[]) {
@@ -332,9 +352,12 @@ async function main() {
       command: "targets.list",
       session: args.session,
       classification: hasSessionLifecycleError(errors) ? "blocked-by-session-lifecycle" : errors.length ? "blocked-by-timeout" : "ok",
+      lifecycleCodes: lifecycleCodes(errors),
+      lifecycleDetails: primaryLifecycleDetails(errors),
+      sessionLifecycle: primarySessionLifecycle(errors),
+      parsedError: primaryParsedError(errors),
       targetCount: pickWindows(windows).length,
       targets: pickWindows(windows),
-      sessionLifecycle: lifecycleDetails(errors),
       errors,
     }, null, 2));
     return;
@@ -361,7 +384,10 @@ async function main() {
     ...identity,
     windows: pickWindows(windows),
     rawInspect: inspect,
-    sessionLifecycle: lifecycleDetails(inspectErrors),
+    lifecycleCodes: lifecycleCodes(inspectErrors),
+    lifecycleDetails: primaryLifecycleDetails(inspectErrors),
+    sessionLifecycle: primarySessionLifecycle(inspectErrors),
+    parsedError: primaryParsedError(inspectErrors),
     errors: inspectErrors,
   }, null, 2));
 }
