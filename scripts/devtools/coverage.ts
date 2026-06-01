@@ -251,6 +251,7 @@ const surfaces: Surface[] = [
       "runtime hover row availability",
       "target-scoped ActionsDialog first-click selection proof",
       "target-scoped ActionsDialog second-click activation lifecycle proof",
+      "target-scoped ActionsDialog semantic freshness proof after first-click selection",
       "runtime shortcut layout bounds model",
       "getElements(target)",
       "getLayoutInfo(target actionsDialog) ActionsDialog/search/header/list/visible-row/shortcut bounds",

@@ -16,6 +16,7 @@ type Args = {
   proveHover: boolean;
   proveClickSelect: boolean;
   proveClickActivate: boolean;
+  proveSemanticFreshness: boolean;
   inspectTargetForwarded: string[];
   hasExplicitInspectTarget: boolean;
   openTargetForwarded: string[];
@@ -28,7 +29,7 @@ const DEFAULT_OPEN_TARGET = ["--show", "--main", "--strict", "--surface", "Scrip
 function usage() {
   return [
     "Usage:",
-    "  bun scripts/devtools/actions.ts inspect [--session <name>] [--start] [--keep-open] [--open] [--open-target-kind <kind>] [--prove-hover] [--prove-click-select] [--prove-click-activate] [target args]",
+    "  bun scripts/devtools/actions.ts inspect [--session <name>] [--start] [--keep-open] [--open] [--open-target-kind <kind>] [--prove-hover] [--prove-click-select] [--prove-click-activate] [--prove-semantic-freshness] [target args]",
     "",
     "Target args match scripts/devtools/targets.ts inspect. Defaults to --target-kind actionsDialog --strict --surface ActionsDialog.",
   ].join("\n");
@@ -53,6 +54,7 @@ function parseArgs(argv: string[]): Args {
     proveHover: false,
     proveClickSelect: false,
     proveClickActivate: false,
+    proveSemanticFreshness: false,
     inspectTargetForwarded: [],
     hasExplicitInspectTarget: false,
     openTargetForwarded: [],
@@ -74,6 +76,8 @@ function parseArgs(argv: string[]): Args {
       args.proveClickSelect = true;
     } else if (arg === "--prove-click-activate") {
       args.proveClickActivate = true;
+    } else if (arg === "--prove-semantic-freshness") {
+      args.proveSemanticFreshness = true;
     } else if (arg === "--open-target-id") {
       args.openTarget = { type: "id", id: argv[++index] ?? "" };
       args.hasExplicitOpenTarget = true;
@@ -1015,6 +1019,53 @@ async function runClickActivateProof(
   };
 }
 
+function panelOnlyFallbackWarnings(receipt: JsonObject) {
+  const warnings = Array.isArray(receipt.warnings) ? receipt.warnings : [];
+  return warnings.filter((warning): warning is string =>
+    typeof warning === "string" && warning.startsWith("panel_only_")
+  );
+}
+
+async function runSemanticFreshnessProof(
+  args: Args,
+  forwarded: string[],
+  expectedSelectedSemanticId: string | null,
+) {
+  const elementsAfter = await run(
+    ["bun", "scripts/devtools/elements.ts", "snapshot", ...forwarded],
+    "elements.snapshot.semanticFreshness",
+  );
+  const selectedNode = asArray(elementsAfter.nodes).find((node) =>
+    node.semanticId === elementsAfter.selectedSemanticId && node.selected === true
+  ) ?? null;
+  const fallbackWarnings = panelOnlyFallbackWarnings(elementsAfter);
+  const target = (elementsAfter.target as JsonObject | undefined) ?? {};
+  const assertions = {
+    expectedSelectedSemanticIdAvailable: typeof expectedSelectedSemanticId === "string",
+    elementsSelectedMatchesRowGeometry: elementsAfter.selectedSemanticId === expectedSelectedSemanticId,
+    selectedNodeMatches: selectedNode != null && selectedNode.semanticId === expectedSelectedSemanticId,
+    noPanelOnlyFallback: fallbackWarnings.length === 0,
+    targetStable: target.automationId === "actions-dialog",
+  };
+  const ok = Object.values(assertions).every(Boolean);
+  return {
+    classification: ok ? "ok" : "blocked-by-stale-view",
+    command: "actions.semanticFreshnessProof",
+    expected: {
+      selectedSemanticId: expectedSelectedSemanticId,
+      source: "rowGeometry.selectedRow.semanticId",
+    },
+    elements: {
+      selectedSemanticId: elementsAfter.selectedSemanticId ?? null,
+      focusedSemanticId: elementsAfter.focusedSemanticId ?? null,
+      selectedNode,
+      panelOnlyFallbackWarnings: fallbackWarnings,
+    },
+    assertions,
+    receipts: { elementsAfter },
+  };
+}
+
 async function main() {
   const args = parseArgs(Bun.argv.slice(2));
   const forwarded = inspectForwarded(args);
@@ -1098,6 +1149,12 @@ async function main() {
   const clickActivateProof = args.proveClickActivate
     ? await runClickActivateProof(args, selector, target, rowGeometry)
     : null;
+  const semanticExpectedSelectedId = typeof ((clickSelectProof?.after as JsonObject | undefined)?.selectedSemanticId) === "string"
+    ? ((clickSelectProof?.after as JsonObject | undefined)?.selectedSemanticId as string)
+    : selectedRowSemanticId(rowGeometry);
+  const semanticFreshnessProof = args.proveSemanticFreshness
+    ? await runSemanticFreshnessProof(args, forwarded, semanticExpectedSelectedId)
+    : null;
 
   console.log(JSON.stringify({
     schemaVersion: 1,
@@ -1127,6 +1184,7 @@ async function main() {
     hoverProof,
     clickSelectProof,
     clickActivateProof,
+    semanticFreshnessProof,
     chromeContract: {
       source: "actionsDialog.automationState.runtimeAudit",
       status: runtimeAuditStatus,

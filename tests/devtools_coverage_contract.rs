@@ -411,6 +411,52 @@ fn actions_dialog_coverage_mentions_second_click_activation_proof() {
 }
 
 #[test]
+fn actions_cli_reports_semantic_freshness_proof() {
+    for needle in [
+        "--prove-semantic-freshness",
+        "semanticFreshnessProof",
+        "actions.semanticFreshnessProof",
+        "elementsSelectedMatchesRowGeometry",
+        "selectedNodeMatches",
+        "noPanelOnlyFallback",
+        "blocked-by-stale-view",
+    ] {
+        assert!(
+            ACTIONS_DEVTOOLS.contains(needle),
+            "actions DevTools CLI must expose semantic freshness proof receipt: {needle}"
+        );
+    }
+}
+
+#[test]
+fn actions_dialog_elements_use_grouped_visual_index_semantic_ids() {
+    let collector = fs::read_to_string("src/windows/automation_surface_collector.rs")
+        .expect("read automation_surface_collector.rs");
+    for needle in [
+        "for (visual_index, grouped_item) in dialog.grouped_items.iter().enumerate()",
+        "crate::actions::GroupedActionItem::Item(filter_idx)",
+        "dialog.selected_index == visual_index",
+        "format!(\"choice:{visual_index}:{}\", action.id)",
+        "Some(visual_index)",
+    ] {
+        assert!(
+            collector.contains(needle),
+            "ActionsDialog semantic collector must use grouped visual indexes: {needle}"
+        );
+    }
+}
+
+#[test]
+fn actions_dialog_coverage_mentions_semantic_freshness_proof() {
+    assert!(
+        COVERAGE.contains(
+            "target-scoped ActionsDialog semantic freshness proof after first-click selection"
+        ),
+        "coverage CLI must advertise ActionsDialog semantic freshness proof"
+    );
+}
+
+#[test]
 fn actions_dialog_rows_expose_mouse_click_arm_state() {
     for needle in [
         "\"mouseArmed\": self.mouse_armed_row == Some(visual_index)",

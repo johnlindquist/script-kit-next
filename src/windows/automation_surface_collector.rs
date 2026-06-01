@@ -913,32 +913,48 @@ pub(crate) fn collect_actions_dialog_elements(
         None,
     ));
 
-    // Individual action choices
-    let selected_action_idx = dialog
-        .get_selected_filtered_index()
-        .and_then(|fi| dialog.filtered_actions.get(fi).copied());
+    // Individual action choices. Use grouped visual indexes so semantic ids
+    // match rowGeometry, which also includes section headers.
     let mut selected_semantic_id = None;
 
-    for (filter_pos, &action_idx) in dialog.filtered_actions.iter().enumerate() {
-        let Some(action) = dialog.actions.get(action_idx) else {
-            continue;
-        };
-        let is_selected = selected_action_idx == Some(action_idx);
-        let semantic_id = format!("choice:{}:{}", filter_pos, action.id);
+    for (visual_index, grouped_item) in dialog.grouped_items.iter().enumerate() {
+        match grouped_item {
+            crate::actions::GroupedActionItem::SectionHeader(label) => {
+                elements.push(element(
+                    &format!("section:{visual_index}"),
+                    ElementType::Panel,
+                    Some(label.clone()),
+                    None,
+                    Some(dialog.selected_index == visual_index),
+                    None,
+                    Some(visual_index),
+                ));
+            }
+            crate::actions::GroupedActionItem::Item(filter_idx) => {
+                let Some(&action_idx) = dialog.filtered_actions.get(*filter_idx) else {
+                    continue;
+                };
+                let Some(action) = dialog.actions.get(action_idx) else {
+                    continue;
+                };
+                let is_selected = dialog.selected_index == visual_index;
+                let semantic_id = format!("choice:{visual_index}:{}", action.id);
 
-        if is_selected {
-            selected_semantic_id = Some(semantic_id.clone());
+                if is_selected {
+                    selected_semantic_id = Some(semantic_id.clone());
+                }
+
+                elements.push(element(
+                    &semantic_id,
+                    ElementType::Choice,
+                    Some(action.title.clone()),
+                    Some(action.id.clone()),
+                    Some(is_selected),
+                    None,
+                    Some(visual_index),
+                ));
+            }
         }
-
-        elements.push(element(
-            &semantic_id,
-            ElementType::Choice,
-            Some(action.title.clone()),
-            Some(action.id.clone()),
-            Some(is_selected),
-            None,
-            Some(filter_pos),
-        ));
     }
 
     let focused_semantic_id = if search_focused {

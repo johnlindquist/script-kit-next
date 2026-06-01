@@ -49,6 +49,7 @@ pub(crate) use dialog::matching_filtered_action_id_for_keystroke;
 pub(crate) use dialog::AcpActionsDialogContext;
 #[allow(unused_imports)] // Used by binary target through include!()-ed app_impl code.
 pub(crate) use dialog::ActionsHostContextSnapshot;
+pub(crate) use dialog::GroupedActionItem;
 #[allow(unused_imports)]
 // Used by the binary target through include!()-ed prompt_handler code.
 pub(crate) use dialog::{is_destructive_action, matching_action_id_for_keystroke};
