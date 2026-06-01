@@ -1764,7 +1764,13 @@ impl ScriptListApp {
         let input_y = shell.header_padding_y + context_offset_y;
         let input_width = (window_width - (shell_horizontal_padding * 2.0)).max(0.0);
         let input_text_inset_left =
-            crate::components::main_view_chrome::main_view_input_text_inset_left(menu_def);
+            crate::components::main_view_chrome::main_view_input_text_inset_left(
+                menu_def,
+                matches!(
+                    menu_def.header_info_bar.logo_placement,
+                    crate::designs::MainMenuLogoPlacement::InputLeading
+                ),
+            );
 
         components.push(
             LayoutComponentInfo::new("MainViewInput", LayoutComponentType::Input)
@@ -1815,19 +1821,24 @@ impl ScriptListApp {
                 )),
         );
 
-        let state_icon_size = menu_def.icon.container_size.min(search.height).max(16.0);
-        let state_icon_x = shell_horizontal_padding
-            + crate::components::main_view_chrome::main_view_state_icon_left(menu_def);
-        let state_icon_y = input_y + ((search.height - state_icon_size) * 0.5).max(0.0);
-        components.push(
-            LayoutComponentInfo::new("MainViewInputStateIcon", LayoutComponentType::Other)
-                .with_bounds(state_icon_x, state_icon_y, state_icon_size, state_icon_size)
-                .with_parent("MainViewInput")
-                .with_depth(3)
-                .with_explanation(
-                    "Absolutely positioned state icon shares the row icon column while MainViewInput keeps the text-column inset.",
-                ),
-        );
+        if matches!(
+            menu_def.header_info_bar.logo_placement,
+            crate::designs::MainMenuLogoPlacement::InputLeading
+        ) {
+            let state_icon_size = menu_def.icon.container_size.min(search.height).max(16.0);
+            let state_icon_x = shell_horizontal_padding
+                + crate::components::main_view_chrome::main_view_state_icon_left(menu_def);
+            let state_icon_y = input_y + ((search.height - state_icon_size) * 0.5).max(0.0);
+            components.push(
+                LayoutComponentInfo::new("MainViewInputStateIcon", LayoutComponentType::Other)
+                    .with_bounds(state_icon_x, state_icon_y, state_icon_size, state_icon_size)
+                    .with_parent("MainViewInput")
+                    .with_depth(3)
+                    .with_explanation(
+                        "Absolutely positioned state icon shares the row icon column while MainViewInput keeps the text-column inset.",
+                    ),
+            );
+        }
 
         // Content area
         components.push(

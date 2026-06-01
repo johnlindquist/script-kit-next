@@ -932,6 +932,10 @@ impl ScriptListApp {
             let flat_results_clone = flat_results.clone();
 
             let current_main_menu_theme = self.current_main_menu_theme;
+            let hide_initial_section_header = current_main_menu_theme
+                .def()
+                .header_info_bar
+                .hide_initial_section_header;
             let effective_section_header_height =
                 crate::list_item::effective_section_header_height_for_theme(
                     current_main_menu_theme,
@@ -968,7 +972,9 @@ impl ScriptListApp {
                                     // Section header at 32px height (8px grid) for clear visual separation,
                                     // or 20px if it is the first section header to pull it up closer to input.
                                     let is_first = ix == 0;
-                                    let h_px = if is_first {
+                                    let h_px = if is_first && hide_initial_section_header {
+                                        0.0
+                                    } else if is_first {
                                         crate::list_item::effective_first_section_header_height_for_theme(
                                             current_main_menu_theme,
                                         )
@@ -981,7 +987,14 @@ impl ScriptListApp {
                                             ix as u64,
                                         ))
                                         .h(px(h_px))
-                                        .child(render_section_header(label, icon.as_deref(), theme_colors, is_first))
+                                        .when(!hide_initial_section_header || !is_first, |div| {
+                                            div.child(render_section_header(
+                                                label,
+                                                icon.as_deref(),
+                                                theme_colors,
+                                                is_first,
+                                            ))
+                                        })
                                         .into_any_element()
                                 }
                                 GroupedListItem::Status(status) => {
@@ -1183,7 +1196,14 @@ impl ScriptListApp {
                     .enumerate()
                     .map(|(ix, item)| match item {
                         GroupedListItem::SectionHeader(..) => {
-                            if ix == 0 {
+                            if ix == 0
+                                && current_main_menu_theme
+                                    .def()
+                                    .header_info_bar
+                                    .hide_initial_section_header
+                            {
+                                0.0
+                            } else if ix == 0 {
                                 crate::list_item::effective_first_section_header_height_for_theme(
                                     current_main_menu_theme,
                                 )
@@ -1808,7 +1828,7 @@ impl ScriptListApp {
             div()
                 .w_full()
                 .h(px(
-                    crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0),
+                    crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0)
                 ))
                 .flex()
                 .items_center()
@@ -1826,16 +1846,26 @@ impl ScriptListApp {
             self.render_search_input_with_ghost(cx).into_any_element()
         };
 
+        let state_icon_name =
+            self.main_view_state_icon_name_for_script_list(&filter_text_for_render);
+        let leading = crate::components::main_view_chrome::main_view_should_show_state_icon(
+            menu_def,
+            state_icon_name,
+        )
+        .then(|| {
+            crate::components::main_view_chrome::render_main_view_state_icon(
+                &self.theme,
+                menu_def,
+                state_icon_name,
+            )
+        });
+
         let input = crate::components::main_view_chrome::render_main_view_input_shell(
             &self.theme,
             menu_def,
             crate::components::main_view_chrome::MainViewInputChrome {
                 body: input_body,
-                leading: Some(crate::components::main_view_chrome::render_main_view_state_icon(
-                    &self.theme,
-                    menu_def,
-                    self.main_view_state_icon_name_for_script_list(&filter_text_for_render),
-                )),
+                leading,
                 trailing: Vec::new(),
             },
         );

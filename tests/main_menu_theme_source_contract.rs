@@ -1,6 +1,8 @@
 use std::{collections::HashSet, fs};
 
-use script_kit_gpui::designs::MainMenuThemeVariant;
+use script_kit_gpui::designs::{
+    MainMenuInputTextAlignment, MainMenuLogoPlacement, MainMenuThemeVariant,
+};
 
 fn read_source(path: &str) -> String {
     fs::read_to_string(path).unwrap_or_else(|err| panic!("failed to read {path}: {err}"))
@@ -32,6 +34,43 @@ fn header_info_bar_variants_have_unique_header_signatures() {
         MainMenuThemeVariant::COUNT,
         "each variation slot should explore a distinct header information-bar idea"
     );
+}
+
+#[test]
+fn header_variations_include_logo_and_input_alignment_experiments() {
+    let variants = MainMenuThemeVariant::all();
+
+    assert!(variants.iter().any(|theme| {
+        theme.def().header_info_bar.logo_placement == MainMenuLogoPlacement::InputLeading
+    }));
+    assert!(variants.iter().any(|theme| {
+        theme.def().header_info_bar.logo_placement == MainMenuLogoPlacement::HeaderLeading
+    }));
+    assert!(variants.iter().any(|theme| {
+        theme.def().header_info_bar.logo_placement == MainMenuLogoPlacement::HeaderTrailing
+    }));
+    assert!(variants.iter().any(|theme| {
+        theme.def().header_info_bar.logo_placement == MainMenuLogoPlacement::Hidden
+    }));
+    assert!(variants.iter().any(|theme| {
+        theme.def().header_info_bar.input_text_alignment == MainMenuInputTextAlignment::SearchInset
+    }));
+    assert!(variants.iter().any(|theme| {
+        theme.def().header_info_bar.input_text_alignment == MainMenuInputTextAlignment::SoftCenter
+    }));
+}
+
+#[test]
+fn one_header_variation_hides_the_initial_suggested_separator() {
+    let hidden: Vec<_> = MainMenuThemeVariant::all()
+        .iter()
+        .filter(|theme| theme.def().header_info_bar.hide_initial_section_header)
+        .collect();
+
+    assert_eq!(hidden, vec![&MainMenuThemeVariant::InfoBarUltraQuiet]);
+    assert!(MainMenuThemeVariant::InfoBarUltraQuiet
+        .name()
+        .contains("No Suggested Separator"));
 }
 
 #[test]
@@ -107,9 +146,13 @@ fn shared_main_view_columns_are_cross_theme_source_of_truth() {
 
     assert!(shared.contains("pub(crate) fn main_view_content_columns"));
     assert!(shared.contains("pub(crate) fn main_view_text_column_x"));
+    assert!(shared.contains("pub(crate) fn main_view_should_show_state_icon"));
     assert!(shared.contains(
         "main_view_row_leading_x(def) + main_view_state_icon_slot_size(def) + def.row.icon_text_gap"
     ));
+    assert!(shared.contains("MainMenuInputTextAlignment::SearchInset"));
+    assert!(shared.contains("MainMenuInputTextAlignment::SoftCenter"));
+    assert!(shared.contains("MainMenuLogoPlacement::InputLeading"));
     assert!(shared.contains("def.icon.container_size.min(def.search.height).max(16.0)"));
     assert!(shared.contains("(text_column_x - def.shell.header_padding_x)"));
     assert!(shared.contains(".max(def.search.text_inset_x)"));

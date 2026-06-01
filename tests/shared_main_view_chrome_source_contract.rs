@@ -35,6 +35,7 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(shared.contains("MAIN_VIEW_SHELL_ID"));
     assert!(shared.contains("MAIN_VIEW_HEADER_ID"));
     assert!(shared.contains("MAIN_VIEW_CONTEXT_ZONE_ID"));
+    assert!(shared.contains("MAIN_VIEW_CONTEXT_LOGO_ID"));
     assert!(shared.contains("MAIN_VIEW_CONTEXT_CWD_BUTTON_ID"));
     assert!(shared.contains("MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID"));
     assert!(shared.contains("MAIN_VIEW_INPUT_SHELL_ID"));
@@ -43,6 +44,7 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(shared.contains("MAIN_VIEW_MAIN_ID"));
     assert!(shared.contains(".id(MAIN_VIEW_HEADER_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_ZONE_ID)"));
+    assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_LOGO_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_CWD_BUTTON_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_SHELL_ID)"));
@@ -52,6 +54,12 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(shared.contains("main_view_state_icon_left(def)"));
     assert!(shared.contains("\"/assets/logo.svg\""));
     assert!(shared.contains("main_view_state_icon_uses_script_kit_logo"));
+    assert!(shared.contains("main_view_should_show_state_icon"));
+    assert!(shared.contains("MainMenuLogoPlacement::InputLeading"));
+    assert!(shared.contains("MainMenuLogoPlacement::HeaderLeading"));
+    assert!(shared.contains("MainMenuLogoPlacement::HeaderTrailing"));
+    assert!(shared.contains("MainMenuInputTextAlignment::SearchInset"));
+    assert!(shared.contains("MainMenuInputTextAlignment::SoftCenter"));
     assert!(shared.contains("theme.colors.accent.selected"));
     assert!(
         shared.contains("\"search\" | \"find\" | \"magnifyingglass\""),
@@ -80,6 +88,8 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(script_list.contains("render_main_view_input_shell"));
     assert!(script_list.contains("render_main_view_context_zone"));
     assert!(script_list.contains("render_main_view_state_icon"));
+    assert!(script_list.contains("main_view_should_show_state_icon"));
+    assert!(script_list.contains("hide_initial_section_header"));
     assert!(script_list.contains("main_view_state_icon_name_for_script_list"));
     assert!(script_list.contains("render_main_view_shell()"));
     assert!(script_list.contains("render_main_view_chrome"));
@@ -289,7 +299,8 @@ fn layout_model_exposes_shared_main_view_chrome_names() {
         "layout model should derive MainViewInput width from shared header padding, not stale button edges"
     );
     assert!(
-        layout.contains("main_view_input_text_inset_left(menu_def)"),
+        layout.contains("main_view_input_text_inset_left(")
+            && layout.contains("MainMenuLogoPlacement::InputLeading"),
         "layout model should report the shared input text inset used by the render layer"
     );
     assert!(

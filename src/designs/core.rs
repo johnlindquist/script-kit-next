@@ -22,9 +22,10 @@ pub use accent_variation::{
 pub use main_menu_theme::{
     current_main_menu_theme, set_current_main_menu_theme, FooterButtonTheme, FooterMetricsTokens,
     FooterTheme, HeaderInfoBarLayout, HeaderInfoBarTokens, MainMenuGeometrySignature,
-    MainMenuIconTokens, MainMenuListTokens, MainMenuMetadataTokens, MainMenuRowKind,
-    MainMenuRowTokens, MainMenuSearchTokens, MainMenuShellTokens, MainMenuThemeDef,
-    MainMenuThemeTier, MainMenuThemeVariant, MainMenuTypographyTokens,
+    MainMenuIconTokens, MainMenuInputTextAlignment, MainMenuListTokens, MainMenuLogoPlacement,
+    MainMenuMetadataTokens, MainMenuRowKind, MainMenuRowTokens, MainMenuSearchTokens,
+    MainMenuShellTokens, MainMenuThemeDef, MainMenuThemeTier, MainMenuThemeVariant,
+    MainMenuTypographyTokens,
 };
 // `FooterButtonFill` is part of the accent-variation API surface; re-exported for
 // callers that name the type even though the footer consumes it field-by-field.
