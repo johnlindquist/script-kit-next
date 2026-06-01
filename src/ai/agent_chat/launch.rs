@@ -64,6 +64,17 @@ impl PiAgentChatLaunch {
             .unwrap_or_else(crate::setup::get_kit_path);
         ensure_pi_cwd(&cwd)?;
         let warm_key = pi_warm_key(&launch_spec);
+        let argv_flags = pi_argv_flags(&launch_spec.argv());
+        tracing::info!(
+            target: "script_kit::agent_chat",
+            event = "pi_agent_chat_profile_launch_resolved",
+            profile_id = %profile.id,
+            profile_name = %profile.name,
+            profile_source = ?profile.source,
+            cwd = %cwd.display(),
+            warm_key = %warm_key,
+            argv_flags = ?argv_flags,
+        );
         let rpc_spec = PiRpcLaunchSpec::new(launch_spec.pi_binary.clone(), cwd.clone())
             .with_args(launch_spec.argv());
         let selected_model_id = pi_model_selection_id(&profile);
@@ -100,6 +111,13 @@ impl PiAgentChatLaunch {
             }),
         }
     }
+}
+
+fn pi_argv_flags(argv: &[String]) -> Vec<String> {
+    argv.iter()
+        .filter(|arg| arg.starts_with("--"))
+        .cloned()
+        .collect()
 }
 
 pub(crate) fn warm_session_manager() -> &'static AgentChatWarmSessionManager {
@@ -167,6 +185,7 @@ fn inline_agent_pi_profile(
     profile.disable_extensions = Some(true);
     profile.disable_skills = Some(true);
     profile.disable_prompt_templates = Some(true);
+    profile.disable_context_files = Some(true);
     profile.hide_cwd_in_prompt = Some(true);
     profile.session_dir = None;
     profile.no_session = Some(true);
@@ -210,6 +229,7 @@ mod tests {
         assert_eq!(profile.disable_extensions, Some(true));
         assert_eq!(profile.disable_skills, Some(true));
         assert_eq!(profile.disable_prompt_templates, Some(true));
+        assert_eq!(profile.disable_context_files, Some(true));
         assert_eq!(profile.no_session, Some(true));
     }
 
@@ -293,7 +313,7 @@ mod tests {
         assert!(argv.contains(&"--no-extensions".to_string()));
         assert!(argv.contains(&"--no-skills".to_string()));
         assert!(argv.contains(&"--no-prompt-templates".to_string()));
-        assert!(argv.contains(&"--hide-cwd-in-prompt".to_string()));
+        assert!(argv.contains(&"--no-context-files".to_string()));
         assert!(argv.contains(&"--no-session".to_string()));
         assert_eq!(
             launch.launch_spec.append_system_prompt.as_deref(),
@@ -367,5 +387,25 @@ mod tests {
 
         assert_eq!(launch.cwd, kit_path.join("agent-chat").join("general"));
         assert!(launch.cwd.is_dir());
+    }
+
+    #[test]
+    fn pi_argv_flags_receipt_omits_prompt_and_argument_values() {
+        let flags = pi_argv_flags(&[
+            "--mode".to_string(),
+            "rpc".to_string(),
+            "--append-system-prompt".to_string(),
+            "secret prompt text".to_string(),
+            "--no-context-files".to_string(),
+        ]);
+
+        assert_eq!(
+            flags,
+            vec![
+                "--mode".to_string(),
+                "--append-system-prompt".to_string(),
+                "--no-context-files".to_string()
+            ]
+        );
     }
 }

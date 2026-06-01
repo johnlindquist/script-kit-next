@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "package-manager-plan-only",
+  "name": "Package Manager Plan Only",
+  "description": "Inspects package manifests and proposes dependency plans without executing installs.",
+  "iconName": "package-search",
+  "backend": "pi",
+  "provider": "openai-codex",
+  "model": "gpt-5.5",
+  "thinking": "low",
+  "prompt": { "mode": "append", "file": "PROMPT.md" },
+  "cwd": "~/dev",
+  "tools": ["read", "grep", "find", "ls"],
+  "toolPolicy": { "allow": ["read", "grep", "find", "ls"] },
+  "pathPolicy": {
+    "allowRead": ["~/dev"],
+    "allowWrite": [],
+    "deny": ["~/.ssh", "~/.codex", "~/.scriptkit/secrets"]
+  },
+  "blockedActionMessage": "Package Manager Plan Only can inspect manifests but cannot run or edit dependency changes.",
+  "disableExtensions": true,
+  "disableSkills": true,
+  "disablePromptTemplates": true,
+  "disableContextFiles": true,
+  "hideCwdInPrompt": false,
+  "extensionPolicy": "deny",
+  "noSession": true,
+  "examples": [
+    {
+      "name": "Plan update",
+      "prompt": "Inspect package.json and suggest the smallest dependency update plan.",
+      "expectedTools": ["read", "grep", "find", "ls"],
+      "mustNotUse": ["bash", "write", "edit"]
+    }
+  ]
+}

@@ -8,8 +8,8 @@ use script_kit_gpui::ai::agent_chat::profiles::{
     agent_chat_profile_picker_entries, persist_agent_chat_profile_selection,
     resolve_effective_profile, selected_agent_chat_profile_picker_id, AgentChatProfileContext,
     AgentChatProfileSource, BUILTIN_GENERAL_PROFILE_ID, BUILTIN_SCRIPT_KIT_PROFILE_ID,
-    BUILTIN_TEXT_PROFILE_ID, DEFAULT_PI_MODEL, DEFAULT_PI_PROVIDER, GENERAL_BLOCKED_ACTION_MESSAGE,
-    GENERAL_PI_TOOLS, SCRIPT_KIT_PI_TOOLS, TEXT_APPEND_SYSTEM_PROMPT, TEXT_BLOCKED_ACTION_MESSAGE,
+    BUILTIN_TEXT_PROFILE_ID, DEFAULT_PI_MODEL, DEFAULT_PI_PROVIDER, GENERAL_PI_TOOLS,
+    SCRIPT_KIT_PI_TOOLS, TEXT_APPEND_SYSTEM_PROMPT, TEXT_BLOCKED_ACTION_MESSAGE,
 };
 use script_kit_gpui::config::{AcpProfile, AgentChatBackend, AiPreferences};
 
@@ -48,10 +48,6 @@ fn general_builtin_profile_builds_locked_down_pi_rpc_launch_spec() {
     assert_eq!(spec.profile_name.as_deref(), Some("General"));
     assert_eq!(spec.cwd.as_deref(), profile.cwd.as_deref());
     assert!(argv.starts_with(&["--mode".to_string(), "rpc".to_string()]));
-    assert!(argv.contains(&"--profile-id".to_string()));
-    assert!(argv.contains(&BUILTIN_GENERAL_PROFILE_ID.to_string()));
-    assert!(argv.contains(&"--profile-name".to_string()));
-    assert!(argv.contains(&"General".to_string()));
     assert!(argv.contains(&"--provider".to_string()));
     assert!(argv.contains(&DEFAULT_PI_PROVIDER.to_string()));
     assert!(argv.contains(&"--model".to_string()));
@@ -69,18 +65,16 @@ fn general_builtin_profile_builds_locked_down_pi_rpc_launch_spec() {
     );
     assert!(argv.contains(&"--tools".to_string()));
     assert!(argv.contains(&GENERAL_PI_TOOLS.join(",")));
-    assert!(argv.contains(&"--path-policy-json".to_string()));
     assert!(spec
         .path_policy_json
         .as_deref()
         .is_some_and(|json| { json.contains("allowRead") && json.contains("allowWrite") }));
-    assert!(argv.contains(&"--blocked-action-message".to_string()));
-    assert!(argv.contains(&GENERAL_BLOCKED_ACTION_MESSAGE.to_string()));
     assert!(!argv.contains(&"--no-tools".to_string()));
     assert!(argv.contains(&"--no-extensions".to_string()));
     assert!(argv.contains(&"--no-skills".to_string()));
     assert!(argv.contains(&"--no-prompt-templates".to_string()));
-    assert!(argv.contains(&"--hide-cwd-in-prompt".to_string()));
+    assert!(argv.contains(&"--no-context-files".to_string()));
+    assert_pi_argv_omits_unsupported_profile_metadata_flags(&argv);
     assert!(!argv.contains(&"--cwd".to_string()));
     assert!(!argv.contains(&"--agent".to_string()));
     assert!(!argv.contains(&"--no-hooks".to_string()));
@@ -155,6 +149,7 @@ fn text_builtin_profile_builds_focused_text_only_pi_rpc_launch_spec() {
     assert_eq!(profile.disable_extensions, Some(true));
     assert_eq!(profile.disable_skills, Some(true));
     assert_eq!(profile.disable_prompt_templates, Some(true));
+    assert_eq!(profile.disable_context_files, Some(true));
     assert_eq!(profile.hide_cwd_in_prompt, Some(true));
     assert_eq!(profile.extension_policy.as_deref(), Some("deny"));
     assert_eq!(profile.session_dir, None);
@@ -176,18 +171,32 @@ fn text_builtin_profile_builds_focused_text_only_pi_rpc_launch_spec() {
         .map(|pair| pair[1].as_str());
     assert_eq!(tools_value, Some("web_search"));
     assert!(argv.contains(&"--no-extensions".to_string()));
-    assert!(argv.contains(&"--extension-policy".to_string()));
-    assert!(argv.contains(&"deny".to_string()));
     assert!(argv.contains(&"--no-skills".to_string()));
     assert!(argv.contains(&"--no-prompt-templates".to_string()));
-    assert!(argv.contains(&"--hide-cwd-in-prompt".to_string()));
+    assert!(argv.contains(&"--no-context-files".to_string()));
     assert!(argv.contains(&"--no-session".to_string()));
     assert!(argv.contains(&"--append-system-prompt".to_string()));
     assert!(argv.contains(&TEXT_APPEND_SYSTEM_PROMPT.to_string()));
-    assert!(argv.contains(&"--blocked-action-message".to_string()));
-    assert!(argv.contains(&TEXT_BLOCKED_ACTION_MESSAGE.to_string()));
+    assert_pi_argv_omits_unsupported_profile_metadata_flags(&argv);
     assert!(!argv.contains(&"--agent".to_string()));
     assert!(!argv.contains(&"--system-prompt".to_string()));
+}
+
+fn assert_pi_argv_omits_unsupported_profile_metadata_flags(argv: &[String]) {
+    for flag in [
+        "--profile-id",
+        "--profile-name",
+        "--path-policy-json",
+        "--blocked-action-message",
+        "--extension-policy",
+        "--hide-cwd-in-prompt",
+        "--session-durability",
+    ] {
+        assert!(
+            !argv.contains(&flag.to_string()),
+            "{flag} is metadata in Script Kit profile artifacts, not a supported pi 0.75 CLI flag"
+        );
+    }
 }
 
 #[test]
@@ -304,6 +313,29 @@ fn unmatched_profile_selection_falls_back_to_general() {
     let profile = resolve_effective_profile(&ai, &ctx);
     assert_eq!(profile.id, BUILTIN_GENERAL_PROFILE_ID);
     assert_eq!(profile.backend, AgentChatBackend::Pi);
+}
+
+#[test]
+fn plugin_namespace_selection_cannot_resolve_to_custom_user_profile() {
+    let ctx = context();
+    let ai = AiPreferences {
+        pi_binary: Some("/tmp/test-pi".to_string()),
+        selected_profile_id: Some("plugin:examples/codebase-scout".to_string()),
+        profiles: vec![AcpProfile {
+            id: Some("plugin:examples/codebase-scout".to_string()),
+            name: "Shadow Plugin Scout".to_string(),
+            backend: Some(AgentChatBackend::Pi),
+            system_prompt: Some("shadow prompt".to_string()),
+            ..AcpProfile::default()
+        }],
+        ..AiPreferences::default()
+    };
+
+    let profile = resolve_effective_profile(&ai, &ctx);
+
+    assert_ne!(profile.source, AgentChatProfileSource::User);
+    assert_ne!(profile.name, "Shadow Plugin Scout");
+    assert_ne!(profile.system_prompt.as_deref(), Some("shadow prompt"));
 }
 
 #[test]

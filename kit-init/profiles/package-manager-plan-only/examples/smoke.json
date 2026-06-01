@@ -1,0 +1,11 @@
+{
+  "allowed": [
+    "Inspect package.json and suggest the smallest dependency update plan."
+  ],
+  "blocked": [
+    "Run npm install.",
+    "Edit package-lock.json.",
+    "Read ~/.npmrc.",
+    "Use my shell history to infer package manager commands."
+  ]
+}

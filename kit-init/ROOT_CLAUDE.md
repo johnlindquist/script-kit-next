@@ -26,6 +26,11 @@ Use this plain-text route first:
 - Write to `~/.scriptkit/plugins/main/skills/<name>/SKILL.md`
 - Skills are the preferred way to package reusable AI behavior — plugins are the package boundary
 
+### Agent Chat profile
+- Use for isolated Pi-backed Agent Chat runtime boundaries
+- Write to `~/.scriptkit/plugins/main/profiles/<profile-id>/{profile.json,PROMPT.md,README.md}`
+- Profiles define prompts, provider/model, tools, cwd/session policy, and ambient-resource isolation. `pathPolicy` is schema metadata until runtime path enforcement is proven.
+
 ### mdflow agent (compatibility)
 - Use only when you need a specific backend suffix or legacy mdflow features
 - Write to `~/.scriptkit/plugins/main/agents/<name>.<backend>.md`
@@ -37,6 +42,7 @@ Use this plain-text route first:
 - Save runnable user files only under `~/.scriptkit/plugins/main/`.
 - Do not create a `.ts` script when the request is really a bundle, skill, or agent.
 - For new reusable AI work, create a skill (`plugins/main/skills/<name>/SKILL.md`), not an agent.
+- For a custom isolated Agent Chat runtime, create a profile (`plugins/main/profiles/<profile-id>/profile.json`), not a legacy agent.
 - For `tool:<name>` scriptlets, the first line must be `import "@scriptkit/sdk";`.
 - Agent files do not use `export const metadata`; use underscore-prefixed `_sk_*` keys.
 - Choose the backend suffix deliberately: `.claude.md`, `.agy.md`, `.codex.md`, `.copilot.md`, or `.i.agy.md`.
@@ -48,6 +54,7 @@ Use this plain-text route first:
 - Script details → `~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md`
 - Bundle details → `~/.scriptkit/plugins/scriptkit/skills/new-scriptlet/SKILL.md`
 - Skills overview → `~/.scriptkit/plugins/scriptkit/skills/README.md`
+- Profile builder → `~/.scriptkit/plugins/scriptkit/skills/build-profile/SKILL.md`
 - Agent details (compatibility) → `~/.scriptkit/plugins/scriptkit/skills/new-agent/SKILL.md`
 - Script example → `~/.scriptkit/plugins/examples/scripts/todo-app.ts`
 
@@ -64,6 +71,7 @@ Use this plain-text route first:
 │   │   ├── scripts/               ← PUT NEW SCRIPTS HERE
 │   │   ├── scriptlets/            ← markdown scriptlet bundles
 │   │   ├── skills/                ← AI skills (preferred reusable AI unit)
+│   │   ├── profiles/              ← isolated Agent Chat profile artifacts
 │   │   └── agents/                ← legacy agent definitions (compatibility)
 │   ├── scriptkit/
 │   │   ├── plugin.json
@@ -111,6 +119,12 @@ Use this plain-text route first:
 - Plugins are the package boundary — each plugin owns its own skills
 - Prefer skills over agents for any new reusable AI work
 
+### Agent Chat Profile Rules
+- Create a directory under `plugins/main/profiles/<profile-id>/`
+- Add `profile.json`, `PROMPT.md`, `README.md`, and focused examples
+- Default to `backend: "pi"`, `provider: "openai-codex"`, disabled extensions, disabled skills, disabled prompt templates, disabled context files, and explicit path-policy metadata
+- Do not put profile artifacts in `agents/`; agents are a compatibility/import source
+
 ### mdflow Agent Rules (Compatibility)
 - Save to `plugins/main/agents/<name>.<backend>.md`
 - Use underscore-prefixed `_sk_*` metadata keys
@@ -125,6 +139,7 @@ Use this plain-text route first:
 - Do not put bundles in `scripts/`
 - Do not put agents in `scripts/` or `scriptlets/`
 - Do not put skills in `scripts/` or `scriptlets/` — skills are `SKILL.md` directories under `skills/`
+- Do not put Agent Chat profiles in `agents/` — profiles are `profile.json` directories under `profiles/`
 - Do not create new agents when a skill would work — agents are a compatibility path
 - Do not use CommonJS or the old v1 SDK package
 - Do not edit `sdk/`

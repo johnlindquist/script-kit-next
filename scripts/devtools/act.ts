@@ -608,6 +608,23 @@ function isNonDestructiveLauncherSubmit(actionId: string | null) {
   return actionId !== null && nonDestructiveLauncherSubmitIds.has(actionId);
 }
 
+function isNonDestructiveProfileSwitchSubmit(args: Args, before: JsonObject) {
+  if (args.submitIntent !== "profile-switch") return false;
+  const selected = before.selectedNode as JsonObject | undefined;
+  const keyboardOwner = before.keyboardOwner as JsonObject | undefined;
+  const inputValue = typeof keyboardOwner?.inputValue === "string" ? keyboardOwner.inputValue : "";
+  if (selected?.kind === "profile"
+    && selected?.sourceName === "Spine"
+    && typeof selected?.semanticId === "string"
+    && /^choice:\d+:[a-z0-9-]+$/.test(selected.semanticId)) {
+    return true;
+  }
+  return selected?.kind === "hint"
+    && selected?.sourceName === "Spine"
+    && selected?.semanticId === "choice:0:ready-to-send"
+    && /^\|plugin:[a-z0-9-]+\/[a-z0-9-]+\s*$/.test(inputValue);
+}
+
 function targetInfo(receipt: JsonObject) {
   return (receipt.resolvedTarget as JsonObject | undefined) ?? (receipt.target as JsonObject | undefined) ?? null;
 }
@@ -721,6 +738,14 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
     }
     if (isScriptListTargetReceipt(targetReceipt) && isNonDestructiveLauncherSubmit(actionId)) {
       return { state: "dispatched", actionId };
+    }
+    if (isScriptListTargetReceipt(targetReceipt) && isNonDestructiveProfileSwitchSubmit(args, before)) {
+      return {
+        state: "dispatched",
+        actionId: typeof selectedSemanticId === "string" ? selectedSemanticId : actionId,
+        allowedBy: "submitIntent:profile-switch",
+        proofIntent: args.submitIntent,
+      };
     }
     return { state: "blocked-before-dispatch", reason: "submit requires ActionsDialog target or non-destructive launcher allowlist", selectedSemanticId: selectedSemanticId as string | null };
   }

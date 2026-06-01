@@ -75,6 +75,10 @@ pub fn normalized_material(spec: &PiLaunchSpec) -> String {
         "prompt_template_paths={}",
         normalize_list(&spec.prompt_template_paths, false)
     ));
+    lines.push(format!(
+        "disable_context_files={}",
+        spec.disable_context_files
+    ));
     lines.push(format!("hide_cwd_in_prompt={}", spec.hide_cwd_in_prompt));
     lines.push(format!(
         "session_dir={}",

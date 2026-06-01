@@ -360,8 +360,43 @@ impl ScriptListApp {
 
         let prompt = plan.normalized_prompt.trim().to_string();
         let parts = plan.context_parts.clone();
+        let selected_profile_name = if let Some(profile) = plan.selected_profile.as_ref() {
+            let mut prefs = crate::config::load_user_preferences();
+            let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+            let persisted = crate::ai::agent_chat::profiles::persist_agent_chat_profile_selection(
+                &mut prefs.ai,
+                &profile.id,
+                &ctx,
+            )
+            .and_then(|entry| {
+                if crate::config::save_user_preferences(&prefs).is_ok() {
+                    Some(entry.name)
+                } else {
+                    None
+                }
+            });
+            if persisted.is_none() {
+                tracing::warn!(
+                    target: "script_kit::spine",
+                    event = "spine_prompt_plan_profile_persist_failed",
+                    profile_id = %profile.id,
+                );
+            }
+            persisted
+        } else {
+            None
+        };
 
         if prompt.is_empty() && parts.is_empty() {
+            if let Some(profile_name) = selected_profile_name {
+                self.show_hud(
+                    format!("Agent Chat profile: {profile_name}"),
+                    Some(HUD_SHORT_MS),
+                    cx,
+                );
+                cx.notify();
+                return true;
+            }
             return false;
         }
 
@@ -1019,48 +1054,6 @@ impl ScriptListApp {
                 view.set_input("@".to_string(), cx);
                 view.refresh_acp_spine_from_composer(cx);
             });
-        }
-    }
-
-    pub(crate) fn open_tab_ai_acp_with_profile_picker(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.tab_ai_harness_script_list_trigger = Some('|');
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_open_from_script_list_trigger",
-            trigger = "|",
-            current_view = ?self.current_view,
-        );
-        self.open_tab_ai_acp_with_entry_intent(None, cx);
-        self.filter_text.clear();
-        self.computed_filter_text.clear();
-        self.pending_programmatic_filter_echo = Some(String::new());
-        self.gpui_input_state.update(cx, |state, cx| {
-            state.set_value(String::new(), window, cx);
-            state.set_selection(0, 0, window, cx);
-        });
-
-        let detached_opened = crate::ai::acp::chat_window::open_detached_profile_picker(cx);
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_trigger_picker_open_attempt",
-            trigger = "|",
-            detached_opened,
-        );
-        if detached_opened {
-            return;
-        }
-
-        if let AppView::AcpChatView { entity } = &self.current_view {
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_trigger_picker_open_embedded_deferred",
-                trigger = "|",
-            );
-            self.schedule_embedded_acp_picker_open(window.window_handle(), entity.clone(), '|', cx);
         }
     }
 
@@ -6092,10 +6085,6 @@ mod tests {
                 "pub(crate) fn open_tab_ai_acp_with_mention_picker(",
                 "Some('@')",
             ),
-            (
-                "pub(crate) fn open_tab_ai_acp_with_profile_picker(",
-                "Some('|')",
-            ),
         ] {
             let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(source, signature));
             let trigger_idx = body
@@ -6121,7 +6110,6 @@ mod tests {
         for signature in [
             "pub(crate) fn open_tab_ai_acp_with_slash_picker(",
             "pub(crate) fn open_tab_ai_acp_with_mention_picker(",
-            "pub(crate) fn open_tab_ai_acp_with_profile_picker(",
         ] {
             let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(source, signature));
             assert!(

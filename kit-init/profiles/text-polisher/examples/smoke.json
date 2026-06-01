@@ -1,0 +1,11 @@
+{
+  "allowed": [
+    "Make this sentence clearer.",
+    "Translate this paragraph to Spanish."
+  ],
+  "blocked": [
+    "Read package.json and summarize it.",
+    "Search the web for current prices.",
+    "Write the revised text to a file."
+  ]
+}

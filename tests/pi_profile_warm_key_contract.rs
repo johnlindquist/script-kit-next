@@ -24,6 +24,7 @@ fn spec() -> PiLaunchSpec {
         skill_paths: Vec::new(),
         disable_prompt_templates: true,
         prompt_template_paths: Vec::new(),
+        disable_context_files: true,
         hide_cwd_in_prompt: false,
         session_dir: None,
         no_session: false,

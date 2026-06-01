@@ -9,6 +9,7 @@ Plugin-owned skills for working with Script Kit. Each subdirectory contains a `S
 | [new-script](new-script/SKILL.md) | Create or update TypeScript scripts |
 | [new-scriptlet](new-scriptlet/SKILL.md) | Create or update markdown scriptlet bundles |
 | [start-chat](start-chat/SKILL.md) | Programmatic Agent Chat flows, typed context parts, streaming, and chat lifecycle operations |
+| [build-profile](build-profile/SKILL.md) | Create isolated Pi-backed Agent Chat profile artifacts |
 | [add-actions](add-actions/SKILL.md) | Add Actions Menu commands in scripts and shared scriptlet companion `.actions.md` files |
 | [new-agent](new-agent/SKILL.md) | Create agent files (compatibility — prefer skills for new work) |
 | [update-config](update-config/SKILL.md) | Update configuration, theming, and workspace setup |
@@ -35,4 +36,5 @@ Plugins are the package boundary in Script Kit. Each plugin under `~/.scriptkit/
 - `scripts/` — TypeScript scripts (direct execution)
 - `scriptlets/` — Markdown scriptlet bundles (direct execution)
 - `skills/` — AI skills (open Agent Chat when selected)
+- `profiles/` — Isolated Pi-backed Agent Chat profile artifacts
 - `agents/` — Legacy agent files (compatibility only)

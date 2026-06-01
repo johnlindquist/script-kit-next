@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "docs-researcher",
+  "name": "Docs Researcher",
+  "description": "Researches current docs and writes scoped notes.",
+  "iconName": "book-open-text",
+  "backend": "pi",
+  "provider": "openai-codex",
+  "model": "gpt-5.5",
+  "thinking": "medium",
+  "prompt": { "mode": "append", "file": "PROMPT.md" },
+  "cwd": "~/.scriptkit/agent-chat/profiles/docs-researcher",
+  "tools": ["web_search", "read", "write", "grep", "find", "ls"],
+  "toolPolicy": { "allow": ["web_search", "read", "write", "grep", "find", "ls"] },
+  "pathPolicy": {
+    "allowRead": ["~/dev", "~/.scriptkit/docs"],
+    "allowWrite": ["~/.scriptkit/notes/profile-research"],
+    "deny": ["~/.ssh", "~/.codex", "~/.scriptkit/secrets"]
+  },
+  "blockedActionMessage": "Docs Researcher can only read allowed docs and write notes under profile-research.",
+  "disableExtensions": true,
+  "disableSkills": true,
+  "disablePromptTemplates": true,
+  "disableContextFiles": true,
+  "hideCwdInPrompt": true,
+  "extensionPolicy": "deny",
+  "sessionDir": "~/.scriptkit/agent-chat/profiles/docs-researcher/sessions",
+  "noSession": false,
+  "examples": [
+    {
+      "name": "Research docs",
+      "prompt": "Research the current docs for this API and write a short note under the allowed notes path.",
+      "expectedTools": ["web_search", "read", "write", "grep", "find", "ls"],
+      "mustNotUse": ["bash", "edit"]
+    }
+  ]
+}

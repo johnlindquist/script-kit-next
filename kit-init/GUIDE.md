@@ -100,6 +100,7 @@ Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
 │   │   ├── scripts/
 │   │   ├── scriptlets/
 │   │   ├── skills/
+│   │   ├── profiles/
 │   │   └── agents/
 ├── config.ts
 ├── theme.json
@@ -119,6 +120,7 @@ Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
 | `plugins/main/scripts/` | Your primary scripts - create `.ts` files here |
 | `plugins/main/scriptlets/` | Markdown scriptlet files with shell commands |
 | `plugins/main/skills/` | Reusable ACP workflows (preferred reusable AI unit) |
+| `plugins/main/profiles/` | Isolated Pi-backed Agent Chat profile artifacts; `pathPolicy` is review metadata until runtime path enforcement exists |
 | `plugins/main/agents/` | AI agent definitions |
 | `sdk/` | Runtime SDK (auto-extracted, don't edit) |
 | `db/` | SQLite databases for Notes and AI |

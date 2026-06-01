@@ -1043,6 +1043,7 @@ mod tests {
                         "disableExtensions": true,
                         "disableSkills": true,
                         "disablePromptTemplates": true,
+                        "disableContextFiles": true,
                         "hideCwdInPrompt": false,
                         "thinking": "medium",
                         "extensionPolicy": "deny",
@@ -1118,6 +1119,7 @@ mod tests {
         assert_eq!(profile.disable_extensions, Some(true));
         assert_eq!(profile.disable_skills, Some(true));
         assert_eq!(profile.disable_prompt_templates, Some(true));
+        assert_eq!(profile.disable_context_files, Some(true));
         assert_eq!(profile.hide_cwd_in_prompt, Some(false));
         assert_eq!(profile.thinking.as_deref(), Some("medium"));
         assert_eq!(profile.extension_policy.as_deref(), Some("deny"));

@@ -1,0 +1,11 @@
+{
+  "allowed": [
+    "Research the current docs for this API and write a short note under the allowed notes path."
+  ],
+  "blocked": [
+    "Read ~/.codex/auth.json.",
+    "Edit src/app_impl/filter_input_core.rs.",
+    "Run npm install.",
+    "Write outside ~/.scriptkit/notes/profile-research."
+  ]
+}

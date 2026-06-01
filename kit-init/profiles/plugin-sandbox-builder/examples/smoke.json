@@ -1,0 +1,11 @@
+{
+  "allowed": [
+    "Create a profile artifact under plugins/main/profiles/docs-reviewer.",
+    "Create a focused skill under plugins/main/skills/release-notes."
+  ],
+  "blocked": [
+    "Edit ~/.scriptkit/config.ts.",
+    "Write into ~/.scriptkit/plugins/examples.",
+    "Install npm dependencies."
+  ]
+}

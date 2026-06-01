@@ -322,7 +322,6 @@ pub(crate) struct AcpFooterSnapshot {
     pub(crate) profile_icon_name: Option<String>,
     pub(crate) model_display: String,
     pub(crate) status_text: Option<&'static str>,
-    pub(crate) profile_selector_open: bool,
     pub(crate) buttons: Vec<AcpFooterButtonSpec>,
     pub(crate) cwd_display: Option<String>,
 }
@@ -354,7 +353,7 @@ impl AcpFooterSnapshot {
             profile_name: Some(self.profile_display.clone()),
             icon_token: None,
             action: Some(crate::footer_popup::FooterAction::Ai),
-            selected: self.profile_selector_open,
+            selected: false,
             cwd_chip,
         }
     }
@@ -704,10 +703,6 @@ pub(crate) struct AcpChatView {
     model_selector_open: bool,
     /// Focused row within the model selector popup.
     model_selector_selected_index: usize,
-    /// Whether the Agent Chat profile selector dropdown is open.
-    profile_selector_open: bool,
-    /// Focused row within the Agent Chat profile selector popup.
-    profile_selector_selected_index: usize,
     /// Cmd+F search: (query, current_match_index). None = search hidden.
     pub(crate) search_state: Option<(String, usize)>,
     /// Cached slash commands discovered at creation, with source identity.
@@ -1049,16 +1044,14 @@ impl AcpChatView {
             crate::ai::acp::picker_popup::close_mention_popup_window(cx);
             crate::ai::acp::model_selector_popup::close_model_selector_popup_window(cx);
             crate::ai::acp::history_popup::close_history_popup_window(cx);
-            self.sync_profile_selector_popup_window_from_cached_parent(cx);
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_popup_sync_setup_mode_profile_only",
+                event = "acp_popup_sync_setup_mode_closed",
             );
             return;
         }
 
         self.sync_mention_popup_window_from_cached_parent(cx);
-        self.sync_profile_selector_popup_window_from_cached_parent(cx);
         self.sync_model_selector_popup_window_from_cached_parent(cx);
         self.sync_history_popup_window_from_cached_parent(cx);
     }
@@ -1092,6 +1085,7 @@ impl AcpChatView {
                 let source = match entry.source {
                     crate::ai::agent_chat::profiles::AgentChatProfileSource::BuiltIn => "Built-in",
                     crate::ai::agent_chat::profiles::AgentChatProfileSource::User => "Custom",
+                    crate::ai::agent_chat::profiles::AgentChatProfileSource::Plugin => "Plugin",
                 };
                 let backend = "Pi";
                 let score = if query_lower.is_empty() {
@@ -1124,24 +1118,6 @@ impl AcpChatView {
                 .then_with(|| a.label.to_string().cmp(&b.label.to_string()))
         });
         items
-    }
-
-    fn selected_profile_popup_index(
-        &self,
-        entries: &[crate::ai::agent_chat::profiles::AgentChatProfilePickerEntry],
-    ) -> usize {
-        let prefs = crate::config::load_user_preferences();
-        let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
-        let selected_id =
-            crate::ai::agent_chat::profiles::selected_agent_chat_profile_picker_id(&prefs.ai, &ctx);
-        let raw_index = entries
-            .iter()
-            .position(|entry| entry.id == selected_id)
-            .unwrap_or(self.profile_selector_selected_index);
-        crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
-            raw_index,
-            entries.len(),
-        )
     }
 
     fn reset_model_selector_selection(&mut self, cx: &App) {
@@ -1500,7 +1476,6 @@ impl AcpChatView {
                 profile_icon_name: None,
                 model_display: String::new(),
                 status_text: None,
-                profile_selector_open: self.profile_selector_open,
                 buttons: Vec::new(),
                 cwd_display: None,
             };
@@ -1527,7 +1502,6 @@ impl AcpChatView {
             profile_icon_name: thread.profile_icon_name().map(str::to_string),
             model_display: thread.selected_model_display().to_string(),
             status_text: self.footer_status_text(cx),
-            profile_selector_open: self.profile_selector_open,
             buttons: if visible {
                 self.footer_buttons_for_thread(thread)
             } else {
@@ -3392,8 +3366,6 @@ impl AcpChatView {
         weak_view: WeakEntity<AcpChatView>,
         hint_text_rgba: u32,
     ) -> gpui::AnyElement {
-        let theme = theme::get_cached_theme();
-
         div()
             .id("agent-chat-profile-display")
             .flex()
@@ -3402,13 +3374,6 @@ impl AcpChatView {
             .min_w(px(0.0))
             .overflow_hidden()
             .cursor_pointer()
-            .when(snapshot.profile_selector_open, |d| {
-                let accent = theme.colors.accent.selected;
-                d.bg(rgba((accent << 8) | 0x18))
-                    .rounded(px(4.0))
-                    .px(px(4.0))
-                    .py(px(1.0))
-            })
             .on_click({
                 let profile_view = weak_view.clone();
                 move |_event, window, cx| {
@@ -4251,111 +4216,13 @@ impl AcpChatView {
         }
     }
 
-    fn profile_selector_popup_snapshot(
-        &self,
-        _cx: &App,
-    ) -> Option<crate::ai::acp::profile_selector_popup::AgentChatProfileSelectorPopupSnapshot> {
-        if !self.profile_selector_open {
-            return None;
-        }
-
-        let prefs = crate::config::load_user_preferences();
-        let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
-        let selected_id =
-            crate::ai::agent_chat::profiles::selected_agent_chat_profile_picker_id(&prefs.ai, &ctx);
-        let entries =
-            crate::ai::agent_chat::profiles::agent_chat_profile_picker_entries(&prefs.ai, &ctx);
-        let selected_index = self.selected_profile_popup_index(&entries);
-        let entries = entries
-            .into_iter()
-            .map(|entry| {
-                crate::ai::acp::profile_selector_popup::AgentChatProfileSelectorPopupEntry {
-                    id: entry.id.clone(),
-                    display: SharedString::from(entry.name),
-                    icon_name: entry.icon_name.clone(),
-                    is_active: selected_id == entry.id,
-                }
-            })
-            .collect::<Vec<_>>();
-
-        if entries.is_empty() {
-            return None;
-        }
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "agent_chat_profile_selector_popup_snapshot_built",
-            entry_count = entries.len(),
-            selected_index,
-            "Built Agent Chat profile selector popup snapshot"
-        );
-
-        Some(
-            crate::ai::acp::profile_selector_popup::AgentChatProfileSelectorPopupSnapshot {
-                selected_index,
-                entries,
-            },
-        )
-    }
-
-    pub(super) fn sync_profile_selector_popup_window_from_cached_parent(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(parent) = self.mention_popup_parent_window else {
-            crate::ai::acp::profile_selector_popup::close_profile_selector_popup_window(cx);
-            return;
-        };
-
-        let source_view = cx.entity().downgrade();
-        if let Some(snapshot) = self.profile_selector_popup_snapshot(cx) {
-            if let Err(error) =
-                crate::ai::acp::profile_selector_popup::sync_profile_selector_popup_window(
-                    cx,
-                    crate::ai::acp::profile_selector_popup::AgentChatProfileSelectorPopupRequest {
-                        parent_window_handle: parent.handle,
-                        parent_bounds: parent.bounds,
-                        display_id: parent.display_id,
-                        source_view,
-                        snapshot,
-                    },
-                )
-            {
-                tracing::error!(error = %error, "agent_chat_profile_selector_popup_sync_failed");
-            }
-        } else {
-            crate::ai::acp::profile_selector_popup::close_profile_selector_popup_window(cx);
-        }
-    }
-
-    pub(crate) fn toggle_profile_selector_popup(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.cache_popup_parent_window(window, cx);
-        self.profile_selector_open = !self.profile_selector_open;
-        if self.profile_selector_open {
-            self.model_selector_open = false;
-            self.attach_menu_open = false;
-            self.history_menu = None;
-            self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
-            let entries = self.profile_selector_entries();
-            self.profile_selector_selected_index = self.selected_profile_popup_index(&entries);
-        }
-        self.sync_acp_popup_windows_from_cached_parent(cx);
-        cx.notify();
-    }
-
     pub(crate) fn select_profile_from_popup(&mut self, profile_id: &str, cx: &mut Context<Self>) {
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "agent_chat_profile_selector_selected",
             profile_id,
-            "Selected Agent Chat profile from inline dropdown"
+            "Selected Agent Chat profile from Menu Search"
         );
-        self.profile_selector_open = false;
-        self.sync_profile_selector_popup_window_from_cached_parent(cx);
         if let Some(callback) = self.on_profile_selected.clone() {
             let selected_profile_id = profile_id.to_string();
             cx.defer(move |cx| {
@@ -4363,57 +4230,6 @@ impl AcpChatView {
             });
         }
         cx.notify();
-    }
-
-    pub(crate) fn dismiss_profile_selector_popup(&mut self, cx: &mut Context<Self>) {
-        if !self.profile_selector_open {
-            return;
-        }
-
-        self.profile_selector_open = false;
-        self.sync_profile_selector_popup_window_from_cached_parent(cx);
-        cx.notify();
-    }
-
-    pub(crate) fn move_profile_selector_selection(
-        &mut self,
-        direction: i32,
-        cx: &mut Context<Self>,
-    ) {
-        let profile_count = self.profile_selector_entries().len();
-        if profile_count == 0 {
-            return;
-        }
-
-        let selected_index = self.profile_selector_selected_index.min(profile_count - 1);
-        self.profile_selector_selected_index = if direction < 0 {
-            crate::components::inline_dropdown::inline_dropdown_select_prev(
-                selected_index,
-                profile_count,
-            )
-        } else {
-            crate::components::inline_dropdown::inline_dropdown_select_next(
-                selected_index,
-                profile_count,
-            )
-        };
-
-        self.sync_profile_selector_popup_window_from_cached_parent(cx);
-        cx.notify();
-    }
-
-    pub(crate) fn confirm_profile_selector_selection(&mut self, cx: &mut Context<Self>) {
-        let entries = self.profile_selector_entries();
-        let selected_index = self
-            .profile_selector_selected_index
-            .min(entries.len().saturating_sub(1));
-        let profile_id = entries.get(selected_index).map(|entry| entry.id.clone());
-
-        if let Some(profile_id) = profile_id {
-            self.select_profile_from_popup(&profile_id, cx);
-        } else {
-            self.dismiss_profile_selector_popup(cx);
-        }
     }
 
     pub(crate) fn select_history_from_popup(
@@ -4807,11 +4623,6 @@ impl AcpChatView {
             return true;
         }
 
-        if self.profile_selector_open {
-            self.dismiss_profile_selector_popup(cx);
-            return true;
-        }
-
         if self.model_selector_open {
             self.dismiss_model_selector_popup(cx);
             return true;
@@ -4878,7 +4689,6 @@ impl AcpChatView {
 
     pub(crate) fn has_escape_dismissible_popup(&self) -> bool {
         self.focused_text_editing_variation.is_some()
-            || self.profile_selector_open
             || self.model_selector_open
             || self.mention_session.is_some()
             || self.history_menu.is_some()
@@ -5429,8 +5239,6 @@ impl AcpChatView {
             attach_menu_open: false,
             model_selector_open: false,
             model_selector_selected_index: 0,
-            profile_selector_open: false,
-            profile_selector_selected_index: 0,
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: slash_task,
@@ -5515,8 +5323,6 @@ impl AcpChatView {
             attach_menu_open: false,
             model_selector_open: false,
             model_selector_selected_index: 0,
-            profile_selector_open: false,
-            profile_selector_selected_index: 0,
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: noop_slash,
@@ -7128,8 +6934,6 @@ impl AcpChatView {
         self.attach_menu_open = false;
         self.model_selector_open = false;
         self.history_menu = None;
-        self.profile_selector_open = false;
-        crate::ai::acp::profile_selector_popup::close_profile_selector_popup_window(cx);
         self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.set_input(trigger.to_string(), cx);
         self.refresh_acp_spine_from_composer(cx);
@@ -8010,24 +7814,8 @@ impl AcpChatView {
         self.ensure_transcript(cx).into_any_element()
     }
 
-    // Dedicated selector path retained for setup and legacy automation. Live Agent Chat
-    // profile affordances should use the shared `|` picker path above.
     pub(crate) fn open_profile_picker(&mut self, cx: &mut Context<Self>) {
-        self.attach_menu_open = false;
-        self.model_selector_open = false;
-        self.history_menu = None;
-        self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
-        self.profile_selector_open = true;
-        if self.is_setup_mode() {
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_profile_picker_opened_setup_mode",
-            );
-        }
-        let entries = self.profile_selector_entries();
-        self.profile_selector_selected_index = self.selected_profile_popup_index(&entries);
-        self.sync_acp_popup_windows_from_cached_parent(cx);
-        cx.notify();
+        self.open_profile_trigger_picker(cx);
     }
 
     pub(crate) fn open_slash_picker_in_window(
@@ -8053,8 +7841,7 @@ impl AcpChatView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.cache_popup_parent_window(window, cx);
-        self.open_profile_picker(cx);
+        self.open_profile_trigger_picker_in_window(window, cx);
     }
 
     pub(crate) fn open_profile_trigger_picker_in_window(
@@ -11365,18 +11152,11 @@ impl AcpChatView {
         cx.subscribe(&toolbar, |this, _toolbar, event, cx| match event {
             AcpToolbarEvent::ToggleProfileSelector(parent) => {
                 this.mention_popup_parent_window = Some(*parent);
-                if this.is_setup_mode() {
-                    this.open_profile_picker(cx);
-                } else {
-                    this.open_profile_trigger_picker(cx);
-                }
+                this.open_profile_trigger_picker(cx);
             }
             AcpToolbarEvent::ToggleModelSelector(parent) => {
                 this.mention_popup_parent_window = Some(*parent);
                 this.model_selector_open = !this.model_selector_open;
-                if this.model_selector_open {
-                    this.profile_selector_open = false;
-                }
                 this.sync_acp_popup_windows_from_cached_parent(cx);
                 cx.notify();
             }
@@ -12172,33 +11952,6 @@ impl AcpChatView {
         let modifiers = &event.keystroke.modifiers;
 
         // Setup mode (initial or runtime recovery): delegate to setup card.
-        if self.is_setup_mode() && self.profile_selector_open {
-            let mut handled = true;
-            if crate::ui_foundation::is_key_up(key) {
-                self.move_profile_selector_selection(-1, cx);
-            } else if crate::ui_foundation::is_key_down(key) {
-                self.move_profile_selector_selection(1, cx);
-            } else if crate::ui_foundation::is_key_enter(key)
-                || crate::ui_foundation::is_key_tab(key)
-            {
-                self.confirm_profile_selector_selection(cx);
-            } else if crate::ui_foundation::is_key_escape(key) {
-                self.dismiss_profile_selector_popup(cx);
-            } else {
-                handled = false;
-            }
-
-            if handled {
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_setup_profile_selector_key_handled",
-                    key,
-                );
-                cx.stop_propagation();
-                return;
-            }
-        }
-
         if let Some(card) = &self.setup_card {
             if card.update(cx, |view, cx| view.handle_key_down(event, cx)) {
                 cx.stop_propagation();
@@ -12236,26 +11989,6 @@ impl AcpChatView {
             }
         }
 
-        if self.profile_selector_open {
-            if crate::ui_foundation::is_key_up(key) {
-                self.move_profile_selector_selection(-1, cx);
-                cx.stop_propagation();
-                return;
-            }
-
-            if crate::ui_foundation::is_key_down(key) {
-                self.move_profile_selector_selection(1, cx);
-                cx.stop_propagation();
-                return;
-            }
-
-            if crate::ui_foundation::is_key_enter(key) || crate::ui_foundation::is_key_tab(key) {
-                self.confirm_profile_selector_selection(cx);
-                cx.stop_propagation();
-                return;
-            }
-        }
-
         if self.model_selector_open {
             if crate::ui_foundation::is_key_up(key) {
                 self.move_model_selector_selection(-1, cx);
@@ -12285,10 +12018,6 @@ impl AcpChatView {
         if self.model_selector_open {
             self.dismiss_model_selector_popup(cx);
         }
-        if self.profile_selector_open {
-            self.dismiss_profile_selector_popup(cx);
-        }
-
         // ── Attach menu dismiss on Escape ───────────────────────
         if self.attach_menu_open && crate::ui_foundation::is_key_escape(key) {
             self.attach_menu_open = false;

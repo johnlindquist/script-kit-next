@@ -935,6 +935,9 @@ pub struct AcpProfile {
     pub disable_prompt_templates: Option<bool>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disable_context_files: Option<bool>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hide_cwd_in_prompt: Option<bool>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]

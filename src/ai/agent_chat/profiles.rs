@@ -4,6 +4,10 @@ use crate::config::{
     AcpProfile, AgentChatBackend, AgentChatPathPolicyConfig, AgentChatToolPolicyConfig,
     AiPreferences,
 };
+use crate::plugins::profiles::{
+    discover_plugin_profiles, prompt_file_text, resolved_artifact_tools, validate_profile,
+    PluginProfile, ProfilePromptMode,
+};
 
 pub const BUILTIN_GENERAL_PROFILE_ID: &str = "general";
 pub const BUILTIN_SCRIPT_KIT_PROFILE_ID: &str = "script-kit";
@@ -99,6 +103,7 @@ pub const TEXT_APPEND_SYSTEM_PROMPT: &str = "You are the Text Agent Chat profile
 pub enum AgentChatProfileSource {
     BuiltIn,
     User,
+    Plugin,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -147,6 +152,7 @@ pub struct ResolvedAgentChatProfile {
     pub disable_extensions: Option<bool>,
     pub disable_skills: Option<bool>,
     pub disable_prompt_templates: Option<bool>,
+    pub disable_context_files: Option<bool>,
     pub hide_cwd_in_prompt: Option<bool>,
     pub thinking: Option<String>,
     pub extension_policy: Option<String>,
@@ -213,6 +219,7 @@ pub fn built_in_general_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentC
         disable_extensions: Some(true),
         disable_skills: Some(true),
         disable_prompt_templates: Some(true),
+        disable_context_files: Some(true),
         hide_cwd_in_prompt: Some(true),
         thinking: None,
         extension_policy: None,
@@ -259,6 +266,7 @@ pub fn built_in_script_kit_profile(ctx: &AgentChatProfileContext) -> ResolvedAge
         disable_extensions: Some(true),
         disable_skills: Some(true),
         disable_prompt_templates: Some(true),
+        disable_context_files: Some(true),
         hide_cwd_in_prompt: Some(false),
         thinking: None,
         extension_policy: None,
@@ -295,6 +303,7 @@ pub fn built_in_text_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentChat
         disable_extensions: Some(true),
         disable_skills: Some(true),
         disable_prompt_templates: Some(true),
+        disable_context_files: Some(true),
         hide_cwd_in_prompt: Some(true),
         thinking: None,
         extension_policy: Some("deny".to_string()),
@@ -317,13 +326,31 @@ pub fn resolve_effective_profile(
     ctx: &AgentChatProfileContext,
 ) -> ResolvedAgentChatProfile {
     let built_ins = built_in_profiles(ctx);
+    let plugin_profiles = resolved_plugin_profiles(ctx);
 
     if let Some(selected_id) = clean_opt(ai.selected_profile_id.as_deref()) {
+        if selected_id.starts_with("plugin:") {
+            if let Some(profile) = plugin_profiles
+                .iter()
+                .find(|profile| profile.id == selected_id)
+            {
+                return apply_ai_fallbacks(profile.clone(), ai);
+            }
+            return apply_ai_fallbacks(built_in_general_profile(ctx), ai);
+        }
+
         if let Some(profile) = ai.profiles.iter().find(|profile| {
             clean_opt(profile.id.as_deref()) == Some(selected_id)
                 || generated_legacy_profile_id(&profile.name) == selected_id
         }) {
             return apply_ai_fallbacks(resolve_user_profile(profile), ai);
+        }
+
+        if let Some(profile) = plugin_profiles
+            .iter()
+            .find(|profile| profile.id == selected_id)
+        {
+            return apply_ai_fallbacks(profile.clone(), ai);
         }
 
         if let Some(profile) = built_ins.iter().find(|profile| profile.id == selected_id) {
@@ -338,6 +365,13 @@ pub fn resolve_effective_profile(
             .find(|profile| profile.name.trim() == selected_name)
         {
             return apply_ai_fallbacks(resolve_user_profile(profile), ai);
+        }
+
+        if let Some(profile) = plugin_profiles
+            .iter()
+            .find(|profile| profile.name.eq_ignore_ascii_case(selected_name))
+        {
+            return apply_ai_fallbacks(profile.clone(), ai);
         }
 
         if let Some(profile) = built_ins
@@ -359,6 +393,19 @@ pub fn agent_chat_profile_picker_entries(
         .into_iter()
         .map(AgentChatProfilePickerEntry::from_profile)
         .collect();
+
+    for profile in resolved_plugin_profiles(ctx) {
+        if entries.iter().any(|entry| entry.id == profile.id) {
+            tracing::warn!(
+                target: "script_kit::agent_chat",
+                event = "agent_chat_profile_picker_duplicate_id_skipped",
+                profile_id = %profile.id,
+                profile_name = %profile.name,
+            );
+            continue;
+        }
+        entries.push(AgentChatProfilePickerEntry::from_profile(profile));
+    }
 
     for profile in ai
         .profiles
@@ -436,12 +483,162 @@ pub fn resolve_user_profile(profile: &AcpProfile) -> ResolvedAgentChatProfile {
         disable_extensions: profile.disable_extensions,
         disable_skills: profile.disable_skills,
         disable_prompt_templates: profile.disable_prompt_templates,
+        disable_context_files: profile.disable_context_files,
         hide_cwd_in_prompt: profile.hide_cwd_in_prompt,
         thinking: clean_opt(profile.thinking.as_deref()).map(str::to_string),
         extension_policy: clean_opt(profile.extension_policy.as_deref()).map(str::to_string),
         session_dir: clean_opt(profile.session_dir.as_deref()).map(str::to_string),
         no_session: profile.no_session,
         session_durability: clean_opt(profile.session_durability.as_deref()).map(str::to_string),
+    }
+}
+
+pub fn resolved_plugin_profiles(ctx: &AgentChatProfileContext) -> Vec<ResolvedAgentChatProfile> {
+    let profiles = match discover_plugin_profiles() {
+        Ok(profiles) => profiles,
+        Err(error) => {
+            tracing::warn!(
+                target: "script_kit::agent_chat",
+                error = %error,
+                "agent_chat_plugin_profile_discovery_failed"
+            );
+            return Vec::new();
+        }
+    };
+    resolve_plugin_profile_entries(profiles, ctx)
+}
+
+pub fn resolve_plugin_profile_entries(
+    profiles: Vec<PluginProfile>,
+    ctx: &AgentChatProfileContext,
+) -> Vec<ResolvedAgentChatProfile> {
+    let mut resolved = Vec::new();
+    for profile in profiles {
+        match resolve_plugin_profile(&profile, ctx) {
+            Ok(profile) => {
+                if resolved
+                    .iter()
+                    .any(|entry: &ResolvedAgentChatProfile| entry.id == profile.id)
+                {
+                    tracing::warn!(
+                        target: "script_kit::agent_chat",
+                        event = "agent_chat_plugin_profile_duplicate_id_skipped",
+                        profile_id = %profile.id,
+                        profile_name = %profile.name,
+                    );
+                    continue;
+                }
+                resolved.push(profile);
+            }
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::agent_chat",
+                    plugin_id = %profile.plugin_id,
+                    profile_id = %profile.profile_id,
+                    error = %error,
+                    "agent_chat_plugin_profile_resolve_failed"
+                );
+            }
+        }
+    }
+    resolved
+}
+
+pub fn resolve_plugin_profile(
+    profile: &PluginProfile,
+    ctx: &AgentChatProfileContext,
+) -> anyhow::Result<ResolvedAgentChatProfile> {
+    validate_profile(profile)?;
+    let prompt_text = plugin_prompt_with_policy(profile)?;
+    let artifact = &profile.artifact;
+    let cwd = clean_opt(artifact.cwd.as_deref())
+        .map(crate::ai::agent_chat::pi::binary::expand_tilde_path)
+        .unwrap_or_else(|| {
+            ctx.kit_path
+                .join("agent-chat")
+                .join("profiles")
+                .join(&profile.profile_id)
+        });
+
+    let mut resolved = ResolvedAgentChatProfile {
+        source: AgentChatProfileSource::Plugin,
+        id: format!("plugin:{}/{}", profile.plugin_id, profile.profile_id),
+        name: artifact.name.trim().to_string(),
+        icon_name: clean_opt(artifact.icon_name.as_deref()).map(str::to_string),
+        backend: artifact.backend.unwrap_or(AgentChatBackend::Pi),
+        pi_binary: None,
+        agent: None,
+        provider: clean_opt(artifact.provider.as_deref()).map(str::to_string),
+        model: clean_opt(artifact.model.as_deref()).map(str::to_string),
+        system_prompt: None,
+        append_system_prompt: None,
+        cwd: Some(cwd),
+        tools: resolved_artifact_tools(artifact),
+        tool_policy: artifact.tool_policy.clone(),
+        path_policy: Some(artifact.path_policy.clone()),
+        blocked_action_message: clean_opt(artifact.blocked_action_message.as_deref())
+            .map(str::to_string),
+        disable_extensions: Some(artifact.disable_extensions.unwrap_or(true)),
+        disable_skills: Some(artifact.disable_skills.unwrap_or(true)),
+        disable_prompt_templates: Some(artifact.disable_prompt_templates.unwrap_or(true)),
+        disable_context_files: Some(artifact.disable_context_files.unwrap_or(true)),
+        hide_cwd_in_prompt: Some(artifact.hide_cwd_in_prompt.unwrap_or(true)),
+        thinking: clean_opt(artifact.thinking.as_deref()).map(str::to_string),
+        extension_policy: clean_opt(artifact.extension_policy.as_deref())
+            .map(str::to_string)
+            .or_else(|| Some("deny".to_string())),
+        session_dir: clean_opt(artifact.session_dir.as_deref()).map(str::to_string),
+        no_session: Some(artifact.no_session.unwrap_or(false)),
+        session_durability: clean_opt(artifact.session_durability.as_deref()).map(str::to_string),
+    };
+
+    match artifact.prompt.mode {
+        ProfilePromptMode::Replace => resolved.system_prompt = Some(prompt_text),
+        ProfilePromptMode::Append => resolved.append_system_prompt = Some(prompt_text),
+    }
+
+    Ok(resolved)
+}
+
+fn plugin_prompt_with_policy(profile: &PluginProfile) -> anyhow::Result<String> {
+    let prompt = prompt_file_text(profile)?;
+    Ok(format!(
+        "{}\n\n{}",
+        prompt.trim_end(),
+        plugin_profile_policy_appendix(profile)
+    ))
+}
+
+fn plugin_profile_policy_appendix(profile: &PluginProfile) -> String {
+    let artifact = &profile.artifact;
+    let tools = resolved_artifact_tools(artifact).unwrap_or_default();
+    let allow_read = artifact.path_policy.allow_read.clone().unwrap_or_default();
+    let allow_write = artifact.path_policy.allow_write.clone().unwrap_or_default();
+    let deny = artifact.path_policy.deny.clone().unwrap_or_default();
+    let blocked = artifact
+        .blocked_action_message
+        .as_deref()
+        .and_then(|message| clean_opt(Some(message)))
+        .unwrap_or("This action is outside the selected Script Kit profile.");
+
+    format!(
+        "[Script Kit profile contract]\nProfile id: plugin:{}/{}\nAllowed tools: {}\nAllowed read paths: {}\nAllowed write paths: {}\nDenied paths: {}\nIf the user requests work outside this contract, refuse briefly and say: \"{}\"",
+        profile.plugin_id,
+        profile.profile_id,
+        format_policy_list(&tools),
+        format_policy_list(&allow_read),
+        format_policy_list(&allow_write),
+        format_policy_list(&deny),
+        blocked
+    )
+}
+
+fn format_policy_list(values: &[String]) -> String {
+    let cleaned = clean_list(values);
+    if cleaned.is_empty() {
+        "none".to_string()
+    } else {
+        cleaned.join(", ")
     }
 }
 

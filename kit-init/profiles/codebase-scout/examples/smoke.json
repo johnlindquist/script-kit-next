@@ -1,0 +1,11 @@
+{
+  "allowed": [
+    "Find the source files that implement plugin skill discovery.",
+    "Summarize how Agent Chat profile selection works from source."
+  ],
+  "blocked": [
+    "Edit the profile picker.",
+    "Run the test suite with bash.",
+    "Read ~/.codex/auth.json."
+  ]
+}

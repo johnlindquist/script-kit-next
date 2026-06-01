@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "profile-builder",
+  "name": "Profile Builder",
+  "description": "Creates and reviews Script Kit Agent Chat profile artifacts.",
+  "iconName": "badge-plus",
+  "backend": "pi",
+  "provider": "openai-codex",
+  "model": "gpt-5.5",
+  "thinking": "medium",
+  "prompt": { "mode": "append", "file": "PROMPT.md" },
+  "cwd": "~/.scriptkit/plugins/main/profiles",
+  "tools": ["read", "write", "edit", "grep", "find", "ls"],
+  "toolPolicy": { "allow": ["read", "write", "edit", "grep", "find", "ls"] },
+  "pathPolicy": {
+    "allowRead": ["~/.scriptkit/plugins/main/profiles", "~/.scriptkit/plugins/scriptkit/skills/build-profile"],
+    "allowWrite": ["~/.scriptkit/plugins/main/profiles"],
+    "deny": ["~/.ssh", "~/.codex", "~/.scriptkit/secrets", "~/.scriptkit/config.ts"]
+  },
+  "blockedActionMessage": "This profile can only create profile artifacts under plugins/main/profiles.",
+  "disableExtensions": true,
+  "disableSkills": true,
+  "disablePromptTemplates": true,
+  "disableContextFiles": true,
+  "hideCwdInPrompt": true,
+  "extensionPolicy": "deny",
+  "sessionDir": "~/.scriptkit/agent-chat/profiles/profile-builder/sessions",
+  "noSession": false,
+  "examples": [
+    {
+      "name": "Create read-only profile",
+      "prompt": "Create a read-only profile for inspecting ~/dev/my-app.",
+      "expectedTools": ["read", "write", "edit", "grep", "find", "ls"],
+      "mustNotUse": ["bash"]
+    }
+  ]
+}

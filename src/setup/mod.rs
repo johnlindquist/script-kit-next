@@ -70,8 +70,101 @@ const EMBEDDED_SKILL_CONFIGURE_MCP: &str =
 /// Skill: troubleshooting
 const EMBEDDED_SKILL_TROUBLESHOOTING: &str =
     include_str!("../../kit-init/skills/troubleshoot/SKILL.md");
+/// Skill: build profile
+const EMBEDDED_SKILL_BUILD_PROFILE: &str =
+    include_str!("../../kit-init/skills/build-profile/SKILL.md");
 /// Example script: Todo app
 const EMBEDDED_EXAMPLE_TODO_APP: &str = include_str!("../../kit-init/examples/scripts/todo-app.ts");
+/// Example profile: profile-builder
+const EMBEDDED_PROFILE_BUILDER_JSON: &str =
+    include_str!("../../kit-init/profiles/profile-builder/profile.json");
+const EMBEDDED_PROFILE_BUILDER_PROMPT: &str =
+    include_str!("../../kit-init/profiles/profile-builder/PROMPT.md");
+const EMBEDDED_PROFILE_BUILDER_README: &str =
+    include_str!("../../kit-init/profiles/profile-builder/README.md");
+const EMBEDDED_PROFILE_BUILDER_SMOKE: &str =
+    include_str!("../../kit-init/profiles/profile-builder/examples/smoke.json");
+/// Example profile: codebase-scout
+const EMBEDDED_CODEBASE_SCOUT_JSON: &str =
+    include_str!("../../kit-init/profiles/codebase-scout/profile.json");
+const EMBEDDED_CODEBASE_SCOUT_PROMPT: &str =
+    include_str!("../../kit-init/profiles/codebase-scout/PROMPT.md");
+const EMBEDDED_CODEBASE_SCOUT_README: &str =
+    include_str!("../../kit-init/profiles/codebase-scout/README.md");
+const EMBEDDED_CODEBASE_SCOUT_SMOKE: &str =
+    include_str!("../../kit-init/profiles/codebase-scout/examples/smoke.json");
+/// Example profile: plugin-sandbox-builder
+const EMBEDDED_PLUGIN_SANDBOX_BUILDER_JSON: &str =
+    include_str!("../../kit-init/profiles/plugin-sandbox-builder/profile.json");
+const EMBEDDED_PLUGIN_SANDBOX_BUILDER_PROMPT: &str =
+    include_str!("../../kit-init/profiles/plugin-sandbox-builder/PROMPT.md");
+const EMBEDDED_PLUGIN_SANDBOX_BUILDER_README: &str =
+    include_str!("../../kit-init/profiles/plugin-sandbox-builder/README.md");
+const EMBEDDED_PLUGIN_SANDBOX_BUILDER_SMOKE: &str =
+    include_str!("../../kit-init/profiles/plugin-sandbox-builder/examples/smoke.json");
+/// Example profile: text-polisher
+const EMBEDDED_TEXT_POLISHER_JSON: &str =
+    include_str!("../../kit-init/profiles/text-polisher/profile.json");
+const EMBEDDED_TEXT_POLISHER_PROMPT: &str =
+    include_str!("../../kit-init/profiles/text-polisher/PROMPT.md");
+const EMBEDDED_TEXT_POLISHER_README: &str =
+    include_str!("../../kit-init/profiles/text-polisher/README.md");
+const EMBEDDED_TEXT_POLISHER_SMOKE: &str =
+    include_str!("../../kit-init/profiles/text-polisher/examples/smoke.json");
+/// Example profile: docs-researcher
+const EMBEDDED_DOCS_RESEARCHER_JSON: &str =
+    include_str!("../../kit-init/profiles/docs-researcher/profile.json");
+const EMBEDDED_DOCS_RESEARCHER_PROMPT: &str =
+    include_str!("../../kit-init/profiles/docs-researcher/PROMPT.md");
+const EMBEDDED_DOCS_RESEARCHER_README: &str =
+    include_str!("../../kit-init/profiles/docs-researcher/README.md");
+const EMBEDDED_DOCS_RESEARCHER_SMOKE: &str =
+    include_str!("../../kit-init/profiles/docs-researcher/examples/smoke.json");
+/// Example profile: project-docs-maintainer
+const EMBEDDED_PROJECT_DOCS_MAINTAINER_JSON: &str =
+    include_str!("../../kit-init/profiles/project-docs-maintainer/profile.json");
+const EMBEDDED_PROJECT_DOCS_MAINTAINER_PROMPT: &str =
+    include_str!("../../kit-init/profiles/project-docs-maintainer/PROMPT.md");
+const EMBEDDED_PROJECT_DOCS_MAINTAINER_README: &str =
+    include_str!("../../kit-init/profiles/project-docs-maintainer/README.md");
+const EMBEDDED_PROJECT_DOCS_MAINTAINER_SMOKE: &str =
+    include_str!("../../kit-init/profiles/project-docs-maintainer/examples/smoke.json");
+/// Example profile: package-manager-plan-only
+const EMBEDDED_PACKAGE_MANAGER_PLAN_ONLY_JSON: &str =
+    include_str!("../../kit-init/profiles/package-manager-plan-only/profile.json");
+const EMBEDDED_PACKAGE_MANAGER_PLAN_ONLY_PROMPT: &str =
+    include_str!("../../kit-init/profiles/package-manager-plan-only/PROMPT.md");
+const EMBEDDED_PACKAGE_MANAGER_PLAN_ONLY_README: &str =
+    include_str!("../../kit-init/profiles/package-manager-plan-only/README.md");
+const EMBEDDED_PACKAGE_MANAGER_PLAN_ONLY_SMOKE: &str =
+    include_str!("../../kit-init/profiles/package-manager-plan-only/examples/smoke.json");
+/// Example profile: legacy-agent-import
+const EMBEDDED_LEGACY_AGENT_IMPORT_JSON: &str =
+    include_str!("../../kit-init/profiles/legacy-agent-import/profile.json");
+const EMBEDDED_LEGACY_AGENT_IMPORT_PROMPT: &str =
+    include_str!("../../kit-init/profiles/legacy-agent-import/PROMPT.md");
+const EMBEDDED_LEGACY_AGENT_IMPORT_README: &str =
+    include_str!("../../kit-init/profiles/legacy-agent-import/README.md");
+const EMBEDDED_LEGACY_AGENT_IMPORT_SMOKE: &str =
+    include_str!("../../kit-init/profiles/legacy-agent-import/examples/smoke.json");
+/// Example profile: invalid-schema-collision
+const EMBEDDED_INVALID_SCHEMA_COLLISION_JSON: &str =
+    include_str!("../../kit-init/profiles/invalid-schema-collision/profile.json");
+const EMBEDDED_INVALID_SCHEMA_COLLISION_PROMPT: &str =
+    include_str!("../../kit-init/profiles/invalid-schema-collision/PROMPT.md");
+const EMBEDDED_INVALID_SCHEMA_COLLISION_README: &str =
+    include_str!("../../kit-init/profiles/invalid-schema-collision/README.md");
+const EMBEDDED_INVALID_SCHEMA_COLLISION_SMOKE: &str =
+    include_str!("../../kit-init/profiles/invalid-schema-collision/examples/smoke.json");
+/// Example profile: ambient-leakage-stress
+const EMBEDDED_AMBIENT_LEAKAGE_STRESS_JSON: &str =
+    include_str!("../../kit-init/profiles/ambient-leakage-stress/profile.json");
+const EMBEDDED_AMBIENT_LEAKAGE_STRESS_PROMPT: &str =
+    include_str!("../../kit-init/profiles/ambient-leakage-stress/PROMPT.md");
+const EMBEDDED_AMBIENT_LEAKAGE_STRESS_README: &str =
+    include_str!("../../kit-init/profiles/ambient-leakage-stress/README.md");
+const EMBEDDED_AMBIENT_LEAKAGE_STRESS_SMOKE: &str =
+    include_str!("../../kit-init/profiles/ambient-leakage-stress/examples/smoke.json");
 /// Canonical menu syntax handler: todo inbox
 const EMBEDDED_CANONICAL_CAPTURE_TODO_INBOX: &str =
     include_str!("../../scripts/examples/menu-syntax/capture-todo-inbox.ts");
@@ -837,6 +930,12 @@ pub fn ensure_kit_setup() -> SetupResult {
         "plugins/scriptkit/skills/troubleshoot/SKILL.md",
     );
     write_string_if_changed(
+        &scriptkit_skills.join("build-profile").join("SKILL.md"),
+        EMBEDDED_SKILL_BUILD_PROFILE,
+        &mut warnings,
+        "plugins/scriptkit/skills/build-profile/SKILL.md",
+    );
+    write_string_if_changed(
         &scriptkit_skills.join("manage-notes").join("SKILL.md"),
         EMBEDDED_SKILL_MANAGE_NOTES,
         &mut warnings,
@@ -882,6 +981,96 @@ pub fn ensure_kit_setup() -> SetupResult {
         EMBEDDED_EXAMPLE_TODO_APP,
         &mut warnings,
         "plugins/examples/scripts/todo-app.ts",
+    );
+    write_example_profile(
+        &examples_plugin,
+        "profile-builder",
+        EMBEDDED_PROFILE_BUILDER_JSON,
+        EMBEDDED_PROFILE_BUILDER_PROMPT,
+        EMBEDDED_PROFILE_BUILDER_README,
+        EMBEDDED_PROFILE_BUILDER_SMOKE,
+        &mut warnings,
+    );
+    write_example_profile(
+        &examples_plugin,
+        "codebase-scout",
+        EMBEDDED_CODEBASE_SCOUT_JSON,
+        EMBEDDED_CODEBASE_SCOUT_PROMPT,
+        EMBEDDED_CODEBASE_SCOUT_README,
+        EMBEDDED_CODEBASE_SCOUT_SMOKE,
+        &mut warnings,
+    );
+    write_example_profile(
+        &examples_plugin,
+        "plugin-sandbox-builder",
+        EMBEDDED_PLUGIN_SANDBOX_BUILDER_JSON,
+        EMBEDDED_PLUGIN_SANDBOX_BUILDER_PROMPT,
+        EMBEDDED_PLUGIN_SANDBOX_BUILDER_README,
+        EMBEDDED_PLUGIN_SANDBOX_BUILDER_SMOKE,
+        &mut warnings,
+    );
+    write_example_profile(
+        &examples_plugin,
+        "text-polisher",
+        EMBEDDED_TEXT_POLISHER_JSON,
+        EMBEDDED_TEXT_POLISHER_PROMPT,
+        EMBEDDED_TEXT_POLISHER_README,
+        EMBEDDED_TEXT_POLISHER_SMOKE,
+        &mut warnings,
+    );
+    write_example_profile(
+        &examples_plugin,
+        "docs-researcher",
+        EMBEDDED_DOCS_RESEARCHER_JSON,
+        EMBEDDED_DOCS_RESEARCHER_PROMPT,
+        EMBEDDED_DOCS_RESEARCHER_README,
+        EMBEDDED_DOCS_RESEARCHER_SMOKE,
+        &mut warnings,
+    );
+    write_example_profile(
+        &examples_plugin,
+        "project-docs-maintainer",
+        EMBEDDED_PROJECT_DOCS_MAINTAINER_JSON,
+        EMBEDDED_PROJECT_DOCS_MAINTAINER_PROMPT,
+        EMBEDDED_PROJECT_DOCS_MAINTAINER_README,
+        EMBEDDED_PROJECT_DOCS_MAINTAINER_SMOKE,
+        &mut warnings,
+    );
+    write_example_profile(
+        &examples_plugin,
+        "package-manager-plan-only",
+        EMBEDDED_PACKAGE_MANAGER_PLAN_ONLY_JSON,
+        EMBEDDED_PACKAGE_MANAGER_PLAN_ONLY_PROMPT,
+        EMBEDDED_PACKAGE_MANAGER_PLAN_ONLY_README,
+        EMBEDDED_PACKAGE_MANAGER_PLAN_ONLY_SMOKE,
+        &mut warnings,
+    );
+    write_example_profile(
+        &examples_plugin,
+        "legacy-agent-import",
+        EMBEDDED_LEGACY_AGENT_IMPORT_JSON,
+        EMBEDDED_LEGACY_AGENT_IMPORT_PROMPT,
+        EMBEDDED_LEGACY_AGENT_IMPORT_README,
+        EMBEDDED_LEGACY_AGENT_IMPORT_SMOKE,
+        &mut warnings,
+    );
+    write_example_profile(
+        &examples_plugin,
+        "invalid-schema-collision",
+        EMBEDDED_INVALID_SCHEMA_COLLISION_JSON,
+        EMBEDDED_INVALID_SCHEMA_COLLISION_PROMPT,
+        EMBEDDED_INVALID_SCHEMA_COLLISION_README,
+        EMBEDDED_INVALID_SCHEMA_COLLISION_SMOKE,
+        &mut warnings,
+    );
+    write_example_profile(
+        &examples_plugin,
+        "ambient-leakage-stress",
+        EMBEDDED_AMBIENT_LEAKAGE_STRESS_JSON,
+        EMBEDDED_AMBIENT_LEAKAGE_STRESS_PROMPT,
+        EMBEDDED_AMBIENT_LEAKAGE_STRESS_README,
+        EMBEDDED_AMBIENT_LEAKAGE_STRESS_SMOKE,
+        &mut warnings,
     );
 
     // App-managed: .gitignore (refresh if changed)
@@ -1202,6 +1391,7 @@ fn ensure_plugin_root(
     ensure_dir(&root.join("scriptlets"), warnings);
     ensure_dir(&root.join("agents"), warnings);
     ensure_dir(&root.join("skills"), warnings);
+    ensure_dir(&root.join("profiles"), warnings);
 
     let manifest = format!(
         "{{\n  \"id\": \"{plugin_id}\",\n  \"title\": \"{title}\",\n  \"description\": \"{description}\"\n}}"
@@ -1215,6 +1405,44 @@ fn ensure_plugin_root(
 
     info!(plugin_id = %plugin_id, "plugin_root_ensured");
 }
+
+fn write_example_profile(
+    examples_plugin: &Path,
+    profile_id: &str,
+    profile_json: &str,
+    prompt: &str,
+    readme: &str,
+    smoke: &str,
+    warnings: &mut Vec<String>,
+) {
+    let root = examples_plugin.join("profiles").join(profile_id);
+    let label = |file: &str| format!("plugins/examples/profiles/{profile_id}/{file}");
+    write_string_if_changed(
+        &root.join("profile.json"),
+        profile_json,
+        warnings,
+        &label("profile.json"),
+    );
+    write_string_if_changed(
+        &root.join("PROMPT.md"),
+        prompt,
+        warnings,
+        &label("PROMPT.md"),
+    );
+    write_string_if_changed(
+        &root.join("README.md"),
+        readme,
+        warnings,
+        &label("README.md"),
+    );
+    write_string_if_changed(
+        &root.join("examples").join("smoke.json"),
+        smoke,
+        warnings,
+        &label("examples/smoke.json"),
+    );
+}
+
 fn write_string_if_missing(path: &Path, contents: &str, warnings: &mut Vec<String>, label: &str) {
     if path.exists() {
         return;
@@ -2560,6 +2788,38 @@ mod asset_destination_tests {
         assert!(
             !setup_portion.contains(&bad_pattern),
             "skills must not be nested under kit/ — they belong at the workspace root"
+        );
+    }
+
+    #[test]
+    fn setup_seeds_example_profiles_under_examples_plugin() {
+        let source = include_str!("mod.rs");
+        for profile_id in [
+            "profile-builder",
+            "codebase-scout",
+            "plugin-sandbox-builder",
+            "text-polisher",
+            "docs-researcher",
+            "project-docs-maintainer",
+            "package-manager-plan-only",
+            "legacy-agent-import",
+            "invalid-schema-collision",
+            "ambient-leakage-stress",
+        ] {
+            assert!(
+                source.contains(&format!(
+                    r#""plugins/examples/profiles/{{profile_id}}/{{file}}""#
+                )),
+                "write_example_profile should label seeded example profile files"
+            );
+            assert!(
+                source.contains(&format!(r#""{profile_id}""#)),
+                "ensure_kit_setup must seed {profile_id}"
+            );
+        }
+        assert!(
+            source.contains("write_example_profile("),
+            "ensure_kit_setup must write bundled example profile artifacts"
         );
     }
 }

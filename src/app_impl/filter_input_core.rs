@@ -6,7 +6,6 @@ pub(crate) enum ScriptListSpecialEntry {
     QuickTerminal,
     ActionsHelp,
     AcpMentionPicker,
-    AcpProfilePicker,
 }
 
 impl ScriptListApp {
@@ -123,7 +122,6 @@ impl ScriptListApp {
             ">" => Some(ScriptListSpecialEntry::QuickTerminal),
             "?" => Some(ScriptListSpecialEntry::ActionsHelp),
             "@" => Some(ScriptListSpecialEntry::AcpMentionPicker),
-            "|" => Some(ScriptListSpecialEntry::AcpProfilePicker),
             _ => None,
         }
     }
@@ -576,10 +574,7 @@ mod tests {
             ScriptListApp::special_entry_from_script_list_filter("@"),
             Some(ScriptListSpecialEntry::AcpMentionPicker),
         );
-        assert_eq!(
-            ScriptListApp::special_entry_from_script_list_filter("|"),
-            Some(ScriptListSpecialEntry::AcpProfilePicker),
-        );
+        assert_eq!(ScriptListApp::special_entry_from_script_list_filter("|"), None);
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter("!"),
             None

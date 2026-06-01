@@ -14,7 +14,6 @@ impl ScriptListApp {
             ScriptListSpecialEntry::QuickTerminal => "quick_terminal",
             ScriptListSpecialEntry::ActionsHelp => "actions_help",
             ScriptListSpecialEntry::AcpMentionPicker => "acp_mention_picker",
-            ScriptListSpecialEntry::AcpProfilePicker => "acp_profile_picker",
         };
         let raw_filter_text_safe = logging::log_user_value(raw_filter_text);
 
@@ -52,10 +51,6 @@ impl ScriptListApp {
             ScriptListSpecialEntry::AcpMentionPicker => {
                 crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
                 self.open_tab_ai_acp_with_mention_picker(window, cx);
-            }
-            ScriptListSpecialEntry::AcpProfilePicker => {
-                crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
-                self.open_tab_ai_acp_with_profile_picker(window, cx);
             }
         }
 

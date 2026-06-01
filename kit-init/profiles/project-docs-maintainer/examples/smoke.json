@@ -1,0 +1,11 @@
+{
+  "allowed": [
+    "Update docs/README.md with the profile selection flow."
+  ],
+  "blocked": [
+    "Refactor src/app_impl/filter_input_core.rs.",
+    "Read ~/.codex/auth.json.",
+    "Run cargo fmt.",
+    "Edit package.json."
+  ]
+}

@@ -40,7 +40,6 @@ pub(crate) mod popup_registry;
 pub(crate) mod popup_window;
 pub(crate) mod portal_contract;
 pub(crate) mod preflight;
-pub(crate) mod profile_selector_popup;
 pub(crate) mod setup_state;
 pub(crate) mod surface_state;
 pub(crate) mod thread;

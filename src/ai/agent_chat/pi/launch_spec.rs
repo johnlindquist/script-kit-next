@@ -23,6 +23,7 @@ pub struct PiLaunchSpec {
     pub skill_paths: Vec<String>,
     pub disable_prompt_templates: bool,
     pub prompt_template_paths: Vec<String>,
+    pub disable_context_files: bool,
     pub hide_cwd_in_prompt: bool,
     pub session_dir: Option<String>,
     pub no_session: bool,
@@ -54,6 +55,7 @@ impl PiLaunchSpec {
             skill_paths: Vec::new(),
             disable_prompt_templates: profile.disable_prompt_templates.unwrap_or(false),
             prompt_template_paths: Vec::new(),
+            disable_context_files: profile.disable_context_files.unwrap_or(false),
             hide_cwd_in_prompt: profile.hide_cwd_in_prompt.unwrap_or(false),
             session_dir: profile.session_dir.clone(),
             no_session: profile.no_session.unwrap_or(false),
@@ -64,8 +66,6 @@ impl PiLaunchSpec {
     pub fn argv(&self) -> Vec<String> {
         let mut argv = vec!["--mode".to_string(), "rpc".to_string()];
 
-        push_arg(&mut argv, "--profile-id", self.profile_id.as_deref());
-        push_arg(&mut argv, "--profile-name", self.profile_name.as_deref());
         push_arg(&mut argv, "--provider", self.provider.as_deref());
         push_arg(&mut argv, "--model", self.model.as_deref());
         push_arg(&mut argv, "--thinking", self.thinking.as_deref());
@@ -85,27 +85,11 @@ impl PiLaunchSpec {
             None => {}
         }
 
-        push_arg(
-            &mut argv,
-            "--path-policy-json",
-            self.path_policy_json.as_deref(),
-        );
-        push_arg(
-            &mut argv,
-            "--blocked-action-message",
-            self.blocked_action_message.as_deref(),
-        );
-
         if self.disable_extensions {
             argv.push("--no-extensions".to_string());
         } else {
             push_repeated_arg(&mut argv, "--extension", &self.extension_paths);
         }
-        push_arg(
-            &mut argv,
-            "--extension-policy",
-            self.extension_policy.as_deref(),
-        );
 
         if self.disable_skills {
             argv.push("--no-skills".to_string());
@@ -119,19 +103,14 @@ impl PiLaunchSpec {
             push_repeated_arg(&mut argv, "--prompt-template", &self.prompt_template_paths);
         }
 
-        if self.hide_cwd_in_prompt {
-            argv.push("--hide-cwd-in-prompt".to_string());
+        if self.disable_context_files {
+            argv.push("--no-context-files".to_string());
         }
 
         push_arg(&mut argv, "--session-dir", self.session_dir.as_deref());
         if self.no_session {
             argv.push("--no-session".to_string());
         }
-        push_arg(
-            &mut argv,
-            "--session-durability",
-            self.session_durability.as_deref(),
-        );
 
         argv
     }

@@ -1,67 +1,60 @@
+use super::list::{matches_query, ss, SpineListAction, SpineListRow, SpineListRowKind};
 use std::ops::Range;
 
-use super::list::{matches_query, ss, SpineListAction, SpineListRow, SpineListRowKind};
-
-struct ProfileSpec {
-    id: &'static str,
-    title: &'static str,
-    description: &'static str,
-    icon: &'static str,
+fn profile_source_label(
+    source: crate::ai::agent_chat::profiles::AgentChatProfileSource,
+) -> &'static str {
+    match source {
+        crate::ai::agent_chat::profiles::AgentChatProfileSource::BuiltIn => "Built-in",
+        crate::ai::agent_chat::profiles::AgentChatProfileSource::User => "Custom",
+        crate::ai::agent_chat::profiles::AgentChatProfileSource::Plugin => "Plugin",
+    }
 }
-
-const SPINE_PROFILES: &[ProfileSpec] = &[
-    ProfileSpec {
-        id: "creative",
-        title: "Creative",
-        description: "More exploratory and generative",
-        icon: "palette",
-    },
-    ProfileSpec {
-        id: "concise",
-        title: "Concise",
-        description: "Short, direct responses",
-        icon: "scissors",
-    },
-    ProfileSpec {
-        id: "technical",
-        title: "Technical",
-        description: "Precise engineering-focused responses",
-        icon: "code",
-    },
-    ProfileSpec {
-        id: "friendly",
-        title: "Friendly",
-        description: "Warm and approachable responses",
-        icon: "heart",
-    },
-];
 
 pub(super) fn build_profile_rows(
     query: &str,
     segment_index: usize,
     segment_byte_range: Range<usize>,
 ) -> Vec<SpineListRow> {
-    SPINE_PROFILES
-        .iter()
+    let prefs = crate::config::load_user_preferences();
+    let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+    let selected_id =
+        crate::ai::agent_chat::profiles::selected_agent_chat_profile_picker_id(&prefs.ai, &ctx);
+
+    crate::ai::agent_chat::profiles::agent_chat_profile_picker_entries(&prefs.ai, &ctx)
+        .into_iter()
         .enumerate()
-        .filter(|(_, spec)| {
-            let pipe_text = format!("|{}", spec.id);
-            matches_query(spec.id, query)
-                || matches_query(spec.title, query)
+        .filter(|(_, entry)| {
+            let pipe_text = format!("|{}", entry.id);
+            matches_query(&entry.id, query)
+                || matches_query(&entry.name, query)
                 || matches_query(&pipe_text, query)
-                || matches_query(spec.description, query)
         })
-        .map(|(rank, spec)| {
-            let replacement = format!("|{}", spec.id);
+        .map(|(rank, entry)| {
+            let replacement = format!("|{}", entry.id);
+            let source = profile_source_label(entry.source);
+            let selected = entry.id == selected_id;
+            let title = if selected {
+                format!("{} \u{2713}", entry.name)
+            } else {
+                entry.name.clone()
+            };
+            let subtitle = if selected {
+                format!("Current Agent Chat profile · {source} · Pi")
+            } else {
+                format!("Switch Agent Chat to this profile · {source} · Pi")
+            };
             SpineListRow {
-                id: ss(format!("spine:|:{}", spec.id)),
+                id: ss(format!("spine:|:{}", entry.id)),
                 kind: SpineListRowKind::Profile {
-                    profile_id: ss(spec.id),
+                    profile_id: ss(entry.id.clone()),
                 },
-                title: ss(spec.title),
-                subtitle: Some(ss(spec.description)),
-                meta: None,
-                icon: Some(ss(spec.icon)),
+                title: ss(title),
+                subtitle: Some(ss(subtitle)),
+                meta: Some(ss(format!("|{}", entry.id))),
+                icon: Some(ss(entry
+                    .icon_name
+                    .unwrap_or_else(|| "user-round".to_string()))),
                 badges: vec![ss("|")],
                 score: i32::MAX.saturating_sub(rank as i32),
                 is_selectable: true,
@@ -70,7 +63,7 @@ pub(super) fn build_profile_rows(
                     segment_index,
                     segment_byte_range: segment_byte_range.clone(),
                     replacement: ss(replacement.clone()),
-                    resolution_id: ss(spec.id),
+                    resolution_id: ss(entry.id),
                     resolution_label: ss(replacement),
                     resolution_source: ss("profile"),
                     trailing_space: true,
