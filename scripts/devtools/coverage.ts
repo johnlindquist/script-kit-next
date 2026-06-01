@@ -249,6 +249,8 @@ const surfaces: Surface[] = [
       "attached popup resize generation",
       "runtime row and section bounds model",
       "runtime hover row availability",
+      "target-scoped ActionsDialog first-click selection proof",
+      "target-scoped ActionsDialog second-click activation lifecycle proof",
       "runtime shortcut layout bounds model",
       "getElements(target)",
       "getLayoutInfo(target actionsDialog) ActionsDialog/search/header/list/visible-row/shortcut bounds",

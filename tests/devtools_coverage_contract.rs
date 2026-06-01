@@ -375,6 +375,42 @@ fn actions_cli_reports_protocol_click_select_proof() {
 }
 
 #[test]
+fn actions_cli_reports_protocol_click_activate_proof() {
+    for needle in [
+        "--prove-click-activate",
+        "clickActivateProof",
+        "actions.clickActivateProof",
+        "target-scoped ActionsDialog second-click activation proof",
+        "CLICK_ACTIVATE_ALLOWED_ACTION_IDS",
+        "toggle_info",
+        "firstClickSelectedRequestedRow",
+        "firstClickArmedRequestedRow",
+        "secondClickDispatchedExactHandle",
+        "sourceClosed",
+        "parentLive",
+        "destructiveActionAllowed",
+    ] {
+        assert!(
+            ACTIONS_DEVTOOLS.contains(needle),
+            "actions DevTools CLI must expose second-click activation proof receipt: {needle}"
+        );
+    }
+}
+
+#[test]
+fn actions_dialog_coverage_mentions_second_click_activation_proof() {
+    for needle in [
+        "target-scoped ActionsDialog second-click activation lifecycle proof",
+        "target-scoped ActionsDialog first-click selection proof",
+    ] {
+        assert!(
+            COVERAGE.contains(needle),
+            "coverage CLI must advertise ActionsDialog click lifecycle proof: {needle}"
+        );
+    }
+}
+
+#[test]
 fn actions_dialog_rows_expose_mouse_click_arm_state() {
     for needle in [
         "\"mouseArmed\": self.mouse_armed_row == Some(visual_index)",

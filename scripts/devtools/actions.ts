@@ -15,6 +15,7 @@ type Args = {
   keepOpen: boolean;
   proveHover: boolean;
   proveClickSelect: boolean;
+  proveClickActivate: boolean;
   inspectTargetForwarded: string[];
   hasExplicitInspectTarget: boolean;
   openTargetForwarded: string[];
@@ -27,7 +28,7 @@ const DEFAULT_OPEN_TARGET = ["--show", "--main", "--strict", "--surface", "Scrip
 function usage() {
   return [
     "Usage:",
-    "  bun scripts/devtools/actions.ts inspect [--session <name>] [--start] [--keep-open] [--open] [--open-target-kind <kind>] [--prove-hover] [--prove-click-select] [target args]",
+    "  bun scripts/devtools/actions.ts inspect [--session <name>] [--start] [--keep-open] [--open] [--open-target-kind <kind>] [--prove-hover] [--prove-click-select] [--prove-click-activate] [target args]",
     "",
     "Target args match scripts/devtools/targets.ts inspect. Defaults to --target-kind actionsDialog --strict --surface ActionsDialog.",
   ].join("\n");
@@ -51,6 +52,7 @@ function parseArgs(argv: string[]): Args {
     keepOpen: false,
     proveHover: false,
     proveClickSelect: false,
+    proveClickActivate: false,
     inspectTargetForwarded: [],
     hasExplicitInspectTarget: false,
     openTargetForwarded: [],
@@ -70,6 +72,8 @@ function parseArgs(argv: string[]): Args {
       args.proveHover = true;
     } else if (arg === "--prove-click-select") {
       args.proveClickSelect = true;
+    } else if (arg === "--prove-click-activate") {
+      args.proveClickActivate = true;
     } else if (arg === "--open-target-id") {
       args.openTarget = { type: "id", id: argv[++index] ?? "" };
       args.hasExplicitOpenTarget = true;
@@ -324,6 +328,15 @@ function pickClickSelectProofRow(rowGeometry: JsonObject | null) {
     .find((row) => rowSemanticId(row) !== selectedSemanticId) ?? null;
 }
 
+const CLICK_ACTIVATE_ALLOWED_ACTION_IDS = new Set(["toggle_info"]);
+
+function pickClickActivateProofRow(rowGeometry: JsonObject | null) {
+  return visibleActionRowsFromGeometry(rowGeometry).find((row) => {
+    const actionId = typeof row.actionId === "string" ? row.actionId : "";
+    return CLICK_ACTIVATE_ALLOWED_ACTION_IDS.has(actionId);
+  }) ?? null;
+}
+
 function centerOfRect(rect: Rect) {
   return {
     x: rect.x + rect.width / 2,
@@ -463,6 +476,53 @@ function clickSelectProofBlocked(reason: string, extras: JsonObject = {}) {
     },
     ...extras,
   };
+}
+
+function clickActivateProofBlocked(reason: string, extras: JsonObject = {}) {
+  return {
+    classification: "blocked-by-missing-primitive",
+    command: "actions.clickActivateProof",
+    reason,
+    missingPrimitives: ["target-scoped ActionsDialog second-click activation proof"],
+    safety: {
+      noNativeEscalation: true,
+      submitAttempted: true,
+      activationAttempted: true,
+      destructiveActionAllowed: false,
+    },
+    ...extras,
+  };
+}
+
+async function dispatchLeftClick(
+  args: Args,
+  point: { x: number; y: number },
+  prefix: string,
+) {
+  const eventTarget = { type: "kind", kind: "actionsDialog" };
+  const mouseDown = await rpc(
+    args.session,
+    {
+      type: "simulateGpuiEvent",
+      requestId: requestId(`${prefix}-down`),
+      target: eventTarget,
+      event: { type: "mouseDown", x: point.x, y: point.y, button: "left" },
+    },
+    "simulateGpuiEventResult",
+    args.timeoutMs,
+  );
+  const mouseUp = await rpc(
+    args.session,
+    {
+      type: "simulateGpuiEvent",
+      requestId: requestId(`${prefix}-up`),
+      target: eventTarget,
+      event: { type: "mouseUp", x: point.x, y: point.y, button: "left" },
+    },
+    "simulateGpuiEventResult",
+    args.timeoutMs,
+  );
+  return { mouseDown, mouseUp };
 }
 
 async function runHoverProof(
@@ -737,6 +797,224 @@ async function runClickSelectProof(
   };
 }
 
+async function runClickActivateProof(
+  args: Args,
+  selector: JsonObject,
+  target: JsonObject,
+  rowGeometry: JsonObject | null,
+) {
+  if (rowGeometry?.rowBoundsAvailable !== true) {
+    return clickActivateProofBlocked("rowGeometry.rowBoundsAvailable is not true", { rowGeometry });
+  }
+
+  const requestedRow = pickClickActivateProofRow(rowGeometry);
+  const requestedSemanticId = requestedRow ? rowSemanticId(requestedRow) : null;
+  const requestedBounds = requestedRow
+    ? (rectFrom(requestedRow.innerBounds) ?? rectFrom(requestedRow.bounds) ?? rectFrom(requestedRow.rect))
+    : null;
+  const beforeSelectedSemanticId = selectedRowSemanticId(rowGeometry);
+  const beforeArmedSemanticId = mouseArmedRowSemanticId(rowGeometry);
+  if (!requestedRow || !requestedSemanticId || !requestedBounds) {
+    return clickActivateProofBlocked("no safe visible action row with usable bounds", {
+      before: {
+        selectedSemanticId: beforeSelectedSemanticId,
+        selectedRow: selectedRowOf(rowGeometry),
+        mouseArmedRow: mouseArmedRowOf(rowGeometry),
+      },
+      requestedRow,
+    });
+  }
+  if (beforeSelectedSemanticId === requestedSemanticId || beforeArmedSemanticId === requestedSemanticId) {
+    return clickActivateProofBlocked("safe row is already selected or armed before first click", {
+      before: {
+        selectedSemanticId: beforeSelectedSemanticId,
+        selectedRow: selectedRowOf(rowGeometry),
+        mouseArmedRow: mouseArmedRowOf(rowGeometry),
+      },
+      requestedRow,
+    });
+  }
+
+  const point = centerOfRect(requestedBounds);
+  const eventTarget = { type: "kind", kind: "actionsDialog" };
+  const mouseMove = await rpc(
+    args.session,
+    {
+      type: "simulateGpuiEvent",
+      requestId: requestId("click-activate-move"),
+      target: eventTarget,
+      event: { type: "mouseMove", x: point.x, y: point.y },
+    },
+    "simulateGpuiEventResult",
+    args.timeoutMs,
+  );
+  const firstClick = await dispatchLeftClick(args, point, "click-activate-first");
+
+  if (
+    !dispatchSuccess(firstClick.mouseDown)
+    || !dispatchSuccess(firstClick.mouseUp)
+    || dispatchPath(firstClick.mouseDown) !== "exact_handle"
+    || dispatchPath(firstClick.mouseUp) !== "exact_handle"
+  ) {
+    return clickActivateProofBlocked("first click did not dispatch through exact actions dialog handle", {
+      requestedRow,
+      point: { ...point, coordinateSpace: "popupLogicalPx", target: eventTarget },
+      receipts: { mouseMove, ...firstClick },
+    });
+  }
+
+  const startedAt = Date.now();
+  const attempts: JsonObject[] = [];
+  let stateAfterArm: JsonObject | null = null;
+  let actionsDialogAfterArm: JsonObject | null = null;
+  let rowGeometryAfterArm: JsonObject | null = null;
+  while (Date.now() - startedAt < Math.min(args.timeoutMs, 1500)) {
+    stateAfterArm = await rpc(
+      args.session,
+      { type: "getState", requestId: requestId("click-activate-arm-state"), target: selector, summaryOnly: true },
+      "stateResult",
+      args.timeoutMs,
+    );
+    actionsDialogAfterArm = stateActionsDialog(stateAfterArm);
+    rowGeometryAfterArm = (actionsDialogAfterArm?.rowGeometry as JsonObject | undefined) ?? null;
+    const selectedSemanticId = selectedRowSemanticId(rowGeometryAfterArm);
+    const armedSemanticId = mouseArmedRowSemanticId(rowGeometryAfterArm);
+    attempts.push({
+      elapsedMs: Date.now() - startedAt,
+      selectedSemanticId,
+      armedSemanticId,
+      selectedRow: selectedRowOf(rowGeometryAfterArm),
+      mouseArmedRow: mouseArmedRowOf(rowGeometryAfterArm),
+    });
+    if (selectedSemanticId === requestedSemanticId && armedSemanticId === requestedSemanticId) break;
+    await Bun.sleep(50);
+  }
+
+  const afterArmSelectedSemanticId = selectedRowSemanticId(rowGeometryAfterArm);
+  const afterArmArmedSemanticId = mouseArmedRowSemanticId(rowGeometryAfterArm);
+  const firstClickSelectedRequestedRow = afterArmSelectedSemanticId === requestedSemanticId;
+  const firstClickArmedRequestedRow = afterArmArmedSemanticId === requestedSemanticId;
+  if (!firstClickSelectedRequestedRow || !firstClickArmedRequestedRow || !actionsDialogAfterArm) {
+    return clickActivateProofBlocked("first click did not select and arm the requested row", {
+      requestedRow,
+      point: { ...point, coordinateSpace: "popupLogicalPx", target: eventTarget },
+      before: {
+        selectedSemanticId: beforeSelectedSemanticId,
+        selectedRow: selectedRowOf(rowGeometry),
+        mouseArmedRow: mouseArmedRowOf(rowGeometry),
+      },
+      firstClick: {
+        receipts: { mouseMove, mouseDown: firstClick.mouseDown, mouseUp: firstClick.mouseUp },
+        stateAfterArm,
+      },
+      assertions: {
+        firstClickSelectedRequestedRow,
+        firstClickArmedRequestedRow,
+      },
+      attempts,
+    });
+  }
+
+  const secondClick = await dispatchLeftClick(args, point, "click-activate-second");
+  const secondClickDispatchedExactHandle = dispatchSuccess(secondClick.mouseDown)
+    && dispatchSuccess(secondClick.mouseUp)
+    && dispatchPath(secondClick.mouseDown) === "exact_handle"
+    && dispatchPath(secondClick.mouseUp) === "exact_handle";
+
+  const sourceTarget = await run([
+    "bun",
+    "scripts/devtools/targets.ts",
+    "inspect",
+    "--session",
+    args.session,
+    "--target-kind",
+    "actionsDialog",
+    "--strict",
+    "--surface",
+    "ActionsDialog",
+    "--timeout",
+    String(args.timeoutMs),
+  ], "targets.inspect.actionsDialog.afterActivation");
+  const parentAutomationId = target.parentAutomationId ?? target.openerAutomationId ?? "main";
+  const parentTarget = await run([
+    "bun",
+    "scripts/devtools/targets.ts",
+    "inspect",
+    "--session",
+    args.session,
+    "--target-id",
+    String(parentAutomationId),
+    "--strict",
+    "--timeout",
+    String(args.timeoutMs),
+  ], "targets.inspect.parent.afterActivation");
+
+  const sourceClosed = sourceTarget.classification !== "ok";
+  const parentResolved = (parentTarget.resolvedTarget as JsonObject | undefined) ?? {};
+  const parentLive = parentTarget.classification === "ok" && Boolean(parentResolved.automationId);
+  const assertions = {
+    rowBoundsAvailable: Boolean(requestedBounds && requestedBounds.width > 0 && requestedBounds.height > 0),
+    requestedSafeAction: requestedRow.actionId === "toggle_info",
+    firstClickSelectedRequestedRow,
+    firstClickArmedRequestedRow,
+    secondClickDispatchedExactHandle,
+    sourceClosed,
+    parentLive,
+  };
+
+  if (!Object.values(assertions).every(Boolean)) {
+    return clickActivateProofBlocked("second click did not activate only the requested actions dialog row", {
+      requestedRow,
+      point: { ...point, coordinateSpace: "popupLogicalPx", target: eventTarget },
+      before: {
+        selectedSemanticId: beforeSelectedSemanticId,
+        selectedRow: selectedRowOf(rowGeometry),
+        mouseArmedRow: mouseArmedRowOf(rowGeometry),
+      },
+      firstClick: {
+        receipts: { mouseMove, mouseDown: firstClick.mouseDown, mouseUp: firstClick.mouseUp },
+        stateAfterArm,
+      },
+      secondClick: { receipts: secondClick },
+      after: { sourceTarget, parentTarget },
+      assertions,
+      attempts,
+    });
+  }
+
+  return {
+    classification: "ok",
+    command: "actions.clickActivateProof",
+    safety: {
+      noNativeEscalation: true,
+      submitAttempted: true,
+      activationAttempted: true,
+      destructiveActionAllowed: false,
+    },
+    requestedRow: {
+      semanticId: requestedSemanticId,
+      visualIndex: requestedRow.visualIndex ?? null,
+      kind: requestedRow.kind ?? null,
+      actionId: requestedRow.actionId ?? null,
+      bounds: requestedBounds,
+    },
+    point: { ...point, coordinateSpace: "popupLogicalPx", target: eventTarget },
+    before: {
+      selectedSemanticId: beforeSelectedSemanticId,
+      selectedRow: selectedRowOf(rowGeometry),
+      mouseArmedRow: mouseArmedRowOf(rowGeometry),
+    },
+    firstClick: {
+      receipts: { mouseMove, mouseDown: firstClick.mouseDown, mouseUp: firstClick.mouseUp },
+      stateAfterArm,
+    },
+    secondClick: { receipts: secondClick },
+    after: { sourceTarget, parentTarget },
+    assertions,
+    attempts,
+  };
+}
+
 async function main() {
   const args = parseArgs(Bun.argv.slice(2));
   const forwarded = inspectForwarded(args);
@@ -817,6 +1095,9 @@ async function main() {
   const clickSelectProof = args.proveClickSelect
     ? await runClickSelectProof(args, selector, target, rowGeometry)
     : null;
+  const clickActivateProof = args.proveClickActivate
+    ? await runClickActivateProof(args, selector, target, rowGeometry)
+    : null;
 
   console.log(JSON.stringify({
     schemaVersion: 1,
@@ -845,6 +1126,7 @@ async function main() {
     rowGeometry,
     hoverProof,
     clickSelectProof,
+    clickActivateProof,
     chromeContract: {
       source: "actionsDialog.automationState.runtimeAudit",
       status: runtimeAuditStatus,
