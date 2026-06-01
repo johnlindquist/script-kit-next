@@ -20,6 +20,7 @@ type Args = {
   proveCloseCleanup: boolean;
   proveShortcutOpenFreshness: boolean;
   proveShortcutCloseCleanup: boolean;
+  proveEscapeCloseCleanup: boolean;
   sampleMs: number;
   intervalMs: number;
   inspectTargetForwarded: string[];
@@ -34,7 +35,7 @@ const DEFAULT_OPEN_TARGET = ["--show", "--main", "--strict", "--surface", "Scrip
 function usage() {
   return [
     "Usage:",
-    "  bun scripts/devtools/actions.ts inspect [--session <name>] [--start] [--keep-open] [--open] [--open-target-kind <kind>] [--prove-hover] [--prove-click-select] [--prove-click-activate] [--prove-semantic-freshness] [--prove-close-cleanup] [--prove-shortcut-open-freshness] [--prove-shortcut-close-cleanup] [--sample-ms <ms>] [--interval-ms <ms>] [target args]",
+    "  bun scripts/devtools/actions.ts inspect [--session <name>] [--start] [--keep-open] [--open] [--open-target-kind <kind>] [--prove-hover] [--prove-click-select] [--prove-click-activate] [--prove-semantic-freshness] [--prove-close-cleanup] [--prove-shortcut-open-freshness] [--prove-shortcut-close-cleanup] [--prove-escape-close-cleanup] [--sample-ms <ms>] [--interval-ms <ms>] [target args]",
     "",
     "Target args match scripts/devtools/targets.ts inspect. Defaults to --target-kind actionsDialog --strict --surface ActionsDialog.",
   ].join("\n");
@@ -63,6 +64,7 @@ function parseArgs(argv: string[]): Args {
     proveCloseCleanup: false,
     proveShortcutOpenFreshness: false,
     proveShortcutCloseCleanup: false,
+    proveEscapeCloseCleanup: false,
     sampleMs: 900,
     intervalMs: 50,
     inspectTargetForwarded: [],
@@ -94,6 +96,8 @@ function parseArgs(argv: string[]): Args {
       args.proveShortcutOpenFreshness = true;
     } else if (arg === "--prove-shortcut-close-cleanup") {
       args.proveShortcutCloseCleanup = true;
+    } else if (arg === "--prove-escape-close-cleanup") {
+      args.proveEscapeCloseCleanup = true;
     } else if (arg === "--open-target-id") {
       args.openTarget = { type: "id", id: argv[++index] ?? "" };
       args.hasExplicitOpenTarget = true;
@@ -563,6 +567,26 @@ function shortcutCloseCleanupProofBlocked(
     command: "actions.shortcutCloseCleanupProof",
     reason,
     missingPrimitives: ["target-scoped ActionsDialog Cmd+K shortcut-close cleanup proof"],
+    safety: {
+      noNativeEscalation: true,
+      shortcutDispatched: false,
+      submitAttempted: false,
+      activationAttempted: false,
+    },
+    ...extras,
+  };
+}
+
+function escapeCloseCleanupProofBlocked(
+  classification: "blocked-by-missing-primitive" | "blocked-by-stale-view",
+  reason: string,
+  extras: JsonObject = {},
+) {
+  return {
+    classification,
+    command: "actions.escapeCloseCleanupProof",
+    reason,
+    missingPrimitives: ["target-scoped ActionsDialog Escape close cleanup proof"],
     safety: {
       noNativeEscalation: true,
       shortcutDispatched: false,
@@ -1566,12 +1590,25 @@ async function runShortcutOpenFreshnessProof(args: Args) {
   };
 }
 
-async function runShortcutCloseCleanupProof(args: Args) {
+async function runCloseKeyCleanupProof(
+  args: Args,
+  options: {
+    command: string;
+    closeKey: string;
+    closeModifiers: string[];
+    closeAssertion: string;
+    blocker: (
+      classification: "blocked-by-missing-primitive" | "blocked-by-stale-view",
+      reason: string,
+      extras?: JsonObject,
+    ) => JsonObject;
+  },
+) {
   const beforeMainTarget = await inspectMainTarget(args, "targets.inspect.main.beforeShortcutClose");
   const beforeMainState = await getMainState(args, "shortcut-close-main-before");
   const beforeMainKeyboard = await inspectMainKeyboard(args, "keyboard.inspect.main.beforeShortcutClose");
   if (beforeMainTarget.classification !== "ok" || !mainStillScriptList(beforeMainTarget)) {
-    return shortcutCloseCleanupProofBlocked("blocked-by-stale-view", "main ScriptList target was not ready before Cmd+K open", {
+    return options.blocker("blocked-by-stale-view", "main ScriptList target was not ready before opening ActionsDialog", {
       before: { beforeMainTarget, beforeMainState, beforeMainKeyboard },
     });
   }
@@ -1609,7 +1646,7 @@ async function runShortcutCloseCleanupProof(args: Args) {
   }
 
   if (!openedTarget) {
-    return shortcutCloseCleanupProofBlocked("blocked-by-stale-view", "ActionsDialog did not open before Cmd+K close", {
+    return options.blocker("blocked-by-stale-view", "ActionsDialog did not open before close key dispatch", {
       receipts: { beforeMainTarget, beforeMainState, beforeMainKeyboard, openKeyReceipt },
       openAttempts,
     });
@@ -1627,12 +1664,11 @@ async function runShortcutCloseCleanupProof(args: Args) {
     "--surface",
     "ActionsDialog",
     "--key",
-    "k",
-    "--modifiers",
-    "cmd",
+    options.closeKey,
+    ...(options.closeModifiers.length > 0 ? ["--modifiers", options.closeModifiers.join(",")] : []),
     "--timeout",
     String(args.timeoutMs),
-  ], "act.key.cmdK.closeActions");
+  ], `act.key.${options.closeKey}.closeActions`);
 
   const closeStartedAt = Date.now();
   const samplesAfterClose: JsonObject[] = [];
@@ -1659,7 +1695,7 @@ async function runShortcutCloseCleanupProof(args: Args) {
   const assertions = {
     cmdKOpenDispatched: openKeyReceipt.status !== "error" && responseOf(openKeyReceipt).success !== false,
     openedViaShortcut: openedTarget.classification === "ok",
-    cmdKCloseDispatched: closeKeyReceipt.status !== "error" && responseOf(closeKeyReceipt).success !== false,
+    [options.closeAssertion]: closeKeyReceipt.status !== "error" && responseOf(closeKeyReceipt).success !== false,
     sourceTargetGone: samplesAfterClose.every((sample) =>
       (sample.sourceTarget as JsonObject | undefined)?.classification !== "ok"
     ),
@@ -1681,7 +1717,7 @@ async function runShortcutCloseCleanupProof(args: Args) {
   const ok = Object.values(assertions).every(Boolean);
   return {
     classification: ok ? "ok" : "blocked-by-stale-view",
-    command: "actions.shortcutCloseCleanupProof",
+    command: options.command,
     assertions,
     openedTarget: (openedTarget.resolvedTarget as JsonObject | undefined) ?? null,
     samplesAfterClose,
@@ -1700,6 +1736,26 @@ async function runShortcutCloseCleanupProof(args: Args) {
       openAttempts,
     },
   };
+}
+
+async function runShortcutCloseCleanupProof(args: Args) {
+  return runCloseKeyCleanupProof(args, {
+    command: "actions.shortcutCloseCleanupProof",
+    closeKey: "k",
+    closeModifiers: ["cmd"],
+    closeAssertion: "cmdKCloseDispatched",
+    blocker: shortcutCloseCleanupProofBlocked,
+  });
+}
+
+async function runEscapeCloseCleanupProof(args: Args) {
+  return runCloseKeyCleanupProof(args, {
+    command: "actions.escapeCloseCleanupProof",
+    closeKey: "escape",
+    closeModifiers: [],
+    closeAssertion: "escapeCloseDispatched",
+    blocker: escapeCloseCleanupProofBlocked,
+  });
 }
 
 async function main() {
@@ -1800,8 +1856,13 @@ async function main() {
   const shortcutCloseCleanupProof = args.proveShortcutCloseCleanup
     ? await runShortcutCloseCleanupProof(args)
     : null;
-  const finalClassification = shortcutCloseCleanupProof?.classification
-    ? shortcutCloseCleanupProof.classification
+  const escapeCloseCleanupProof = args.proveEscapeCloseCleanup
+    ? await runEscapeCloseCleanupProof(args)
+    : null;
+  const finalClassification = escapeCloseCleanupProof?.classification
+    ? escapeCloseCleanupProof.classification
+    : shortcutCloseCleanupProof?.classification
+      ? shortcutCloseCleanupProof.classification
     : shortcutOpenFreshnessProof?.classification
       ? shortcutOpenFreshnessProof.classification
       : classification;
@@ -1838,6 +1899,7 @@ async function main() {
     closeCleanupProof,
     shortcutOpenFreshnessProof,
     shortcutCloseCleanupProof,
+    escapeCloseCleanupProof,
     chromeContract: {
       source: "actionsDialog.automationState.runtimeAudit",
       status: runtimeAuditStatus,
