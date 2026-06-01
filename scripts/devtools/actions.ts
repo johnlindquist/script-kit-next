@@ -17,6 +17,7 @@ type Args = {
   proveClickSelect: boolean;
   proveClickActivate: boolean;
   proveSemanticFreshness: boolean;
+  proveCloseCleanup: boolean;
   inspectTargetForwarded: string[];
   hasExplicitInspectTarget: boolean;
   openTargetForwarded: string[];
@@ -29,7 +30,7 @@ const DEFAULT_OPEN_TARGET = ["--show", "--main", "--strict", "--surface", "Scrip
 function usage() {
   return [
     "Usage:",
-    "  bun scripts/devtools/actions.ts inspect [--session <name>] [--start] [--keep-open] [--open] [--open-target-kind <kind>] [--prove-hover] [--prove-click-select] [--prove-click-activate] [--prove-semantic-freshness] [target args]",
+    "  bun scripts/devtools/actions.ts inspect [--session <name>] [--start] [--keep-open] [--open] [--open-target-kind <kind>] [--prove-hover] [--prove-click-select] [--prove-click-activate] [--prove-semantic-freshness] [--prove-close-cleanup] [target args]",
     "",
     "Target args match scripts/devtools/targets.ts inspect. Defaults to --target-kind actionsDialog --strict --surface ActionsDialog.",
   ].join("\n");
@@ -55,6 +56,7 @@ function parseArgs(argv: string[]): Args {
     proveClickSelect: false,
     proveClickActivate: false,
     proveSemanticFreshness: false,
+    proveCloseCleanup: false,
     inspectTargetForwarded: [],
     hasExplicitInspectTarget: false,
     openTargetForwarded: [],
@@ -78,6 +80,8 @@ function parseArgs(argv: string[]): Args {
       args.proveClickActivate = true;
     } else if (arg === "--prove-semantic-freshness") {
       args.proveSemanticFreshness = true;
+    } else if (arg === "--prove-close-cleanup") {
+      args.proveCloseCleanup = true;
     } else if (arg === "--open-target-id") {
       args.openTarget = { type: "id", id: argv[++index] ?? "" };
       args.hasExplicitOpenTarget = true;
@@ -493,6 +497,21 @@ function clickActivateProofBlocked(reason: string, extras: JsonObject = {}) {
       submitAttempted: true,
       activationAttempted: true,
       destructiveActionAllowed: false,
+    },
+    ...extras,
+  };
+}
+
+function closeCleanupProofBlocked(reason: string, extras: JsonObject = {}) {
+  return {
+    classification: "blocked-by-stale-view",
+    command: "actions.closeCleanupProof",
+    reason,
+    missingPrimitives: ["target-scoped ActionsDialog close cleanup proof"],
+    safety: {
+      noNativeEscalation: true,
+      submitAttempted: false,
+      activationAttempted: false,
     },
     ...extras,
   };
@@ -1066,6 +1085,82 @@ async function runSemanticFreshnessProof(
   };
 }
 
+async function runCloseCleanupProof(
+  args: Args,
+  clickActivateProof: JsonObject | null,
+) {
+  const activationProofAvailable = clickActivateProof?.classification === "ok";
+  if (!activationProofAvailable) {
+    return closeCleanupProofBlocked("close cleanup proof requires a green clickActivateProof", {
+      clickActivateProof,
+    });
+  }
+
+  const sourceTarget = await run([
+    "bun",
+    "scripts/devtools/targets.ts",
+    "inspect",
+    "--session",
+    args.session,
+    "--target-kind",
+    "actionsDialog",
+    "--strict",
+    "--surface",
+    "ActionsDialog",
+    "--timeout",
+    String(args.timeoutMs),
+  ], "targets.inspect.actionsDialog.closeCleanup");
+  const elementsAfterClose = await run([
+    "bun",
+    "scripts/devtools/elements.ts",
+    "snapshot",
+    "--session",
+    args.session,
+    "--target-kind",
+    "actionsDialog",
+    "--strict",
+    "--surface",
+    "ActionsDialog",
+    "--timeout",
+    String(args.timeoutMs),
+  ], "elements.snapshot.actionsDialog.closeCleanup");
+  const staleDispatch = await rpc(
+    args.session,
+    {
+      type: "simulateGpuiEvent",
+      requestId: requestId("close-cleanup-stale-event"),
+      target: { type: "kind", kind: "actionsDialog" },
+      event: { type: "mouseMove", x: 1, y: 1 },
+    },
+    "simulateGpuiEventResult",
+    args.timeoutMs,
+  );
+  const staleDispatchResponse = responseOf(staleDispatch);
+  const parentTarget = ((clickActivateProof.after as JsonObject | undefined)?.parentTarget as JsonObject | undefined) ?? null;
+  const staleDispatchFailed = staleDispatchResponse.success === false || staleDispatch.success === false;
+  const assertions = {
+    activationProofAvailable,
+    sourceTargetGone: sourceTarget.classification !== "ok",
+    elementsNotFresh: elementsAfterClose.classification !== "ok" || asNumber(elementsAfterClose.returnedCount, 0) === 0,
+    staleEventRefused: staleDispatchFailed,
+    noExactHandleDispatchAfterClose: dispatchPath(staleDispatch) !== "exact_handle",
+    parentLive: parentTarget?.classification === "ok",
+  };
+  const ok = Object.values(assertions).every(Boolean);
+
+  return {
+    classification: ok ? "ok" : "blocked-by-stale-view",
+    command: "actions.closeCleanupProof",
+    assertions,
+    receipts: {
+      sourceTarget,
+      elementsAfterClose,
+      staleDispatch,
+      parentTarget,
+    },
+  };
+}
+
 async function main() {
   const args = parseArgs(Bun.argv.slice(2));
   const forwarded = inspectForwarded(args);
@@ -1155,6 +1250,9 @@ async function main() {
   const semanticFreshnessProof = args.proveSemanticFreshness
     ? await runSemanticFreshnessProof(args, forwarded, semanticExpectedSelectedId)
     : null;
+  const closeCleanupProof = args.proveCloseCleanup
+    ? await runCloseCleanupProof(args, clickActivateProof)
+    : null;
 
   console.log(JSON.stringify({
     schemaVersion: 1,
@@ -1185,6 +1283,7 @@ async function main() {
     clickSelectProof,
     clickActivateProof,
     semanticFreshnessProof,
+    closeCleanupProof,
     chromeContract: {
       source: "actionsDialog.automationState.runtimeAudit",
       status: runtimeAuditStatus,

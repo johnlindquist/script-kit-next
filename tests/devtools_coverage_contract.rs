@@ -457,6 +457,49 @@ fn actions_dialog_coverage_mentions_semantic_freshness_proof() {
 }
 
 #[test]
+fn actions_cli_reports_close_cleanup_proof() {
+    for needle in [
+        "--prove-close-cleanup",
+        "closeCleanupProof",
+        "actions.closeCleanupProof",
+        "sourceTargetGone",
+        "elementsNotFresh",
+        "staleEventRefused",
+        "noExactHandleDispatchAfterClose",
+        "blocked-by-stale-view",
+    ] {
+        assert!(
+            ACTIONS_DEVTOOLS.contains(needle),
+            "actions DevTools CLI must expose close-cleanup stale-target proof: {needle}"
+        );
+    }
+}
+
+#[test]
+fn actions_popup_defer_close_removes_runtime_handle() {
+    let source = fs::read_to_string("src/actions/window.rs").expect("read src/actions/window.rs");
+    let start = source.find("fn defer_close").expect("defer_close exists");
+    let end = source[start..]
+        .find("fn request_close")
+        .map(|idx| start + idx)
+        .expect("request_close follows defer_close");
+    let body = &source[start..end];
+    assert!(
+        body.contains("remove_runtime_window_handle(\"actions-dialog\")")
+            || body.contains("unregister_actions_dialog_automation_surfaces()"),
+        "activation-driven ActionsDialog close must remove the runtime handle, not only the automation window"
+    );
+}
+
+#[test]
+fn actions_dialog_coverage_mentions_close_cleanup_proof() {
+    assert!(
+        COVERAGE.contains("target-scoped ActionsDialog close cleanup proof after activation"),
+        "coverage CLI must advertise ActionsDialog post-close stale-target cleanup proof"
+    );
+}
+
+#[test]
 fn actions_dialog_rows_expose_mouse_click_arm_state() {
     for needle in [
         "\"mouseArmed\": self.mouse_armed_row == Some(visual_index)",

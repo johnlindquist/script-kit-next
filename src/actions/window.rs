@@ -355,11 +355,7 @@ impl ActionsWindow {
                 "ACTIONS",
                 &format!("ACTIONS_WINDOW_LIFECYCLE defer_close_executing: reason={reason}"),
             );
-            clear_actions_popup_automation_snapshot();
-            crate::windows::automation_surface_collector::remove_actions_dialog_snapshot(
-                "actions-dialog",
-            );
-            crate::windows::remove_automation_window("actions-dialog");
+            unregister_actions_dialog_automation_surfaces();
             clear_actions_window_handle(reason);
             window.remove_window();
         });
@@ -1271,6 +1267,13 @@ fn clear_actions_popup_automation_snapshot() {
     }
 }
 
+fn unregister_actions_dialog_automation_surfaces() {
+    clear_actions_popup_automation_snapshot();
+    crate::windows::automation_surface_collector::remove_actions_dialog_snapshot("actions-dialog");
+    crate::windows::remove_runtime_window_handle("actions-dialog");
+    crate::windows::remove_automation_window("actions-dialog");
+}
+
 fn update_actions_popup_automation_snapshot_for_resize(
     popup_bounds: Bounds<Pixels>,
     position: WindowPosition,
@@ -1803,10 +1806,7 @@ pub fn open_actions_window(
 /// Close the actions window if it's open
 pub fn close_actions_window(cx: &mut App) {
     // Unregister from automation registry before destroying the window
-    clear_actions_popup_automation_snapshot();
-    crate::windows::automation_surface_collector::remove_actions_dialog_snapshot("actions-dialog");
-    crate::windows::remove_runtime_window_handle("actions-dialog");
-    crate::windows::remove_automation_window("actions-dialog");
+    unregister_actions_dialog_automation_surfaces();
 
     if let Some(window_storage) = ACTIONS_WINDOW.get() {
         if let Ok(mut guard) = window_storage.lock() {
