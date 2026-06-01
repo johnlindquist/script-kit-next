@@ -69,6 +69,10 @@ const targetIdentityFields = [
   "resolvedTarget.focused",
   "resolvedTarget.screenshotIdentity",
   "resolvedTarget.strictTargetMatch",
+  "resolvedTarget.strictTargetMismatch",
+  "resolvedTarget.strictTargetMismatch.expectedSurfaceKind",
+  "resolvedTarget.strictTargetMismatch.actualCandidates",
+  "resolvedTarget.strictTargetMismatch.mismatchReason",
   "resolvedTarget.ambiguity",
 ];
 
@@ -278,6 +282,9 @@ const primitiveSchemas = [
       "blockedAction.nextSafeCommand",
       "submitLifecycle.allowedBy",
       "submitLifecycle.proofIntent",
+      "postIntentTargetProof",
+      "postIntentTargetProof.expected.expectedSurfaceKind",
+      "postIntentTargetProof.receipt.resolvedTarget.strictTargetMatch",
       "expected",
       "targetAfter",
       "visibleResult",

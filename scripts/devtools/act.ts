@@ -372,12 +372,74 @@ function actionPayload(args: Args, selector: JsonObject) {
 
 function expectedResponse(args: Args) {
   if (isPrintableTextKey(args)) return "stdin_command_parsed";
-  return args.actionKind === "key" ? "stdin_command_parsed" : "batchResult";
+  return args.actionKind === "key" ? "externalCommandResult" : "batchResult";
 }
 
 function expectedResponseForTarget(args: Args, targetReceipt: JsonObject) {
   if (shouldUseLauncherSetFilter(args, targetReceipt)) return "stdin_command_parsed";
   return expectedResponse(args);
+}
+
+function requiresPostIntentTargetProof(args: Args) {
+  return args.submitIntent === "agent-chat-route";
+}
+
+function expectedPostTargetForIntent(args: Args): JsonObject | null {
+  if (args.submitIntent === "agent-chat-route") {
+    return {
+      intent: "agent-chat-route",
+      targetArgs: ["--main", "--strict", "--surface", "AcpChat"],
+      expectedSurfaceKind: "AcpChat",
+      expectedAutomationId: "main",
+    };
+  }
+  return null;
+}
+
+async function waitForPostIntentTarget(args: Args): Promise<JsonObject | null> {
+  const expected = expectedPostTargetForIntent(args);
+  if (!expected) return null;
+
+  const startedAt = Date.now();
+  const attempts: JsonObject[] = [];
+  const deadline = startedAt + args.timeoutMs;
+  const targetArgs = Array.isArray(expected.targetArgs)
+    ? expected.targetArgs.map(String)
+    : [];
+
+  while (Date.now() < deadline) {
+    const receipt = await run([
+      "bun",
+      "scripts/devtools/targets.ts",
+      "inspect",
+      "--session",
+      args.session,
+      "--timeout",
+      String(args.timeoutMs),
+      ...targetArgs,
+    ], "targets.inspect.post-intent");
+    attempts.push({
+      elapsedMs: Date.now() - startedAt,
+      classification: receipt.classification ?? null,
+      requestedTarget: receipt.requestedTarget ?? null,
+      resolvedTarget: receipt.resolvedTarget ?? null,
+    });
+    if (
+      receipt.classification === "ok"
+      && (receipt.resolvedTarget as JsonObject | undefined)?.strictTargetMatch === true
+    ) {
+      return { status: "ok", classification: "ok", expected, receipt, attempts };
+    }
+    await Bun.sleep(50);
+  }
+
+  return {
+    status: "error",
+    classification: "blocked-by-target-ambiguity",
+    reason: "post-intent target did not resolve",
+    expected,
+    attempts,
+  };
 }
 
 async function printableTextKeyAction(args: Args, before: JsonObject) {
@@ -719,8 +781,28 @@ function resolveSubmitLifecycleAfterAction(
   preflight: SubmitLifecycleState,
   sourceAfter: JsonObject,
   parentAfter: JsonObject | null,
+  postIntentTargetProof: JsonObject | null,
 ): SubmitLifecycleState {
   if (preflight.state !== "dispatched") return preflight;
+  if (postIntentTargetProof) {
+    if (postIntentTargetProof.classification === "ok") {
+      const receipt = postIntentTargetProof.receipt as JsonObject | undefined;
+      return {
+        state: "source-closed-parent-live",
+        actionId: preflight.actionId,
+        parentSubjectId: preflight.parentSubjectId,
+        parentSubjectText: preflight.parentSubjectText,
+        parentTarget: (receipt?.resolvedTarget as JsonObject | undefined) ?? null,
+      };
+    }
+    return {
+      state: "failed",
+      reason: String(postIntentTargetProof.reason ?? "post-intent target did not resolve"),
+      actionId: preflight.actionId,
+      sourceAfter,
+      parentAfter: postIntentTargetProof,
+    };
+  }
   if (sourceAfter.submitDiagnostics && typeof sourceAfter.submitDiagnostics === "object") {
     return {
       state: "source-live",
@@ -816,6 +898,7 @@ function classify(
   after: JsonObject,
   submitLifecycle: SubmitLifecycleState,
   postActionLifecycle: PostActionLifecycleState,
+  postIntentTargetProof: JsonObject | null,
 ) {
   if (targetReceipt.classification !== "ok") {
     return targetReceipt.classification ?? "blocked-by-target-ambiguity";
@@ -831,6 +914,9 @@ function classify(
   }
   if (guard.errors.length > 0) {
     return "blocked-by-unsafe-operation";
+  }
+  if (requiresPostIntentTargetProof(args) && postIntentTargetProof?.classification !== "ok") {
+    return postIntentTargetProof?.classification ?? "blocked-by-target-ambiguity";
   }
   if (submitLifecycle.state === "source-live" || submitLifecycle.state === "source-closed-parent-live") {
     return "ok";
@@ -907,7 +993,7 @@ async function main() {
       : isPrintableTextKey(args)
       ? await printableTextKeyAction(args, before)
       : args.actionKind === "key"
-      ? await send(args.session, actionPayload(args, selector), args.timeoutMs)
+      ? await rpc(args.session, actionPayload(args, selector), expectedResponse(args), args.timeoutMs)
       : await rpc(args.session, actionPayload(args, selector), expectedResponse(args), args.timeoutMs);
   }
 
@@ -916,11 +1002,19 @@ async function main() {
   const afterScroll = await scrollReceipt(afterArgs, "scroll.after");
   const endedAt = new Date().toISOString();
   const actionReceipt = responseOf(actionEnvelope);
+  const postIntentTargetProof = preflight.state === "dispatched"
+    ? await waitForPostIntentTarget(args)
+    : null;
   const parentAfterSubmit = isSubmitLike(args) ? await inspectParentAfterSubmit(args, targetReceipt) : null;
   const parentAfterAction = isDismissLike(args) || isSuccessfulPromptPopupSelect(args, targetReceipt, actionReceipt)
     ? await inspectParentAfterAction(args, targetReceipt)
     : parentAfterSubmit;
-  const submitLifecycle = resolveSubmitLifecycleAfterAction(preflight, after, parentAfterSubmit);
+  const submitLifecycle = resolveSubmitLifecycleAfterAction(
+    preflight,
+    after,
+    parentAfterSubmit,
+    postIntentTargetProof,
+  );
   const promptPopupSelectClosedSource = isSuccessfulPromptPopupSelect(args, targetReceipt, actionReceipt);
   const postActionLifecycle = resolvePostActionLifecycle(
     args,
@@ -929,7 +1023,16 @@ async function main() {
     parentAfterAction,
     promptPopupSelectClosedSource,
   );
-  const classification = classify(args, targetReceipt, guardWithPreflight, actionReceipt, after, submitLifecycle, postActionLifecycle);
+  const classification = classify(
+    args,
+    targetReceipt,
+    guardWithPreflight,
+    actionReceipt,
+    after,
+    submitLifecycle,
+    postActionLifecycle,
+    postIntentTargetProof,
+  );
 
   console.log(JSON.stringify({
     schemaVersion: 1,
@@ -964,8 +1067,10 @@ async function main() {
       submitAllowed: args.allowSubmit,
       noNativeEscalation: !guardWithPreflight.nativeEscalation,
       prePostReceipts: ["focus.inspect", "focus.inspect.submitDiagnostics", "scroll.inspect"],
+      postIntentTarget: expectedPostTargetForIntent(args),
     },
     actionReceipt,
+    postIntentTargetProof,
     targetAfter: after.target ?? null,
     submitDiagnostics: {
       before: before.submitDiagnostics ?? null,
@@ -983,6 +1088,7 @@ async function main() {
       ...guardWithPreflight.errors.map((error) => ({ error })),
       targetReceipt.classification !== "ok" ? targetReceipt : null,
       actionFailed(actionReceipt) ? actionReceipt : null,
+      postIntentTargetProof && postIntentTargetProof.classification !== "ok" ? postIntentTargetProof : null,
     ].filter(Boolean),
   }, null, 2));
 }

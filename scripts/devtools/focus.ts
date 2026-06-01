@@ -128,6 +128,14 @@ function classify(targetReceipt: JsonObject, stateEnvelope: JsonObject, elements
   return "ok";
 }
 
+function errorsFor(targetReceipt: JsonObject, stateEnvelope: JsonObject, elementsEnvelope: JsonObject) {
+  return [
+    targetReceipt.classification !== "ok" ? targetReceipt : null,
+    stateEnvelope.status === "error" ? stateEnvelope : null,
+    elementsEnvelope.status === "error" ? elementsEnvelope : null,
+  ].filter(Boolean);
+}
+
 async function main() {
   const args = parseArgs(Bun.argv.slice(2));
   const targetReceipt = await run(["bun", "scripts/devtools/targets.ts", "inspect", ...args.forwarded], "targets.inspect");
@@ -170,6 +178,11 @@ async function main() {
     activeFooter: state.activeFooter ?? null,
     nativeFooter,
     submitDiagnostics: state.submitDiagnostics ?? null,
+    receipts: {
+      target: targetReceipt,
+      state: stateEnvelope,
+      elements: elementsEnvelope,
+    },
     keyboardOwner: {
       inputValue: state.inputValue ?? null,
       promptType: state.promptType ?? null,
@@ -188,7 +201,7 @@ async function main() {
       state.isFocused === false ? "window is visible but not focused" : "",
       focusedSemanticId == null ? "focused semantic id missing" : "",
     ].filter(Boolean),
-    errors: [targetReceipt, stateEnvelope, elementsEnvelope].filter((value) => value.status === "error"),
+    errors: errorsFor(targetReceipt, stateEnvelope, elementsEnvelope),
   }, null, 2));
 }
 
