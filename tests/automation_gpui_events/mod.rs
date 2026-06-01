@@ -625,6 +625,24 @@ fn attached_main_popup_dispatch_reacquires_global_main_handle() {
     }
 }
 
+#[test]
+fn gpui_event_simulator_keeps_mouse_down_up_on_exact_actions_dialog_handle() {
+    for needle in [
+        "popup exact handles also receive popup-local mouse coordinates",
+        "SimulatedGpuiEvent::MouseDown { .. } => \"mouseDown\"",
+        "SimulatedGpuiEvent::MouseUp { .. } => \"mouseUp\"",
+        "get_valid_runtime_window_handle(&resolved.id, cx)",
+        "dispatch_with_any_handle(",
+        "\"exact_handle\"",
+        "let event = match rebase_mouse_event_to_dispatch_space(&resolved, event)",
+    ] {
+        assert!(
+            GPUI_EVENT_SIMULATOR.contains(needle),
+            "exact ActionsDialog handle must keep mouse down/up before attached-surface rebasing: {needle}"
+        );
+    }
+}
+
 /// Same agreement check for PromptPopup — the other attached surface kind.
 /// Uses `_with_main` variant for test isolation.
 #[test]

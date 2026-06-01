@@ -1810,6 +1810,7 @@ impl ActionsDialog {
                 "actionId": action_id,
                 "selected": is_selected,
                 "hovered": self.hovered_row == Some(visual_index),
+                "mouseArmed": self.mouse_armed_row == Some(visual_index),
                 "visible": visible,
                 "clipped": !visible,
                 "contentY": content_y,
@@ -1843,6 +1844,14 @@ impl ActionsDialog {
                 .find(|row| {
                     row.get("visualIndex").and_then(serde_json::Value::as_u64)
                         == Some(hovered_index as u64)
+                })
+                .cloned()
+        });
+        let mouse_armed_row = self.mouse_armed_row.and_then(|armed_index| {
+            rows.iter()
+                .find(|row| {
+                    row.get("visualIndex").and_then(serde_json::Value::as_u64)
+                        == Some(armed_index as u64)
                 })
                 .cloned()
         });
@@ -1906,6 +1915,12 @@ impl ActionsDialog {
                 "available": true,
                 "state": if hovered_row.is_some() { "hovered" } else { "none" },
                 "row": hovered_row,
+            },
+            "mouseArmedRowAvailable": true,
+            "mouseArmedRow": {
+                "available": true,
+                "state": if mouse_armed_row.is_some() { "armed" } else { "none" },
+                "row": mouse_armed_row,
             },
             "shortcutBoundsAvailable": true,
             "disabledReasonBoundsAvailable": false,

@@ -353,3 +353,39 @@ fn actions_dialog_rows_expose_mouse_move_hover_state() {
         );
     }
 }
+
+#[test]
+fn actions_cli_reports_protocol_click_select_proof() {
+    for needle in [
+        "--prove-click-select",
+        "clickSelectProof",
+        "actions.clickSelectProof",
+        "target-scoped ActionsDialog first-click selection proof",
+        "mouseDown",
+        "mouseUp",
+        "selectedRequestedRow",
+        "mouseArmedRequestedRow",
+        "activationObserved",
+    ] {
+        assert!(
+            ACTIONS_DEVTOOLS.contains(needle),
+            "actions DevTools CLI must expose first-click select proof receipt: {needle}"
+        );
+    }
+}
+
+#[test]
+fn actions_dialog_rows_expose_mouse_click_arm_state() {
+    for needle in [
+        "\"mouseArmed\": self.mouse_armed_row == Some(visual_index)",
+        "let mouse_armed_row = self.mouse_armed_row.and_then(|armed_index|",
+        "\"mouseArmedRowAvailable\": true",
+        "\"state\": if mouse_armed_row.is_some() { \"armed\" } else { \"none\" }",
+        "\"row\": mouse_armed_row",
+    ] {
+        assert!(
+            ACTIONS_DIALOG.contains(needle),
+            "ActionsDialog row geometry must expose click-arm state: {needle}"
+        );
+    }
+}
