@@ -303,7 +303,10 @@ fn main_cli_reports_early_frame_freshness_proof() {
         "noPromptIdOnReopen",
         "noActivePopupOnReopen",
         "footerSurfaceFresh",
+        "generationFieldsAvailable",
+        "generationMonotonic",
         "generationMonotonicWhenAvailable",
+        "blocked-by-missing-primitive",
         "blocked-by-stale-view",
     ] {
         assert!(
@@ -336,6 +339,9 @@ fn main_cli_early_frame_freshness_uses_target_scoped_state_not_screenshots() {
         "targetGeneration",
         "surfaceGeneration",
         "dataGeneration",
+        "generationFieldsAvailable",
+        "generationMonotonic",
+        "blocked-by-missing-primitive",
     ] {
         assert!(
             MAIN_DEVTOOLS.contains(needle),

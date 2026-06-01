@@ -362,6 +362,12 @@ function summarizeGenerationSeries(samples: JsonObject[]) {
   const targetGeneration = numericValues(samples, (sample) => (sample.target as JsonObject | undefined)?.targetGeneration);
   const surfaceGeneration = numericValues(samples, (sample) => (sample.target as JsonObject | undefined)?.surfaceGeneration);
   const dataGeneration = numericValues(samples, (sample) => (sample.target as JsonObject | undefined)?.dataGeneration);
+  const generationFieldsAvailable = targetGeneration.length >= 2
+    && surfaceGeneration.length >= 2
+    && dataGeneration.length >= 2;
+  const generationMonotonic = monotonicNonDecreasing(targetGeneration)
+    && monotonicNonDecreasing(surfaceGeneration)
+    && monotonicNonDecreasing(dataGeneration);
   return {
     targetGeneration,
     surfaceGeneration,
@@ -376,9 +382,9 @@ function summarizeGenerationSeries(samples: JsonObject[]) {
       surfaceGeneration.length < 2 ? "surfaceGeneration" : "",
       dataGeneration.length < 2 ? "dataGeneration" : "",
     ].filter(Boolean),
-    monotonicWhenAvailable: monotonicNonDecreasing(targetGeneration)
-      && monotonicNonDecreasing(surfaceGeneration)
-      && monotonicNonDecreasing(dataGeneration),
+    generationFieldsAvailable,
+    generationMonotonic,
+    monotonicWhenAvailable: generationMonotonic,
   };
 }
 
@@ -420,11 +426,18 @@ function buildEarlyFrameFreshnessProof(openCloseFreshnessProof: JsonObject | nul
     noPromptIdOnReopen: samples.every((sample) => ((sample.state as JsonObject | undefined)?.promptId ?? null) == null),
     noActivePopupOnReopen: samples.every((sample) => ((sample.state as JsonObject | undefined)?.activePopupPresent ?? false) === false),
     footerSurfaceFresh: samples.every(footerSurfaceFresh),
+    generationFieldsAvailable: generation.generationFieldsAvailable,
+    generationMonotonic: generation.generationMonotonic,
     generationMonotonicWhenAvailable: generation.monotonicWhenAvailable,
   };
   const ok = Object.values(assertions).every(Boolean);
+  const classification = ok
+    ? "ok"
+    : generation.generationFieldsAvailable === false
+      ? "blocked-by-missing-primitive"
+      : "blocked-by-stale-view";
   return {
-    classification: ok ? "ok" : "blocked-by-stale-view",
+    classification,
     command: "main.earlyFrameFreshnessProof",
     marker: {
       inputFingerprint: marker.inputFingerprint ?? null,

@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 /// v2: added `resolved_bounds`, `target_bounds_in_screenshot`,
 ///     `surface_hit_point`, and `suggested_hit_points`.
 /// v3: added `semantic_quality` — machine-readable semantic proof level.
-pub const AUTOMATION_INSPECT_SCHEMA_VERSION: u32 = 3;
+/// v4: added target/surface/data generation counters for stale-view proofs.
+pub const AUTOMATION_INSPECT_SCHEMA_VERSION: u32 = 4;
 
 /// Machine-readable indicator of the semantic element quality in an inspect receipt.
 ///
@@ -108,6 +109,18 @@ pub struct AutomationInspectSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native_footer_surface: Option<String>,
 
+    /// Monotonic target lifecycle generation for stale-target proofs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_generation: Option<u64>,
+
+    /// Monotonic surface identity generation for stale-surface proofs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface_generation: Option<u64>,
+
+    /// Monotonic redacted data generation for stale-data proofs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_generation: Option<u64>,
+
     /// Window title if available.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
@@ -197,6 +210,9 @@ mod tests {
             surface_kind: None,
             app_view_variant: None,
             native_footer_surface: None,
+            target_generation: None,
+            surface_generation: None,
+            data_generation: None,
             title: None,
             resolved_bounds: None,
             target_bounds_in_screenshot: None,
@@ -238,6 +254,9 @@ mod tests {
             surface_kind: Some("NotesWindow".to_string()),
             app_view_variant: None,
             native_footer_surface: None,
+            target_generation: Some(2),
+            surface_generation: Some(3),
+            data_generation: Some(4),
             title: Some("Script Kit Notes".to_string()),
             resolved_bounds: Some(crate::protocol::AutomationWindowBounds {
                 x: 100.0,

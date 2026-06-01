@@ -1393,6 +1393,58 @@ enum DevtoolsSelectionState {
     UnsupportedPrompt,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct InspectGenerationRecord {
+    target_fingerprint: String,
+    surface_fingerprint: String,
+    data_fingerprint: String,
+    target_generation: u64,
+    surface_generation: u64,
+    data_generation: u64,
+}
+
+static INSPECT_GENERATIONS: std::sync::LazyLock<
+    parking_lot::Mutex<std::collections::HashMap<String, InspectGenerationRecord>>,
+> = std::sync::LazyLock::new(|| parking_lot::Mutex::new(std::collections::HashMap::new()));
+
+fn next_inspect_generations(
+    window_id: &str,
+    target_fingerprint: String,
+    surface_fingerprint: String,
+    data_fingerprint: String,
+) -> (u64, u64, u64) {
+    let mut generations = INSPECT_GENERATIONS.lock();
+    let record = generations
+        .entry(window_id.to_string())
+        .or_insert_with(|| InspectGenerationRecord {
+            target_fingerprint: target_fingerprint.clone(),
+            surface_fingerprint: surface_fingerprint.clone(),
+            data_fingerprint: data_fingerprint.clone(),
+            target_generation: 1,
+            surface_generation: 1,
+            data_generation: 1,
+        });
+
+    if record.target_fingerprint != target_fingerprint {
+        record.target_fingerprint = target_fingerprint;
+        record.target_generation = record.target_generation.saturating_add(1);
+    }
+    if record.surface_fingerprint != surface_fingerprint {
+        record.surface_fingerprint = surface_fingerprint;
+        record.surface_generation = record.surface_generation.saturating_add(1);
+    }
+    if record.data_fingerprint != data_fingerprint {
+        record.data_fingerprint = data_fingerprint;
+        record.data_generation = record.data_generation.saturating_add(1);
+    }
+
+    (
+        record.target_generation,
+        record.surface_generation,
+        record.data_generation,
+    )
+}
+
 // --- merged from part_001.rs ---
 impl ScriptListApp {
     pub(crate) fn build_automation_inspect_snapshot(
@@ -1422,6 +1474,9 @@ impl ScriptListApp {
                     surface_kind: None,
                     app_view_variant: None,
                     native_footer_surface: None,
+                    target_generation: None,
+                    surface_generation: None,
+                    data_generation: None,
                     title: None,
                     resolved_bounds: None,
                     target_bounds_in_screenshot: None,
@@ -1557,21 +1612,62 @@ impl ScriptListApp {
             "automation.inspect.geometry_computed"
         );
 
+        let surface_kind = (resolved.kind == protocol::AutomationWindowKind::Main)
+            .then(|| format!("{:?}", self.current_view.surface_kind()));
+        let app_view_variant = (resolved.kind == protocol::AutomationWindowKind::Main)
+            .then(|| self.current_view.app_view_variant().to_string());
+        let native_footer_surface = (resolved.kind == protocol::AutomationWindowKind::Main)
+            .then(|| {
+                self.current_view
+                    .native_footer_surface()
+                    .map(str::to_string)
+            })
+            .flatten();
+        let target_fingerprint = format!(
+            "{:?}|{}|{}|{:?}|{:?}|{:?}|{:?}|{:?}",
+            resolved.kind,
+            resolved.focused,
+            resolved.visible,
+            resolved.bounds,
+            resolved.parent_window_id,
+            resolved.parent_kind,
+            resolved.semantic_surface,
+            resolved.pid
+        );
+        let surface_fingerprint = format!(
+            "{:?}|{:?}|{:?}|{:?}",
+            surface_kind,
+            app_view_variant,
+            native_footer_surface,
+            resolved.semantic_surface
+        );
+        let data_fingerprint = format!(
+            "{:?}|{:?}|{}|{:?}|{:?}|{:?}",
+            surface_kind,
+            app_view_variant,
+            total_count,
+            focused_semantic_id,
+            selected_semantic_id,
+            semantic_quality
+        );
+        let (target_generation, surface_generation, data_generation) =
+            next_inspect_generations(
+                &resolved.id,
+                target_fingerprint,
+                surface_fingerprint,
+                data_fingerprint,
+            );
+
         let snapshot = protocol::AutomationInspectSnapshot {
             schema_version: protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
             window_id: resolved.id.clone(),
             window_kind: format!("{:?}", resolved.kind),
-            surface_kind: (resolved.kind == protocol::AutomationWindowKind::Main)
-                .then(|| format!("{:?}", self.current_view.surface_kind())),
-            app_view_variant: (resolved.kind == protocol::AutomationWindowKind::Main)
-                .then(|| self.current_view.app_view_variant().to_string()),
-            native_footer_surface: (resolved.kind == protocol::AutomationWindowKind::Main)
-                .then(|| {
-                    self.current_view
-                        .native_footer_surface()
-                        .map(str::to_string)
-                })
-                .flatten(),
+            surface_kind,
+            app_view_variant,
+            native_footer_surface,
+            target_generation: Some(target_generation),
+            surface_generation: Some(surface_generation),
+            data_generation: Some(data_generation),
             title: resolved.title.clone(),
             resolved_bounds: resolved.bounds.clone(),
             target_bounds_in_screenshot,
