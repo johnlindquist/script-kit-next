@@ -262,6 +262,7 @@ const surfaces: Surface[] = [
       "target-scoped ActionsDialog semantic freshness proof after first-click selection",
       "target-scoped ActionsDialog close cleanup proof after activation",
       "target-scoped ActionsDialog Cmd+K shortcut-open first-frame freshness proof",
+      "target-scoped ActionsDialog Cmd+K shortcut-close cleanup proof",
       "runtime shortcut layout bounds model",
       "getElements(target)",
       "getLayoutInfo(target actionsDialog) ActionsDialog/search/header/list/visible-row/shortcut bounds",

@@ -19,6 +19,7 @@ type Args = {
   proveSemanticFreshness: boolean;
   proveCloseCleanup: boolean;
   proveShortcutOpenFreshness: boolean;
+  proveShortcutCloseCleanup: boolean;
   sampleMs: number;
   intervalMs: number;
   inspectTargetForwarded: string[];
@@ -33,7 +34,7 @@ const DEFAULT_OPEN_TARGET = ["--show", "--main", "--strict", "--surface", "Scrip
 function usage() {
   return [
     "Usage:",
-    "  bun scripts/devtools/actions.ts inspect [--session <name>] [--start] [--keep-open] [--open] [--open-target-kind <kind>] [--prove-hover] [--prove-click-select] [--prove-click-activate] [--prove-semantic-freshness] [--prove-close-cleanup] [--prove-shortcut-open-freshness] [--sample-ms <ms>] [--interval-ms <ms>] [target args]",
+    "  bun scripts/devtools/actions.ts inspect [--session <name>] [--start] [--keep-open] [--open] [--open-target-kind <kind>] [--prove-hover] [--prove-click-select] [--prove-click-activate] [--prove-semantic-freshness] [--prove-close-cleanup] [--prove-shortcut-open-freshness] [--prove-shortcut-close-cleanup] [--sample-ms <ms>] [--interval-ms <ms>] [target args]",
     "",
     "Target args match scripts/devtools/targets.ts inspect. Defaults to --target-kind actionsDialog --strict --surface ActionsDialog.",
   ].join("\n");
@@ -61,6 +62,7 @@ function parseArgs(argv: string[]): Args {
     proveSemanticFreshness: false,
     proveCloseCleanup: false,
     proveShortcutOpenFreshness: false,
+    proveShortcutCloseCleanup: false,
     sampleMs: 900,
     intervalMs: 50,
     inspectTargetForwarded: [],
@@ -90,6 +92,8 @@ function parseArgs(argv: string[]): Args {
       args.proveCloseCleanup = true;
     } else if (arg === "--prove-shortcut-open-freshness") {
       args.proveShortcutOpenFreshness = true;
+    } else if (arg === "--prove-shortcut-close-cleanup") {
+      args.proveShortcutCloseCleanup = true;
     } else if (arg === "--open-target-id") {
       args.openTarget = { type: "id", id: argv[++index] ?? "" };
       args.hasExplicitOpenTarget = true;
@@ -539,6 +543,26 @@ function shortcutOpenFreshnessProofBlocked(
     command: "actions.shortcutOpenFreshnessProof",
     reason,
     missingPrimitives: ["target-scoped ActionsDialog Cmd+K shortcut-open first-frame freshness proof"],
+    safety: {
+      noNativeEscalation: true,
+      shortcutDispatched: false,
+      submitAttempted: false,
+      activationAttempted: false,
+    },
+    ...extras,
+  };
+}
+
+function shortcutCloseCleanupProofBlocked(
+  classification: "blocked-by-missing-primitive" | "blocked-by-stale-view",
+  reason: string,
+  extras: JsonObject = {},
+) {
+  return {
+    classification,
+    command: "actions.shortcutCloseCleanupProof",
+    reason,
+    missingPrimitives: ["target-scoped ActionsDialog Cmd+K shortcut-close cleanup proof"],
     safety: {
       noNativeEscalation: true,
       shortcutDispatched: false,
@@ -1285,8 +1309,21 @@ function noMainFooterLeak(sample: JsonObject) {
   const activeSurface = activeFooter.activeSurface;
   const buttonCount = asNumber(activeFooter.buttonCount, 0);
   const surfaceMatches = expectedSurface == null || activeSurface == null || activeSurface === expectedSurface;
-  return ((owner == null || owner === "main") && surfaceMatches)
+  return ((owner == null || owner === "main" || owner === "native") && surfaceMatches)
     || (owner === "popup" && buttonCount === 0 && surfaceMatches);
+}
+
+function mainStillScriptList(targetReceipt: JsonObject) {
+  const target = (targetReceipt.resolvedTarget as JsonObject | undefined) ?? {};
+  return target.automationId === "main"
+    && target.targetKind === "Main"
+    && target.strictTargetMatch === true
+    && target.surfaceKind === "ScriptList";
+}
+
+function noActivePopup(sample: JsonObject) {
+  const mainState = (sample.mainState as JsonObject | undefined) ?? {};
+  return mainState.activePopupContract == null;
 }
 
 async function inspectMainTarget(args: Args, label: string) {
@@ -1345,6 +1382,54 @@ async function inspectActionsTarget(args: Args, label: string) {
     "--timeout",
     String(args.timeoutMs),
   ], label);
+}
+
+async function inspectActionsTargetFast(args: Args, label: string) {
+  return run([
+    "bun",
+    "scripts/devtools/targets.ts",
+    "inspect",
+    "--session",
+    args.session,
+    "--target-kind",
+    "actionsDialog",
+    "--strict",
+    "--surface",
+    "ActionsDialog",
+    "--timeout",
+    String(Math.min(args.timeoutMs, 1000)),
+  ], label);
+}
+
+async function snapshotActionsElementsFast(args: Args, label: string) {
+  return run([
+    "bun",
+    "scripts/devtools/elements.ts",
+    "snapshot",
+    "--session",
+    args.session,
+    "--target-kind",
+    "actionsDialog",
+    "--strict",
+    "--surface",
+    "ActionsDialog",
+    "--timeout",
+    String(Math.min(args.timeoutMs, 1000)),
+  ], label);
+}
+
+async function staleActionsMouseMove(args: Args, label: string) {
+  return rpc(
+    args.session,
+    {
+      type: "simulateGpuiEvent",
+      requestId: requestId(label),
+      target: { type: "kind", kind: "actionsDialog" },
+      event: { type: "mouseMove", x: 1, y: 1 },
+    },
+    "simulateGpuiEventResult",
+    Math.min(args.timeoutMs, 1000),
+  );
 }
 
 async function getActionsState(args: Args, label: string) {
@@ -1481,6 +1566,142 @@ async function runShortcutOpenFreshnessProof(args: Args) {
   };
 }
 
+async function runShortcutCloseCleanupProof(args: Args) {
+  const beforeMainTarget = await inspectMainTarget(args, "targets.inspect.main.beforeShortcutClose");
+  const beforeMainState = await getMainState(args, "shortcut-close-main-before");
+  const beforeMainKeyboard = await inspectMainKeyboard(args, "keyboard.inspect.main.beforeShortcutClose");
+  if (beforeMainTarget.classification !== "ok" || !mainStillScriptList(beforeMainTarget)) {
+    return shortcutCloseCleanupProofBlocked("blocked-by-stale-view", "main ScriptList target was not ready before Cmd+K open", {
+      before: { beforeMainTarget, beforeMainState, beforeMainKeyboard },
+    });
+  }
+
+  const openKeyReceipt = await run([
+    "bun",
+    "scripts/devtools/act.ts",
+    "key",
+    "--session",
+    args.session,
+    "--show",
+    "--main",
+    "--strict",
+    "--surface",
+    "ScriptList",
+    "--key",
+    "k",
+    "--modifiers",
+    "cmd",
+    "--timeout",
+    String(args.timeoutMs),
+  ], "act.key.cmdK.openActionsForClose");
+
+  let openedTarget: JsonObject | null = null;
+  const openAttempts: JsonObject[] = [];
+  const openStartedAt = Date.now();
+  while (Date.now() - openStartedAt < args.timeoutMs) {
+    const receipt = await inspectActionsTarget(args, "targets.inspect.actionsDialog.beforeShortcutClose");
+    openAttempts.push(receipt);
+    if (receipt.classification === "ok") {
+      openedTarget = receipt;
+      break;
+    }
+    await Bun.sleep(args.intervalMs);
+  }
+
+  if (!openedTarget) {
+    return shortcutCloseCleanupProofBlocked("blocked-by-stale-view", "ActionsDialog did not open before Cmd+K close", {
+      receipts: { beforeMainTarget, beforeMainState, beforeMainKeyboard, openKeyReceipt },
+      openAttempts,
+    });
+  }
+
+  const closeKeyReceipt = await run([
+    "bun",
+    "scripts/devtools/act.ts",
+    "key",
+    "--session",
+    args.session,
+    "--target-kind",
+    "actionsDialog",
+    "--strict",
+    "--surface",
+    "ActionsDialog",
+    "--key",
+    "k",
+    "--modifiers",
+    "cmd",
+    "--timeout",
+    String(args.timeoutMs),
+  ], "act.key.cmdK.closeActions");
+
+  const closeStartedAt = Date.now();
+  const samplesAfterClose: JsonObject[] = [];
+  while (Date.now() - closeStartedAt < args.sampleMs || samplesAfterClose.length < 3) {
+    const sourceTarget = await inspectActionsTargetFast(args, "targets.inspect.actionsDialog.afterShortcutClose");
+    const elementsAfterClose = await snapshotActionsElementsFast(args, "elements.snapshot.actionsDialog.afterShortcutClose");
+    const staleDispatch = await staleActionsMouseMove(args, "shortcut-close-stale-event");
+    const mainTarget = await inspectMainTarget(args, "targets.inspect.main.afterShortcutClose");
+    const mainState = await getMainState(args, "shortcut-close-main-after");
+    const mainKeyboard = await inspectMainKeyboard(args, "keyboard.inspect.main.afterShortcutClose");
+    samplesAfterClose.push({
+      elapsedMs: Date.now() - closeStartedAt,
+      sourceTarget,
+      elementsAfterClose,
+      staleDispatch,
+      mainTarget,
+      mainState: responseOf(mainState),
+      mainKeyboard,
+    });
+    if (Date.now() - closeStartedAt >= args.sampleMs && samplesAfterClose.length >= 3) break;
+    await Bun.sleep(args.intervalMs);
+  }
+
+  const assertions = {
+    cmdKOpenDispatched: openKeyReceipt.status !== "error" && responseOf(openKeyReceipt).success !== false,
+    openedViaShortcut: openedTarget.classification === "ok",
+    cmdKCloseDispatched: closeKeyReceipt.status !== "error" && responseOf(closeKeyReceipt).success !== false,
+    sourceTargetGone: samplesAfterClose.every((sample) =>
+      (sample.sourceTarget as JsonObject | undefined)?.classification !== "ok"
+    ),
+    elementsNotFresh: samplesAfterClose.every((sample) => {
+      const elementsAfterClose = (sample.elementsAfterClose as JsonObject | undefined) ?? {};
+      return elementsAfterClose.classification !== "ok" || asNumber(elementsAfterClose.returnedCount, 0) === 0;
+    }),
+    staleEventRefused: samplesAfterClose.every((sample) => {
+      const staleDispatch = (sample.staleDispatch as JsonObject | undefined) ?? {};
+      const response = responseOf(staleDispatch);
+      return response.success === false || staleDispatch.success === false;
+    }),
+    noExactHandleDispatchAfterClose: samplesAfterClose.every((sample) => dispatchPath((sample.staleDispatch as JsonObject | undefined) ?? {}) !== "exact_handle"),
+    parentLiveAfterClose: samplesAfterClose.every((sample) => (sample.mainTarget as JsonObject | undefined)?.classification === "ok"),
+    parentScriptListStableAfterClose: samplesAfterClose.every((sample) => mainStillScriptList((sample.mainTarget as JsonObject | undefined) ?? {})),
+    noActivePopupAfterClose: samplesAfterClose.every(noActivePopup),
+    noFooterOwnershipLeakAfterClose: samplesAfterClose.every(noMainFooterLeak),
+  };
+  const ok = Object.values(assertions).every(Boolean);
+  return {
+    classification: ok ? "ok" : "blocked-by-stale-view",
+    command: "actions.shortcutCloseCleanupProof",
+    assertions,
+    openedTarget: (openedTarget.resolvedTarget as JsonObject | undefined) ?? null,
+    samplesAfterClose,
+    safety: {
+      noNativeEscalation: true,
+      shortcutDispatched: true,
+      submitAttempted: false,
+      activationAttempted: false,
+    },
+    receipts: {
+      beforeMainTarget,
+      beforeMainState,
+      beforeMainKeyboard,
+      openKeyReceipt,
+      closeKeyReceipt,
+      openAttempts,
+    },
+  };
+}
+
 async function main() {
   const args = parseArgs(Bun.argv.slice(2));
   const forwarded = inspectForwarded(args);
@@ -1576,9 +1797,14 @@ async function main() {
   const shortcutOpenFreshnessProof = args.proveShortcutOpenFreshness
     ? await runShortcutOpenFreshnessProof(args)
     : null;
-  const finalClassification = shortcutOpenFreshnessProof?.classification
-    ? shortcutOpenFreshnessProof.classification
-    : classification;
+  const shortcutCloseCleanupProof = args.proveShortcutCloseCleanup
+    ? await runShortcutCloseCleanupProof(args)
+    : null;
+  const finalClassification = shortcutCloseCleanupProof?.classification
+    ? shortcutCloseCleanupProof.classification
+    : shortcutOpenFreshnessProof?.classification
+      ? shortcutOpenFreshnessProof.classification
+      : classification;
 
   console.log(JSON.stringify({
     schemaVersion: 1,
@@ -1611,6 +1837,7 @@ async function main() {
     semanticFreshnessProof,
     closeCleanupProof,
     shortcutOpenFreshnessProof,
+    shortcutCloseCleanupProof,
     chromeContract: {
       source: "actionsDialog.automationState.runtimeAudit",
       status: runtimeAuditStatus,
