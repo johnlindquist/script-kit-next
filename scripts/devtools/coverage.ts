@@ -468,12 +468,12 @@ const surfaces: Surface[] = [
       "getState dictation recording state generation and idle audio-level receipt",
       "getState dictation media cleanup receipt",
       "dictation.deliver-fixture pushDictationResult target delivery generation, transcript fingerprint, and main-filter insertion range receipt",
+      "dictation.deliver-fixture --expect-refusal wrong-target refusal receipt",
       "devtools.media.inspect passive receipt gate",
       "fail-closed dictation stress specs",
     ],
     missingRuntimePrimitives: [
       "cursor insertion range for Notes/ACP/frontmost destinations",
-      "wrong-target refusal receipt",
     ],
     regressionRecipeRole: "Do not use live dictation recipes as proof until passive media receipts can avoid permission prompts and target mutations.",
   },

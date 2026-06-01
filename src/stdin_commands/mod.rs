@@ -1440,6 +1440,7 @@ mod tests {
             ExternalCommand::PasteClipboardIntoAcp { request_id: None },
             ExternalCommand::PushDictationResult {
                 transcript: String::new(),
+                partial_transcript: None,
                 target: None,
                 request_id: None,
             },

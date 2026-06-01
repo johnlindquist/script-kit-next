@@ -4,6 +4,7 @@
 #![allow(unused_imports)]
 
 pub mod capture;
+mod delivery;
 mod device;
 pub mod download;
 mod history;
@@ -16,6 +17,11 @@ mod visualizer;
 mod window;
 
 pub use capture::{start_capture, DictationCaptureHandle};
+pub use delivery::{
+    parse_dictation_target_label, resolve_delivery_target_request,
+    DictationDeliveryTargetResolution, DictationDeliveryTargetSource, DictationWrongTargetReason,
+    DictationWrongTargetRefusalDraft,
+};
 pub use device::{
     apply_device_selection, build_device_menu_items, default_input_device,
     device_selection_action_from_value, device_selection_value, list_input_device_menu_items,
@@ -42,13 +48,14 @@ pub(crate) use microphone_popup_window::{
 };
 pub use runtime::{
     abort_dictation, automation_state, begin_stop_capture, can_cycle_dictation_target,
-    current_dictation_phase, cycle_dictation_target, dictation_elapsed, finish_stop_capture,
-    get_active_dictation_device, get_dictation_target, is_dictation_busy, is_dictation_recording,
-    is_dictation_stopping, last_delivery_receipt, last_stop_receipt, maybe_unload_transcriber,
-    record_delivery_receipt, redacted_transcript_fingerprint, resolve_final_or_partial_transcript,
-    set_dictation_target_cycle, set_overlay_phase, snapshot_overlay_state, toggle_dictation,
-    transcribe_captured_audio, BeginStopCapture, DictationStopJob, DictationStopReason,
-    DictationTranscriptResolution,
+    current_dictation_phase, cycle_dictation_target, delivery_receipt_generation,
+    dictation_elapsed, finish_stop_capture, get_active_dictation_device, get_dictation_target,
+    is_dictation_busy, is_dictation_recording, is_dictation_stopping, last_delivery_receipt,
+    last_stop_receipt, last_wrong_target_refusal, maybe_unload_transcriber,
+    record_delivery_receipt, record_wrong_target_refusal, redacted_transcript_fingerprint,
+    resolve_final_or_partial_transcript, set_dictation_target_cycle, set_overlay_phase,
+    snapshot_overlay_state, toggle_dictation, transcribe_captured_audio, BeginStopCapture,
+    DictationStopJob, DictationStopReason, DictationTranscriptResolution,
 };
 pub use setup::{
     build_dictation_setup_state, DictationHotkeyStatus, DictationMicrophonePermissionStatus,

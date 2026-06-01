@@ -1,4 +1,7 @@
-use script_kit_gpui::dictation::resolve_final_or_partial_transcript;
+use script_kit_gpui::dictation::{
+    resolve_delivery_target_request, resolve_final_or_partial_transcript,
+    DictationDeliveryTargetResolution, DictationTarget,
+};
 
 #[test]
 fn final_transcript_wins_over_partial_transcript() {
@@ -28,4 +31,68 @@ fn no_transcript_is_returned_when_final_and_partial_are_empty() {
     assert!(!resolution.used_partial_fallback);
     assert_eq!(resolution.final_len, 0);
     assert_eq!(resolution.partial_len, Some(2));
+}
+
+#[test]
+fn explicit_valid_target_resolves_without_fallback() {
+    let result = resolve_delivery_target_request(
+        Some("mainWindowFilter"),
+        Some(DictationTarget::NotesEditor),
+        DictationTarget::ExternalApp,
+        7,
+    );
+
+    assert!(matches!(
+        result,
+        DictationDeliveryTargetResolution::Deliver {
+            target: DictationTarget::MainWindowFilter,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn explicit_invalid_target_refuses_instead_of_fallback() {
+    let result = resolve_delivery_target_request(
+        Some("__missing_target__"),
+        Some(DictationTarget::NotesEditor),
+        DictationTarget::MainWindowFilter,
+        7,
+    );
+
+    assert!(matches!(
+        result,
+        DictationDeliveryTargetResolution::Refuse(_)
+    ));
+}
+
+#[test]
+fn implicit_target_uses_active_session_before_ui_fallback() {
+    let result = resolve_delivery_target_request(
+        None,
+        Some(DictationTarget::AiChatComposer),
+        DictationTarget::MainWindowFilter,
+        7,
+    );
+
+    assert!(matches!(
+        result,
+        DictationDeliveryTargetResolution::Deliver {
+            target: DictationTarget::AiChatComposer,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn implicit_target_uses_ui_fallback_when_no_active_session() {
+    let result = resolve_delivery_target_request(None, None, DictationTarget::MainWindowFilter, 7);
+
+    assert!(matches!(
+        result,
+        DictationDeliveryTargetResolution::Deliver {
+            target: DictationTarget::MainWindowFilter,
+            ..
+        }
+    ));
 }

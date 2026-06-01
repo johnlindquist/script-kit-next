@@ -2,6 +2,7 @@ use std::fs;
 
 const MEASURE: &str = include_str!("../scripts/devtools/measure.ts");
 const MEDIA: &str = include_str!("../scripts/devtools/media.ts");
+const DICTATION: &str = include_str!("../scripts/devtools/dictation.ts");
 const DEVTOOLS_SKILL: &str = include_str!("../.agents/skills/script-kit-devtools/SKILL.md");
 const COVERAGE_AUDIT: &str =
     include_str!("../.agents/skills/script-kit-devtools/references/devtools-coverage-audit.md");
@@ -53,6 +54,10 @@ fn media_cli_pins_passive_dictation_inspection_contract() {
         "transcript fingerprint",
         "cursor insertion range",
         "wrong-target refusal receipt",
+        "wrongTargetRefusal",
+        "noDeliveryAttempted",
+        "requestedTargetLabelFingerprint",
+        "--expect-refusal",
         "hotkey binding snapshot",
         "media cleanup receipt",
         "noMicrophoneCaptureRequired",
@@ -60,7 +65,7 @@ fn media_cli_pins_passive_dictation_inspection_contract() {
         "noTccMutationRequired",
     ] {
         assert!(
-            MEDIA.contains(needle),
+            MEDIA.contains(needle) || DICTATION.contains(needle),
             "devtools.media.inspect must preserve passive Dictation field: {needle}"
         );
     }

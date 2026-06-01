@@ -77,18 +77,71 @@ fn push_dictation_result_routes_through_real_delivery_helper() {
 fn delivery_helper_preserves_active_session_target_and_accepts_acp_alias() {
     assert!(
         BUILTIN_EXECUTION.contains("pub(crate) fn deliver_stdin_dictation_result(")
-            && BUILTIN_EXECUTION.contains(".or_else(crate::dictation::get_dictation_target)")
+            && BUILTIN_EXECUTION.contains("resolve_delivery_target_request(")
+            && BUILTIN_EXECUTION.contains("active_session_target")
+            && BUILTIN_EXECUTION.contains("ui_fallback_target")
             && BUILTIN_EXECUTION.contains("self.handle_dictation_transcript("),
         "delivery helper must resolve target through explicit label, active session target, then UI-derived fallback before calling handle_dictation_transcript"
     );
     assert!(
-        BUILTIN_EXECUTION.contains("\"tabaiharness\" | \"acp\" | \"acpchat\" | \"ai\"")
+        include_str!("../src/dictation/delivery.rs")
+            .contains("\"tabaiharness\" | \"acp\" | \"acpchat\" | \"ai\"")
             && BUILTIN_EXECUTION.contains("DictationTarget::TabAiHarness"),
         "pushDictationResult must accept acp/acpChat aliases for ACP-targeted verification"
     );
     assert!(
         BUILTIN_EXECUTION.contains("crate::dictation::abort_dictation()"),
         "synthetic delivery must stop any active capture session before injecting the transcript"
+    );
+}
+
+#[test]
+fn explicit_push_dictation_target_is_fail_closed() {
+    let helper_start = BUILTIN_EXECUTION
+        .find("pub(crate) fn deliver_stdin_dictation_result(")
+        .expect("helper must exist");
+    let helper = &BUILTIN_EXECUTION
+        [helper_start..helper_start + 5000.min(BUILTIN_EXECUTION.len() - helper_start)];
+    assert!(
+        helper.contains("resolve_delivery_target_request("),
+        "synthetic delivery must use the dictation delivery actor"
+    );
+    assert!(
+        helper.contains("DictationDeliveryTargetResolution::Refuse"),
+        "invalid explicit target must enter the refusal branch"
+    );
+    assert!(
+        helper.contains("record_wrong_target_refusal("),
+        "refusal branch must write a redacted runtime receipt"
+    );
+    let refuse_pos = helper
+        .find("DictationDeliveryTargetResolution::Refuse")
+        .unwrap();
+    let deliver_pos = helper.find("self.handle_dictation_transcript(").unwrap();
+    assert!(
+        refuse_pos < deliver_pos,
+        "refusal must happen before any transcript delivery call"
+    );
+}
+
+#[test]
+fn wrong_target_refusal_receipt_is_redacted_for_devtools() {
+    assert!(
+        DICTATION_RUNTIME.contains("LAST_WRONG_TARGET_REFUSAL")
+            && DICTATION_RUNTIME.contains("record_wrong_target_refusal(")
+            && DICTATION_RUNTIME.contains("last_wrong_target_refusal()")
+            && DICTATION_RUNTIME.contains("\"wrongTargetRefusal\""),
+        "runtime must expose wrong-target refusal receipts in getState dictation state"
+    );
+    assert!(
+        DICTATION_RUNTIME.contains("\"requestedTargetLabelLen\"")
+            && DICTATION_RUNTIME.contains("\"requestedTargetLabelFingerprint\"")
+            && DICTATION_RUNTIME.contains("\"noDeliveryAttempted\": true")
+            && DICTATION_RUNTIME.contains("\"redacted\": true")
+            && !DICTATION_RUNTIME.contains("\"requestedTargetLabel\":")
+            && !DICTATION_RUNTIME.contains("\"transcript\": transcript")
+            && !DICTATION_RUNTIME.contains("\"transcriptText\""),
+        "wrong-target refusal must expose only redacted metadata"
     );
 }
 

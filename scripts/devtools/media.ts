@@ -110,6 +110,10 @@ function receiptHas(receipt: JsonObject | null, field: string) {
   if (field === "transcript fingerprint") {
     return typeof lastDelivery.transcriptFingerprint === "string";
   }
+  if (field === "cursor insertion range") {
+    const insertionRange = asObject(lastDelivery.insertionRange);
+    return insertionRange.available === true;
+  }
   if (field === "hotkey binding snapshot") {
     return typeof hotkey.enabled === "boolean" && typeof hotkey.generation === "number";
   }
@@ -117,7 +121,13 @@ function receiptHas(receipt: JsonObject | null, field: string) {
     return typeof cleanup.captureActive === "boolean" && typeof cleanup.generation === "number";
   }
   if (field === "wrong-target refusal receipt") {
-    return typeof dictation.wrongTargetRefusal === "object" && dictation.wrongTargetRefusal !== null;
+    const refusal = asObject(dictation.wrongTargetRefusal);
+    return (
+      typeof refusal.generation === "number" &&
+      typeof refusal.requestedTargetLabelFingerprint === "string" &&
+      refusal.redacted === true &&
+      refusal.noDeliveryAttempted === true
+    );
   }
 
   const normalized = field.replace(/[^a-z0-9]+/gi, "").toLowerCase();

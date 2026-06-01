@@ -6648,14 +6648,8 @@ impl ScriptListApp {
         target_label: Option<&str>,
         cx: &mut Context<Self>,
     ) -> Result<crate::dictation::DictationTarget, String> {
-        let target = Self::dictation_target_from_stdin_label(target_label)
-            .or_else(crate::dictation::get_dictation_target)
-            .unwrap_or_else(|| self.resolve_dictation_target());
-
-        if crate::dictation::is_dictation_recording() {
-            crate::dictation::abort_dictation()
-                .map_err(|error| format!("failed to stop active dictation capture: {error}"))?;
-        }
+        crate::dictation::abort_dictation()
+            .map_err(|error| format!("failed to stop active dictation capture: {error}"))?;
 
         let resolution =
             crate::dictation::resolve_final_or_partial_transcript(&transcript, partial_transcript);
@@ -6668,6 +6662,65 @@ impl ScriptListApp {
                 "Using partial dictation transcript because final transcript was empty"
             );
         }
+        let transcript_len = resolution.transcript.as_ref().map(String::len);
+        let delivery_generation_before = crate::dictation::delivery_receipt_generation();
+        let active_session_target = crate::dictation::get_dictation_target();
+        let ui_fallback_target = self.resolve_dictation_target();
+        let target_resolution = crate::dictation::resolve_delivery_target_request(
+            target_label,
+            active_session_target,
+            ui_fallback_target,
+            delivery_generation_before,
+        );
+        let (target, target_source) = match target_resolution {
+            crate::dictation::DictationDeliveryTargetResolution::Deliver { target, source } => {
+                (target, source)
+            }
+            crate::dictation::DictationDeliveryTargetResolution::Refuse(draft) => {
+                let receipt = crate::dictation::record_wrong_target_refusal(draft, transcript_len);
+                tracing::warn!(
+                    category = "DICTATION",
+                    event = "push_dictation_result_refused",
+                    reason_code = %receipt
+                        .get("reasonCode")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("unknown"),
+                    requested_target_label_len = ?receipt.get("requestedTargetLabelLen"),
+                    transcript_len = ?transcript_len,
+                    "Refusing pushDictationResult for an invalid explicit target"
+                );
+                return Err("dictation delivery target refused".to_string());
+            }
+        };
+        if matches!(
+            target_source,
+            crate::dictation::DictationDeliveryTargetSource::ExplicitLabel
+        ) {
+            if let Err(error) = self.ensure_dictation_delivery_target_available_for(target) {
+                let draft = crate::dictation::DictationWrongTargetRefusalDraft {
+                    reason: crate::dictation::DictationWrongTargetReason::TargetUnavailable,
+                    requested_target_label: target_label.map(str::to_owned),
+                    requested_target: Some(target),
+                    fallback_target: None,
+                    delivery_generation_before,
+                };
+                let receipt = crate::dictation::record_wrong_target_refusal(draft, transcript_len);
+                tracing::warn!(
+                    category = "DICTATION",
+                    event = "push_dictation_result_refused",
+                    reason_code = %receipt
+                        .get("reasonCode")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("unknown"),
+                    requested_target = ?target,
+                    requested_target_label_len = ?receipt.get("requestedTargetLabelLen"),
+                    transcript_len = ?transcript_len,
+                    error = %error,
+                    "Refusing pushDictationResult for an unavailable explicit target"
+                );
+                return Err("dictation delivery target unavailable".to_string());
+            }
+        }
 
         let result = Ok(resolution.transcript);
         self.handle_dictation_transcript(result, std::time::Duration::ZERO, target, cx);
@@ -6677,32 +6730,7 @@ impl ScriptListApp {
     fn dictation_target_from_stdin_label(
         target_label: Option<&str>,
     ) -> Option<crate::dictation::DictationTarget> {
-        let normalized = target_label?
-            .trim()
-            .chars()
-            .filter(|ch| ch.is_ascii_alphanumeric())
-            .flat_map(|ch| ch.to_lowercase())
-            .collect::<String>();
-
-        match normalized.as_str() {
-            "mainwindowfilter" | "scriptkit" | "launcher" | "filter" => {
-                Some(crate::dictation::DictationTarget::MainWindowFilter)
-            }
-            "mainwindowprompt" | "prompt" => {
-                Some(crate::dictation::DictationTarget::MainWindowPrompt)
-            }
-            "noteseditor" | "notes" => Some(crate::dictation::DictationTarget::NotesEditor),
-            "aichatcomposer" | "aichat" | "legacyai" => {
-                Some(crate::dictation::DictationTarget::AiChatComposer)
-            }
-            "tabaiharness" | "acp" | "acpchat" | "ai" => {
-                Some(crate::dictation::DictationTarget::TabAiHarness)
-            }
-            "externalapp" | "frontmostapp" | "frontmost" | "app" => {
-                Some(crate::dictation::DictationTarget::ExternalApp)
-            }
-            _ => None,
-        }
+        target_label.and_then(crate::dictation::parse_dictation_target_label)
     }
 
     const DICTATION_FOCUS_SETTLE_MS: u64 = 120;

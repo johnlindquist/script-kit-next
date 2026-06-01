@@ -12,6 +12,7 @@ use crate::dictation::types::{
 };
 use crate::dictation::visualizer::silent_bars;
 use crate::dictation::window::DictationOverlayState;
+use crate::dictation::DictationWrongTargetRefusalDraft;
 use anyhow::{Context, Result};
 use gpui::SharedString;
 use parking_lot::Mutex;
@@ -101,6 +102,13 @@ static DICTATION_STATE_GENERATION: AtomicU64 = AtomicU64::new(1);
 /// Last dictation delivery receipt. This stores only routing metadata, length,
 /// and a one-way fingerprint; it never stores transcript text.
 static LAST_DELIVERY_RECEIPT: Mutex<Option<serde_json::Value>> = Mutex::new(None);
+
+/// Monotonic counter for wrong-target refusal receipts.
+static WRONG_TARGET_REFUSAL_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+/// Last fail-closed dictation delivery refusal. Stores only redacted routing
+/// metadata and never stores transcript text or raw requested labels.
+static LAST_WRONG_TARGET_REFUSAL: Mutex<Option<serde_json::Value>> = Mutex::new(None);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DictationTranscriptResolution {
@@ -360,6 +368,44 @@ pub fn record_delivery_receipt(
     receipt
 }
 
+pub fn delivery_receipt_generation() -> u64 {
+    DELIVERY_RECEIPT_GENERATION.load(Ordering::Relaxed)
+}
+
+pub fn record_wrong_target_refusal(
+    draft: DictationWrongTargetRefusalDraft,
+    transcript_len: Option<usize>,
+) -> serde_json::Value {
+    let generation = WRONG_TARGET_REFUSAL_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    let requested_target_label_len = draft
+        .requested_target_label
+        .as_ref()
+        .map(|label| label.chars().count());
+    let requested_target_label_fingerprint = draft
+        .requested_target_label
+        .as_ref()
+        .map(|label| redacted_transcript_fingerprint(label));
+    let delivery_generation_after = delivery_receipt_generation();
+
+    let receipt = serde_json::json!({
+        "generation": generation,
+        "reasonCode": draft.reason.as_code(),
+        "requestedTarget": draft.requested_target.map(|target| format!("{:?}", target)),
+        "requestedTargetLabelLen": requested_target_label_len,
+        "requestedTargetLabelFingerprint": requested_target_label_fingerprint,
+        "fallbackTarget": draft.fallback_target.map(|target| format!("{:?}", target)),
+        "deliveryGenerationBefore": draft.delivery_generation_before,
+        "deliveryGenerationAfter": delivery_generation_after,
+        "noDeliveryAttempted": true,
+        "transcriptLen": transcript_len,
+        "source": "deliveryActor",
+        "redacted": true,
+    });
+    *LAST_WRONG_TARGET_REFUSAL.lock() = Some(receipt.clone());
+    bump_dictation_state_generation();
+    receipt
+}
+
 /// Resolve final transcription text with a partial fallback for stop/finalize
 /// races where the provider returns an empty final result.
 pub fn resolve_final_or_partial_transcript(
@@ -395,6 +441,10 @@ pub fn resolve_final_or_partial_transcript(
 /// Return the latest content-safe dictation delivery receipt.
 pub fn last_delivery_receipt() -> Option<serde_json::Value> {
     LAST_DELIVERY_RECEIPT.lock().clone()
+}
+
+pub fn last_wrong_target_refusal() -> Option<serde_json::Value> {
+    LAST_WRONG_TARGET_REFUSAL.lock().clone()
 }
 
 /// Stable non-cryptographic fingerprint for correlating synthetic receipts.
@@ -634,6 +684,8 @@ pub fn automation_state() -> serde_json::Value {
         },
         "lastDelivery": crate::dictation::last_delivery_receipt(),
         "deliveryReceiptAvailable": crate::dictation::last_delivery_receipt().is_some(),
+        "wrongTargetRefusal": crate::dictation::last_wrong_target_refusal(),
+        "wrongTargetRefusalAvailable": crate::dictation::last_wrong_target_refusal().is_some(),
         "stop": crate::dictation::last_stop_receipt(),
         "cleanup": {
             "captureActive": is_recording,

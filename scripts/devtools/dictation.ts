@@ -11,13 +11,14 @@ type Args = {
   timeoutMs: number;
   target: string;
   fixtureId: string;
+  expectRefusal: boolean;
 };
 
 function usage() {
   return [
     "Usage:",
     "  bun scripts/devtools/dictation.ts inspect [--session <name>] [--start] [--show] [--include-env-payload]",
-    "  bun scripts/devtools/dictation.ts deliver-fixture [--session <name>] [--start] [--show] [--target <label>] [--fixture-id <id>]",
+    "  bun scripts/devtools/dictation.ts deliver-fixture [--session <name>] [--start] [--show] [--target <label>] [--fixture-id <id>] [--expect-refusal]",
   ].join("\n");
 }
 
@@ -39,6 +40,7 @@ function parseArgs(argv: string[]): Args {
     timeoutMs: 8000,
     target: "mainWindowFilter",
     fixtureId: "short-phrase",
+    expectRefusal: false,
   };
   for (let index = 1; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -56,6 +58,8 @@ function parseArgs(argv: string[]): Args {
       args.target = argv[++index] ?? args.target;
     } else if (arg === "--fixture-id") {
       args.fixtureId = argv[++index] ?? args.fixtureId;
+    } else if (arg === "--expect-refusal") {
+      args.expectRefusal = true;
     }
   }
   return args;
@@ -242,6 +246,24 @@ function deliveryReceipt(runtimeState: JsonObject | null) {
   return receipt && typeof receipt === "object" ? receipt as JsonObject : null;
 }
 
+function wrongTargetRefusalGeneration(runtimeState: JsonObject | null) {
+  const receipt = runtimeState?.dictation && typeof runtimeState.dictation === "object"
+    ? (runtimeState.dictation as JsonObject).wrongTargetRefusal
+    : null;
+  if (!receipt || typeof receipt !== "object") {
+    return 0;
+  }
+  const generation = (receipt as JsonObject).generation;
+  return typeof generation === "number" ? generation : 0;
+}
+
+function wrongTargetRefusalReceipt(runtimeState: JsonObject | null) {
+  const receipt = runtimeState?.dictation && typeof runtimeState.dictation === "object"
+    ? (runtimeState.dictation as JsonObject).wrongTargetRefusal
+    : null;
+  return receipt && typeof receipt === "object" ? receipt as JsonObject : null;
+}
+
 async function state(session: string, timeoutMs: number) {
   const envelope = await rpc(session, {
     type: "getState",
@@ -256,6 +278,7 @@ async function deliverFixture(args: Args) {
   await maybeStartAndShow(args);
   const before = await state(args.session, args.timeoutMs);
   const beforeGeneration = deliveryGeneration(before);
+  const beforeRefusalGeneration = wrongTargetRefusalGeneration(before);
   const transcript = fixtureTranscript(args.fixtureId);
   const requestId = `devtools-dictation-deliver-${Date.now()}`;
   const sendReceipt = await run([
@@ -276,7 +299,10 @@ async function deliverFixture(args: Args) {
   const after = await state(args.session, args.timeoutMs);
   const afterReceipt = deliveryReceipt(after);
   const afterGeneration = deliveryGeneration(after);
+  const afterRefusalReceipt = wrongTargetRefusalReceipt(after);
+  const afterRefusalGeneration = wrongTargetRefusalGeneration(after);
   const deliveryAdvanced = afterGeneration > beforeGeneration;
+  const refusalAdvanced = afterRefusalGeneration > beforeRefusalGeneration;
   const requestedTargetMatches = String(afterReceipt?.target ?? "").toLowerCase() === args.target.toLowerCase()
     || String(afterReceipt?.targetLabel ?? "").toLowerCase() === args.target.toLowerCase();
   const redacted = afterReceipt?.redacted === true && afterReceipt?.transcriptFingerprint && afterReceipt?.transcriptLen === transcript.length;
@@ -284,11 +310,19 @@ async function deliverFixture(args: Args) {
     ? afterReceipt.insertionRange as JsonObject
     : null;
   const insertionRangeAvailable = insertionRange?.available === true;
-  const classification = sendReceipt.status === "error"
-    ? "blocked-by-timeout"
-    : deliveryAdvanced && redacted && insertionRangeAvailable
-      ? "ok"
-      : "blocked-by-missing-primitive";
+  const refusalProven =
+    sendReceipt.status !== "error" &&
+    !deliveryAdvanced &&
+    refusalAdvanced &&
+    afterRefusalReceipt?.redacted === true &&
+    afterRefusalReceipt?.noDeliveryAttempted === true;
+  const classification = args.expectRefusal
+    ? refusalProven ? "ok" : "blocked-by-missing-primitive"
+    : sendReceipt.status === "error"
+      ? "blocked-by-timeout"
+      : deliveryAdvanced && redacted && insertionRangeAvailable
+        ? "ok"
+        : "blocked-by-missing-primitive";
 
   console.log(JSON.stringify({
     schemaVersion: 1,
@@ -320,12 +354,22 @@ async function deliverFixture(args: Args) {
       transcriptFingerprintAvailable: typeof afterReceipt?.transcriptFingerprint === "string",
       rawTranscriptReturned: false,
     },
+    refusal: {
+      beforeGeneration: beforeRefusalGeneration,
+      afterGeneration: afterRefusalGeneration,
+      advanced: refusalAdvanced,
+      receipt: afterRefusalReceipt,
+      redacted: afterRefusalReceipt?.redacted === true,
+      noDeliveryAttempted: afterRefusalReceipt?.noDeliveryAttempted === true,
+    },
     missingPrimitives: [
-      deliveryAdvanced ? "" : "target delivery generation",
-      afterReceipt?.transcriptFingerprint ? "" : "transcript fingerprint",
-      requestedTargetMatches ? "" : "requested target match",
-      insertionRangeAvailable ? "" : "cursor insertion range",
-      "wrong-target refusal receipt",
+      args.expectRefusal
+        ? ""
+        : deliveryAdvanced ? "" : "target delivery generation",
+      args.expectRefusal ? "" : afterReceipt?.transcriptFingerprint ? "" : "transcript fingerprint",
+      args.expectRefusal ? "" : requestedTargetMatches ? "" : "requested target match",
+      args.expectRefusal ? "" : insertionRangeAvailable ? "" : "cursor insertion range",
+      args.expectRefusal && !refusalProven ? "wrong-target refusal receipt" : "",
     ].filter(Boolean),
     recommendedNext: [
       "Add cursor insertion range for Notes/ACP/frontmost destinations.",
