@@ -2,6 +2,7 @@ use std::fs;
 
 const COVERAGE: &str = include_str!("../scripts/devtools/coverage.ts");
 const ACTIONS_DEVTOOLS: &str = include_str!("../scripts/devtools/actions.ts");
+const MAIN_DEVTOOLS: &str = include_str!("../scripts/devtools/main.ts");
 const ACTIONS_DIALOG: &str = include_str!("../src/actions/dialog.rs");
 const DEVTOOLS_SKILL: &str = include_str!("../.agents/skills/script-kit-devtools/SKILL.md");
 const COVERAGE_MAP: &str =
@@ -237,6 +238,59 @@ fn coverage_pins_focused_text_mini_agent_chat_and_missing_runtime_proof() {
             "coverage CLI must keep focused-text mini Agent Chat coverage explicit: {needle}"
         );
     }
+}
+
+#[test]
+fn main_cli_reports_open_close_freshness_proof() {
+    for needle in [
+        "--prove-open-close-freshness",
+        "openCloseFreshnessProof",
+        "main.openCloseFreshnessProof",
+        "target-scoped main-window open/close stale-view freshness proof",
+        "markerApplied",
+        "closeObserved",
+        "reopenVisible",
+        "noStaleInputValue",
+        "targetStable",
+        "sampledReopenFrames",
+        "rawValueRedacted",
+        "blocked-by-stale-view",
+    ] {
+        assert!(
+            MAIN_DEVTOOLS.contains(needle)
+                || COVERAGE.contains(needle)
+                || DEVTOOLS_SKILL.contains(needle),
+            "main DevTools CLI must expose open/close freshness proof receipt: {needle}"
+        );
+    }
+}
+
+#[test]
+fn main_coverage_mentions_open_close_freshness_proof() {
+    assert!(
+        COVERAGE.contains("target-scoped main-window open/close stale-view freshness proof"),
+        "coverage CLI must advertise main-window open/close stale-view freshness proof"
+    );
+}
+
+#[test]
+fn main_cli_uses_target_scoped_state_not_screenshots() {
+    for needle in [
+        "target: { type: \"main\" }",
+        "summaryOnly: true",
+        "scripts/devtools/targets.ts",
+        "strictTargetMatch",
+        "samplesAfterReopen",
+    ] {
+        assert!(
+            MAIN_DEVTOOLS.contains(needle),
+            "main DevTools CLI must use target-scoped protocol state: {needle}"
+        );
+    }
+    assert!(
+        !MAIN_DEVTOOLS.contains("captureScreenshot"),
+        "main open/close freshness proof must not use screenshots as proof"
+    );
 }
 
 #[test]
