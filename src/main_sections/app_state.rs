@@ -1210,3 +1210,6 @@ enum AliasMatch {
     BuiltIn(Arc<builtins::BuiltInEntry>),
     App(Arc<app_launcher::AppInfo>),
 }
+
+pub(crate) const ROOT_LAUNCHER_PLACEHOLDER: &str =
+    "Search • @ context • / skills • . profile";

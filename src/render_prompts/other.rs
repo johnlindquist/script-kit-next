@@ -279,6 +279,23 @@ impl ScriptListApp {
             .into_any_element()
     }
 
+    fn render_entity_owned_prompt_host(
+        &mut self,
+        entity: impl IntoElement,
+        key_handler: impl Fn(&mut Self, &gpui::KeyDownEvent, &mut Window, &mut Context<Self>) + 'static,
+        key_context: &'static str,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let handle_key = cx.listener(key_handler);
+        div()
+            .w_full()
+            .h_full()
+            .key_context(key_context)
+            .on_key_down(handle_key)
+            .child(entity)
+            .into_any_element()
+    }
+
     fn render_select_prompt(
         &mut self,
         entity: Entity<SelectPrompt>,
@@ -289,6 +306,7 @@ impl ScriptListApp {
             row_subtitle = "focus-only",
             row_accent_bar = "focused-only",
             trailing_metadata = "hint-text",
+            shell_owner = "entity",
             "prompt_surface_rendered"
         );
         crate::components::emit_prompt_chrome_audit(
@@ -297,9 +315,12 @@ impl ScriptListApp {
                 self.has_nonempty_sdk_actions(),
             ),
         );
-        let hints = crate::components::universal_prompt_hints();
-        crate::components::emit_prompt_hint_audit("render_prompts::select", &hints);
-        self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_default, cx)
+        self.render_entity_owned_prompt_host(
+            entity,
+            Self::other_prompt_shell_handle_key_default,
+            "select_prompt_host",
+            cx,
+        )
     }
 
     fn render_env_prompt(
@@ -1048,16 +1069,12 @@ mod other_prompt_render_wrapper_tests {
     fn simple_prompt_wrappers_skip_unused_shell_allocations() {
         // Chat is excluded: it uses render_simple_prompt_shell directly (no wrapper footer)
         // because it renders its own footer (mini hint strip or rich interactive footer).
-        for fn_name in [
-            "render_select_prompt",
-            "render_env_prompt",
-            "render_drop_prompt",
-            "render_naming_prompt",
-        ] {
+        // Select is excluded: its entity owns the footer-aware minimal list shell.
+        for fn_name in ["render_env_prompt", "render_drop_prompt", "render_naming_prompt"] {
             let body = fn_source(fn_name);
             assert!(
-                body.contains("render_wrapped_prompt_entity("),
-                "{fn_name} should delegate to render_wrapped_prompt_entity"
+                body.contains("render_wrapped_prompt_entity"),
+                "{fn_name} should delegate to a shared prompt entity wrapper"
             );
             assert!(
                 !body.contains("hex_to_rgba_with_opacity"),
@@ -1068,6 +1085,48 @@ mod other_prompt_render_wrapper_tests {
                 "{fn_name} should not allocate unused box shadows in the shell wrapper"
             );
         }
+    }
+
+    #[test]
+    fn select_prompt_outer_host_is_entity_owned_shell() {
+        let body = fn_source("render_select_prompt");
+        assert!(
+            body.contains("render_entity_owned_prompt_host("),
+            "select prompt outer renderer should host keys only"
+        );
+        assert!(
+            !body.contains("render_wrapped_prompt_entity("),
+            "select prompt should not get a second outer prompt shell/footer"
+        );
+        assert!(
+            !body.contains("clickable_universal_hint_strip("),
+            "select prompt outer renderer should not add a second footer"
+        );
+        assert!(
+            !body.contains("emit_prompt_hint_audit("),
+            "select prompt hint audit should stay with the entity-owned footer"
+        );
+    }
+
+    #[test]
+    fn entity_owned_prompt_host_preserves_key_boundary_without_chrome() {
+        let body = fn_source("render_entity_owned_prompt_host");
+        assert!(
+            body.contains(".on_key_down(handle_key)"),
+            "entity-owned prompt host must keep the parent key boundary"
+        );
+        assert!(
+            body.contains(".child(entity)"),
+            "entity-owned prompt host must render the entity directly"
+        );
+        assert!(
+            !body.contains("render_simple_prompt_shell("),
+            "entity-owned prompt host must not add a second prompt shell"
+        );
+        assert!(
+            !body.contains("main_window_footer_slot("),
+            "entity-owned prompt host must not add a second footer owner"
+        );
     }
 
     #[test]
@@ -1091,7 +1150,6 @@ mod other_prompt_render_wrapper_tests {
     fn wrapper_surfaces_emit_hint_audits() {
         // Surfaces that emit universal hint audits (chat is excluded — it owns its footer)
         for (fn_name, surface) in [
-            ("render_select_prompt", "render_prompts::select"),
             ("render_env_prompt", "render_prompts::env"),
             ("render_drop_prompt", "render_prompts::drop"),
             ("render_naming_prompt", "render_prompts::naming"),

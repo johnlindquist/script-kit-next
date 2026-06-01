@@ -17,6 +17,7 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(shared.contains("pub(crate) fn render_main_view_shell"));
     assert!(shared.contains("pub(crate) fn main_view_input_text_inset_left"));
     assert!(shared.contains("pub(crate) fn render_main_view_state_icon"));
+    assert!(shared.contains("pub(crate) fn render_main_view_context_zone"));
     assert!(shared.contains("pub(crate) fn main_view_state_icon_left"));
     assert!(shared.contains("pub(crate) fn render_main_view_chrome"));
     assert!(shared.contains("pub(crate) struct MainViewInputChrome"));
@@ -33,11 +34,17 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     );
     assert!(shared.contains("MAIN_VIEW_SHELL_ID"));
     assert!(shared.contains("MAIN_VIEW_HEADER_ID"));
+    assert!(shared.contains("MAIN_VIEW_CONTEXT_ZONE_ID"));
+    assert!(shared.contains("MAIN_VIEW_CONTEXT_CWD_BUTTON_ID"));
+    assert!(shared.contains("MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID"));
     assert!(shared.contains("MAIN_VIEW_INPUT_SHELL_ID"));
     assert!(shared.contains("MAIN_VIEW_INPUT_STATE_ICON_ID"));
     assert!(shared.contains("MAIN_VIEW_HEADER_DIVIDER_ID"));
     assert!(shared.contains("MAIN_VIEW_MAIN_ID"));
     assert!(shared.contains(".id(MAIN_VIEW_HEADER_ID)"));
+    assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_ZONE_ID)"));
+    assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_CWD_BUTTON_ID)"));
+    assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_SHELL_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_INPUT_SHELL_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_INPUT_STATE_ICON_ID)"));
@@ -58,12 +65,21 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(shared.contains("def.row.icon_text_gap"));
 
     assert!(script_list.contains("render_main_view_input_shell"));
+    assert!(script_list.contains("render_main_view_context_zone"));
     assert!(script_list.contains("render_main_view_state_icon"));
     assert!(script_list.contains("main_view_state_icon_name_for_script_list"));
     assert!(script_list.contains("render_main_view_shell()"));
     assert!(script_list.contains("render_main_view_chrome"));
     assert!(script_list.contains("MainViewInputChrome"));
     assert!(script_list.contains("MainViewHeaderChrome"));
+    assert!(script_list.contains("context: Some("));
+    assert!(script_list.contains("FooterAction::Cwd"));
+    assert!(script_list.contains("FooterAction::AgentModel"));
+    assert!(script_list.contains("trailing: Vec::new()"));
+    assert!(
+        !script_list.contains("render_launcher_ask_ai_hint"),
+        "ScriptList input should stay query-only; Agent belongs in the footer action zone"
+    );
     assert!(script_list.contains("MainViewDividerChrome"));
     assert!(script_list.contains("MainViewChrome"));
     assert!(
@@ -80,6 +96,7 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(acp.contains("render_main_view_chrome"));
     assert!(acp.contains("MainViewInputChrome"));
     assert!(acp.contains("MainViewHeaderChrome"));
+    assert!(acp.contains("context: None"));
     assert!(acp.contains("MainViewDividerChrome"));
     assert!(acp.contains("MainViewChrome"));
 }
@@ -205,6 +222,7 @@ fn layout_model_exposes_shared_main_view_chrome_names() {
 
     for name in [
         "MainViewHeader",
+        "MainViewContextZone",
         "MainViewInput",
         "MainViewInputStateIcon",
         "MainViewMain",
@@ -286,10 +304,36 @@ fn acp_layout_model_swaps_only_main_section_to_conversation() {
 }
 
 #[test]
+fn script_list_three_zone_footer_keeps_context_out_of_action_zone() {
+    let ui_window = read_source("src/app_impl/ui_window.rs");
+    let standard_footer = ui_window
+        .split("fn standard_main_window_footer_buttons")
+        .nth(1)
+        .and_then(|tail| tail.split("fn main_window_footer_buttons_blocked").next())
+        .expect("standard_main_window_footer_buttons body should be present");
+    assert!(standard_footer.contains("FooterAction::Run"));
+    assert!(standard_footer.contains("FooterAction::Actions"));
+    assert!(standard_footer.contains("FooterAction::Ai"));
+    assert!(standard_footer.contains("matches!(self.current_view, AppView::ScriptList)"));
+
+    let global_left_chips = ui_window
+        .split("fn current_view_shows_global_left_chips")
+        .nth(1)
+        .and_then(|tail| tail.split("fn global_main_window_left_chip_buttons").next())
+        .expect("current_view_shows_global_left_chips body should be present");
+    assert!(
+        global_left_chips.contains("AppView::AcpChatView { .. }")
+            && !global_left_chips.contains("AppView::ScriptList"),
+        "ScriptList cwd/model context should render in MainViewContextZone, not as footer action buttons"
+    );
+}
+
+#[test]
 fn acp_component_bounds_model_uses_main_view_chrome() {
     let bounds = read_source("src/app_layout/build_component_bounds.rs");
 
     assert!(bounds.contains("\"MainViewHeader\""));
+    assert!(bounds.contains("\"MainViewContextZone\""));
     assert!(bounds.contains("AppView::AcpChatView { .. } =>"));
     assert!(bounds.contains("\"MainViewMain\""));
     assert!(bounds.contains("\"AcpConversation\""));

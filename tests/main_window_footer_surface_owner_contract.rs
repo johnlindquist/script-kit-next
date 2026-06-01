@@ -199,6 +199,61 @@ fn ui_window_delegates_footer_surface_to_app_view_contract() {
 }
 
 #[test]
+fn main_window_footer_config_exposes_slot_model_contract() {
+    for needle in [
+        "pub(crate) const MAIN_WINDOW_FOOTER_MAX_ACTION_SLOTS: usize = 3",
+        "pub(crate) enum FooterSlotRole",
+        "ActionSlot",
+        "ContextChip",
+        "pub(crate) struct MainWindowFooterSlotModel",
+        "pub action_slot_count: usize",
+        "pub context_chip_count: usize",
+        "pub duplicate_shortcut_keys: Vec<String>",
+        "pub violation: Option<&'static str>",
+        "pub(crate) fn footer_button_slot_role",
+        "pub(crate) fn slot_model(&self) -> MainWindowFooterSlotModel",
+        "pub(crate) fn slot_contract_violation(&self) -> Option<&'static str>",
+    ] {
+        assert!(
+            FOOTER_POPUP_SOURCE.contains(needle),
+            "footer config must expose semantic slot-model contract: {needle}"
+        );
+    }
+
+    assert!(
+        FOOTER_POPUP_SOURCE.contains("let model = config.slot_model();")
+            && FOOTER_POPUP_SOURCE.contains("debug_assert!(")
+            && FOOTER_POPUP_SOURCE.contains("tracing::warn!")
+            && FOOTER_POPUP_SOURCE.contains("duplicate_shortcut_keys"),
+        "MainWindowFooterConfig::new must audit the slot model without mutating button availability"
+    );
+}
+
+#[test]
+fn footer_context_chips_do_not_count_as_action_slots() {
+    let role_body = function_body(FOOTER_POPUP_SOURCE, "pub(crate) fn footer_button_slot_role");
+    assert!(
+        role_body.contains("FooterAction::Cwd | FooterAction::AgentModel")
+            && role_body.contains("FooterSlotRole::ContextChip")
+            && role_body.contains("matches!(button.action, FooterAction::Ai)")
+            && role_body.contains("crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN")
+            && role_body.contains("FooterSlotRole::ActionSlot"),
+        "cwd, agent/model, and mic-key AI footer entries must be context chips, not action slots"
+    );
+
+    let slot_model_body = function_body(FOOTER_POPUP_SOURCE, "pub(crate) fn slot_model(");
+    assert!(
+        slot_model_body.contains("FooterSlotRole::ActionSlot")
+            && slot_model_body.contains("action_slot_count += 1;")
+            && slot_model_body.contains("FooterSlotRole::ContextChip")
+            && slot_model_body.contains("context_chip_count += 1;")
+            && slot_model_body.contains("too_many_action_slots")
+            && slot_model_body.contains("duplicate_shortcut_keys"),
+        "slot_model must count action slots separately from context chips and report violations"
+    );
+}
+
+#[test]
 fn live_dictation_overlay_does_not_join_main_window_footer_ownership() {
     let footer_map = function_body(APP_VIEW_STATE_SOURCE, "pub(crate) fn native_footer_surface");
     assert!(

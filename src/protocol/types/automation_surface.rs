@@ -73,6 +73,10 @@ pub struct ActiveFooterSnapshot {
     pub gpui_fallback_visible: bool,
     pub left_info: Option<ActiveFooterLeftInfoSnapshot>,
     pub button_count: usize,
+    pub action_slot_count: usize,
+    pub context_chip_count: usize,
+    pub duplicate_shortcut_keys: Vec<String>,
+    pub slot_contract_violation: Option<String>,
     pub buttons: Vec<ActiveFooterButtonSnapshot>,
     pub mismatch: Option<String>,
 }

@@ -505,3 +505,127 @@ fn batch_result_success_with_trace_omits_when_absent() {
         "trace should be omitted when not provided"
     );
 }
+
+#[test]
+fn batch_trace_helper_preserves_result_shape_and_payloads() {
+    use script_kit_gpui::protocol::transaction_trace::build_batch_trace_from_results;
+    use script_kit_gpui::protocol::{
+        BatchCommand, BatchResultEntry, TransactionError, TransactionErrorCode,
+        TransactionTraceStatus, WaitCondition, WaitNamedCondition,
+    };
+
+    let commands = vec![
+        BatchCommand::SetInput {
+            text: "apple".to_string(),
+        },
+        BatchCommand::WaitFor {
+            condition: WaitCondition::Named(WaitNamedCondition::ChoicesRendered),
+            timeout: Some(1000),
+            poll_interval: Some(25),
+        },
+    ];
+    let timeout_error = TransactionError {
+        code: TransactionErrorCode::WaitConditionTimeout,
+        message: "timeout".to_string(),
+        suggestion: None,
+    };
+    let results = vec![
+        BatchResultEntry {
+            index: 0,
+            success: true,
+            command: "setInput".to_string(),
+            elapsed: Some(2),
+            value: None,
+            error: None,
+        },
+        BatchResultEntry {
+            index: 1,
+            success: false,
+            command: "waitFor".to_string(),
+            elapsed: Some(1000),
+            value: None,
+            error: Some(timeout_error.clone()),
+        },
+    ];
+
+    let trace = build_batch_trace_from_results(
+        "txn-shared-trace".to_string(),
+        "fp-shared-trace".to_string(),
+        12345,
+        1002,
+        false,
+        Some(1),
+        &commands,
+        &results,
+    );
+
+    assert_eq!(trace.status, TransactionTraceStatus::Failed);
+    assert_eq!(trace.started_at_ms, 12345);
+    assert_eq!(trace.total_elapsed_ms, 1002);
+    assert_eq!(trace.failed_at, Some(1));
+    assert_eq!(trace.commands.len(), 2);
+    assert_eq!(trace.commands[0].command_payload, Some(commands[0].clone()));
+    assert_eq!(trace.commands[1].command_payload, Some(commands[1].clone()));
+    assert_eq!(trace.commands[1].error, Some(timeout_error));
+}
+
+#[test]
+fn prompt_handler_batch_trace_finalization_is_shared_and_nonzero() {
+    let source = include_str!("../src/prompt_handler/mod.rs");
+
+    assert!(
+        source.contains("maybe_persist_batch_trace_from_results"),
+        "batch paths must finalize traces through the shared helper"
+    );
+    assert!(
+        !source.contains("let started_at_ms = 0u64"),
+        "batch trace receipts must not use a zero started_at_ms sentinel"
+    );
+    assert!(
+        !source.contains("commands: results.iter().map(|r|"),
+        "prompt_handler must not hand-roll batch trace command mapping"
+    );
+    assert!(
+        !source.contains("append_transaction_trace(None, trace)"),
+        "prompt_handler must not persist traces through a target-specific side path"
+    );
+}
+
+#[test]
+fn included_batch_trace_persistence_error_is_returned_to_caller() {
+    use script_kit_gpui::protocol::transaction_trace::maybe_persist_batch_trace_from_results;
+    use script_kit_gpui::protocol::{BatchCommand, BatchResultEntry, TransactionTraceMode};
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let bad_log_path = temp.path();
+    let commands = vec![BatchCommand::SetInput {
+        text: "x".to_string(),
+    }];
+    let results = vec![BatchResultEntry {
+        index: 0,
+        success: true,
+        command: "setInput".to_string(),
+        elapsed: Some(1),
+        value: None,
+        error: None,
+    }];
+
+    let err = maybe_persist_batch_trace_from_results(
+        TransactionTraceMode::On,
+        "txn-persist-fails".to_string(),
+        "fp".to_string(),
+        123,
+        1,
+        true,
+        None,
+        &commands,
+        &results,
+        Some(bad_log_path),
+    )
+    .expect_err("trace persistence should fail closed");
+    let message = err.to_string();
+    assert!(
+        message.contains("failed to open") || message.contains("Is a directory"),
+        "unexpected persistence error: {message}"
+    );
+}

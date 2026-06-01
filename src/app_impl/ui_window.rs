@@ -596,6 +596,12 @@ impl ScriptListApp {
                     .enabled(!footer_disabled),
             );
         }
+        if matches!(self.current_view, AppView::ScriptList) {
+            buttons.push(
+                FooterButtonConfig::new(FooterAction::Ai, "⌘↵", "Agent")
+                    .enabled(!footer_disabled),
+            );
+        }
         buttons
     }
 
@@ -1177,10 +1183,7 @@ impl ScriptListApp {
     /// already binds ⇥ to "Next Field", which would collide with the cwd chip's
     /// ⇥ keycap.
     fn current_view_shows_global_left_chips(&self) -> bool {
-        matches!(
-            self.current_view,
-            AppView::ScriptList | AppView::AcpChatView { .. }
-        )
+        matches!(self.current_view, AppView::AcpChatView { .. })
     }
 
     /// Builds the global left-pinned footer chips (Spine cwd + Agent·Model) from

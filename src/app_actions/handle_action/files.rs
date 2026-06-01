@@ -474,7 +474,8 @@ impl ScriptListApp {
         let AppView::FileSearchView { selected_index, .. } = &self.current_view else {
             return None;
         };
-        let (_, entry) = self.selected_file_search_result(*selected_index)?;
+        let binding = self.file_search_selection_binding(*selected_index);
+        let entry = binding.file.as_ref()?;
         let is_dir = matches!(entry.file_type, crate::file_search::FileType::Directory);
         Some((entry.path.clone(), is_dir, entry.name.clone()))
     }

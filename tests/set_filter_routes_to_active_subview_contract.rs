@@ -109,14 +109,12 @@ fn set_filter_at_routes_script_list_to_acp_mention_picker() {
 
     for needle in [
         "Self::special_entry_from_script_list_filter(&text)",
-        "ScriptListSpecialEntry::AcpMentionPicker",
-        "entry_kind = \"acp_mention_picker\"",
-        "self.open_tab_ai_acp_with_mention_picker(window, cx);",
+        "self.route_script_list_special_entry(entry, &text, window, cx)",
         "return;",
     ] {
         assert!(
             receiver_body.contains(needle),
-            "stdin/devtools setFilter \"@\" must route through the same ACP mention picker entry path as typed launcher text: {needle}"
+            "stdin/devtools setFilter \"@\" must delegate ScriptList special entries to the shared router: {needle}"
         );
     }
 }

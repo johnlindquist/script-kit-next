@@ -1,5 +1,6 @@
 use gpui::{
-    div, px, rgb, rgba, AnyElement, InteractiveElement, IntoElement, ParentElement, Styled,
+    div, px, rgb, rgba, AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement,
+    StatefulInteractiveElement, Styled,
 };
 
 use crate::designs::MainMenuThemeDef;
@@ -7,6 +8,12 @@ use crate::designs::MainMenuThemeDef;
 pub(crate) const MAIN_VIEW_SHELL_ID: &str = "main-view-shell";
 pub(crate) const MAIN_VIEW_INPUT_SHELL_ID: &str = "main-view-input-shell";
 pub(crate) const MAIN_VIEW_INPUT_STATE_ICON_ID: &str = "main-view-input-state-icon";
+#[allow(dead_code)]
+pub(crate) const MAIN_VIEW_CONTEXT_ZONE_ID: &str = "main-view-context-zone";
+#[allow(dead_code)]
+pub(crate) const MAIN_VIEW_CONTEXT_CWD_BUTTON_ID: &str = "main-view-context-cwd-button";
+#[allow(dead_code)]
+pub(crate) const MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID: &str = "main-view-context-model-button";
 pub(crate) const MAIN_VIEW_HEADER_ID: &str = "main-view-header";
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_HEADER_DIVIDER_ID: &str = "main-view-header-divider";
@@ -20,6 +27,7 @@ pub(crate) struct MainViewInputChrome {
 }
 
 pub(crate) struct MainViewHeaderChrome {
+    pub(crate) context: Option<AnyElement>,
     pub(crate) input: AnyElement,
     pub(crate) padding_x: f32,
     pub(crate) padding_y: f32,
@@ -91,17 +99,122 @@ pub(crate) fn render_main_view_chrome(
 }
 
 pub(crate) fn render_main_view_header(chrome: MainViewHeaderChrome) -> AnyElement {
-    div()
+    let mut header = div()
         .id(MAIN_VIEW_HEADER_ID)
         .w_full()
         .px(px(chrome.padding_x))
         .py(px(chrome.padding_y))
         .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
         .flex()
+        .flex_col()
+        .items_center()
+        .gap(px(chrome.gap));
+
+    if let Some(context) = chrome.context {
+        header = header.child(context);
+    }
+
+    header.child(chrome.input).into_any_element()
+}
+
+#[allow(dead_code)]
+pub(crate) fn render_main_view_context_zone(
+    theme: &crate::theme::Theme,
+    def: MainMenuThemeDef,
+    cwd_label: Option<String>,
+    agent_model_label: Option<String>,
+    on_cwd_click: impl Fn(&ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_agent_model_click: impl Fn(&ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> AnyElement {
+    let border = rgba((theme.colors.ui.border << 8) | 0x52);
+    let rest_bg = rgba((theme.colors.background.search_box << 8) | 0x22);
+    let hover_bg = rgba((theme.colors.accent.selected << 8) | 0x20);
+    let text_color = rgb(theme.colors.text.muted);
+    let key_color = rgb(theme.colors.accent.selected);
+    let chip_radius = (def.search.radius * 0.75).max(4.0);
+
+    let cwd_label = cwd_label.unwrap_or_else(|| "Choose cwd".to_string());
+    let agent_model_label = agent_model_label.unwrap_or_else(|| "Choose agent · model".to_string());
+
+    div()
+        .id(MAIN_VIEW_CONTEXT_ZONE_ID)
+        .w_full()
+        .min_h(px(20.0))
+        .flex()
         .flex_row()
         .items_center()
-        .gap(px(chrome.gap))
-        .child(chrome.input)
+        .justify_between()
+        .gap(px(def.shell.header_gap))
+        .child(
+            div()
+                .id(MAIN_VIEW_CONTEXT_CWD_BUTTON_ID)
+                .min_w(px(0.0))
+                .flex_1()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .px(px(8.0))
+                .py(px(3.0))
+                .rounded(px(chip_radius))
+                .border_1()
+                .border_color(border)
+                .bg(rest_bg)
+                .text_size(px(12.0))
+                .text_color(text_color)
+                .cursor_pointer()
+                .hover(move |s| s.bg(hover_bg))
+                .on_click(on_cwd_click)
+                .child("cwd")
+                .child(
+                    div()
+                        .min_w(px(0.0))
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .child(cwd_label),
+                )
+                .child(
+                    div()
+                        .text_color(key_color)
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .child("Tab"),
+                ),
+        )
+        .child(
+            div()
+                .id(MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID)
+                .min_w(px(0.0))
+                .flex_1()
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_end()
+                .gap(px(6.0))
+                .px(px(8.0))
+                .py(px(3.0))
+                .rounded(px(chip_radius))
+                .border_1()
+                .border_color(border)
+                .bg(rest_bg)
+                .text_size(px(12.0))
+                .text_color(text_color)
+                .cursor_pointer()
+                .hover(move |s| s.bg(hover_bg))
+                .on_click(on_agent_model_click)
+                .child(
+                    div()
+                        .min_w(px(0.0))
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .child(agent_model_label),
+                )
+                .child(
+                    div()
+                        .text_color(key_color)
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .child("Shift+Tab"),
+                ),
+        )
         .into_any_element()
 }
 
@@ -192,7 +305,7 @@ pub(crate) fn render_main_view_state_icon(
     let container_size = def.icon.container_size.min(def.search.height).max(16.0);
     let uses_script_kit_logo = main_view_state_icon_uses_script_kit_logo(icon_name);
     let svg_size = if uses_script_kit_logo {
-        (container_size - 2.0).max(18.0)
+        ((container_size - 2.0).max(18.0) * 1.1).min(container_size)
     } else {
         def.icon.svg_size.min(container_size - 4.0).max(12.0)
     };
@@ -232,6 +345,7 @@ pub(crate) fn render_main_view_input_shell(
 
     let mut input = div()
         .id(MAIN_VIEW_INPUT_SHELL_ID)
+        .w_full()
         .flex_1()
         .h(px(search.height))
         .rounded(px(search.radius))

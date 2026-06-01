@@ -703,7 +703,7 @@ pub(crate) fn render_hint_strip_leading_text(
         .into_any_element()
 }
 
-/// Number of footer hints the design spec mandates: `↵ Run`, Agent, `⌘K Actions`.
+/// Number of footer hints the design spec mandates: `↵ Run`, `⌘K Actions`, Agent.
 pub(crate) const UNIVERSAL_PROMPT_HINT_COUNT: usize = 3;
 
 /// The canonical three-key footer hints from `.impeccable.md`.
@@ -720,8 +720,8 @@ pub(crate) fn universal_prompt_hints_with_primary_label(
 ) -> Vec<SharedString> {
     vec![
         format!("↵ {}", primary_label.as_ref()).into(),
-        crate::ai::acp::labels::AGENT_CHAT_CMD_ENTER_HINT.into(),
         "⌘K Actions".into(),
+        crate::ai::acp::labels::AGENT_CHAT_CMD_ENTER_HINT.into(),
     ]
 }
 
@@ -821,7 +821,7 @@ pub(crate) fn main_window_footer_slot_for_prompt_surface(
 
 /// Renderer for the canonical three-key footer with click handlers.
 ///
-/// `on_run` fires for "↵ Run", `on_ai` for "⌘↵ AI", `on_actions` for "⌘K Actions".
+/// `on_run` fires for "↵ Run", `on_actions` for "⌘K Actions", `on_ai` for "⌘↵ Agent".
 #[allow(dead_code)]
 pub(crate) fn render_universal_prompt_hint_strip_clickable(
     on_run: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
@@ -842,8 +842,8 @@ pub(crate) fn render_universal_prompt_hint_strip_clickable_with_primary_label(
 ) -> AnyElement {
     crate::components::HintStrip::new(universal_prompt_hints_with_primary_label(primary_label))
         .on_hint_click(0, on_run)
-        .on_hint_click(1, on_ai)
-        .on_hint_click(2, on_actions)
+        .on_hint_click(1, on_actions)
+        .on_hint_click(2, on_ai)
         .into_any_element()
 }
 
@@ -915,7 +915,7 @@ pub(crate) fn emit_prompt_hint_audit(surface: &'static str, hints: &[SharedStrin
             target: "script_kit::prompt_chrome",
             event = "prompt_hint_contract_violation",
             surface = audit.surface,
-            expected = "↵ Run | ⌘↵ AI | ⌘K Actions",
+            expected = "↵ Run | ⌘K Actions | ⌘↵ Agent",
             actual = %audit.hints_joined,
             "prompt footer diverged from universal three-key contract"
         );
@@ -1239,17 +1239,55 @@ mod prompt_layout_shell_tests {
 
     #[test]
     fn simple_prompt_wrappers_use_shared_layout_shell() {
-        for fn_name in [
-            "render_select_prompt",
-            "render_env_prompt",
-            "render_drop_prompt",
-        ] {
+        for fn_name in ["render_env_prompt", "render_drop_prompt"] {
             let body = fn_source(fn_name);
             assert!(
-                body.contains("render_wrapped_prompt_entity("),
-                "{fn_name} should delegate to render_wrapped_prompt_entity"
+                body.contains("render_wrapped_prompt_entity"),
+                "{fn_name} should delegate to a shared prompt entity wrapper"
             );
         }
+    }
+
+    #[test]
+    fn select_prompt_outer_host_is_entity_owned_shell() {
+        let body = fn_source("render_select_prompt");
+        assert!(
+            body.contains("render_entity_owned_prompt_host("),
+            "select prompt outer renderer should host keys only"
+        );
+        assert!(
+            !body.contains("render_wrapped_prompt_entity("),
+            "select prompt should not get a second outer prompt shell/footer"
+        );
+        assert!(
+            !body.contains("clickable_universal_hint_strip("),
+            "select prompt outer renderer should not add a second footer"
+        );
+        assert!(
+            !body.contains("emit_prompt_hint_audit("),
+            "select prompt hint audit should stay with the entity-owned footer"
+        );
+    }
+
+    #[test]
+    fn entity_owned_prompt_host_preserves_key_boundary_without_chrome() {
+        let body = fn_source("render_entity_owned_prompt_host");
+        assert!(
+            body.contains(".on_key_down(handle_key)"),
+            "entity-owned prompt host must keep the parent key boundary"
+        );
+        assert!(
+            body.contains(".child(entity)"),
+            "entity-owned prompt host must render the entity directly"
+        );
+        assert!(
+            !body.contains("render_simple_prompt_shell("),
+            "entity-owned prompt host must not add a second prompt shell"
+        );
+        assert!(
+            !body.contains("main_window_footer_slot("),
+            "entity-owned prompt host must not add a second footer owner"
+        );
     }
 
     #[test]
@@ -1489,8 +1527,8 @@ mod prompt_layout_shell_tests {
         let hints = super::universal_prompt_hints();
         assert_eq!(hints.len(), super::UNIVERSAL_PROMPT_HINT_COUNT);
         assert_eq!(hints[0].as_ref(), "↵ Run");
-        assert_eq!(hints[1].as_ref(), "⌘↵ AI");
-        assert_eq!(hints[2].as_ref(), "⌘K Actions");
+        assert_eq!(hints[1].as_ref(), "⌘K Actions");
+        assert_eq!(hints[2].as_ref(), "⌘↵ Agent");
     }
 
     #[test]
@@ -2102,8 +2140,9 @@ mod prompt_layout_shell_tests {
         );
         assert!(
             render_code.contains("render_minimal_list_prompt_shell_with_footer(")
-                && render_code.contains("render_native_main_window_footer_spacer()"),
-            "select prompt should swap the GPUI hint strip for a native footer spacer when needed"
+                && render_code.contains("main_window_footer_slot_for_prompt_surface(")
+                && render_code.contains("\"select_prompt\""),
+            "select prompt should route its footer through the prompt surface slot helper"
         );
         assert!(
             !render_code.contains("SharedString::from(\"↵ Select\")"),

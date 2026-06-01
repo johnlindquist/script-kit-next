@@ -551,10 +551,11 @@ impl ScriptListApp {
         // Get selected file for preview (if any)
         // Clamp the display index so a stale selected_index from a shrinking
         // result set still resolves to a valid visible row.
-        let clamped_selected_index = self.clamp_file_search_display_index(selected_index);
-        let selected_file = clamped_selected_index
-            .and_then(|display_index| self.file_search_result_at_display_index(display_index))
-            .cloned();
+        let selection = self.file_search_selection_binding(selected_index);
+        let selected_file = selection.file.clone();
+        let clamped_selected_index = selection
+            .projection
+            .map(|projection| projection.display_index);
         self.ensure_file_search_preview_thumbnail(selected_file.as_ref(), cx);
 
         // Use pre-computed display indices instead of running Nucleo in render
@@ -672,13 +673,7 @@ impl ScriptListApp {
                     // released before the closure borrows `this` immutably.
                     let sel_idx = *selected_index;
 
-                    let get_selected_file = || {
-                        this.clamp_file_search_display_index(sel_idx)
-                            .and_then(|display_index| {
-                                this.file_search_result_at_display_index(display_index)
-                            })
-                            .cloned()
-                    };
+                    let get_selected_file = || this.file_search_selection_binding(sel_idx).file;
 
                     // Space (unmodified) triggers Quick Look for non-directory files
                     let is_space = key.eq_ignore_ascii_case("space") || key_char == Some(" ");

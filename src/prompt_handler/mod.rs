@@ -3870,18 +3870,22 @@ impl ScriptListApp {
                         ref query,
                         selected_index,
                         ..
-                    } => (
-                        "fileSearch".to_string(),
-                        Some("file-search".to_string()),
-                        None,
-                        query.clone(),
-                        self.cached_file_results.len(),
-                        self.cached_file_results.len(),
-                        *selected_index as i32,
-                        self.cached_file_results
-                            .get(*selected_index)
-                            .map(|f| f.name.clone()),
-                    ),
+                    } => {
+                        let selection = self.file_search_selection_binding(*selected_index);
+                        (
+                            "fileSearch".to_string(),
+                            Some("file-search".to_string()),
+                            None,
+                            query.clone(),
+                            self.cached_file_results.len(),
+                            self.file_search_display_indices.len(),
+                            selection
+                                .projection
+                                .map(|projection| projection.display_index as i32)
+                                .unwrap_or(-1),
+                            selection.file.as_ref().map(|file| file.name.clone()),
+                        )
+                    }
                     AppView::ThemeChooserView {
                         filter,
                         selected_index,
@@ -5816,6 +5820,7 @@ impl ScriptListApp {
                     // limited to setInput, waitFor, selectByValue, and
                     // selectBySemanticId.
                     if let Some(acp_entity) = detached_batch_entity {
+                        let batch_started_at_ms = protocol::transaction_trace::now_epoch_ms();
                         let batch_start = std::time::Instant::now();
                         let batch_timeout = std::time::Duration::from_millis(opts.timeout);
                         let mut results: Vec<protocol::BatchResultEntry> = Vec::new();
@@ -6116,38 +6121,46 @@ impl ScriptListApp {
                             None
                         };
 
-                        let include_trace = protocol::transaction_trace::should_include_trace(trace_mode, success);
-                        let trace = if include_trace {
-                            let started_at_ms = protocol::transaction_trace::now_epoch_ms()
-                                .saturating_sub(total_elapsed);
-                            Some(protocol::TransactionTrace {
-                                schema_version: protocol::TRANSACTION_TRACE_SCHEMA_VERSION,
-                                request_id: rid.clone(),
-                                command_fingerprint: command_fingerprint.clone(),
-                                status: if success {
-                                    protocol::TransactionTraceStatus::Ok
-                                } else {
-                                    protocol::TransactionTraceStatus::Failed
-                                },
-                                started_at_ms,
-                                total_elapsed_ms: total_elapsed,
-                                failed_at,
-                                commands: results.iter().map(|r| {
-                                    protocol::TransactionCommandTrace {
-                                        index: r.index,
-                                        command: r.command.clone(),
-                                command_payload: None,
-                                        started_at_ms,
-                                        elapsed_ms: r.elapsed.unwrap_or(0),
-                                        before: protocol::UiStateSnapshot::default(),
-                                        after: protocol::UiStateSnapshot::default(),
-                                        polls: Vec::new(),
-                                        error: r.error.clone(),
-                                    }
-                                }).collect(),
-                            })
-                        } else {
-                            None
+                        let trace = match protocol::transaction_trace::maybe_persist_batch_trace_from_results(
+                            trace_mode,
+                            rid.clone(),
+                            command_fingerprint.clone(),
+                            batch_started_at_ms,
+                            total_elapsed,
+                            success,
+                            failed_at,
+                            &commands,
+                            &results,
+                            None,
+                        ) {
+                            Ok(trace) => trace,
+                            Err(error) => {
+                                tracing::warn!(
+                                    target: "script_kit::transaction",
+                                    request_id = %rid,
+                                    error = %error,
+                                    "batch trace persistence failed"
+                                );
+                                if let Some(ref s) = sender {
+                                    let _ = s.try_send(Message::batch_result(
+                                        rid.clone(),
+                                        false,
+                                        vec![protocol::BatchResultEntry {
+                                            index: 0,
+                                            success: false,
+                                            command: "trace".to_string(),
+                                            elapsed: Some(total_elapsed),
+                                            value: None,
+                                            error: Some(protocol::TransactionError::action_failed(format!(
+                                                "failed to persist transaction trace: {error}"
+                                            ))),
+                                        }],
+                                        Some(0),
+                                        total_elapsed,
+                                    ));
+                                }
+                                return;
+                            }
                         };
 
                         tracing::info!(
@@ -6157,7 +6170,7 @@ impl ScriptListApp {
                             total_elapsed_ms = total_elapsed,
                             failed_at = ?failed_at,
                             target = "acpDetached",
-                            trace_included = include_trace,
+                            trace_included = trace.is_some(),
                             "automation.batch.detached_acp.completed"
                         );
 
@@ -6173,6 +6186,7 @@ impl ScriptListApp {
                     // When targeting the Notes window, route setInput and
                     // waitFor commands to the Notes entity.
                     if let Some((notes_entity, notes_handle)) = notes_batch_target {
+                        let batch_started_at_ms = protocol::transaction_trace::now_epoch_ms();
                         let batch_start = std::time::Instant::now();
                         let batch_timeout = std::time::Duration::from_millis(opts.timeout);
                         let mut results: Vec<protocol::BatchResultEntry> = Vec::new();
@@ -6497,38 +6511,46 @@ impl ScriptListApp {
                             None
                         };
 
-                        let include_trace = protocol::transaction_trace::should_include_trace(trace_mode, success);
-                        let trace = if include_trace {
-                            let started_at_ms = protocol::transaction_trace::now_epoch_ms()
-                                .saturating_sub(total_elapsed);
-                            Some(protocol::TransactionTrace {
-                                schema_version: protocol::TRANSACTION_TRACE_SCHEMA_VERSION,
-                                request_id: rid.clone(),
-                                command_fingerprint: command_fingerprint.clone(),
-                                status: if success {
-                                    protocol::TransactionTraceStatus::Ok
-                                } else {
-                                    protocol::TransactionTraceStatus::Failed
-                                },
-                                started_at_ms,
-                                total_elapsed_ms: total_elapsed,
-                                failed_at,
-                                commands: results.iter().map(|r| {
-                                    protocol::TransactionCommandTrace {
-                                        index: r.index,
-                                        command: r.command.clone(),
-                                command_payload: None,
-                                        started_at_ms,
-                                        elapsed_ms: r.elapsed.unwrap_or(0),
-                                        before: protocol::UiStateSnapshot::default(),
-                                        after: protocol::UiStateSnapshot::default(),
-                                        polls: Vec::new(),
-                                        error: r.error.clone(),
-                                    }
-                                }).collect(),
-                            })
-                        } else {
-                            None
+                        let trace = match protocol::transaction_trace::maybe_persist_batch_trace_from_results(
+                            trace_mode,
+                            rid.clone(),
+                            command_fingerprint.clone(),
+                            batch_started_at_ms,
+                            total_elapsed,
+                            success,
+                            failed_at,
+                            &commands,
+                            &results,
+                            None,
+                        ) {
+                            Ok(trace) => trace,
+                            Err(error) => {
+                                tracing::warn!(
+                                    target: "script_kit::transaction",
+                                    request_id = %rid,
+                                    error = %error,
+                                    "batch trace persistence failed"
+                                );
+                                if let Some(ref s) = sender {
+                                    let _ = s.try_send(Message::batch_result(
+                                        rid.clone(),
+                                        false,
+                                        vec![protocol::BatchResultEntry {
+                                            index: 0,
+                                            success: false,
+                                            command: "trace".to_string(),
+                                            elapsed: Some(total_elapsed),
+                                            value: None,
+                                            error: Some(protocol::TransactionError::action_failed(format!(
+                                                "failed to persist transaction trace: {error}"
+                                            ))),
+                                        }],
+                                        Some(0),
+                                        total_elapsed,
+                                    ));
+                                }
+                                return;
+                            }
                         };
 
                         tracing::info!(
@@ -6538,7 +6560,7 @@ impl ScriptListApp {
                             total_elapsed_ms = total_elapsed,
                             failed_at = ?failed_at,
                             target = "notes",
-                            trace_included = include_trace,
+                            trace_included = trace.is_some(),
                             "automation.batch.notes.completed"
                         );
 
@@ -6555,6 +6577,7 @@ impl ScriptListApp {
                     // selectByValue, selectBySemanticId, and waitFor commands
                     // to the dialog entity. Unsupported commands fail closed.
                     if let Some(dialog_entity) = actions_dialog_batch_entity {
+                        let batch_started_at_ms = protocol::transaction_trace::now_epoch_ms();
                         let batch_start = std::time::Instant::now();
                         let batch_timeout = std::time::Duration::from_millis(opts.timeout);
                         let mut results: Vec<protocol::BatchResultEntry> = Vec::new();
@@ -6810,34 +6833,46 @@ impl ScriptListApp {
                         let success = !failed;
                         let failed_at = if failed { results.iter().position(|r| !r.success) } else { None };
                         let total_elapsed = batch_start.elapsed().as_millis() as u64;
-                        let include_trace = matches!(trace_mode, protocol::TransactionTraceMode::On)
-                            || (matches!(trace_mode, protocol::TransactionTraceMode::OnFailure) && !success);
-                        let started_at_ms = 0u64;
-                        let trace = if include_trace {
-                            Some(protocol::TransactionTrace {
-                                schema_version: protocol::TRANSACTION_TRACE_SCHEMA_VERSION,
-                                request_id: rid.clone(),
-                                command_fingerprint: command_fingerprint.clone(),
-                                status: if success { protocol::TransactionTraceStatus::Ok } else { protocol::TransactionTraceStatus::Failed },
-                                started_at_ms,
-                                total_elapsed_ms: total_elapsed,
-                                failed_at,
-                                commands: results.iter().map(|r| {
-                                    protocol::TransactionCommandTrace {
-                                        index: r.index,
-                                        command: r.command.clone(),
-                                command_payload: None,
-                                        started_at_ms,
-                                        elapsed_ms: r.elapsed.unwrap_or(0),
-                                        before: protocol::UiStateSnapshot::default(),
-                                        after: protocol::UiStateSnapshot::default(),
-                                        polls: Vec::new(),
-                                        error: r.error.clone(),
-                                    }
-                                }).collect(),
-                            })
-                        } else {
-                            None
+                        let trace = match protocol::transaction_trace::maybe_persist_batch_trace_from_results(
+                            trace_mode,
+                            rid.clone(),
+                            command_fingerprint.clone(),
+                            batch_started_at_ms,
+                            total_elapsed,
+                            success,
+                            failed_at,
+                            &commands,
+                            &results,
+                            None,
+                        ) {
+                            Ok(trace) => trace,
+                            Err(error) => {
+                                tracing::warn!(
+                                    target: "script_kit::transaction",
+                                    request_id = %rid,
+                                    error = %error,
+                                    "batch trace persistence failed"
+                                );
+                                if let Some(ref s) = sender {
+                                    let _ = s.try_send(Message::batch_result(
+                                        rid.clone(),
+                                        false,
+                                        vec![protocol::BatchResultEntry {
+                                            index: 0,
+                                            success: false,
+                                            command: "trace".to_string(),
+                                            elapsed: Some(total_elapsed),
+                                            value: None,
+                                            error: Some(protocol::TransactionError::action_failed(format!(
+                                                "failed to persist transaction trace: {error}"
+                                            ))),
+                                        }],
+                                        Some(0),
+                                        total_elapsed,
+                                    ));
+                                }
+                                return;
+                            }
                         };
 
                         tracing::info!(
@@ -6847,7 +6882,7 @@ impl ScriptListApp {
                             total_elapsed_ms = total_elapsed,
                             failed_at = ?failed_at,
                             target = "actionsDialog",
-                            trace_included = include_trace,
+                            trace_included = trace.is_some(),
                             "automation.batch.actions_dialog.completed"
                         );
 
@@ -6865,6 +6900,7 @@ impl ScriptListApp {
                     // Supported: selectByValue, selectBySemanticId, waitFor.
                     // setInput fails closed (popups don't have independent input).
                     if is_prompt_popup_batch {
+                        let batch_started_at_ms = protocol::transaction_trace::now_epoch_ms();
                         let batch_start = std::time::Instant::now();
                         let batch_timeout = std::time::Duration::from_millis(opts.timeout);
                         let mut results: Vec<protocol::BatchResultEntry> = Vec::new();
@@ -7142,34 +7178,46 @@ impl ScriptListApp {
                         let success = !failed;
                         let failed_at = if failed { results.iter().position(|r| !r.success) } else { None };
                         let total_elapsed = batch_start.elapsed().as_millis() as u64;
-                        let include_trace = matches!(trace_mode, protocol::TransactionTraceMode::On)
-                            || (matches!(trace_mode, protocol::TransactionTraceMode::OnFailure) && !success);
-                        let started_at_ms = 0u64;
-                        let trace = if include_trace {
-                            Some(protocol::TransactionTrace {
-                                schema_version: protocol::TRANSACTION_TRACE_SCHEMA_VERSION,
-                                request_id: rid.clone(),
-                                command_fingerprint: command_fingerprint.clone(),
-                                status: if success { protocol::TransactionTraceStatus::Ok } else { protocol::TransactionTraceStatus::Failed },
-                                started_at_ms,
-                                total_elapsed_ms: total_elapsed,
-                                failed_at,
-                                commands: results.iter().map(|r| {
-                                    protocol::TransactionCommandTrace {
-                                        index: r.index,
-                                        command: r.command.clone(),
-                                command_payload: None,
-                                        started_at_ms,
-                                        elapsed_ms: r.elapsed.unwrap_or(0),
-                                        before: protocol::UiStateSnapshot::default(),
-                                        after: protocol::UiStateSnapshot::default(),
-                                        polls: Vec::new(),
-                                        error: r.error.clone(),
-                                    }
-                                }).collect(),
-                            })
-                        } else {
-                            None
+                        let trace = match protocol::transaction_trace::maybe_persist_batch_trace_from_results(
+                            trace_mode,
+                            rid.clone(),
+                            command_fingerprint.clone(),
+                            batch_started_at_ms,
+                            total_elapsed,
+                            success,
+                            failed_at,
+                            &commands,
+                            &results,
+                            None,
+                        ) {
+                            Ok(trace) => trace,
+                            Err(error) => {
+                                tracing::warn!(
+                                    target: "script_kit::transaction",
+                                    request_id = %rid,
+                                    error = %error,
+                                    "batch trace persistence failed"
+                                );
+                                if let Some(ref s) = sender {
+                                    let _ = s.try_send(Message::batch_result(
+                                        rid.clone(),
+                                        false,
+                                        vec![protocol::BatchResultEntry {
+                                            index: 0,
+                                            success: false,
+                                            command: "trace".to_string(),
+                                            elapsed: Some(total_elapsed),
+                                            value: None,
+                                            error: Some(protocol::TransactionError::action_failed(format!(
+                                                "failed to persist transaction trace: {error}"
+                                            ))),
+                                        }],
+                                        Some(0),
+                                        total_elapsed,
+                                    ));
+                                }
+                                return;
+                            }
                         };
 
                         tracing::info!(
@@ -7179,7 +7227,7 @@ impl ScriptListApp {
                             total_elapsed_ms = total_elapsed,
                             failed_at = ?failed_at,
                             target = "promptPopup",
-                            trace_included = include_trace,
+                            trace_included = trace.is_some(),
                             "automation.batch.prompt_popup.completed"
                         );
 
@@ -7192,6 +7240,7 @@ impl ScriptListApp {
                     }
 
                     // ── Main-window batch path (existing) ────────────────
+                    let batch_started_at_ms = protocol::transaction_trace::now_epoch_ms();
                     let batch_start = std::time::Instant::now();
                     let batch_timeout = std::time::Duration::from_millis(opts.timeout);
                     let mut results: Vec<protocol::BatchResultEntry> = Vec::new();
@@ -7713,52 +7762,47 @@ impl ScriptListApp {
                         None
                     };
 
-                    let include_trace = protocol::transaction_trace::should_include_trace(trace_mode, success);
-                    let trace = if include_trace {
-                        let started_at_ms = protocol::transaction_trace::now_epoch_ms()
-                            .saturating_sub(total_elapsed);
-                        Some(protocol::TransactionTrace {
-                            schema_version: protocol::TRANSACTION_TRACE_SCHEMA_VERSION,
-                            request_id: rid.clone(),
-                            command_fingerprint: command_fingerprint.clone(),
-                            status: if success {
-                                protocol::TransactionTraceStatus::Ok
-                            } else {
-                                protocol::TransactionTraceStatus::Failed
-                            },
-                            started_at_ms,
-                            total_elapsed_ms: total_elapsed,
-                            failed_at,
-                            commands: results.iter().map(|r| {
-                                protocol::TransactionCommandTrace {
-                                    index: r.index,
-                                    command: r.command.clone(),
-                                    command_payload: commands.get(r.index).cloned(),
-                                    started_at_ms,
-                                    elapsed_ms: r.elapsed.unwrap_or(0),
-                                    before: protocol::UiStateSnapshot::default(),
-                                    after: protocol::UiStateSnapshot::default(),
-                                    polls: Vec::new(),
-                                    error: r.error.clone(),
-                                }
-                            }).collect(),
-                        })
-                    } else {
-                        None
-                    };
-
-                    if let Some(ref trace) = trace {
-                        if let Err(error) =
-                            protocol::transaction_trace::append_transaction_trace(None, trace)
-                        {
+                    let trace = match protocol::transaction_trace::maybe_persist_batch_trace_from_results(
+                        trace_mode,
+                        rid.clone(),
+                        command_fingerprint.clone(),
+                        batch_started_at_ms,
+                        total_elapsed,
+                        success,
+                        failed_at,
+                        &commands,
+                        &results,
+                        None,
+                    ) {
+                        Ok(trace) => trace,
+                        Err(error) => {
                             tracing::warn!(
                                 target: "script_kit::transaction",
                                 request_id = %rid,
                                 error = %error,
-                                "Failed to append transaction trace"
+                                "batch trace persistence failed"
                             );
+                            if let Some(ref s) = sender {
+                                let _ = s.try_send(Message::batch_result(
+                                    rid.clone(),
+                                    false,
+                                    vec![protocol::BatchResultEntry {
+                                        index: 0,
+                                        success: false,
+                                        command: "trace".to_string(),
+                                        elapsed: Some(total_elapsed),
+                                        value: None,
+                                        error: Some(protocol::TransactionError::action_failed(format!(
+                                            "failed to persist transaction trace: {error}"
+                                        ))),
+                                    }],
+                                    Some(0),
+                                    total_elapsed,
+                                ));
+                            }
+                            return;
                         }
-                    }
+                    };
 
                     tracing::info!(
                         category = "AUTOMATION",
@@ -7766,7 +7810,7 @@ impl ScriptListApp {
                         success = success,
                         total_elapsed_ms = total_elapsed,
                         failed_at = ?failed_at,
-                        trace_included = include_trace,
+                        trace_included = trace.is_some(),
                         "automation.batch.completed"
                     );
 
@@ -9287,6 +9331,7 @@ impl ScriptListApp {
         if let Some(ref mut cfg) = config {
             self.enrich_footer_config_with_acp_info(cfg);
         }
+        let slot_model = config.as_ref().map(|cfg| cfg.slot_model());
         let native_buttons: Vec<_> = config
             .as_ref()
             .map(|cfg| {
@@ -9369,6 +9414,27 @@ impl ScriptListApp {
             ],
             _ => Vec::new(),
         };
+        let (
+            action_slot_count,
+            context_chip_count,
+            duplicate_shortcut_keys,
+            slot_contract_violation,
+        ) = if let Some(model) = slot_model.as_ref() {
+            (
+                model.action_slot_count,
+                model.context_chip_count,
+                model.duplicate_shortcut_keys.clone(),
+                model.violation.map(str::to_string),
+            )
+        } else {
+            (
+                buttons.len(),
+                0,
+                Vec::new(),
+                (buttons.len() > crate::footer_popup::MAIN_WINDOW_FOOTER_MAX_ACTION_SLOTS)
+                    .then_some("too_many_action_slots".to_string()),
+            )
+        };
 
         let mismatch = match (expected_surface, host.installed_surface) {
             (Some(expected), Some(active)) if expected != active => {
@@ -9390,6 +9456,10 @@ impl ScriptListApp {
             gpui_fallback_visible: owner == "prompt",
             left_info,
             button_count: buttons.len(),
+            action_slot_count,
+            context_chip_count,
+            duplicate_shortcut_keys,
+            slot_contract_violation,
             buttons,
             mismatch,
         }

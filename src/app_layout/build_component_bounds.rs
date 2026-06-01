@@ -12,21 +12,14 @@ impl ScriptListApp {
         let menu_def = self.current_main_menu_theme.def();
 
         // Layout constants from panel.rs and list_item.rs
-        // Header: py(HEADER_PADDING_Y=8) + max(input=22px, buttons=28px) + py(8) + divider(1px)
-        // The buttons are 28px tall, input is 22px, so header content height is 28px
-        // Total: 8 + 28 + 8 + 1 = 45px
+        // Header: py(HEADER_PADDING_Y=8) + shared main-view content + py(8) + divider(1px)
         const HEADER_PADDING_Y: f32 = 8.0;
         const HEADER_PADDING_X: f32 = 16.0;
         const BUTTON_HEIGHT: f32 = 28.0;
         const DIVIDER_HEIGHT: f32 = 1.0;
-        let header_height = px(HEADER_PADDING_Y * 2.0 + BUTTON_HEIGHT + DIVIDER_HEIGHT); // 45px
 
         // Content padding matches HEADER_PADDING_X
         let content_padding = HEADER_PADDING_X;
-
-        // Main content area (below header)
-        let content_top = header_height;
-        let content_height = height - header_height;
 
         // Determine the current view type and build appropriate bounds
         let view_name = match &self.current_view {
@@ -82,6 +75,17 @@ impl ScriptListApp {
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalog",
             AppView::ConfirmPrompt { .. } => "ConfirmPrompt",
         };
+
+        let main_view_has_context_zone = matches!(self.current_view, AppView::ScriptList);
+        const MAIN_VIEW_CONTEXT_ZONE_HEIGHT: f32 = 20.0;
+        let main_view_header_content_height = if main_view_has_context_zone {
+            BUTTON_HEIGHT + menu_def.shell.header_gap + MAIN_VIEW_CONTEXT_ZONE_HEIGHT
+        } else {
+            BUTTON_HEIGHT
+        };
+        let header_height = px(HEADER_PADDING_Y * 2.0 + main_view_header_content_height + DIVIDER_HEIGHT);
+        let content_top = header_height;
+        let content_height = height - header_height;
 
         // Header bounds (includes padding + input + divider) - common to all views
         bounds.push(
@@ -432,6 +436,21 @@ impl ScriptListApp {
             self.current_view,
             AppView::ScriptList | AppView::AcpChatView { .. }
         ) {
+            if main_view_has_context_zone {
+                bounds.push(
+                    ComponentBounds::new(
+                        "MainViewContextZone",
+                        gpui::Bounds {
+                            origin: gpui::point(px(menu_def.shell.header_padding_x), px(HEADER_PADDING_Y)),
+                            size: gpui::size(
+                                (width - px(menu_def.shell.header_padding_x * 2.0)).max(px(0.)),
+                                px(MAIN_VIEW_CONTEXT_ZONE_HEIGHT),
+                            ),
+                        },
+                    )
+                    .with_type(ComponentType::Container),
+                );
+            }
             // Input field in header
             // Positioned from the same shared main-view theme inset used by
             // the rendered chrome, so the input aligns with the app shell.
@@ -439,7 +458,13 @@ impl ScriptListApp {
             // Input height is ~22px (CURSOR_HEIGHT_LG=18 + CURSOR_MARGIN_Y*2=4)
             const INPUT_HEIGHT: f32 = 22.0;
             let input_x = px(menu_def.shell.header_padding_x);
-            let input_y = px(HEADER_PADDING_Y + (BUTTON_HEIGHT - INPUT_HEIGHT) / 2.0); // Vertically centered
+            let context_offset_y = if main_view_has_context_zone {
+                MAIN_VIEW_CONTEXT_ZONE_HEIGHT + menu_def.shell.header_gap
+            } else {
+                0.0
+            };
+            let input_y =
+                px(HEADER_PADDING_Y + context_offset_y + (BUTTON_HEIGHT - INPUT_HEIGHT) / 2.0);
             let input_width = (width - (input_x * 2.)).max(px(0.));
 
             bounds.push(

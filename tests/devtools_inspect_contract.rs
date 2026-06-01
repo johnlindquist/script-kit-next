@@ -405,6 +405,21 @@ fn keyboard_cli_reports_bindings_policies_and_duplicate_keys() {
 }
 
 #[test]
+fn keyboard_cli_reports_footer_slot_contract_fields() {
+    for needle in [
+        "actionSlotCount",
+        "contextChipCount",
+        "duplicateShortcutKeys",
+        "slotContractViolation",
+    ] {
+        assert!(
+            KEYBOARD.contains(needle),
+            "keyboard CLI must expose activeFooter slot-contract field: {needle}"
+        );
+    }
+}
+
+#[test]
 fn actions_cli_reports_popup_route_geometry_shortcuts_and_gaps() {
     for needle in [
         "script-kit-devtools.actions",

@@ -287,6 +287,9 @@ impl ScriptListApp {
         host: ActionsDialogHost,
         parent_automation_id: Option<String>,
     ) -> crate::actions::ActionsHostContextSnapshot {
+        let parent_automation_id = parent_automation_id.or_else(|| {
+            matches!(host, ActionsDialogHost::MainList).then(|| "main".to_string())
+        });
         let parent_info =
             parent_automation_id
                 .as_deref()
@@ -307,36 +310,29 @@ impl ScriptListApp {
                         .map(|file| format!("root-file/{}", file.path))
                 });
 
-            if parent_subject_id.is_none() {
-                let selected_result = self.selected_main_list_search_result_owned();
-                parent_subject_id = selected_result
-                    .as_ref()
-                    .and_then(|result| result.stable_selection_key());
-
-                if let Some(result) = selected_result.as_ref() {
-                    let (grouped_items, flat_results) = self.cached_grouped_results_snapshot();
-                    let selected_grouped =
-                        crate::list_item::coerce_selection(&grouped_items, self.selected_index);
-                    let mut row_index = 0usize;
-                    for (grouped_index, item) in grouped_items.iter().enumerate() {
-                        match item {
-                            crate::list_item::GroupedListItem::SectionHeader(..) => {}
-                            crate::list_item::GroupedListItem::Item(result_idx) => {
-                                if Some(grouped_index) == selected_grouped
-                                    && flat_results.get(*result_idx).is_some()
-                                {
-                                    let label = Self::script_list_result_label(result);
-                                    selected_semantic_id = Some(crate::protocol::generate_semantic_id(
-                                        "choice", row_index, &label,
-                                    ));
-                                    break;
-                                }
-                                row_index += 1;
+            let (grouped_items, flat_results) = self.cached_grouped_results_snapshot();
+            let selected_grouped =
+                crate::list_item::coerce_selection(&grouped_items, self.selected_index);
+            let mut row_index = 0usize;
+            for (grouped_index, item) in grouped_items.iter().enumerate() {
+                match item {
+                    crate::list_item::GroupedListItem::SectionHeader(..) => {}
+                    crate::list_item::GroupedListItem::Item(result_idx) => {
+                        if Some(grouped_index) == selected_grouped {
+                            if let Some(result) = flat_results.get(*result_idx) {
+                                parent_subject_id = parent_subject_id
+                                    .or_else(|| result.stable_selection_key());
+                                let label = Self::script_list_result_label(result);
+                                selected_semantic_id = Some(crate::protocol::generate_semantic_id(
+                                    "choice", row_index, &label,
+                                ));
                             }
-                            crate::list_item::GroupedListItem::Status(_) => {
-                                row_index += 1;
-                            }
+                            break;
                         }
+                        row_index += 1;
+                    }
+                    crate::list_item::GroupedListItem::Status(_) => {
+                        row_index += 1;
                     }
                 }
             }

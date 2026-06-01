@@ -1,6 +1,4 @@
 use super::*;
-use crate::filter_input_core::ScriptListSpecialEntry;
-
 impl ScriptListApp {
     #[inline]
     fn filter_change_can_affect_window_size(&self) -> bool {
@@ -239,30 +237,8 @@ impl ScriptListApp {
         let mut handler_form_owns_input = false;
         if !handled_by_subview && matches!(self.current_view, AppView::ScriptList) {
             if let Some(entry) = Self::special_entry_from_script_list_filter(&text) {
-                match entry {
-                    ScriptListSpecialEntry::AcpMentionPicker => {
-                        let entry_kind = "acp_mention_picker";
-                        crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
-                        tracing::info!(
-                            target: "script_kit::tab_ai",
-                            event = "script_list_special_entry_routed",
-                            entry_kind,
-                        );
-                        self.open_tab_ai_acp_with_mention_picker(window, cx);
-                        return;
-                    }
-                    ScriptListSpecialEntry::AcpProfilePicker => {
-                        let entry_kind = "acp_profile_picker";
-                        crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
-                        tracing::info!(
-                            target: "script_kit::tab_ai",
-                            event = "script_list_special_entry_routed",
-                            entry_kind,
-                        );
-                        self.open_tab_ai_acp_with_profile_picker(window, cx);
-                        return;
-                    }
-                    _ => {}
+                if self.route_script_list_special_entry(entry, &text, window, cx) {
+                    return;
                 }
             }
             self.set_menu_syntax_mode_from_filter(&text);

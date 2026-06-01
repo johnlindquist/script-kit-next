@@ -9,6 +9,19 @@ enum WebcamOpenUtilityAction {
     OpenWebcamPrompt,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FileSearchSelectionProjection {
+    pub(crate) requested_display_index: usize,
+    pub(crate) display_index: usize,
+    pub(crate) result_index: usize,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct FileSearchSelectionBinding {
+    pub(crate) projection: Option<FileSearchSelectionProjection>,
+    pub(crate) file: Option<crate::file_search::FileResult>,
+}
+
 impl TerminalOpenUtilityAction {
     fn creation_failure_log(self, error: impl std::fmt::Display) -> String {
         match self {
@@ -354,6 +367,44 @@ impl ScriptListApp {
             })
     }
 
+    /// Projection from the user-facing File Search display row into the raw
+    /// cached result row. This is the selection identity used by preview,
+    /// actions, and automation state.
+    pub(crate) fn resolve_file_search_selection_projection(
+        display_indices: &[usize],
+        result_count: usize,
+        selected_index: usize,
+    ) -> Option<FileSearchSelectionProjection> {
+        if display_indices.is_empty() {
+            return None;
+        }
+        let display_index = selected_index.min(display_indices.len().saturating_sub(1));
+        let result_index = *display_indices.get(display_index)?;
+        if result_index >= result_count {
+            return None;
+        }
+        Some(FileSearchSelectionProjection {
+            requested_display_index: selected_index,
+            display_index,
+            result_index,
+        })
+    }
+
+    pub(crate) fn file_search_selection_binding(
+        &self,
+        selected_index: usize,
+    ) -> FileSearchSelectionBinding {
+        let projection = Self::resolve_file_search_selection_projection(
+            &self.file_search_display_indices,
+            self.cached_file_results.len(),
+            selected_index,
+        );
+        let file = projection
+            .and_then(|projection| self.cached_file_results.get(projection.result_index))
+            .cloned();
+        FileSearchSelectionBinding { projection, file }
+    }
+
     /// Look up a file search result by its position in the rendered display list
     /// (after filtering, scoring, and directory-first sorting).
     pub(crate) fn file_search_result_at_display_index(
@@ -379,9 +430,9 @@ impl ScriptListApp {
         &self,
         selected_index: usize,
     ) -> Option<(usize, &crate::file_search::FileResult)> {
-        let display_index = self.clamp_file_search_display_index(selected_index)?;
-        let entry = self.file_search_result_at_display_index(display_index)?;
-        Some((display_index, entry))
+        let projection = self.file_search_selection_binding(selected_index).projection?;
+        let entry = self.cached_file_results.get(projection.result_index)?;
+        Some((projection.display_index, entry))
     }
 
     /// Number of rows in the precomputed file-search display list.
@@ -978,5 +1029,31 @@ mod utility_views_file_search_tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "parsed-dir-result");
+    }
+
+    #[test]
+    fn file_search_selection_projection_maps_display_row_to_result_row() {
+        let projection =
+            ScriptListApp::resolve_file_search_selection_projection(&[2, 0], 3, 0).unwrap();
+
+        assert_eq!(projection.requested_display_index, 0);
+        assert_eq!(projection.display_index, 0);
+        assert_eq!(projection.result_index, 2);
+    }
+
+    #[test]
+    fn file_search_selection_projection_clamps_stale_selected_index() {
+        let projection =
+            ScriptListApp::resolve_file_search_selection_projection(&[4, 1], 5, 99).unwrap();
+
+        assert_eq!(projection.requested_display_index, 99);
+        assert_eq!(projection.display_index, 1);
+        assert_eq!(projection.result_index, 1);
+    }
+
+    #[test]
+    fn file_search_selection_projection_rejects_empty_or_invalid_projection() {
+        assert!(ScriptListApp::resolve_file_search_selection_projection(&[], 3, 0).is_none());
+        assert!(ScriptListApp::resolve_file_search_selection_projection(&[9], 3, 0).is_none());
     }
 }

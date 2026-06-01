@@ -655,12 +655,11 @@ impl ScriptListApp {
             // Reset the flag since we're now in main menu
             self.opened_from_main_menu = false;
 
-            // Sync input and reset placeholder to the active main-menu theme id
-            let theme_placeholder = self.current_main_menu_theme.placeholder();
+            // Sync input and reset the root launcher discovery placeholder.
             self.gpui_input_state.update(cx, |state, cx| {
                 state.set_value("", window, cx);
                 state.set_selection(0, 0, window, cx);
-                state.set_placeholder(theme_placeholder, window, cx);
+                state.set_placeholder(crate::ROOT_LAUNCHER_PLACEHOLDER, window, cx);
             });
 
             // Clear actions popup state (prevents stale overlay on return to menu)

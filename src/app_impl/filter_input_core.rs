@@ -13,7 +13,7 @@ impl ScriptListApp {
     /// Transient first-character launch triggers should not persist when the
     /// user returns to the ScriptList surface.
     pub(crate) fn is_transient_script_list_trigger(new_text: &str) -> bool {
-        matches!(new_text, "~" | "!" | "?")
+        matches!(new_text, "~" | ">" | "?")
     }
 
     /// Parse `raw` through the menu-syntax classifier and store the result in
@@ -120,7 +120,7 @@ impl ScriptListApp {
         }
 
         match new_text {
-            "!" => Some(ScriptListSpecialEntry::QuickTerminal),
+            ">" => Some(ScriptListSpecialEntry::QuickTerminal),
             "?" => Some(ScriptListSpecialEntry::ActionsHelp),
             "@" => Some(ScriptListSpecialEntry::AcpMentionPicker),
             "|" => Some(ScriptListSpecialEntry::AcpProfilePicker),
@@ -582,10 +582,18 @@ mod tests {
         );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter("!"),
-            Some(ScriptListSpecialEntry::QuickTerminal)
+            None
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter("!dep"),
+            None
         );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter(">"),
+            Some(ScriptListSpecialEntry::QuickTerminal)
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter(">deploy"),
             None
         );
         assert_eq!(
@@ -610,7 +618,7 @@ mod tests {
     fn test_is_transient_script_list_trigger() {
         use super::ScriptListApp;
 
-        for trigger in ["~", "!", "?"] {
+        for trigger in ["~", ">", "?"] {
             assert!(
                 ScriptListApp::is_transient_script_list_trigger(trigger),
                 "expected '{trigger}' to be transient"
@@ -618,7 +626,7 @@ mod tests {
         }
 
         for query in [
-            "/", "@", "|", ".", ";", "~/src", "@browser", "/tmp", "foo", "",
+            "!", "!dep", "/", "@", "|", ".", ";", "~/src", "@browser", "/tmp", "foo", "",
         ] {
             assert!(
                 !ScriptListApp::is_transient_script_list_trigger(query),

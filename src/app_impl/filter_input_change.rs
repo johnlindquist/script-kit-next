@@ -2,6 +2,66 @@ use super::*;
 use crate::filter_input_core::ScriptListSpecialEntry;
 
 impl ScriptListApp {
+    pub(crate) fn route_script_list_special_entry(
+        &mut self,
+        entry: ScriptListSpecialEntry,
+        raw_filter_text: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let entry_kind = match &entry {
+            ScriptListSpecialEntry::FileSearchMini { .. } => "file_search_mini",
+            ScriptListSpecialEntry::QuickTerminal => "quick_terminal",
+            ScriptListSpecialEntry::ActionsHelp => "actions_help",
+            ScriptListSpecialEntry::AcpMentionPicker => "acp_mention_picker",
+            ScriptListSpecialEntry::AcpProfilePicker => "acp_profile_picker",
+        };
+        let raw_filter_text_safe = logging::log_user_value(raw_filter_text);
+
+        tracing::info!(
+            target: "script_kit::do_in_trace",
+            event = "DO_IN_TRACE script_list_special_entry_routed",
+            filter_text_preview = %raw_filter_text_safe,
+            filter_text_bytes = raw_filter_text_safe.raw_bytes,
+            filter_text_safe_bytes = raw_filter_text_safe.safe_bytes,
+            filter_text_truncated = raw_filter_text_safe.truncated,
+            entry_kind,
+            current_view = ?self.current_view,
+            "DO_IN_TRACE script_list_special_entry_routed"
+        );
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "script_list_special_entry_routed",
+            filter_text = %raw_filter_text,
+            entry_kind,
+            current_view = ?self.current_view,
+        );
+
+        match entry {
+            ScriptListSpecialEntry::FileSearchMini { query } => {
+                self.open_file_search_view(query, FileSearchPresentation::Mini, cx);
+            }
+            ScriptListSpecialEntry::QuickTerminal => {
+                self.open_quick_terminal(None, cx);
+            }
+            ScriptListSpecialEntry::ActionsHelp => {
+                if self.has_actions() {
+                    self.toggle_actions(cx, window);
+                }
+            }
+            ScriptListSpecialEntry::AcpMentionPicker => {
+                crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+                self.open_tab_ai_acp_with_mention_picker(window, cx);
+            }
+            ScriptListSpecialEntry::AcpProfilePicker => {
+                crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+                self.open_tab_ai_acp_with_profile_picker(window, cx);
+            }
+        }
+
+        true
+    }
+
     pub(crate) fn handle_filter_input_change(
         &mut self,
         window: &mut Window,
@@ -613,54 +673,10 @@ impl ScriptListApp {
         // Prompt-builder sigils (@, /, |, .) are handled by the Spine
         // projection and stay in the main list. Only mode-exit sigils and
         // file search trigger a view switch.
-        let special_entry = Self::special_entry_from_script_list_filter(&new_text);
-        if let Some(entry) = special_entry {
-            let entry_kind = match &entry {
-                ScriptListSpecialEntry::FileSearchMini { .. } => "file_search_mini",
-                ScriptListSpecialEntry::QuickTerminal => "quick_terminal",
-                ScriptListSpecialEntry::ActionsHelp => "actions_help",
-                ScriptListSpecialEntry::AcpMentionPicker => "acp_mention_picker",
-                ScriptListSpecialEntry::AcpProfilePicker => "acp_profile_picker",
-            };
-            tracing::info!(
-                target: "script_kit::do_in_trace",
-                event = "DO_IN_TRACE script_list_special_entry_routed",
-                filter_text_preview = %new_text_safe,
-                filter_text_bytes = new_text_safe.raw_bytes,
-                filter_text_safe_bytes = new_text_safe.safe_bytes,
-                filter_text_truncated = new_text_safe.truncated,
-                entry_kind,
-                current_view = ?self.current_view,
-                "DO_IN_TRACE script_list_special_entry_routed"
-            );
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "script_list_special_entry_routed",
-                filter_text = %new_text,
-                entry_kind,
-                current_view = ?self.current_view,
-            );
-            match entry {
-                ScriptListSpecialEntry::FileSearchMini { .. } => {
-                    let query = Self::normalize_mini_file_search_query(&new_text);
-                    self.open_file_search_view(query, FileSearchPresentation::Mini, cx);
-                }
-                ScriptListSpecialEntry::QuickTerminal => {
-                    self.open_quick_terminal(None, cx);
-                }
-                ScriptListSpecialEntry::ActionsHelp => {
-                    if self.has_actions() {
-                        self.toggle_actions(cx, window);
-                    }
-                }
-                ScriptListSpecialEntry::AcpMentionPicker => {
-                    self.open_tab_ai_acp_with_mention_picker(window, cx);
-                }
-                ScriptListSpecialEntry::AcpProfilePicker => {
-                    self.open_tab_ai_acp_with_profile_picker(window, cx);
-                }
+        if let Some(entry) = Self::special_entry_from_script_list_filter(&new_text) {
+            if self.route_script_list_special_entry(entry, &new_text, window, cx) {
+                return;
             }
-            return;
         }
 
         self.set_menu_syntax_mode_from_filter(&new_text);

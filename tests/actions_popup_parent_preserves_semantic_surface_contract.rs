@@ -333,7 +333,7 @@ fn script_list_actions_open_paths_capture_host_context_before_popup_spawn() {
     let helper = source_between(
         ACTIONS_TOGGLE,
         "pub(crate) fn build_actions_host_context_snapshot(",
-        "    }",
+        "        crate::actions::ActionsHostContextSnapshot",
     );
     assert!(helper.contains("parent_automation_id"));
     assert!(helper.contains("parent_semantic_surface"));

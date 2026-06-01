@@ -66,11 +66,10 @@ impl ScriptListApp {
         crate::designs::set_current_main_menu_theme(new_theme);
         self.refresh_main_menu_theme_layout_metrics("cycle_main_menu_theme", cx);
 
-        // Surface the active theme in the search placeholder so it stays
-        // identifiable while browsing the (empty-filter) list.
+        // Keep the root launcher placeholder stable while theme geometry changes.
         let input_state = self.gpui_input_state.clone();
         input_state.update(cx, |state, cx| {
-            state.set_placeholder(new_theme.placeholder(), window, cx);
+            state.set_placeholder(crate::ROOT_LAUNCHER_PLACEHOLDER, window, cx);
         });
 
         self.toast_manager.push(

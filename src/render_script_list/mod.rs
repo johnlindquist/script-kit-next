@@ -847,7 +847,8 @@ impl ScriptListApp {
         // Build script list using uniform_list for proper virtualized scrolling.
         let handler_form_owns_input_for_render =
             self.menu_syntax_capture_form_owns_input_for(&filter_text_for_render);
-        let show_launcher_ask_ai_hint = !handler_form_owns_input_for_render;
+        // The three-zone launcher keeps Agent discovery in the footer action zone.
+        let show_launcher_ask_ai_hint = false;
         let capture_composer_owns_main_list = self
             .menu_syntax_mode
             .capture_composer_owns_input_for(&filter_text_for_render)
@@ -1825,19 +1826,6 @@ impl ScriptListApp {
             self.render_search_input_with_ghost(cx).into_any_element()
         };
 
-        let mut input_trailing = Vec::new();
-        if show_launcher_ask_ai_hint {
-            input_trailing.push(
-                crate::components::render_launcher_ask_ai_hint(
-                    &self.theme,
-                    cx.listener(|this, _event, _window, cx| {
-                        this.open_tab_ai_chat(cx);
-                    }),
-                )
-                .into_any_element(),
-            );
-        }
-
         let input = crate::components::main_view_chrome::render_main_view_input_shell(
             &self.theme,
             menu_def,
@@ -1848,11 +1836,35 @@ impl ScriptListApp {
                     menu_def,
                     self.main_view_state_icon_name_for_script_list(&filter_text_for_render),
                 )),
-                trailing: input_trailing,
+                trailing: Vec::new(),
             },
         );
 
         let header = crate::components::main_view_chrome::MainViewHeaderChrome {
+            context: Some(
+                crate::components::main_view_chrome::render_main_view_context_zone(
+                    &self.theme,
+                    menu_def,
+                    self.global_footer_cwd_chip().map(|chip| chip.label),
+                    self.agent_model_footer_label(),
+                    cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                        this.dispatch_main_window_footer_action(
+                            crate::footer_popup::FooterAction::Cwd,
+                            window,
+                            cx,
+                            "main_view_context_click",
+                        );
+                    }),
+                    cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                        this.dispatch_main_window_footer_action(
+                            crate::footer_popup::FooterAction::AgentModel,
+                            window,
+                            cx,
+                            "main_view_context_click",
+                        );
+                    }),
+                ),
+            ),
             input,
             padding_x: header_padding_x,
             padding_y: header_padding_y,

@@ -232,3 +232,31 @@ fn get_state_active_footer_exposes_acp_model_status_text() {
         "active footer snapshots must include ACP-enriched left info, including status text"
     );
 }
+
+#[test]
+fn acp_agent_model_chip_remains_context_slot_with_active_dot() {
+    let chip_body = fn_body(UI_WINDOW_SOURCE, "fn global_main_window_left_chip_buttons(");
+    assert!(
+        chip_body.contains("FooterAction::AgentModel")
+            && chip_body.contains("agent_model_dot_status")
+            && chip_body.contains("button.leading_dot(dot_status)")
+            && chip_body.contains("buttons.push(button);"),
+        "ACP footer enrichment must keep the Agent/Model entry as the active status chip"
+    );
+
+    let role_body = fn_body(FOOTER_POPUP_SOURCE, "pub(crate) fn footer_button_slot_role");
+    assert!(
+        role_body.contains("FooterAction::Cwd | FooterAction::AgentModel")
+            && role_body.contains("FooterSlotRole::ContextChip"),
+        "AgentModel must be a context chip so its active dot does not inflate footer action slots"
+    );
+
+    assert!(
+        PROTOCOL_SURFACE_SOURCE.contains("pub action_slot_count: usize")
+            && PROTOCOL_SURFACE_SOURCE.contains("pub context_chip_count: usize")
+            && PROMPT_HANDLER_SOURCE.contains("let slot_model = config.as_ref().map(|cfg| cfg.slot_model());")
+            && PROMPT_HANDLER_SOURCE.contains("model.action_slot_count")
+            && PROMPT_HANDLER_SOURCE.contains("model.context_chip_count"),
+        "getState.activeFooter must expose action and context slot counts derived from the footer slot model"
+    );
+}

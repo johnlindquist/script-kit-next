@@ -121,8 +121,16 @@ impl ScriptListApp {
         // Layout constants (same as build_component_bounds)
         use crate::ui::chrome as chrome_tokens;
         const BUTTON_HEIGHT: f32 = 28.0;
+        const MAIN_VIEW_CONTEXT_ZONE_HEIGHT: f32 = 20.0;
+        let main_view_has_context_zone = matches!(self.current_view, AppView::ScriptList);
         let shell_horizontal_padding = shell.header_padding_x;
-        let header_height = shell.header_padding_y * 2.0 + BUTTON_HEIGHT + shell.divider_height;
+        let header_content_height = if main_view_has_context_zone {
+            MAIN_VIEW_CONTEXT_ZONE_HEIGHT + shell.header_gap + BUTTON_HEIGHT
+        } else {
+            BUTTON_HEIGHT
+        };
+        let header_height =
+            shell.header_padding_y * 2.0 + header_content_height + shell.divider_height;
         let list_width = if uses_split_preview {
             window_width * 0.5
         } else {
@@ -1712,18 +1720,48 @@ impl ScriptListApp {
                     shell.header_padding_y,
                     shell_horizontal_padding,
                 )
-                .with_flex_row()
+                .with_flex_column()
                 .with_depth(1)
                 .with_parent("Window")
                 .with_explanation(format!(
-                    "Height = padding({}) + content({}) + padding({}) + divider({}) = {}px. Uses flex-row with items-center.",
-                    shell.header_padding_y, BUTTON_HEIGHT, shell.header_padding_y, shell.divider_height, header_height
+                    "Height = padding({}) + content({}) + padding({}) + divider({}) = {}px. Uses shared main-view header chrome.",
+                    shell.header_padding_y, header_content_height, shell.header_padding_y, shell.divider_height, header_height
                 )),
         );
 
         // Search input in header
         let input_height = search.height;
-        let input_y = shell.header_padding_y + (BUTTON_HEIGHT - input_height) / 2.0;
+        let context_offset_y = if main_view_has_context_zone {
+            MAIN_VIEW_CONTEXT_ZONE_HEIGHT + shell.header_gap
+        } else {
+            0.0
+        };
+        if main_view_has_context_zone {
+            components.push(
+                LayoutComponentInfo::new("MainViewContextZone", LayoutComponentType::Container)
+                    .with_bounds(
+                        shell_horizontal_padding,
+                        shell.header_padding_y,
+                        (window_width - (shell_horizontal_padding * 2.0)).max(0.0),
+                        MAIN_VIEW_CONTEXT_ZONE_HEIGHT,
+                    )
+                    .with_visual_style(
+                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                        Some(search.radius * 0.75),
+                    )
+                    .with_visual_token("chrome.mainViewContext")
+                    .with_flex_row()
+                    .with_gap(shell.header_gap)
+                    .with_depth(2)
+                    .with_parent("MainViewHeader")
+                    .with_explanation(
+                        "Three-zone launcher context row: cwd/Tab and agent-model/Shift+Tab live above the query input."
+                            .to_string(),
+                    ),
+            );
+        }
+        let input_y = shell.header_padding_y + context_offset_y + (BUTTON_HEIGHT - input_height) / 2.0;
         let input_width = (window_width - (shell_horizontal_padding * 2.0)).max(0.0);
         let input_text_inset_left =
             crate::components::main_view_chrome::main_view_input_text_inset_left(menu_def);
@@ -1764,7 +1802,7 @@ impl ScriptListApp {
                 .with_visual_token("chrome.mainViewInput")
                 .with_hit_bounds(
                     shell_horizontal_padding,
-                    shell.header_padding_y,
+                    input_y,
                     input_width,
                     search.height,
                 )

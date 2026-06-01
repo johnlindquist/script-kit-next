@@ -4,6 +4,7 @@ use gpui::{
     ParentElement, Pixels, Render, SharedString, StatefulInteractiveElement, Styled, Window,
     WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
+use std::collections::BTreeMap;
 use std::sync::{Mutex, OnceLock};
 
 #[cfg(target_os = "macos")]
@@ -137,6 +138,38 @@ pub(crate) struct FooterButtonConfig {
     pub leading_dot: Option<FooterDotStatus>,
 }
 
+pub(crate) const MAIN_WINDOW_FOOTER_MAX_ACTION_SLOTS: usize = 3;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FooterSlotRole {
+    ActionSlot,
+    ContextChip,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct MainWindowFooterSlotModel {
+    pub surface: &'static str,
+    pub button_count: usize,
+    pub action_slot_count: usize,
+    pub context_chip_count: usize,
+    pub duplicate_shortcut_keys: Vec<String>,
+    pub violation: Option<&'static str>,
+}
+
+pub(crate) fn footer_button_slot_role(button: &FooterButtonConfig) -> FooterSlotRole {
+    if matches!(button.action, FooterAction::Cwd | FooterAction::AgentModel) {
+        return FooterSlotRole::ContextChip;
+    }
+
+    if matches!(button.action, FooterAction::Ai)
+        && button.key.as_ref() == crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN
+    {
+        return FooterSlotRole::ContextChip;
+    }
+
+    FooterSlotRole::ActionSlot
+}
+
 impl FooterButtonConfig {
     pub(crate) fn new(
         action: FooterAction,
@@ -243,11 +276,74 @@ pub(crate) struct MainWindowFooterConfig {
 
 impl MainWindowFooterConfig {
     pub(crate) fn new(surface: &'static str, buttons: Vec<FooterButtonConfig>) -> Self {
-        Self {
+        let config = Self {
             surface,
             buttons,
             left_info: None,
+        };
+        let model = config.slot_model();
+        if let Some(violation) = model.violation {
+            debug_assert!(
+                false,
+                "main window footer slot contract violation on {surface}: {violation}"
+            );
+            tracing::warn!(
+                surface,
+                action_slot_count = model.action_slot_count,
+                context_chip_count = model.context_chip_count,
+                button_count = model.button_count,
+                duplicate_shortcut_keys = ?model.duplicate_shortcut_keys,
+                violation,
+                "Main window footer slot contract violation"
+            );
         }
+        config
+    }
+
+    pub(crate) fn slot_model(&self) -> MainWindowFooterSlotModel {
+        let mut action_slot_count = 0usize;
+        let mut context_chip_count = 0usize;
+        let mut shortcut_counts = BTreeMap::<String, usize>::new();
+
+        for button in &self.buttons {
+            match footer_button_slot_role(button) {
+                FooterSlotRole::ActionSlot => {
+                    action_slot_count += 1;
+                    let key = button.key.trim();
+                    if !key.is_empty() {
+                        *shortcut_counts.entry(key.to_string()).or_insert(0) += 1;
+                    }
+                }
+                FooterSlotRole::ContextChip => {
+                    context_chip_count += 1;
+                }
+            }
+        }
+
+        let duplicate_shortcut_keys = shortcut_counts
+            .into_iter()
+            .filter_map(|(key, count)| (count > 1).then_some(key))
+            .collect::<Vec<_>>();
+        let violation = if action_slot_count > MAIN_WINDOW_FOOTER_MAX_ACTION_SLOTS {
+            Some("too_many_action_slots")
+        } else if !duplicate_shortcut_keys.is_empty() {
+            Some("duplicate_shortcut_keys")
+        } else {
+            None
+        };
+
+        MainWindowFooterSlotModel {
+            surface: self.surface,
+            button_count: self.buttons.len(),
+            action_slot_count,
+            context_chip_count,
+            duplicate_shortcut_keys,
+            violation,
+        }
+    }
+
+    pub(crate) fn slot_contract_violation(&self) -> Option<&'static str> {
+        self.slot_model().violation
     }
 }
 

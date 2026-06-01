@@ -3,7 +3,11 @@
 //! Appends serialized `TransactionTrace` records to an append-only JSONL file
 //! and reads them back for inspection by agents and diagnostic tooling.
 
-use crate::protocol::types::batch_wait::{TransactionTrace, TransactionTraceMode};
+use crate::protocol::types::batch_wait::{
+    BatchCommand, BatchResultEntry, TransactionCommandTrace, TransactionTrace,
+    TransactionTraceMode, TransactionTraceStatus, UiStateSnapshot,
+    TRANSACTION_TRACE_SCHEMA_VERSION,
+};
 use anyhow::{anyhow, Context, Result};
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
@@ -191,4 +195,83 @@ pub fn read_latest_transaction_trace(
 pub fn should_include_trace(mode: TransactionTraceMode, success: bool) -> bool {
     matches!(mode, TransactionTraceMode::On)
         || (!success && matches!(mode, TransactionTraceMode::OnFailure))
+}
+
+pub fn build_batch_trace_from_results(
+    request_id: String,
+    command_fingerprint: String,
+    started_at_ms: u64,
+    total_elapsed_ms: u64,
+    success: bool,
+    failed_at: Option<usize>,
+    commands: &[BatchCommand],
+    results: &[BatchResultEntry],
+) -> TransactionTrace {
+    debug_assert_ne!(
+        started_at_ms, 0,
+        "transaction traces must carry a real started_at_ms"
+    );
+    debug_assert_eq!(
+        failed_at,
+        results.iter().position(|entry| !entry.success),
+        "failed_at must match the first failed result"
+    );
+
+    TransactionTrace {
+        schema_version: TRANSACTION_TRACE_SCHEMA_VERSION,
+        request_id,
+        command_fingerprint,
+        status: if success {
+            TransactionTraceStatus::Ok
+        } else {
+            TransactionTraceStatus::Failed
+        },
+        started_at_ms,
+        total_elapsed_ms,
+        failed_at,
+        commands: results
+            .iter()
+            .map(|entry| TransactionCommandTrace {
+                index: entry.index,
+                command: entry.command.clone(),
+                command_payload: commands.get(entry.index).cloned(),
+                started_at_ms,
+                elapsed_ms: entry.elapsed.unwrap_or(0),
+                before: UiStateSnapshot::default(),
+                after: UiStateSnapshot::default(),
+                polls: Vec::new(),
+                error: entry.error.clone(),
+            })
+            .collect(),
+    }
+}
+
+pub fn maybe_persist_batch_trace_from_results(
+    mode: TransactionTraceMode,
+    request_id: String,
+    command_fingerprint: String,
+    started_at_ms: u64,
+    total_elapsed_ms: u64,
+    success: bool,
+    failed_at: Option<usize>,
+    commands: &[BatchCommand],
+    results: &[BatchResultEntry],
+    log_path: Option<&Path>,
+) -> Result<Option<TransactionTrace>> {
+    if !should_include_trace(mode, success) {
+        return Ok(None);
+    }
+
+    let trace = build_batch_trace_from_results(
+        request_id,
+        command_fingerprint,
+        started_at_ms,
+        total_elapsed_ms,
+        success,
+        failed_at,
+        commands,
+        results,
+    );
+    append_transaction_trace(log_path, &trace)?;
+    Ok(Some(trace))
 }
