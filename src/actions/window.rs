@@ -1772,6 +1772,8 @@ pub fn open_actions_window(
         close_actions_window(cx);
         return Err(e);
     }
+    let popup_any_handle: AnyWindowHandle = handle.into();
+    crate::windows::upsert_runtime_window_handle(&popup_automation_id, popup_any_handle);
     crate::windows::automation_surface_collector::upsert_actions_dialog_snapshot(
         popup_automation_id.as_str(),
         &dialog_entity,
@@ -1803,6 +1805,7 @@ pub fn close_actions_window(cx: &mut App) {
     // Unregister from automation registry before destroying the window
     clear_actions_popup_automation_snapshot();
     crate::windows::automation_surface_collector::remove_actions_dialog_snapshot("actions-dialog");
+    crate::windows::remove_runtime_window_handle("actions-dialog");
     crate::windows::remove_automation_window("actions-dialog");
 
     if let Some(window_storage) = ACTIONS_WINDOW.get() {
@@ -2427,6 +2430,36 @@ mod actions_popup_origin_tests {
         assert!(
             source.contains("addChildWindow:child_ns_window ordered:NS_WINDOW_ABOVE"),
             "actions popup child attachment should use AppKit addChildWindow ordering"
+        );
+    }
+
+    #[test]
+    fn open_actions_window_registers_protocol_runtime_handle() {
+        let source = std::fs::read_to_string("src/actions/window.rs")
+            .expect("Failed to read src/actions/window.rs");
+
+        let fn_start = source
+            .find("pub fn open_actions_window(")
+            .expect("open_actions_window not found");
+        let close_start = source
+            .find("pub fn close_actions_window(")
+            .expect("close_actions_window not found");
+        let open_body = &source[fn_start..close_start];
+        let close_body = &source[close_start..];
+
+        assert!(
+            open_body.contains("let popup_any_handle: AnyWindowHandle = handle.into();"),
+            "open_actions_window must convert the popup handle to an AnyWindowHandle"
+        );
+        assert!(
+            open_body.contains(
+                "crate::windows::upsert_runtime_window_handle(&popup_automation_id, popup_any_handle)"
+            ),
+            "open_actions_window must register the actions-dialog runtime handle for simulateGpuiEvent"
+        );
+        assert!(
+            close_body.contains("crate::windows::remove_runtime_window_handle(\"actions-dialog\")"),
+            "close_actions_window must remove the actions-dialog runtime handle"
         );
     }
 }

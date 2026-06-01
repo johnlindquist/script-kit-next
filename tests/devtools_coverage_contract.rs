@@ -1,6 +1,8 @@
 use std::fs;
 
 const COVERAGE: &str = include_str!("../scripts/devtools/coverage.ts");
+const ACTIONS_DEVTOOLS: &str = include_str!("../scripts/devtools/actions.ts");
+const ACTIONS_DIALOG: &str = include_str!("../src/actions/dialog.rs");
 const DEVTOOLS_SKILL: &str = include_str!("../.agents/skills/script-kit-devtools/SKILL.md");
 const COVERAGE_MAP: &str =
     include_str!("../.agents/skills/script-kit-devtools/references/devtools-api-coverage-map.md");
@@ -309,6 +311,45 @@ fn devtools_coverage_artifacts_are_checked_in() {
         assert!(
             fs::metadata(path).is_ok(),
             "expected checked-in DevTools coverage artifact at {path}"
+        );
+    }
+}
+
+#[test]
+fn actions_cli_reports_protocol_hover_proof() {
+    for needle in [
+        "--prove-hover",
+        "hoverProof",
+        "simulateGpuiEvent",
+        "target-scoped ActionsDialog hover proof",
+        "noNativeEscalation",
+        "submitAttempted",
+        "activationAttempted",
+        "hoveredRequestedRow",
+        "popupLogicalPx",
+    ] {
+        assert!(
+            ACTIONS_DEVTOOLS.contains(needle),
+            "actions DevTools CLI must expose protocol hover proof receipt: {needle}"
+        );
+    }
+}
+
+#[test]
+fn actions_dialog_rows_expose_mouse_move_hover_state() {
+    for needle in [
+        "fn update_hovered_row_from_popup_y",
+        "let list_top = if search_at_top { search_height } else { 0.0 } + header_height",
+        "this.update_hovered_row_from_popup_y(f32::from(event.position.y), cx)",
+        ".on_mouse_move({",
+        "move |_event: &gpui::MouseMoveEvent, _window, cx|",
+        "this.hovered_row = Some(ix)",
+        "cx.notify()",
+        ".on_hover({",
+    ] {
+        assert!(
+            ACTIONS_DIALOG.contains(needle),
+            "actions row hover must update from protocol mouseMove and native hover: {needle}"
         );
     }
 }

@@ -445,9 +445,64 @@ pub(crate) fn dispatch_gpui_event(
         }
     };
 
+    let event_type = match event {
+        SimulatedGpuiEvent::KeyDown { .. } => "keyDown",
+        SimulatedGpuiEvent::MouseMove { .. } => "mouseMove",
+        SimulatedGpuiEvent::MouseDown { .. } => "mouseDown",
+        SimulatedGpuiEvent::MouseUp { .. } => "mouseUp",
+    };
+
+    tracing::info!(
+        target: "script_kit::automation",
+        request_id = %request_id,
+        window_id = %resolved.id,
+        kind = ?resolved.kind,
+        event_type = %event_type,
+        "gpui_event_simulation.dispatch"
+    );
+
+    // 2. Try exact runtime handle first — this preserves the resolved
+    //    automation window identity all the way through GPUI dispatch,
+    //    so two detached ACP windows can be targeted independently. Attached
+    //    popup exact handles also receive popup-local mouse coordinates; only
+    //    the parent-window fallback below rebases into parent dispatch space.
+    if let Some(handle) = crate::windows::get_valid_runtime_window_handle(&resolved.id, cx) {
+        tracing::info!(
+            target: "script_kit::automation",
+            request_id = %request_id,
+            window_id = %resolved.id,
+            "gpui_event_simulation.dispatch_exact_handle"
+        );
+        if matches!(
+            resolved.kind,
+            crate::protocol::AutomationWindowKind::AcpDetached
+                | crate::protocol::AutomationWindowKind::Dictation
+        ) {
+            return dispatch_with_any_handle_deferred(
+                handle,
+                request_id,
+                &resolved.id,
+                event_type,
+                event,
+                cx,
+                "exact_handle",
+            );
+        }
+
+        return dispatch_with_any_handle(
+            handle,
+            request_id,
+            &resolved.id,
+            event_type,
+            event,
+            cx,
+            "exact_handle",
+        );
+    }
+
     // Rebase mouse coordinates for attached surfaces (ActionsDialog, PromptPopup)
-    // before GPUI dispatch so clicks land inside the popup, not at the same
-    // (x, y) in the parent window.
+    // only when falling back to the parent window. Exact popup handles above use
+    // popup-local coordinates directly.
     let event = match rebase_mouse_event_to_dispatch_space(&resolved, event) {
         Ok(rebased) => rebased,
         Err(msg) => {
@@ -467,59 +522,6 @@ pub(crate) fn dispatch_gpui_event(
             };
         }
     };
-
-    let event_type = match &event {
-        SimulatedGpuiEvent::KeyDown { .. } => "keyDown",
-        SimulatedGpuiEvent::MouseMove { .. } => "mouseMove",
-        SimulatedGpuiEvent::MouseDown { .. } => "mouseDown",
-        SimulatedGpuiEvent::MouseUp { .. } => "mouseUp",
-    };
-
-    tracing::info!(
-        target: "script_kit::automation",
-        request_id = %request_id,
-        window_id = %resolved.id,
-        kind = ?resolved.kind,
-        event_type = %event_type,
-        "gpui_event_simulation.dispatch"
-    );
-
-    // 2. Try exact runtime handle first — this preserves the resolved
-    //    automation window identity all the way through GPUI dispatch,
-    //    so two detached ACP windows can be targeted independently.
-    if let Some(handle) = crate::windows::get_valid_runtime_window_handle(&resolved.id, cx) {
-        tracing::info!(
-            target: "script_kit::automation",
-            request_id = %request_id,
-            window_id = %resolved.id,
-            "gpui_event_simulation.dispatch_exact_handle"
-        );
-        if matches!(
-            resolved.kind,
-            crate::protocol::AutomationWindowKind::AcpDetached
-                | crate::protocol::AutomationWindowKind::Dictation
-        ) {
-            return dispatch_with_any_handle_deferred(
-                handle,
-                request_id,
-                &resolved.id,
-                event_type,
-                &event,
-                cx,
-                "exact_handle",
-            );
-        }
-
-        return dispatch_with_any_handle(
-            handle,
-            request_id,
-            &resolved.id,
-            event_type,
-            &event,
-            cx,
-            "exact_handle",
-        );
-    }
 
     // 2b. Main-window re-acquisition: the runtime handle registry only gets
     //     upserted on show/hide transitions, and `handle.update()` returns
@@ -681,6 +683,33 @@ pub(crate) fn dispatch_gpui_event(
             any
         }
         None => {
+            if role == crate::windows::WindowRole::Main
+                && is_attached_surface(resolved.kind)
+                && resolved.parent_kind == Some(crate::protocol::AutomationWindowKind::Main)
+            {
+                if let Some(handle) = crate::get_main_window_handle() {
+                    if let Some(parent_id) = resolved.parent_window_id.as_ref() {
+                        crate::windows::upsert_runtime_window_handle(parent_id.clone(), handle);
+                    }
+                    tracing::info!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        window_id = %resolved.id,
+                        parent_window_id = ?resolved.parent_window_id,
+                        "gpui_event_simulation.attached_main_reacquired_global"
+                    );
+                    return dispatch_with_any_handle_deferred(
+                        handle,
+                        request_id,
+                        &resolved.id,
+                        event_type,
+                        &event,
+                        cx,
+                        "attached_main_reacquire",
+                    );
+                }
+            }
+
             let msg = format!(
                 "Window handle not available for role {:?} (kind {:?})",
                 role, resolved.kind

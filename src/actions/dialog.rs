@@ -1934,6 +1934,64 @@ impl ActionsDialog {
         })
     }
 
+    fn update_hovered_row_from_popup_y(&mut self, popup_y: f32, cx: &mut Context<Self>) {
+        let style = actions_dialog_default_style();
+        let show_search =
+            !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
+        let search_at_top = matches!(self.config.search_position, SearchPosition::Top);
+        let search_height = if show_search {
+            SEARCH_INPUT_HEIGHT
+        } else {
+            0.0
+        };
+        let header_height = if self.shows_context_header() && style.show_header {
+            HEADER_HEIGHT
+        } else {
+            0.0
+        };
+        let list_top = if search_at_top { search_height } else { 0.0 } + header_height;
+        let mut content_y = popup_y - list_top;
+        if content_y < 0.0 {
+            if self.hovered_row.take().is_some() {
+                cx.notify();
+            }
+            return;
+        }
+
+        let scroll_top_item_index = self.list_state.logical_scroll_top().item_ix;
+        let scroll_top_content_y: f32 = self
+            .grouped_items
+            .iter()
+            .take(scroll_top_item_index)
+            .map(|item| match item {
+                GroupedActionItem::SectionHeader(_) => SECTION_HEADER_HEIGHT,
+                GroupedActionItem::Item(_) => style.row_height,
+            })
+            .sum();
+        content_y += scroll_top_content_y;
+
+        let mut cursor_y = 0.0;
+        let mut next_hovered_row = None;
+        for (visual_index, item) in self.grouped_items.iter().enumerate() {
+            let height = match item {
+                GroupedActionItem::SectionHeader(_) => SECTION_HEADER_HEIGHT,
+                GroupedActionItem::Item(_) => style.row_height,
+            };
+            if content_y >= cursor_y && content_y < cursor_y + height {
+                if matches!(item, GroupedActionItem::Item(_)) {
+                    next_hovered_row = Some(visual_index);
+                }
+                break;
+            }
+            cursor_y += height;
+        }
+
+        if self.hovered_row != next_hovered_row {
+            self.hovered_row = next_hovered_row;
+            cx.notify();
+        }
+    }
+
     fn devtools_text_fingerprint(value: &str) -> String {
         let mut hash = 0xcbf29ce484222325_u64;
         for byte in value.as_bytes() {
@@ -3929,6 +3987,17 @@ impl Render for ActionsDialog {
                                                     }
                                                 }
                                             })
+                                            .on_mouse_move({
+                                                let entity = entity.clone();
+                                                move |_event: &gpui::MouseMoveEvent, _window, cx| {
+                                                    entity.update(cx, |this, cx| {
+                                                        if this.hovered_row != Some(ix) {
+                                                            this.hovered_row = Some(ix);
+                                                            cx.notify();
+                                                        }
+                                                    });
+                                                }
+                                            })
                                             .on_hover({
                                                 let entity = entity.clone();
                                                 move |hovered: &bool, _window, cx| {
@@ -4210,7 +4279,12 @@ impl Render for ActionsDialog {
             .overflow_hidden()
             .text_color(container_text)
             .text_color(container_text)
-            .key_context("actions_dialog");
+            .key_context("actions_dialog")
+            .on_mouse_move(
+                cx.listener(|this, event: &gpui::MouseMoveEvent, _window, cx| {
+                    this.update_hovered_row_from_popup_y(f32::from(event.position.y), cx);
+                }),
+            );
         if style.show_container_border {
             container = container.border_1().border_color(container_border);
         }

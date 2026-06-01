@@ -15,6 +15,8 @@ use script_kit_gpui::protocol::{
 };
 use std::sync::atomic::{AtomicU32, Ordering};
 
+const GPUI_EVENT_SIMULATOR: &str = include_str!("../../src/platform/gpui_event_simulator.rs");
+
 static TEST_COUNTER: AtomicU32 = AtomicU32::new(50_000);
 fn prefix() -> String {
     let n = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
@@ -600,6 +602,27 @@ fn inspect_geometry_and_rebase_agree_for_actions_dialog() {
     );
 
     cleanup(&p, &["main", "actions"]);
+}
+
+#[test]
+fn attached_main_popup_dispatch_reacquires_global_main_handle() {
+    for needle in [
+        "popup exact handles also receive popup-local mouse coordinates",
+        "only when falling back to the parent window. Exact popup handles above use",
+        "let event = match rebase_mouse_event_to_dispatch_space(&resolved, event)",
+        "attached_main_reacquired_global",
+        "attached_main_reacquire",
+        "is_attached_surface(resolved.kind)",
+        "resolved.parent_kind == Some(crate::protocol::AutomationWindowKind::Main)",
+        "crate::get_main_window_handle()",
+        "crate::windows::upsert_runtime_window_handle(parent_id.clone(), handle)",
+        "dispatch_with_any_handle_deferred",
+    ] {
+        assert!(
+            GPUI_EVENT_SIMULATOR.contains(needle),
+            "attached popup simulateGpuiEvent dispatch must re-acquire main handle: {needle}"
+        );
+    }
 }
 
 /// Same agreement check for PromptPopup — the other attached surface kind.

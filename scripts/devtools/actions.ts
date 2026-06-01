@@ -13,6 +13,7 @@ type Args = {
   open: boolean;
   start: boolean;
   keepOpen: boolean;
+  proveHover: boolean;
   inspectTargetForwarded: string[];
   hasExplicitInspectTarget: boolean;
   openTargetForwarded: string[];
@@ -25,7 +26,7 @@ const DEFAULT_OPEN_TARGET = ["--show", "--main", "--strict", "--surface", "Scrip
 function usage() {
   return [
     "Usage:",
-    "  bun scripts/devtools/actions.ts inspect [--session <name>] [--start] [--keep-open] [--open] [--open-target-kind <kind>] [target args]",
+    "  bun scripts/devtools/actions.ts inspect [--session <name>] [--start] [--keep-open] [--open] [--open-target-kind <kind>] [--prove-hover] [target args]",
     "",
     "Target args match scripts/devtools/targets.ts inspect. Defaults to --target-kind actionsDialog --strict --surface ActionsDialog.",
   ].join("\n");
@@ -47,6 +48,7 @@ function parseArgs(argv: string[]): Args {
     open: false,
     start: false,
     keepOpen: false,
+    proveHover: false,
     inspectTargetForwarded: [],
     hasExplicitInspectTarget: false,
     openTargetForwarded: [],
@@ -62,6 +64,8 @@ function parseArgs(argv: string[]): Args {
       args.start = true;
     } else if (arg === "--keep-open") {
       args.keepOpen = true;
+    } else if (arg === "--prove-hover") {
+      args.proveHover = true;
     } else if (arg === "--open-target-id") {
       args.openTarget = { type: "id", id: argv[++index] ?? "" };
       args.hasExplicitOpenTarget = true;
@@ -282,6 +286,32 @@ function groupSections(rows: ReturnType<typeof visibleActionRows>) {
   return [...sections.values()];
 }
 
+function rowSemanticId(row: JsonObject) {
+  return typeof row.semanticId === "string" ? row.semanticId : null;
+}
+
+function visibleActionRowsFromGeometry(rowGeometry: JsonObject | null) {
+  return asArray(rowGeometry?.rows).filter((row) => {
+    const semanticId = rowSemanticId(row);
+    return row.kind === "action"
+      && row.visible === true
+      && typeof semanticId === "string"
+      && semanticId.startsWith("choice:")
+      && Boolean(rectFrom(row.bounds) ?? rectFrom(row.rect));
+  });
+}
+
+function pickHoverProofRow(rowGeometry: JsonObject | null) {
+  return visibleActionRowsFromGeometry(rowGeometry)[0] ?? null;
+}
+
+function centerOfRect(rect: Rect) {
+  return {
+    x: rect.x + rect.width / 2,
+    y: rect.y + rect.height / 2,
+  };
+}
+
 function findParentTarget(target: JsonObject, windows: JsonObject[]) {
   const parentId = target.parentAutomationId ?? target.openerAutomationId;
   return windows.find((window) => window.automationId === parentId) ?? null;
@@ -349,6 +379,146 @@ function classify(targetReceipt: JsonObject, stateEnvelope: JsonObject, missing:
     return "blocked-by-missing-primitive";
   }
   return "ok";
+}
+
+function hoveredRowOf(rowGeometry: JsonObject | null) {
+  return ((rowGeometry?.hoveredRow as JsonObject | undefined) ?? null);
+}
+
+function hoveredRowSemanticId(rowGeometry: JsonObject | null) {
+  const hoveredRow = hoveredRowOf(rowGeometry);
+  const row = (hoveredRow?.row as JsonObject | undefined) ?? null;
+  return row ? rowSemanticId(row) : null;
+}
+
+function stateActionsDialog(envelope: JsonObject) {
+  const state = responseOf(envelope);
+  return (state.actionsDialog as JsonObject | undefined) ?? null;
+}
+
+function hoverProofBlocked(reason: string, extras: JsonObject = {}) {
+  return {
+    classification: "blocked-by-missing-primitive",
+    command: "actions.hoverProof",
+    reason,
+    missingPrimitives: ["target-scoped ActionsDialog hover proof"],
+    safety: {
+      noNativeEscalation: true,
+      submitAttempted: false,
+      activationAttempted: false,
+    },
+    ...extras,
+  };
+}
+
+async function runHoverProof(
+  args: Args,
+  selector: JsonObject,
+  target: JsonObject,
+  rowGeometry: JsonObject | null,
+) {
+  if (rowGeometry?.hoverRowAvailable !== true) {
+    return hoverProofBlocked("rowGeometry.hoverRowAvailable is not true", { rowGeometry });
+  }
+
+  const requestedRow = pickHoverProofRow(rowGeometry);
+  const requestedSemanticId = requestedRow ? rowSemanticId(requestedRow) : null;
+  const requestedBounds = requestedRow ? (rectFrom(requestedRow.bounds) ?? rectFrom(requestedRow.rect)) : null;
+  if (!requestedRow || !requestedSemanticId || !requestedBounds) {
+    return hoverProofBlocked("no visible action row with usable bounds", { requestedRow });
+  }
+
+  const point = centerOfRect(requestedBounds);
+  const eventTarget = { type: "kind", kind: "actionsDialog" };
+  const beforeHoveredRow = hoveredRowOf(rowGeometry);
+  const simulateReceipt = await rpc(
+    args.session,
+    {
+      type: "simulateGpuiEvent",
+      requestId: requestId("hover"),
+      target: eventTarget,
+      event: { type: "mouseMove", x: point.x, y: point.y },
+    },
+    "simulateGpuiEventResult",
+    args.timeoutMs,
+  );
+
+  if (simulateReceipt.status === "error" || responseOf(simulateReceipt).success === false) {
+    return hoverProofBlocked("simulateGpuiEvent did not dispatch", {
+      requestedRow,
+      point: { ...point, coordinateSpace: "popupLogicalPx", target: eventTarget },
+      receipts: { simulateGpuiEvent: simulateReceipt },
+    });
+  }
+
+  const startedAt = Date.now();
+  const attempts: JsonObject[] = [];
+  let stateAfter: JsonObject | null = null;
+  let actionsDialogAfter: JsonObject | null = null;
+  let rowGeometryAfter: JsonObject | null = null;
+  while (Date.now() - startedAt < Math.min(args.timeoutMs, 1500)) {
+    stateAfter = await rpc(
+      args.session,
+      { type: "getState", requestId: requestId("hover-state"), target: selector, summaryOnly: true },
+      "stateResult",
+      args.timeoutMs,
+    );
+    actionsDialogAfter = stateActionsDialog(stateAfter);
+    rowGeometryAfter = (actionsDialogAfter?.rowGeometry as JsonObject | undefined) ?? null;
+    const hoveredSemanticId = hoveredRowSemanticId(rowGeometryAfter);
+    attempts.push({
+      elapsedMs: Date.now() - startedAt,
+      hoveredSemanticId,
+      hoveredRow: hoveredRowOf(rowGeometryAfter),
+    });
+    if (hoveredSemanticId === requestedSemanticId) break;
+    await Bun.sleep(50);
+  }
+
+  const popupStillOpen = Boolean(actionsDialogAfter);
+  const targetStable = target.automationId === "actions-dialog" && target.targetKind === "ActionsDialog";
+  const hoveredRequestedRow = hoveredRowSemanticId(rowGeometryAfter) === requestedSemanticId;
+  const assertions = {
+    rowBoundsAvailable: Boolean(requestedBounds && requestedBounds.width > 0 && requestedBounds.height > 0),
+    hoveredRequestedRow,
+    popupStillOpen,
+    targetStable,
+  };
+
+  if (!hoveredRequestedRow || !popupStillOpen || !targetStable) {
+    return hoverProofBlocked("hover did not update to requested row", {
+      requestedRow,
+      point: { ...point, coordinateSpace: "popupLogicalPx", target: eventTarget },
+      before: { hoveredRow: beforeHoveredRow },
+      after: { hoveredRow: hoveredRowOf(rowGeometryAfter) },
+      assertions,
+      attempts,
+      receipts: { simulateGpuiEvent: simulateReceipt, stateAfter },
+    });
+  }
+
+  return {
+    classification: "ok",
+    command: "actions.hoverProof",
+    safety: {
+      noNativeEscalation: true,
+      submitAttempted: false,
+      activationAttempted: false,
+    },
+    requestedRow: {
+      semanticId: requestedSemanticId,
+      visualIndex: requestedRow.visualIndex ?? null,
+      kind: requestedRow.kind ?? null,
+      actionId: requestedRow.actionId ?? null,
+      bounds: requestedBounds,
+    },
+    point: { ...point, coordinateSpace: "popupLogicalPx", target: eventTarget },
+    before: { hoveredRow: beforeHoveredRow },
+    after: { hoveredRow: hoveredRowOf(rowGeometryAfter) },
+    assertions,
+    attempts,
+    receipts: { simulateGpuiEvent: simulateReceipt, stateAfter },
+  };
 }
 
 async function main() {
@@ -425,6 +595,9 @@ async function main() {
     disabledReasonBoundsRequired && !disabledReasonBoundsAvailable ? "disabled reason bounds" : "",
   ].filter(Boolean);
   const classification = classify(targetReceipt, stateEnvelope, missing);
+  const hoverProof = args.proveHover
+    ? await runHoverProof(args, selector, target, rowGeometry)
+    : null;
 
   console.log(JSON.stringify({
     schemaVersion: 1,
@@ -451,6 +624,7 @@ async function main() {
     routeStack,
     routeId: target.routeId ?? dialogRoute.currentRouteId ?? null,
     rowGeometry,
+    hoverProof,
     chromeContract: {
       source: "actionsDialog.automationState.runtimeAudit",
       status: runtimeAuditStatus,
