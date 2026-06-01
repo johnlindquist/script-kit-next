@@ -591,6 +591,34 @@ fn actions_cli_reports_close_cleanup_proof() {
 }
 
 #[test]
+fn actions_cli_reports_shortcut_open_first_frame_freshness_proof() {
+    for needle in [
+        "--prove-shortcut-open-freshness",
+        "shortcutOpenFreshnessProof",
+        "actions.shortcutOpenFreshnessProof",
+        "cmdKDispatched",
+        "openedViaShortcut",
+        "firstObservableFrameTargetStable",
+        "everySampleTargetStable",
+        "parentStillMainScriptList",
+        "attachedPopupGenerationAvailable",
+        "generationMonotonicWhenAvailable",
+        "chromeContractOk",
+        "actionsDialogFooterless",
+        "noFooterOwnershipLeak",
+        "blocked-by-missing-primitive",
+        "blocked-by-stale-view",
+    ] {
+        assert!(
+            ACTIONS_DEVTOOLS.contains(needle)
+                || COVERAGE.contains(needle)
+                || DEVTOOLS_SKILL.contains(needle),
+            "ActionsDialog DevTools CLI must expose Cmd+K shortcut-open first-frame freshness proof: {needle}"
+        );
+    }
+}
+
+#[test]
 fn actions_popup_defer_close_removes_runtime_handle() {
     let source = fs::read_to_string("src/actions/window.rs").expect("read src/actions/window.rs");
     let start = source.find("fn defer_close").expect("defer_close exists");

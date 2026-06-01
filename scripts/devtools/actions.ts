@@ -18,6 +18,9 @@ type Args = {
   proveClickActivate: boolean;
   proveSemanticFreshness: boolean;
   proveCloseCleanup: boolean;
+  proveShortcutOpenFreshness: boolean;
+  sampleMs: number;
+  intervalMs: number;
   inspectTargetForwarded: string[];
   hasExplicitInspectTarget: boolean;
   openTargetForwarded: string[];
@@ -30,7 +33,7 @@ const DEFAULT_OPEN_TARGET = ["--show", "--main", "--strict", "--surface", "Scrip
 function usage() {
   return [
     "Usage:",
-    "  bun scripts/devtools/actions.ts inspect [--session <name>] [--start] [--keep-open] [--open] [--open-target-kind <kind>] [--prove-hover] [--prove-click-select] [--prove-click-activate] [--prove-semantic-freshness] [--prove-close-cleanup] [target args]",
+    "  bun scripts/devtools/actions.ts inspect [--session <name>] [--start] [--keep-open] [--open] [--open-target-kind <kind>] [--prove-hover] [--prove-click-select] [--prove-click-activate] [--prove-semantic-freshness] [--prove-close-cleanup] [--prove-shortcut-open-freshness] [--sample-ms <ms>] [--interval-ms <ms>] [target args]",
     "",
     "Target args match scripts/devtools/targets.ts inspect. Defaults to --target-kind actionsDialog --strict --surface ActionsDialog.",
   ].join("\n");
@@ -57,6 +60,9 @@ function parseArgs(argv: string[]): Args {
     proveClickActivate: false,
     proveSemanticFreshness: false,
     proveCloseCleanup: false,
+    proveShortcutOpenFreshness: false,
+    sampleMs: 900,
+    intervalMs: 50,
     inspectTargetForwarded: [],
     hasExplicitInspectTarget: false,
     openTargetForwarded: [],
@@ -82,6 +88,8 @@ function parseArgs(argv: string[]): Args {
       args.proveSemanticFreshness = true;
     } else if (arg === "--prove-close-cleanup") {
       args.proveCloseCleanup = true;
+    } else if (arg === "--prove-shortcut-open-freshness") {
+      args.proveShortcutOpenFreshness = true;
     } else if (arg === "--open-target-id") {
       args.openTarget = { type: "id", id: argv[++index] ?? "" };
       args.hasExplicitOpenTarget = true;
@@ -148,6 +156,10 @@ function parseArgs(argv: string[]): Args {
       args.inspectTargetForwarded.push("--surface", argv[++index] ?? "");
     } else if (arg === "--timeout") {
       args.timeoutMs = Number(argv[++index] ?? args.timeoutMs);
+    } else if (arg === "--sample-ms") {
+      args.sampleMs = Number(argv[++index] ?? args.sampleMs);
+    } else if (arg === "--interval-ms") {
+      args.intervalMs = Number(argv[++index] ?? args.intervalMs);
     }
   }
   return args;
@@ -510,6 +522,26 @@ function closeCleanupProofBlocked(reason: string, extras: JsonObject = {}) {
     missingPrimitives: ["target-scoped ActionsDialog close cleanup proof"],
     safety: {
       noNativeEscalation: true,
+      submitAttempted: false,
+      activationAttempted: false,
+    },
+    ...extras,
+  };
+}
+
+function shortcutOpenFreshnessProofBlocked(
+  classification: "blocked-by-missing-primitive" | "blocked-by-stale-view",
+  reason: string,
+  extras: JsonObject = {},
+) {
+  return {
+    classification,
+    command: "actions.shortcutOpenFreshnessProof",
+    reason,
+    missingPrimitives: ["target-scoped ActionsDialog Cmd+K shortcut-open first-frame freshness proof"],
+    safety: {
+      noNativeEscalation: true,
+      shortcutDispatched: false,
       submitAttempted: false,
       activationAttempted: false,
     },
@@ -1161,6 +1193,294 @@ async function runCloseCleanupProof(
   };
 }
 
+function numericValues(samples: JsonObject[], path: (sample: JsonObject) => unknown) {
+  return samples
+    .map(path)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+}
+
+function monotonicNonDecreasing(values: number[]) {
+  return values.every((value, index) => index === 0 || value >= values[index - 1]);
+}
+
+function targetOfSample(sample: JsonObject) {
+  return (sample.target as JsonObject | undefined) ?? {};
+}
+
+function stateActionsOfSample(sample: JsonObject) {
+  return (sample.actionsDialog as JsonObject | undefined) ?? {};
+}
+
+function summarizeShortcutGenerations(samples: JsonObject[]) {
+  const targetGeneration = numericValues(samples, (sample) => targetOfSample(sample).targetGeneration);
+  const surfaceGeneration = numericValues(samples, (sample) => targetOfSample(sample).surfaceGeneration);
+  const dataGeneration = numericValues(samples, (sample) => targetOfSample(sample).dataGeneration);
+  const attachedPopupGeneration = numericValues(samples, (sample) => {
+    const actionsDialog = stateActionsOfSample(sample);
+    const attachedPopup = (actionsDialog.attachedPopup as JsonObject | undefined) ?? {};
+    return attachedPopup.generation;
+  });
+  return {
+    targetGeneration,
+    surfaceGeneration,
+    dataGeneration,
+    attachedPopupGeneration,
+    fieldsChecked: [
+      targetGeneration.length >= 2 ? "targetGeneration" : "",
+      surfaceGeneration.length >= 2 ? "surfaceGeneration" : "",
+      dataGeneration.length >= 2 ? "dataGeneration" : "",
+      attachedPopupGeneration.length >= 2 ? "attachedPopupGeneration" : "",
+    ].filter(Boolean),
+    missingOrSingleSampleFields: [
+      targetGeneration.length < 2 ? "targetGeneration" : "",
+      surfaceGeneration.length < 2 ? "surfaceGeneration" : "",
+      dataGeneration.length < 2 ? "dataGeneration" : "",
+    ].filter(Boolean),
+    generationMonotonicWhenAvailable: monotonicNonDecreasing(targetGeneration)
+      && monotonicNonDecreasing(surfaceGeneration)
+      && monotonicNonDecreasing(dataGeneration)
+      && monotonicNonDecreasing(attachedPopupGeneration),
+  };
+}
+
+function actionSampleFresh(sample: JsonObject) {
+  const target = targetOfSample(sample);
+  return target.automationId === "actions-dialog"
+    && target.targetKind === "ActionsDialog"
+    && target.strictTargetMatch === true;
+}
+
+function parentStillMainScriptList(sample: JsonObject) {
+  const target = targetOfSample(sample);
+  return (target.parentAutomationId ?? target.parentWindowId ?? target.openerAutomationId) === "main";
+}
+
+function chromeContractOk(sample: JsonObject) {
+  const actionsDialog = stateActionsOfSample(sample);
+  const runtimeAudit = (actionsDialog.runtimeAudit as JsonObject | undefined) ?? null;
+  const violations = asArray(actionsDialog.runtimeAuditViolations);
+  const status = typeof actionsDialog.runtimeAuditStatus === "string"
+    ? actionsDialog.runtimeAuditStatus
+    : runtimeAudit
+      ? violations.length === 0 ? "ok" : "violation"
+      : "unavailable";
+  return status === "ok";
+}
+
+function actionsDialogFooterless(sample: JsonObject) {
+  const keyboard = (sample.keyboard as JsonObject | undefined) ?? {};
+  const activeFooter = (keyboard.activeFooter as JsonObject | undefined) ?? {};
+  const nativeFooter = (keyboard.nativeFooter as JsonObject | undefined) ?? {};
+  return activeFooter.owner == null
+    || activeFooter.owner === "main"
+    || nativeFooter.hostInstalled === false
+    || asArray(nativeFooter.bindings).length === 0;
+}
+
+function noMainFooterLeak(sample: JsonObject) {
+  const mainKeyboard = (sample.mainKeyboard as JsonObject | undefined) ?? {};
+  const activeFooter = (mainKeyboard.activeFooter as JsonObject | undefined) ?? {};
+  const owner = activeFooter.owner;
+  const expectedSurface = activeFooter.expectedSurface;
+  const activeSurface = activeFooter.activeSurface;
+  const buttonCount = asNumber(activeFooter.buttonCount, 0);
+  const surfaceMatches = expectedSurface == null || activeSurface == null || activeSurface === expectedSurface;
+  return ((owner == null || owner === "main") && surfaceMatches)
+    || (owner === "popup" && buttonCount === 0 && surfaceMatches);
+}
+
+async function inspectMainTarget(args: Args, label: string) {
+  return run([
+    "bun",
+    "scripts/devtools/targets.ts",
+    "inspect",
+    "--session",
+    args.session,
+    "--main",
+    "--strict",
+    "--surface",
+    "ScriptList",
+    "--timeout",
+    String(args.timeoutMs),
+  ], label);
+}
+
+async function getMainState(args: Args, label: string) {
+  return rpc(
+    args.session,
+    { type: "getState", requestId: requestId(label), target: { type: "main" }, summaryOnly: true },
+    "stateResult",
+    args.timeoutMs,
+  );
+}
+
+async function inspectMainKeyboard(args: Args, label: string) {
+  return run([
+    "bun",
+    "scripts/devtools/keyboard.ts",
+    "inspect",
+    "--session",
+    args.session,
+    "--main",
+    "--strict",
+    "--surface",
+    "ScriptList",
+    "--timeout",
+    String(args.timeoutMs),
+  ], label);
+}
+
+async function inspectActionsTarget(args: Args, label: string) {
+  return run([
+    "bun",
+    "scripts/devtools/targets.ts",
+    "inspect",
+    "--session",
+    args.session,
+    "--target-kind",
+    "actionsDialog",
+    "--strict",
+    "--surface",
+    "ActionsDialog",
+    "--timeout",
+    String(args.timeoutMs),
+  ], label);
+}
+
+async function getActionsState(args: Args, label: string) {
+  return rpc(
+    args.session,
+    { type: "getState", requestId: requestId(label), target: { type: "kind", kind: "actionsDialog" }, summaryOnly: true },
+    "stateResult",
+    args.timeoutMs,
+  );
+}
+
+async function inspectActionsKeyboard(args: Args, label: string) {
+  return run([
+    "bun",
+    "scripts/devtools/keyboard.ts",
+    "inspect",
+    "--session",
+    args.session,
+    "--target-kind",
+    "actionsDialog",
+    "--strict",
+    "--surface",
+    "ActionsDialog",
+    "--timeout",
+    String(args.timeoutMs),
+  ], label);
+}
+
+async function runShortcutOpenFreshnessProof(args: Args) {
+  const beforeMainTarget = await inspectMainTarget(args, "targets.inspect.main.beforeShortcut");
+  const beforeMainState = await getMainState(args, "shortcut-open-main-before");
+  const beforeMainKeyboard = await inspectMainKeyboard(args, "keyboard.inspect.main.beforeShortcut");
+
+  const beforeResolved = (beforeMainTarget.resolvedTarget as JsonObject | undefined) ?? {};
+  if (beforeMainTarget.classification !== "ok" || beforeResolved.automationId !== "main") {
+    return shortcutOpenFreshnessProofBlocked("blocked-by-target-ambiguity", "main ScriptList target was not ready before Cmd+K", {
+      before: { mainTarget: beforeMainTarget, mainState: beforeMainState, mainKeyboard: beforeMainKeyboard },
+    });
+  }
+
+  const keyReceipt = await run([
+    "bun",
+    "scripts/devtools/act.ts",
+    "key",
+    "--session",
+    args.session,
+    "--show",
+    "--main",
+    "--strict",
+    "--surface",
+    "ScriptList",
+    "--key",
+    "k",
+    "--modifiers",
+    "cmd",
+    "--timeout",
+    String(args.timeoutMs),
+  ], "act.key.cmdK.openActions");
+
+  const startedAt = Date.now();
+  const samples: JsonObject[] = [];
+  while (Date.now() - startedAt < args.sampleMs || samples.length < 3) {
+    const targetReceipt = await inspectActionsTarget(args, "targets.inspect.actionsDialog.shortcutOpen");
+    if (targetReceipt.classification === "ok") {
+      const stateEnvelope = await getActionsState(args, "shortcut-open-actions-state");
+      const keyboard = await inspectActionsKeyboard(args, "keyboard.inspect.actionsDialog.shortcutOpen");
+      const mainState = await getMainState(args, "shortcut-open-main-state");
+      const mainKeyboard = await inspectMainKeyboard(args, "keyboard.inspect.main.shortcutOpen");
+      const state = responseOf(stateEnvelope);
+      samples.push({
+        elapsedMs: Date.now() - startedAt,
+        target: targetReceipt.resolvedTarget ?? null,
+        actionsDialog: state.actionsDialog ?? null,
+        keyboard,
+        mainState: responseOf(mainState),
+        mainKeyboard,
+        receipts: { target: targetReceipt, state: stateEnvelope, keyboard, mainState, mainKeyboard },
+      });
+    } else {
+      samples.push({
+        elapsedMs: Date.now() - startedAt,
+        target: targetReceipt.resolvedTarget ?? null,
+        errors: targetReceipt.errors ?? [],
+        receipts: { target: targetReceipt },
+      });
+    }
+    if (Date.now() - startedAt >= args.sampleMs && samples.length >= 3) break;
+    await Bun.sleep(args.intervalMs);
+  }
+
+  const firstObservableFrame = samples.find(actionSampleFresh) ?? null;
+  const generation = summarizeShortcutGenerations(samples.filter(actionSampleFresh));
+  const keyResponse = responseOf(keyReceipt);
+  const assertions = {
+    cmdKDispatched: keyReceipt.status !== "error" && keyResponse.success !== false,
+    openedViaShortcut: firstObservableFrame != null,
+    firstObservableFrameTargetStable: firstObservableFrame != null && actionSampleFresh(firstObservableFrame),
+    everySampleTargetStable: samples.filter(actionSampleFresh).length >= 3 && samples.filter(actionSampleFresh).every(actionSampleFresh),
+    parentStillMainScriptList: samples.filter(actionSampleFresh).every(parentStillMainScriptList),
+    attachedPopupGenerationAvailable: generation.targetGeneration.length >= 2 || generation.attachedPopupGeneration.length >= 2,
+    generationMonotonicWhenAvailable: generation.generationMonotonicWhenAvailable,
+    noStalePopupGeneration: generation.targetGeneration.length === 0 || new Set(generation.targetGeneration).size <= generation.targetGeneration.length,
+    chromeContractOk: samples.filter(actionSampleFresh).every(chromeContractOk),
+    actionsDialogFooterless: samples.filter(actionSampleFresh).every(actionsDialogFooterless),
+    noFooterOwnershipLeak: samples.filter(actionSampleFresh).every(noMainFooterLeak),
+  };
+  const missingGeneration = !assertions.attachedPopupGenerationAvailable;
+  const ok = Object.values(assertions).every(Boolean);
+  const classification = ok
+    ? "ok"
+    : missingGeneration
+      ? "blocked-by-missing-primitive"
+      : "blocked-by-stale-view";
+
+  return {
+    classification,
+    command: "actions.shortcutOpenFreshnessProof",
+    assertions,
+    generation,
+    firstObservableFrame,
+    samplesAfterShortcut: samples,
+    safety: {
+      noNativeEscalation: true,
+      shortcutDispatched: true,
+      submitAttempted: false,
+      activationAttempted: false,
+    },
+    receipts: {
+      beforeMainTarget,
+      beforeMainState,
+      beforeMainKeyboard,
+      keyReceipt,
+    },
+  };
+}
+
 async function main() {
   const args = parseArgs(Bun.argv.slice(2));
   const forwarded = inspectForwarded(args);
@@ -1253,12 +1573,18 @@ async function main() {
   const closeCleanupProof = args.proveCloseCleanup
     ? await runCloseCleanupProof(args, clickActivateProof)
     : null;
+  const shortcutOpenFreshnessProof = args.proveShortcutOpenFreshness
+    ? await runShortcutOpenFreshnessProof(args)
+    : null;
+  const finalClassification = shortcutOpenFreshnessProof?.classification
+    ? shortcutOpenFreshnessProof.classification
+    : classification;
 
   console.log(JSON.stringify({
     schemaVersion: 1,
     tool: "script-kit-devtools.actions",
     command: "actions.inspect",
-    classification,
+    classification: finalClassification,
     session: args.session,
     requestedTarget: targetReceipt.requestedTarget ?? { selector },
     target,
@@ -1284,6 +1610,7 @@ async function main() {
     clickActivateProof,
     semanticFreshnessProof,
     closeCleanupProof,
+    shortcutOpenFreshnessProof,
     chromeContract: {
       source: "actionsDialog.automationState.runtimeAudit",
       status: runtimeAuditStatus,
