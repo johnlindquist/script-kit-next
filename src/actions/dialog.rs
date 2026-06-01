@@ -2269,6 +2269,21 @@ impl ActionsDialog {
             state["selectedSemanticId"] = serde_json::json!(host_context.selected_semantic_id);
         }
         state["rowGeometry"] = self.devtools_row_geometry();
+        let runtime_audit = ActionsDialogRuntimeAudit::from_parts(
+            "actions_dialog",
+            &self.config,
+            &actions_dialog_default_style(),
+        );
+        let runtime_violations = runtime_audit.validate();
+        state["runtimeAudit"] =
+            serde_json::to_value(&runtime_audit).unwrap_or(serde_json::Value::Null);
+        state["runtimeAuditViolations"] =
+            serde_json::to_value(&runtime_violations).unwrap_or(serde_json::Value::Null);
+        state["runtimeAuditStatus"] = serde_json::json!(if runtime_violations.is_empty() {
+            "ok"
+        } else {
+            "violation"
+        });
 
         state
     }

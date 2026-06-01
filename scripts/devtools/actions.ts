@@ -384,6 +384,13 @@ async function main() {
   const attachedPopup = (actionsDialog?.attachedPopup as JsonObject | undefined) ?? null;
   const attachedGeometry = (attachedPopup?.geometry as JsonObject | undefined) ?? {};
   const rowGeometry = (actionsDialog?.rowGeometry as JsonObject | undefined) ?? null;
+  const runtimeAudit = (actionsDialog?.runtimeAudit as JsonObject | undefined) ?? null;
+  const runtimeAuditViolations = asArray(actionsDialog?.runtimeAuditViolations);
+  const runtimeAuditStatus = typeof actionsDialog?.runtimeAuditStatus === "string"
+    ? actionsDialog.runtimeAuditStatus
+    : runtimeAudit
+      ? runtimeAuditViolations.length === 0 ? "ok" : "violation"
+      : "unavailable";
   const target = (targetReceipt.resolvedTarget as JsonObject | undefined) ?? {};
   const windows = asArray(targetsList.targets ?? targetsList.windows);
   const parent = findParentTarget(target, windows);
@@ -444,6 +451,12 @@ async function main() {
     routeStack,
     routeId: target.routeId ?? dialogRoute.currentRouteId ?? null,
     rowGeometry,
+    chromeContract: {
+      source: "actionsDialog.automationState.runtimeAudit",
+      status: runtimeAuditStatus,
+      audit: runtimeAudit,
+      violations: runtimeAuditViolations,
+    },
     geometry: {
       layoutPrimitive: "getLayoutInfo(actionsDialog)",
       popupRect,
