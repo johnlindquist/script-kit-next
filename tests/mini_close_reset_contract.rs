@@ -13,7 +13,7 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
 
 // doc-anchor-removed: [[removed-docs close reset]]
 #[test]
-fn hide_path_snapshots_mini_mode_before_reset() {
+fn hide_path_snapshots_mini_mode_before_deferred_reset() {
     let body = source_between(
         WINDOW_VISIBILITY,
         "fn hide_main_window_helper",
@@ -21,18 +21,21 @@ fn hide_path_snapshots_mini_mode_before_reset() {
     );
     let was_mini = body
         .find("let was_mini = view.main_window_mode == MainWindowMode::Mini")
-        .expect("hide helper must snapshot mini mode before reset");
-    let reset = body
-        .find("view.reset_to_script_list(ctx)")
-        .expect("hide helper must reset to script list");
+        .expect("hide helper must snapshot mini mode before deferred reset");
+    let hide = body
+        .find("platform::defer_hide_main_window(cx);")
+        .expect("hide helper must enqueue native hide");
+    let deferred_reset = body
+        .find("view.defer_reset_to_script_list_after_main_window_hidden")
+        .expect("hide helper must schedule the hidden ScriptList reset");
     assert!(
-        was_mini < reset,
-        "mini mode must be captured before reset_to_script_list"
+        was_mini < hide && hide < deferred_reset,
+        "mini mode must be captured before hide, and ScriptList reset must be deferred until after native hide"
     );
     assert!(
-        body.contains("let post_reset_is_mini = view.main_window_mode == MainWindowMode::Mini")
-            && body.contains("was_mini || post_reset_is_mini")
-            && body.contains("if should_reset_to_mini_bounds"),
+        body.contains("reset_mini_bounds_after_hidden_reset")
+            && body.contains("cancel_script_execution_without_view_reset")
+            && body.contains("\"hide_main_window_helper\""),
         "hide helper must reset hidden mini bounds when pre- or post-reset mode is Mini"
     );
 }

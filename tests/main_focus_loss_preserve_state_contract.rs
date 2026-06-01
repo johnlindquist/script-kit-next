@@ -103,31 +103,35 @@ fn explicit_reset_paths_clear_focus_loss_restore_intent() {
 }
 
 #[test]
-fn close_and_reset_marks_window_hidden_before_script_list_reset() {
-    let close_path = source_block_after(LIFECYCLE_RESET, "fn close_and_reset_window", 4200);
+fn close_and_reset_enqueues_native_hide_before_script_list_reset() {
+    let close_path = source_block_after(LIFECYCLE_RESET, "fn close_and_reset_window", 5200);
     let hidden = close_path
         .find("set_main_window_visible(false)")
         .expect("close_and_reset_window must mark the main window hidden");
     let footer_close = close_path
         .find("close_main_footer_popup")
         .expect("close_and_reset_window must close the main footer popup");
-    let reset = close_path
-        .find("reset_to_script_list(cx);")
-        .expect("close_and_reset_window must reset to ScriptList");
     let defer_hide = close_path
         .find("defer_hide_main_window(cx);")
         .expect("close_and_reset_window must use the main-panel-only deferred hide");
+    let deferred_reset = close_path
+        .find("defer_reset_to_script_list_after_main_window_hidden")
+        .expect("close_and_reset_window must defer reset until after native hide is enqueued");
 
     assert!(
-        hidden < reset,
-        "windowVisible must become false before reset_to_script_list can make ScriptList current"
+        hidden < defer_hide,
+        "windowVisible must become false before native hide is enqueued"
     );
     assert!(
-        footer_close < reset,
-        "footer popup must close before reset_to_script_list"
+        footer_close < defer_hide,
+        "footer popup must close before native hide is enqueued"
     );
     assert!(
-        reset < defer_hide,
-        "state reset should happen after visible=false and before the deferred AppKit hide"
+        defer_hide < deferred_reset,
+        "ScriptList reset must be deferred until after native hide is enqueued"
+    );
+    assert!(
+        !close_path[hidden..defer_hide].contains("reset_to_script_list(cx);"),
+        "close path must not reset to ScriptList while the AppKit window can still be visible"
     );
 }

@@ -99,20 +99,13 @@ fn show_main_window_helper(
     logging::bench_log("show_main_window_helper_start");
     logging::log("VISIBILITY", "show_main_window_helper called");
 
-    // 1. Set visibility state
-    set_main_window_visible(true);
-
-    // 2. Re-enable position saving (may have been suppressed by reset)
+    // 1. Re-enable position saving (may have been suppressed by reset)
     window_state::allow_save();
 
-    // 3. Mark window shown timestamp for focus grace period
-    // This prevents the window from being closed by focus loss immediately after opening
-    script_kit_gpui::mark_window_shown();
-
-    // 4. Move to active space (macOS)
+    // 2. Move to active space (macOS)
     platform::ensure_move_to_active_space();
 
-    // 5. Consume NEEDS_RESET BEFORE any geometry is computed so we size the hidden
+    // 3. Consume NEEDS_RESET BEFORE any geometry is computed so we size the hidden
     // window for the actual post-reset view instead of the stale pre-show surface.
     let needs_reset_before_show = NEEDS_RESET
         .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
@@ -146,6 +139,12 @@ fn show_main_window_helper(
             );
             view.focused_input = FocusedInput::MainFilter;
             view.pending_focus = Some(FocusTarget::MainFilter);
+        } else if !matches!(view.current_view, AppView::ScriptList) {
+            logging::log(
+                "VISIBILITY",
+                "Preparing ScriptList before showing hidden main window",
+            );
+            view.reset_to_script_list(ctx);
         } else {
             view.ensure_selection_at_first_item(ctx);
         }
@@ -159,7 +158,9 @@ fn show_main_window_helper(
             let target = crate::window_resize::MainMenuSizingTarget(sizing);
             gpui::size(px(target.width()), target.height())
         } else if matches!(view.current_view, AppView::ScriptList) {
-            let target = crate::window_resize::MainMenuSizingTarget(crate::window_resize::MainWindowSizing::default());
+            let target = crate::window_resize::MainMenuSizingTarget(
+                crate::window_resize::MainWindowSizing::default(),
+            );
             gpui::size(px(target.width()), target.height())
         } else if let Some((view_type, item_count)) =
             view.calculate_window_size_params_with_app(Some(&*ctx))
@@ -177,6 +178,12 @@ fn show_main_window_helper(
             )
         }
     });
+
+    // 4. Only mark the main window visible after the hidden state is already
+    // normalized for the first visible frame.
+    set_main_window_visible(true);
+    script_kit_gpui::mark_window_shown();
+
     logging::log(
         "POSITION_TRACE",
         &format!(
@@ -329,8 +336,8 @@ fn show_main_window_helper(
 /// 1. Saves window position for the current display (per-display persistence)
 /// 2. Sets MAIN_WINDOW_VISIBLE state to false
 /// 3. Cancels any active prompt (if in prompt mode)
-/// 4. Resets to script list
-/// 5. Defers a main-panel-only hide so secondary windows cannot be app-hidden
+/// 4. Defers a main-panel-only hide so secondary windows cannot be app-hidden
+/// 5. Resets the hidden main window to ScriptList after the hide turn
 ///
 /// # Arguments
 /// * `app_entity` - The ScriptListApp entity
@@ -389,24 +396,17 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
         ),
     );
 
-    // 4. Cancel prompt and reset UI
-    let should_reset_to_mini_bounds = app_entity.update(cx, |view, ctx| {
+    // 4. Cancel prompts without resetting the visible route. The ScriptList reset
+    // is deferred until after the native hide turn to avoid a visible stale-view
+    // or main-menu frame while AppKit is still closing the panel.
+    let reset_mini_bounds_after_hidden_reset = app_entity.update(cx, |view, _ctx| {
         let was_mini = view.main_window_mode == MainWindowMode::Mini;
         if view.is_in_prompt() {
             logging::log("VISIBILITY", "Canceling prompt before hiding");
-            view.cancel_script_execution(ctx);
+            view.cancel_script_execution_without_view_reset();
         }
-        view.reset_to_script_list(ctx);
-        let post_reset_is_mini = view.main_window_mode == MainWindowMode::Mini;
-        was_mini || post_reset_is_mini
+        was_mini
     });
-    // After the view has been reset back to ScriptList, re-key the
-    // automation surface so the next list snapshot reports the truth.
-    // Without this, a window hidden while in `FileSearchView` would leak
-    // the `"fileSearch"` surface tag across its next show even though
-    // `reset_to_script_list` has already returned the view to the
-    // script list.
-    crate::windows::update_automation_semantic_surface("main", Some("scriptList".to_string()));
     // Sibling teardown for the embedded AI (`kind: Ai`, `id: "ai"`) entry.
     // Matches the `ensure_embedded_ai_window(false)` call in
     // `close_acp_chat_to_script_list` (the in-app Escape/close-flow path)
@@ -437,18 +437,6 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     // shape as the actions-dialog sibling above; pure registry op, idempotent.
     crate::windows::remove_automation_window("confirm-popup");
 
-    // Pre-emptively resize the main window back to its default mini
-    // dimensions (480×440) so `listAutomationWindows` reports consistent
-    // bounds during the hidden phase. Without this, a window grown by a
-    // subview (fileSearch/emoji picker → 750×500) leaks its grown bounds
-    // through the automation registry until the next `show()` self-heals.
-    // Uses the pre-reset mini snapshot too, so Full/mini normalization inside
-    // reset_to_script_list cannot skip hidden mini-bound cleanup.
-    if should_reset_to_mini_bounds {
-        crate::window_resize::resize_to_mini_main_window_sync();
-        sync_main_automation_window(current_main_automation_bounds(), false, false);
-    }
-
     // 5. Hide only the main panel. `cx.hide()` app-hides all windows, so any
     // false-negative secondary-window check can take Notes down with main.
     let secondary_windows_open = notes_open || ai_open || acp_chat_open;
@@ -460,6 +448,13 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
         ),
     );
     platform::defer_hide_main_window(cx);
+    app_entity.update(cx, |view, ctx| {
+        view.defer_reset_to_script_list_after_main_window_hidden(
+            ctx,
+            "hide_main_window_helper",
+            reset_mini_bounds_after_hidden_reset,
+        );
+    });
 
     logging::log("VISIBILITY", "Main window hidden");
 }

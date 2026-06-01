@@ -277,19 +277,11 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 script_kit_gpui::set_main_window_visible(false);
                                 sync_main_automation_window(current_main_automation_bounds(), false, false);
 
-                                // Reset the view back to the script list and re-key the
-                                // automation `semanticSurface` to `"scriptList"` so the
-                                // next list snapshot reports the truth. Without this, a
-                                // hide issued while in e.g. `FileSearchView` would leak
-                                // the `"fileSearch"` surface tag across its next show
-                                // and leave the automation introspection channel
-                                // diverged from `getState.promptType` (Pass #19 side
-                                // finding; covered by `tool-hide-rpc-surface-reset`).
-                                view.reset_to_script_list(ctx);
-                                crate::windows::update_automation_semantic_surface(
-                                    "main",
-                                    Some("scriptList".to_string()),
-                                );
+                                // Reset the hidden view back to ScriptList after the
+                                // native hide has been enqueued. This preserves the
+                                // Pass #19 automation re-key fix without rendering a
+                                // visible ScriptList frame while AppKit is still
+                                // closing the panel.
                                 // Sibling teardown for the embedded AI (`kind: Ai`,
                                 // `id: "ai"`) registry entry. See the matching
                                 // `ensure_embedded_ai_window(false)` in
@@ -336,6 +328,11 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     ),
                                 );
                                 platform::defer_hide_main_window(ctx);
+                                view.defer_reset_to_script_list_after_main_window_hidden(
+                                    ctx,
+                                    "stdin_hide_rpc",
+                                    false,
+                                );
                             }
                             ExternalCommand::SetFilter { ref text, ref request_id } => {
                                 let rid = request_id.as_deref().unwrap_or("-");

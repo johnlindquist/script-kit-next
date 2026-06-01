@@ -57,7 +57,7 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    pub(crate) fn cancel_script_execution(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn cancel_script_execution_without_view_reset(&mut self) {
         logging::log("EXEC", "=== Canceling script execution ===");
 
         // Send cancel message to script (Exit with cancel code)
@@ -110,7 +110,10 @@ impl ScriptListApp {
                 logging::log("EXEC", "Cleared script session");
             }
         }
+    }
 
+    pub(crate) fn cancel_script_execution(&mut self, cx: &mut Context<Self>) {
+        self.cancel_script_execution_without_view_reset();
         // Reset to script list view
         self.reset_to_script_list(cx);
         logging::log("EXEC", "=== Script cancellation complete ===");
@@ -203,21 +206,19 @@ impl ScriptListApp {
         // Update visibility state FIRST to prevent race conditions
         script_kit_gpui::set_main_window_visible(false);
         crate::windows::set_automation_visibility("main", false);
-        crate::windows::update_automation_semantic_surface("main", Some("scriptList".to_string()));
         crate::windows::ensure_embedded_ai_window(false);
         crate::footer_popup::close_main_footer_popup(&mut *cx);
         logging::log("VISIBILITY", "WINDOW_VISIBLE set to: false");
 
-        // If in a prompt, cancel the script execution
+        // If in a prompt, cancel execution without resetting the visible route.
+        // The reset is deferred until after the native hide turn below, avoiding
+        // a visible ScriptList frame while the panel is closing.
         if self.is_in_prompt() {
             logging::log(
                 "VISIBILITY",
-                "In prompt mode - canceling script before hiding",
+                "In prompt mode - canceling script before hidden reset",
             );
-            self.cancel_script_execution(cx);
-        } else {
-            // Just reset to script list (clears filter, selection, scroll)
-            self.reset_to_script_list(cx);
+            self.cancel_script_execution_without_view_reset();
         }
 
         // Check if Notes or AI windows are open BEFORE hiding
@@ -246,7 +247,52 @@ impl ScriptListApp {
             ),
         );
         platform::defer_hide_main_window(cx);
+        self.defer_reset_to_script_list_after_main_window_hidden(
+            cx,
+            "close_and_reset_window",
+            false,
+        );
         logging::log("VISIBILITY", "=== Window closed ===");
+    }
+
+    pub(crate) fn reset_hidden_main_window_to_script_list(
+        &mut self,
+        cx: &mut Context<Self>,
+        reason: &'static str,
+    ) -> bool {
+        logging::log(
+            "VISIBILITY",
+            &format!("Resetting hidden main window to ScriptList after {reason}"),
+        );
+        let was_mini = self.main_window_mode == MainWindowMode::Mini;
+        self.reset_to_script_list(cx);
+        let post_reset_is_mini = self.main_window_mode == MainWindowMode::Mini;
+        self.rekey_main_automation_surface_from_current_view();
+        crate::windows::set_automation_visibility("main", false);
+        was_mini || post_reset_is_mini
+    }
+
+    pub(crate) fn defer_reset_to_script_list_after_main_window_hidden(
+        &mut self,
+        cx: &mut Context<Self>,
+        reason: &'static str,
+        reset_mini_bounds_after_hidden_reset: bool,
+    ) {
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(16))
+                .await;
+            let _ = cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    let hidden_reset_is_mini =
+                        app.reset_hidden_main_window_to_script_list(cx, reason);
+                    if reset_mini_bounds_after_hidden_reset || hidden_reset_is_mini {
+                        crate::window_resize::resize_to_mini_main_window_sync();
+                    }
+                })
+            });
+        })
+        .detach();
     }
 
     pub(crate) fn can_preserve_hide_script_list_on_passive_focus_loss(&self) -> bool {
