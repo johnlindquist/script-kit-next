@@ -8362,6 +8362,7 @@ impl AcpChatView {
         );
         crate::components::main_view_chrome::render_main_view_header(
             crate::components::main_view_chrome::MainViewHeaderChrome {
+                context: None,
                 input,
                 padding_x: menu_def.shell.header_padding_x,
                 padding_y: menu_def.shell.header_padding_y,
@@ -13388,6 +13389,7 @@ impl Render for AcpChatView {
                 &theme,
             );
             let header = crate::components::main_view_chrome::MainViewHeaderChrome {
+                context: None,
                 input,
                 padding_x: menu_def.shell.header_padding_x,
                 padding_y: menu_def.shell.header_padding_y,

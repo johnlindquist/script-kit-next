@@ -51,6 +51,17 @@ const SCRIPT_LIST_APP_STATE_SOURCE: &str = include_str!("../src/main_sections/ap
 const HOSTED_SOURCE: &str = include_str!("../src/ai/acp/hosted.rs");
 const VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 
+fn body<'a>(source: &'a str, start_marker: &str, end_marker: &str) -> &'a str {
+    let start = source
+        .find(start_marker)
+        .unwrap_or_else(|| panic!("Expected start marker: {start_marker}"));
+    let tail = &source[start..];
+    let end = tail
+        .find(end_marker)
+        .unwrap_or_else(|| panic!("Expected end marker after {start_marker}: {end_marker}"));
+    &tail[..end]
+}
+
 fn prepare_for_host_hide_slice() -> &'static str {
     let start = VIEW_SOURCE
         .find("pub(crate) fn prepare_for_host_hide(&mut self, cx: &mut Context<Self>) {")
@@ -81,8 +92,9 @@ fn prepare_for_host_hide_slice() -> &'static str {
 #[test]
 fn notes_and_script_list_have_distinct_embedded_acp_chat_fields() {
     assert!(
-        NOTES_WINDOW_SOURCE
-            .contains("embedded_acp_chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,"),
+        NOTES_WINDOW_SOURCE.contains(
+            "embedded_acp_chat: Option<Entity<crate::ai::agent_chat::ui::AgentChatView>>,"
+        ),
         "NotesApp must declare its own embedded_acp_chat field — host \
          isolation depends on Notes and the main launcher holding \
          SEPARATE cached ACP view entities so neither can observe or \
@@ -96,6 +108,44 @@ fn notes_and_script_list_have_distinct_embedded_acp_chat_fields() {
          regresses into a shared static or moves to a host-neutral cache, \
          the two hosts start sharing view state and host isolation breaks"
     );
+}
+
+#[test]
+fn notes_embedded_acp_registers_notes_parented_ai_identity() {
+    assert!(NOTES_ACP_HOST_SOURCE.contains("NOTES_EMBEDDED_AI_AUTOMATION_ID"));
+    assert!(NOTES_ACP_HOST_SOURCE.contains("\"notes:ai\""));
+    assert!(NOTES_ACP_HOST_SOURCE.contains("fn sync_notes_embedded_acp_automation_window("));
+    assert!(NOTES_ACP_HOST_SOURCE.contains("AutomationWindowKind::Ai"));
+    assert!(NOTES_ACP_HOST_SOURCE.contains("parent_window_id: Some(\"notes\".to_string())"));
+    assert!(NOTES_ACP_HOST_SOURCE
+        .contains("parent_kind: Some(crate::protocol::AutomationWindowKind::Notes)"));
+    assert!(NOTES_ACP_HOST_SOURCE.contains("semantic_surface: Some(\"notesAcpChat\".to_string())"));
+    assert!(NOTES_ACP_HOST_SOURCE.contains("focused: false"));
+    assert!(!NOTES_ACP_HOST_SOURCE.contains("ensure_embedded_ai_window(true)"));
+}
+
+#[test]
+fn notes_embedded_acp_lifecycle_syncs_child_identity() {
+    let open = body(
+        NOTES_ACP_HOST_SOURCE,
+        "pub(crate) fn open_or_focus_embedded_acp(",
+        "cx.notify();",
+    );
+    assert!(open.contains("self.sync_notes_embedded_acp_automation_window(true)"));
+
+    let close = body(
+        NOTES_ACP_HOST_SOURCE,
+        "fn close_embedded_acp_via_host(",
+        "tracing::info!(",
+    );
+    assert!(close.contains("self.sync_notes_embedded_acp_automation_window(false)"));
+
+    let prepare = body(
+        NOTES_ACP_HOST_SOURCE,
+        "pub(super) fn prepare_embedded_acp_for_window_close(",
+        "tracing::info!(",
+    );
+    assert!(prepare.contains("self.sync_notes_embedded_acp_automation_window(false)"));
 }
 
 // doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Reattach preserves embedded view identity]]
@@ -133,7 +183,7 @@ fn freshly_constructed_acp_chat_view_has_no_pending_portal_session() {
 #[test]
 fn open_or_focus_embedded_acp_emits_host_swap_tracing_event() {
     assert!(
-        NOTES_ACP_HOST_SOURCE.contains("pub(super) fn open_or_focus_embedded_acp("),
+        NOTES_ACP_HOST_SOURCE.contains("pub(crate) fn open_or_focus_embedded_acp("),
         "NotesApp::open_or_focus_embedded_acp must remain the entry point \
          for the Notes host swap — it is where the host-identity tracing \
          event is emitted"
@@ -156,9 +206,9 @@ fn prepare_for_host_hide_clears_popups_but_not_pending_portal_session() {
         "self.attach_menu_open = false;",
         "self.model_selector_open = false;",
         "self.permission_options_open = false;",
-        "self.mention_session = None;",
+        "self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);",
         "self.history_menu = None;",
-        "self.setup_agent_picker = None;",
+        "view.set_agent_picker(None, cx)",
     ] {
         assert!(
             slice.contains(field),

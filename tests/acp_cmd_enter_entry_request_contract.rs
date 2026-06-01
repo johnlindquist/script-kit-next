@@ -30,6 +30,25 @@ fn acp_entry_request_is_the_cmd_enter_handoff_choke_point() {
     ] {
         assert!(source.contains(needle), "missing {needle}");
     }
+    let body_start = source
+        .find("pub(crate) fn open_acp_chat_from_entry_request")
+        .expect("entry request opener should exist");
+    let body = &source[body_start..];
+    assert!(
+        body.contains("self.seed_acp_return_origin_for_view(&source_view)")
+            && body.contains("event = \"acp_entry_request_open\""),
+        "entry request opener must seed return origin and log the handoff before launch dispatch"
+    );
+    for forbidden in [
+        "self.current_view = AppView::AcpChatView",
+        "ensure_embedded_ai_window(",
+        "transition_acp_surface(",
+    ] {
+        assert!(
+            !body.contains(forbidden),
+            "entry request opener must not mutate the ACP surface directly: {forbidden}"
+        );
+    }
 }
 
 #[test]

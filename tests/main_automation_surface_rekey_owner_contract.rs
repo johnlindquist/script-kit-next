@@ -219,12 +219,13 @@ fn embedded_acp_entry_and_return_paths_rekey_from_current_view_contract() {
         );
     }
 
-    assert_eq!(
-        TAB_AI_MODE_SOURCE
-            .matches("self.rekey_main_automation_surface_from_current_view();")
-            .count(),
-        1,
-        "tab_ai_mode/mod.rs must use the shared owner for normal return-origin close; embedded entry paths use enter_embedded_acp_chat_surface"
+    assert!(
+        !TAB_AI_MODE_SOURCE.contains("semantic_surface_for_main_view(&self.current_view)"),
+        "tab_ai_mode/mod.rs must not hand-roll main semantic-surface re-keying"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("self.exit_embedded_acp_chat_surface("),
+        "tab_ai_mode/mod.rs must delegate embedded ACP return-origin close to the lifecycle actor"
     );
     assert!(
         !ACP_SETUP_SOURCE.contains("self.rekey_main_automation_surface_from_current_view();")
@@ -235,8 +236,12 @@ fn embedded_acp_entry_and_return_paths_rekey_from_current_view_contract() {
     assert!(
         ACP_SURFACE_TRANSITIONS_SOURCE.contains("pub(crate) fn enter_embedded_acp_chat_surface")
             && ACP_SURFACE_TRANSITIONS_SOURCE
-                .contains("self.rekey_main_automation_surface_from_current_view();"),
-        "embedded ACP entry must re-key main through the shared current-view owner"
+                .contains("pub(crate) fn exit_embedded_acp_chat_surface")
+            && ACP_SURFACE_TRANSITIONS_SOURCE
+                .matches("self.rekey_main_automation_surface_from_current_view()")
+                .count()
+                >= 2,
+        "embedded ACP entry and exit must re-key main through the lifecycle actors"
     );
     let entry_delegate_count: usize = [
         ("acp_setup.rs", ACP_SETUP_SOURCE),

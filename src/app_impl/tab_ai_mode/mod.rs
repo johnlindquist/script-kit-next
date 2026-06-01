@@ -3126,17 +3126,16 @@ impl ScriptListApp {
             return;
         }
 
-        self.restore_current_view_with_focus(return_view, return_focus_target);
-
         if closing_acp_chat {
             self.acp_ready_script_path = None;
             self.acp_footer_dot_status = None;
             self.acp_footer_model_display = None;
             self.acp_footer_snapshot = None;
-            self.rekey_main_automation_surface_from_current_view();
-            crate::windows::ensure_embedded_ai_window(false);
-            self.transition_acp_surface(
-                crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedClosed,
+            let _receipt = self.exit_embedded_acp_chat_surface(
+                return_view,
+                return_focus_target,
+                "close_tab_ai_harness_terminal_impl",
+                cx,
             );
             tracing::info!(
                 target: "script_kit::tab_ai",
@@ -3144,6 +3143,8 @@ impl ScriptListApp {
                 return_view = ?self.current_view,
                 focus_target = ?return_focus_target,
             );
+        } else {
+            self.restore_current_view_with_focus(return_view, return_focus_target);
         }
 
         if return_is_script_list {

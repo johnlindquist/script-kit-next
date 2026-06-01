@@ -204,10 +204,15 @@ function hasDraftSnapshot(value: JsonObject): boolean {
 
 function missingCoveragePrimitives(coverage: ReturnType<typeof notesCoverage>, runtimeNotes: JsonObject): string[] {
   const missing = coverage.missingRuntimePrimitives.map(String);
-  if (hasDraftSnapshot(runtimeNotes)) {
-    return missing.filter((primitive) => primitive !== "draft snapshot fingerprint");
-  }
-  return missing;
+  return missing.filter((primitive) => {
+    if (hasDraftSnapshot(runtimeNotes) && primitive === "draft snapshot fingerprint") {
+      return false;
+    }
+    if (hasNotesAcpOriginReceipt(runtimeNotes) && primitive.includes("ACP embedded origin receipts")) {
+      return false;
+    }
+    return true;
+  });
 }
 
 function shortcutSnapshot(value: JsonObject) {
@@ -216,6 +221,28 @@ function shortcutSnapshot(value: JsonObject) {
     activeScope: notesActiveScope(value),
     focusTransitionGeneration: notesFocusGeneration(value),
   };
+}
+
+function hasNotesAcpOriginReceipt(runtimeNotes: JsonObject): boolean {
+  const embeddedAcp = asObject(runtimeNotes.embeddedAcp);
+  const registered = asObject(embeddedAcp.registered);
+  return (
+    embeddedAcp.host === "notes" &&
+    embeddedAcp.automationId === "notes:ai" &&
+    embeddedAcp.parentWindowId === "notes" &&
+    embeddedAcp.parentKind === "notes" &&
+    embeddedAcp.usesMainAiAutomationWindow === false &&
+    (
+      embeddedAcp.active !== true ||
+      (
+        registered.id === "notes:ai" &&
+        registered.kind === "ai" &&
+        registered.parentWindowId === "notes" &&
+        registered.parentKind === "notes" &&
+        registered.focused === false
+      )
+    )
+  );
 }
 
 function buildShortcutActivationReceipt(sendReceipt: JsonObject | null, beforeEnvelope: JsonObject | null, afterEnvelope: JsonObject | null) {
@@ -393,6 +420,7 @@ function notesState(elements: JsonObject, focus: JsonObject, text: JsonObject, r
     previewAnchor: runtimeNotes.previewAnchor ?? null,
     view: runtimeNotes.view ?? null,
     commandBars: runtimeNotes.commandBars ?? null,
+    embeddedAcp: runtimeNotes.embeddedAcp ?? null,
     shortcutRegistry: runtimeNotes.shortcutRegistry ?? null,
     focusTransitions: runtimeNotes.focusTransitions ?? null,
     ghostAutocomplete: runtimeNotes.ghostAutocomplete ?? null,
@@ -759,7 +787,7 @@ async function runInspect(args: Args) {
       previewAnchor.previewEnabled === true && previewAnchor.scrollMetricsAvailable !== true
         ? "preview scroll metrics"
         : "",
-      "ACP embedded origin receipts",
+      hasNotesAcpOriginReceipt(runtimeNotes) ? "" : "ACP embedded origin receipts",
       "portal session provenance",
       state.commandBars == null ? "notes command bar runtime state" : "",
       state.shortcutRegistry == null ? "notes shortcut registry" : "",

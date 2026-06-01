@@ -493,6 +493,7 @@ mod vibrancy;
 mod window_ops;
 
 pub use acp_host::close_notes_embedded_acp;
+pub(crate) use acp_host::NOTES_EMBEDDED_AI_AUTOMATION_ID;
 pub use window_ops::{
     accept_notes_ghost_for_automation, apply_mcp_notes_mutation_on_main_thread, close_notes_window,
     get_notes_app_entity_and_handle, get_notes_editor_text, handle_notes_ghost_key_for_automation,

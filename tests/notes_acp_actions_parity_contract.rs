@@ -35,7 +35,9 @@ fn dispatch_uses_originating_acp_target_and_generation_not_current_cache() {
         "fn dispatch_notes_acp_action(",
         "    // Handle model switch.",
     );
-    assert!(dispatch.contains("acp_target: gpui::WeakEntity<crate::ai::acp::view::AcpChatView>"));
+    assert!(
+        dispatch.contains("acp_target: gpui::WeakEntity<crate::ai::agent_chat::ui::AgentChatView>")
+    );
     assert!(dispatch.contains("let Some(acp_entity) = acp_target.upgrade()"));
     assert!(dispatch.contains("entity.read(cx).notes_acp_generation != acp_generation"));
     assert!(dispatch.contains("notes_acp_action_stale_view"));
@@ -43,6 +45,5 @@ fn dispatch_uses_originating_acp_target_and_generation_not_current_cache() {
         !dispatch.contains("entity.read(cx).embedded_acp_chat.clone()"),
         "dispatch must not use the current embedded_acp_chat cache as the action target"
     );
-    assert!(dispatch.contains("app.open_or_focus_embedded_acp(None, window, cx)"));
-    assert!(dispatch.contains("chat.restore_draft_snapshot(snapshot, cx);"));
+    assert!(dispatch.contains("app.close_embedded_acp_via_host("));
 }

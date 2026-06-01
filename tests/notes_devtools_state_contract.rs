@@ -231,6 +231,44 @@ fn notes_state_exposes_shortcut_registry_and_focus_owner_scope() {
 }
 
 #[test]
+fn notes_state_exposes_embedded_acp_origin_isolation_receipt() {
+    for needle in [
+        "fn automation_embedded_acp_isolation_snapshot(&self)",
+        "\"embeddedAcp\"",
+        "\"host\": \"notes\"",
+        "\"automationId\"",
+        "NOTES_EMBEDDED_AI_AUTOMATION_ID",
+        "\"parentWindowId\": \"notes\"",
+        "\"parentKind\": \"notes\"",
+        "\"actionsParentAutomationId\": \"notes\"",
+        "\"usesMainAiAutomationWindow\": false",
+        "\"mainAiAutomationId\": \"ai\"",
+        "\"registered\"",
+    ] {
+        assert!(
+            NOTES_NAVIGATION.contains(needle),
+            "Notes state must expose embedded ACP origin/isolation receipt: {needle}"
+        );
+    }
+}
+
+#[test]
+fn notes_cli_reports_embedded_acp_origin_receipt() {
+    for needle in [
+        "embeddedAcp: runtimeNotes.embeddedAcp ?? null",
+        "function hasNotesAcpOriginReceipt",
+        "embeddedAcp.host === \"notes\"",
+        "embeddedAcp.automationId === \"notes:ai\"",
+        "embeddedAcp.usesMainAiAutomationWindow === false",
+    ] {
+        assert!(
+            DEVTOOLS_NOTES.contains(needle),
+            "Notes DevTools CLI must report embedded ACP origin receipt: {needle}"
+        );
+    }
+}
+
+#[test]
 fn notes_batch_supports_target_scoped_open_actions() {
     for needle in ["OpenActions", "openActions"] {
         assert!(

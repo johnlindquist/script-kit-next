@@ -6,7 +6,41 @@
 
 use super::*;
 
+pub(crate) const NOTES_EMBEDDED_AI_AUTOMATION_ID: &str = "notes:ai";
+
 impl NotesApp {
+    fn sync_notes_embedded_acp_automation_window(&self, active: bool) -> bool {
+        if !active {
+            let _ = crate::windows::remove_automation_window(NOTES_EMBEDDED_AI_AUTOMATION_ID);
+            return true;
+        }
+
+        if crate::windows::automation_window_by_id("notes").is_none() {
+            tracing::warn!(
+                target: "script_kit::automation",
+                event = "notes_embedded_acp_automation_parent_missing",
+                parent_window_id = "notes",
+                child_window_id = NOTES_EMBEDDED_AI_AUTOMATION_ID,
+                "Notes embedded ACP automation identity was not registered because the Notes parent is missing"
+            );
+            return false;
+        }
+
+        crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
+            id: NOTES_EMBEDDED_AI_AUTOMATION_ID.to_string(),
+            kind: crate::protocol::AutomationWindowKind::Ai,
+            title: Some("Script Kit Notes AI".to_string()),
+            focused: false,
+            visible: true,
+            semantic_surface: Some("notesAcpChat".to_string()),
+            bounds: None,
+            parent_window_id: Some("notes".to_string()),
+            parent_kind: Some(crate::protocol::AutomationWindowKind::Notes),
+            pid: Some(std::process::id()),
+        });
+        true
+    }
+
     pub(super) fn ensure_embedded_acp_view(
         &mut self,
         initial_input: Option<String>,
@@ -59,8 +93,15 @@ impl NotesApp {
 
         self.surface_mode = NotesSurfaceMode::Acp;
         self.pending_focus_surface = Some(focus::NotesFocusSurface::AcpChat);
+        let automation_synced = self.sync_notes_embedded_acp_automation_window(true);
 
-        tracing::info!(event = "notes_acp_surface_opened", reused, mode = "acp",);
+        tracing::info!(
+            event = "notes_acp_surface_opened",
+            reused,
+            mode = "acp",
+            automation_synced,
+            automation_id = NOTES_EMBEDDED_AI_AUTOMATION_ID,
+        );
 
         cx.notify();
         Ok(())
@@ -92,6 +133,7 @@ impl NotesApp {
         }
 
         self.surface_mode = NotesSurfaceMode::Notes;
+        let automation_synced = self.sync_notes_embedded_acp_automation_window(false);
         if let Some(window) = window {
             self.request_focus_surface(focus::NotesFocusSurface::Editor, window, cx);
         } else {
@@ -103,6 +145,7 @@ impl NotesApp {
             target: "script_kit::tab_ai",
             event = "notes_embedded_acp_closed_via_host",
             reason,
+            automation_synced,
         );
     }
 
@@ -120,11 +163,13 @@ impl NotesApp {
         if crate::actions::is_actions_window_open() {
             crate::actions::close_actions_window(cx);
         }
+        let automation_synced = self.sync_notes_embedded_acp_automation_window(false);
 
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "notes_embedded_acp_prepared_for_window_close",
             reason,
+            automation_synced,
         );
     }
 

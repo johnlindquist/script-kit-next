@@ -102,6 +102,41 @@ impl NotesApp {
         })
     }
 
+    fn automation_embedded_acp_isolation_snapshot(&self) -> serde_json::Value {
+        let active = self.surface_mode == NotesSurfaceMode::Acp;
+        let child = crate::windows::automation_window_by_id(
+            crate::notes::window::NOTES_EMBEDDED_AI_AUTOMATION_ID,
+        );
+        let main_ai = crate::windows::automation_window_by_id("ai");
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "source": "runtime.notes.embeddedAcpIsolation",
+            "redacted": true,
+            "host": "notes",
+            "active": active,
+            "cached": self.embedded_acp_chat.is_some(),
+            "generation": self.notes_acp_generation,
+            "automationId": crate::notes::window::NOTES_EMBEDDED_AI_AUTOMATION_ID,
+            "parentWindowId": "notes",
+            "parentKind": "notes",
+            "semanticSurface": "notesAcpChat",
+            "actionsParentAutomationId": "notes",
+            "usesMainAiAutomationWindow": false,
+            "mainAiAutomationId": "ai",
+            "mainAiWindowPresent": main_ai.is_some(),
+            "registered": child.as_ref().map(|info| serde_json::json!({
+                "id": info.id,
+                "kind": info.kind.as_camel_case(),
+                "parentWindowId": info.parent_window_id,
+                "parentKind": info.parent_kind.map(|kind| kind.as_camel_case()),
+                "semanticSurface": info.semantic_surface,
+                "focused": info.focused,
+                "visible": info.visible,
+            })),
+        })
+    }
+
     fn automation_ghost_autocomplete_state(&self) -> serde_json::Value {
         let prediction = self.notes_ghost_prediction.as_ref();
         let last_action = self.notes_ghost_last_action.as_ref().map(|action| {
@@ -487,6 +522,7 @@ impl NotesApp {
                 "actions": self.command_bar.automation_state("notes.actions", cx),
                 "noteSwitcher": self.note_switcher.automation_state("notes.switcher", cx),
             },
+            "embeddedAcp": self.automation_embedded_acp_isolation_snapshot(),
             "shortcutRegistry": self.automation_shortcut_registry(),
             "focusTransitions": self.automation_focus_transition_timeline(),
             "ghostAutocomplete": self.automation_ghost_autocomplete_state(),
