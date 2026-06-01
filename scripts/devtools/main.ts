@@ -8,6 +8,7 @@ type Args = {
   start: boolean;
   show: boolean;
   proveOpenCloseFreshness: boolean;
+  proveEarlyFrameFreshness: boolean;
   sampleMs: number;
   intervalMs: number;
 };
@@ -17,7 +18,7 @@ const MAIN_TARGET_ARGS = ["--main", "--strict", "--surface", "ScriptList"];
 function usage() {
   return [
     "Usage:",
-    "  bun scripts/devtools/main.ts inspect [--session <name>] [--start] [--show] [--prove-open-close-freshness] [--timeout <ms>]",
+    "  bun scripts/devtools/main.ts inspect [--session <name>] [--start] [--show] [--prove-open-close-freshness] [--prove-early-frame-freshness] [--timeout <ms>]",
   ].join("\n");
 }
 
@@ -37,6 +38,7 @@ function parseArgs(argv: string[]): Args {
     start: false,
     show: false,
     proveOpenCloseFreshness: false,
+    proveEarlyFrameFreshness: false,
     sampleMs: 900,
     intervalMs: 50,
   };
@@ -50,6 +52,8 @@ function parseArgs(argv: string[]): Args {
       args.show = true;
     } else if (arg === "--prove-open-close-freshness") {
       args.proveOpenCloseFreshness = true;
+    } else if (arg === "--prove-early-frame-freshness") {
+      args.proveEarlyFrameFreshness = true;
     } else if (arg === "--timeout") {
       args.timeoutMs = Number(argv[++index] ?? args.timeoutMs);
     } else if (arg === "--sample-ms") {
@@ -101,6 +105,10 @@ async function send(session: string, payload: JsonObject, timeoutMs: number) {
 
 function responseOf(envelope: JsonObject): JsonObject {
   return (envelope.response as JsonObject | undefined) ?? envelope;
+}
+
+function asArray(value: unknown): JsonObject[] {
+  return Array.isArray(value) ? value.filter((entry): entry is JsonObject => typeof entry === "object" && entry !== null) : [];
 }
 
 async function maybeStartSession(args: Args) {
@@ -168,6 +176,9 @@ function summarizeMainState(stateReceipt: JsonObject, targetReceipt: JsonObject,
       surfaceKind: target.surfaceKind ?? null,
       semanticSurface: target.semanticSurface ?? null,
       appViewVariant: target.appViewVariant ?? null,
+      routeId: target.routeId ?? null,
+      routeStack: target.routeStack ?? [],
+      nativeFooterSurface: target.nativeFooterSurface ?? null,
       targetGeneration: target.targetGeneration ?? null,
       surfaceGeneration: target.surfaceGeneration ?? null,
       dataGeneration: target.dataGeneration ?? null,
@@ -179,6 +190,12 @@ function summarizeMainState(stateReceipt: JsonObject, targetReceipt: JsonObject,
       promptType: state.promptType ?? null,
       promptId: state.promptId ?? null,
       surfaceKind: surfaceContract.surfaceKind ?? target.surfaceKind ?? null,
+      surfaceContract: {
+        surfaceKind: surfaceContract.surfaceKind ?? null,
+        keyboardPolicy: surfaceContract.keyboardPolicy ?? null,
+        inputOwnership: surfaceContract.inputOwnership ?? null,
+        focusPolicy: surfaceContract.focusPolicy ?? null,
+      },
       inputLength: inputValue.length,
       inputFingerprint,
       visibleChoiceCount: state.visibleChoiceCount ?? null,
@@ -186,6 +203,17 @@ function summarizeMainState(stateReceipt: JsonObject, targetReceipt: JsonObject,
       windowVisible: state.windowVisible ?? null,
       activePopupPresent: Boolean(state.activePopupContract),
       activeFooterOwner: activeFooter.owner ?? null,
+      activeFooter: {
+        owner: activeFooter.owner ?? null,
+        activeSurface: activeFooter.activeSurface ?? null,
+        expectedSurface: activeFooter.expectedSurface ?? null,
+        nativeFooterHostInstalled: activeFooter.nativeFooterHostInstalled ?? null,
+        buttonCount: activeFooter.buttonCount ?? asArray(activeFooter.buttons).length,
+        actionSlotCount: activeFooter.actionSlotCount ?? null,
+        contextChipCount: activeFooter.contextChipCount ?? null,
+        duplicateShortcutKeys: activeFooter.duplicateShortcutKeys ?? [],
+        slotContractViolation: activeFooter.slotContractViolation ?? null,
+      },
     },
     staleInputObserved: markerFingerprint != null && inputFingerprint === markerFingerprint,
   };
@@ -320,7 +348,101 @@ async function runOpenCloseFreshnessProof(args: Args) {
   };
 }
 
-function classifyMainReceipt(targetReceipt: JsonObject, stateReceipt: JsonObject, proof: JsonObject | null) {
+function numericValues(samples: JsonObject[], path: (sample: JsonObject) => unknown) {
+  return samples
+    .map(path)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+}
+
+function monotonicNonDecreasing(values: number[]) {
+  return values.every((value, index) => index === 0 || value >= values[index - 1]);
+}
+
+function summarizeGenerationSeries(samples: JsonObject[]) {
+  const targetGeneration = numericValues(samples, (sample) => (sample.target as JsonObject | undefined)?.targetGeneration);
+  const surfaceGeneration = numericValues(samples, (sample) => (sample.target as JsonObject | undefined)?.surfaceGeneration);
+  const dataGeneration = numericValues(samples, (sample) => (sample.target as JsonObject | undefined)?.dataGeneration);
+  return {
+    targetGeneration,
+    surfaceGeneration,
+    dataGeneration,
+    fieldsChecked: [
+      targetGeneration.length >= 2 ? "targetGeneration" : "",
+      surfaceGeneration.length >= 2 ? "surfaceGeneration" : "",
+      dataGeneration.length >= 2 ? "dataGeneration" : "",
+    ].filter(Boolean),
+    missingOrSingleSampleFields: [
+      targetGeneration.length < 2 ? "targetGeneration" : "",
+      surfaceGeneration.length < 2 ? "surfaceGeneration" : "",
+      dataGeneration.length < 2 ? "dataGeneration" : "",
+    ].filter(Boolean),
+    monotonicWhenAvailable: monotonicNonDecreasing(targetGeneration)
+      && monotonicNonDecreasing(surfaceGeneration)
+      && monotonicNonDecreasing(dataGeneration),
+  };
+}
+
+function footerSurfaceFresh(sample: JsonObject) {
+  const state = (sample.state as JsonObject | undefined) ?? {};
+  const footer = (state.activeFooter as JsonObject | undefined) ?? {};
+  const activeSurface = footer.activeSurface;
+  const expectedSurface = footer.expectedSurface;
+  const slotViolation = footer.slotContractViolation;
+  const duplicates = footer.duplicateShortcutKeys;
+  return (expectedSurface == null || activeSurface == null || activeSurface === expectedSurface)
+    && (slotViolation == null || slotViolation === false)
+    && (!Array.isArray(duplicates) || duplicates.length === 0);
+}
+
+function sampleSurfaceFresh(sample: JsonObject) {
+  const target = (sample.target as JsonObject | undefined) ?? {};
+  const state = (sample.state as JsonObject | undefined) ?? {};
+  return target.automationId === "main"
+    && target.strictTargetMatch === true
+    && (target.surfaceKind === "ScriptList" || state.surfaceKind === "ScriptList");
+}
+
+function buildEarlyFrameFreshnessProof(openCloseFreshnessProof: JsonObject | null) {
+  const samples = asArray(openCloseFreshnessProof?.samplesAfterReopen);
+  const marker = (openCloseFreshnessProof?.marker as JsonObject | undefined) ?? {};
+  const firstVisibleFrame = samples.find((sample) => {
+    const target = (sample.target as JsonObject | undefined) ?? {};
+    const state = (sample.state as JsonObject | undefined) ?? {};
+    return target.visible === true || state.windowVisible === true;
+  }) ?? null;
+  const generation = summarizeGenerationSeries(samples);
+  const assertions = {
+    baseOpenCloseProofOk: openCloseFreshnessProof?.classification === "ok",
+    sampledEarlyFrames: samples.length >= 3,
+    firstVisibleFrameFresh: firstVisibleFrame != null && sampleSurfaceFresh(firstVisibleFrame),
+    everySampleTargetStable: samples.every(sampleSurfaceFresh),
+    noStaleInputValue: samples.every((sample) => sample.staleInputObserved === false),
+    noPromptIdOnReopen: samples.every((sample) => ((sample.state as JsonObject | undefined)?.promptId ?? null) == null),
+    noActivePopupOnReopen: samples.every((sample) => ((sample.state as JsonObject | undefined)?.activePopupPresent ?? false) === false),
+    footerSurfaceFresh: samples.every(footerSurfaceFresh),
+    generationMonotonicWhenAvailable: generation.monotonicWhenAvailable,
+  };
+  const ok = Object.values(assertions).every(Boolean);
+  return {
+    classification: ok ? "ok" : "blocked-by-stale-view",
+    command: "main.earlyFrameFreshnessProof",
+    marker: {
+      inputFingerprint: marker.inputFingerprint ?? null,
+      rawValueRedacted: marker.rawValueRedacted === true,
+    },
+    assertions,
+    generation,
+    firstVisibleFrame,
+    samplesAfterReopen: samples,
+  };
+}
+
+function classifyMainReceipt(
+  targetReceipt: JsonObject,
+  stateReceipt: JsonObject,
+  proof: JsonObject | null,
+  earlyFrameProof: JsonObject | null,
+) {
   if (targetReceipt.classification !== "ok") {
     return targetReceipt.classification ?? "blocked-by-target-ambiguity";
   }
@@ -329,6 +451,9 @@ function classifyMainReceipt(targetReceipt: JsonObject, stateReceipt: JsonObject
   }
   if (proof?.classification && proof.classification !== "ok") {
     return proof.classification;
+  }
+  if (earlyFrameProof?.classification && earlyFrameProof.classification !== "ok") {
+    return earlyFrameProof.classification;
   }
   return "ok";
 }
@@ -340,10 +465,14 @@ async function main() {
   const targetReceipt = await inspectMain(args, "targets.inspect.main");
   const stateReceipt = await getMainState(args, "main-state");
   const stateSummary = summarizeMainState(stateReceipt, targetReceipt);
-  const openCloseFreshnessProof = args.proveOpenCloseFreshness
+  const shouldRunOpenCloseFreshness = args.proveOpenCloseFreshness || args.proveEarlyFrameFreshness;
+  const openCloseFreshnessProof = shouldRunOpenCloseFreshness
     ? await runOpenCloseFreshnessProof(args)
     : null;
-  const classification = classifyMainReceipt(targetReceipt, stateReceipt, openCloseFreshnessProof);
+  const earlyFrameFreshnessProof = args.proveEarlyFrameFreshness
+    ? buildEarlyFrameFreshnessProof(openCloseFreshnessProof)
+    : null;
+  const classification = classifyMainReceipt(targetReceipt, stateReceipt, openCloseFreshnessProof, earlyFrameFreshnessProof);
   console.log(JSON.stringify({
     schemaVersion: 1,
     tool: "script-kit-devtools.main",
@@ -353,6 +482,7 @@ async function main() {
     target: stateSummary.target,
     state: stateSummary.state,
     openCloseFreshnessProof,
+    earlyFrameFreshnessProof,
     receipts: { startReceipt, showReceipt, target: targetReceipt, state: stateReceipt },
     missingPrimitives: [],
     warnings: [],

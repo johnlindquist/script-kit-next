@@ -235,6 +235,7 @@ const surfaces: Surface[] = [
       "getLayoutInfo",
       "captureScreenshot",
       "target-scoped main-window open/close stale-view freshness proof",
+      "target-scoped main-window early-frame surface/footer/chrome freshness proof",
     ],
     missingRuntimePrimitives: ["text fit", "scroll geometry", "layout overlap pairs", "focus ring bounds"],
     regressionRecipeRole: "Use recipes only for stable launcher regressions after direct measurements isolate the bug.",

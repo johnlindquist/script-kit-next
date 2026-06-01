@@ -294,6 +294,61 @@ fn main_cli_uses_target_scoped_state_not_screenshots() {
 }
 
 #[test]
+fn main_cli_reports_early_frame_freshness_proof() {
+    for needle in [
+        "--prove-early-frame-freshness",
+        "earlyFrameFreshnessProof",
+        "main.earlyFrameFreshnessProof",
+        "firstVisibleFrameFresh",
+        "noPromptIdOnReopen",
+        "noActivePopupOnReopen",
+        "footerSurfaceFresh",
+        "generationMonotonicWhenAvailable",
+        "blocked-by-stale-view",
+    ] {
+        assert!(
+            MAIN_DEVTOOLS.contains(needle)
+                || COVERAGE.contains(needle)
+                || DEVTOOLS_SKILL.contains(needle),
+            "main DevTools CLI must expose early-frame freshness proof receipt: {needle}"
+        );
+    }
+}
+
+#[test]
+fn main_coverage_mentions_early_frame_freshness_proof() {
+    assert!(
+        COVERAGE.contains(
+            "target-scoped main-window early-frame surface/footer/chrome freshness proof"
+        ),
+        "coverage CLI must advertise main-window early-frame surface/footer/chrome freshness proof"
+    );
+}
+
+#[test]
+fn main_cli_early_frame_freshness_uses_target_scoped_state_not_screenshots() {
+    for needle in [
+        "target: { type: \"main\" }",
+        "summaryOnly: true",
+        "activePopupPresent",
+        "activeFooter",
+        "surfaceContract",
+        "targetGeneration",
+        "surfaceGeneration",
+        "dataGeneration",
+    ] {
+        assert!(
+            MAIN_DEVTOOLS.contains(needle),
+            "early-frame freshness proof must use target-scoped protocol state: {needle}"
+        );
+    }
+    assert!(
+        !MAIN_DEVTOOLS.contains("captureScreenshot"),
+        "main early-frame freshness proof must not use screenshots as proof"
+    );
+}
+
+#[test]
 fn coverage_source_files_exist_for_notes_and_dictation() {
     for path in [
         "src/notes/window.rs",
