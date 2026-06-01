@@ -4,10 +4,7 @@ Hand-off stories for manual QA. Each story is a real, end-to-end action a user
 would take. Work top to bottom.
 
 This file covers the launcher, built-ins, Notes, Dictation, Quick Terminal, the
-Actions menu, and the main-input sigils (stories 1–30). The **Agent Chat**
-stories — core flows, `@` context sigils, and the multi-feature combinations
-(multiple `@` sigils, changing the cwd, multi-turn threads, live web search) —
-are in **[QA_AGENT_CHAT.md](./QA_AGENT_CHAT.md)** (20 stories).
+Actions menu, the main-input sigils, and Agent Chat.
 
 **Conventions**
 - "Open the launcher" = press your global Script Kit hotkey (default brings up
@@ -229,14 +226,6 @@ are in **[QA_AGENT_CHAT.md](./QA_AGENT_CHAT.md)** (20 stories).
 3. Pick a project directory (e.g. `~/dev/your-project`).
 - Expected: the footer's left cwd chip updates from `~/.scriptkit` to the chosen
   directory, and it persists across surface switches and app restarts.
-
----
-
-## H. Agent Chat
-
-The Agent Chat stories (core flows, `@` context sigils, and the multi-feature
-combination stories) live in their own file:
-**[QA_AGENT_CHAT.md](./QA_AGENT_CHAT.md)** (20 stories).
 
 ---
 

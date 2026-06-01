@@ -1,3 +1,0 @@
-{"schemaVersion":1,"status":"not_found","session":"dt-proof-a","alive":false}
-{"schemaVersion":1,"status":"not_found","session":"dt-proof-b","alive":false}
-{"schemaVersion":1,"status":"not_found","session":"dt-proof-c","alive":false}

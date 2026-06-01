@@ -263,29 +263,7 @@ fn frozen_get_acp_state_protocol_contract_is_unchanged() {
 fn agent_chat_user_facing_copy_uses_feature_name() {
     // Display copy must name the feature "Agent Chat", not "ACP". Each pair
     // asserts the new copy is present and the old ACP-as-feature label is gone.
-    let cases: &[(&str, &str, &str)] = &[
-        ("src/render_prompts/term.rs", "⌘W Agent Chat", "⌘W ACP"),
-        (
-            "src/storybook/dictation_states.rs",
-            "Agent Chat Target",
-            "\"ACP Target\"",
-        ),
-        (
-            "src/storybook/notes_window_states.rs",
-            "Agent Chat Host",
-            "\"ACP Host\"",
-        ),
-        (
-            "src/storybook/main_menu_variations/mod.rs",
-            "Agent Chat Ready Footer",
-            "\"ACP Ready Footer\"",
-        ),
-        (
-            "src/storybook/built_in_browser_states.rs",
-            "AGENT CHAT THREAD",
-            "\"ACP THREAD\"",
-        ),
-    ];
+    let cases: &[(&str, &str, &str)] = &[("src/render_prompts/term.rs", "⌘W Agent Chat", "⌘W ACP")];
     for (path, expect_new, forbid_old) in cases {
         let src = read(path);
         assert!(

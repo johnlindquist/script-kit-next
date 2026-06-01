@@ -79,40 +79,6 @@ name = "script-kit-gpui"
 path = "src/main.rs"
 test = false  # Tests run via lib.rs only - avoids duplicate test runs
 
-[[bin]]
-name = "smoke-test"
-path = "src/bin/smoke-test.rs"
-test = false
-
-[[bin]]
-name = "storybook"
-path = "src/bin/storybook.rs"
-test = false
-required-features = ["storybook"]
-
-[[bin]]
-name = "audit_reports"
-path = "src/bin/audit_reports.rs"
-test = false
-required-features = ["storybook"]
-
-[[bin]]
-name = "vibrancy-poc"
-path = "src/bin/vibrancy-poc.rs"
-test = false
-required-features = ["vibrancy-poc"]
-
-[[bin]]
-name = "menu-syntax-doctor"
-path = "src/bin/menu_syntax_doctor.rs"
-test = false
-required-features = ["menu-syntax-doctor"]
-
-[[test]]
-name = "menu_syntax_doctor_cli"
-path = "tests/menu_syntax_doctor_cli.rs"
-required-features = ["menu-syntax-doctor"]
-
 [dependencies]
 gpui = { path = "vendor/gpui" }
 gpui_platform = { path = "vendor/gpui_platform", features = ["font-kit"] }
@@ -288,15 +254,6 @@ ocr = []
 # Enables key event timing, scroll timing, and rate logging
 # Run with: cargo build --features perf
 perf = []
-# Storybook design explorer (disabled by default to speed up dev builds)
-# Run with: cargo run --bin storybook --features storybook
-storybook = []
-# Utility binaries (disabled by default to speed up dev/CI builds)
-# Run with: cargo run --bin vibrancy-poc --features vibrancy-poc
-vibrancy-poc = []
-# Run with: cargo run --bin menu-syntax-doctor --features menu-syntax-doctor
-menu-syntax-doctor = []
-
 [dev-dependencies]
 tree-sitter-highlight = "0.25.4"
 temp-env = "0.3.6"

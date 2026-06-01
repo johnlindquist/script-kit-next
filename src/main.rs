@@ -95,10 +95,6 @@ mod setup;
 mod shortcuts;
 mod spine;
 mod stdin_commands;
-#[cfg(feature = "storybook")]
-mod stories;
-#[cfg(feature = "storybook")]
-mod storybook;
 mod sync;
 mod syntax;
 mod term_prompt;

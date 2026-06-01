@@ -1,1 +1,0 @@
-SCRIPT_KIT_AGENT_ID=mcp-slice1 ./scripts/agentic/agent-cargo.sh test --lib

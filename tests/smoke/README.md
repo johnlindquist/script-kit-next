@@ -467,4 +467,3 @@ timeout 10 ./target/debug/script-kit-gpui tests/smoke/hello-world.ts || echo "Te
 - `src/protocol.rs` - JSONL message types and parsing
 - `src/panel.rs` - GPUI UI rendering
 - `scripts/kit-sdk.ts` - TypeScript SDK with global functions
-- `src/bin/smoke-test.rs` - Rust-based smoke test binary

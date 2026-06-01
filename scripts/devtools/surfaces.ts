@@ -50,7 +50,6 @@ const root = new URL("../..", import.meta.url);
 
 const paths = {
   contracts: "docs/ai/contracts/surface-contracts.json",
-  featureMap: "feature-map/index.md",
   coverage: "scripts/devtools/coverage.ts",
 };
 
@@ -454,7 +453,7 @@ function markdown(report: ReturnType<typeof buildReport>) {
 }
 
 const args = parseArgs(Bun.argv.slice(2));
-const report = buildReport(await readText(paths.contracts), await readText(paths.featureMap), await readText(paths.coverage));
+const report = buildReport(await readText(paths.contracts), "", await readText(paths.coverage));
 
 if (args.markdown) {
   console.log(markdown(report));

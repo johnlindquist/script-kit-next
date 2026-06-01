@@ -1,5 +1,0 @@
-# Feature Map Lens
-
-The atlas is easiest to understand as a network of surfaces, contracts, and proof recipes. The graph keeps the chapter list visible, but selection starts from relationships: shared clusters, shared owners, and the workflow density hiding inside each Markdown chapter.
-
-Use the search field when you know a term. Use cluster and owner filters when you are mapping responsibility. Select a node to inspect the feature's workflows, state rows, risks, and source file without leaving the graph.

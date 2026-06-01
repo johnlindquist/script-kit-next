@@ -1,1 +1,0 @@
-./scripts/agentic/agent-cargo.sh test --lib mcp_notes

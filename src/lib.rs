@@ -256,14 +256,6 @@ pub mod plugins;
 // Ensures ~/.scriptkit exists with required directories and starter files
 pub mod setup;
 
-// Storybook - Component preview system for development
-#[cfg(feature = "storybook")]
-pub mod storybook;
-
-// Stories - Component story definitions for the storybook
-#[cfg(feature = "storybook")]
-pub mod stories;
-
 // MCP Server - HTTP server for Model Context Protocol integration
 // Provides localhost:43210 endpoint with Bearer token auth
 pub mod mcp_server;

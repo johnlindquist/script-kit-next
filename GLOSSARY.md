@@ -59,9 +59,3 @@ Searchable utility lists available directly from the launcher.
 | **File Search** | Browse files on the local filesystem. | `FileSearchView` | [file_search.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/file_search.rs) |
 
 ---
-
-## 5. Developer Surfaces
-
-| UI Element | Description | Key Structs / Entities | Main Source File |
-| :--- | :--- | :--- | :--- |
-| **Storybook** | Visual component design and variables catalog. | `StoryBrowser` | [storybook/mod.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/storybook/mod.rs) & [stories/](file:///Users/johnlindquist/dev/script-kit-gpui/src/stories/) |

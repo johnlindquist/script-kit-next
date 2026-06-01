@@ -80,9 +80,6 @@ mod menu_syntax_ai_stale_proposal;
 #[path = "source_audits/menu_syntax_handler_form_contract.rs"]
 mod menu_syntax_handler_form_contract;
 
-#[path = "source_audits/non_list_state_showcase_contract.rs"]
-mod non_list_state_showcase_contract;
-
 #[path = "source_audits/trigger_builtin_sdk_literals.rs"]
 mod trigger_builtin_sdk_literals;
 
