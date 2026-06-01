@@ -445,29 +445,15 @@ pub fn request_show_main_window() {
     let _ = tx.try_send(());
 }
 
-/// Timestamp of when the window was last shown (for focus loss grace period)
-/// This prevents focus racing from immediately closing the window after it opens
-static WINDOW_SHOWN_AT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+/// Legacy hook retained for split runtime call sites.
+///
+/// Focus-loss handling must stay immediate; this intentionally does not start
+/// a grace timer.
+pub fn mark_window_shown() {}
 
-/// Grace period in milliseconds after showing window during which focus loss is ignored
-const FOCUS_LOSS_GRACE_PERIOD_MS: u64 = 400;
-
-/// Mark the window as just shown (call from show_main_window_helper)
-pub fn mark_window_shown() {
-    if let Ok(mut guard) = WINDOW_SHOWN_AT.lock() {
-        *guard = Some(std::time::Instant::now());
-    }
-}
-
-/// Check if we're within the grace period after showing the window
-/// Returns true if focus loss should be ignored (within grace period)
+/// Focus-loss grace is disabled so blur-dismiss reacts without an artificial
+/// startup/refocus delay.
 pub fn is_within_focus_grace_period() -> bool {
-    if let Ok(guard) = WINDOW_SHOWN_AT.lock() {
-        if let Some(shown_at) = *guard {
-            let elapsed = shown_at.elapsed().as_millis() as u64;
-            return elapsed < FOCUS_LOSS_GRACE_PERIOD_MS;
-        }
-    }
     false
 }
 
@@ -476,16 +462,21 @@ mod main_menu_input_guard_tests {
     use std::fs;
 
     #[test]
-    fn test_focus_grace_period_window_is_400ms() {
+    fn test_focus_grace_period_is_disabled() {
         let lib_source = fs::read_to_string("src/lib.rs").expect("Failed to read src/lib.rs");
+        let production_source = lib_source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("src/lib.rs should contain production source before tests");
         assert!(
-            lib_source.contains("const FOCUS_LOSS_GRACE_PERIOD_MS: u64 = 400;"),
-            "Focus loss grace period should be 400ms"
+            !production_source.contains("const FOCUS_LOSS_GRACE_PERIOD_MS"),
+            "Focus loss should not be delayed by a grace-period constant"
         );
+        assert!(!crate::is_within_focus_grace_period());
     }
 
     #[test]
-    fn test_main_render_resets_grace_timer_when_focus_is_regained() {
+    fn test_main_render_does_not_delay_focus_loss_with_grace() {
         let render_impl = fs::read_to_string("src/main_sections/render_impl.rs")
             .expect("Failed to read src/main_sections/render_impl.rs");
         assert!(
@@ -493,14 +484,12 @@ mod main_menu_input_guard_tests {
             "Main render should detect focus gained transition"
         );
         assert!(
-            render_impl.contains("script_kit_gpui::mark_window_shown();"),
-            "Focus gained transition should reset window shown timestamp"
+            !render_impl.contains("is_within_focus_grace_period"),
+            "Main blur handling must not delay focus loss with a grace window"
         );
         assert!(
-            render_impl.contains(
-                "logging::log(\"FOCUS\", \"Main window gained focus - resetting grace timer\");"
-            ),
-            "Focus gained transition should emit grace timer reset log"
+            !render_impl.contains("within grace period"),
+            "Main blur handling must not log a grace-period ignore branch"
         );
     }
 

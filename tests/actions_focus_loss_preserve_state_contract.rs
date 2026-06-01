@@ -97,6 +97,10 @@ fn passive_scriptlist_hide_predicate_excludes_actions_open_guard() {
     assert!(predicate.contains("script_kit_gpui::is_main_window_visible()"));
     assert!(predicate.contains("!self.is_pinned"));
     assert!(
+        !predicate.contains("is_within_focus_grace_period"),
+        "passive focus-loss hide should not be delayed by a grace window"
+    );
+    assert!(
         !predicate.contains("is_actions_window_open"),
         "the shared actions close callback decides whether actions should trigger the passive hide"
     );

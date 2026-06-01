@@ -130,6 +130,7 @@ fn show_main_window_helper(
         &format!("Current window bounds before show: {:?}", current_bounds),
     );
     let window_size = app_entity.update(cx, |view, ctx| {
+        view.was_window_focused = false;
         if needs_reset_before_show {
             view.reset_to_script_list(ctx);
         } else if restore_after_focus_loss && matches!(view.current_view, AppView::ScriptList) {
@@ -381,6 +382,9 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
 
     // 2. Set visibility state
     set_main_window_visible(false);
+    app_entity.update(cx, |view, _| {
+        view.was_window_focused = false;
+    });
     sync_main_automation_window(current_main_automation_bounds(), false, false);
     crate::footer_popup::close_main_footer_popup(cx);
 

@@ -159,8 +159,7 @@ impl Render for ScriptListApp {
         // When is_pinned is true, the window stays open on blur (only closes via ESC/Cmd+W)
         let is_window_focused = platform::is_main_window_focused();
         if !self.was_window_focused && is_window_focused {
-            script_kit_gpui::mark_window_shown();
-            logging::log("FOCUS", "Main window gained focus - resetting grace timer");
+            logging::log("FOCUS", "Main window gained focus");
 
             if matches!(self.current_view, AppView::FileSearchView { .. }) {
                 let stopped_drag = cx.stop_active_drag(window);
@@ -205,10 +204,9 @@ impl Render for ScriptListApp {
                 logging::log(
                     "FOCUS",
                     &format!(
-                        "FileSearch focus lost: visible={} pinned={} within_grace={} actions_open={} confirm_open={}",
+                        "FileSearch focus lost: visible={} pinned={} actions_open={} confirm_open={}",
                         script_kit_gpui::is_main_window_visible(),
                         self.is_pinned,
-                        script_kit_gpui::is_within_focus_grace_period(),
                         actions::is_actions_window_open(),
                         confirm::is_confirm_window_open()
                     ),
@@ -216,12 +214,10 @@ impl Render for ScriptListApp {
             }
             // Window just lost focus (user clicked another window)
             // Only auto-dismiss if we're in a dismissable view AND window is visible AND not pinned
-            // AND we're past the focus grace period (prevents race condition on window open)
             // AND the actions popup is not open (actions popup is a companion window, not "losing focus")
             if self.is_dismissable_view()
                 && script_kit_gpui::is_main_window_visible()
                 && !self.is_pinned
-                && !script_kit_gpui::is_within_focus_grace_period()
                 && !actions_popup_active_or_closing
                 && !confirm::is_confirm_window_open()
                 && !ai::acp::chat_window::is_chat_window_open()
@@ -262,11 +258,6 @@ impl Render for ScriptListApp {
                 logging::log(
                     "FOCUS",
                     "Main window lost focus but confirm popup is open - staying open",
-                );
-            } else if script_kit_gpui::is_within_focus_grace_period() {
-                logging::log(
-                    "FOCUS",
-                    "Main window lost focus but within grace period - ignoring",
                 );
             } else if self.is_pinned {
                 logging::log(

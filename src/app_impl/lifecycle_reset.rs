@@ -205,6 +205,7 @@ impl ScriptListApp {
 
         // Update visibility state FIRST to prevent race conditions
         script_kit_gpui::set_main_window_visible(false);
+        self.was_window_focused = false;
         crate::windows::set_automation_visibility("main", false);
         crate::windows::ensure_embedded_ai_window(false);
         crate::footer_popup::close_main_footer_popup(&mut *cx);
@@ -300,7 +301,6 @@ impl ScriptListApp {
             && self.is_dismissable_view()
             && script_kit_gpui::is_main_window_visible()
             && !self.is_pinned
-            && !script_kit_gpui::is_within_focus_grace_period()
             && !confirm::is_confirm_window_open()
             && !ai::acp::chat_window::is_chat_window_open()
             && !crate::dictation::is_dictation_overlay_open()
@@ -339,6 +339,7 @@ impl ScriptListApp {
         }
 
         script_kit_gpui::set_main_window_visible(false);
+        self.was_window_focused = false;
         crate::footer_popup::close_main_footer_popup(&mut *cx);
         mark_main_state_restore_after_focus_loss();
 
