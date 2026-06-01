@@ -154,7 +154,7 @@ fn script_list_entry_paths_delegate_to_main_filter_owner() {
         (
             "builtin_execution.rs",
             include_str!("../src/app_execute/builtin_execution.rs"),
-            "fn open_mini_main_window",
+            "fn open_main_window",
         ),
     ] {
         let body = function_body(source, signature);
@@ -251,7 +251,7 @@ fn embedded_acp_entry_and_return_paths_rekey_from_current_view_contract() {
     })
     .sum();
     assert_eq!(
-        entry_delegate_count, 3,
-        "setup, launch, and reuse ACP entry paths must delegate to enter_embedded_acp_chat_surface"
+        entry_delegate_count, 4,
+        "setup, launch, reuse, and focused-text ACP entry paths must delegate to enter_embedded_acp_chat_surface"
     );
 }

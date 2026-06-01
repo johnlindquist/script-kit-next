@@ -239,6 +239,17 @@ fn grouped_cache_readers_use_behavior_named_accessors() {
 }
 
 #[test]
+fn submit_selection_reads_grouped_cache_through_domain_guard() {
+    assert!(
+        SELECTION_FALLBACK.contains("self.filter_text != self.computed_filter_text")
+            && SELECTION_FALLBACK.contains("has_grouped_results_for(&self.computed_filter_text)")
+            && SELECTION_FALLBACK
+                .contains("flat_result_index_for_coerced_grouped_selection(self.selected_index)"),
+        "ScriptList submit must prove live filter, computed filter, grouped cache key, and selected grouped row before dispatch"
+    );
+}
+
+#[test]
 fn production_cache_consumers_do_not_read_storage_fields_directly() {
     for (name, source) in [
         ("filtering_cache", FILTERING_CACHE),

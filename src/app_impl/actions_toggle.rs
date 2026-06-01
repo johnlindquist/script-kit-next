@@ -272,7 +272,91 @@ fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
     }
 }
 
+fn actions_context_text_fingerprint(value: &str) -> String {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in value.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("fnv1a64:{hash:016x}")
+}
+
 impl ScriptListApp {
+    pub(crate) fn build_actions_host_context_snapshot(
+        &mut self,
+        host: ActionsDialogHost,
+        parent_automation_id: Option<String>,
+    ) -> crate::actions::ActionsHostContextSnapshot {
+        let parent_info =
+            parent_automation_id
+                .as_deref()
+                .and_then(crate::windows::automation_window_by_id);
+        let parent_kind = parent_info.as_ref().map(|info| format!("{:?}", info.kind));
+        let parent_semantic_surface = parent_info.and_then(|info| info.semantic_surface);
+
+        let mut parent_subject_id = None;
+        let mut selected_semantic_id = None;
+        if matches!(host, ActionsDialogHost::MainList) {
+            parent_subject_id = self
+                .pending_root_unified_actions_subject
+                .as_ref()
+                .and_then(|subject| subject.stable_key())
+                .or_else(|| {
+                    self.pending_root_file_actions_file
+                        .as_ref()
+                        .map(|file| format!("root-file/{}", file.path))
+                });
+
+            if parent_subject_id.is_none() {
+                let selected_result = self.selected_main_list_search_result_owned();
+                parent_subject_id = selected_result
+                    .as_ref()
+                    .and_then(|result| result.stable_selection_key());
+
+                if let Some(result) = selected_result.as_ref() {
+                    let (grouped_items, flat_results) = self.cached_grouped_results_snapshot();
+                    let selected_grouped =
+                        crate::list_item::coerce_selection(&grouped_items, self.selected_index);
+                    let mut row_index = 0usize;
+                    for (grouped_index, item) in grouped_items.iter().enumerate() {
+                        match item {
+                            crate::list_item::GroupedListItem::SectionHeader(..) => {}
+                            crate::list_item::GroupedListItem::Item(result_idx) => {
+                                if Some(grouped_index) == selected_grouped
+                                    && flat_results.get(*result_idx).is_some()
+                                {
+                                    let label = Self::script_list_result_label(result);
+                                    selected_semantic_id = Some(crate::protocol::generate_semantic_id(
+                                        "choice", row_index, &label,
+                                    ));
+                                    break;
+                                }
+                                row_index += 1;
+                            }
+                            crate::list_item::GroupedListItem::Status(_) => {
+                                row_index += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let parent_subject_text_fingerprint = parent_subject_id
+            .as_deref()
+            .map(actions_context_text_fingerprint);
+
+        crate::actions::ActionsHostContextSnapshot {
+            host: actions_dialog_host_label(&host).to_string(),
+            parent_automation_id,
+            parent_kind,
+            parent_semantic_surface,
+            parent_subject_id,
+            parent_subject_text_fingerprint,
+            selected_semantic_id,
+        }
+    }
+
     pub(crate) fn make_actions_window_on_close_callback(
         app_entity: Entity<Self>,
         host: ActionsDialogHost,
@@ -922,6 +1006,13 @@ impl ScriptListApp {
                 dialog
             });
 
+            let parent_automation_id = crate::windows::focused_automation_window_id();
+            let host_context =
+                self.build_actions_host_context_snapshot(host, parent_automation_id.clone());
+            dialog.update(cx, |d, _cx| {
+                d.set_host_context(host_context);
+            });
+
             // Store the dialog entity for keyboard routing
             self.actions_dialog = Some(dialog.clone());
 
@@ -1057,6 +1148,13 @@ impl ScriptListApp {
             dialog.set_skip_track_focus(true);
             dialog.set_match_main_window_background(true);
             dialog
+        });
+
+        let parent_automation_id = crate::windows::focused_automation_window_id();
+        let host_context =
+            self.build_actions_host_context_snapshot(host, parent_automation_id.clone());
+        dialog.update(cx, |d, _cx| {
+            d.set_host_context(host_context);
         });
 
         self.actions_dialog = Some(dialog.clone());
@@ -1443,6 +1541,13 @@ impl ScriptListApp {
             dialog.set_skip_track_focus(true);
             dialog.set_match_main_window_background(true);
             dialog
+        });
+
+        let parent_automation_id = crate::windows::focused_automation_window_id();
+        let host_context =
+            self.build_actions_host_context_snapshot(host, parent_automation_id.clone());
+        dialog.update(cx, |d, _cx| {
+            d.set_host_context(host_context);
         });
 
         self.actions_dialog = Some(dialog.clone());

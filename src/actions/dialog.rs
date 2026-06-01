@@ -509,6 +509,19 @@ pub struct AcpActionsDialogContext<'a> {
     pub(crate) focused_text_expanded: bool,
 }
 
+/// Immutable parent/subject identity captured when an ActionsDialog opens.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ActionsHostContextSnapshot {
+    pub host: String,
+    pub parent_automation_id: Option<String>,
+    pub parent_kind: Option<String>,
+    pub parent_semantic_surface: Option<String>,
+    pub parent_subject_id: Option<String>,
+    pub parent_subject_text_fingerprint: Option<String>,
+    pub selected_semantic_id: Option<String>,
+}
+
 /// ActionsDialog - Compact overlay popup for quick actions
 /// Implements Raycast-style design with individual keycap shortcuts
 ///
@@ -563,6 +576,8 @@ pub struct ActionsDialog {
     pub on_close: Option<CloseCallback>,
     /// Callback for mouse-triggered activations that need parent window handling.
     on_activation: Option<ActivationCallback>,
+    /// Parent/subject identity captured before the popup is registered.
+    host_context: Option<ActionsHostContextSnapshot>,
     // ── Route / back-stack state ─────────────────────────────────────────────
     /// Stack of route states (empty = no route-based navigation active).
     route_stack: Vec<ActionsDialogRouteState>,
@@ -786,6 +801,7 @@ impl ActionsDialog {
             match_main_window_background: true,
             on_close: None,
             on_activation: None,
+            host_context: None,
             route_stack: Vec::new(),
             drill_down_routes: HashMap::new(),
             mouse_armed_row: None,
@@ -1175,6 +1191,14 @@ impl ActionsDialog {
 
     pub(crate) fn on_activation_callback(&self) -> Option<ActivationCallback> {
         self.on_activation.clone()
+    }
+
+    pub(crate) fn set_host_context(&mut self, context: ActionsHostContextSnapshot) {
+        self.host_context = Some(context);
+    }
+
+    pub(crate) fn host_context(&self) -> Option<&ActionsHostContextSnapshot> {
+        self.host_context.as_ref()
     }
 
     /// Set the callback for when the dialog is closed (escape pressed, window dismissed)
@@ -2236,6 +2260,13 @@ impl ActionsDialog {
 
         if let Some(attached_popup) = crate::actions::actions_popup_automation_snapshot() {
             state["attachedPopup"] = attached_popup;
+        }
+        if let Some(host_context) = self.host_context() {
+            state["hostContext"] =
+                serde_json::to_value(host_context).unwrap_or(serde_json::Value::Null);
+            state["contextStableKey"] = serde_json::json!(host_context.parent_subject_id);
+            state["contextSource"] = serde_json::json!(host_context.host);
+            state["selectedSemanticId"] = serde_json::json!(host_context.selected_semantic_id);
         }
         state["rowGeometry"] = self.devtools_row_geometry();
 

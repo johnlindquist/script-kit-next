@@ -218,6 +218,33 @@ fn activate_action_id_returns_distinct_drill_down_and_executed_variants() {
 }
 
 #[test]
+fn app_activation_captures_parent_subject_before_close_actions_popup() {
+    let body = extract_fn_body(
+        include_str!("../src/app_impl/actions_dialog.rs"),
+        "pub(crate) fn handle_actions_dialog_activation(",
+    );
+
+    let root_context_idx = body
+        .find("let root_unified_context =")
+        .expect("handle_actions_dialog_activation must capture root unified context");
+    let root_file_idx = body
+        .find("let root_file_context =")
+        .expect("handle_actions_dialog_activation must capture root file context");
+    let close_idx = body
+        .find("self.close_actions_popup(host, window, cx);")
+        .expect("handle_actions_dialog_activation must close through close_actions_popup");
+
+    assert!(
+        root_context_idx < close_idx,
+        "root unified context must be captured before close_actions_popup clears actions state"
+    );
+    assert!(
+        root_file_idx < close_idx,
+        "root file context must be captured before close_actions_popup clears actions state"
+    );
+}
+
+#[test]
 fn actions_dialog_activation_has_exactly_three_variants() {
     // Mirror of the Pass #11
     // `actions_dialog_escape_outcome_has_exactly_two_variants` test

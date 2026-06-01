@@ -185,6 +185,59 @@ impl ScriptListApp {
         None
     }
 
+    fn record_blocked_script_list_submit(&mut self, route: &'static str) {
+        let value = self.filter_text.clone();
+        tracing::info!(
+            event = "script_list_submit_blocked",
+            route,
+            filter_text = %value,
+            computed_filter_text = %self.computed_filter_text,
+            grouped_cache_key = %self.main_menu_result_caches.grouped_cache_key(),
+            selected_index = self.selected_index,
+        );
+        self.record_submit_diagnostic("launcher", route, None, Some(value.as_str()), true);
+    }
+
+    fn live_script_list_flat_selection_for_submit(&mut self) -> Option<(usize, usize)> {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return None;
+        }
+
+        if self.filter_text != self.computed_filter_text {
+            self.record_blocked_script_list_submit(
+                "main_list_submit_blocked.stale_filter_domain",
+            );
+            return None;
+        }
+
+        self.get_grouped_results_cached();
+
+        if !self
+            .main_menu_result_caches
+            .has_grouped_results_for(&self.computed_filter_text)
+        {
+            self.record_blocked_script_list_submit(
+                "main_list_submit_blocked.stale_grouped_cache_domain",
+            );
+            return None;
+        }
+
+        let Some((resolved_index, flat_result_index)) = self
+            .main_menu_result_caches
+            .flat_result_index_for_coerced_grouped_selection(self.selected_index)
+        else {
+            self.record_blocked_script_list_submit("main_list_submit_blocked.no_live_selected_row");
+            return None;
+        };
+
+        if resolved_index != self.selected_index {
+            self.selected_index = resolved_index;
+            self.rebuild_main_window_preflight_if_needed();
+        }
+
+        Some((resolved_index, flat_result_index))
+    }
+
     pub(crate) fn execute_selected(&mut self, cx: &mut Context<Self>) {
         if self.should_ignore_selection_event_during_main_menu_open_guard() {
             return;
@@ -278,19 +331,10 @@ impl ScriptListApp {
 
         let history_query = (!self.filter_text.trim().is_empty()).then(|| self.filter_text.clone());
 
-        // Populate grouped results so the result-cache owner can resolve the
-        // selected visual row into the flat result backing store.
-        self.get_grouped_results_cached();
-
-        if let Some((resolved_index, idx)) = self
-            .main_menu_result_caches
-            .flat_result_index_for_coerced_grouped_selection(self.selected_index)
+        let Some((_resolved_index, idx)) = self.live_script_list_flat_selection_for_submit() else {
+            return;
+        };
         {
-            if resolved_index != self.selected_index {
-                self.selected_index = resolved_index;
-                self.rebuild_main_window_preflight_if_needed();
-            }
-
             let selected_result = self
                 .main_menu_result_caches
                 .cloned_search_result_for_flat_index(idx);
@@ -599,14 +643,7 @@ impl ScriptListApp {
             return None;
         }
 
-        self.get_grouped_results_cached();
-        let (resolved_index, result_idx) = self
-            .main_menu_result_caches
-            .flat_result_index_for_coerced_grouped_selection(self.selected_index)?;
-        if resolved_index != self.selected_index {
-            self.selected_index = resolved_index;
-            self.rebuild_main_window_preflight_if_needed();
-        }
+        let (_resolved_index, result_idx) = self.live_script_list_flat_selection_for_submit()?;
 
         if self
             .inline_calculator_for_result_index(result_idx)
@@ -1083,40 +1120,7 @@ impl ScriptListApp {
             return;
         }
 
-        let input = self.filter_text.clone();
-        if let Some(fallback) = self.main_menu_fallback_state.selected_item().cloned() {
-            let submitted_value = fallback.display_name();
-            self.record_submit_diagnostic(
-                "launcher_fallback",
-                "execute_selected_fallback.legacy",
-                None,
-                Some(submitted_value.as_str()),
-                false,
-            );
-            logging::log(
-                "EXEC",
-                &format!("Executing fallback: {}", fallback.display_name()),
-            );
-
-            let should_close = !fallback_keeps_window_open(&fallback);
-
-            // Execute the fallback action
-            match &fallback {
-                crate::fallbacks::FallbackItem::Builtin(builtin) => {
-                    let fallback_id = builtin.id.to_string();
-                    self.execute_builtin_fallback_inline(&fallback_id, &input, cx);
-                }
-                crate::fallbacks::FallbackItem::Script(config) => {
-                    self.mark_opened_from_main_menu("execute_selected_fallback");
-                    self.execute_interactive(&config.script, cx);
-                }
-            }
-
-            // Close the window after executing (unless it's a stay-open action)
-            if should_close {
-                self.close_and_reset_window(cx);
-            }
-        }
+        self.record_blocked_script_list_submit("execute_selected_fallback.no_live_grouped_fallback");
     }
 
     /// Execute a built-in fallback action without window reference

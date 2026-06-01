@@ -94,14 +94,16 @@ fn filterable_view_preparation_preserves_route_specific_side_effects() {
     let prepare = body_of(DISPATCH, "fn prepare_filterable_route(");
 
     for required in [
-        "FilterableView::DesignGallery",
-        "FilterableView::FooterGallery",
         "FilterableView::ClipboardHistory",
         "FilterableView::AppLauncher",
         "FilterableView::BrowserTabs",
         "FilterableView::EmojiPicker",
         "FilterableView::WindowSwitcher",
         "FilterableView::ProcessManager",
+        "FilterableView::KitStoreBrowse",
+        "FilterableView::KitStoreInstalled",
+        "FilterableView::Favorites",
+        "FilterableView::SearchAiPresets",
         "crate::clipboard_history::get_cached_entries(100)",
         "crate::browser_tabs::list_open_tabs()",
         "crate::window_control::list_windows()",
@@ -110,6 +112,10 @@ fn filterable_view_preparation_preserves_route_specific_side_effects() {
         "Search Emoji & Symbols...",
         "Search windows...",
         "Search running scripts...",
+        "Search Kit Store...",
+        "Search installed kits...",
+        "Search favorites...",
+        "Search AI presets...",
     ] {
         assert!(
             prepare.contains(required),
@@ -134,6 +140,10 @@ fn apply_filterable_route_plan_is_the_single_assignment_step() {
     assert!(
         apply.contains("self.current_view = plan.next_view;"),
         "apply step must own the single filterable-route current_view assignment"
+    );
+    assert!(
+        apply.contains("self.restore_current_view_with_focus(plan.next_view, focus);"),
+        "apply step must synchronize pending_focus and focused_input through the shared focus restore owner"
     );
     assert!(
         apply.contains("let surface_kind = self.current_view.surface_kind();"),

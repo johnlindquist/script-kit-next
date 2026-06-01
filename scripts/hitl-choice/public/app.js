@@ -174,6 +174,14 @@ function render() {
     node.dataset.optionId = option.id;
     node.querySelector("h2").textContent = option.title;
     node.querySelector(".description").textContent = option.description;
+    const wireframe = node.querySelector(".wireframe");
+    if (option.wireframeHtml) {
+      wireframe.innerHTML = option.wireframeHtml;
+      wireframe.hidden = false;
+    } else {
+      wireframe.replaceChildren();
+      wireframe.hidden = true;
+    }
     node.querySelector(".goal").textContent = option.goal ? `Goal: ${option.goal}` : "";
     node.querySelector(".risk").textContent = option.risk ? `Risk: ${option.risk}` : "";
     node.querySelector(".option-meta").textContent = [

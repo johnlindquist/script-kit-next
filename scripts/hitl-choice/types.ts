@@ -4,6 +4,7 @@ export type HitlChoiceOption = {
   surface?: string;
   tags?: string[];
   description: string;
+  wireframeHtml?: string;
   goal?: string;
   risk?: string;
   suggestedProofCommands?: string[];

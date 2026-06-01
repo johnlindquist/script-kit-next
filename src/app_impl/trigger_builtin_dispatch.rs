@@ -280,7 +280,7 @@ impl ScriptListApp {
                     },
                     reset_shared_filter: false,
                     pending_placeholder: None,
-                    pending_focus: None,
+                    pending_focus: Some(FocusTarget::MainFilter),
                     clear_hover: false,
                     resize: true,
                 }
@@ -292,7 +292,7 @@ impl ScriptListApp {
                 },
                 reset_shared_filter: false,
                 pending_placeholder: None,
-                pending_focus: None,
+                pending_focus: Some(FocusTarget::MainFilter),
                 clear_hover: false,
                 resize: true,
             },
@@ -431,10 +431,10 @@ impl ScriptListApp {
             self.hovered_index = None;
         }
         if let Some(focus) = plan.pending_focus {
-            self.pending_focus = Some(focus);
+            self.restore_current_view_with_focus(plan.next_view, focus);
+        } else {
+            self.current_view = plan.next_view;
         }
-
-        self.current_view = plan.next_view;
         let surface_kind = self.current_view.surface_kind();
         if plan.resize {
             self.update_window_size_deferred(window, cx);

@@ -44,6 +44,10 @@ fn actions_window_render_falls_back_to_autoclose_when_inactive() {
         "render auto-close must check the actual actions parent, not hard-code main focus"
     );
     assert!(
+        render.contains("&self.parent_automation_id"),
+        "render auto-close must use the stored parent identity captured when the popup opened"
+    );
+    assert!(
         !render.contains("let main_window_focused = platform::is_main_window_focused();"),
         "render auto-close must not close Notes-owned popups just because main is unfocused"
     );

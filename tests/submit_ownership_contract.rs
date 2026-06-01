@@ -163,6 +163,89 @@ fn script_list_enter_refuses_immediate_prompt_submit_echo() {
 }
 
 #[test]
+fn script_list_submit_requires_live_filter_and_grouped_cache_domain() {
+    let helper = source_window(
+        SELECTION_FALLBACK,
+        "fn live_script_list_flat_selection_for_submit",
+        2600,
+    );
+    assert!(
+        helper.contains("matches!(self.current_view, AppView::ScriptList)"),
+        "ScriptList submit guard must only resolve main-list rows on ScriptList"
+    );
+    assert!(
+        helper.contains("self.filter_text != self.computed_filter_text")
+            && helper.find("self.filter_text != self.computed_filter_text")
+                < helper.find("self.get_grouped_results_cached()"),
+        "ScriptList submit must block while live filter_text and computed_filter_text disagree"
+    );
+    assert!(
+        helper.contains("has_grouped_results_for(&self.computed_filter_text)"),
+        "ScriptList submit must verify grouped cache ownership before resolving selected_index"
+    );
+    assert!(
+        helper.contains("flat_result_index_for_coerced_grouped_selection(self.selected_index)"),
+        "ScriptList submit must resolve through the grouped visible-row cache"
+    );
+    assert!(
+        helper.contains("main_list_submit_blocked.no_live_selected_row"),
+        "No visible/live selected row must produce an explicit submit diagnostic"
+    );
+}
+
+#[test]
+fn execute_selected_uses_live_selection_guard_before_row_execution() {
+    let execute_selected =
+        source_window(SELECTION_FALLBACK, "pub(crate) fn execute_selected", 14000);
+    assert!(
+        execute_selected.contains("live_script_list_flat_selection_for_submit()"),
+        "execute_selected must route visible-row submit through the live selection guard"
+    );
+    assert!(
+        execute_selected.find("live_script_list_flat_selection_for_submit()")
+            < execute_selected.find("inline_calculator_for_result_index"),
+        "live selection guard must run before calculator or row execution"
+    );
+    let guard_pos = execute_selected
+        .find("live_script_list_flat_selection_for_submit()")
+        .expect("execute_selected must call live selection guard");
+    let after_guard = &execute_selected[guard_pos..];
+    assert!(
+        after_guard.find("live_script_list_flat_selection_for_submit()")
+            < after_guard.find("mark_opened_from_main_menu"),
+        "live selection guard must run before any launcher row dispatch"
+    );
+}
+
+#[test]
+fn selected_main_list_search_result_owned_uses_live_selection_guard() {
+    let selected_owned = source_window(
+        SELECTION_FALLBACK,
+        "pub(crate) fn selected_main_list_search_result_owned",
+        1400,
+    );
+    assert!(
+        selected_owned.contains("live_script_list_flat_selection_for_submit()"),
+        "all owned ScriptList result lookups must share the live selection guard"
+    );
+}
+
+#[test]
+fn fallback_enter_cannot_execute_legacy_cached_fallback_without_grouped_row() {
+    let fallback_submit =
+        source_window(SELECTION_FALLBACK, "pub fn execute_selected_fallback", 2200);
+    assert!(
+        fallback_submit.contains("scripts::SearchResult::Fallback"),
+        "fallback Enter must execute only a live grouped fallback row"
+    );
+    assert!(
+        !fallback_submit.contains("main_menu_fallback_state.selected_item().cloned()")
+            && !fallback_submit.contains("execute_selected_fallback.legacy"),
+        "fallback Enter must not execute legacy cached fallback state outside the visible grouped row domain"
+    );
+}
+
+#[test]
 fn get_state_exposes_submit_diagnostics_receipt() {
     assert!(
         PROTOCOL_QUERY_VARIANTS.contains("submit_diagnostics: Option<serde_json::Value>")
