@@ -180,8 +180,14 @@ fn script_list_submit_requires_live_filter_and_grouped_cache_domain() {
         "ScriptList submit must block while live filter_text and computed_filter_text disagree"
     );
     assert!(
-        helper.contains("has_grouped_results_for(&self.computed_filter_text)"),
-        "ScriptList submit must verify grouped cache ownership before resolving selected_index"
+        helper.contains("has_grouped_results_for_filter_text(&self.computed_filter_text)"),
+        "ScriptList submit must verify grouped cache ownership for the current filter before resolving selected_index"
+    );
+    assert!(
+        FILTERING_CACHE.contains("source-filters={grouped_source_filter_key}")
+            && FILTERING_CACHE.contains("browser-tabs-gen={browser_tabs_generation}")
+            && FILTERING_CACHE.contains("browser-history-gen={browser_history_generation}"),
+        "Grouped cache domains may include source/current-app/generation fields, so submit guards must not require exact filter-only keys"
     );
     assert!(
         helper.contains("flat_result_index_for_coerced_grouped_selection(self.selected_index)"),

@@ -505,14 +505,11 @@ mod main_menu_input_guard_tests {
     }
 
     #[test]
-    fn test_execute_selected_ignores_stale_input_when_window_just_opened() {
+    fn test_focus_grace_does_not_block_main_menu_submit() {
         let selection_fallback = fs::read_to_string("src/app_impl/selection_fallback.rs")
             .expect("Failed to read src/app_impl/selection_fallback.rs");
-
-        assert!(
-            selection_fallback.contains("script_kit_gpui::is_within_focus_grace_period()"),
-            "Selection guard should use window show focus-grace timing"
-        );
+        let startup = fs::read_to_string("src/app_impl/startup.rs")
+            .expect("Failed to read src/app_impl/startup.rs");
 
         let execute_selected_pos = selection_fallback
             .find("pub(crate) fn execute_selected")
@@ -521,9 +518,10 @@ mod main_menu_input_guard_tests {
         let execute_selected_section =
             &selection_fallback[execute_selected_pos..execute_selected_end];
         assert!(
-            execute_selected_section
-                .contains("if self.should_ignore_selection_event_during_main_menu_open_guard()"),
-            "execute_selected should early-return when stale input is detected"
+            !execute_selected_section.contains("is_within_focus_grace_period")
+                && !execute_selected_section
+                    .contains("should_ignore_selection_event_during_main_menu_open_guard"),
+            "execute_selected must not drop user activation during the focus-loss grace window"
         );
 
         let execute_fallback_pos = selection_fallback
@@ -533,9 +531,75 @@ mod main_menu_input_guard_tests {
         let execute_fallback_section =
             &selection_fallback[execute_fallback_pos..execute_fallback_end];
         assert!(
-            execute_fallback_section
-                .contains("if self.should_ignore_selection_event_during_main_menu_open_guard()"),
-            "execute_selected_fallback should also early-return when stale input is detected"
+            !execute_fallback_section.contains("is_within_focus_grace_period")
+                && !execute_fallback_section.contains(
+                    "should_ignore_selection_event_during_main_menu_open_guard"
+                ),
+            "execute_selected_fallback must not drop fallback activation during the focus-loss grace window"
+        );
+
+        let press_enter_pos = startup
+            .find("InputEvent::PressEnter")
+            .expect("PressEnter branch not found");
+        let press_enter_end = (press_enter_pos + 1800).min(startup.len());
+        let press_enter_section = &startup[press_enter_pos..press_enter_end];
+        assert!(
+            !press_enter_section.contains("Ignoring PressEnter: within focus grace period"),
+            "main-menu PressEnter must submit the selected row even immediately after focus is gained"
+        );
+    }
+
+    #[test]
+    fn test_physical_plain_enter_routes_main_menu_selection() {
+        let startup = fs::read_to_string("src/app_impl/startup.rs")
+            .expect("Failed to read src/app_impl/startup.rs");
+        let physical_enter_pos = startup
+            .find("if is_plain_enter {")
+            .expect("physical plain Enter interceptor not found");
+        let physical_enter_section =
+            &startup[physical_enter_pos..(physical_enter_pos + 4500).min(startup.len())];
+        let script_issues_pos = physical_enter_section
+            .find("AppView::ScriptIssuesView")
+            .expect("physical Enter must preserve ScriptIssuesView handling first");
+        let object_popup_pos = physical_enter_section
+            .find("menu_syntax_object_selector_popup_window")
+            .expect("physical Enter must preserve menu-syntax object popup Accept");
+        let trigger_popup_pos = physical_enter_section
+            .find("menu_syntax_trigger_popup_window")
+            .expect("physical Enter must preserve menu-syntax trigger popup Accept");
+        let script_list_pos = physical_enter_section
+            .find("global_plain_enter_script_list")
+            .expect("physical Enter must route ScriptList through the submit guard");
+        let spine_pos = physical_enter_section
+            .find("this.try_handle_spine_enter(window, cx)")
+            .expect("physical Enter must preserve Spine row acceptance");
+        let fallback_pos = physical_enter_section
+            .find("this.execute_selected_fallback(cx);")
+            .expect("physical Enter must preserve fallback execution");
+        let execute_pos = physical_enter_section
+            .find("this.execute_selected(cx);")
+            .expect("physical Enter must execute selected ScriptList rows");
+        let acp_pos = physical_enter_section
+            .find("if let AppView::AcpChatView")
+            .expect("physical Enter ACP fallback not found");
+
+        assert!(
+            script_issues_pos < object_popup_pos
+                && object_popup_pos < trigger_popup_pos
+                && trigger_popup_pos < script_list_pos
+                && script_list_pos < spine_pos
+                && spine_pos < fallback_pos
+                && fallback_pos < execute_pos
+                && execute_pos < acp_pos,
+            "physical plain Enter must keep ScriptIssues/menu-syntax Accept ahead of ScriptList submit, then Spine, fallback/selected execution, and only later ACP handling"
+        );
+        assert!(
+            physical_enter_section.contains("!crate::actions::is_actions_window_open()"),
+            "physical plain Enter must not steal Enter while the actions window owns it"
+        );
+        assert!(
+            !physical_enter_section.contains("is_within_focus_grace_period"),
+            "physical plain Enter must not reintroduce focus-grace submit blocking"
         );
     }
 }

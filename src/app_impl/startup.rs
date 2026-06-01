@@ -698,11 +698,6 @@ impl ScriptListApp {
                         return;
                     }
 
-                    if script_kit_gpui::is_within_focus_grace_period() {
-                        logging::log("KEY", "Ignoring PressEnter: within focus grace period");
-                        return;
-                    }
-
                     if matches!(this.current_view, AppView::ScriptList) && !this.show_actions_popup
                     {
                         if this.should_consume_script_list_enter_after_submit(
@@ -1684,6 +1679,33 @@ impl ScriptListApp {
                                     cx.stop_propagation();
                                     return;
                                 }
+                            }
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && !this.show_actions_popup
+                                && !crate::actions::is_actions_window_open()
+                            {
+                                if this.should_consume_script_list_enter_after_submit(
+                                    "global_plain_enter_script_list",
+                                ) {
+                                    logging::log(
+                                        "KEY",
+                                        "Ignoring global plain Enter: prompt submit already consumed this Enter",
+                                    );
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                                if this.try_handle_spine_enter(window, cx) {
+                                    logging::log("KEY", "Global plain Enter: spine consumed");
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                                if this.main_menu_fallback_state.is_active() {
+                                    this.execute_selected_fallback(cx);
+                                } else {
+                                    this.execute_selected(cx);
+                                }
+                                cx.stop_propagation();
+                                return;
                             }
                             if let AppView::AcpChatView { entity, .. } = &this.current_view {
                                 let handled =

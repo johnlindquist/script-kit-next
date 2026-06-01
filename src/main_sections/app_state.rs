@@ -258,6 +258,14 @@ impl MainMenuResultCacheState {
         self.grouped_cache_key == computed_filter_text
     }
 
+    fn has_grouped_results_for_filter_text(&self, computed_filter_text: &str) -> bool {
+        self.grouped_cache_key == computed_filter_text
+            || self
+                .grouped_cache_key
+                .strip_prefix(computed_filter_text)
+                .is_some_and(|suffix| suffix.starts_with('\x1F'))
+    }
+
     fn grouped_cache_key(&self) -> &str {
         &self.grouped_cache_key
     }
