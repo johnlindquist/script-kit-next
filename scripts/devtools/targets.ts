@@ -174,20 +174,63 @@ function pickWindows(windows: JsonObject) {
   }));
 }
 
-function expectedSurfaceMatches(snapshot: JsonObject, expectedSurfaceKind: string) {
+type SurfaceCandidate = { field: string; value: string };
+type ActualSurfaceCandidate = {
+  automationId: unknown;
+  windowKind: unknown;
+  surfaceKind: unknown;
+  semanticSurface: unknown;
+  appViewVariant: unknown;
+};
+
+function surfaceCandidates(snapshot: JsonObject, listedWindow: JsonObject): SurfaceCandidate[] {
+  return [
+    ["snapshot.windowKind", snapshot.windowKind],
+    ["snapshot.kind", snapshot.kind],
+    ["snapshot.surfaceKind", snapshot.surfaceKind],
+    ["snapshot.semanticSurface", snapshot.semanticSurface],
+    ["snapshot.appViewVariant", snapshot.appViewVariant],
+    ["snapshot.surfaceContract.surfaceKind", (snapshot.surfaceContract as JsonObject | undefined)?.surfaceKind],
+    ["snapshot.state.surfaceKind", (snapshot.state as JsonObject | undefined)?.surfaceKind],
+    ["listedWindow.windowKind", listedWindow.windowKind],
+    ["listedWindow.semanticSurface", listedWindow.semanticSurface],
+    ["listedWindow.surfaceKind", listedWindow.surfaceKind],
+    ["listedWindow.appViewVariant", listedWindow.appViewVariant],
+  ]
+    .filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0)
+    .map(([field, value]) => ({ field, value }));
+}
+
+function surfaceMatch(snapshot: JsonObject, listedWindow: JsonObject, expectedSurfaceKind: string) {
   if (!expectedSurfaceKind) {
-    return true;
+    return {
+      ok: true,
+      expectedSurfaceKind: null,
+      candidates: [] as SurfaceCandidate[],
+      actualValues: [] as string[],
+      mismatchReason: null,
+    };
   }
-  const candidates = [
-    snapshot.windowKind,
-    snapshot.kind,
-    snapshot.surfaceKind,
-    snapshot.semanticSurface,
-    snapshot.appViewVariant,
-    (snapshot.surfaceContract as JsonObject | undefined)?.surfaceKind,
-    (snapshot.state as JsonObject | undefined)?.surfaceKind,
-  ].filter(Boolean).map(String);
-  return candidates.includes(expectedSurfaceKind);
+  const candidates = surfaceCandidates(snapshot, listedWindow);
+  const actualValues = [...new Set(candidates.map((candidate) => candidate.value))];
+  const ok = candidates.some((candidate) => candidate.value === expectedSurfaceKind);
+  return {
+    ok,
+    expectedSurfaceKind,
+    candidates,
+    actualValues,
+    mismatchReason: ok ? null : "expected-surface-not-found",
+  };
+}
+
+function actualSurfaceCandidate(windowId: unknown, listedWindow: JsonObject): ActualSurfaceCandidate {
+  return {
+    automationId: windowId,
+    windowKind: listedWindow.windowKind ?? null,
+    surfaceKind: listedWindow.surfaceKind ?? null,
+    semanticSurface: listedWindow.semanticSurface ?? null,
+    appViewVariant: listedWindow.appViewVariant ?? null,
+  };
 }
 
 function targetIdentity(args: Args, inspect: JsonObject, windows: JsonObject) {
@@ -195,7 +238,8 @@ function targetIdentity(args: Args, inspect: JsonObject, windows: JsonObject) {
   const resolvedBounds = snapshot.resolvedBounds ?? snapshot.bounds ?? null;
   const windowId = snapshot.windowId ?? snapshot.id ?? null;
   const listedWindow = pickWindows(windows).find((window) => window.automationId === windowId) ?? {};
-  const strictTargetMatch = Boolean(windowId) && expectedSurfaceMatches(snapshot, args.expectedSurfaceKind);
+  const match = surfaceMatch(snapshot, listedWindow, args.expectedSurfaceKind);
+  const strictTargetMatch = Boolean(windowId) && match.ok;
   const ambiguity = args.strict && !windowId ? pickWindows(windows) : [];
 
   return {
@@ -235,6 +279,16 @@ function targetIdentity(args: Args, inspect: JsonObject, windows: JsonObject) {
       },
       pid: snapshot.pid ?? listedWindow.pid ?? null,
       strictTargetMatch,
+      strictTargetMismatch: args.strict && !strictTargetMatch
+        ? {
+          expectedSurfaceKind: args.expectedSurfaceKind || null,
+          automationId: windowId,
+          surfaceCandidates: match.candidates,
+          actualCandidates: [actualSurfaceCandidate(windowId, listedWindow)],
+          actualValues: match.actualValues,
+          mismatchReason: match.mismatchReason,
+        }
+        : null,
       ambiguity,
     },
   };
