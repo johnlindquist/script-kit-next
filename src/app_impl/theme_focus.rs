@@ -28,7 +28,7 @@ impl ScriptListApp {
         }
     }
 
-    /// Cycle the live cohesive theme exploration variation for the main menu.
+    /// Cycle the live header information-bar exploration variation for the main menu.
     ///
     /// Mirrors the old `cycle_design` pattern: mutate state, log, surface the
     /// active variation (as a toast and in the search placeholder), then notify.
@@ -55,7 +55,7 @@ impl ScriptListApp {
             new_theme = new_theme.name(),
             new_index = new_theme.index(),
             total_themes = crate::designs::MainMenuThemeVariant::COUNT,
-            "Cycling main menu theme"
+            "Cycling main menu header"
         );
 
         self.current_main_menu_theme = new_theme;
@@ -75,7 +75,7 @@ impl ScriptListApp {
         self.toast_manager.push(
             components::toast::Toast::info(
                 format!(
-                    "Theme {}/{}: {}",
+                    "Header {}/{}: {}",
                     new_theme.index() + 1,
                     crate::designs::MainMenuThemeVariant::COUNT,
                     new_theme.name()
@@ -460,7 +460,8 @@ mod focus_restore_regression_tests {
             "coordinator sync should preserve the AcpChat target through the legacy bridge"
         );
         assert!(
-            source.contains("AppView::AcpChatView { .. } => self.embedded_acp_focus_handle.clone()")
+            source
+                .contains("AppView::AcpChatView { .. } => self.embedded_acp_focus_handle.clone()")
                 && source.contains("FocusTarget::AcpChat => {")
                 && source.contains("matches!(self.current_view, AppView::AcpChatView { .. })"),
             "launcher ACP focus should work through cached focus handles for both the legacy ChatPrompt compatibility path and the dedicated AcpChat target"

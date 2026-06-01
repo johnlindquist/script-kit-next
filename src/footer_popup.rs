@@ -1328,7 +1328,7 @@ fn footer_text_hex(theme: &crate::theme::Theme) -> u32 {
     }
 }
 
-/// Hex (0xRRGGBB) for the native footer's keycap / labelcap borders.
+/// Hex (0xRRGGBB) for the native footer's keycap borders.
 #[cfg(target_os = "macos")]
 fn footer_keycap_hex(theme: &crate::theme::Theme) -> u32 {
     if crate::designs::current_main_menu_theme()
@@ -2928,10 +2928,6 @@ unsafe fn make_footer_hint_item(
         footer_keycap_hex(theme),
         footer_keycap_border_alpha(theme, button_cfg.selected),
     );
-    let labelcap_border_color = ns_color_from_hex_with_alpha(
-        footer_keycap_hex(theme),
-        footer_keycap_border_alpha(theme, button_cfg.selected),
-    );
     let key_font: id = font;
 
     let shortcut_keys =
@@ -3103,13 +3099,7 @@ unsafe fn make_footer_hint_item(
                 label_layer,
                 setCornerRadius: crate::components::footer_chrome::FOOTER_KEYCAP_RADIUS_PX as f64
             ];
-            let _: () = msg_send![label_layer, setBorderWidth: 1.0_f64];
-            if labelcap_border_color != nil {
-                let cg_border: id = msg_send![labelcap_border_color, CGColor];
-                if cg_border != nil {
-                    let _: () = msg_send![label_layer, setBorderColor: cg_border];
-                }
-            }
+            let _: () = msg_send![label_layer, setBorderWidth: 0.0_f64];
         }
 
         let label_field_x = ((label_chip_width - label_text_width) / 2.0).round();

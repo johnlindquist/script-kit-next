@@ -7,7 +7,7 @@ fn read_source(path: &str) -> String {
 }
 
 #[test]
-fn all_main_menu_themes_have_unique_geometry_signatures() {
+fn all_header_info_bar_variants_preserve_base_geometry() {
     let signatures = MainMenuThemeVariant::all()
         .iter()
         .map(|theme| theme.geometry_signature())
@@ -15,44 +15,23 @@ fn all_main_menu_themes_have_unique_geometry_signatures() {
 
     assert_eq!(
         signatures.len(),
-        MainMenuThemeVariant::COUNT,
-        "main-menu themes must differ by geometry/typography, not just alpha"
+        1,
+        "header variants must keep the current base geometry and vary only the information bar"
     );
 }
 
 #[test]
-fn theme_geometry_varies_across_several_token_families() {
-    let defs = MainMenuThemeVariant::all()
+fn header_info_bar_variants_have_unique_header_signatures() {
+    let signatures = MainMenuThemeVariant::all()
         .iter()
-        .map(|theme| theme.def())
-        .collect::<Vec<_>>();
-
-    let row_heights = defs
-        .iter()
-        .map(|def| def.list.item_height as u32)
-        .collect::<HashSet<_>>();
-    let search_heights = defs
-        .iter()
-        .map(|def| def.search.height as u32)
-        .collect::<HashSet<_>>();
-    let shell_insets = defs
-        .iter()
-        .map(|def| def.shell.content_inset_x as u32)
-        .collect::<HashSet<_>>();
-    let icon_sizes = defs
-        .iter()
-        .map(|def| def.icon.container_size as u32)
-        .collect::<HashSet<_>>();
-    let footer_gaps = defs
-        .iter()
-        .map(|def| def.footer.metrics.item_gap_px as u32)
+        .map(|theme| theme.header_info_bar_signature())
         .collect::<HashSet<_>>();
 
-    assert!(row_heights.len() >= 8);
-    assert!(search_heights.len() >= 6);
-    assert!(shell_insets.len() >= 8);
-    assert!(icon_sizes.len() >= 6);
-    assert!(footer_gaps.len() >= 5);
+    assert_eq!(
+        signatures.len(),
+        MainMenuThemeVariant::COUNT,
+        "each variation slot should explore a distinct header information-bar idea"
+    );
 }
 
 #[test]
@@ -74,14 +53,64 @@ fn script_list_consumes_shell_search_and_theme_list_metrics() {
 }
 
 #[test]
+fn selector_copy_is_header_oriented_not_theme_oriented() {
+    for variant in MainMenuThemeVariant::all() {
+        assert!(variant.placeholder().contains("Header"));
+        assert!(!variant.placeholder().contains("Theme"));
+        let def = variant.def();
+        assert_eq!(def.header_info_bar.font_family, "JetBrains Mono");
+        assert_eq!(def.header_info_bar.font_size, 10.5);
+        assert_eq!(def.header_info_bar.opacity, 0.34);
+        assert!(def.header_info_bar.show_cwd);
+        assert!(def.header_info_bar.show_agent_model);
+        assert!(def.shell.header_padding_y <= 4.0);
+        assert!(def.shell.header_gap <= 4.0);
+    }
+}
+
+#[test]
+fn main_menu_variant_slots_are_header_info_bar_slots() {
+    let source = read_source("src/designs/core/main_menu_theme.rs");
+    let variant_enum = source
+        .split("pub enum MainMenuThemeVariant")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("#[derive(Debug, Clone, Copy, PartialEq, Eq)]")
+                .next()
+        })
+        .expect("MainMenuThemeVariant enum body should be readable");
+
+    for old_name in [
+        "TahoeClear",
+        "TahoeGraphite",
+        "TahoeBlueGlass",
+        "FrostedCommand",
+        "LiquidPrism",
+        "CarbonNeon",
+        "OperatorMonoGlass",
+    ] {
+        assert!(
+            !variant_enum.contains(old_name),
+            "old visual theme slot {old_name} should not remain in MainMenuThemeVariant"
+        );
+    }
+
+    assert_eq!(
+        variant_enum.matches("InfoBar").count(),
+        MainMenuThemeVariant::COUNT
+    );
+}
+
+#[test]
 fn shared_main_view_columns_are_cross_theme_source_of_truth() {
     let shared = read_source("src/components/main_view_chrome.rs");
 
     assert!(shared.contains("pub(crate) fn main_view_content_columns"));
     assert!(shared.contains("pub(crate) fn main_view_text_column_x"));
     assert!(shared.contains(
-        "main_view_row_leading_x(def) + def.icon.container_size + def.row.icon_text_gap"
+        "main_view_row_leading_x(def) + main_view_state_icon_slot_size(def) + def.row.icon_text_gap"
     ));
+    assert!(shared.contains("def.icon.container_size.min(def.search.height).max(16.0)"));
     assert!(shared.contains("(text_column_x - def.shell.header_padding_x)"));
     assert!(shared.contains(".max(def.search.text_inset_x)"));
 }

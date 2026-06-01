@@ -103,7 +103,7 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
     );
     assert!(
         DICTATION_WINDOW
-            .contains("crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT")
+            .contains("crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT")
             && DICTATION_WINDOW.contains("crate::components::footer_chrome::footer_rail_chrome")
             && DICTATION_WINDOW.contains("sync_window_footer_popup(")
             && DICTATION_WINDOW.contains("dictation_native_footer_config(")
@@ -116,9 +116,8 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
         DICTATION_WINDOW.contains("crate::components::footer_chrome::render_footer_hint_content")
             && DICTATION_WINDOW.contains("crate::components::footer_chrome::FooterHintKeyMode")
             && DICTATION_WINDOW.contains("fn render_mic_action_chip_content(")
-            && DICTATION_WINDOW.contains(
-                ".external_path(crate::components::footer_chrome::FOOTER_MIC_ICON_PATH)"
-            )
+            && DICTATION_WINDOW
+                .contains(".external_path(crate::components::footer_chrome::FOOTER_MIC_ICON_PATH)")
             && DICTATION_WINDOW.contains("fn footer_action_button_height()")
             && DICTATION_WINDOW.contains(".h(px(footer_action_button_height()))")
             && DICTATION_WINDOW.contains(".group(\"footer-action-button\")")
@@ -144,9 +143,9 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
             && FOOTER_CHROME
                 .contains("pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.14;")
             && FOOTER_CHROME.contains(
-                "pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight(560.0);"
+                "pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight(500.0);"
             )
-            && FOOTER_CHROME.contains("pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 20.0;")
+            && FOOTER_CHROME.contains("pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 22.0;")
             && FOOTER_CHROME.contains("pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;")
             && FOOTER_CHROME
                 .contains("pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;")
@@ -158,12 +157,10 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
             && FOOTER_CHROME
                 .contains("pub(crate) const FOOTER_CHIP_BORDER_HOVER_ALPHA: f32 = 0.34;")
             && FOOTER_CHROME
-                .contains("pub(crate) const FOOTER_LABELCAP_BORDER_ALPHA: f32 = FOOTER_CHIP_BORDER_ALPHA;")
-            && FOOTER_CHROME
                 .contains("pub(crate) const FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX: f32 = 6.0;")
             && FOOTER_CHROME.contains("pub(crate) const FOOTER_MIC_ICON_TOKEN: &str = \"mic\";")
             && FOOTER_CHROME.contains("pub(crate) const FOOTER_MIC_ICON_PATH: &str = concat!(")
-            && FOOTER_CHROME.contains("let alpha = footer_keycap_border_alpha(theme, selected);")
+            && FOOTER_CHROME.contains("opacity.selected.max(FOOTER_CHIP_BORDER_SELECTED_ALPHA)")
             && FOOTER_CHROME.contains("pub(crate) fn footer_button_height(footer_height: f32)")
             && FOOTER_CHROME.contains("pub(crate) fn footer_rail_chrome(theme: &Theme)")
             && FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_ITEM_GAP_PX")
@@ -177,7 +174,8 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
     assert!(
         FOOTER_CHROME.contains("\"esc\" | \"escape\" => \"⎋\".to_string()")
             && FOOTER_CHROME.contains("fn render_footer_labelcap(")
-            && FOOTER_CHROME.contains("footer_labelcap_border_color(theme)")
+            && !FOOTER_CHROME.contains("footer_labelcap_border_color(theme)")
+            && !FOOTER_CHROME.contains("FOOTER_LABELCAP_BORDER_ALPHA")
             && !FOOTER_CHROME.contains(".bg(footer_keycap_bg_color(theme))")
             && !FOOTER_CHROME.contains("FOOTER_KEYCAP_BG_ALPHA")
             && FOOTER_CHROME.contains(".flex_none()")
@@ -219,11 +217,13 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
     );
     assert!(
         FOOTER_POPUP.contains("fn is_footer_left_pinned_button(")
-            && FOOTER_POPUP.contains("button_cfg.key.as_ref() == crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN")
+            && FOOTER_POPUP.contains(
+                "button_cfg.key.as_ref() == crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN"
+            )
             && !FOOTER_POPUP.contains("&& button_cfg.label.as_ref().is_empty()")
             && FOOTER_POPUP.contains("fn footer_hint_content_layout_for_button(")
             && FOOTER_POPUP.contains("let label_x = (key_x + key_width + gap_width).round();")
-            && FOOTER_POPUP.contains("if left_pinned { 0.0 } else { trailing_x }")
+            && FOOTER_POPUP.contains("if is_footer_left_pinned_button(button_cfg)")
             && FOOTER_POPUP.contains("setContentTintColor: text_color")
             && FOOTER_POPUP.contains("setAlphaValue: 1.0_f64")
             && FOOTER_POPUP.contains("setImageScaling: 0usize"),
@@ -238,7 +238,7 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
         FOOTER_POPUP.contains("fn set_footer_button_border_alpha(")
             && FOOTER_POPUP.contains("setBorderColor: cg_border")
             && FOOTER_POPUP.contains("footer_keycap_border_hover_alpha(&theme)")
-            && FOOTER_POPUP.contains("footer_keycap_border_alpha(&theme, true)"),
+            && FOOTER_POPUP.contains("themed_footer_button_border_alpha(&theme, true)"),
         "native footer chip borders must be visible at rest and strengthen on hover/selected states"
     );
     assert!(

@@ -126,96 +126,140 @@ pub(crate) fn render_main_view_context_zone(
     on_cwd_click: impl Fn(&ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
     on_agent_model_click: impl Fn(&ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> AnyElement {
-    let border = rgba((theme.colors.ui.border << 8) | 0x52);
-    let rest_bg = rgba((theme.colors.background.search_box << 8) | 0x22);
-    let hover_bg = rgba((theme.colors.accent.selected << 8) | 0x20);
-    let text_color = rgb(theme.colors.text.muted);
-    let key_color = rgb(theme.colors.accent.selected);
-    let chip_radius = (def.search.radius * 0.75).max(4.0);
+    let info = def.header_info_bar;
+    let text_alpha = (info.opacity.clamp(0.0, 1.0) * 255.0).round() as u32;
+    let border = rgba((theme.colors.ui.border << 8) | info.pill_border_alpha);
+    let rest_bg = rgba((theme.colors.background.search_box << 8) | info.pill_bg_alpha);
+    let hover_bg = rgba((theme.colors.text.primary << 8) | def.footer.button.hover);
+    let text_color = rgba((theme.colors.text.primary << 8) | text_alpha);
+    let show_pills = info.pill_padding_x > 0.0 || info.pill_border_alpha > 0;
 
     let cwd_label = cwd_label.unwrap_or_else(|| "Choose cwd".to_string());
     let agent_model_label = agent_model_label.unwrap_or_else(|| "Choose agent · model".to_string());
 
-    div()
-        .id(MAIN_VIEW_CONTEXT_ZONE_ID)
-        .w_full()
-        .min_h(px(20.0))
+    let cwd_key = if info.show_keys {
+        div()
+            .opacity(info.key_opacity.clamp(0.0, 1.0))
+            .child(
+                crate::components::footer_chrome::render_footer_hint_button_like(
+                    crate::components::footer_chrome::FooterHintButtonSpec {
+                        label: cwd_label.clone().into(),
+                        key: "Tab".into(),
+                        slot_width_px: Some(280.0),
+                        key_first: false,
+                        justify: crate::components::footer_chrome::FooterHintContentJustify::Start,
+                    },
+                    theme,
+                ),
+            )
+            .into_any_element()
+    } else {
+        div()
+            .min_w(px(0.0))
+            .overflow_hidden()
+            .text_ellipsis()
+            .child(cwd_label.clone())
+            .into_any_element()
+    };
+
+    let model_key = if info.show_keys {
+        div()
+            .opacity(info.key_opacity.clamp(0.0, 1.0))
+            .child(
+                crate::components::footer_chrome::render_footer_hint_button_like(
+                    crate::components::footer_chrome::FooterHintButtonSpec {
+                        label: agent_model_label.clone().into(),
+                        key: "Shift+Tab".into(),
+                        slot_width_px: Some(310.0),
+                        key_first: false,
+                        justify: crate::components::footer_chrome::FooterHintContentJustify::Start,
+                    },
+                    theme,
+                ),
+            )
+            .into_any_element()
+    } else {
+        div()
+            .min_w(px(0.0))
+            .overflow_hidden()
+            .text_ellipsis()
+            .child(agent_model_label.clone())
+            .into_any_element()
+    };
+
+    let mut cwd_chip = div()
+        .id(MAIN_VIEW_CONTEXT_CWD_BUTTON_ID)
+        .min_w(px(0.0))
         .flex()
         .flex_row()
         .items_center()
-        .justify_between()
-        .gap(px(def.shell.header_gap))
-        .child(
+        .gap(px(info.gap_px))
+        .px(px(info.pill_padding_x))
+        .py(px(info.pill_padding_y))
+        .rounded(px(info.pill_radius))
+        .font_family(info.font_family)
+        .text_size(px(info.font_size))
+        .text_color(text_color)
+        .cursor_pointer()
+        .hover(move |s| s.bg(hover_bg))
+        .on_click(on_cwd_click)
+        .child(cwd_key);
+    if show_pills {
+        cwd_chip = cwd_chip.border_1().border_color(border).bg(rest_bg);
+    }
+
+    let mut model_chip = div()
+        .id(MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID)
+        .min_w(px(0.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(info.gap_px))
+        .px(px(info.pill_padding_x))
+        .py(px(info.pill_padding_y))
+        .rounded(px(info.pill_radius))
+        .font_family(info.font_family)
+        .text_size(px(info.font_size))
+        .text_color(text_color)
+        .cursor_pointer()
+        .hover(move |s| s.bg(hover_bg))
+        .on_click(on_agent_model_click)
+        .child(model_key);
+    if show_pills {
+        model_chip = model_chip.border_1().border_color(border).bg(rest_bg);
+    }
+
+    let mut zone = div()
+        .id(MAIN_VIEW_CONTEXT_ZONE_ID)
+        .w_full()
+        .h(px(info.height_px))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(info.gap_px));
+
+    zone = zone.justify_between();
+
+    if info.show_cwd {
+        zone = zone.child(cwd_chip);
+    }
+    if info.show_cwd
+        && info.show_agent_model
+        && !matches!(info.layout, crate::designs::HeaderInfoBarLayout::Split)
+    {
+        zone = zone.child(
             div()
-                .id(MAIN_VIEW_CONTEXT_CWD_BUTTON_ID)
-                .min_w(px(0.0))
-                .flex_1()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(6.0))
-                .px(px(8.0))
-                .py(px(3.0))
-                .rounded(px(chip_radius))
-                .border_1()
-                .border_color(border)
-                .bg(rest_bg)
-                .text_size(px(12.0))
+                .font_family(info.font_family)
+                .text_size(px(info.font_size))
                 .text_color(text_color)
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .on_click(on_cwd_click)
-                .child("cwd")
-                .child(
-                    div()
-                        .min_w(px(0.0))
-                        .overflow_hidden()
-                        .text_ellipsis()
-                        .child(cwd_label),
-                )
-                .child(
-                    div()
-                        .text_color(key_color)
-                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .child("Tab"),
-                ),
-        )
-        .child(
-            div()
-                .id(MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID)
-                .min_w(px(0.0))
-                .flex_1()
-                .flex()
-                .flex_row()
-                .items_center()
-                .justify_end()
-                .gap(px(6.0))
-                .px(px(8.0))
-                .py(px(3.0))
-                .rounded(px(chip_radius))
-                .border_1()
-                .border_color(border)
-                .bg(rest_bg)
-                .text_size(px(12.0))
-                .text_color(text_color)
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .on_click(on_agent_model_click)
-                .child(
-                    div()
-                        .min_w(px(0.0))
-                        .overflow_hidden()
-                        .text_ellipsis()
-                        .child(agent_model_label),
-                )
-                .child(
-                    div()
-                        .text_color(key_color)
-                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .child("Shift+Tab"),
-                ),
-        )
-        .into_any_element()
+                .child(info.separator),
+        );
+    }
+    if info.show_agent_model {
+        zone = zone.child(model_chip);
+    }
+
+    zone.into_any_element()
 }
 
 #[allow(dead_code)]
@@ -249,7 +293,9 @@ pub(crate) fn render_main_view_main_slot(def: MainMenuThemeDef, main: AnyElement
 }
 
 pub(crate) fn main_view_input_text_inset_left(def: MainMenuThemeDef) -> f32 {
-    main_view_content_columns(def).input_text_inset_left
+    let text_column_x =
+        main_view_row_leading_x(def) + main_view_state_icon_slot_size(def) + def.row.icon_text_gap;
+    (text_column_x - def.shell.header_padding_x).max(def.search.text_inset_x)
 }
 
 pub(crate) fn main_view_row_leading_x(def: MainMenuThemeDef) -> f32 {
@@ -277,6 +323,10 @@ pub(crate) fn main_view_state_icon_left(def: MainMenuThemeDef) -> f32 {
     (main_view_row_leading_x(def) - def.shell.header_padding_x).max(0.0)
 }
 
+fn main_view_state_icon_slot_size(def: MainMenuThemeDef) -> f32 {
+    def.icon.container_size.min(def.search.height).max(16.0)
+}
+
 fn main_view_state_icon_path(icon_name: &str) -> &'static str {
     if main_view_state_icon_uses_script_kit_logo(icon_name) {
         return concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg");
@@ -302,7 +352,7 @@ pub(crate) fn render_main_view_state_icon(
     def: MainMenuThemeDef,
     icon_name: &str,
 ) -> AnyElement {
-    let container_size = def.icon.container_size.min(def.search.height).max(16.0);
+    let container_size = main_view_state_icon_slot_size(def);
     let uses_script_kit_logo = main_view_state_icon_uses_script_kit_logo(icon_name);
     let svg_size = if uses_script_kit_logo {
         ((container_size - 2.0).max(18.0) * 1.1).min(container_size)

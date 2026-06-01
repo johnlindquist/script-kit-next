@@ -6,21 +6,21 @@ use gpui::FontWeight;
 #[repr(u8)]
 pub enum MainMenuThemeVariant {
     #[default]
-    TahoeClear = 1,
-    TahoeGraphite = 2,
-    TahoeBlueGlass = 3,
-    TahoeSmoke = 4,
-    TahoeWarmGold = 5,
-    FrostedCommand = 6,
-    LiquidPrism = 7,
-    AuroraSlate = 8,
-    MilkGlass = 9,
-    ProConsole = 10,
-    SpotlightLuxe = 11,
-    OceanGlass = 12,
-    CarbonNeon = 13,
-    StudioPaperGlass = 14,
-    OperatorMonoGlass = 15,
+    InfoBarBase = 1,
+    InfoBarBreadcrumb = 2,
+    InfoBarCompact = 3,
+    InfoBarSplit = 4,
+    InfoBarCwdFocus = 5,
+    InfoBarModelFocus = 6,
+    InfoBarSlashPath = 7,
+    InfoBarMutedPills = 8,
+    InfoBarPlainText = 9,
+    InfoBarLowContrastKeys = 10,
+    InfoBarStrongKeys = 11,
+    InfoBarCentered = 12,
+    InfoBarLeftDense = 13,
+    InfoBarRightUtility = 14,
+    InfoBarUltraQuiet = 15,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -165,6 +165,36 @@ pub struct FooterTheme {
     pub metrics: FooterMetricsTokens,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HeaderInfoBarLayout {
+    Split,
+    Breadcrumb,
+    Compact,
+    Plain,
+    Centered,
+    RightUtility,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HeaderInfoBarTokens {
+    pub layout: HeaderInfoBarLayout,
+    pub font_family: &'static str,
+    pub font_size: f32,
+    pub opacity: f32,
+    pub key_opacity: f32,
+    pub height_px: f32,
+    pub gap_px: f32,
+    pub pill_padding_x: f32,
+    pub pill_padding_y: f32,
+    pub pill_radius: f32,
+    pub pill_border_alpha: u32,
+    pub pill_bg_alpha: u32,
+    pub show_cwd: bool,
+    pub show_agent_model: bool,
+    pub show_keys: bool,
+    pub separator: &'static str,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MainMenuThemeDef {
     pub variant: MainMenuThemeVariant,
@@ -180,6 +210,7 @@ pub struct MainMenuThemeDef {
     pub typography: MainMenuTypographyTokens,
     pub metadata: MainMenuMetadataTokens,
     pub footer: FooterTheme,
+    pub header_info_bar: HeaderInfoBarTokens,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -200,27 +231,46 @@ pub struct MainMenuGeometrySignature {
     pub footer_button_radius: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct HeaderInfoBarSignature {
+    pub layout: HeaderInfoBarLayout,
+    pub font_size: u32,
+    pub opacity: u32,
+    pub key_opacity: u32,
+    pub height_px: u32,
+    pub gap_px: u32,
+    pub pill_padding_x: u32,
+    pub pill_padding_y: u32,
+    pub pill_radius: u32,
+    pub pill_border_alpha: u32,
+    pub pill_bg_alpha: u32,
+    pub show_cwd: bool,
+    pub show_agent_model: bool,
+    pub show_keys: bool,
+    pub separator_len: usize,
+}
+
 impl MainMenuThemeVariant {
     pub const COUNT: usize = 15;
 
     pub fn all() -> &'static [MainMenuThemeVariant] {
         use MainMenuThemeVariant::*;
         &[
-            TahoeClear,
-            TahoeGraphite,
-            TahoeBlueGlass,
-            TahoeSmoke,
-            TahoeWarmGold,
-            FrostedCommand,
-            LiquidPrism,
-            AuroraSlate,
-            MilkGlass,
-            ProConsole,
-            SpotlightLuxe,
-            OceanGlass,
-            CarbonNeon,
-            StudioPaperGlass,
-            OperatorMonoGlass,
+            InfoBarBase,
+            InfoBarBreadcrumb,
+            InfoBarCompact,
+            InfoBarSplit,
+            InfoBarCwdFocus,
+            InfoBarModelFocus,
+            InfoBarSlashPath,
+            InfoBarMutedPills,
+            InfoBarPlainText,
+            InfoBarLowContrastKeys,
+            InfoBarStrongKeys,
+            InfoBarCentered,
+            InfoBarLeftDense,
+            InfoBarRightUtility,
+            InfoBarUltraQuiet,
         ]
     }
 
@@ -254,877 +304,133 @@ impl MainMenuThemeVariant {
 
     pub fn placeholder(self) -> String {
         format!(
-            "Theme {}/{} · {}   ·   alt+\u{2190}/\u{2192} to cycle",
+            "Header {}/{} · {}   ·   alt+\u{2190}/\u{2192} to cycle",
             self.index() + 1,
             Self::COUNT,
             self.name()
         )
     }
 
-    pub fn def(self) -> MainMenuThemeDef {
-        use MainMenuThemeTier::*;
-        use MainMenuThemeVariant::*;
-
-        let accent_button = |rest, hover, active, border_alpha| FooterButtonTheme {
-            rest: Some(rest),
-            hover,
-            active,
-            border_alpha,
-            uses_accent: true,
-        };
-        let neutral_button = |rest, hover, active, border_alpha| FooterButtonTheme {
-            rest,
-            hover,
-            active,
-            border_alpha,
-            uses_accent: false,
-        };
-        let footer = |button, divider_alpha, metrics| FooterTheme {
-            text_accent: false,
-            keycap_accent: false,
-            divider_accent: false,
-            divider_alpha,
-            button,
-            metrics,
-        };
-        let metrics = |side_inset_px,
-                       item_gap_px,
-                       content_gap,
-                       button_padding_x,
-                       button_padding_y,
-                       run_button_padding_x,
-                       button_radius,
-                       label_font_size,
-                       keycap_padding_x,
-                       keycap_padding_y,
-                       keycap_radius,
-                       keycap_font_size| FooterMetricsTokens {
-            side_inset_px,
-            item_gap_px,
-            content_gap,
-            button_padding_x,
-            button_padding_y,
-            run_button_padding_x,
-            button_radius,
-            label_font_size,
-            keycap_padding_x,
-            keycap_padding_y,
-            keycap_radius,
-            keycap_font_size,
-        };
-        let def = |variant: MainMenuThemeVariant,
-                   name: &'static str,
-                   intent: &'static str,
-                   tier: MainMenuThemeTier,
-                   row_kind: MainMenuRowKind,
-                   footer: FooterTheme,
-                   shell_inset: f32,
-                   header_y: f32,
-                   header_gap: f32,
-                   search_height: f32,
-                   search_radius: f32,
-                   row_height: f32,
-                   section_height: f32,
-                   first_section_height: f32,
-                   row_outer_x: f32,
-                   row_outer_y: f32,
-                   row_inner_x: f32,
-                   row_inner_y: f32,
-                   row_radius: f32,
-                   icon_container: f32,
-                   icon_svg: f32,
-                   icon_tile: f32,
-                   icon_tile_radius: f32,
-                   name_size: f32,
-                   name_line: f32,
-                   desc_size: f32,
-                   desc_line: f32,
-                   section_size: f32,
-                   section_line: f32,
-                   metadata_alpha: u32,
-                   type_accessory_size: f32,
-                   source_font_size: f32,
-                   badge_font_size: f32,
-                   selected_border_width: f32,
-                   selected_border_alpha: u32,
-                   selected_fill_alpha: u32,
-                   hover_fill_alpha: u32|
-         -> MainMenuThemeDef {
-            MainMenuThemeDef {
-                variant,
-                name,
-                intent,
-                tier,
-                row_kind,
-                shell: MainMenuShellTokens {
-                    content_inset_x: shell_inset,
-                    content_inset_bottom: shell_inset * 0.35,
-                    header_padding_x: shell_inset,
-                    header_padding_y: header_y,
-                    header_gap,
-                    divider_margin_x: shell_inset,
-                    divider_height: 1.0,
-                    divider_alpha: footer.divider_alpha,
-                },
-                search: MainMenuSearchTokens {
-                    height: search_height,
-                    radius: search_radius,
-                    text_inset_x: (shell_inset * 0.55).clamp(8.0, 16.0),
-                    text_inset_y: 0.0,
-                    surface_alpha: match tier {
-                        TahoeClose => 0x00,
-                        ExpressiveTahoe => 0x12,
-                        Exploratory => 0x18,
-                    },
-                    border_alpha: selected_border_alpha.min(0x80),
-                    font_size: (name_size + 1.0).clamp(14.0, 17.0),
-                    font_weight: FontWeight(430.0),
-                },
-                list: MainMenuListTokens {
-                    item_height: row_height,
-                    section_header_height: section_height,
-                    first_section_header_height: first_section_height,
-                    average_scroll_height: ((row_height * 3.0) + section_height) / 4.0,
-                },
-                row: MainMenuRowTokens {
-                    outer_padding_x: row_outer_x,
-                    outer_padding_y: row_outer_y,
-                    inner_padding_x: row_inner_x,
-                    inner_padding_y: row_inner_y,
-                    radius: row_radius,
-                    name_desc_gap: (row_height / 18.0).clamp(1.5, 3.5),
-                    icon_text_gap: (icon_container * 0.42).clamp(7.0, 12.0),
-                    accessory_gap: (row_inner_x * 0.45).clamp(5.0, 9.0),
-                    selected_border_width,
-                    selected_border_alpha,
-                    selected_fill_alpha,
-                    hover_fill_alpha,
-                },
-                icon: MainMenuIconTokens {
-                    container_size: icon_container,
-                    svg_size: icon_svg,
-                    tile_size: icon_tile,
-                    tile_radius: icon_tile_radius,
-                    tile_fill_alpha: selected_fill_alpha.max(0x80),
-                    tile_border_alpha: selected_border_alpha,
-                },
-                typography: MainMenuTypographyTokens {
-                    name_font_size: name_size,
-                    name_line_height: name_line,
-                    name_weight: FontWeight(450.0),
-                    selected_name_weight: if matches!(
-                        row_kind,
-                        MainMenuRowKind::CarbonNeon
-                            | MainMenuRowKind::ProConsole
-                            | MainMenuRowKind::OperatorMonoGlass
-                    ) {
-                        FontWeight::SEMIBOLD
-                    } else {
-                        FontWeight::MEDIUM
-                    },
-                    desc_font_size: desc_size,
-                    desc_line_height: desc_line,
-                    desc_weight: FontWeight::NORMAL,
-                    section_font_size: section_size,
-                    section_line_height: section_line,
-                    section_weight: if matches!(
-                        row_kind,
-                        MainMenuRowKind::AuroraSlate
-                            | MainMenuRowKind::StudioPaperGlass
-                            | MainMenuRowKind::OperatorMonoGlass
-                    ) {
-                        FontWeight::MEDIUM
-                    } else {
-                        FontWeight::NORMAL
-                    },
-                },
-                metadata: MainMenuMetadataTokens {
-                    metadata_alpha,
-                    type_accessory_size,
-                    source_font_size,
-                    badge_font_size,
-                    keycap_font_size: footer.metrics.keycap_font_size,
-                },
-                footer,
-            }
-        };
-
+    fn info_bar_name(self) -> &'static str {
         match self {
-            TahoeClear => def(
-                self,
-                "Tahoe Clear",
-                "Clean native command palette with nearly invisible footer chrome",
-                TahoeClose,
-                MainMenuRowKind::IconTile,
-                footer(
-                    neutral_button(None, 0x10, 0x24, 0x12),
-                    0x0A,
-                    metrics(
-                        14.0, 6.0, 4.0, 4.0, 2.0, 6.0, 6.0, 12.0, 5.0, 2.0, 6.0, 12.0,
-                    ),
-                ),
-                16.0,
-                10.0,
-                10.0,
-                30.0,
-                9.0,
-                40.0,
-                32.0,
-                26.0,
-                4.0,
-                2.0,
-                14.0,
-                4.0,
-                8.0,
-                20.0,
-                16.0,
-                20.0,
-                7.0,
-                14.0,
-                20.0,
-                12.0,
-                16.0,
-                12.0,
-                16.0,
-                0x73,
-                12.0,
-                11.0,
-                10.0,
-                0.0,
-                0x00,
-                0x20,
-                0x12,
+            MainMenuThemeVariant::InfoBarBase => "Base Info Bar",
+            MainMenuThemeVariant::InfoBarBreadcrumb => "Right Model Breadcrumb",
+            MainMenuThemeVariant::InfoBarCompact => "Right Model Compact",
+            MainMenuThemeVariant::InfoBarSplit => "Right Model Split",
+            MainMenuThemeVariant::InfoBarCwdFocus => "Right Model Cwd Focus",
+            MainMenuThemeVariant::InfoBarModelFocus => "Right Model Focus",
+            MainMenuThemeVariant::InfoBarSlashPath => "Right Model Slash Path",
+            MainMenuThemeVariant::InfoBarMutedPills => "Right Model Muted Pills",
+            MainMenuThemeVariant::InfoBarPlainText => "Right Model Plain",
+            MainMenuThemeVariant::InfoBarLowContrastKeys => "Right Model Low Keys",
+            MainMenuThemeVariant::InfoBarStrongKeys => "Right Model Strong Keys",
+            MainMenuThemeVariant::InfoBarCentered => "Right Model Center Weight",
+            MainMenuThemeVariant::InfoBarLeftDense => "Right Model Left Dense",
+            MainMenuThemeVariant::InfoBarRightUtility => "Right Model Utility",
+            MainMenuThemeVariant::InfoBarUltraQuiet => "Right Model Ultra Quiet",
+        }
+    }
+
+    fn info_bar_intent(self) -> &'static str {
+        match self {
+            MainMenuThemeVariant::InfoBarBase => {
+                "Smallest, dimmest right-model header using the current quiet layout as the base"
+            }
+            MainMenuThemeVariant::InfoBarBreadcrumb => {
+                "Dimmest breadcrumb header with cwd left and model right"
+            }
+            MainMenuThemeVariant::InfoBarCompact => {
+                "Dimmest compact header with minimal vertical footprint"
+            }
+            MainMenuThemeVariant::InfoBarSplit => "Dimmest split header with scan separation",
+            MainMenuThemeVariant::InfoBarCwdFocus => "Dimmest cwd-weighted left chip",
+            MainMenuThemeVariant::InfoBarModelFocus => "Dimmest model-weighted right chip",
+            MainMenuThemeVariant::InfoBarSlashPath => "Dimmest slash-path rhythm",
+            MainMenuThemeVariant::InfoBarMutedPills => "Dimmest muted pill boundaries",
+            MainMenuThemeVariant::InfoBarPlainText => "Dimmest borderless split text",
+            MainMenuThemeVariant::InfoBarLowContrastKeys => "Dimmest low-emphasis footer keycaps",
+            MainMenuThemeVariant::InfoBarStrongKeys => "Dimmest clearer footer keycaps",
+            MainMenuThemeVariant::InfoBarCentered => "Dimmest balanced split rhythm",
+            MainMenuThemeVariant::InfoBarLeftDense => "Dimmest dense left chip",
+            MainMenuThemeVariant::InfoBarRightUtility => "Dimmest right utility chip",
+            MainMenuThemeVariant::InfoBarUltraQuiet => "Dimmest no-key metadata treatment",
+        }
+    }
+
+    pub fn def(self) -> MainMenuThemeDef {
+        base_main_menu_theme_def(self, self.header_info_bar())
+    }
+
+    pub fn header_info_bar(self) -> HeaderInfoBarTokens {
+        use HeaderInfoBarLayout::*;
+        match self {
+            MainMenuThemeVariant::InfoBarBase => header_info_bar_tokens(
+                Split, 0.50, 14.0, 7.0, 0.0, 0.0, 0.0, 0x00, 0x00, true, true, false, "·",
             ),
-            TahoeGraphite => def(
-                self,
-                "Tahoe Graphite",
-                "Restrained graphite structure with grouped footer controls",
-                TahoeClose,
-                MainMenuRowKind::GraphitePill,
-                footer(
-                    neutral_button(Some(0x06), 0x14, 0x28, 0x14),
-                    0x00,
-                    metrics(
-                        15.0, 7.0, 4.5, 4.5, 2.0, 6.5, 7.0, 12.0, 5.0, 2.0, 6.0, 12.0,
-                    ),
-                ),
-                18.0,
-                10.0,
-                11.0,
-                32.0,
-                11.0,
-                42.0,
-                32.0,
-                27.0,
-                4.0,
-                2.0,
-                15.0,
-                4.0,
-                9.0,
-                22.0,
-                17.0,
-                22.0,
-                7.0,
-                14.0,
-                20.0,
-                12.0,
-                16.0,
-                12.0,
-                16.0,
-                0x80,
-                12.0,
-                11.0,
-                10.0,
-                1.0,
-                0x20,
-                0x26,
-                0x14,
+            MainMenuThemeVariant::InfoBarBreadcrumb => header_info_bar_tokens(
+                Split, 0.52, 14.0, 8.0, 4.0, 1.0, 4.0, 0x14, 0x00, true, true, false, "›",
             ),
-            TahoeBlueGlass => def(
-                self,
-                "Tahoe Blue Glass",
-                "System-blue Liquid Glass accents without over-coloring metadata",
-                TahoeClose,
-                MainMenuRowKind::BlueGlass,
-                footer(
-                    accent_button(0x00, 0x12, 0x30, 0x12),
-                    0x14,
-                    metrics(
-                        15.0, 7.0, 5.0, 5.0, 2.0, 7.0, 8.0, 12.0, 5.0, 2.0, 6.0, 12.0,
-                    ),
-                ),
-                18.0,
-                11.0,
-                12.0,
-                34.0,
-                12.0,
-                44.0,
-                34.0,
-                28.0,
-                5.0,
-                2.0,
-                15.0,
-                5.0,
-                10.0,
-                24.0,
-                18.0,
-                24.0,
-                8.0,
-                14.2,
-                20.0,
-                12.0,
-                16.0,
-                12.0,
-                16.0,
-                0x88,
-                12.0,
-                11.0,
-                10.0,
-                1.0,
-                0x44,
-                0x24,
-                0x12,
+            MainMenuThemeVariant::InfoBarCompact => header_info_bar_tokens(
+                Split, 0.48, 13.0, 6.0, 0.0, 0.0, 0.0, 0x00, 0x00, true, true, false, "·",
             ),
-            TahoeSmoke => def(
-                self,
-                "Tahoe Smoke",
-                "Smoky low-contrast native palette with whisper footer states",
-                TahoeClose,
-                MainMenuRowKind::Smoke,
-                footer(
-                    neutral_button(None, 0x0D, 0x1F, 0x00),
-                    0x00,
-                    metrics(
-                        12.0, 5.0, 3.5, 3.5, 1.5, 5.0, 5.0, 11.5, 4.0, 1.5, 5.0, 11.5,
-                    ),
-                ),
-                14.0,
-                8.0,
-                8.0,
-                30.0,
-                8.0,
-                38.0,
-                28.0,
-                22.0,
-                3.0,
-                1.0,
-                12.0,
-                3.0,
-                6.0,
-                18.0,
-                15.0,
-                18.0,
-                5.0,
-                13.5,
-                18.0,
-                11.0,
-                15.0,
-                11.0,
-                15.0,
-                0x62,
-                11.0,
-                10.0,
-                9.5,
-                0.0,
-                0x00,
-                0x16,
-                0x0D,
+            MainMenuThemeVariant::InfoBarSplit => header_info_bar_tokens(
+                Split, 0.54, 15.0, 10.0, 5.0, 1.0, 5.0, 0x18, 0x08, true, true, false, "·",
             ),
-            TahoeWarmGold => def(
-                self,
-                "Tahoe Warm Gold",
-                "Script Kit gold signature translated into native active states",
-                TahoeClose,
-                MainMenuRowKind::WarmGold,
-                footer(
-                    accent_button(0x08, 0x20, 0x3A, 0x12),
-                    0x18,
-                    metrics(
-                        14.0, 6.0, 4.5, 4.5, 2.0, 6.5, 7.0, 12.0, 5.0, 2.0, 6.0, 12.0,
-                    ),
-                ),
-                16.0,
-                10.0,
-                10.0,
-                32.0,
-                10.0,
-                42.0,
-                33.0,
-                27.0,
-                4.0,
-                2.0,
-                14.0,
-                4.0,
-                9.0,
-                22.0,
-                17.0,
-                22.0,
-                7.0,
-                14.0,
-                20.0,
-                12.0,
-                16.0,
-                12.0,
-                16.0,
-                0x96,
-                12.0,
-                11.5,
-                10.0,
-                1.0,
-                0x2A,
-                0x24,
-                0x10,
+            MainMenuThemeVariant::InfoBarCwdFocus => header_info_bar_tokens(
+                Split, 0.46, 14.0, 7.0, 5.0, 1.0, 5.0, 0x1A, 0x00, true, true, false, "cwd",
             ),
-            FrostedCommand => def(
-                self,
-                "Frosted Command",
-                "Stronger command-center hierarchy with segmented footer buttons",
-                ExpressiveTahoe,
-                MainMenuRowKind::FrostedCommand,
-                footer(
-                    accent_button(0x08, 0x22, 0x45, 0x22),
-                    0x10,
-                    metrics(
-                        16.0, 8.0, 5.0, 6.0, 2.5, 7.0, 8.0, 12.5, 5.5, 2.0, 6.5, 12.0,
-                    ),
-                ),
-                20.0,
-                12.0,
-                12.0,
-                36.0,
-                12.0,
-                46.0,
-                34.0,
-                28.0,
-                5.0,
-                3.0,
-                16.0,
-                5.0,
-                11.0,
-                24.0,
-                18.0,
-                24.0,
-                8.0,
-                14.5,
-                20.5,
-                12.0,
-                16.0,
-                12.0,
-                16.0,
-                0xA0,
-                13.0,
-                11.5,
-                10.5,
-                1.0,
-                0x48,
-                0x28,
-                0x14,
+            MainMenuThemeVariant::InfoBarModelFocus => header_info_bar_tokens(
+                Split, 0.56, 15.0, 9.0, 4.0, 1.0, 5.0, 0x22, 0x0A, true, true, false, "model",
             ),
-            LiquidPrism => def(
-                self,
-                "Liquid Prism",
-                "Subtle prismatic glass edge with coherent button cells",
-                ExpressiveTahoe,
-                MainMenuRowKind::LiquidPrism,
-                footer(
-                    accent_button(0x07, 0x22, 0x3C, 0x14),
-                    0x12,
-                    metrics(
-                        17.0, 9.0, 5.5, 6.0, 2.5, 7.5, 10.0, 12.5, 5.5, 2.0, 7.0, 12.0,
-                    ),
-                ),
-                22.0,
-                13.0,
-                13.0,
-                38.0,
-                14.0,
-                48.0,
-                36.0,
-                30.0,
-                6.0,
-                3.0,
-                17.0,
-                5.0,
-                12.0,
-                26.0,
-                20.0,
-                26.0,
-                10.0,
-                14.8,
-                21.0,
-                12.2,
-                16.0,
-                12.0,
-                16.0,
-                0xA6,
-                13.0,
-                11.5,
-                10.5,
-                1.0,
-                0x50,
-                0x28,
-                0x12,
+            MainMenuThemeVariant::InfoBarSlashPath => header_info_bar_tokens(
+                Split, 0.50, 14.0, 6.0, 3.0, 0.0, 3.0, 0x00, 0x00, true, true, false, "/",
             ),
-            AuroraSlate => def(
-                self,
-                "Aurora Slate",
-                "Cool slate surface with aurora accent active states",
-                ExpressiveTahoe,
-                MainMenuRowKind::AuroraSlate,
-                footer(
-                    accent_button(0x0A, 0x28, 0x55, 0x20),
-                    0x00,
-                    metrics(
-                        16.0, 8.0, 5.0, 5.5, 2.0, 7.0, 8.0, 12.0, 5.0, 2.0, 6.0, 12.0,
-                    ),
-                ),
-                20.0,
-                11.0,
-                12.0,
-                34.0,
-                11.0,
-                44.0,
-                34.0,
-                28.0,
-                5.0,
-                2.0,
-                16.0,
-                5.0,
-                9.0,
-                24.0,
-                18.0,
-                24.0,
-                8.0,
-                14.2,
-                20.0,
-                12.0,
-                16.0,
-                12.5,
-                17.0,
-                0xA0,
-                13.0,
-                11.5,
-                10.5,
-                1.0,
-                0x44,
-                0x24,
-                0x12,
+            MainMenuThemeVariant::InfoBarMutedPills => header_info_bar_tokens(
+                Split, 0.44, 15.0, 8.0, 6.0, 1.0, 6.0, 0x10, 0x06, true, true, false, "·",
             ),
-            MilkGlass => def(
-                self,
-                "Milk Glass",
-                "Milky translucency that remains usable in light and dark mode",
-                ExpressiveTahoe,
-                MainMenuRowKind::MilkGlass,
-                footer(
-                    accent_button(0x08, 0x16, 0x30, 0x18),
-                    0x08,
-                    metrics(
-                        18.0, 9.0, 5.5, 6.0, 2.5, 8.0, 11.0, 12.5, 6.0, 2.5, 7.0, 12.5,
-                    ),
-                ),
-                24.0,
-                14.0,
-                14.0,
-                40.0,
-                16.0,
-                46.0,
-                36.0,
-                30.0,
-                6.0,
-                3.0,
-                17.0,
-                6.0,
-                14.0,
-                24.0,
-                18.0,
-                24.0,
-                11.0,
-                14.8,
-                21.0,
-                12.2,
-                16.5,
-                12.0,
-                16.0,
-                0x94,
-                13.0,
-                11.5,
-                10.5,
-                1.0,
-                0x38,
-                0x24,
-                0x10,
+            MainMenuThemeVariant::InfoBarPlainText => header_info_bar_tokens(
+                Split, 0.42, 13.0, 8.0, 0.0, 0.0, 0.0, 0x00, 0x00, true, true, false, "·",
             ),
-            ProConsole => def(
-                self,
-                "Pro Console",
-                "Sharper developer command strip without retro-terminal cosplay",
-                ExpressiveTahoe,
-                MainMenuRowKind::ProConsole,
-                footer(
-                    accent_button(0x0A, 0x20, 0x4D, 0x20),
-                    0x18,
-                    metrics(
-                        11.0, 5.0, 3.5, 3.5, 1.5, 5.0, 5.0, 11.5, 4.0, 1.5, 5.0, 11.5,
-                    ),
-                ),
-                12.0,
-                8.0,
-                8.0,
-                30.0,
-                6.0,
-                36.0,
-                28.0,
-                22.0,
-                3.0,
-                1.0,
-                12.0,
-                3.0,
-                6.0,
-                18.0,
-                15.0,
-                18.0,
-                5.0,
-                13.2,
-                18.0,
-                11.0,
-                15.0,
-                11.0,
-                15.0,
-                0x80,
-                11.0,
-                10.5,
-                9.5,
-                1.0,
-                0x50,
-                0x22,
-                0x14,
+            MainMenuThemeVariant::InfoBarLowContrastKeys => header_info_bar_tokens(
+                Split, 0.38, 22.0, 9.0, 3.0, 1.0, 4.0, 0x12, 0x04, true, true, true, "·",
             ),
-            SpotlightLuxe => def(
-                self,
-                "Spotlight Luxe",
-                "Premium Spotlight-like hero search and floating pill footer",
-                ExpressiveTahoe,
-                MainMenuRowKind::SpotlightLuxe,
-                footer(
-                    accent_button(0x06, 0x14, 0x38, 0x14),
-                    0x00,
-                    metrics(
-                        20.0, 10.0, 6.0, 7.0, 3.0, 8.5, 13.0, 13.0, 6.0, 2.5, 8.0, 12.5,
-                    ),
-                ),
-                28.0,
-                16.0,
-                16.0,
-                44.0,
-                18.0,
-                52.0,
-                38.0,
-                32.0,
-                7.0,
-                3.0,
-                18.0,
-                6.0,
-                16.0,
-                28.0,
-                22.0,
-                28.0,
-                12.0,
-                16.0,
-                23.0,
-                13.0,
-                18.0,
-                12.5,
-                17.0,
-                0xA0,
-                14.0,
-                12.0,
-                11.0,
-                1.0,
-                0x42,
-                0x26,
-                0x10,
+            MainMenuThemeVariant::InfoBarStrongKeys => header_info_bar_tokens(
+                Split, 0.62, 22.0, 9.0, 4.0, 1.0, 5.0, 0x18, 0x08, true, true, true, "·",
             ),
-            OceanGlass => def(
-                self,
-                "Ocean Glass",
-                "Immersive oceanic stress-test for how far color can go",
-                Exploratory,
-                MainMenuRowKind::OceanGlass,
-                footer(
-                    accent_button(0x09, 0x24, 0x50, 0x24),
-                    0x18,
-                    metrics(
-                        17.0, 9.0, 5.5, 6.0, 2.5, 7.5, 10.0, 12.5, 5.5, 2.0, 7.0, 12.0,
-                    ),
-                ),
-                22.0,
-                13.0,
-                13.0,
-                38.0,
-                14.0,
-                48.0,
-                36.0,
-                30.0,
-                6.0,
-                3.0,
-                17.0,
-                5.0,
-                12.0,
-                26.0,
-                20.0,
-                26.0,
-                10.0,
-                15.0,
-                21.0,
-                12.2,
-                16.0,
-                12.0,
-                16.0,
-                0xA8,
-                13.0,
-                11.8,
-                10.5,
-                1.0,
-                0x58,
-                0x30,
-                0x14,
+            MainMenuThemeVariant::InfoBarCentered => header_info_bar_tokens(
+                Split, 0.50, 14.0, 12.0, 2.0, 0.0, 2.0, 0x00, 0x00, true, true, false, "·",
             ),
-            CarbonNeon => def(
-                self,
-                "Carbon Neon",
-                "High-contrast neon edge as a deliberate contrast limit",
-                Exploratory,
-                MainMenuRowKind::CarbonNeon,
-                footer(
-                    accent_button(0x0C, 0x35, 0x70, 0x40),
-                    0x22,
-                    metrics(
-                        15.0, 8.0, 5.0, 5.5, 2.0, 7.0, 6.0, 12.0, 5.0, 2.0, 5.0, 12.0,
-                    ),
-                ),
-                18.0,
-                10.0,
-                11.0,
-                34.0,
-                8.0,
-                42.0,
-                32.0,
-                26.0,
-                4.0,
-                2.0,
-                14.0,
-                4.0,
-                6.0,
-                22.0,
-                17.0,
-                22.0,
-                6.0,
-                14.5,
-                20.0,
-                12.0,
-                16.0,
-                12.0,
-                16.0,
-                0xA0,
-                12.0,
-                11.5,
-                10.5,
-                2.0,
-                0x80,
-                0x28,
-                0x0C,
+            MainMenuThemeVariant::InfoBarLeftDense => header_info_bar_tokens(
+                Split, 0.46, 13.0, 5.0, 3.0, 0.0, 3.0, 0x00, 0x00, true, true, false, "›",
             ),
-            StudioPaperGlass => def(
-                self,
-                "Studio Paper Glass",
-                "Warm editorial paper influence blended into glass",
-                Exploratory,
-                MainMenuRowKind::StudioPaperGlass,
-                footer(
-                    accent_button(0x08, 0x1C, 0x3A, 0x20),
-                    0x12,
-                    metrics(
-                        19.0, 9.0, 5.5, 6.5, 2.5, 8.0, 12.0, 12.5, 6.0, 2.0, 7.0, 12.5,
-                    ),
-                ),
-                26.0,
-                15.0,
-                15.0,
-                40.0,
-                15.0,
-                50.0,
-                40.0,
-                34.0,
-                7.0,
-                3.0,
-                18.0,
-                6.0,
-                13.0,
-                24.0,
-                18.0,
-                24.0,
-                10.0,
-                15.5,
-                22.0,
-                12.5,
-                17.0,
-                13.0,
-                18.0,
-                0x98,
-                13.0,
-                12.0,
-                10.5,
-                1.0,
-                0x48,
-                0x26,
-                0x12,
+            MainMenuThemeVariant::InfoBarRightUtility => header_info_bar_tokens(
+                Split, 0.52, 16.0, 10.0, 6.0, 1.0, 6.0, 0x1C, 0x06, true, true, false, "·",
             ),
-            OperatorMonoGlass => def(
-                self,
-                "Operator Mono Glass",
-                "Operator command mood with equalized footer states",
-                Exploratory,
-                MainMenuRowKind::OperatorMonoGlass,
-                footer(
-                    accent_button(0x08, 0x16, 0x48, 0x20),
-                    0x14,
-                    metrics(
-                        15.0, 7.0, 5.0, 5.0, 2.0, 7.0, 8.0, 12.0, 5.0, 2.0, 6.0, 12.0,
-                    ),
-                ),
-                18.0,
-                11.0,
-                11.0,
-                34.0,
-                10.0,
-                44.0,
-                34.0,
-                28.0,
-                4.0,
-                2.0,
-                15.0,
-                4.0,
-                8.0,
-                20.0,
-                16.0,
-                20.0,
-                6.0,
-                14.0,
-                20.0,
-                12.0,
-                16.0,
-                12.0,
-                16.0,
-                0x90,
-                12.0,
-                11.5,
-                10.0,
-                1.0,
-                0x44,
-                0x24,
-                0x10,
+            MainMenuThemeVariant::InfoBarUltraQuiet => header_info_bar_tokens(
+                Split, 0.34, 13.0, 7.0, 0.0, 0.0, 0.0, 0x00, 0x00, true, true, false, "·",
             ),
+        }
+    }
+
+    pub fn header_info_bar_signature(self) -> HeaderInfoBarSignature {
+        let tokens = self.header_info_bar();
+        let q = |value: f32| (value * 100.0).round() as u32;
+        HeaderInfoBarSignature {
+            layout: tokens.layout,
+            font_size: q(tokens.font_size),
+            opacity: q(tokens.opacity),
+            key_opacity: q(tokens.key_opacity),
+            height_px: q(tokens.height_px),
+            gap_px: q(tokens.gap_px),
+            pill_padding_x: q(tokens.pill_padding_x),
+            pill_padding_y: q(tokens.pill_padding_y),
+            pill_radius: q(tokens.pill_radius),
+            pill_border_alpha: tokens.pill_border_alpha,
+            pill_bg_alpha: tokens.pill_bg_alpha,
+            show_cwd: tokens.show_cwd,
+            show_agent_model: tokens.show_agent_model,
+            show_keys: tokens.show_keys,
+            separator_len: tokens.separator.len(),
         }
     }
 
@@ -1150,7 +456,152 @@ impl MainMenuThemeVariant {
     }
 }
 
-static CURRENT_MAIN_MENU_THEME: AtomicU8 = AtomicU8::new(MainMenuThemeVariant::TahoeClear as u8);
+fn header_info_bar_tokens(
+    layout: HeaderInfoBarLayout,
+    key_opacity: f32,
+    height_px: f32,
+    gap_px: f32,
+    pill_padding_x: f32,
+    pill_padding_y: f32,
+    pill_radius: f32,
+    pill_border_alpha: u32,
+    pill_bg_alpha: u32,
+    show_cwd: bool,
+    show_agent_model: bool,
+    show_keys: bool,
+    separator: &'static str,
+) -> HeaderInfoBarTokens {
+    HeaderInfoBarTokens {
+        layout,
+        font_family: "JetBrains Mono",
+        font_size: 10.5,
+        opacity: 0.34,
+        key_opacity,
+        height_px,
+        gap_px,
+        pill_padding_x,
+        pill_padding_y,
+        pill_radius,
+        pill_border_alpha,
+        pill_bg_alpha,
+        show_cwd,
+        show_agent_model,
+        show_keys,
+        separator,
+    }
+}
+
+fn base_main_menu_theme_def(
+    variant: MainMenuThemeVariant,
+    header_info_bar: HeaderInfoBarTokens,
+) -> MainMenuThemeDef {
+    let footer = FooterTheme {
+        text_accent: false,
+        keycap_accent: false,
+        divider_accent: false,
+        divider_alpha: 0x0A,
+        button: FooterButtonTheme {
+            rest: None,
+            hover: 0x10,
+            active: 0x24,
+            border_alpha: 0x12,
+            uses_accent: false,
+        },
+        metrics: FooterMetricsTokens {
+            side_inset_px: 14.0,
+            item_gap_px: 6.0,
+            content_gap: 4.0,
+            button_padding_x: 4.0,
+            button_padding_y: 2.0,
+            run_button_padding_x: 6.0,
+            button_radius: 6.0,
+            label_font_size: 12.0,
+            keycap_padding_x: 5.0,
+            keycap_padding_y: 2.0,
+            keycap_radius: 6.0,
+            keycap_font_size: 12.0,
+        },
+    };
+
+    MainMenuThemeDef {
+        variant,
+        name: variant.info_bar_name(),
+        intent: variant.info_bar_intent(),
+        tier: MainMenuThemeTier::TahoeClose,
+        row_kind: MainMenuRowKind::IconTile,
+        shell: MainMenuShellTokens {
+            content_inset_x: 16.0,
+            content_inset_bottom: 16.0 * 0.35,
+            header_padding_x: 16.0,
+            header_padding_y: 4.0,
+            header_gap: 4.0,
+            divider_margin_x: 16.0,
+            divider_height: 1.0,
+            divider_alpha: footer.divider_alpha,
+        },
+        search: MainMenuSearchTokens {
+            height: 30.0,
+            radius: 9.0,
+            text_inset_x: (16.0_f32 * 0.55).clamp(8.0, 16.0),
+            text_inset_y: 0.0,
+            surface_alpha: 0x00,
+            border_alpha: 0x00,
+            font_size: 15.0,
+            font_weight: FontWeight(430.0),
+        },
+        list: MainMenuListTokens {
+            item_height: 40.0,
+            section_header_height: 32.0,
+            first_section_header_height: 26.0,
+            average_scroll_height: ((40.0 * 3.0) + 32.0) / 4.0,
+        },
+        row: MainMenuRowTokens {
+            outer_padding_x: 4.0,
+            outer_padding_y: 2.0,
+            inner_padding_x: 14.0,
+            inner_padding_y: 4.0,
+            radius: 8.0,
+            name_desc_gap: (40.0_f32 / 18.0).clamp(1.5, 3.5),
+            icon_text_gap: (20.0_f32 * 0.42).clamp(7.0, 12.0),
+            accessory_gap: (14.0_f32 * 0.45).clamp(5.0, 9.0),
+            selected_border_width: 0.0,
+            selected_border_alpha: 0x00,
+            selected_fill_alpha: 0x20,
+            hover_fill_alpha: 0x12,
+        },
+        icon: MainMenuIconTokens {
+            container_size: 20.0,
+            svg_size: 16.0,
+            tile_size: 20.0,
+            tile_radius: 7.0,
+            tile_fill_alpha: 0x80,
+            tile_border_alpha: 0x00,
+        },
+        typography: MainMenuTypographyTokens {
+            name_font_size: 14.0,
+            name_line_height: 20.0,
+            name_weight: FontWeight(450.0),
+            selected_name_weight: FontWeight::MEDIUM,
+            desc_font_size: 12.0,
+            desc_line_height: 16.0,
+            desc_weight: FontWeight::NORMAL,
+            section_font_size: 12.0,
+            section_line_height: 16.0,
+            section_weight: FontWeight::NORMAL,
+        },
+        metadata: MainMenuMetadataTokens {
+            metadata_alpha: 0x73,
+            type_accessory_size: 12.0,
+            source_font_size: 11.0,
+            badge_font_size: 10.0,
+            keycap_font_size: footer.metrics.keycap_font_size,
+        },
+        footer,
+        header_info_bar,
+    }
+}
+
+static CURRENT_MAIN_MENU_THEME: AtomicU8 = AtomicU8::new(MainMenuThemeVariant::InfoBarBase as u8);
 
 pub fn set_current_main_menu_theme(theme: MainMenuThemeVariant) {
     CURRENT_MAIN_MENU_THEME.store(theme as u8, Ordering::Relaxed);
@@ -1166,7 +617,7 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn main_menu_theme_has_exactly_fifteen_variants() {
+    fn header_info_bar_has_exactly_fifteen_variants() {
         assert_eq!(
             MainMenuThemeVariant::all().len(),
             MainMenuThemeVariant::COUNT
@@ -1178,14 +629,14 @@ mod tests {
     }
 
     #[test]
-    fn main_menu_theme_cycles_forward_and_backward() {
+    fn header_info_bar_cycles_forward_and_backward() {
         assert_eq!(
-            MainMenuThemeVariant::OperatorMonoGlass.next(),
-            MainMenuThemeVariant::TahoeClear
+            MainMenuThemeVariant::InfoBarUltraQuiet.next(),
+            MainMenuThemeVariant::InfoBarBase
         );
         assert_eq!(
-            MainMenuThemeVariant::TahoeClear.prev(),
-            MainMenuThemeVariant::OperatorMonoGlass
+            MainMenuThemeVariant::InfoBarBase.prev(),
+            MainMenuThemeVariant::InfoBarUltraQuiet
         );
         let mut v = MainMenuThemeVariant::default();
         for _ in 0..MainMenuThemeVariant::COUNT {
@@ -1195,11 +646,13 @@ mod tests {
     }
 
     #[test]
-    fn theme_names_and_placeholders_are_identifiable() {
+    fn header_names_and_placeholders_are_identifiable() {
         for theme in MainMenuThemeVariant::all() {
             assert!(!theme.name().trim().is_empty());
             assert!(theme.placeholder().contains(theme.name()));
+            assert!(theme.placeholder().contains("Header"));
             assert!(theme.placeholder().contains("/15"));
+            assert!(!theme.placeholder().contains("Theme"));
         }
     }
 
@@ -1216,10 +669,10 @@ mod tests {
     }
 
     #[test]
-    fn default_is_tahoe_clear_and_first() {
+    fn default_is_base_info_bar_and_first() {
         assert_eq!(
             MainMenuThemeVariant::default(),
-            MainMenuThemeVariant::TahoeClear
+            MainMenuThemeVariant::InfoBarBase
         );
         assert_eq!(MainMenuThemeVariant::default().index(), 0);
     }
@@ -1234,41 +687,38 @@ mod tests {
     }
 
     #[test]
-    fn every_theme_has_a_unique_geometry_signature() {
-        let mut signatures = HashSet::new();
+    fn every_variant_preserves_base_non_header_geometry() {
+        let base = MainMenuThemeVariant::InfoBarBase.geometry_signature();
         for theme in MainMenuThemeVariant::all() {
-            assert!(
-                signatures.insert(theme.geometry_signature()),
-                "{theme:?} reused a main-menu geometry signature"
+            assert_eq!(
+                theme.geometry_signature(),
+                base,
+                "{theme:?} changed base geometry"
             );
         }
     }
 
     #[test]
-    fn tahoe_themes_are_close_but_not_identical() {
-        let tahoe = &MainMenuThemeVariant::all()[0..5];
-        let row_heights = tahoe
-            .iter()
-            .map(|theme| theme.def().list.item_height as u32)
-            .collect::<HashSet<_>>();
-        let search_heights = tahoe
-            .iter()
-            .map(|theme| theme.def().search.height as u32)
-            .collect::<HashSet<_>>();
-        assert!(row_heights.len() >= 4);
-        assert!(search_heights.len() >= 3);
-        assert!(tahoe
-            .iter()
-            .all(|theme| matches!(theme.def().tier, super::MainMenuThemeTier::TahoeClose)));
+    fn every_variant_has_distinct_header_info_bar_signature() {
+        let mut signatures = HashSet::new();
+        for theme in MainMenuThemeVariant::all() {
+            assert!(
+                signatures.insert(theme.header_info_bar_signature()),
+                "{theme:?} reused a header info-bar signature"
+            );
+        }
     }
 
     #[test]
-    fn exploratory_themes_have_larger_structural_differences() {
-        let compact = MainMenuThemeVariant::ProConsole.def();
-        let luxe = MainMenuThemeVariant::SpotlightLuxe.def();
-        assert!(luxe.list.item_height - compact.list.item_height >= 16.0);
-        assert!(luxe.search.height - compact.search.height >= 14.0);
-        assert!(luxe.shell.content_inset_x - compact.shell.content_inset_x >= 16.0);
-        assert!(luxe.icon.container_size - compact.icon.container_size >= 10.0);
+    fn header_info_bar_uses_mono_and_reduced_opacity() {
+        for theme in MainMenuThemeVariant::all() {
+            let tokens = theme.def().header_info_bar;
+            assert_eq!(tokens.font_family, "JetBrains Mono");
+            assert_eq!(tokens.font_size, 10.5);
+            assert_eq!(tokens.opacity, 0.34);
+            assert!(tokens.height_px <= 22.0);
+            assert!(tokens.show_cwd);
+            assert!(tokens.show_agent_model);
+        }
     }
 }

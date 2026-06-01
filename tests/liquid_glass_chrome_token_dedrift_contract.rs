@@ -32,8 +32,9 @@ fn chrome_tokens_define_canonical_liquid_glass_vocabulary() {
 #[test]
 fn button_ghost_height_references_shared_min_hit_token() {
     assert!(
-        BUTTON_TYPES
-            .contains("pub const BUTTON_GHOST_HEIGHT: f32 = crate::ui::chrome::LIQUID_GLASS_MIN_HIT_PX;"),
+        BUTTON_TYPES.contains(
+            "pub const BUTTON_GHOST_HEIGHT: f32 = crate::ui::chrome::LIQUID_GLASS_MIN_HIT_PX;"
+        ),
         "BUTTON_GHOST_HEIGHT must reference the shared Liquid Glass min hit token, not a bare 28.0 literal"
     );
 }
@@ -65,12 +66,11 @@ fn footer_action_button_radius_references_shared_compact_token() {
 #[test]
 fn footer_action_item_gap_stays_pinned_literal() {
     // FOOTER_ACTION_ITEM_GAP_PX is a standalone, separately test-pinned gap with
-    // no shared-token meaning; the pin guards against ACCIDENTAL drift. It was
-    // deliberately raised 6 -> 12pt (slice 5b, Oracle-Session
-    // tahoe-apple-guideline-metrics) to meet Apple's soft ~12pt bezel-padding
-    // floor — the measured "footer lacks padding" concern.
+    // no shared-token meaning; the pin guards against ACCIDENTAL drift. Labels
+    // are no longer bordered chips, so the footer returns to the compact 6pt
+    // rhythm while actual keycaps keep their borders.
     assert!(
-        FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 12.0;"),
-        "FOOTER_ACTION_ITEM_GAP_PX must remain its pinned 12.0 literal"
+        FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 6.0;"),
+        "FOOTER_ACTION_ITEM_GAP_PX must remain its pinned 6.0 literal"
     );
 }

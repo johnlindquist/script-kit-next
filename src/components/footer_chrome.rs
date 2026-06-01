@@ -23,13 +23,10 @@ pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_SEMICOLON_GLYPH_NUDGE_Y_PX: f32 = -1.0;
 pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;
-// Inter-item gap for footer hint chips. Raised 6 -> 12pt (slice 5b,
-// Oracle-Session tahoe-apple-guideline-metrics) to meet Apple's soft ~12pt
-// bezel-padding floor — the measured "footer lacks padding" concern. SOFT: footer
-// hint chips are compact, non-bezeled controls Apple's HIG does not size
-// explicitly, and there is no measured-native footer-gap baseline, so this is a
-// guideline-aligned taste change, not a hard Apple constant.
-pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 12.0;
+// Inter-item gap for footer hint chips. Kept compact now that only actual
+// keycaps carry borders; label text no longer needs the wider bordered-chip
+// spacing rhythm.
+pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 6.0;
 pub(crate) const FOOTER_ACTION_CONTENT_GAP_PX: f32 = 4.0;
 pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX: f32 = 4.0;
 pub(crate) const FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX: f32 = 6.0;
@@ -49,7 +46,6 @@ pub(crate) const FOOTER_SHORTCUT_LAYOUT_MEASUREMENT_SOURCE: &str =
 pub(crate) const FOOTER_CHIP_BORDER_ALPHA: f32 = 0.18;
 pub(crate) const FOOTER_CHIP_BORDER_HOVER_ALPHA: f32 = 0.34;
 pub(crate) const FOOTER_CHIP_BORDER_SELECTED_ALPHA: f32 = 0.40;
-pub(crate) const FOOTER_LABELCAP_BORDER_ALPHA: f32 = FOOTER_CHIP_BORDER_ALPHA;
 pub(crate) const FOOTER_MIC_ICON_TOKEN: &str = "mic";
 pub(crate) const FOOTER_MIC_ICON_PATH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -92,6 +88,14 @@ pub(crate) struct FooterRailChrome {
 
 pub(crate) enum FooterHintKeyMode {
     Shortcut,
+}
+
+pub(crate) struct FooterHintButtonSpec {
+    pub(crate) label: SharedString,
+    pub(crate) key: SharedString,
+    pub(crate) slot_width_px: Option<f32>,
+    pub(crate) key_first: bool,
+    pub(crate) justify: FooterHintContentJustify,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -236,12 +240,6 @@ pub(crate) fn footer_keycap_border_hover_color(theme: &Theme) -> gpui::Hsla {
     )
 }
 
-pub(crate) fn footer_labelcap_border_color(theme: &Theme) -> gpui::Hsla {
-    theme.colors.text.primary.with_opacity(
-        FOOTER_LABELCAP_BORDER_ALPHA.max(themed_footer_button_border_alpha(theme, false)),
-    )
-}
-
 pub(crate) fn split_footer_shortcut(shortcut: &str) -> Vec<String> {
     let s = shortcut.trim();
     if s.is_empty() {
@@ -363,6 +361,26 @@ pub(crate) fn render_footer_hint_content_constrained(
         key_first,
         justify,
     )
+}
+
+pub(crate) fn render_footer_hint_button_like(
+    spec: FooterHintButtonSpec,
+    theme: &Theme,
+) -> AnyElement {
+    match spec.slot_width_px {
+        Some(slot_width_px) => render_footer_hint_content_constrained(
+            spec.label,
+            spec.key,
+            FooterHintKeyMode::Shortcut,
+            theme,
+            slot_width_px,
+            spec.key_first,
+            spec.justify,
+        ),
+        None => {
+            render_footer_hint_content(spec.label, spec.key, FooterHintKeyMode::Shortcut, theme)
+        }
+    }
 }
 
 fn render_footer_hint_content_impl(
@@ -619,13 +637,12 @@ fn render_footer_labelcap(
 
 fn render_footer_labelcap_constrained(
     label: SharedString,
-    theme: &Theme,
+    _theme: &Theme,
     footer_text: gpui::Rgba,
     full_text: gpui::Hsla,
     max_width_px: Option<f32>,
     force_width: bool,
 ) -> AnyElement {
-    let hover_border = footer_keycap_border_hover_color(theme);
     let metrics = current_main_menu_footer_metrics();
     let mut cap = div()
         .flex_none()
@@ -636,8 +653,6 @@ fn render_footer_labelcap_constrained(
         .px(px(metrics.keycap_padding_x))
         .py(px(metrics.keycap_padding_y))
         .rounded(px(metrics.keycap_radius))
-        .border_1()
-        .border_color(footer_labelcap_border_color(theme))
         .flex()
         .items_center()
         .justify_center()
@@ -645,9 +660,7 @@ fn render_footer_labelcap_constrained(
         .font_weight(FOOTER_HINT_FONT_WEIGHT_GPUI)
         .text_size(px(metrics.label_font_size))
         .text_color(footer_text)
-        .group_hover("footer-action-button", move |s| {
-            s.text_color(full_text).border_color(hover_border)
-        });
+        .group_hover("footer-action-button", move |s| s.text_color(full_text));
 
     if let Some(max_width_px) = max_width_px {
         cap = cap.max_w(px(max_width_px)).overflow_hidden();
@@ -956,7 +969,7 @@ mod tests {
 
     #[test]
     fn footer_action_chrome_tokens_match_native_footer_contract() {
-        assert_eq!(FOOTER_ACTION_ITEM_GAP_PX, 12.0);
+        assert_eq!(FOOTER_ACTION_ITEM_GAP_PX, 6.0);
         assert_eq!(FOOTER_ACTION_CONTENT_GAP_PX, 4.0);
         assert_eq!(FOOTER_ACTION_CONTENT_PADDING_X_PX, 4.0);
         assert_eq!(FOOTER_ACTION_BUTTON_RADIUS_PX, 10.0);

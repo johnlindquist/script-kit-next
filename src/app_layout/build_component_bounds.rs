@@ -11,15 +11,11 @@ impl ScriptListApp {
         let height = window_size.height;
         let menu_def = self.current_main_menu_theme.def();
 
-        // Layout constants from panel.rs and list_item.rs
-        // Header: py(HEADER_PADDING_Y=8) + shared main-view content + py(8) + divider(1px)
-        const HEADER_PADDING_Y: f32 = 8.0;
-        const HEADER_PADDING_X: f32 = 16.0;
-        const BUTTON_HEIGHT: f32 = 28.0;
-        const DIVIDER_HEIGHT: f32 = 1.0;
+        // Header bounds follow the same active main-menu theme tokens as the
+        // shared rendered chrome.
 
         // Content padding matches HEADER_PADDING_X
-        let content_padding = HEADER_PADDING_X;
+        let content_padding = menu_def.shell.header_padding_x;
 
         // Determine the current view type and build appropriate bounds
         let view_name = match &self.current_view {
@@ -77,13 +73,15 @@ impl ScriptListApp {
         };
 
         let main_view_has_context_zone = matches!(self.current_view, AppView::ScriptList);
-        const MAIN_VIEW_CONTEXT_ZONE_HEIGHT: f32 = 20.0;
+        let main_view_context_zone_height = menu_def.header_info_bar.height_px;
         let main_view_header_content_height = if main_view_has_context_zone {
-            BUTTON_HEIGHT + menu_def.shell.header_gap + MAIN_VIEW_CONTEXT_ZONE_HEIGHT
+            menu_def.search.height + menu_def.shell.header_gap + main_view_context_zone_height
         } else {
-            BUTTON_HEIGHT
+            menu_def.search.height
         };
-        let header_height = px(HEADER_PADDING_Y * 2.0 + main_view_header_content_height + DIVIDER_HEIGHT);
+        let header_height = px(menu_def.shell.header_padding_y * 2.0
+            + main_view_header_content_height
+            + menu_def.shell.divider_height);
         let content_top = header_height;
         let content_height = height - header_height;
 
@@ -97,7 +95,10 @@ impl ScriptListApp {
                 },
             )
             .with_type(ComponentType::Header)
-            .with_padding(BoxModel::symmetric(HEADER_PADDING_Y, content_padding)),
+            .with_padding(BoxModel::symmetric(
+                menu_def.shell.header_padding_y,
+                content_padding,
+            )),
         );
 
         // Build view-specific bounds
@@ -441,10 +442,13 @@ impl ScriptListApp {
                     ComponentBounds::new(
                         "MainViewContextZone",
                         gpui::Bounds {
-                            origin: gpui::point(px(menu_def.shell.header_padding_x), px(HEADER_PADDING_Y)),
+                            origin: gpui::point(
+                                px(menu_def.shell.header_padding_x),
+                                px(menu_def.shell.header_padding_y),
+                            ),
                             size: gpui::size(
                                 (width - px(menu_def.shell.header_padding_x * 2.0)).max(px(0.)),
-                                px(MAIN_VIEW_CONTEXT_ZONE_HEIGHT),
+                                px(main_view_context_zone_height),
                             ),
                         },
                     )
@@ -456,15 +460,14 @@ impl ScriptListApp {
             // the rendered chrome, so the input aligns with the app shell.
             // The input is vertically centered in the header (which has 28px content height)
             // Input height is ~22px (CURSOR_HEIGHT_LG=18 + CURSOR_MARGIN_Y*2=4)
-            const INPUT_HEIGHT: f32 = 22.0;
+            let input_height = menu_def.search.height;
             let input_x = px(menu_def.shell.header_padding_x);
             let context_offset_y = if main_view_has_context_zone {
-                MAIN_VIEW_CONTEXT_ZONE_HEIGHT + menu_def.shell.header_gap
+                main_view_context_zone_height + menu_def.shell.header_gap
             } else {
                 0.0
             };
-            let input_y =
-                px(HEADER_PADDING_Y + context_offset_y + (BUTTON_HEIGHT - INPUT_HEIGHT) / 2.0);
+            let input_y = px(menu_def.shell.header_padding_y + context_offset_y);
             let input_width = (width - (input_x * 2.)).max(px(0.));
 
             bounds.push(
@@ -472,7 +475,7 @@ impl ScriptListApp {
                     "MainViewInput",
                     gpui::Bounds {
                         origin: gpui::point(input_x, input_y),
-                        size: gpui::size(input_width, px(INPUT_HEIGHT)),
+                        size: gpui::size(input_width, px(input_height)),
                     },
                 )
                 .with_type(ComponentType::Input)
@@ -485,9 +488,7 @@ impl ScriptListApp {
                 .min(menu_def.search.height)
                 .max(16.0);
             let state_icon_x = input_x
-                + px(crate::components::main_view_chrome::main_view_state_icon_left(
-                    menu_def,
-                ));
+                + px(crate::components::main_view_chrome::main_view_state_icon_left(menu_def));
             let state_icon_y =
                 input_y + px(((menu_def.search.height - state_icon_size) * 0.5).max(0.0));
             bounds.push(

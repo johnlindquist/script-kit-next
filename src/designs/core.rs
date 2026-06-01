@@ -21,10 +21,10 @@ pub use accent_variation::{
 #[allow(unused_imports)]
 pub use main_menu_theme::{
     current_main_menu_theme, set_current_main_menu_theme, FooterButtonTheme, FooterMetricsTokens,
-    FooterTheme, MainMenuGeometrySignature, MainMenuIconTokens, MainMenuListTokens,
-    MainMenuMetadataTokens, MainMenuRowKind, MainMenuRowTokens, MainMenuSearchTokens,
-    MainMenuShellTokens, MainMenuThemeDef, MainMenuThemeTier, MainMenuThemeVariant,
-    MainMenuTypographyTokens,
+    FooterTheme, HeaderInfoBarLayout, HeaderInfoBarTokens, MainMenuGeometrySignature,
+    MainMenuIconTokens, MainMenuListTokens, MainMenuMetadataTokens, MainMenuRowKind,
+    MainMenuRowTokens, MainMenuSearchTokens, MainMenuShellTokens, MainMenuThemeDef,
+    MainMenuThemeTier, MainMenuThemeVariant, MainMenuTypographyTokens,
 };
 // `FooterButtonFill` is part of the accent-variation API surface; re-exported for
 // callers that name the type even though the footer consumes it field-by-field.

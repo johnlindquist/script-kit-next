@@ -121,13 +121,13 @@ impl ScriptListApp {
         // Layout constants (same as build_component_bounds)
         use crate::ui::chrome as chrome_tokens;
         const BUTTON_HEIGHT: f32 = 28.0;
-        const MAIN_VIEW_CONTEXT_ZONE_HEIGHT: f32 = 20.0;
         let main_view_has_context_zone = matches!(self.current_view, AppView::ScriptList);
         let shell_horizontal_padding = shell.header_padding_x;
+        let main_view_context_zone_height = menu_def.header_info_bar.height_px;
         let header_content_height = if main_view_has_context_zone {
-            MAIN_VIEW_CONTEXT_ZONE_HEIGHT + shell.header_gap + BUTTON_HEIGHT
+            main_view_context_zone_height + shell.header_gap + search.height
         } else {
-            BUTTON_HEIGHT
+            search.height
         };
         let header_height =
             shell.header_padding_y * 2.0 + header_content_height + shell.divider_height;
@@ -1732,7 +1732,7 @@ impl ScriptListApp {
         // Search input in header
         let input_height = search.height;
         let context_offset_y = if main_view_has_context_zone {
-            MAIN_VIEW_CONTEXT_ZONE_HEIGHT + shell.header_gap
+            main_view_context_zone_height + shell.header_gap
         } else {
             0.0
         };
@@ -1743,7 +1743,7 @@ impl ScriptListApp {
                         shell_horizontal_padding,
                         shell.header_padding_y,
                         (window_width - (shell_horizontal_padding * 2.0)).max(0.0),
-                        MAIN_VIEW_CONTEXT_ZONE_HEIGHT,
+                        main_view_context_zone_height,
                     )
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_FUNCTIONAL,
@@ -1761,7 +1761,7 @@ impl ScriptListApp {
                     ),
             );
         }
-        let input_y = shell.header_padding_y + context_offset_y + (BUTTON_HEIGHT - input_height) / 2.0;
+        let input_y = shell.header_padding_y + context_offset_y;
         let input_width = (window_width - (shell_horizontal_padding * 2.0)).max(0.0);
         let input_text_inset_left =
             crate::components::main_view_chrome::main_view_input_text_inset_left(menu_def);

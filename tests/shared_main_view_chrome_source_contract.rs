@@ -27,7 +27,7 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(shared.contains("pub(crate) struct MainViewColumnMetrics"));
     assert!(shared.contains("pub(crate) fn main_view_content_columns"));
     assert!(shared.contains("pub(crate) fn main_view_text_column_x"));
-    assert!(shared.contains("main_view_content_columns(def).input_text_inset_left"));
+    assert!(shared.contains("main_view_state_icon_slot_size(def)"));
     assert!(
         !shared.contains("pre_main") && !shared.contains("post_main"),
         "shared main-view chrome should expose exactly one main slot so ScriptList and Agent Chat only swap the main section"
@@ -63,6 +63,19 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(shared.contains("search.text_inset_x"));
     assert!(shared.contains("def.icon.container_size"));
     assert!(shared.contains("def.row.icon_text_gap"));
+    assert!(shared.contains("def.header_info_bar"));
+    assert!(shared.contains("render_footer_hint_button_like"));
+    assert!(shared.contains("FooterHintButtonSpec"));
+    assert!(shared.contains(".h(px(info.height_px))"));
+    assert!(shared.contains("zone = zone.justify_between();"));
+    assert!(shared.contains("def.footer.button.hover"));
+    assert!(!shared.contains("theme.colors.accent.selected << 8"));
+    assert!(
+        !shared.contains(
+            "font_weight(gpui::FontWeight::SEMIBOLD)\n                        .child(\"Tab\")"
+        ),
+        "header Tab text should use the footer key/button renderer instead of local styling"
+    );
 
     assert!(script_list.contains("render_main_view_input_shell"));
     assert!(script_list.contains("render_main_view_context_zone"));
@@ -102,6 +115,28 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
 }
 
 #[test]
+fn header_info_bar_reuses_footer_key_button_components() {
+    let shared = read_source("src/components/main_view_chrome.rs");
+    let footer = read_source("src/components/footer_chrome.rs");
+
+    assert!(footer.contains("pub(crate) struct FooterHintButtonSpec"));
+    assert!(footer.contains("pub(crate) fn render_footer_hint_button_like"));
+    assert!(shared.contains("render_footer_hint_button_like"));
+    assert!(shared.contains("FooterHintButtonSpec"));
+    assert!(shared.contains("label: cwd_label.clone().into()"));
+    assert!(shared.contains("key: \"Tab\".into()"));
+    assert!(shared.contains("key: \"Shift+Tab\".into()"));
+    assert!(
+        shared.contains(".opacity(info.key_opacity.clamp(0.0, 1.0))"),
+        "header key affordance may vary opacity but must wrap the shared footer renderer"
+    );
+    assert!(
+        !shared.contains(".text_color(key_color)") && !shared.contains(".child(\"Shift+Tab\"),"),
+        "header keys must not carry bespoke color/weight/text rendering that can drift from footer key buttons"
+    );
+}
+
+#[test]
 fn shared_main_view_columns_own_text_column_math() {
     let shared = read_source("src/components/main_view_chrome.rs");
 
@@ -111,9 +146,13 @@ fn shared_main_view_columns_own_text_column_math() {
     );
     assert!(
         shared.contains(
-            "main_view_row_leading_x(def) + def.icon.container_size + def.row.icon_text_gap"
+            "main_view_row_leading_x(def) + main_view_state_icon_slot_size(def) + def.row.icon_text_gap"
         ),
-        "text column should be row leading plus icon slot plus icon/text gap"
+        "input text column should be row leading plus rendered state-icon slot plus icon/text gap"
+    );
+    assert!(
+        shared.contains("def.icon.container_size.min(def.search.height).max(16.0)"),
+        "state icon slot must match the rendered/clamped logo size so the input placeholder does not drift right"
     );
     assert!(shared.contains("text_column_x"));
     assert!(
@@ -186,7 +225,7 @@ fn script_list_no_longer_owns_local_main_view_chrome() {
 }
 
 #[test]
-fn acp_composer_shell_consumes_main_menu_theme_geometry() {
+fn acp_composer_shell_consumes_main_menu_header_geometry() {
     let acp = read_source("src/ai/acp/view.rs");
     let ui_variant = read_source("src/ai/acp/ui_variant.rs");
 
