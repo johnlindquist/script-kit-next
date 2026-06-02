@@ -341,6 +341,8 @@ pub(crate) fn render_main_view_main_slot(def: MainMenuThemeDef, main: AnyElement
         .w_full()
         .pb(px(def.shell.content_inset_bottom))
         .overflow_hidden()
+        .flex()
+        .flex_col()
         .child(main)
         .into_any_element()
 }

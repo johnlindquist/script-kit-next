@@ -1,6 +1,7 @@
 const TRANSCRIPT_SOURCE: &str = include_str!("../src/ai/acp/components/transcript.rs");
 const VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 const BUILD_LAYOUT_INFO_SOURCE: &str = include_str!("../src/app_layout/build_layout_info.rs");
+const MAIN_VIEW_CHROME_SOURCE: &str = include_str!("../src/components/main_view_chrome.rs");
 
 fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     let start_index = source
@@ -82,6 +83,55 @@ fn transcript_render_does_not_reset_list_state_each_frame() {
             && body.contains(".with_sizing_behavior(ListSizingBehavior::Auto)")
             && body.contains(".vertical_scrollbar(&self.list_state)"),
         "AcpTranscript render must size the virtualized list and keep transcript scrolling wired"
+    );
+}
+
+#[test]
+fn main_view_main_slot_is_a_flex_column_viewport() {
+    let body = source_between(
+        MAIN_VIEW_CHROME_SOURCE,
+        "pub(crate) fn render_main_view_main_slot(",
+        "\n}\n\npub(crate) fn main_view_input_text_inset_left",
+    );
+
+    assert!(
+        body.contains(".flex_1()")
+            && body.contains(".min_h(px(0.))")
+            && body.contains(".w_full()")
+            && body.contains(".overflow_hidden()"),
+        "MainViewMain must remain a bounded viewport"
+    );
+    assert!(
+        body.contains(".flex()") && body.contains(".flex_col()"),
+        "MainViewMain must be a flex column so ACP transcript descendants receive real height"
+    );
+
+    let flex = body.find(".flex()").expect("missing flex");
+    let child = body.find(".child(main)").expect("missing child(main)");
+    assert!(
+        flex < child,
+        "MainViewMain must become a flex container before mounting the ACP body"
+    );
+}
+
+#[test]
+fn acp_middle_area_is_a_bounded_transcript_viewport() {
+    let body = source_between(
+        VIEW_SOURCE,
+        "fn render_acp_middle_area(",
+        "\n    pub(crate) fn open_profile_picker(",
+    );
+
+    assert!(
+        body.contains(".child(self.ensure_transcript(cx).into_any_element())"),
+        "ACP middle area must mount the transcript"
+    );
+    assert!(
+        body.contains(".h_full()")
+            && body.contains(".overflow_hidden()")
+            && body.contains(".flex()")
+            && body.contains(".flex_col()"),
+        "ACP middle area must provide a real flex viewport for the virtualized transcript"
     );
 }
 

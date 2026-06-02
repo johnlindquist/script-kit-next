@@ -7792,6 +7792,7 @@ impl AcpChatView {
                 .min_h(px(0.0))
                 .w_full()
                 .h_full()
+                .overflow_hidden()
                 .child(crate::components::render_acp_empty_guidance(theme))
                 .into_any_element();
         }
@@ -7799,6 +7800,9 @@ impl AcpChatView {
             return div()
                 .flex_1()
                 .min_h(px(0.0))
+                .w_full()
+                .h_full()
+                .overflow_hidden()
                 .flex()
                 .flex_row()
                 .child(self.ensure_transcript(cx).into_any_element())
@@ -7815,6 +7819,10 @@ impl AcpChatView {
             .flex_1()
             .min_h(px(0.0))
             .w_full()
+            .h_full()
+            .overflow_hidden()
+            .flex()
+            .flex_col()
             .child(self.ensure_transcript(cx).into_any_element())
             .into_any_element()
     }
@@ -13262,6 +13270,8 @@ impl Render for AcpChatView {
                 .flex_1()
                 .min_h(px(0.0))
                 .w_full()
+                .h_full()
+                .overflow_hidden()
                 .flex()
                 .flex_col()
                 .children(pre_main)
