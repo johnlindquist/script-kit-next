@@ -646,10 +646,15 @@ impl ScriptListApp {
             .embedded_acp_chat
             .as_ref()
             .is_some_and(|entity| entity.read(cx).has_retry_request());
+        let cached_acp_is_setup_mode = self
+            .embedded_acp_chat
+            .as_ref()
+            .is_some_and(|entity| entity.read(cx).is_setup_mode());
 
         if Self::should_reuse_embedded_acp_view_for_open(
             normalized_entry_intent.as_deref(),
             has_cached_retry_request,
+            cached_acp_is_setup_mode,
         ) && self.try_reuse_embedded_acp_view(entry_intent.clone(), ui_variant, cx)
         {
             return;
@@ -1118,6 +1123,18 @@ impl ScriptListApp {
             .filter(|value| !value.is_empty());
         let source_view = self.current_view.clone();
 
+        if normalized_intent.is_some() && is_setup_mode {
+            self.embedded_acp_chat = None;
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "tab_ai_embedded_acp_reuse_rejected_setup_mode",
+                source_view = ?source_view,
+                auto_submit = true,
+                acp_chat_ui_variant = ui_variant.state_id(),
+            );
+            return false;
+        }
+
         let trigger = self.tab_ai_harness_script_list_trigger;
         entity.update(cx, |chat, cx| {
             chat.opened_via_transient_trigger = trigger;
@@ -1149,8 +1166,9 @@ impl ScriptListApp {
     fn should_reuse_embedded_acp_view_for_open(
         entry_intent: Option<&str>,
         has_cached_retry_request: bool,
+        cached_acp_is_setup_mode: bool,
     ) -> bool {
-        entry_intent.is_some() && !has_cached_retry_request
+        entry_intent.is_some() && !has_cached_retry_request && !cached_acp_is_setup_mode
     }
 
     fn take_prewarmed_acp_chat_for_launch(
@@ -5996,16 +6014,23 @@ mod tests {
     }
 
     #[test]
-    fn embedded_acp_reuse_requires_entry_intent_and_no_cached_retry_request() {
+    fn embedded_acp_reuse_requires_entry_intent_no_retry_and_non_setup_cache() {
         assert!(!ScriptListApp::should_reuse_embedded_acp_view_for_open(
-            None, false,
+            None, false, false,
         ));
         assert!(ScriptListApp::should_reuse_embedded_acp_view_for_open(
             Some("explain this"),
             false,
+            false,
         ));
         assert!(!ScriptListApp::should_reuse_embedded_acp_view_for_open(
             Some("switch agent"),
+            true,
+            false,
+        ));
+        assert!(!ScriptListApp::should_reuse_embedded_acp_view_for_open(
+            Some("explain this"),
+            false,
             true,
         ));
     }
@@ -6021,6 +6046,32 @@ mod tests {
                 "chat.submit_reused_entry_intent(intent.clone(), cx);",
             )),
             "reused ACP entry intents must clear stale composer state before submit"
+        );
+    }
+
+    #[test]
+    fn entry_intent_does_not_reuse_cached_setup_mode_acp_view() {
+        let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(
+            include_str!("mod.rs"),
+            "fn try_reuse_embedded_acp_view(",
+        ));
+        assert!(
+            body.contains(&tab_ai_contract_compact(
+                "if normalized_intent.is_some() && is_setup_mode {"
+            )),
+            "non-empty entry intents must reject setup-mode ACP cache reuse"
+        );
+        assert!(
+            body.contains(&tab_ai_contract_compact("self.embedded_acp_chat = None;")),
+            "setup-mode cache rejection must clear the stale embedded ACP view"
+        );
+        assert!(
+            body.contains("tab_ai_embedded_acp_reuse_rejected_setup_mode"),
+            "setup-mode cache rejection must leave a positive audit log"
+        );
+        assert!(
+            body.contains(&tab_ai_contract_compact("return false;")),
+            "setup-mode cache rejection must fall through to fresh launch resolution"
         );
     }
 

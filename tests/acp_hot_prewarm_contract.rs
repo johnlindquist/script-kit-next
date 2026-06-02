@@ -129,6 +129,44 @@ fn profile_selection_starts_selected_profile_warm_session() {
 }
 
 #[test]
+fn entry_intent_does_not_reuse_cached_setup_mode_acp_view() {
+    let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
+    let open_body = fn_body(&tab_ai, "fn open_tab_ai_acp_with_options(");
+    let reuse_body = fn_body(&tab_ai, "fn try_reuse_embedded_acp_view(");
+    let predicate_body = fn_body(&tab_ai, "fn should_reuse_embedded_acp_view_for_open(");
+
+    assert!(
+        open_body.contains("cached_acp_is_setup_mode"),
+        "ACP open must inspect whether the cached embedded ACP view is setup-mode"
+    );
+    assert!(
+        open_body.contains("should_reuse_embedded_acp_view_for_open")
+            && open_body.contains("cached_acp_is_setup_mode"),
+        "ACP open must pass setup-mode state into the reuse predicate"
+    );
+    assert!(
+        predicate_body.contains("!cached_acp_is_setup_mode"),
+        "non-empty entry intents must not select setup-mode ACP cache reuse"
+    );
+    assert!(
+        reuse_body.contains("if normalized_intent.is_some() && is_setup_mode"),
+        "direct setup-mode reuse must fail closed for auto-submit entry intents"
+    );
+    assert!(
+        reuse_body.contains("self.embedded_acp_chat = None;"),
+        "setup-mode cache rejection must clear the stale embedded ACP view"
+    );
+    assert!(
+        reuse_body.contains("tab_ai_embedded_acp_reuse_rejected_setup_mode"),
+        "setup-mode cache rejection must leave an audit log"
+    );
+    assert!(
+        reuse_body.contains("return false;"),
+        "setup-mode cache rejection must fall through to fresh launch resolution"
+    );
+}
+
+#[test]
 fn spine_profile_selection_starts_selected_profile_warm_session() {
     let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
     let body = fn_body(
