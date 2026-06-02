@@ -37,10 +37,10 @@ fn header_info_bar_variants_have_unique_header_signatures() {
 }
 
 #[test]
-fn all_header_variations_keep_the_screenshot_base_layout() {
+fn all_header_variations_keep_logo_free_numbered_header_layout() {
     for theme in MainMenuThemeVariant::all() {
         let tokens = theme.def().header_info_bar;
-        assert_eq!(tokens.logo_placement, MainMenuLogoPlacement::InputLeading);
+        assert_eq!(tokens.logo_placement, MainMenuLogoPlacement::Hidden);
         assert_eq!(
             tokens.input_text_alignment,
             MainMenuInputTextAlignment::RowTextColumn
@@ -49,6 +49,17 @@ fn all_header_variations_keep_the_screenshot_base_layout() {
         assert!(tokens.show_cwd);
         assert!(tokens.show_agent_model);
     }
+}
+
+#[test]
+fn header_context_renders_centered_reference_number() {
+    let shared = read_source("src/components/main_view_chrome.rs");
+
+    assert!(shared.contains("MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID"));
+    assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID)"));
+    assert!(shared.contains("(def.variant.index() + 1).to_string()"));
+    assert!(shared.contains(".w(px(32.0))"));
+    assert!(shared.contains(".justify_center()"));
 }
 
 #[test]

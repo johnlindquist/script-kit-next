@@ -512,7 +512,7 @@ fn header_info_bar_tokens(
         show_agent_model,
         show_keys,
         separator,
-        logo_placement: MainMenuLogoPlacement::InputLeading,
+        logo_placement: MainMenuLogoPlacement::Hidden,
         input_text_alignment: MainMenuInputTextAlignment::RowTextColumn,
         hide_initial_section_header: false,
     }
@@ -640,7 +640,7 @@ pub fn current_main_menu_theme() -> MainMenuThemeVariant {
 
 #[cfg(test)]
 mod tests {
-    use super::{current_main_menu_theme, set_current_main_menu_theme, MainMenuThemeVariant};
+    use super::{MainMenuThemeVariant, current_main_menu_theme, set_current_main_menu_theme};
     use std::collections::HashSet;
 
     #[test]

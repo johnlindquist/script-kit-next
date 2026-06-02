@@ -16,6 +16,8 @@ pub(crate) const MAIN_VIEW_CONTEXT_LOGO_ID: &str = "main-view-context-logo";
 pub(crate) const MAIN_VIEW_CONTEXT_CWD_BUTTON_ID: &str = "main-view-context-cwd-button";
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID: &str = "main-view-context-model-button";
+#[allow(dead_code)]
+pub(crate) const MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID: &str = "main-view-context-variation-badge";
 pub(crate) const MAIN_VIEW_HEADER_ID: &str = "main-view-header";
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_HEADER_DIVIDER_ID: &str = "main-view-header-divider";
@@ -231,28 +233,33 @@ pub(crate) fn render_main_view_context_zone(
         model_chip = model_chip.border_1().border_color(border).bg(rest_bg);
     }
 
-    let mut zone = div()
-        .id(MAIN_VIEW_CONTEXT_ZONE_ID)
-        .w_full()
-        .h(px(info.height_px))
+    let variation_badge = div()
+        .id(MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID)
+        .font_family(info.font_family)
+        .text_size(px(info.font_size))
+        .text_color(text_color)
+        .opacity(info.opacity.clamp(0.0, 1.0))
+        .child((def.variant.index() + 1).to_string());
+
+    let mut left_lane = div()
+        .flex_1()
+        .min_w(px(0.0))
         .flex()
         .flex_row()
         .items_center()
+        .justify_start()
         .gap(px(info.gap_px));
-
-    zone = zone.justify_between();
-
     if matches!(info.logo_placement, MainMenuLogoPlacement::HeaderLeading) {
-        zone = zone.child(render_main_view_context_logo(theme, info.height_px));
+        left_lane = left_lane.child(render_main_view_context_logo(theme, info.height_px));
     }
     if info.show_cwd {
-        zone = zone.child(cwd_chip);
+        left_lane = left_lane.child(cwd_chip);
     }
     if info.show_cwd
         && info.show_agent_model
         && !matches!(info.layout, crate::designs::HeaderInfoBarLayout::Split)
     {
-        zone = zone.child(
+        left_lane = left_lane.child(
             div()
                 .font_family(info.font_family)
                 .text_size(px(info.font_size))
@@ -260,14 +267,41 @@ pub(crate) fn render_main_view_context_zone(
                 .child(info.separator),
         );
     }
+
+    let mut right_lane = div()
+        .flex_1()
+        .min_w(px(0.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_end()
+        .gap(px(info.gap_px));
     if info.show_agent_model {
-        zone = zone.child(model_chip);
+        right_lane = right_lane.child(model_chip);
     }
     if matches!(info.logo_placement, MainMenuLogoPlacement::HeaderTrailing) {
-        zone = zone.child(render_main_view_context_logo(theme, info.height_px));
+        right_lane = right_lane.child(render_main_view_context_logo(theme, info.height_px));
     }
 
-    zone.into_any_element()
+    div()
+        .id(MAIN_VIEW_CONTEXT_ZONE_ID)
+        .w_full()
+        .h(px(info.height_px))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(info.gap_px))
+        .child(left_lane)
+        .child(
+            div()
+                .w(px(32.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(variation_badge),
+        )
+        .child(right_lane)
+        .into_any_element()
 }
 
 fn render_main_view_context_logo(theme: &crate::theme::Theme, height_px: f32) -> AnyElement {
