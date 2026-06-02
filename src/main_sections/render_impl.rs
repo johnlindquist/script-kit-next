@@ -312,6 +312,7 @@ impl Render for ScriptListApp {
         //
         // HUD is now handled by hud_manager as a separate floating window
         // No need to render it as part of this view
+        let shared_header_owned_by_view = self.current_view.uses_shared_main_view_header();
         let current_view = self.current_view.clone();
         let main_content: AnyElement = match current_view {
             AppView::ScriptList => self.render_script_list(cx).into_any_element(),
@@ -766,6 +767,31 @@ impl Render for ScriptListApp {
 
         // Outer container: holds both the clipped main content and the dialog
         // layer which must NOT be clipped (same pattern as Notes window).
+        let main_content_container = if shared_header_owned_by_view {
+            div().flex_1().w_full().min_h(px(0.)).child(main_content)
+        } else {
+            let menu_def = self.current_main_menu_theme.def();
+            div()
+                .flex_1()
+                .w_full()
+                .min_h(px(0.))
+                .flex()
+                .flex_col()
+                .child(self.render_clickable_main_view_context_header(
+                    menu_def,
+                    crate::ui::chrome::HEADER_PADDING_X,
+                    cx,
+                ))
+                .child(
+                    div()
+                        .flex_1()
+                        .w_full()
+                        .min_h(px(0.))
+                        .overflow_hidden()
+                        .child(main_content),
+                )
+        };
+
         div()
             .id("main-window-root")
             .size_full()
@@ -931,7 +957,7 @@ impl Render for ScriptListApp {
                     // Warning banner appears at the top when bun is not available
                     .when_some(warning_banner, |container, banner| container.child(banner))
                     // Main content takes remaining space
-                    .child(div().flex_1().w_full().min_h(px(0.)).child(main_content))
+                    .child(main_content_container)
                     // Shortcut recorder overlay (on top of main content when recording)
                     .when_some(shortcut_recorder_overlay, |container, overlay| {
                         container.child(overlay)

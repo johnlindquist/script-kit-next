@@ -97,21 +97,28 @@ fn global_cmd_enter_spine_probe_falls_through_to_agent_chat_route() {
 }
 
 #[test]
-fn pi_warmup_branch_switches_to_visible_agent_chat_setup() {
-    let warm_branch = source_block_after(
+fn pi_warmup_branch_opens_visible_chat_instead_of_warming_setup() {
+    let launch_body = source_block_after(
         TAB_AI_ACP_LAUNCH_SOURCE,
-        "let Some(lease) = manager.acquire_warm_ready(&pi_launch.warm_key) else",
-        1700,
+        "fn open_tab_ai_pi_view_from_launch(",
+        6500,
     );
 
     assert!(
-        warm_branch.contains("manager.prepare_warm_background(warm_spec)"),
-        "Pi Agent Chat warm miss must still start background preparation"
+        launch_body.contains("acquire_ready_or_spawn_cold(warm_spec)"),
+        "Pi Agent Chat warm miss must acquire a ready lease or cold-spawn an acquired lease"
     );
     assert!(
-        warm_branch.contains("show_pi_agent_chat_warming_setup_view"),
-        "Pi Agent Chat warm miss must switch to a visible Agent Chat setup surface, \
-         not leave Cmd+Enter hidden on ScriptList with only a toast"
+        launch_body.contains("enter_embedded_acp_chat_surface"),
+        "Pi Agent Chat open must still switch into the visible Agent Chat view"
+    );
+    assert!(
+        !launch_body.contains("show_pi_agent_chat_warming_setup_view"),
+        "Ordinary Empty/Preparing warm misses must not show the retry-only warming setup"
+    );
+    assert!(
+        !launch_body.contains("Starting Pi Agent Chat. Try again in a moment."),
+        "Ordinary Empty/Preparing warm misses must not toast a retry-only waiting state"
     );
 }
 

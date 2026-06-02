@@ -13135,10 +13135,21 @@ impl Render for AcpChatView {
                 view_entity.clone(),
                 &theme,
             );
+            let footer_snapshot = self.footer_snapshot(cx);
+            let context_labels = crate::components::main_view_chrome::MainViewContextLabels::new(
+                footer_snapshot.cwd_display.unwrap_or_else(|| {
+                    crate::components::main_view_chrome::MAIN_VIEW_CWD_UNAVAILABLE_LABEL.to_string()
+                }),
+                footer_snapshot.model_display,
+            );
             let header = crate::components::main_view_chrome::MainViewHeaderChrome {
                 context: Some(
-                    crate::components::main_view_chrome::render_main_view_context_zone_inert(
-                        &theme, menu_def, None, None,
+                    crate::components::main_view_chrome::render_main_view_context_zone_required(
+                        &theme,
+                        menu_def,
+                        context_labels,
+                        |_event, _window, _cx| {},
+                        |_event, _window, _cx| {},
                     ),
                 ),
                 input,

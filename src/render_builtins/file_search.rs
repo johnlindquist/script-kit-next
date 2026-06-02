@@ -1453,30 +1453,7 @@ impl ScriptListApp {
             },
         );
         let header = crate::components::main_view_chrome::MainViewHeaderChrome {
-            context: Some(
-                crate::components::main_view_chrome::render_main_view_context_zone(
-                    &self.theme,
-                    menu_def,
-                    self.global_footer_cwd_chip().map(|chip| chip.label),
-                    self.agent_model_footer_label(),
-                    cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
-                        this.dispatch_main_window_footer_action(
-                            crate::footer_popup::FooterAction::Cwd,
-                            window,
-                            cx,
-                            "main_view_context_click",
-                        );
-                    }),
-                    cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
-                        this.dispatch_main_window_footer_action(
-                            crate::footer_popup::FooterAction::AgentModel,
-                            window,
-                            cx,
-                            "main_view_context_click",
-                        );
-                    }),
-                ),
-            ),
+            context: Some(self.render_clickable_main_view_context_zone(menu_def, cx)),
             input,
             padding_x: shell.header_padding_x,
             padding_y: shell.header_padding_y,
@@ -1689,8 +1666,8 @@ mod file_search_thumbnail_tests {
     }
 
     #[test]
-    fn test_load_file_search_thumbnail_preview_returns_resolution_too_large_when_dimension_exceeds_limit()
-     {
+    fn test_load_file_search_thumbnail_preview_returns_resolution_too_large_when_dimension_exceeds_limit(
+    ) {
         let temp_dir = tempdir().expect("tempdir should be created");
         let image_path = temp_dir.path().join("oversized.png");
         let img = RgbaImage::from_pixel(2, 2, Rgba([255, 0, 0, 255]));

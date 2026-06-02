@@ -397,11 +397,7 @@ impl ScriptListApp {
                     self.current_view = AppView::ScriptList;
                 }
                 self.cwd_pick_mode = true;
-                self.open_file_search_view(
-                    "~/".to_string(),
-                    FileSearchPresentation::Full,
-                    cx,
-                );
+                self.open_file_search_view("~/".to_string(), FileSearchPresentation::Full, cx);
                 self.suppress_filter_events = true;
                 self.gpui_input_state.update(cx, |state, cx| {
                     state.set_value("~/".to_string(), window, cx);
@@ -598,8 +594,7 @@ impl ScriptListApp {
         }
         if matches!(self.current_view, AppView::ScriptList) {
             buttons.push(
-                FooterButtonConfig::new(FooterAction::Ai, "⌘↵", "Agent")
-                    .enabled(!footer_disabled),
+                FooterButtonConfig::new(FooterAction::Ai, "⌘↵", "Agent").enabled(!footer_disabled),
             );
         }
         buttons
@@ -1167,12 +1162,94 @@ impl ScriptListApp {
     /// provider/model selection (`spine_agent_label` / `spine_model_label`).
     /// Returns `None` when neither label is known so the chip stays hidden.
     pub(crate) fn agent_model_footer_label(&self) -> Option<String> {
-        match (self.spine_agent_label.as_ref(), self.spine_model_label.as_ref()) {
+        match (
+            self.spine_agent_label.as_ref(),
+            self.spine_model_label.as_ref(),
+        ) {
             (Some(agent), Some(model)) => Some(format!("{agent} · {model}")),
             (Some(agent), None) => Some(agent.clone()),
             (None, Some(model)) => Some(model.clone()),
             (None, None) => None,
         }
+    }
+
+    pub(crate) fn main_view_context_labels(
+        &self,
+    ) -> crate::components::main_view_chrome::MainViewContextLabels {
+        let cwd_label = self
+            .global_footer_cwd_chip()
+            .map(|chip| chip.label)
+            .or_else(|| {
+                std::env::current_dir()
+                    .ok()
+                    .map(|cwd| crate::file_search::shorten_path(&cwd.to_string_lossy()))
+            })
+            .unwrap_or_else(|| {
+                crate::components::main_view_chrome::MAIN_VIEW_CWD_UNAVAILABLE_LABEL.to_string()
+            });
+
+        let agent_model_label = self.agent_model_footer_label().unwrap_or_else(|| {
+            crate::components::main_view_chrome::MAIN_VIEW_AGENT_MODEL_UNAVAILABLE_LABEL.to_string()
+        });
+
+        crate::components::main_view_chrome::MainViewContextLabels::new(
+            cwd_label,
+            agent_model_label,
+        )
+    }
+
+    pub(crate) fn render_clickable_main_view_context_zone(
+        &self,
+        menu_def: crate::designs::MainMenuThemeDef,
+        cx: &mut gpui::Context<Self>,
+    ) -> gpui::AnyElement {
+        crate::components::main_view_chrome::render_main_view_context_zone_required(
+            &self.theme,
+            menu_def,
+            self.main_view_context_labels(),
+            cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                this.dispatch_main_window_footer_action(
+                    crate::footer_popup::FooterAction::Cwd,
+                    window,
+                    cx,
+                    "main_view_context_click",
+                );
+            }),
+            cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                this.dispatch_main_window_footer_action(
+                    crate::footer_popup::FooterAction::AgentModel,
+                    window,
+                    cx,
+                    "main_view_context_click",
+                );
+            }),
+        )
+    }
+
+    pub(crate) fn render_clickable_main_view_context_header(
+        &self,
+        menu_def: crate::designs::MainMenuThemeDef,
+        padding_x: f32,
+        cx: &mut gpui::Context<Self>,
+    ) -> gpui::AnyElement {
+        crate::components::main_view_chrome::render_main_view_context_header(
+            self.render_clickable_main_view_context_zone(menu_def, cx),
+            padding_x,
+        )
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn render_inert_main_view_context_zone(
+        &self,
+        menu_def: crate::designs::MainMenuThemeDef,
+    ) -> gpui::AnyElement {
+        crate::components::main_view_chrome::render_main_view_context_zone_required(
+            &self.theme,
+            menu_def,
+            self.main_view_context_labels(),
+            |_event, _window, _cx| {},
+            |_event, _window, _cx| {},
+        )
     }
 
     /// The launcher surfaces that display the global Spine cwd + Agent·Model
@@ -1190,9 +1267,7 @@ impl ScriptListApp {
     /// the single global sources (`global_footer_cwd_chip` /
     /// `agent_model_footer_label`) so they render identically on every surface
     /// that shows them. Either chip is omitted when its data is absent.
-    fn global_main_window_left_chip_buttons(
-        &self,
-    ) -> Vec<crate::footer_popup::FooterButtonConfig> {
+    fn global_main_window_left_chip_buttons(&self) -> Vec<crate::footer_popup::FooterButtonConfig> {
         use crate::footer_popup::{FooterAction, FooterButtonConfig, FooterDotStatus};
 
         let enabled = !self.main_window_footer_buttons_blocked();
@@ -1211,7 +1286,10 @@ impl ScriptListApp {
         // never jitters as the status changes. ScriptList gets `None` → no lane,
         // staying genuinely dot-free.
         let agent_model_dot_status = if matches!(self.current_view, AppView::AcpChatView { .. }) {
-            Some(self.acp_footer_dot_status.unwrap_or(FooterDotStatus::Hidden))
+            Some(
+                self.acp_footer_dot_status
+                    .unwrap_or(FooterDotStatus::Hidden),
+            )
         } else {
             None
         };
@@ -1242,8 +1320,9 @@ impl ScriptListApp {
     ) -> Vec<crate::footer_popup::FooterButtonConfig> {
         use crate::footer_popup::FooterAction;
 
-        buttons
-            .retain(|button| !matches!(button.action, FooterAction::Cwd | FooterAction::AgentModel));
+        buttons.retain(|button| {
+            !matches!(button.action, FooterAction::Cwd | FooterAction::AgentModel)
+        });
         let mut prefixed = self.global_main_window_left_chip_buttons();
         prefixed.append(&mut buttons);
         prefixed
@@ -1587,9 +1666,7 @@ impl ScriptListApp {
                 Some((ViewType::MainWindow, count))
             }
             AppView::NamingPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
-            AppView::BrowseKitsView { results, .. } => {
-                Some((ViewType::MainWindow, results.len()))
-            }
+            AppView::BrowseKitsView { results, .. } => Some((ViewType::MainWindow, results.len())),
             AppView::InstalledKitsView { kits, .. } => Some((ViewType::MainWindow, kits.len())),
             AppView::SearchAiPresetsView { .. } => {
                 // Presets list - defaults (5) + user presets
@@ -1879,8 +1956,7 @@ impl ScriptListApp {
                 f32::from(target_height),
             );
             let width = if self.main_window_mode == MainWindowMode::Mini {
-                crate::window_resize::width_for_view(ViewType::MainWindow)
-                    .unwrap_or(target_width)
+                crate::window_resize::width_for_view(ViewType::MainWindow).unwrap_or(target_width)
             } else {
                 target_width
             };
@@ -1891,8 +1967,7 @@ impl ScriptListApp {
         if let Some((view_type, item_count)) = self.calculate_window_size_params() {
             let target_height = crate::window_resize::height_for_view(view_type, item_count);
             let width = if self.main_window_mode == MainWindowMode::Mini {
-                crate::window_resize::width_for_view(ViewType::MainWindow)
-                    .unwrap_or(target_width)
+                crate::window_resize::width_for_view(ViewType::MainWindow).unwrap_or(target_width)
             } else {
                 target_width
             };

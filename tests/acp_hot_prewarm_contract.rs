@@ -69,8 +69,10 @@ fn startup_schedules_acp_connection_prewarm() {
         "agent config prewarm should be kicked off before ACP chat prewarm"
     );
     assert!(
-        dev_sh.contains("SCRIPT_KIT_DISABLE_ACP_HOT_PREWARM"),
-        "./dev.sh must opt out of hidden ACP connection prewarm so dev launch cannot trigger codex-acp keychain prompts"
+        dev_sh.contains(
+            r#"SCRIPT_KIT_DISABLE_ACP_HOT_PREWARM="${SCRIPT_KIT_DISABLE_ACP_HOT_PREWARM:-0}""#
+        ),
+        "./dev.sh must enable ACP hot prewarm by default while preserving explicit env opt-out"
     );
     assert!(
         !dev_sh.contains("SCRIPT_KIT_DISABLE_CODEX_ACP"),
@@ -236,12 +238,12 @@ fn pi_tab_open_does_not_prepare_warm_synchronously_before_view_switch() {
     let body = fn_body(&acp_launch, "fn open_tab_ai_pi_view_from_launch(");
 
     assert!(
-        body.contains("acquire_warm_ready"),
+        body.contains("acquire_ready_or_spawn_cold"),
         "Pi Tab open must first try the ready warm-session fast path"
     );
     assert!(
-        body.contains("prepare_warm_background"),
-        "Pi Tab open must prepare missing warm sessions in the background"
+        body.contains("enter_embedded_acp_chat_surface"),
+        "Pi Tab open must switch into the visible Agent Chat view for ready and cold-spawned leases"
     );
     assert!(
         !body.contains(".prepare_warm("),

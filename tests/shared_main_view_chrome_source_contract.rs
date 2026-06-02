@@ -10,16 +10,26 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     let script_list = read_source("src/render_script_list/mod.rs");
     let acp = read_source("src/ai/acp/view.rs");
     let file_search = read_source("src/render_builtins/file_search.rs");
+    let ui_window = read_source("src/app_impl/ui_window.rs");
+    let render_impl = read_source("src/main_sections/render_impl.rs");
+    let app_view_state = read_source("src/main_sections/app_view_state.rs");
 
     assert!(shared.contains("pub(crate) fn render_main_view_input_shell"));
     assert!(shared.contains("pub(crate) fn render_main_view_header"));
+    assert!(shared.contains("pub(crate) fn render_main_view_context_header"));
     assert!(shared.contains("pub(crate) fn render_main_view_header_divider"));
     assert!(shared.contains("pub(crate) fn render_main_view_main_slot"));
     assert!(shared.contains("pub(crate) fn render_main_view_shell"));
     assert!(shared.contains("pub(crate) fn main_view_input_text_inset_left"));
     assert!(shared.contains("pub(crate) fn render_main_view_state_icon"));
     assert!(shared.contains("pub(crate) fn render_main_view_context_zone"));
+    assert!(shared.contains("pub(crate) fn render_main_view_context_zone_required"));
     assert!(shared.contains("pub(crate) fn render_main_view_context_zone_inert"));
+    assert!(shared.contains("pub(crate) struct MainViewContextLabels"));
+    assert!(shared.contains("MAIN_VIEW_CWD_UNAVAILABLE_LABEL"));
+    assert!(shared.contains("MAIN_VIEW_AGENT_MODEL_UNAVAILABLE_LABEL"));
+    assert!(shared.contains("\"Agent model unavailable\""));
+    assert!(!shared.contains("\"Choose agent · model\""));
     assert!(shared.contains("pub(crate) fn main_view_state_icon_left"));
     assert!(shared.contains("pub(crate) fn render_main_view_chrome"));
     assert!(shared.contains("pub(crate) struct MainViewInputChrome"));
@@ -85,9 +95,25 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
         ),
         "header Tab text should use the footer key/button renderer instead of local styling"
     );
+    assert!(ui_window.contains("pub(crate) fn main_view_context_labels"));
+    assert!(ui_window.contains("render_clickable_main_view_context_zone"));
+    assert!(ui_window.contains("render_clickable_main_view_context_header"));
+    assert!(ui_window.contains("render_inert_main_view_context_zone"));
+    assert!(ui_window.contains("render_main_view_context_zone_required"));
+    assert!(ui_window.contains("FooterAction::Cwd"));
+    assert!(ui_window.contains("FooterAction::AgentModel"));
+    assert!(app_view_state.contains("pub(crate) fn uses_shared_main_view_header"));
+    assert!(app_view_state.contains(
+        "AppView::ScriptList | AppView::FileSearchView { .. } | AppView::AcpChatView { .. }"
+    ));
+    assert!(render_impl.contains(
+        "let shared_header_owned_by_view = self.current_view.uses_shared_main_view_header();"
+    ));
+    assert!(render_impl.contains("render_clickable_main_view_context_header"));
+    assert!(render_impl.contains("main_content_container"));
 
     assert!(script_list.contains("render_main_view_input_shell"));
-    assert!(script_list.contains("render_main_view_context_zone"));
+    assert!(script_list.contains("render_clickable_main_view_context_zone"));
     assert!(script_list.contains("render_main_view_state_icon"));
     assert!(script_list.contains("main_view_should_show_state_icon"));
     assert!(script_list.contains("hide_initial_section_header"));
@@ -97,8 +123,6 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(script_list.contains("MainViewInputChrome"));
     assert!(script_list.contains("MainViewHeaderChrome"));
     assert!(script_list.contains("context: Some("));
-    assert!(script_list.contains("FooterAction::Cwd"));
-    assert!(script_list.contains("FooterAction::AgentModel"));
     assert!(script_list.contains("trailing: Vec::new()"));
     assert!(
         !script_list.contains("render_launcher_ask_ai_hint"),
@@ -127,15 +151,13 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(acp.contains("visible: false"));
     assert!(acp.contains("MainViewChrome"));
     assert!(file_search.contains("render_main_view_input_shell"));
-    assert!(file_search.contains("render_main_view_context_zone"));
+    assert!(file_search.contains("render_clickable_main_view_context_zone"));
     assert!(file_search.contains("render_main_view_state_icon"));
     assert!(file_search.contains("render_main_view_shell()"));
     assert!(file_search.contains("render_main_view_chrome"));
     assert!(file_search.contains("MainViewInputChrome"));
     assert!(file_search.contains("MainViewHeaderChrome"));
     assert!(file_search.contains("context: Some("));
-    assert!(file_search.contains("FooterAction::Cwd"));
-    assert!(file_search.contains("FooterAction::AgentModel"));
     assert!(file_search.contains("MainViewDividerChrome"));
     assert!(file_search.contains("visible: false"));
     assert!(file_search.contains("MainViewChrome"));
@@ -267,6 +289,8 @@ fn acp_composer_shell_consumes_main_menu_header_geometry() {
     assert!(acp.contains("render_main_view_header"));
     assert!(!acp.contains("render_main_view_header_divider("));
     assert!(acp.contains("render_main_view_context_zone_inert"));
+    assert!(acp.contains("MainViewContextLabels::new"));
+    assert!(acp.contains("footer_snapshot.model_display"));
     assert!(acp.contains("render_main_view_main_slot"));
     assert!(acp.contains("render_main_view_chrome"));
     assert!(acp.contains("let profile_icon = Self::render_input_profile_icon"));
@@ -358,7 +382,7 @@ fn acp_layout_model_swaps_only_main_section_to_conversation() {
         "AcpChat should use the same stable main-window sizing target as the main menu chrome"
     );
     assert!(
-        layout.contains("if matches!(self.current_view, AppView::AcpChatView { .. })"),
+        layout.contains("if let AppView::AcpChatView { entity } = &self.current_view"),
         "AcpChat needs its own layout branch before the launcher ScriptList fallback"
     );
     assert!(

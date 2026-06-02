@@ -814,6 +814,18 @@ impl AppView {
         self.surface_kind().surface_contract()
     }
 
+    /// True when the view renderer already owns the shared main-view header.
+    ///
+    /// Root-level wrapping uses this to add the shared cwd/model header to
+    /// legacy surfaces without duplicating it on renderers that already use
+    /// `main_view_chrome`.
+    pub(crate) fn uses_shared_main_view_header(&self) -> bool {
+        matches!(
+            self,
+            AppView::ScriptList | AppView::FileSearchView { .. } | AppView::AcpChatView { .. }
+        )
+    }
+
     /// Dismiss policy for the active top-level launcher view.
     ///
     /// The policy is stored in [`SurfaceKind::surface_contract`] so behavior

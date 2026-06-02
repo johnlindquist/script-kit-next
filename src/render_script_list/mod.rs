@@ -1871,30 +1871,7 @@ impl ScriptListApp {
         );
 
         let header = crate::components::main_view_chrome::MainViewHeaderChrome {
-            context: Some(
-                crate::components::main_view_chrome::render_main_view_context_zone(
-                    &self.theme,
-                    menu_def,
-                    self.global_footer_cwd_chip().map(|chip| chip.label),
-                    self.agent_model_footer_label(),
-                    cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
-                        this.dispatch_main_window_footer_action(
-                            crate::footer_popup::FooterAction::Cwd,
-                            window,
-                            cx,
-                            "main_view_context_click",
-                        );
-                    }),
-                    cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
-                        this.dispatch_main_window_footer_action(
-                            crate::footer_popup::FooterAction::AgentModel,
-                            window,
-                            cx,
-                            "main_view_context_click",
-                        );
-                    }),
-                ),
-            ),
+            context: Some(self.render_clickable_main_view_context_zone(menu_def, cx)),
             input,
             padding_x: header_padding_x,
             padding_y: header_padding_y,

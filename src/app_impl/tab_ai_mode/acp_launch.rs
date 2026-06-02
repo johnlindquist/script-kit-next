@@ -280,41 +280,23 @@ impl ScriptListApp {
             self.show_pi_agent_chat_unavailable_setup_view(source_view, error, cx);
             return;
         }
-        let Some(lease) = manager.acquire_warm_ready(&pi_launch.warm_key) else {
-            match manager.prepare_warm_background(warm_spec) {
-                Ok(snapshot) => {
-                    tracing::info!(
-                        target: "script_kit::tab_ai",
-                        event = "pi_agent_chat_warm_prepare_background",
-                        profile_id = %pi_launch.profile.id,
-                        warm_key = %pi_launch.warm_key,
-                        generation = snapshot.generation,
-                        state = ?snapshot.state,
-                    );
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        target: "script_kit::tab_ai",
-                        event = "pi_agent_chat_warm_prepare_failed",
-                        profile_id = %pi_launch.profile.id,
-                        warm_key = %pi_launch.warm_key,
-                        error = %error,
-                    );
-                }
+        let (lease, acquire_origin) = match manager.acquire_ready_or_spawn_cold(warm_spec) {
+            Ok(result) => result,
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "pi_agent_chat_acquire_or_cold_spawn_failed",
+                    profile_id = %pi_launch.profile.id,
+                    warm_key = %pi_launch.warm_key,
+                    error = %error,
+                );
+                self.show_pi_agent_chat_unavailable_setup_view(
+                    source_view,
+                    error.to_string(),
+                    cx,
+                );
+                return;
             }
-            self.toast_manager.push(
-                crate::components::toast::Toast::info(
-                    "Starting Pi Agent Chat. Try again in a moment.",
-                    &self.theme,
-                )
-                .duration_ms(Some(TOAST_ERROR_MS)),
-            );
-            self.show_pi_agent_chat_warming_setup_view(
-                source_view,
-                pi_launch.profile.name.clone(),
-                cx,
-            );
-            return;
         };
 
         let connection = lease.connection.clone();
@@ -327,6 +309,7 @@ impl ScriptListApp {
             profile_id = %pi_launch.profile.id,
             profile_name = %pi_launch.profile.name,
             warm_key = %pi_launch.warm_key,
+            acquire_origin = ?acquire_origin,
             generation = lease.generation,
             ui_thread_id = %ui_thread_id,
             cwd = %cwd.display(),

@@ -59,6 +59,12 @@ pub(crate) enum AgentChatWarmSessionState {
     Failed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AgentChatWarmAcquireOrigin {
+    Ready,
+    ColdSpawned,
+}
+
 struct WarmSlot {
     spec: AgentChatWarmSessionSpec,
     generation: u64,
@@ -176,6 +182,90 @@ impl AgentChatWarmSessionManager {
     pub(crate) fn acquire_warm(&self, key: &str) -> Option<AgentChatWarmSessionLease> {
         self.cleanup_stale_acquired(DEFAULT_STALE_ACQUIRED_TTL);
         self.acquire_warm_ready(key)
+    }
+
+    pub(crate) fn acquire_ready_or_spawn_cold(
+        &self,
+        spec: AgentChatWarmSessionSpec,
+    ) -> Result<(AgentChatWarmSessionLease, AgentChatWarmAcquireOrigin)> {
+        self.cleanup_stale_acquired(DEFAULT_STALE_ACQUIRED_TTL);
+        if let Some(lease) = self.acquire_warm_ready(&spec.key) {
+            return Ok((lease, AgentChatWarmAcquireOrigin::Ready));
+        }
+
+        let (generation, ui_thread_id, previous_state) = {
+            let mut inner = self.inner.lock();
+            let previous_state = inner.slots.get(&spec.key).map(|slot| slot.state);
+            inner.next_generation += 1;
+            let generation = inner.next_generation;
+            let ui_thread_id = (self.ui_thread_id_source)();
+            inner.slots.insert(
+                spec.key.clone(),
+                WarmSlot {
+                    spec: spec.clone(),
+                    generation,
+                    ui_thread_id: Some(ui_thread_id.clone()),
+                    state: AgentChatWarmSessionState::Preparing,
+                    connection: None,
+                    acquired_at: None,
+                    failure_message: None,
+                },
+            );
+            (generation, ui_thread_id, previous_state)
+        };
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "warm_cold_spawn_begin",
+            key = %spec.key,
+            generation,
+            previous_state = ?previous_state,
+        );
+
+        let connection = match spec.factory.spawn_connection() {
+            Ok(connection) => connection,
+            Err(error) => {
+                let failure_message = format!("Failed to spawn Pi Agent Chat runtime: {error:#}");
+                let mut inner = self.inner.lock();
+                if let Some(slot) = inner.slots.get_mut(&spec.key) {
+                    if slot.generation == generation {
+                        slot.state = AgentChatWarmSessionState::Failed;
+                        slot.failure_message = Some(failure_message.clone());
+                    }
+                }
+                anyhow::bail!(failure_message);
+            }
+        };
+
+        {
+            let mut inner = self.inner.lock();
+            if let Some(slot) = inner.slots.get_mut(&spec.key) {
+                if slot.generation == generation {
+                    slot.state = AgentChatWarmSessionState::Acquired;
+                    slot.connection = Some(connection.clone());
+                    slot.acquired_at = Some(Instant::now());
+                    slot.failure_message = None;
+                }
+            }
+        }
+
+        let lease = AgentChatWarmSessionLease {
+            key: spec.key.clone(),
+            generation,
+            ui_thread_id,
+            cwd: spec.cwd.clone(),
+            connection,
+        };
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "warm_cold_spawn_acquired",
+            key = %lease.key,
+            generation = lease.generation,
+            ui_thread_id = %lease.ui_thread_id,
+            cwd = %lease.cwd.display(),
+        );
+
+        Ok((lease, AgentChatWarmAcquireOrigin::ColdSpawned))
     }
 
     pub(crate) fn prepare_warm_background(
@@ -753,6 +843,14 @@ mod tests {
         }
     }
 
+    struct SpawnFailFactory;
+
+    impl AgentChatWarmRuntimeFactory for SpawnFailFactory {
+        fn spawn_connection(&self) -> Result<Arc<dyn AgentChatConnection>> {
+            anyhow::bail!("spawn failed")
+        }
+    }
+
     fn manager() -> AgentChatWarmSessionManager {
         let counter = Arc::new(AtomicUsize::new(0));
         AgentChatWarmSessionManager::with_ui_thread_id_source(Arc::new(move || {
@@ -930,6 +1028,135 @@ mod tests {
         manager.prepare_warm(spec(factory.clone())).unwrap();
         assert!(manager.acquire_warm("key-b").is_none());
         assert_eq!(factory.spawned().len(), 1);
+    }
+
+    #[test]
+    fn acquire_ready_or_spawn_cold_uses_ready_slot_when_available() {
+        let manager = manager();
+        let factory = Arc::new(RecordingFactory::default());
+
+        let prepared = manager.prepare_warm(spec(factory.clone())).unwrap();
+        let (lease, origin) = manager
+            .acquire_ready_or_spawn_cold(spec(factory.clone()))
+            .expect("acquire ready");
+        let snapshot = manager.snapshot("key-a").unwrap();
+
+        assert_eq!(origin, AgentChatWarmAcquireOrigin::Ready);
+        assert_eq!(lease.generation, prepared.generation);
+        assert_eq!(lease.ui_thread_id, "thread-1");
+        assert_eq!(snapshot.state, AgentChatWarmSessionState::Acquired);
+        assert_eq!(factory.spawned().len(), 1);
+    }
+
+    #[test]
+    fn acquire_ready_or_spawn_cold_creates_acquired_lease_when_empty() {
+        let manager = manager();
+        let factory = Arc::new(RecordingFactory::default());
+
+        let (lease, origin) = manager
+            .acquire_ready_or_spawn_cold(spec(factory.clone()))
+            .expect("cold spawn");
+        let snapshot = manager.snapshot("key-a").unwrap();
+
+        assert_eq!(origin, AgentChatWarmAcquireOrigin::ColdSpawned);
+        assert_eq!(lease.generation, 1);
+        assert_eq!(lease.ui_thread_id, "thread-1");
+        assert_eq!(lease.cwd, PathBuf::from("/tmp/a"));
+        assert_eq!(snapshot.state, AgentChatWarmSessionState::Acquired);
+        assert_eq!(snapshot.generation, 1);
+        assert_eq!(factory.spawned().len(), 1);
+        assert!(factory.spawned()[0].prepare_calls().is_empty());
+    }
+
+    #[test]
+    fn acquire_ready_or_spawn_cold_replaces_preparing_slot_without_waiting() {
+        let manager = manager();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let blocking_factory = Arc::new(BlockingFactory::new(started_tx, release_rx));
+
+        manager
+            .prepare_warm_background(spec_with_factory(blocking_factory.clone()))
+            .expect("background prepare");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("background prepare started");
+
+        let cold_factory = Arc::new(RecordingFactory::default());
+        let (lease, origin) = manager
+            .acquire_ready_or_spawn_cold(spec(cold_factory.clone()))
+            .expect("cold spawn");
+        assert_eq!(origin, AgentChatWarmAcquireOrigin::ColdSpawned);
+        assert_eq!(lease.generation, 2);
+        assert_eq!(
+            manager.snapshot("key-a").unwrap().state,
+            AgentChatWarmSessionState::Acquired
+        );
+
+        release_tx.send(()).expect("release stale prepare");
+        for _ in 0..100 {
+            if blocking_factory.spawned_count() == 1 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let snapshot = manager.snapshot("key-a").unwrap();
+        assert_eq!(snapshot.state, AgentChatWarmSessionState::Acquired);
+        assert_eq!(snapshot.generation, 2);
+        assert_eq!(cold_factory.spawned().len(), 1);
+    }
+
+    #[test]
+    fn cold_acquired_dismiss_reset_background_prepares_replacement() {
+        let manager = manager();
+        let factory = Arc::new(RecordingFactory::default());
+
+        let (lease, origin) = manager
+            .acquire_ready_or_spawn_cold(spec(factory.clone()))
+            .expect("cold spawn");
+        assert_eq!(origin, AgentChatWarmAcquireOrigin::ColdSpawned);
+        let replacement = manager.dismiss_reset_background(lease);
+
+        assert_eq!(replacement.state, AgentChatWarmSessionState::Preparing);
+        assert_eq!(replacement.generation, 2);
+        assert_eq!(replacement.ui_thread_id.as_deref(), Some("thread-2"));
+        for _ in 0..100 {
+            if manager.snapshot("key-a").unwrap().state == AgentChatWarmSessionState::Ready {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            factory.spawned()[0].cancel_calls(),
+            vec!["thread-1".to_string()]
+        );
+        assert_eq!(
+            factory.spawned()[1].prepare_calls(),
+            vec![("thread-2".to_string(), PathBuf::from("/tmp/a"))]
+        );
+    }
+
+    #[test]
+    fn acquire_ready_or_spawn_cold_marks_spawn_failure_failed() {
+        let manager = manager();
+        let error = match manager
+            .acquire_ready_or_spawn_cold(spec_with_factory(Arc::new(SpawnFailFactory)))
+        {
+            Ok(_) => panic!("spawn should fail"),
+            Err(error) => error,
+        };
+        let snapshot = manager.snapshot("key-a").unwrap();
+
+        assert!(error
+            .to_string()
+            .contains("Failed to spawn Pi Agent Chat runtime"));
+        assert_eq!(snapshot.state, AgentChatWarmSessionState::Failed);
+        assert_eq!(snapshot.generation, 1);
+        assert!(snapshot
+            .failure_message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("spawn failed"));
     }
 
     #[test]

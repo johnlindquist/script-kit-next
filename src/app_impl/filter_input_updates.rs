@@ -690,6 +690,7 @@ impl ScriptListApp {
                     self.spine_cwd_label = Some(resolution_label.as_ref().to_string());
                     self.spine_cwd_revision = self.spine_cwd_revision.wrapping_add(1);
                     self.persist_spine_cwd();
+                    self.prewarm_acp_for_spine_cwd(cx);
                     self.invalidate_grouped_cache();
                     // CWD becomes a footer chip — strip the segment text from
                     // the input bar so the user sees a clean prompt builder.

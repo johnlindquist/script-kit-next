@@ -19,10 +19,33 @@ pub(crate) const MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID: &str = "main-view-context-mo
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID: &str = "main-view-context-variation-badge";
 pub(crate) const MAIN_VIEW_HEADER_ID: &str = "main-view-header";
+pub(crate) const MAIN_VIEW_CWD_UNAVAILABLE_LABEL: &str = "No cwd";
+pub(crate) const MAIN_VIEW_AGENT_MODEL_UNAVAILABLE_LABEL: &str = "Agent model unavailable";
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_HEADER_DIVIDER_ID: &str = "main-view-header-divider";
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_MAIN_ID: &str = "main-view-main";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct MainViewContextLabels {
+    pub(crate) cwd_label: String,
+    pub(crate) agent_model_label: String,
+}
+
+impl MainViewContextLabels {
+    pub(crate) fn new(cwd_label: impl Into<String>, agent_model_label: impl Into<String>) -> Self {
+        let cwd_label = non_empty_label(cwd_label.into(), MAIN_VIEW_CWD_UNAVAILABLE_LABEL);
+        let agent_model_label = non_empty_label(
+            agent_model_label.into(),
+            MAIN_VIEW_AGENT_MODEL_UNAVAILABLE_LABEL,
+        );
+
+        Self {
+            cwd_label,
+            agent_model_label,
+        }
+    }
+}
 
 pub(crate) struct MainViewInputChrome {
     pub(crate) body: AnyElement,
@@ -121,12 +144,51 @@ pub(crate) fn render_main_view_header(chrome: MainViewHeaderChrome) -> AnyElemen
     header.child(chrome.input).into_any_element()
 }
 
+#[allow(dead_code)] // Used by the binary target through include!-merged render code.
+pub(crate) fn render_main_view_context_header(context: AnyElement, padding_x: f32) -> AnyElement {
+    div()
+        .id(MAIN_VIEW_HEADER_ID)
+        .w_full()
+        .px(px(padding_x))
+        .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+        .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
+        .flex()
+        .flex_col()
+        .items_center()
+        .child(context)
+        .into_any_element()
+}
+
+fn non_empty_label(label: String, fallback: &'static str) -> String {
+    let trimmed = label.trim();
+    if trimmed.is_empty() {
+        fallback.to_string()
+    } else {
+        label
+    }
+}
+
 #[allow(dead_code)]
 pub(crate) fn render_main_view_context_zone(
     theme: &crate::theme::Theme,
     def: MainMenuThemeDef,
     cwd_label: Option<String>,
     agent_model_label: Option<String>,
+    on_cwd_click: impl Fn(&ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_agent_model_click: impl Fn(&ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> AnyElement {
+    let labels = MainViewContextLabels::new(
+        cwd_label.unwrap_or_else(|| MAIN_VIEW_CWD_UNAVAILABLE_LABEL.to_string()),
+        agent_model_label.unwrap_or_else(|| MAIN_VIEW_AGENT_MODEL_UNAVAILABLE_LABEL.to_string()),
+    );
+
+    render_main_view_context_zone_required(theme, def, labels, on_cwd_click, on_agent_model_click)
+}
+
+pub(crate) fn render_main_view_context_zone_required(
+    theme: &crate::theme::Theme,
+    def: MainMenuThemeDef,
+    labels: MainViewContextLabels,
     on_cwd_click: impl Fn(&ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
     on_agent_model_click: impl Fn(&ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> AnyElement {
@@ -138,8 +200,8 @@ pub(crate) fn render_main_view_context_zone(
     let text_color = rgba((theme.colors.text.primary << 8) | text_alpha);
     let show_pills = info.pill_padding_x > 0.0 || info.pill_border_alpha > 0;
 
-    let cwd_label = cwd_label.unwrap_or_else(|| "Choose cwd".to_string());
-    let agent_model_label = agent_model_label.unwrap_or_else(|| "Choose agent · model".to_string());
+    let cwd_label = labels.cwd_label;
+    let agent_model_label = labels.agent_model_label;
 
     let cwd_key = if info.show_keys {
         div()
