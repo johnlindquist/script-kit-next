@@ -1,5 +1,6 @@
 const TRANSCRIPT_SOURCE: &str = include_str!("../src/ai/acp/components/transcript.rs");
 const VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
+const BUILD_LAYOUT_INFO_SOURCE: &str = include_str!("../src/app_layout/build_layout_info.rs");
 
 fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     let start_index = source
@@ -85,6 +86,33 @@ fn transcript_render_does_not_reset_list_state_each_frame() {
 }
 
 #[test]
+fn transcript_message_sync_is_idempotent() {
+    let helper_body = source_between(
+        TRANSCRIPT_SOURCE,
+        "fn messages_match_current(",
+        "\n    pub fn set_messages(",
+    );
+    let setter_body = source_between(
+        TRANSCRIPT_SOURCE,
+        "pub fn set_messages(",
+        "\n    pub fn set_show_activity_row(",
+    );
+
+    assert!(
+        helper_body.contains("current.id == incoming.id")
+            && helper_body.contains("current.role == incoming.role")
+            && helper_body.contains("current.body == incoming.body")
+            && helper_body.contains("current.tool_call_id == incoming.tool_call_id"),
+        "AcpTranscript message sync must compare the rendered message signature"
+    );
+    assert!(
+        setter_body.contains("if self.messages_match_current(&messages)")
+            && setter_body.contains("return;"),
+        "AcpTranscript::set_messages must avoid notify/reset churn when messages are unchanged"
+    );
+}
+
+#[test]
 fn agent_chat_mounts_transcript_from_existing_thread_messages() {
     let ensure_body = source_between(
         VIEW_SOURCE,
@@ -107,8 +135,50 @@ fn agent_chat_mounts_transcript_from_existing_thread_messages() {
         "Agent Chat must pass existing messages into the transcript entity"
     );
     assert!(
+        ensure_body.contains("transcript.set_messages(messages, cx)"),
+        "Agent Chat must keep an existing transcript entity synced with live thread messages"
+    );
+    assert!(
         middle_area_body.contains(".child(self.ensure_transcript(cx).into_any_element())")
             && render_body.contains("self.render_acp_middle_area("),
         "Agent Chat must mount the transcript through the middle-area render path even when assistant text already exists"
+    );
+}
+
+#[test]
+fn acp_layout_measure_gates_empty_guidance_on_live_acp_state() {
+    let branch = source_between(
+        BUILD_LAYOUT_INFO_SOURCE,
+        "if let AppView::AcpChatView { entity }",
+        "\n        } else {\n            // Script list",
+    );
+
+    assert!(
+        branch.contains("collect_acp_state_snapshot"),
+        "layout.measure must read live AcpChatView state"
+    );
+    assert!(
+        branch.contains("acp_state.message_count == 0")
+            && branch.contains("!acp_state.awaiting_first_assistant_text"),
+        "layout.measure must mirror AcpChatView render's empty-state predicate"
+    );
+    assert!(
+        branch.contains("if acp_is_empty"),
+        "AcpEmptyGuidance must be guarded by the live empty predicate"
+    );
+    assert!(
+        branch.contains("LayoutComponentInfo::new(\"AcpTranscript\""),
+        "non-empty ACP layout.measure receipts must expose the transcript region"
+    );
+
+    let guard = branch
+        .find("if acp_is_empty")
+        .expect("missing acp_is_empty guard");
+    let empty = branch
+        .find("LayoutComponentInfo::new(\"AcpEmptyGuidance\"")
+        .expect("missing empty guidance component");
+    assert!(
+        guard < empty,
+        "AcpEmptyGuidance must not be emitted unconditionally"
     );
 }

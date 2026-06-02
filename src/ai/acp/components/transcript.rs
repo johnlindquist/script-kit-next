@@ -58,7 +58,25 @@ impl AcpTranscript {
         self.list_state.clone()
     }
 
+    fn messages_match_current(&self, messages: &[AcpThreadMessage]) -> bool {
+        self.messages.len() == messages.len()
+            && self
+                .messages
+                .iter()
+                .zip(messages.iter())
+                .all(|(current, incoming)| {
+                    current.id == incoming.id
+                        && current.role == incoming.role
+                        && current.body == incoming.body
+                        && current.tool_call_id == incoming.tool_call_id
+                })
+    }
+
     pub fn set_messages(&mut self, messages: Vec<AcpThreadMessage>, cx: &mut Context<Self>) {
+        if self.messages_match_current(&messages) {
+            return;
+        }
+
         let old_count = self.messages.len();
         self.messages = messages;
         let new_count = self.messages.len();

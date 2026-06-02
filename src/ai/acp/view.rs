@@ -11195,17 +11195,18 @@ impl AcpChatView {
     }
 
     fn ensure_transcript(&mut self, cx: &mut Context<Self>) -> Entity<AcpTranscript> {
-        if let Some(transcript) = &self.transcript {
-            transcript.update(cx, |transcript, cx| {
-                transcript.set_ui_variant(self.ui_variant, cx);
-            });
-            return transcript.clone();
-        }
-
         let messages = {
             let thread_ref = self.live_thread().read(cx);
             thread_ref.messages.clone()
         };
+
+        if let Some(transcript) = &self.transcript {
+            transcript.update(cx, |transcript, cx| {
+                transcript.set_messages(messages, cx);
+                transcript.set_ui_variant(self.ui_variant, cx);
+            });
+            return transcript.clone();
+        }
 
         let ui_variant = self.ui_variant;
         let transcript = cx.new(|cx| AcpTranscript::new(messages, cx).with_ui_variant(ui_variant));

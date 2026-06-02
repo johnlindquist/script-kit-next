@@ -1,5 +1,5 @@
 impl ScriptListApp {
-    pub fn build_layout_info(&self, _cx: &mut gpui::Context<Self>) -> protocol::LayoutInfo {
+    pub fn build_layout_info(&self, cx: &mut gpui::Context<Self>) -> protocol::LayoutInfo {
         use protocol::{LayoutComponentInfo, LayoutComponentType, LayoutInfo};
         let menu_theme = self.current_main_menu_theme;
         let menu_def = menu_theme.def();
@@ -2032,7 +2032,10 @@ impl ScriptListApp {
             };
         }
 
-        if matches!(self.current_view, AppView::AcpChatView { .. }) {
+        if let AppView::AcpChatView { entity } = &self.current_view {
+            let acp_state = entity.read(cx).collect_acp_state_snapshot(cx);
+            let acp_is_empty =
+                acp_state.message_count == 0 && !acp_state.awaiting_first_assistant_text;
             let info_metrics = crate::components::info_state::info_metrics(
                 crate::components::info_state::InfoStateDensity::Comfortable,
             );
@@ -2068,88 +2071,94 @@ impl ScriptListApp {
                     .with_flex_grow(1.0)
                     .with_depth(2)
                     .with_parent("MainViewMain")
-                    .with_explanation(
-                        "AcpChat swaps the shared main-view main slot from the launcher list to the conversation transcript while keeping the same header/input/footer chrome."
-                            .to_string(),
-                ),
-        );
-
-            components.push(
-                LayoutComponentInfo::new("AcpEmptyGuidance", LayoutComponentType::Container)
-                    .with_bounds(
-                        info_x,
-                        info_y,
-                        info_width,
-                        (content_height - info_columns.top_inset_y - shell.content_inset_bottom)
-                            .max(0.0),
-                    )
-                    .with_visual_style(
-                        chrome_tokens::CHROME_LAYER_CONTENT,
-                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
-                    )
-                    .with_visual_token("content.acpEmptyGuidance")
-                    .with_flex_column()
-                    .with_gap(info_metrics.block_gap)
-                    .with_depth(3)
-                    .with_parent("AcpConversation")
                     .with_explanation(format!(
-                        "ComposerEmpty InfoState is anchored to the shared main-view text column: x={} = row outer + row inner + icon + gap. Width = window({}) - x({}) - right inset({}).",
-                        info_x, window_width, info_x, info_columns.content_right_inset_x
+                        "AcpChat conversation region. message_count={}, awaiting_first_assistant_text={}.",
+                        acp_state.message_count, acp_state.awaiting_first_assistant_text
                     )),
             );
-            components.push(
-                LayoutComponentInfo::new("AcpEmptyGuidanceTitle", LayoutComponentType::Header)
-                    .with_bounds(
-                        info_x,
-                        info_y,
-                        info_width,
-                        crate::components::info_state::INFO_TYPE_SCALE.title.line,
+
+            if acp_is_empty {
+                components.push(
+                    LayoutComponentInfo::new("AcpEmptyGuidance", LayoutComponentType::Container)
+                        .with_bounds(
+                            info_x,
+                            info_y,
+                            info_width,
+                            (content_height
+                                - info_columns.top_inset_y
+                                - shell.content_inset_bottom)
+                                .max(0.0),
+                        )
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_CONTENT,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                        )
+                        .with_visual_token("content.acpEmptyGuidance")
+                        .with_flex_column()
+                        .with_gap(info_metrics.block_gap)
+                        .with_depth(3)
+                        .with_parent("AcpConversation")
+                        .with_explanation(format!(
+                            "ComposerEmpty InfoState is anchored to the shared main-view text column: x={} = row outer + row inner + icon + gap. Width = window({}) - x({}) - right inset({}).",
+                            info_x, window_width, info_x, info_columns.content_right_inset_x
+                        )),
+                );
+                components.push(
+                    LayoutComponentInfo::new("AcpEmptyGuidanceTitle", LayoutComponentType::Header)
+                        .with_bounds(
+                            info_x,
+                            info_y,
+                            info_width,
+                            crate::components::info_state::INFO_TYPE_SCALE.title.line,
+                        )
+                        .with_typography(
+                            "infoTitle",
+                            Some(self.theme_font_family()),
+                            crate::components::info_state::INFO_TYPE_SCALE.title.size,
+                            "semibold",
+                            gpui::FontWeight::SEMIBOLD.0,
+                            crate::components::info_state::INFO_TYPE_SCALE.title.line,
+                            "left",
+                        )
+                        .with_depth(4)
+                        .with_parent("AcpEmptyGuidance")
+                        .with_explanation(
+                            "Comfortable ComposerEmpty title uses the InfoState title scale and starts on the shared main-view text column."
+                                .to_string(),
+                        ),
+                );
+                components.push(
+                    LayoutComponentInfo::new("AcpEmptyGuidanceBody", LayoutComponentType::Other)
+                        .with_bounds(
+                            info_x,
+                            info_y
+                                + crate::components::info_state::INFO_TYPE_SCALE.title.line
+                                + crate::components::info_state::INFO_SPACING.xs * 0.5,
+                            info_width,
+                            crate::components::info_state::INFO_TYPE_SCALE.body.line,
+                        )
+                        .with_typography(
+                            "infoBody",
+                            Some(self.theme_font_family()),
+                            crate::components::info_state::INFO_TYPE_SCALE.body.size,
+                            "regular",
+                            gpui::FontWeight::NORMAL.0,
+                            crate::components::info_state::INFO_TYPE_SCALE.body.line,
+                            "left",
+                        )
+                        .with_depth(4)
+                        .with_parent("AcpEmptyGuidance")
+                        .with_explanation(
+                            "ComposerEmpty body follows the title inside the same shared main-view column."
+                                .to_string(),
+                        ),
+                );
+                components.push(
+                    LayoutComponentInfo::new(
+                        "AcpEmptyGuidanceShortcutSlot",
+                        LayoutComponentType::Other,
                     )
-                    .with_typography(
-                        "infoTitle",
-                        Some(self.theme_font_family()),
-                        crate::components::info_state::INFO_TYPE_SCALE.title.size,
-                        "semibold",
-                        gpui::FontWeight::SEMIBOLD.0,
-                        crate::components::info_state::INFO_TYPE_SCALE.title.line,
-                        "left",
-                    )
-                    .with_depth(4)
-                    .with_parent("AcpEmptyGuidance")
-                    .with_explanation(
-                        "Comfortable ComposerEmpty title uses the InfoState title scale and starts on the shared main-view text column."
-                            .to_string(),
-                    ),
-            );
-            components.push(
-                LayoutComponentInfo::new("AcpEmptyGuidanceBody", LayoutComponentType::Other)
-                    .with_bounds(
-                        info_x,
-                        info_y
-                            + crate::components::info_state::INFO_TYPE_SCALE.title.line
-                            + crate::components::info_state::INFO_SPACING.xs * 0.5,
-                        info_width,
-                        crate::components::info_state::INFO_TYPE_SCALE.body.line,
-                    )
-                    .with_typography(
-                        "infoBody",
-                        Some(self.theme_font_family()),
-                        crate::components::info_state::INFO_TYPE_SCALE.body.size,
-                        "regular",
-                        gpui::FontWeight::NORMAL.0,
-                        crate::components::info_state::INFO_TYPE_SCALE.body.line,
-                        "left",
-                    )
-                    .with_depth(4)
-                    .with_parent("AcpEmptyGuidance")
-                    .with_explanation(
-                        "ComposerEmpty body follows the title inside the same shared main-view column."
-                            .to_string(),
-                    ),
-            );
-            components.push(
-                LayoutComponentInfo::new("AcpEmptyGuidanceShortcutSlot", LayoutComponentType::Other)
                     .with_bounds(
                         info_x,
                         info_y + info_metrics.block_gap + crate::components::info_state::INFO_TYPE_SCALE.title.line + crate::components::info_state::INFO_SPACING.xs * 0.5 + crate::components::info_state::INFO_TYPE_SCALE.body.line,
@@ -2162,9 +2171,12 @@ impl ScriptListApp {
                         "Shortcut slot width uses the same footer keycap geometry as InfoState guidance rows."
                             .to_string(),
                     ),
-            );
-            components.push(
-                LayoutComponentInfo::new("AcpEmptyGuidanceLabelColumn", LayoutComponentType::Other)
+                );
+                components.push(
+                    LayoutComponentInfo::new(
+                        "AcpEmptyGuidanceLabelColumn",
+                        LayoutComponentType::Other,
+                    )
                     .with_bounds(
                         guidance_label_x,
                         info_y + info_metrics.block_gap + crate::components::info_state::INFO_TYPE_SCALE.title.line + crate::components::info_state::INFO_SPACING.xs * 0.5 + crate::components::info_state::INFO_TYPE_SCALE.body.line,
@@ -2186,7 +2198,32 @@ impl ScriptListApp {
                         "Guidance labels start after the footer-keycap shortcut slot and the InfoState row gap; the whole block remains anchored to the main-view text column."
                             .to_string(),
                     ),
-            );
+                );
+            } else {
+                components.push(
+                    LayoutComponentInfo::new("AcpTranscript", LayoutComponentType::List)
+                        .with_bounds(
+                            0.0,
+                            content_top,
+                            window_width,
+                            (content_height - shell.content_inset_bottom).max(0.0),
+                        )
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_CONTENT,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                        )
+                        .with_visual_token("content.acpTranscript")
+                        .with_flex_column()
+                        .with_flex_grow(1.0)
+                        .with_depth(3)
+                        .with_parent("AcpConversation")
+                        .with_explanation(format!(
+                            "ACP transcript viewport for {} live thread messages.",
+                            acp_state.message_count
+                        )),
+                );
+            }
         } else {
             // Script list: full width for MainWindow, left panel for split-preview surfaces.
             components.push(
