@@ -563,7 +563,7 @@ fn base_main_menu_theme_def(
             header_padding_y: 4.0,
             header_gap: 4.0,
             divider_margin_x: 16.0,
-            divider_height: 1.0,
+            divider_height: 0.0,
             divider_alpha: footer.divider_alpha,
         },
         search: MainMenuSearchTokens {
@@ -579,7 +579,7 @@ fn base_main_menu_theme_def(
         list: MainMenuListTokens {
             item_height: 40.0,
             section_header_height: 32.0,
-            first_section_header_height: 26.0,
+            first_section_header_height: 4.0 + 16.0 + 4.0,
             average_scroll_height: ((40.0 * 3.0) + 32.0) / 4.0,
         },
         row: MainMenuRowTokens {
@@ -640,7 +640,7 @@ pub fn current_main_menu_theme() -> MainMenuThemeVariant {
 
 #[cfg(test)]
 mod tests {
-    use super::{MainMenuThemeVariant, current_main_menu_theme, set_current_main_menu_theme};
+    use super::{current_main_menu_theme, set_current_main_menu_theme, MainMenuThemeVariant};
     use std::collections::HashSet;
 
     #[test]

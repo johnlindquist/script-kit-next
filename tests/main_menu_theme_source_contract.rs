@@ -93,7 +93,23 @@ fn selector_copy_is_header_oriented_not_theme_oriented() {
         assert!(def.header_info_bar.show_agent_model);
         assert!(def.shell.header_padding_y <= 4.0);
         assert!(def.shell.header_gap <= 4.0);
+        assert_eq!(def.shell.divider_height, 0.0);
+        assert_eq!(
+            def.list.first_section_header_height,
+            def.shell.header_padding_y + def.typography.section_line_height + 4.0
+        );
     }
+}
+
+#[test]
+fn first_section_separator_padding_matches_header_bottom_padding() {
+    let list_item = read_source("src/list_item/mod.rs");
+
+    assert!(list_item.contains("pub first_section_padding_top: f32"));
+    assert!(list_item.contains("first_section_padding_top: def.shell.header_padding_y"));
+    assert!(list_item.contains("metrics.first_section_padding_top"));
+    assert!(list_item.contains("if is_first"));
+    assert!(list_item.contains("header.justify_start()"));
 }
 
 #[test]
@@ -139,7 +155,7 @@ fn shared_main_view_columns_are_cross_theme_source_of_truth() {
     assert!(shared.contains(
         "main_view_row_leading_x(def) + main_view_state_icon_slot_size(def) + def.row.icon_text_gap"
     ));
-    assert!(shared.contains("MainMenuLogoPlacement::InputLeading"));
+    assert!(shared.contains("!main_view_state_icon_uses_script_kit_logo(icon_name)"));
     assert!(shared.contains("def.icon.container_size.min(def.search.height).max(16.0)"));
     assert!(shared.contains("(text_column_x - def.shell.header_padding_x)"));
     assert!(shared.contains(".max(def.search.text_inset_x)"));

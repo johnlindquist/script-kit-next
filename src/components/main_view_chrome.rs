@@ -3,7 +3,7 @@ use gpui::{
     StatefulInteractiveElement, Styled,
 };
 
-use crate::designs::{MainMenuInputTextAlignment, MainMenuLogoPlacement, MainMenuThemeDef};
+use crate::designs::{MainMenuInputTextAlignment, MainMenuThemeDef};
 
 pub(crate) const MAIN_VIEW_SHELL_ID: &str = "main-view-shell";
 pub(crate) const MAIN_VIEW_INPUT_SHELL_ID: &str = "main-view-input-shell";
@@ -249,9 +249,6 @@ pub(crate) fn render_main_view_context_zone(
         .items_center()
         .justify_start()
         .gap(px(info.gap_px));
-    if matches!(info.logo_placement, MainMenuLogoPlacement::HeaderLeading) {
-        left_lane = left_lane.child(render_main_view_context_logo(theme, info.height_px));
-    }
     if info.show_cwd {
         left_lane = left_lane.child(cwd_chip);
     }
@@ -279,9 +276,6 @@ pub(crate) fn render_main_view_context_zone(
     if info.show_agent_model {
         right_lane = right_lane.child(model_chip);
     }
-    if matches!(info.logo_placement, MainMenuLogoPlacement::HeaderTrailing) {
-        right_lane = right_lane.child(render_main_view_context_logo(theme, info.height_px));
-    }
 
     div()
         .id(MAIN_VIEW_CONTEXT_ZONE_ID)
@@ -304,21 +298,21 @@ pub(crate) fn render_main_view_context_zone(
         .into_any_element()
 }
 
-fn render_main_view_context_logo(theme: &crate::theme::Theme, height_px: f32) -> AnyElement {
-    let size = (height_px - 2.0).clamp(12.0, 18.0);
-    div()
-        .id(MAIN_VIEW_CONTEXT_LOGO_ID)
-        .size(px(height_px.max(14.0)))
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(
-            gpui::svg()
-                .external_path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
-                .size(px(size))
-                .text_color(rgb(theme.colors.accent.selected)),
-        )
-        .into_any_element()
+#[allow(dead_code)]
+pub(crate) fn render_main_view_context_zone_inert(
+    theme: &crate::theme::Theme,
+    def: MainMenuThemeDef,
+    cwd_label: Option<String>,
+    agent_model_label: Option<String>,
+) -> AnyElement {
+    render_main_view_context_zone(
+        theme,
+        def,
+        cwd_label,
+        agent_model_label,
+        |_event, _window, _cx| {},
+        |_event, _window, _cx| {},
+    )
 }
 
 #[allow(dead_code)]
@@ -421,11 +415,8 @@ pub(crate) fn main_view_state_icon_uses_script_kit_logo(icon_name: &str) -> bool
 
 #[allow(dead_code)]
 pub(crate) fn main_view_should_show_state_icon(def: MainMenuThemeDef, icon_name: &str) -> bool {
+    let _ = def;
     !main_view_state_icon_uses_script_kit_logo(icon_name)
-        || matches!(
-            def.header_info_bar.logo_placement,
-            MainMenuLogoPlacement::InputLeading
-        )
 }
 
 pub(crate) fn render_main_view_state_icon(

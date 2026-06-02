@@ -8154,7 +8154,11 @@ impl AcpChatView {
         );
         crate::components::main_view_chrome::render_main_view_header(
             crate::components::main_view_chrome::MainViewHeaderChrome {
-                context: None,
+                context: Some(
+                    crate::components::main_view_chrome::render_main_view_context_zone_inert(
+                        theme, menu_def, None, None,
+                    ),
+                ),
                 input,
                 padding_x: menu_def.shell.header_padding_x,
                 padding_y: menu_def.shell.header_padding_y,
@@ -13123,7 +13127,11 @@ impl Render for AcpChatView {
                 &theme,
             );
             let header = crate::components::main_view_chrome::MainViewHeaderChrome {
-                context: None,
+                context: Some(
+                    crate::components::main_view_chrome::render_main_view_context_zone_inert(
+                        &theme, menu_def, None, None,
+                    ),
+                ),
                 input,
                 padding_x: menu_def.shell.header_padding_x,
                 padding_y: menu_def.shell.header_padding_y,
@@ -13132,7 +13140,7 @@ impl Render for AcpChatView {
             let divider = crate::components::main_view_chrome::MainViewDividerChrome {
                 margin_x: menu_def.shell.divider_margin_x,
                 height: menu_def.shell.divider_height,
-                visible: true,
+                visible: false,
             };
 
             let mut pre_main = Vec::new();
@@ -13365,19 +13373,6 @@ impl Render for AcpChatView {
                         view_entity.clone(),
                         &theme,
                     ))
-                },
-            )
-            .when(
-                matches!(variant_config.composer, AcpComposerPlacement::Default),
-                |d| {
-                    d.child(
-                        crate::components::main_view_chrome::render_main_view_header_divider(
-                            &theme,
-                            menu_def,
-                            menu_def.shell.divider_margin_x,
-                            menu_def.shell.divider_height,
-                        ),
-                    )
                 },
             )
             .when_some(self.focused_inline_mention_preview(cx), |d, preview| {

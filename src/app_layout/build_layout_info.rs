@@ -121,7 +121,10 @@ impl ScriptListApp {
         // Layout constants (same as build_component_bounds)
         use crate::ui::chrome as chrome_tokens;
         const BUTTON_HEIGHT: f32 = 28.0;
-        let main_view_has_context_zone = matches!(self.current_view, AppView::ScriptList);
+        let main_view_has_context_zone = matches!(
+            self.current_view,
+            AppView::ScriptList | AppView::FileSearchView { .. } | AppView::AcpChatView { .. }
+        );
         let shell_horizontal_padding = shell.header_padding_x;
         let main_view_context_zone_height = menu_def.header_info_bar.height_px;
         let header_content_height = if main_view_has_context_zone {
@@ -129,8 +132,7 @@ impl ScriptListApp {
         } else {
             search.height
         };
-        let header_height =
-            shell.header_padding_y * 2.0 + header_content_height + shell.divider_height;
+        let header_height = shell.header_padding_y * 2.0 + header_content_height;
         let list_width = if uses_split_preview {
             window_width * 0.5
         } else {
@@ -1724,8 +1726,8 @@ impl ScriptListApp {
                 .with_depth(1)
                 .with_parent("Window")
                 .with_explanation(format!(
-                    "Height = padding({}) + content({}) + padding({}) + divider({}) = {}px. Uses shared main-view header chrome.",
-                    shell.header_padding_y, header_content_height, shell.header_padding_y, shell.divider_height, header_height
+                    "Height = padding({}) + content({}) + padding({}) = {}px. Uses shared no-divider main-view header chrome.",
+                    shell.header_padding_y, header_content_height, shell.header_padding_y, header_height
                 )),
         );
 

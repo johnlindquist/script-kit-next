@@ -72,20 +72,22 @@ impl ScriptListApp {
             AppView::ConfirmPrompt { .. } => "ConfirmPrompt",
         };
 
-        let main_view_has_context_zone = matches!(self.current_view, AppView::ScriptList);
+        let main_view_has_context_zone = matches!(
+            self.current_view,
+            AppView::ScriptList | AppView::FileSearchView { .. } | AppView::AcpChatView { .. }
+        );
         let main_view_context_zone_height = menu_def.header_info_bar.height_px;
         let main_view_header_content_height = if main_view_has_context_zone {
             menu_def.search.height + menu_def.shell.header_gap + main_view_context_zone_height
         } else {
             menu_def.search.height
         };
-        let header_height = px(menu_def.shell.header_padding_y * 2.0
-            + main_view_header_content_height
-            + menu_def.shell.divider_height);
+        let header_height =
+            px(menu_def.shell.header_padding_y * 2.0 + main_view_header_content_height);
         let content_top = header_height;
         let content_height = height - header_height;
 
-        // Header bounds (includes padding + input + divider) - common to all views
+        // Header bounds (includes padding + context + input; no divider) - common to all views
         bounds.push(
             ComponentBounds::new(
                 "MainViewHeader",

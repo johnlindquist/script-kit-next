@@ -1907,7 +1907,7 @@ impl ScriptListApp {
             } else {
                 design_visual.border_thin
             },
-            visible: true,
+            visible: false,
         };
 
         if is_mini {

@@ -1353,13 +1353,16 @@ impl ScriptListApp {
             vec![primary.into(), ai_hint.into(), "\u{2318}F Focus".into()]
         };
 
-        // Header: bare input + file count (scaffold adds padding/layout)
+        // Header: shared main-view input shell with File Search's local count
+        // metadata in the trailing lane.
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
         let header_gap = if is_default_design {
-            12.0
+            shell.header_gap
         } else {
             design_spacing.gap_md
         };
-        let header_element = div()
+        let input_body = div()
             .flex_1()
             .flex()
             .flex_row()
@@ -1434,6 +1437,56 @@ impl ScriptListApp {
                             }),
                     ),
             );
+        let input = crate::components::main_view_chrome::render_main_view_input_shell(
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewInputChrome {
+                body: input_body.into_any_element(),
+                leading: Some(
+                    crate::components::main_view_chrome::render_main_view_state_icon(
+                        &self.theme,
+                        menu_def,
+                        "folder-open",
+                    ),
+                ),
+                trailing: Vec::new(),
+            },
+        );
+        let header = crate::components::main_view_chrome::MainViewHeaderChrome {
+            context: Some(
+                crate::components::main_view_chrome::render_main_view_context_zone(
+                    &self.theme,
+                    menu_def,
+                    self.global_footer_cwd_chip().map(|chip| chip.label),
+                    self.agent_model_footer_label(),
+                    cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                        this.dispatch_main_window_footer_action(
+                            crate::footer_popup::FooterAction::Cwd,
+                            window,
+                            cx,
+                            "main_view_context_click",
+                        );
+                    }),
+                    cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                        this.dispatch_main_window_footer_action(
+                            crate::footer_popup::FooterAction::AgentModel,
+                            window,
+                            cx,
+                            "main_view_context_click",
+                        );
+                    }),
+                ),
+            ),
+            input,
+            padding_x: shell.header_padding_x,
+            padding_y: shell.header_padding_y,
+            gap: header_gap,
+        };
+        let divider = crate::components::main_view_chrome::MainViewDividerChrome {
+            margin_x: shell.divider_margin_x,
+            height: shell.divider_height,
+            visible: false,
+        };
 
         // List pane: loading/empty/results with scrollbar overlay
         let loading_badge = div()
@@ -1522,32 +1575,59 @@ impl ScriptListApp {
         let gpui_footer = crate::components::render_simple_hint_strip(file_search_hints, None);
         let footer = self.main_window_footer_slot(gpui_footer);
 
-        if is_mini {
-            crate::components::render_minimal_list_prompt_shell_with_footer(
-                0.0,
-                None,
-                header_element,
-                list_pane,
-                footer,
-            )
+        let root = crate::components::main_view_chrome::render_main_view_shell()
             .font_family(self.theme_font_family())
             .key_context("FileSearchView")
             .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            .into_any_element()
+            .on_key_down(handle_key);
+
+        let main = if is_mini {
+            div()
+                .w_full()
+                .h_full()
+                .min_h(px(0.))
+                .overflow_hidden()
+                .child(list_pane)
+                .into_any_element()
         } else {
-            crate::components::render_expanded_view_scaffold_with_footer(
-                header_element,
-                list_pane,
-                preview_pane,
+            div()
+                .flex()
+                .flex_row()
+                .h_full()
+                .min_h(px(0.))
+                .w_full()
+                .overflow_hidden()
+                .child(
+                    div()
+                        .flex_1()
+                        .h_full()
+                        .min_h(px(0.))
+                        .overflow_hidden()
+                        .child(list_pane),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .h_full()
+                        .min_h(px(0.))
+                        .overflow_hidden()
+                        .child(preview_pane),
+                )
+                .into_any_element()
+        };
+
+        crate::components::main_view_chrome::render_main_view_chrome(
+            root,
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header,
+                divider,
+                main,
                 footer,
-            )
-            .font_family(self.theme_font_family())
-            .key_context("FileSearchView")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            .into_any_element()
-        }
+                overlays: Vec::new(),
+            },
+        )
     }
 }
 
@@ -1609,8 +1689,8 @@ mod file_search_thumbnail_tests {
     }
 
     #[test]
-    fn test_load_file_search_thumbnail_preview_returns_resolution_too_large_when_dimension_exceeds_limit(
-    ) {
+    fn test_load_file_search_thumbnail_preview_returns_resolution_too_large_when_dimension_exceeds_limit()
+     {
         let temp_dir = tempdir().expect("tempdir should be created");
         let image_path = temp_dir.path().join("oversized.png");
         let img = RgbaImage::from_pixel(2, 2, Rgba([255, 0, 0, 255]));
@@ -1649,16 +1729,20 @@ mod file_search_chrome_audit {
     }
 
     #[test]
-    fn file_search_uses_shared_footer_scaffolds() {
+    fn file_search_uses_shared_main_view_chrome() {
         let source = production_source();
 
         assert!(
-            source.contains("render_expanded_view_scaffold_with_footer("),
-            "file_search expanded view should use the shared footer scaffold"
+            source.contains("render_main_view_chrome("),
+            "file_search should use the shared main-view chrome"
         );
         assert!(
-            source.contains("render_minimal_list_prompt_shell_with_footer("),
-            "file_search mini view should use the shared footer shell"
+            source.contains("render_main_view_context_zone("),
+            "file_search should keep the shared header context zone"
+        );
+        assert!(
+            source.contains("render_main_view_input_shell("),
+            "file_search should keep the shared main-view input shell"
         );
         assert!(
             source.contains("main_window_footer_slot("),

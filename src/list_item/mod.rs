@@ -110,6 +110,7 @@ pub struct ListItemMetricsOverride {
     pub first_section_header_height: f32,
     pub average_scroll_height: f32,
     pub section_padding_top: f32,
+    pub first_section_padding_top: f32,
     pub icon_container_size: f32,
     pub icon_svg_size: f32,
     pub icon_tile_size: f32,
@@ -149,6 +150,7 @@ impl ListItemMetricsOverride {
             first_section_header_height: SECTION_HEADER_HEIGHT - (SECTION_PADDING_TOP / 2.0),
             average_scroll_height: AVERAGE_ITEM_HEIGHT_FOR_SCROLL,
             section_padding_top: SECTION_PADDING_TOP,
+            first_section_padding_top: SECTION_PADDING_TOP / 2.0,
             icon_container_size: ICON_CONTAINER_SIZE,
             icon_svg_size: ICON_SVG_SIZE,
             icon_tile_size: ICON_CONTAINER_SIZE,
@@ -189,6 +191,7 @@ impl ListItemMetricsOverride {
             first_section_header_height: def.list.first_section_header_height,
             average_scroll_height: def.list.average_scroll_height,
             section_padding_top: SECTION_PADDING_TOP,
+            first_section_padding_top: def.shell.header_padding_y,
             icon_container_size: def.icon.container_size,
             icon_svg_size: def.icon.svg_size,
             icon_tile_size: def.icon.tile_size,
@@ -2350,24 +2353,31 @@ pub fn render_section_header(
     }
 
     let (header_height, padding_top) = if is_first {
-        // First section header has no preceding items, so we pull it up closer to the input field
-        // by reducing the top padding and height to a halfway point between normal (32px) and tight (20px)
-        let half_padding = metrics.section_padding_top / 2.0;
-        (metrics.section_header_height - half_padding, half_padding)
+        // First section headers align their top breathing room with the shared
+        // main-view header bottom padding, so the query/header block and the
+        // first group separator feel mathematically balanced.
+        (
+            metrics.first_section_header_height,
+            metrics.first_section_padding_top,
+        )
     } else {
         (metrics.section_header_height, metrics.section_padding_top)
     };
 
     // Clean section headers — no background tint for a calmer list appearance
-    let header = div()
+    let mut header = div()
         .w_full()
         .h(px(header_height))
         .px(px(SECTION_PADDING_X))
         .pt(px(padding_top))
         .pb(px(SECTION_PADDING_BOTTOM))
         .flex()
-        .flex_col()
-        .justify_end(); // Align content to bottom for better visual anchoring
+        .flex_col();
+    header = if is_first {
+        header.justify_start()
+    } else {
+        header.justify_end()
+    }; // Later headers stay bottom-anchored between rows.
 
     // No separator lines — spacing alone defines groups per whisper-chrome spec
     header.child(content)
