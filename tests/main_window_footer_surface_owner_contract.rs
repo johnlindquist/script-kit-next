@@ -254,6 +254,29 @@ fn footer_context_chips_do_not_count_as_action_slots() {
 }
 
 #[test]
+fn cwd_and_agent_model_are_not_rendered_as_main_window_footer_chips() {
+    assert!(
+        !UI_WINDOW_SOURCE.contains("FooterButtonConfig::new(FooterAction::Cwd")
+            && !UI_WINDOW_SOURCE.contains("FooterButtonConfig::new(FooterAction::AgentModel"),
+        "cwd and Agent/model are shared-header controls and must not be duplicated as native footer buttons"
+    );
+    assert!(
+        !UI_WINDOW_SOURCE.contains("prepend_global_main_window_left_chips")
+            && !UI_WINDOW_SOURCE.contains("global_main_window_left_chip_buttons")
+            && !UI_WINDOW_SOURCE.contains("current_view_shows_global_left_chips"),
+        "main-window footer config must not have a global cwd/model prepending path"
+    );
+    assert!(
+        function_body(
+            UI_WINDOW_SOURCE,
+            "pub(crate) fn enrich_footer_config_with_acp_info"
+        )
+        .contains("config.left_info = None;"),
+        "ACP footer enrichment must suppress legacy left-info cwd/model markers"
+    );
+}
+
+#[test]
 fn live_dictation_overlay_does_not_join_main_window_footer_ownership() {
     let footer_map = function_body(APP_VIEW_STATE_SOURCE, "pub(crate) fn native_footer_surface");
     assert!(

@@ -102,6 +102,24 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(ui_window.contains("render_main_view_context_zone_required"));
     assert!(ui_window.contains("FooterAction::Cwd"));
     assert!(ui_window.contains("FooterAction::AgentModel"));
+    assert!(
+        !ui_window.contains("FooterButtonConfig::new(FooterAction::Cwd"),
+        "cwd must be a shared-header affordance, not a duplicated native footer chip"
+    );
+    assert!(
+        !ui_window.contains("FooterButtonConfig::new(FooterAction::AgentModel"),
+        "Agent/model must be a shared-header affordance, not a duplicated native footer chip"
+    );
+    assert!(
+        !ui_window.contains("prepend_global_main_window_left_chips")
+            && !ui_window.contains("global_main_window_left_chip_buttons")
+            && !ui_window.contains("current_view_shows_global_left_chips"),
+        "main-window footer config must not prepend duplicated cwd/model context chips"
+    );
+    assert!(
+        ui_window.contains("config.left_info = None;"),
+        "ACP footer enrichment must suppress old left-info model/cwd marker now owned by the header"
+    );
     assert!(app_view_state.contains("pub(crate) fn uses_shared_main_view_header"));
     assert!(app_view_state.contains(
         "AppView::ScriptList | AppView::FileSearchView { .. } | AppView::AcpChatView { .. }"
@@ -416,7 +434,7 @@ fn acp_layout_model_swaps_only_main_section_to_conversation() {
 }
 
 #[test]
-fn script_list_three_zone_footer_keeps_context_out_of_action_zone() {
+fn main_window_footer_keeps_header_context_out_of_action_zone() {
     let ui_window = read_source("src/app_impl/ui_window.rs");
     let standard_footer = ui_window
         .split("fn standard_main_window_footer_buttons")
@@ -427,16 +445,25 @@ fn script_list_three_zone_footer_keeps_context_out_of_action_zone() {
     assert!(standard_footer.contains("FooterAction::Actions"));
     assert!(standard_footer.contains("FooterAction::Ai"));
     assert!(standard_footer.contains("matches!(self.current_view, AppView::ScriptList)"));
-
-    let global_left_chips = ui_window
-        .split("fn current_view_shows_global_left_chips")
-        .nth(1)
-        .and_then(|tail| tail.split("fn global_main_window_left_chip_buttons").next())
-        .expect("current_view_shows_global_left_chips body should be present");
     assert!(
-        global_left_chips.contains("AppView::AcpChatView { .. }")
-            && !global_left_chips.contains("AppView::ScriptList"),
-        "ScriptList cwd/model context should render in MainViewContextZone, not as footer action buttons"
+        !standard_footer.contains("FooterAction::Cwd")
+            && !standard_footer.contains("FooterAction::AgentModel"),
+        "cwd/model context should render in MainViewContextZone, not as footer action buttons"
+    );
+
+    let footer_config = ui_window
+        .split("pub(crate) fn main_window_footer_config_with_cx")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("pub(crate) fn main_window_uses_native_footer")
+                .next()
+        })
+        .expect("main_window_footer_config_with_cx body should be present");
+    assert!(
+        !footer_config.contains("prepend_global_main_window_left_chips")
+            && !footer_config.contains("FooterAction::Cwd")
+            && !footer_config.contains("FooterAction::AgentModel"),
+        "main-window footer config should not inject duplicated cwd/model footer chips"
     );
 }
 

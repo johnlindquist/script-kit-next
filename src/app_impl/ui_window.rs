@@ -575,12 +575,6 @@ impl ScriptListApp {
 
         let mut buttons = Vec::new();
 
-        // NOTE: the global Cwd + Agent·Model left chips are no longer assembled
-        // here. They are prepended centrally in `main_window_footer_config_with_cx`
-        // (see `prepend_global_main_window_left_chips`) so they persist
-        // identically across the main menu ↔ Agent Chat switch instead of
-        // appearing only on the ScriptList-specific path.
-
         buttons.push(
             FooterButtonConfig::new(FooterAction::Run, "↵", run_label).enabled(!footer_disabled),
         );
@@ -1018,14 +1012,7 @@ impl ScriptListApp {
         }
 
         let surface = self.main_window_footer_surface()?;
-        let mut buttons = self.main_window_footer_buttons_for_current_view(cx);
-
-        // Cwd + Agent·Model are GLOBAL launcher chips, not per-surface buttons.
-        // Prepend them centrally for the surfaces that show them so they render
-        // identically and persist with no gap across main menu ↔ Agent Chat.
-        if self.current_view_shows_global_left_chips() {
-            buttons = self.prepend_global_main_window_left_chips(buttons);
-        }
+        let buttons = self.main_window_footer_buttons_for_current_view(cx);
 
         tracing::info!(
             target: "script_kit::footer_popup",
@@ -1252,152 +1239,18 @@ impl ScriptListApp {
         )
     }
 
-    /// The launcher surfaces that display the global Spine cwd + Agent·Model
-    /// chips: the main menu and Agent Chat. They are GLOBAL launcher context, so
-    /// they must render identically on both and persist across the switch (the
-    /// reported bug was them vanishing/flashing when moving main menu ↔ Agent
-    /// Chat). Other surfaces intentionally omit them — e.g. `TemplatePrompt`
-    /// already binds ⇥ to "Next Field", which would collide with the cwd chip's
-    /// ⇥ keycap.
-    fn current_view_shows_global_left_chips(&self) -> bool {
-        matches!(self.current_view, AppView::AcpChatView { .. })
-    }
-
-    /// Builds the global left-pinned footer chips (Spine cwd + Agent·Model) from
-    /// the single global sources (`global_footer_cwd_chip` /
-    /// `agent_model_footer_label`) so they render identically on every surface
-    /// that shows them. Either chip is omitted when its data is absent.
-    fn global_main_window_left_chip_buttons(&self) -> Vec<crate::footer_popup::FooterButtonConfig> {
-        use crate::footer_popup::{FooterAction, FooterButtonConfig, FooterDotStatus};
-
-        let enabled = !self.main_window_footer_buttons_blocked();
-        let mut buttons = Vec::with_capacity(2);
-
-        if let Some(cwd_chip) = self.global_footer_cwd_chip() {
-            let key = cwd_chip.key.unwrap_or_else(|| "⇥".to_string());
-            buttons.push(
-                FooterButtonConfig::new(FooterAction::Cwd, key, cwd_chip.label).enabled(enabled),
-            );
-        }
-
-        // The ACP streaming/idle status dot rides inside the Agent·Model chip,
-        // but ONLY in Agent Chat: reserve the dot lane whenever the surface is
-        // AcpChatView (Some(Hidden) before the first snapshot) so the chip width
-        // never jitters as the status changes. ScriptList gets `None` → no lane,
-        // staying genuinely dot-free.
-        let agent_model_dot_status = if matches!(self.current_view, AppView::AcpChatView { .. }) {
-            Some(
-                self.acp_footer_dot_status
-                    .unwrap_or(FooterDotStatus::Hidden),
-            )
-        } else {
-            None
-        };
-
-        // Agent · Model chip, pinned right of the cwd chip; opens the combined
-        // Pi provider/model picker on click / Shift+Tab.
-        if let Some(label) = self.agent_model_footer_label() {
-            let mut button =
-                FooterButtonConfig::new(FooterAction::AgentModel, "⇧⇥", label).enabled(enabled);
-            if let Some(dot_status) = agent_model_dot_status {
-                button = button.leading_dot(dot_status);
-            }
-            buttons.push(button);
-        }
-
-        buttons
-    }
-
-    /// Prepends the global left chips to a surface's own footer buttons. The
-    /// native footer left-pins Cwd/AgentModel regardless of list position (see
-    /// `is_footer_left_pinned_button` in footer_popup.rs), so surface-owned
-    /// buttons (Run/Send/Actions) still render trailing. Any pre-existing Cwd/
-    /// AgentModel entries are stripped first so the global chips are the single
-    /// source of truth and never duplicate.
-    fn prepend_global_main_window_left_chips(
-        &self,
-        mut buttons: Vec<crate::footer_popup::FooterButtonConfig>,
-    ) -> Vec<crate::footer_popup::FooterButtonConfig> {
-        use crate::footer_popup::FooterAction;
-
-        buttons.retain(|button| {
-            !matches!(button.action, FooterAction::Cwd | FooterAction::AgentModel)
-        });
-        let mut prefixed = self.global_main_window_left_chip_buttons();
-        prefixed.append(&mut buttons);
-        prefixed
-    }
-
     pub(crate) fn enrich_footer_config_with_acp_info(
         &self,
         config: &mut crate::footer_popup::MainWindowFooterConfig,
     ) {
         if matches!(self.current_view, AppView::AcpChatView { .. }) {
-            // Cwd + Agent·Model are now real left-pinned FooterButtonConfig
-            // entries in the native hints row (prepended in
-            // `main_window_footer_config_with_cx`). The old visual-only
-            // `left_info.cwd_chip` / model marker lived in a SEPARATE left-info
-            // rail; rendering both at once is exactly what caused the
-            // gap/flash/overlap when switching surfaces. So when the real chips
-            // are present, suppress the left-info rail entirely.
-            //
-            // The ACP streaming/status dot now rides as a reserved leading dot
-            // INSIDE the real Agent·Model footer button (see
-            // global_main_window_left_chip_buttons + FooterButtonConfig.leading_dot),
-            // so the separate left-info rail stays suppressed and the old overlap
-            // path cannot return.
-            let has_real_global_left_chips = config.buttons.iter().any(|button| {
-                matches!(
-                    button.action,
-                    crate::footer_popup::FooterAction::Cwd
-                        | crate::footer_popup::FooterAction::AgentModel
-                )
-            });
-            if has_real_global_left_chips {
-                config.left_info = None;
-                return;
-            }
-
-            // Fallback only for unusual states where no global chip exists
-            // (e.g. no spine_cwd and no agent/model selection yet): keep the ACP
-            // model marker but do NOT draw a visual cwd_chip.
-            if let Some(snapshot) = self.acp_footer_snapshot.as_ref() {
-                let mut left_info = snapshot.profile_left_info();
-                left_info.cwd_chip = None;
-                config.left_info = Some(left_info);
-                return;
-            }
-
-            let (Some(dot_status), Some(model_name)) = (
-                self.acp_footer_dot_status,
-                self.acp_footer_model_display.as_ref(),
-            ) else {
-                return;
-            };
-
-            config.left_info = Some(crate::footer_popup::FooterLeftInfo {
-                dot_status,
-                model_name: model_name.clone(),
-                prefer_accent_for_active_states: true,
-                profile_name: None,
-                icon_token: Some(
-                    crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN.to_string(),
-                ),
-                action: Some(crate::footer_popup::FooterAction::Ai),
-                selected: false,
-                cwd_chip: None,
-            });
+            // Cwd and Agent/Model now live in the shared main-view header. Keep
+            // the native footer scoped to surface actions only, and make sure
+            // stale ACP left-info state cannot reintroduce duplicate model/cwd
+            // chips beside the footer buttons.
+            config.left_info = None;
             return;
         }
-
-        // Main menu (ScriptList): CWD is rendered as a regular footer button
-        // (see standard_main_window_footer_buttons → FooterAction::Cwd), so it
-        // gets the same bordered chrome + hover state as Open / Actions.
-        //
-        // NOTE: a centered agent/model marker was tried here but overlapped the
-        // cwd button. The agent/model footer indicator is deferred until the
-        // agent-selection backend is reconciled (see below) and a non-colliding
-        // footer slot is chosen.
     }
 
     pub(crate) fn toggle_logs(&mut self, cx: &mut Context<Self>) {
