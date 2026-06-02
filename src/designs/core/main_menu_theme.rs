@@ -335,20 +335,20 @@ impl MainMenuThemeVariant {
     fn info_bar_name(self) -> &'static str {
         match self {
             MainMenuThemeVariant::InfoBarBase => "Base Info Bar",
-            MainMenuThemeVariant::InfoBarBreadcrumb => "Header Logo Left",
-            MainMenuThemeVariant::InfoBarCompact => "No Logo Compact",
-            MainMenuThemeVariant::InfoBarSplit => "Header Logo Right",
+            MainMenuThemeVariant::InfoBarBreadcrumb => "Right Model Breadcrumb",
+            MainMenuThemeVariant::InfoBarCompact => "Right Model Compact",
+            MainMenuThemeVariant::InfoBarSplit => "Right Model Split",
             MainMenuThemeVariant::InfoBarCwdFocus => "Right Model Cwd Focus",
             MainMenuThemeVariant::InfoBarModelFocus => "Right Model Focus",
             MainMenuThemeVariant::InfoBarSlashPath => "Right Model Slash Path",
             MainMenuThemeVariant::InfoBarMutedPills => "Right Model Muted Pills",
-            MainMenuThemeVariant::InfoBarPlainText => "No Logo Plain",
+            MainMenuThemeVariant::InfoBarPlainText => "Right Model Plain",
             MainMenuThemeVariant::InfoBarLowContrastKeys => "Right Model Low Keys",
             MainMenuThemeVariant::InfoBarStrongKeys => "Right Model Strong Keys",
-            MainMenuThemeVariant::InfoBarCentered => "No Logo Center Start",
-            MainMenuThemeVariant::InfoBarLeftDense => "Header Logo Dense Left",
-            MainMenuThemeVariant::InfoBarRightUtility => "Header Logo Utility Right",
-            MainMenuThemeVariant::InfoBarUltraQuiet => "No Suggested Separator",
+            MainMenuThemeVariant::InfoBarCentered => "Right Model Center Weight",
+            MainMenuThemeVariant::InfoBarLeftDense => "Right Model Left Dense",
+            MainMenuThemeVariant::InfoBarRightUtility => "Right Model Utility",
+            MainMenuThemeVariant::InfoBarUltraQuiet => "Right Model Ultra Quiet",
         }
     }
 
@@ -358,33 +358,23 @@ impl MainMenuThemeVariant {
                 "Smallest, dimmest right-model header using the current quiet layout as the base"
             }
             MainMenuThemeVariant::InfoBarBreadcrumb => {
-                "Moves the Script Kit mark to the metadata row before cwd"
+                "Dimmest breadcrumb header with cwd left and model right"
             }
             MainMenuThemeVariant::InfoBarCompact => {
-                "Removes the default logo and starts the input on the quieter search inset"
+                "Dimmest compact header with minimal vertical footprint"
             }
-            MainMenuThemeVariant::InfoBarSplit => {
-                "Moves the Script Kit mark to the metadata row after model"
-            }
+            MainMenuThemeVariant::InfoBarSplit => "Dimmest split header with scan separation",
             MainMenuThemeVariant::InfoBarCwdFocus => "Dimmest cwd-weighted left chip",
             MainMenuThemeVariant::InfoBarModelFocus => "Dimmest model-weighted right chip",
             MainMenuThemeVariant::InfoBarSlashPath => "Dimmest slash-path rhythm",
             MainMenuThemeVariant::InfoBarMutedPills => "Dimmest muted pill boundaries",
-            MainMenuThemeVariant::InfoBarPlainText => "Borderless split text with no default logo",
+            MainMenuThemeVariant::InfoBarPlainText => "Dimmest borderless split text",
             MainMenuThemeVariant::InfoBarLowContrastKeys => "Dimmest low-emphasis footer keycaps",
             MainMenuThemeVariant::InfoBarStrongKeys => "Dimmest clearer footer keycaps",
-            MainMenuThemeVariant::InfoBarCentered => {
-                "No-logo input with a softer centered starting point"
-            }
-            MainMenuThemeVariant::InfoBarLeftDense => {
-                "Dense left metadata treatment with header-row logo"
-            }
-            MainMenuThemeVariant::InfoBarRightUtility => {
-                "Utility-weighted right chip with trailing header-row logo"
-            }
-            MainMenuThemeVariant::InfoBarUltraQuiet => {
-                "No-logo treatment that removes the first Suggested separator"
-            }
+            MainMenuThemeVariant::InfoBarCentered => "Dimmest balanced split rhythm",
+            MainMenuThemeVariant::InfoBarLeftDense => "Dimmest dense left chip",
+            MainMenuThemeVariant::InfoBarRightUtility => "Dimmest right utility chip",
+            MainMenuThemeVariant::InfoBarUltraQuiet => "Dimmest no-key metadata treatment",
         }
     }
 
@@ -394,7 +384,7 @@ impl MainMenuThemeVariant {
 
     pub fn header_info_bar(self) -> HeaderInfoBarTokens {
         use HeaderInfoBarLayout::*;
-        let mut tokens = match self {
+        match self {
             MainMenuThemeVariant::InfoBarBase => header_info_bar_tokens(
                 Split, 0.50, 14.0, 7.0, 0.0, 0.0, 0.0, 0x00, 0x00, true, true, false, "·",
             ),
@@ -440,35 +430,7 @@ impl MainMenuThemeVariant {
             MainMenuThemeVariant::InfoBarUltraQuiet => header_info_bar_tokens(
                 Split, 0.34, 13.0, 7.0, 0.0, 0.0, 0.0, 0x00, 0x00, true, true, false, "·",
             ),
-        };
-
-        match self {
-            MainMenuThemeVariant::InfoBarBreadcrumb | MainMenuThemeVariant::InfoBarLeftDense => {
-                tokens.logo_placement = MainMenuLogoPlacement::HeaderLeading;
-                tokens.input_text_alignment = MainMenuInputTextAlignment::SearchInset;
-            }
-            MainMenuThemeVariant::InfoBarSplit | MainMenuThemeVariant::InfoBarRightUtility => {
-                tokens.logo_placement = MainMenuLogoPlacement::HeaderTrailing;
-                tokens.input_text_alignment = MainMenuInputTextAlignment::SearchInset;
-            }
-            MainMenuThemeVariant::InfoBarCompact
-            | MainMenuThemeVariant::InfoBarPlainText
-            | MainMenuThemeVariant::InfoBarUltraQuiet => {
-                tokens.logo_placement = MainMenuLogoPlacement::Hidden;
-                tokens.input_text_alignment = MainMenuInputTextAlignment::SearchInset;
-            }
-            MainMenuThemeVariant::InfoBarCentered => {
-                tokens.logo_placement = MainMenuLogoPlacement::Hidden;
-                tokens.input_text_alignment = MainMenuInputTextAlignment::SoftCenter;
-            }
-            _ => {}
         }
-
-        if self == MainMenuThemeVariant::InfoBarUltraQuiet {
-            tokens.hide_initial_section_header = true;
-        }
-
-        tokens
     }
 
     pub fn header_info_bar_signature(self) -> HeaderInfoBarSignature {

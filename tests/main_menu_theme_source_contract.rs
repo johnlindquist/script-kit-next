@@ -37,40 +37,18 @@ fn header_info_bar_variants_have_unique_header_signatures() {
 }
 
 #[test]
-fn header_variations_include_logo_and_input_alignment_experiments() {
-    let variants = MainMenuThemeVariant::all();
-
-    assert!(variants.iter().any(|theme| {
-        theme.def().header_info_bar.logo_placement == MainMenuLogoPlacement::InputLeading
-    }));
-    assert!(variants.iter().any(|theme| {
-        theme.def().header_info_bar.logo_placement == MainMenuLogoPlacement::HeaderLeading
-    }));
-    assert!(variants.iter().any(|theme| {
-        theme.def().header_info_bar.logo_placement == MainMenuLogoPlacement::HeaderTrailing
-    }));
-    assert!(variants.iter().any(|theme| {
-        theme.def().header_info_bar.logo_placement == MainMenuLogoPlacement::Hidden
-    }));
-    assert!(variants.iter().any(|theme| {
-        theme.def().header_info_bar.input_text_alignment == MainMenuInputTextAlignment::SearchInset
-    }));
-    assert!(variants.iter().any(|theme| {
-        theme.def().header_info_bar.input_text_alignment == MainMenuInputTextAlignment::SoftCenter
-    }));
-}
-
-#[test]
-fn one_header_variation_hides_the_initial_suggested_separator() {
-    let hidden: Vec<_> = MainMenuThemeVariant::all()
-        .iter()
-        .filter(|theme| theme.def().header_info_bar.hide_initial_section_header)
-        .collect();
-
-    assert_eq!(hidden, vec![&MainMenuThemeVariant::InfoBarUltraQuiet]);
-    assert!(MainMenuThemeVariant::InfoBarUltraQuiet
-        .name()
-        .contains("No Suggested Separator"));
+fn all_header_variations_keep_the_screenshot_base_layout() {
+    for theme in MainMenuThemeVariant::all() {
+        let tokens = theme.def().header_info_bar;
+        assert_eq!(tokens.logo_placement, MainMenuLogoPlacement::InputLeading);
+        assert_eq!(
+            tokens.input_text_alignment,
+            MainMenuInputTextAlignment::RowTextColumn
+        );
+        assert!(!tokens.hide_initial_section_header);
+        assert!(tokens.show_cwd);
+        assert!(tokens.show_agent_model);
+    }
 }
 
 #[test]
@@ -150,8 +128,6 @@ fn shared_main_view_columns_are_cross_theme_source_of_truth() {
     assert!(shared.contains(
         "main_view_row_leading_x(def) + main_view_state_icon_slot_size(def) + def.row.icon_text_gap"
     ));
-    assert!(shared.contains("MainMenuInputTextAlignment::SearchInset"));
-    assert!(shared.contains("MainMenuInputTextAlignment::SoftCenter"));
     assert!(shared.contains("MainMenuLogoPlacement::InputLeading"));
     assert!(shared.contains("def.icon.container_size.min(def.search.height).max(16.0)"));
     assert!(shared.contains("(text_column_x - def.shell.header_padding_x)"));
