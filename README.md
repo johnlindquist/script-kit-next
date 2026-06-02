@@ -236,8 +236,9 @@ export default {
   theme: { presetId: "nord" },
   dictation: { selectedDeviceId: "usb-mic" },
   ai: {
-    selectedAcpAgentId: "codex-acp",
-    selectedModelId: "gpt-5.4"
+    selectedProfileId: "script-kit",
+    selectedBackend: "pi",
+    selectedModelId: "openai-codex/gpt-5.4"
   },
   windowManagement: { snapMode: "expanded" }
 };
@@ -245,22 +246,16 @@ export default {
 
 ### Agent Chat Configuration
 
-Agent Chat with Pi Backend uses the Agent Catalog and `~/.scriptkit/config.ts`.
-Some compatibility config keys still contain legacy adapter naming; treat those
-as storage/API names, not user-facing product language.
+Agent Chat with Pi Backend uses profiles in `~/.scriptkit/config.ts`. Codex is
+the default provider; alternative providers belong in advanced profile
+configuration rather than the primary setup flow.
 
 ```typescript
 ai: {
-  selectedAcpAgentId: "codex-acp",
-  selectedModelId: "gpt-5.4",
+  selectedBackend: "pi",
   selectedProfileId: "script-kit",
+  selectedModelId: "openai-codex/gpt-5.4",
   profiles: [
-    {
-      name: "Code Review",
-      agent: "codex-acp",
-      model: "gpt-5.4",
-      systemPrompt: "Review changes and call out risks first."
-    },
     {
       id: "script-kit",
       name: "Script Kit",
@@ -273,8 +268,7 @@ ai: {
       disableSkills: true,
       disablePromptTemplates: true
     }
-  ],
-  selectedProfileName: "Code Review"
+  ]
 }
 ```
 
@@ -282,11 +276,15 @@ Pi-backed Agent Chat uses the bundled Pi sidecar in release builds. Developers
 and support builds can override it with `SCRIPT_KIT_PI_BINARY`, `ai.piBinary`,
 or a per-profile `piBinary`.
 
-Use the Agent Chat actions menu to change agent, model, or profile. Claude Code settings may still be honored for compatibility when that adapter is selected, but they are not the primary Agent Chat setup flow.
+Use the Agent Chat actions menu to change profile or model. Compatibility
+settings for other command-line agents may still be honored when explicitly
+configured, but they are not the primary Agent Chat setup flow.
 
-### Legacy Direct-Provider API Keys
+### Advanced Provider Configuration
 
-These keys are for legacy direct-provider AI features, not for configuring Agent Chat agents. Agent Chat setup should go through the Agent Catalog and `config.ts`.
+These keys are for legacy direct-provider AI features and advanced provider
+setups, not for the default Codex-backed Agent Chat flow. Agent Chat setup
+should go through profiles in `config.ts`.
 
 ```bash
 # Direct providers
@@ -395,7 +393,7 @@ bash scripts/verify-macos-bundle.sh
 - **App Launcher** - Quick launch applications
 - **Window Switcher** - Switch between open windows (enable in config)
 - **Notes Window** - Floating notes with Markdown support (`Cmd+Shift+N`)
-- **Agent Chat** - Press Tab to open Agent Chat (`AppView::AcpChatView`) with the current context staged for the active agent
+- **Agent Chat** - Press Command+Enter to open Agent Chat with the current context staged for the active profile
 - **System Tray** - Menu bar icon with quick actions
 - **Global Hotkeys** - Trigger scripts from anywhere
 
@@ -422,11 +420,13 @@ Script Kit exposes desktop context and UI state to scripts and AI agents through
 
 ### Agent Chat
 
-Agent Chat is the primary and only AI chat surface. `Tab` and `Shift+Tab` route into Agent Chat; some internal helpers and compatibility types still use `tab_ai_*` naming, but those are implementation details rather than separate chat products.
+Agent Chat is the primary and only AI chat surface. Command+Enter routes into
+Agent Chat; some internal helpers and compatibility types still use `tab_ai_*`
+naming, but those are implementation details rather than separate chat products.
 
 **Entry path:**
-- Plain `Tab` opens Agent Chat and stages current context for the active agent.
-- `Shift+Tab` in `AppView::ScriptList` with non-empty filter text opens Agent Chat and submits that filter text as user intent.
+- Command+Enter opens Agent Chat and stages current context for the active profile.
+- Command+Enter with typed launcher text can submit that text as user intent when the active surface supports it.
 - Detached Agent Chat windows use the same conversation model and automation targeting contract as the in-panel Agent Chat view.
 
 **Close semantics:**
@@ -435,8 +435,8 @@ Agent Chat is the primary and only AI chat surface. `Tab` and `Shift+Tab` route 
 - The footer keeps Agent Chat aligned with the launcher chrome and action model.
 
 **Runtime contract:**
-- Agent Chat entry is driven from `src/app_impl/tab_ai_mode.rs` and rendered through `AppView::AcpChatView`.
-- Detached Agent Chat windows are managed by `src/ai/acp/chat_window.rs`.
+- Agent Chat entry is driven from `src/app_impl/tab_ai_mode.rs` and rendered through the compatibility `AppView::AcpChatView` surface.
+- Detached Agent Chat windows are managed by the compatibility implementation in `src/ai/acp/chat_window.rs`.
 - Agent selection, model preferences, and profiles live under the `ai` block in `~/.scriptkit/config.ts` and are backed by the Agent Catalog.
 - Context bundle: `~/.scriptkit/context/latest.md` (deterministic path)
 - Context assembly still uses compatibility-named helpers such as `snapshot_tab_ai_ui()`, `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())`, and `build_tab_ai_context_from()`.

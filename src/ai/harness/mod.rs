@@ -1724,11 +1724,13 @@ mod tests {
     }
 
     #[test]
-    fn root_claude_md_documents_acp_boundary_and_quick_terminal_pty_contract() {
+    fn root_claude_md_documents_agent_chat_boundary_and_quick_terminal_pty_contract() {
         let doc = include_str!("../../../kit-init/ROOT_CLAUDE.md");
         assert!(
-            doc.contains("Plain `Tab` in `AppView::ScriptList` routes through the ACP entry path"),
-            "ROOT_CLAUDE.md must document plain Tab as the ACP entry path"
+            doc.contains(
+                "Command+Enter in `AppView::ScriptList` routes through the Agent Chat entry path"
+            ),
+            "ROOT_CLAUDE.md must document Command+Enter as the Agent Chat entry path"
         );
         assert!(
             doc.contains("`Tab` / `Shift+Tab` inside `AppView::QuickTerminalView`"),
@@ -1737,6 +1739,10 @@ mod tests {
         assert!(
             !doc.contains("Plain `Tab` opens the harness terminal"),
             "ROOT_CLAUDE.md must not describe plain Tab as opening the harness terminal"
+        );
+        assert!(
+            !doc.contains("Plain `Tab` in `AppView::ScriptList` routes through"),
+            "ROOT_CLAUDE.md must not describe plain Tab as the Agent Chat entry path"
         );
         assert!(
             !doc.contains("`Shift+Tab` in `AppView::ScriptList` with non-empty filter text"),

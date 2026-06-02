@@ -109,6 +109,24 @@ fn provider_scoped_pi_model_selection_is_split_before_launch() {
 }
 
 #[test]
+fn primary_pi_provider_catalog_is_codex_only_with_advanced_alternatives() {
+    let primary = fn_body(PROFILES_SOURCE, "pub fn pi_provider_model_catalog()");
+    assert!(primary.contains(r#"id: "openai-codex""#));
+    assert!(primary.contains(r#"display_name: "Codex""#));
+    assert!(
+        !primary.contains(r#"id: "anthropic""#) && !primary.contains(r#"id: "google""#),
+        "primary Agent Chat provider catalog must not surface alternate providers"
+    );
+
+    let advanced = fn_body(
+        PROFILES_SOURCE,
+        "pub fn advanced_pi_provider_model_catalog()",
+    );
+    assert!(advanced.contains(r#"id: "anthropic""#));
+    assert!(advanced.contains(r#"id: "google""#));
+}
+
+#[test]
 fn profile_display_flows_through_thread_and_footer() {
     assert!(ACP_THREAD_SOURCE.contains("profile_display_name"));
     assert!(ACP_THREAD_SOURCE.contains("pub(crate) fn profile_display"));

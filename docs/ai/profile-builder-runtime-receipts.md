@@ -57,7 +57,7 @@ Receipt summary:
 - seven `kind: profile` rows owned by `Spine`
 - rows included `General`, `Text`, `Script Kit`, `Codebase Scout`,
   `Plugin Sandbox Builder`, `Profile Builder`, and `Text Polisher`
-- no `ActionsDialog` or ACP profile popup target was involved
+- no `ActionsDialog` or Agent Chat profile popup target was involved
 
 Profile token and submit proof:
 
@@ -168,7 +168,7 @@ Receipt summary:
 - 13 `kind: profile` rows owned by `Spine`
 - rows included built-ins `General`, `Text`, `Script Kit` and all ten plugin
   examples listed above
-- no `ActionsDialog` or ACP profile popup target was involved
+- no `ActionsDialog` or Agent Chat profile popup target was involved
 
 Cleanup:
 
@@ -313,7 +313,7 @@ Receipt summary:
 - post-route app view: `AcpChatView`
 - native footer surface: `acp_chat`
 - the route used main Menu Search and the Agent shortcut; it did not use
-  `ActionsDialog` or the removed ACP profile popup
+  `ActionsDialog` or the removed Agent Chat profile popup
 
 Pre-prompt state proof:
 

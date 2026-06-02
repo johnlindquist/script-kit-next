@@ -106,7 +106,7 @@ impl AiApp {
                             .child("Open Agent Catalog"),
                     ),
             )
-            // ACP setup feedback (shown when setup state changes)
+            // Agent Chat setup feedback (shown when setup state changes)
             .when_some(self.claude_code_setup_feedback.clone(), |el, feedback| {
                 el.child(
                     div()

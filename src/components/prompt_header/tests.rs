@@ -67,7 +67,7 @@ fn test_render_ask_ai_hint_uses_transparent_backgrounds() {
         .count();
     assert_eq!(
         transparent_bg_count, 2,
-        "Expected transparent backgrounds for Ask AI and Tab hint buttons. Section:\n{}",
+        "Expected transparent backgrounds for Ask AI and shortcut hint buttons. Section:\n{}",
         section
     );
 }
@@ -79,7 +79,7 @@ fn test_render_ask_ai_hint_uses_pointer_cursor_for_hint_buttons() {
     let pointer_count = section.as_str().matches(".cursor_pointer()").count();
     assert_eq!(
         pointer_count, 2,
-        "Expected cursor_pointer on Ask AI and Tab hint buttons. Section:\n{}",
+        "Expected cursor_pointer on Ask AI and shortcut hint buttons. Section:\n{}",
         section
     );
 }
@@ -91,7 +91,7 @@ fn test_render_ask_ai_hint_adds_hover_feedback_for_both_hint_buttons() {
     let hover_count = section.as_str().matches(".hover(move |style|").count();
     assert_eq!(
         hover_count, 2,
-        "Expected hover handlers on Ask AI and Tab hint buttons. Section:\n{}",
+        "Expected hover handlers on Ask AI and shortcut hint buttons. Section:\n{}",
         section
     );
 
@@ -126,7 +126,7 @@ fn test_render_ask_ai_hint_uses_ghost_button_spacing_tokens_for_hint_buttons() {
         .count();
     assert_eq!(
         ghost_height_count, 2,
-        "Expected ghost button height token on Ask AI and Tab hint buttons. Section:\n{}",
+        "Expected ghost button height token on Ask AI and shortcut hint buttons. Section:\n{}",
         section
     );
 

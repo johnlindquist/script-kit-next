@@ -15,15 +15,16 @@ pub const BUILTIN_TEXT_PROFILE_ID: &str = "text";
 pub const DEFAULT_PI_PROVIDER: &str = "openai-codex";
 pub const DEFAULT_PI_MODEL: &str = "gpt-5.4";
 
-/// A curated Pi provider ("Agent") and its selectable models for the Shift+Tab
-/// Agent & Model picker.
+/// A curated Pi provider ("Agent") and its selectable models for Agent Chat
+/// model pickers.
 ///
 /// The live provider/model catalog is advertised dynamically by the `pi` agent
 /// at runtime (`get_available_models`); this static fallback lets the launcher
-/// pre-select a provider/model WITHOUT a live session. Selections persist as
-/// the namespaced `selectedModelId = "<provider>/<model>"` that the Pi launch
-/// reads (see [`parse_provider_model_selection`]). Edit this list to add or
-/// remove providers/models surfaced in the launcher.
+/// pre-select a provider/model WITHOUT a live session. The primary launcher
+/// catalog is Codex-only; alternative providers are available through advanced
+/// configuration paths. Selections persist as the namespaced
+/// `selectedModelId = "<provider>/<model>"` that the Pi launch reads (see
+/// [`parse_provider_model_selection`]).
 pub struct PiProviderCatalogEntry {
     pub id: &'static str,
     pub display_name: &'static str,
@@ -32,18 +33,22 @@ pub struct PiProviderCatalogEntry {
     pub models: Vec<(&'static str, &'static str)>,
 }
 
-/// Curated static Pi provider → model catalog for the launcher picker.
+/// Primary static Pi provider → model catalog for the launcher picker.
 pub fn pi_provider_model_catalog() -> Vec<PiProviderCatalogEntry> {
+    vec![PiProviderCatalogEntry {
+        id: "openai-codex",
+        display_name: "Codex",
+        models: vec![
+            ("gpt-5.5", "GPT-5.5"),
+            ("gpt-5.4", "GPT-5.4"),
+            ("gpt-5-mini", "GPT-5 mini"),
+        ],
+    }]
+}
+
+/// Advanced static provider catalog retained for settings/configuration flows.
+pub fn advanced_pi_provider_model_catalog() -> Vec<PiProviderCatalogEntry> {
     vec![
-        PiProviderCatalogEntry {
-            id: "openai-codex",
-            display_name: "Codex",
-            models: vec![
-                ("gpt-5.5", "GPT-5.5"),
-                ("gpt-5.4", "GPT-5.4"),
-                ("gpt-5-mini", "GPT-5 mini"),
-            ],
-        },
         PiProviderCatalogEntry {
             id: "anthropic",
             display_name: "Claude",

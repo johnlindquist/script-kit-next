@@ -1,7 +1,7 @@
 /**
  * Test: Header with Ask AI hint
  * 
- * This test verifies the "Ask AI [Tab]" hint appears in the header.
+ * This test verifies the "Ask AI [Command+Enter]" hint appears in the header.
  * Captures a screenshot for visual verification.
  */
 import '../../scripts/kit-sdk';
@@ -24,7 +24,7 @@ await div(`
     <!-- Ask AI hint - THIS IS WHAT WE'RE TESTING -->
     <div class="flex items-center gap-1.5 flex-shrink-0">
       <span class="text-zinc-500 text-sm">Ask AI</span>
-      <span class="px-1.5 py-0.5 rounded border border-zinc-600 text-zinc-500 text-xs">Tab</span>
+      <span class="px-1.5 py-0.5 rounded border border-zinc-600 text-zinc-500 text-xs">⌘↵</span>
     </div>
     
     <!-- Buttons -->
@@ -35,7 +35,7 @@ await div(`
     <div class="w-4 h-4 bg-amber-400 rounded"></div>
   </div>
   
-  <p class="text-zinc-500 text-sm">Above shows expected header layout with "Ask AI [Tab]" hint</p>
+  <p class="text-zinc-500 text-sm">Above shows expected header layout with "Ask AI [Command+Enter]" hint</p>
 </div>
 `);
 

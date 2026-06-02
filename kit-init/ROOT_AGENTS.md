@@ -347,7 +347,7 @@ export default {
 Tab AI now has two distinct surfaces: Agent Chat is the default AI chat UI, while `AppView::QuickTerminalView` remains the PTY-backed harness surface rendered by `TermPrompt`.
 
 **Entry path:**
-- Plain `Tab` in `AppView::ScriptList` routes through the ACP entry path and context-capture helpers. Do not describe plain Tab as opening the harness terminal by default.
+- Command+Enter in `AppView::ScriptList` routes through the Agent Chat entry path and context-capture helpers. Do not describe plain Tab as opening Agent Chat or the harness terminal.
 - `QuickTerminalView` is opened by explicit harness / verification flows that need a PTY-backed surface.
 - `Tab` / `Shift+Tab` inside `AppView::QuickTerminalView` are forwarded to the PTY. Do not describe them as focus-navigation keys once the harness terminal is open.
 
@@ -357,7 +357,7 @@ Tab AI now has two distinct surfaces: Agent Chat is the default AI chat UI, whil
 - The footer hint strip advertises only `⌘W Close`.
 
 **Runtime contract:**
-- Canonical chat entry: `open_tab_ai_acp_with_entry_intent(...)`
+- Canonical chat entry: Command+Enter via `open_tab_ai_acp_with_entry_intent(...)`
 - Quick-terminal path: `begin_tab_ai_harness_entry()` → `open_tab_ai_harness_terminal_from_request()`
 - Harness session state: `TabAiHarnessSessionState`
 - Harness config: `claudeCode` block in `~/.scriptkit/config.ts`
@@ -382,7 +382,7 @@ Tab AI now has two distinct surfaces: Agent Chat is the default AI chat UI, whil
 **Agent Chat vs harness terminal:**
 - Agent Chat is the user-facing default AI chat surface.
 - Quick Terminal is the PTY-backed harness surface for terminal-native verification and authoring flows.
-- Do not describe plain Tab as opening the harness terminal or `Shift+Tab` in `AppView::ScriptList` as the default quick-submit path.
+- Do not describe plain Tab as opening Agent Chat or the harness terminal, and do not describe `Shift+Tab` in `AppView::ScriptList` as the default quick-submit path.
 
 **Do not describe as current behavior:**
 - Do not describe the old inline chat entity or custom streaming UI as the primary Tab AI surface

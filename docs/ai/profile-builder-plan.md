@@ -73,7 +73,7 @@ For the initial builder skill, generate into:
      custom profiles cannot shadow plugin artifacts.
    - Do not allow plugin profiles to shadow `general`, `script-kit`, or `text`.
    - Route profile selection through main Menu Search / Spine profile rows, not
-     the deprecated ACP profile popup.
+     the deprecated Agent Chat profile popup.
 
 3. Keep `PiLaunchSpec` aligned with supported Pi flags:
    - Plugin artifacts should resolve into the existing launch spec fields.
@@ -166,7 +166,7 @@ Each iteration should:
 6. Use `script-kit-devtools` to open the main Menu Search through the real user path.
 7. Type `|` so the Spine/Menu Search profile rows are shown in the main list.
 8. Verify the profile appears in the main list, select it through the Spine row,
-   and confirm persistence. Do not open or test the deleted ACP profile popup.
+   and confirm persistence. Do not open or test the deleted Agent Chat profile popup.
 9. Submit one allowed prompt and one blocked prompt.
 10. Collect source, UI, log, config, warm-key, and filesystem receipts.
 
@@ -207,7 +207,7 @@ Current partial receipt:
   plugin prompts.
 - `profile-main-menu-pipe-proof`: DevTools showed `|` profile rows on the main
   `ScriptList` surface and selected `choice:5:profile-builder` without opening
-  the deprecated ACP profile popup. Plain Enter persistence still needs a direct
+  the deprecated Agent Chat profile popup. Plain Enter persistence still needs a direct
   runtime receipt because the DevTools submit-like activation primitive refused
   that action for safety.
 - `profile-builder-ledger-proof`: DevTools `main.inspect` resolved the real
@@ -225,16 +225,17 @@ Current partial receipt:
 - `profile-builder-ten-profiles-proof`: DevTools proved a fresh app setup seeded
   ten plugin example profiles under `plugins/examples/profiles`, and main Menu
   Search `|` showed 13 Spine-owned profile rows: 3 built-ins plus the ten plugin
-  examples. No ActionsDialog or ACP profile popup was involved.
+  examples. No ActionsDialog or Agent Chat profile popup was involved.
 - `profile-builder-docs-switch-proof`: DevTools selected the new
   `docs-researcher` example through main Menu Search, inserted the profile
   token, submitted the profile switch with the scoped `profile-switch` intent,
   and ended with `Docs Researcher ✓` as the current Plugin/Pi profile.
 - `profile-builder-prompt-transcript-profile-builder`: DevTools proved the
   selected `profile-builder` profile from main Menu Search, cleared the profile
-  token, opened `AcpChat` with Cmd+Enter from the main Menu, submitted one
-  allowed prompt and one blocked prompt through real ACP input, and exported the
-  conversation markdown with `acp_export_markdown`. The allowed prompt was
+  token, opened the compatibility `AcpChat` surface with Cmd+Enter from the
+  main Menu, submitted one allowed prompt and one blocked prompt through real
+  Agent Chat input, and exported the conversation markdown with
+  `acp_export_markdown`. The allowed prompt was
   answered in-scope, and the blocked prompt refused editing `~/.scriptkit` or
   reading `~/.codex/auth.json`.
 

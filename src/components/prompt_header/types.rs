@@ -177,7 +177,7 @@ pub struct PromptHeaderConfig {
     pub actions_search_text: String,
     /// Whether the input is focused
     pub is_focused: bool,
-    /// Whether to show the "Ask AI" hint with Tab badge
+    /// Whether to show the "Ask AI" hint with Command+Enter badge
     pub show_ask_ai_hint: bool,
     /// Width reservation policy for the right-side actions area.
     pub actions_density: HeaderActionsDensity,
@@ -268,7 +268,7 @@ impl PromptHeaderConfig {
         self
     }
 
-    /// Set whether to show the "Ask AI" hint with Tab badge
+    /// Set whether to show the "Ask AI" hint with Command+Enter badge
     pub fn show_ask_ai_hint(mut self, show: bool) -> Self {
         self.show_ask_ai_hint = show;
         self

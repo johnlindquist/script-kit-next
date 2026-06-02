@@ -286,11 +286,6 @@ impl ScriptListApp {
                                     "STDIN",
                                     "SimulateKey: Tab - navigate root directory file row",
                                 );
-                            } else if !has_shift {
-                                let _ = view
-                                    .try_route_plain_tab_to_acp_context_capture(
-                                        ctx,
-                                    );
                             }
                         }
                         "up" | "arrowup" => {
@@ -367,11 +362,6 @@ impl ScriptListApp {
                                     "STDIN",
                                     "SimulateKey: Tab - navigate root directory file row",
                                 );
-                            } else if !has_shift {
-                                let _ = view
-                                    .try_route_plain_tab_to_acp_context_capture(
-                                        ctx,
-                                    );
                             }
                         }
                         "up" | "arrowup" => {

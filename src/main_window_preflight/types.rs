@@ -1,6 +1,6 @@
 /// Receipt types for the main-window Execution Contract rail.
 ///
-/// These types describe "what Enter will do" and "what Tab will send"
+/// These types describe "what Enter will do" and "what Command+Enter will send"
 /// for the currently selected item in the ScriptList view.  They are
 /// serializable so an AI agent (or test harness) can inspect the
 /// contract without parsing the UI.

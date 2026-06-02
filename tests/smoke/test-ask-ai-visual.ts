@@ -1,5 +1,5 @@
 // @ts-nocheck
-// Visual test for Ask AI [Tab] hint in the mini main window header
+// Visual test for Ask AI [Command+Enter] hint in the mini main window header
 import '../../scripts/kit-sdk';
 import { expectMiniMainWindow } from './helpers/mini_main_window';
 

@@ -650,13 +650,13 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     key: "ai.selectedModelId",
     type: "string | undefined",
     default: undefined,
-    description: "Last-selected ACP model ID"
+    description: "Last-selected Agent Chat model ID"
   },
   {
     key: "ai.selectedAcpAgentId",
     type: "string | undefined",
     default: undefined,
-    description: "Last-selected ACP agent ID"
+    description: "Legacy Agent Chat agent ID compatibility field"
   },
   {
     key: "windowManagement.snapMode",

@@ -194,11 +194,11 @@ impl Render for AcpSetupCard {
         let state = &self.state;
 
         let action_hint: String = match state.primary_action {
-            AcpSetupAction::Retry => "Press Tab to retry".to_string(),
-            AcpSetupAction::Install => "Install the agent, then press Tab to retry".to_string(),
-            AcpSetupAction::Authenticate => "Authenticate, then press Tab to retry".to_string(),
+            AcpSetupAction::Retry => "Press Enter to retry".to_string(),
+            AcpSetupAction::Install => "Install the agent, then press Enter to retry".to_string(),
+            AcpSetupAction::Authenticate => "Authenticate, then press Enter to retry".to_string(),
             AcpSetupAction::OpenCatalog => {
-                "Add or edit an agent in ~/.scriptkit/acp/agents.json, then press Tab to retry"
+                "Add or edit an Agent Chat profile in config.ts, then press Enter to retry"
                     .to_string()
             }
             AcpSetupAction::SelectAgent => "Press Enter to select a different agent".to_string(),
@@ -206,7 +206,7 @@ impl Render for AcpSetupCard {
 
         let secondary_hint: Option<String> = state.secondary_action.map(|action| match action {
             AcpSetupAction::SelectAgent => "Enter: select agent".to_string(),
-            AcpSetupAction::Retry => "Tab: retry".to_string(),
+            AcpSetupAction::Retry => "Enter: retry".to_string(),
             AcpSetupAction::OpenCatalog => "Add agent".to_string(),
             _ => String::new(),
         });

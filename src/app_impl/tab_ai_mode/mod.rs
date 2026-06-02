@@ -271,7 +271,7 @@ impl ScriptListApp {
         }
     }
 
-    /// Open the Tab AI surface (zero-intent).
+    /// Open the Agent Chat compatibility surface (zero-intent).
     ///
     /// Routes to the harness terminal (`QuickTerminalView`), which connects
     /// to a pre-running CLI harness (Claude Code, Codex, AGY, etc.)
@@ -280,7 +280,7 @@ impl ScriptListApp {
         self.open_tab_ai_chat_with_entry_intent(None, cx);
     }
 
-    /// Primary Tab entry point.
+    /// Compatibility Agent Chat entry point.
     ///
     /// - `None` => open the harness and stage context only (`PasteOnly`)
     /// - `Some(intent)` => open the harness and immediately submit that intent
@@ -1618,87 +1618,21 @@ impl ScriptListApp {
         (focused_target, visible_targets)
     }
 
-    /// Route a plain Tab press from Script List into ACP.
+    /// Deprecated plain-Tab Agent Chat entry shim.
     ///
-    /// Non-empty launcher input is forwarded as raw ACP composer text and
-    /// auto-submitted. Empty launcher input only opens ACP and waits.
+    /// Command+Enter is the canonical Agent Chat entry. Plain Tab remains
+    /// available to local focus/navigation handlers and must not open Agent
+    /// Chat from the launcher.
     pub(crate) fn try_route_plain_tab_to_acp_context_capture(
         &mut self,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) -> bool {
-        if self.show_actions_popup || self.tab_ai_save_offer_state.is_some() {
-            return false;
-        }
-        // Attachment portals reuse `AppView::ScriptList` (and other builtin
-        // views) as their host surface. Tab inside a portal must not be
-        // treated as a main-menu launcher — the only valid auto-submit
-        // surface is the actual main menu.
-        if self.is_in_attachment_portal() {
-            tracing::debug!(
-                target: "script_kit::tab_ai",
-                event = "tab_ai_plain_tab_suppressed_in_attachment_portal",
-                source_view = %self.app_view_name(),
-            );
-            return false;
-        }
-
-        let source_view = self.app_view_name();
-        let entry_intent = matches!(self.current_view, AppView::ScriptList)
-            .then(|| self.filter_text.trim())
-            .filter(|text| !text.is_empty())
-            .map(str::to_string);
-
-        if let Some(intent) = entry_intent.clone() {
-            if let Some(entity) = crate::ai::acp::chat_window::get_detached_acp_view_entity() {
-                if let Err(error) = crate::ai::acp::chat_window::open_chat_window(cx) {
-                    tracing::debug!(%error, "failed to focus detached chat window");
-                } else {
-                    entity.update(cx, |chat, cx| {
-                        chat.live_thread().update(cx, |thread, cx| {
-                            thread.set_input(intent.clone(), cx);
-                            if let Err(error) = thread.submit_input(cx) {
-                                tracing::warn!(
-                                    target: "script_kit::tab_ai",
-                                    event = "tab_ai_plain_tab_detached_submit_failed",
-                                    error = %error,
-                                );
-                            }
-                        });
-                    });
-
-                    tracing::info!(
-                        target: "script_kit::tab_ai",
-                        event = "tab_ai_plain_tab_submitted_to_detached_acp",
-                        source_view = %source_view,
-                        input_len = intent.len(),
-                    );
-                    return true;
-                }
-            }
-        }
-
-        tracing::info!(
+        tracing::debug!(
             target: "script_kit::tab_ai",
-            event = "tab_ai_plain_tab_routed_to_acp",
-            source_view = %source_view,
-            auto_submit = entry_intent.is_some(),
-            input_len = entry_intent.as_ref().map(|text| text.len()).unwrap_or(0),
+            event = "agent_chat_plain_tab_entry_deprecated",
+            source_view = %self.app_view_name(),
         );
-
-        self.open_acp_chat_from_entry_request(
-            acp_entry::AcpEntryRequest {
-                origin: acp_entry::AcpEntryOrigin::LauncherTab,
-                target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
-                seed_text: entry_intent,
-                ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
-                seed_policy: acp_entry::AcpSeedPolicy::AutoSubmitFirstTurn,
-                suppress_focused_part: true,
-                context_staging: acp_entry::AcpContextStaging::SuppressFocused,
-                return_origin: Some(self.current_view.clone()),
-            },
-            cx,
-        );
-        true
+        false
     }
 
     /// Returns `true` when the current view should treat global `Cmd+Enter`
@@ -1843,9 +1777,10 @@ impl ScriptListApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.spine_enabled && matches!(self.current_view, AppView::ScriptList) {
-            let raw = self.filter_text.clone();
-            if !raw.trim().is_empty() && self.try_submit_spine_prompt_plan_from_enter(cx) {
+        let explicit_spine_prompt_plan =
+            self.script_list_cmd_enter_has_explicit_spine_prompt_plan();
+        if explicit_spine_prompt_plan {
+            if self.try_submit_spine_prompt_plan_from_enter(cx) {
                 return true;
             }
         }
@@ -1872,6 +1807,18 @@ impl ScriptListApp {
                 source_view = %self.app_view_name(),
             );
             return false;
+        }
+
+        if let Some(intent) =
+            self.script_list_cmd_enter_plain_prompt_intent(explicit_spine_prompt_plan)
+        {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "tab_ai_global_cmd_enter_plain_prompt_routed_to_acp",
+                input_len = intent.len(),
+            );
+            self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(Some(intent), cx);
+            return true;
         }
 
         let source_view = self.app_view_name();
@@ -1933,6 +1880,36 @@ impl ScriptListApp {
             cx,
         );
         true
+    }
+
+    fn script_list_cmd_enter_has_explicit_spine_prompt_plan(&mut self) -> bool {
+        if !self.spine_enabled || !matches!(self.current_view, AppView::ScriptList) {
+            return false;
+        }
+
+        let raw = self.filter_text.clone();
+        if raw.trim().is_empty() {
+            return false;
+        }
+
+        self.set_spine_parse_from_filter_and_cursor(&raw, raw.len());
+        crate::spine::parse_has_prompt_builder_segments(&self.spine_parse)
+    }
+
+    fn script_list_cmd_enter_plain_prompt_intent(
+        &self,
+        explicit_spine_prompt_plan: bool,
+    ) -> Option<String> {
+        if explicit_spine_prompt_plan || !matches!(self.current_view, AppView::ScriptList) {
+            return None;
+        }
+
+        let intent = self.filter_text.trim();
+        if intent.is_empty() {
+            return None;
+        }
+
+        Some(intent.to_string())
     }
 
     /// Build a focused-target `AiContextPart` from the current view's

@@ -430,9 +430,12 @@ pub(crate) fn build_main_window_preflight_receipt(
     }
 
     if app.filter_text.trim().is_empty() {
-        warnings.push("Tab-to-AI is inactive until the filter has text.".to_string());
+        warnings
+            .push("Command+Enter Agent Chat is inactive until the filter has text.".to_string());
     } else if app.menu_syntax_capture_form_owns_input() {
-        warnings.push("Tab-to-AI is disabled while the handler form owns Tab.".to_string());
+        warnings.push(
+            "Command+Enter Agent Chat is disabled while the handler form owns input.".to_string(),
+        );
     }
 
     let enter_action = result.as_ref().map(|result| MainWindowPreflightAction {

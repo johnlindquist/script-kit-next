@@ -130,7 +130,7 @@ pub(crate) struct FooterButtonConfig {
     pub enabled: bool,
     pub disabled_reason: Option<&'static str>,
     /// Optional status dot rendered at the leading edge of the button, INSIDE
-    /// the chip (e.g. the ACP streaming/idle dot on the Agent·Model chip). When
+    /// the chip (e.g. the Agent Chat streaming/idle dot on the Agent·Model chip). When
     /// `Some(_)` a fixed-width dot lane is reserved so the chip's width stays
     /// stable as the status changes; `Some(Hidden)` reserves the lane but draws
     /// nothing. `None` reserves no lane (the common case — keeps ScriptList and
@@ -217,7 +217,7 @@ impl FooterAction {
     }
 }
 
-/// Status of the ACP thread, used to pick dot color and animation.
+/// Status of the Agent Chat thread, used to pick dot color and animation.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum FooterDotStatus {
     /// No dot shown.
@@ -240,7 +240,7 @@ pub(crate) struct FooterLeftInfo {
     pub dot_status: FooterDotStatus,
     /// Model display name (e.g. "Claude Sonnet 4"). Empty = hide label.
     pub model_name: String,
-    /// When true, active ACP states should use the accent token instead of the
+    /// When true, active Agent Chat states should use the accent token instead of the
     /// generic high-contrast fallback so the footer clearly reads as AI-active.
     pub prefer_accent_for_active_states: bool,
     /// Human-readable profile name for automation and accessibility snapshots.
@@ -945,7 +945,7 @@ pub(crate) fn dispatch_acp_footer_action(action: FooterAction) {
             event = "acp_footer_left_info_action_send_failed",
             action = footer_action_key(action),
             %error,
-            "Failed to enqueue ACP footer left-info action"
+            "Failed to enqueue Agent Chat footer left-info action"
         );
     }
 }
@@ -1845,7 +1845,7 @@ unsafe fn layout_footer_left_info(
 
     let hit_start_x = x;
 
-    // ── Status dot (legacy left-info path only; ACP profile markers pulse the icon) ──
+    // ── Status dot (legacy left-info path only; Agent Chat profile markers pulse the icon) ──
     let show_dot = info.icon_token.is_none() && !matches!(info.dot_status, FooterDotStatus::Hidden);
     if show_dot {
         let dot_y = ((bounds.size.height - FOOTER_STREAMING_DOT_SIZE) / 2.0).round();
@@ -2830,8 +2830,8 @@ unsafe fn footer_icon_image(token: &str) -> id {
 }
 
 /// Build a small status-dot NSView for the leading edge of a footer button
-/// (the ACP streaming/idle dot inside the Agent·Model chip). Uses
-/// accent-preferred active states to match the legacy ACP left-info marker.
+/// (the Agent Chat streaming/idle dot inside the Agent·Model chip). Uses
+/// accent-preferred active states to match the legacy Agent Chat left-info marker.
 #[cfg(target_os = "macos")]
 unsafe fn make_footer_hint_leading_dot_view(
     action: FooterAction,
@@ -3060,7 +3060,7 @@ unsafe fn make_footer_hint_item(
     let label_padding_x = crate::components::footer_chrome::FOOTER_KEYCAP_PADDING_X_PX as f64;
     let label_chip_height = crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX as f64;
 
-    // Optional leading status dot (e.g. ACP streaming dot on the Agent·Model
+    // Optional leading status dot (e.g. Agent Chat streaming dot on the Agent·Model
     // chip), rendered inside the chip ahead of the label. The lane is a FIXED
     // width whenever `leading_dot` is `Some(_)` — including `Some(Hidden)` — so
     // the chip's x/width never jump as the status changes during streaming.

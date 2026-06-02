@@ -1,4 +1,4 @@
-// Test script to verify Ask AI [Tab] hint is visible in the mini main window header
+// Test script to verify Ask AI [Command+Enter] hint is visible in the mini main window header
 // @ts-nocheck
 import '../../scripts/kit-sdk';
 import { expectMiniMainWindow } from './helpers/mini_main_window';

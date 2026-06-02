@@ -1,4 +1,4 @@
-// Test: Verify legacy `chat()` prompt input and copy icon used by ACP-adjacent SDK flows
+// Test: Verify legacy `chat()` prompt input and copy icon used by Agent Chat-adjacent SDK flows
 import '../../scripts/kit-sdk';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';

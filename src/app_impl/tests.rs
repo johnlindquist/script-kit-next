@@ -245,40 +245,39 @@ fn quick_terminal_tab_is_written_directly_to_pty_in_standard_startup() {
 }
 
 #[test]
-fn plain_tab_in_script_list_routes_to_acp_in_standard_startup() {
+fn plain_tab_in_script_list_no_longer_routes_to_agent_chat_in_standard_startup() {
     let source = fs::read_to_string("src/app_impl/startup.rs")
         .expect("Failed to read src/app_impl/startup.rs");
 
     assert!(
-        source.contains("matches!(this.current_view, AppView::ScriptList)")
-            && source.contains("this.try_route_plain_tab_to_acp_context_capture(cx)"),
-        "Plain Tab in ScriptList must route through the ACP handoff helper in startup.rs"
+        source.contains("Tab-to-Agent deprecated: Cmd+Enter is the AI entry.")
+            && !source.contains("this.try_route_plain_tab_to_acp_context_capture(cx)"),
+        "Plain Tab in ScriptList must not route through the Agent Chat handoff helper in startup.rs"
     );
 }
 
 #[test]
-fn plain_tab_routes_raw_launcher_text_and_submits_to_detached_acp() {
+fn plain_tab_agent_chat_helper_is_deprecated_noop() {
     let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
         .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
 
     assert!(
-        source.contains("self.filter_text.trim()"),
-        "Plain Tab ACP helper must derive the entry intent from raw ScriptList filter text"
+        source.contains("agent_chat_plain_tab_entry_deprecated"),
+        "Plain Tab Agent Chat helper must emit the deprecated-entry marker"
     );
     assert!(
-        source.contains("self.open_tab_ai_acp_with_entry_intent_preserving_return_and_options(")
-            && source.contains("entry_intent,\n            true,\n            cx,"),
-        "Plain Tab ACP helper must suppress focused-choice staging on non-detached ACP launches"
+        !source.contains("tab_ai_plain_tab_routed_to_acp")
+            && !source.contains("tab_ai_plain_tab_submitted_to_detached_acp"),
+        "Plain Tab helper must not keep old Agent Chat submit telemetry"
     );
     assert!(
-        source.contains("get_detached_acp_view_entity()")
-            && source.contains("thread.submit_input(cx)"),
-        "Plain Tab ACP helper must submit launcher text to an existing detached ACP chat"
+        source.contains("Command+Enter is the canonical Agent Chat entry"),
+        "Plain Tab helper must document the replacement entry path"
     );
 }
 
 #[test]
-fn plain_tab_suppresses_focused_part_staging_but_cmd_enter_does_not() {
+fn focused_part_staging_suppression_stays_available_for_explicit_handoffs() {
     let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
         .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
 
@@ -295,7 +294,7 @@ fn plain_tab_suppresses_focused_part_staging_but_cmd_enter_does_not() {
         source.contains("self.open_tab_ai_acp_with_entry_intent_preserving_return_and_options(")
             && source.contains("entry_intent,\n            true,\n            cx,")
             && source.contains("self.open_tab_ai_acp_with_options(entry_intent, false, cx);"),
-        "Plain Tab should suppress focused-choice staging while the shared ACP entry path should not"
+        "Explicit Agent Chat handoffs can suppress focused-choice staging while the shared entry path should not"
     );
 }
 
@@ -312,7 +311,7 @@ fn direct_prompt_acp_handoff_can_suppress_focused_part_staging() {
 }
 
 #[test]
-fn legacy_simulate_key_tab_uses_plain_tab_acp_helper() {
+fn simulate_key_tab_does_not_use_plain_tab_agent_chat_helper() {
     let helper_source = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
         .expect("Failed to read src/app_impl/simulate_key_dispatch.rs");
     let app_run_setup = fs::read_to_string("src/main_entry/app_run_setup.rs")
@@ -321,8 +320,8 @@ fn legacy_simulate_key_tab_uses_plain_tab_acp_helper() {
         .expect("Failed to read src/main_entry/runtime_stdin_match_simulate_key.rs");
 
     assert!(
-        helper_source.contains("try_route_plain_tab_to_acp_context_capture"),
-        "simulateKey Tab helper must reside in unified simulate_key_dispatch.rs"
+        !helper_source.contains("try_route_plain_tab_to_acp_context_capture"),
+        "simulateKey Tab must not route through the deprecated plain-Tab Agent Chat helper"
     );
     assert!(
         app_run_setup.contains("dispatch_simulate_key")

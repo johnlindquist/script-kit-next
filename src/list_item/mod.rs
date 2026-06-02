@@ -435,10 +435,10 @@ pub(crate) const ALPHA_EMPTY_HINT: u32 = 0x54;
 /// (Bumped from 17% — was barely visible; now subtly legible)
 pub(crate) const ALPHA_EMPTY_TIPS: u32 = 0x38;
 // =============================================================================
-// Header Area Constants (Ask AI button, Tab badge, indicators)
+// Header Area Constants (Ask AI button, shortcut badge, indicators)
 // =============================================================================
 
-/// Gap between "Ask AI" text and "Tab" badge
+/// Gap between "Ask AI" text and shortcut badge
 pub(crate) const ASK_AI_BUTTON_GAP: f32 = 6.0;
 /// Ask AI button horizontal padding
 pub(crate) const ASK_AI_BUTTON_PADDING_X: f32 = 6.0;
@@ -446,15 +446,15 @@ pub(crate) const ASK_AI_BUTTON_PADDING_X: f32 = 6.0;
 pub(crate) const ASK_AI_BUTTON_PADDING_Y: f32 = 4.0;
 /// Ask AI button corner radius
 pub(crate) const ASK_AI_BUTTON_RADIUS: f32 = 4.0;
-/// Tab badge horizontal padding
+/// Shortcut badge horizontal padding
 pub(crate) const TAB_BADGE_PADDING_X: f32 = 6.0;
-/// Tab badge vertical padding
+/// Shortcut badge vertical padding
 pub(crate) const TAB_BADGE_PADDING_Y: f32 = 2.0;
-/// Tab badge corner radius
+/// Shortcut badge corner radius
 pub(crate) const TAB_BADGE_RADIUS: f32 = 4.0;
 /// 18% opacity — hover accent background on interactive buttons
 pub(crate) const ALPHA_HOVER_ACCENT: u32 = 0x2e;
-/// 30% opacity — Tab badge background tint
+/// 30% opacity — shortcut badge background tint
 pub(crate) const ALPHA_TAB_BADGE_BG: u32 = 0x4D;
 /// 80% opacity — library size count hint (boosted for vibrancy readability)
 pub(crate) const ALPHA_COUNT_HINT: u32 = 0xCC;

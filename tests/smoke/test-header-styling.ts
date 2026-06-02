@@ -2,10 +2,10 @@ import '../../scripts/kit-sdk';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
-// Test header styling - Tab badge should have grey background (no border)
+// Test header styling - shortcut badge should have grey background (no border)
 // Logo should be 21px with yellow background at 85% opacity
 // Yellow text for "Ask AI", "Run", "Actions"
-// Grey text for "Tab", "↵", "⌘K"
+// Grey text for "⌘↵", "↵", "⌘K"
 
 // Use arg() to show the main script list view with header
 // Don't await - just show it, then capture

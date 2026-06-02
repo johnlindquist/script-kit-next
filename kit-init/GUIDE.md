@@ -119,7 +119,7 @@ Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
 |-----------|---------|
 | `plugins/main/scripts/` | Your primary scripts - create `.ts` files here |
 | `plugins/main/scriptlets/` | Markdown scriptlet files with shell commands |
-| `plugins/main/skills/` | Reusable ACP workflows (preferred reusable AI unit) |
+| `plugins/main/skills/` | Reusable Agent Chat workflows (preferred reusable AI unit) |
 | `plugins/main/profiles/` | Isolated Pi-backed Agent Chat profile artifacts; `pathPolicy` is review metadata until runtime path enforcement exists |
 | `plugins/main/agents/` | AI agent definitions |
 | `sdk/` | Runtime SDK (auto-extracted, don't edit) |
@@ -676,7 +676,7 @@ Then `{{content}}` becomes `https://github.com` when the action runs.
 
 ### How Shared Actions Work
 
-1. When you open the Actions menu (Tab key) on a scriptlet
+1. When you open the Actions menu on a scriptlet
 2. Script Kit loads both the scriptlet's inline actions (H3 headers within the scriptlet) AND the shared actions from the companion `.actions.md` file
 3. Inline actions take precedence over shared actions with the same name
 4. All actions appear together in the Actions menu
@@ -1095,7 +1095,7 @@ Script Kit includes Agent Chat - a built-in chat surface for command-line agents
 - **Focus existing Agent Chat**: Use `aiFocus()`
 - **From skills**: Selecting a skill opens Agent Chat
 - **Hotkey**: `Cmd+Shift+Space` (default, configurable)
-- **Tab behavior**: Plain `Tab` from the launcher opens Agent Chat with current context
+- **Command+Enter behavior**: `Command+Enter` from the launcher opens Agent Chat with current context
 
 ### Agent Setup
 
@@ -1215,7 +1215,7 @@ Notes are currently exposed to scripts through the automation protocol rather th
 
 Use the semantic IDs `panel:notes-window` and `input:notes-editor`. Do not read or write `~/.scriptkit/db/notes.sqlite` directly from scripts.
 
-## ACP Handoffs
+## Agent Chat Handoffs
 
 Use the Notes UI actions for cross-surface handoffs:
 

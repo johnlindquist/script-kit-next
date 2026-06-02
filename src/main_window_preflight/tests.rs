@@ -151,7 +151,7 @@ fn receipt_with_warnings_serializes_correctly() {
         None,
         vec![
             "Agent execution is not fully implemented.".to_string(),
-            "Tab-to-AI is inactive.".to_string(),
+            "Command+Enter Agent Chat is inactive.".to_string(),
         ],
     );
 

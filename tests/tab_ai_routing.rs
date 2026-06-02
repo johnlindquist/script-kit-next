@@ -1,12 +1,11 @@
-//! Contract tests verifying Tab AI compatibility routes and ACP entry points.
+//! Contract tests verifying Agent Chat compatibility routes and ACP entry points.
 //!
-//! The primary Tab AI compatibility entry path is:
-//!   Tab key → `open_tab_ai_chat()` → `open_tab_ai_harness_terminal_from_request()` →
-//!   `AppView::QuickTerminalView` rendered via `TermPrompt`.
+//! The primary Agent Chat entry key is Command+Enter. Plain Tab is deprecated
+//! for Agent Chat entry and remains local to focus/navigation handlers.
 //!
 //! Direct zero-intent launcher surfaces now route through
 //! `open_tab_ai_acp_with_entry_intent(None, cx)`, while `open_tab_ai_chat()`
-//! remains the compatibility wrapper for Tab-driven harness entry.
+//! remains a compatibility wrapper for older harness entry callers.
 
 const TAB_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
 const TAB_NEW_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
@@ -43,27 +42,23 @@ fn source_block_after<'a>(source: &'a str, needle: &str, len: usize) -> &'a str 
 // =========================================================================
 
 #[test]
-fn plain_tab_and_global_cmd_enter_helpers_bail_when_attachment_portal_open() {
+fn plain_tab_agent_chat_entry_is_deprecated_and_global_cmd_enter_bails_when_portal_open() {
     // Regression: when an attachment portal (e.g. `@` mention → file /
     // script / scriptlet / skill search) is open, the visible surface
-    // reuses `AppView::ScriptList`. Tab and global Cmd+Enter must NOT be
-    // treated as "main menu launcher" submits in that state — they would
-    // re-enter ACP behind the portal and lose the user's context.
-    //
-    // The guard lives in the two central routing helpers so every call
-    // site (startup.rs, startup_new_tab.rs, runtime_stdin{,_match_simulate_key}.rs,
-    // app_run_setup.rs, file_search.rs, render_script_list) is covered at once.
+    // reuses `AppView::ScriptList`. Plain Tab is no longer an Agent Chat
+    // entry at all, and global Cmd+Enter must still refuse portal submits.
 
     let plain_tab_fn = TAB_AI_MODE_SOURCE
-        .find("fn try_route_plain_tab_to_acp_context_capture")
-        .expect("plain tab helper must exist");
+        .find("Deprecated plain-Tab Agent Chat entry shim")
+        .expect("plain tab helper docs must exist");
     let plain_tab_body = &TAB_AI_MODE_SOURCE
         [plain_tab_fn..plain_tab_fn + 1500.min(TAB_AI_MODE_SOURCE.len() - plain_tab_fn)];
     assert!(
-        plain_tab_body.contains("self.is_in_attachment_portal()")
-            && plain_tab_body.contains("return false"),
-        "Plain Tab ACP helper must early-return false when an attachment portal is active \
-         so Tab inside a portal never auto-submits to ACP"
+        plain_tab_body.contains("agent_chat_plain_tab_entry_deprecated")
+            && plain_tab_body.contains("false")
+            && !plain_tab_body.contains("AcpEntryOrigin::LauncherTab")
+            && !plain_tab_body.contains("tab_ai_plain_tab_routed_to_acp"),
+        "Plain Tab helper must be a deprecated no-op and must not launch Agent Chat"
     );
 
     let cmd_enter_fn = TAB_AI_MODE_SOURCE
@@ -87,10 +82,12 @@ fn global_cmd_enter_spine_probe_falls_through_to_agent_chat_route() {
     );
 
     assert!(
-        cmd_enter_body.contains("&& self.try_submit_spine_prompt_plan_from_enter(cx)")
+        cmd_enter_body.contains("script_list_cmd_enter_has_explicit_spine_prompt_plan")
+            && cmd_enter_body.contains("if self.try_submit_spine_prompt_plan_from_enter(cx)")
             && cmd_enter_body.contains("return true;"),
-        "Global Cmd+Enter may let Spine consume explicit prompt-builder syntax, \
-         but a false Spine probe must fall through to the normal Agent Chat route"
+        "Global Cmd+Enter may let Spine consume explicit prompt-builder syntax only after \
+         an explicit predicate, and a false Spine probe must fall through to the normal \
+         Agent Chat route"
     );
     assert!(
         !cmd_enter_body.contains("return self.try_submit_spine_prompt_plan_from_enter(cx);"),
@@ -123,39 +120,26 @@ fn pi_warmup_branch_switches_to_visible_agent_chat_setup() {
 }
 
 #[test]
-fn empty_plain_tab_open_skips_script_authoring_slash_prime() {
+fn deprecated_plain_tab_helper_never_opens_agent_chat() {
     let plain_tab_fn = TAB_AI_MODE_SOURCE
-        .find("fn try_route_plain_tab_to_acp_context_capture")
-        .expect("plain tab helper must exist");
+        .find("Deprecated plain-Tab Agent Chat entry shim")
+        .expect("plain tab helper docs must exist");
     let plain_tab_body = &TAB_AI_MODE_SOURCE
-        [plain_tab_fn..plain_tab_fn + 3500.min(TAB_AI_MODE_SOURCE.len() - plain_tab_fn)];
+        [plain_tab_fn..plain_tab_fn + 1500.min(TAB_AI_MODE_SOURCE.len() - plain_tab_fn)];
     assert!(
-        plain_tab_body.contains("entry_intent,\n            true,\n            cx,"),
-        "plain Tab launches must set suppress_focused_part=true, including empty launcher input"
+        plain_tab_body.contains("Command+Enter is the canonical Agent Chat entry"),
+        "plain Tab helper must document the Command+Enter replacement"
+    );
+    assert!(
+        !plain_tab_body.contains("open_acp_chat_from_entry_request")
+            && !plain_tab_body.contains("submit_input(cx)")
+            && !plain_tab_body.contains("AutoSubmitFirstTurn"),
+        "plain Tab helper must not open or submit Agent Chat"
     );
 
-    let prime_policy_fn = TAB_AI_MODE_SOURCE
-        .find("fn should_prime_script_authoring_slash(")
-        .expect("new-script prime policy helper must exist");
-    let prime_policy_body = &TAB_AI_MODE_SOURCE
-        [prime_policy_fn..prime_policy_fn + 900.min(TAB_AI_MODE_SOURCE.len() - prime_policy_fn)];
     assert!(
-        prime_policy_body.contains("&& !suppress_focused_part"),
-        "new-script slash priming must be disabled for explicit empty-composer handoffs"
-    );
-
-    let acp_open_fn = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_acp_view_from_request_impl(")
-        .expect("ACP open helper must exist");
-    let acp_open_body = &TAB_AI_MODE_SOURCE[acp_open_fn..];
-    let next_fn = acp_open_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(acp_open_body.len());
-    let acp_open_body = &acp_open_body[..next_fn];
-    assert!(
-        acp_open_body.contains("Self::should_prime_script_authoring_slash(")
-            && acp_open_body.contains("request.suppress_focused_part"),
-        "ACP open path must route slash priming through the policy helper with the launch suppression flag"
+        plain_tab_body.contains("false"),
+        "plain Tab helper must return false so ScriptList can keep local Tab behavior"
     );
 }
 
@@ -1998,7 +1982,7 @@ fn startup_tab_interceptor_no_longer_routes_shift_tab_query_into_harness() {
 }
 
 #[test]
-fn typed_tab_entry_uses_submit_mode_in_harness() {
+fn typed_command_enter_entry_uses_submit_mode_in_harness() {
     assert!(
         TAB_AI_MODE_SOURCE.contains("fn open_tab_ai_chat_with_entry_intent("),
         "tab_ai_mode.rs must expose an entry-intent-aware harness entry point"
@@ -2009,7 +1993,7 @@ fn typed_tab_entry_uses_submit_mode_in_harness() {
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("crate::ai::TabAiHarnessSubmissionMode::Submit"),
-        "typed Tab entry must submit immediately through the harness"
+        "typed Command+Enter entry must submit immediately through the harness"
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("effective_intent"),

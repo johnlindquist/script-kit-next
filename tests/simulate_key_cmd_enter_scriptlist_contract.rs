@@ -2,9 +2,41 @@
 //! (Run 2 Pass #24) updated for unified simulateKey dispatcher.
 
 const CANONICAL_SIMULATEKEY: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
+const TAB_AI_MODE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 const RUNTIME_MATCH_SIMULATEKEY: &str =
     include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
+
+fn fn_body<'a>(source: &'a str, signature: &str) -> &'a str {
+    let start = source.find(signature).expect("signature must exist");
+    let rest = &source[start..];
+    let open = rest.find('{').expect("function body must start");
+    let mut depth = 0usize;
+
+    for (idx, ch) in rest[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &rest[..open + idx + 1];
+                }
+            }
+            _ => {}
+        }
+    }
+
+    panic!("function body must close");
+}
+
+fn assert_before(source: &str, first: &str, second: &str) {
+    let first_pos = source.find(first).expect("missing first marker");
+    let second_pos = source.find(second).expect("missing second marker");
+    assert!(
+        first_pos < second_pos,
+        "expected `{first}` before `{second}`"
+    );
+}
 
 #[test]
 fn simulate_key_dispatchers_route_cmd_enter_in_scriptlist_to_acp_context_capture() {
@@ -71,9 +103,85 @@ fn simulate_key_cmd_enter_arm_precedes_plain_enter_in_scriptlist() {
 
 #[test]
 fn try_route_global_cmd_enter_to_acp_context_capture_still_defined() {
-    const TAB_AI_MODE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
     assert!(
         TAB_AI_MODE.contains("pub(crate) fn try_route_global_cmd_enter_to_acp_context_capture("),
         "try_route_global_cmd_enter_to_acp_context_capture must still be defined"
+    );
+}
+
+#[test]
+fn script_list_cmd_enter_spine_attempt_is_explicit_and_non_terminal() {
+    let body = fn_body(
+        TAB_AI_MODE,
+        "pub(crate) fn try_route_global_cmd_enter_to_acp_context_capture(",
+    );
+
+    assert!(
+        !body.contains("return self.try_submit_spine_prompt_plan_from_enter(cx);"),
+        "ScriptList Cmd+Enter must not let Spine return early for every non-empty filter"
+    );
+    assert!(
+        body.contains("script_list_cmd_enter_has_explicit_spine_prompt_plan"),
+        "ScriptList Cmd+Enter must gate Spine submission behind an explicit prompt-plan predicate"
+    );
+    assert!(
+        body.contains("if self.try_submit_spine_prompt_plan_from_enter(cx)")
+            && body.contains("return true;"),
+        "Spine should consume Cmd+Enter only after a successful explicit prompt-plan submission"
+    );
+    assert_before(
+        body,
+        "script_list_cmd_enter_has_explicit_spine_prompt_plan",
+        "self.try_route_cmd_enter_to_menu_syntax_ai(cx)",
+    );
+}
+
+#[test]
+fn script_list_cmd_enter_plain_prompt_uses_agent_chat_entry_intent() {
+    let body = fn_body(
+        TAB_AI_MODE,
+        "pub(crate) fn try_route_global_cmd_enter_to_acp_context_capture(",
+    );
+
+    assert!(
+        body.contains("script_list_cmd_enter_plain_prompt_intent"),
+        "plain natural ScriptList input should have a distinct Cmd+Enter prompt route"
+    );
+    assert!(
+        body.contains(
+            "open_tab_ai_acp_with_entry_intent_suppressing_focused_part(Some(intent), cx)"
+        ),
+        "plain natural ScriptList input should seed Agent Chat as an entry intent so it can stream"
+    );
+}
+
+#[test]
+fn script_list_cmd_enter_plain_prompt_does_not_block_on_selected_rows() {
+    let body = fn_body(TAB_AI_MODE, "fn script_list_cmd_enter_plain_prompt_intent(");
+
+    assert!(
+        !body.contains("search_result_for_grouped_item(self.selected_index)"),
+        "plain prompt routing must not use selected grouped rows to override typed prose"
+    );
+    assert!(
+        body.contains("Some(intent.to_string())"),
+        "non-empty ScriptList prose must become the Agent Chat entry intent"
+    );
+}
+
+#[test]
+fn script_list_cmd_enter_spine_explicit_predicate_requires_prompt_builder_syntax() {
+    let body = fn_body(
+        TAB_AI_MODE,
+        "fn script_list_cmd_enter_has_explicit_spine_prompt_plan(",
+    );
+
+    assert!(
+        body.contains("parse_has_prompt_builder_segments(&self.spine_parse)"),
+        "explicit prompt-builder syntax must still authorize the Spine prompt-plan path"
+    );
+    assert!(
+        !body.contains("self.spine_cwd.is_some()"),
+        "a cwd chip alone must not make plain launcher prose take the destructive Spine submit path"
     );
 }

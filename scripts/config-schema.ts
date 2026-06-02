@@ -247,12 +247,12 @@
  * theme: { presetId: "nord" },
  * dictation: { selectedDeviceId: "usb-mic" },
  * ai: {
- *   selectedAcpAgentId: "codex-acp",
- *   selectedModelId: "gpt-5.4",
+ *   selectedBackend: "pi",
+ *   selectedProfileId: "script-kit",
+ *   selectedModelId: "openai-codex/gpt-5.4",
  *   profiles: [
- *     { id: "writing", label: "Long-form writing", selectedModelId: "gpt-5.4", systemPromptSlug: "writing" }
- *   ],
- *   activeProfileId: "writing"
+ *     { id: "script-kit", name: "Script Kit", backend: "pi", provider: "openai-codex", model: "gpt-5.4" }
+ *   ]
  * },
  * windowManagement: { snapMode: "expanded" },
  * ```
@@ -1254,12 +1254,12 @@ export interface AiProfile {
   piBinary?: string;
 
   /**
-   * ACP agent id. Ignored by Pi profiles.
+   * Legacy Agent Chat agent id. Ignored by Pi profiles.
    */
   agent?: string;
 
   /**
-   * Pi provider id. Ignored by ACP profiles.
+   * Pi provider id.
    */
   provider?: string;
 
@@ -1285,7 +1285,7 @@ export interface AiProfile {
   sessionDurability?: string;
 
   /**
-   * ACP agent ID to use when this profile is active.
+   * Legacy Agent Chat agent ID to use when this profile is active.
    *
    * @example "codex-acp"
    */
@@ -1300,7 +1300,7 @@ export interface AiProfile {
 }
 
 /**
- * ACP Chat runtime preferences stored in `~/.scriptkit/config.ts`.
+ * Agent Chat runtime preferences stored in `~/.scriptkit/config.ts`.
  */
 export interface AiPreferences {
   /**
@@ -1311,7 +1311,7 @@ export interface AiPreferences {
   selectedModelId?: string;
 
   /**
-   * Last-selected ACP agent ID.
+   * Legacy last-selected Agent Chat agent ID.
    *
    * @example "codex-acp"
    */
@@ -1490,24 +1490,26 @@ export interface Config extends BaseConfig {
   mcp?: McpConfig;
 
   /**
-   * ACP Chat runtime preferences.
+   * Agent Chat runtime preferences.
    *
-   * Top-level selections remain the backward-compatible default. Named profiles
-   * add optional model, agent, and system prompt combinations for quick switching.
+   * Codex-backed Pi profiles are the primary setup flow. Legacy top-level
+   * selections remain backward-compatible input.
    *
-   * @default undefined (use ACP defaults)
+   * @default undefined (use Agent Chat defaults)
    * @example
    * ```typescript
-   * ai: {
-   *   selectedAcpAgentId: "codex-acp",
-   *   selectedModelId: "gpt-5.4",
-   *   profiles: [
-   *     {
-   *       id: "writing",
-   *       label: "Long-form writing",
-   *       selectedModelId: "gpt-5.4",
-   *       systemPromptSlug: "writing"
-   *     }
+ * ai: {
+ *   selectedBackend: "pi",
+ *   selectedProfileId: "script-kit",
+ *   selectedModelId: "openai-codex/gpt-5.4",
+ *   profiles: [
+ *     {
+ *       id: "script-kit",
+ *       name: "Script Kit",
+ *       backend: "pi",
+ *       provider: "openai-codex",
+ *       model: "gpt-5.4"
+ *     }
    *   ],
    *   activeProfileId: "writing"
    * }
@@ -1650,7 +1652,7 @@ export interface UnifiedSearchConfig {
   files?: UnifiedSearchFilesConfig;
   /** Controls for passive root Notes rows backed by the local Notes index. */
   notes?: UnifiedSearchNotesConfig;
-  /** Controls for passive root AI conversation rows backed by saved ACP history. */
+  /** Controls for passive root AI conversation rows backed by saved Agent Chat history. */
   acpHistory?: UnifiedSearchAcpHistoryConfig;
   /** Controls for passive root AI Vault rows backed by cmux session metadata. */
   aiVault?: UnifiedSearchAiVaultConfig;
@@ -1701,7 +1703,7 @@ export interface UnifiedSearchFilesConfig {
 }
 
 export interface UnifiedSearchAcpHistoryConfig {
-  /** Enable saved ACP conversation rows in root launcher search. */
+  /** Enable saved Agent Chat conversation rows in root launcher search. */
   enabled?: boolean;
   /** Maximum number of AI conversation rows to append. Clamped to 1-5. */
   maxResults?: number;

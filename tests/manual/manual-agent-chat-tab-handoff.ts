@@ -8,7 +8,7 @@ function log(test: string, status: string, extra: any = {}) {
   console.error(JSON.stringify({ test, status, timestamp: new Date().toISOString(), ...extra }));
 }
 
-const testName = "manual-agent-chat-tab-handoff";
+const testName = "manual-agent-chat-cmd-enter-handoff";
 
 async function runTest() {
   log(testName, "running");
@@ -21,12 +21,12 @@ async function runTest() {
     // Display a message about how to test
     await div(`
       <div class="p-4 flex flex-col gap-4">
-        <h1 class="text-xl font-bold">Agent Chat Tab Handoff Test</h1>
+        <h1 class="text-xl font-bold">Agent Chat Command+Enter Handoff Test</h1>
         <p>To test the Agent Chat handoff:</p>
         <ol class="list-decimal ml-6 space-y-2">
           <li>Press Escape to close this prompt</li>
           <li>Type something in the main search bar (e.g., "hello")</li>
-          <li>Press Tab</li>
+          <li>Press Command+Enter</li>
           <li>Agent Chat should appear with your text as the initial query</li>
           <li>If an agent is configured, you can submit to get responses</li>
         </ol>
