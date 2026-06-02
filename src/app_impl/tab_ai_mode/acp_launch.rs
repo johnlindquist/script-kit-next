@@ -177,10 +177,6 @@ impl ScriptListApp {
 
         let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
         let ai_preferences = crate::config::load_user_preferences().ai;
-        let effective_profile = crate::ai::agent_chat::profiles::resolve_effective_profile(
-            &ai_preferences,
-            &profile_ctx,
-        );
         let focused_text_mini =
             request.ui_variant == crate::ai::acp::ui_variant::AcpChatUiVariant::FocusedTextMini;
         let pi_launch_result = if focused_text_mini {
@@ -189,11 +185,9 @@ impl ScriptListApp {
                 &profile_ctx,
             )
         } else {
-            // Apply the Spine cwd chip as the agent's working directory. The Pi
-            // runtime bakes cwd at spawn time and ignores per-turn cwd, so this
-            // must be set on the launch spec, not via AcpThread::set_cwd.
-            crate::ai::agent_chat::launch::PiAgentChatLaunch::from_profile_with_cwd_override(
-                effective_profile.clone(),
+            crate::ai::agent_chat::launch::resolve_selected_pi_launch_with_cwd_override(
+                &ai_preferences,
+                &profile_ctx,
                 self.spine_cwd_for_acp_launch(),
             )
         };
@@ -573,14 +567,22 @@ impl ScriptListApp {
     /// toast). Invoked when the user picks a cwd.
     pub(crate) fn prewarm_acp_for_spine_cwd(&self, cx: &mut Context<Self>) {
         let _ = cx;
-        let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
         let ai_preferences = crate::config::load_user_preferences().ai;
-        let effective_profile = crate::ai::agent_chat::profiles::resolve_effective_profile(
+        self.prewarm_selected_agent_chat_profile_for_current_cwd(
             &ai_preferences,
-            &profile_ctx,
+            "prewarm_acp_for_spine_cwd",
         );
-        match crate::ai::agent_chat::launch::PiAgentChatLaunch::from_profile_with_cwd_override(
-            effective_profile,
+    }
+
+    pub(crate) fn prewarm_selected_agent_chat_profile_for_current_cwd(
+        &self,
+        ai_preferences: &crate::config::AiPreferences,
+        source: &'static str,
+    ) {
+        let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+        match crate::ai::agent_chat::launch::resolve_selected_pi_launch_with_cwd_override(
+            ai_preferences,
+            &profile_ctx,
             self.spine_cwd_for_acp_launch(),
         ) {
             Ok(pi_launch) => {
@@ -588,15 +590,19 @@ impl ScriptListApp {
                 if let Err(error) = manager.prepare_warm_background(pi_launch.warm_spec()) {
                     tracing::warn!(
                         target: "script_kit::spine",
-                        event = "prewarm_acp_for_spine_cwd_failed",
+                        event = "prewarm_selected_agent_chat_profile_failed",
+                        source,
                         warm_key = %pi_launch.warm_key,
+                        profile_id = %pi_launch.profile.id,
                         error = %error,
                     );
                 } else {
                     tracing::info!(
                         target: "script_kit::spine",
-                        event = "prewarm_acp_for_spine_cwd",
+                        event = "prewarm_selected_agent_chat_profile",
+                        source,
                         warm_key = %pi_launch.warm_key,
+                        profile_id = %pi_launch.profile.id,
                         cwd = %pi_launch.cwd.display(),
                     );
                 }
@@ -604,7 +610,8 @@ impl ScriptListApp {
             Err(error) => {
                 tracing::debug!(
                     target: "script_kit::spine",
-                    event = "prewarm_acp_for_spine_cwd_resolution_failed",
+                    event = "prewarm_selected_agent_chat_profile_resolution_failed",
+                    source,
                     error = %error,
                 );
             }

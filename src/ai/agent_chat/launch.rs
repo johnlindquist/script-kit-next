@@ -128,8 +128,16 @@ pub(crate) fn resolve_selected_pi_launch(
     ai: &AiPreferences,
     ctx: &AgentChatProfileContext,
 ) -> Result<PiAgentChatLaunch> {
+    resolve_selected_pi_launch_with_cwd_override(ai, ctx, None)
+}
+
+pub(crate) fn resolve_selected_pi_launch_with_cwd_override(
+    ai: &AiPreferences,
+    ctx: &AgentChatProfileContext,
+    cwd_override: Option<PathBuf>,
+) -> Result<PiAgentChatLaunch> {
     let profile = resolve_effective_profile(ai, ctx);
-    PiAgentChatLaunch::from_profile(profile)
+    PiAgentChatLaunch::from_profile_with_cwd_override(profile, cwd_override)
 }
 
 pub(crate) fn resolve_inline_agent_pi_launch(
@@ -247,6 +255,29 @@ mod tests {
         assert!(launch.rpc_spec.args.contains(&"--mode".to_string()));
         assert!(launch.rpc_spec.args.contains(&"rpc".to_string()));
         assert!(launch.warm_key.starts_with("pi-warm-v1:"));
+    }
+
+    #[test]
+    fn selected_pi_launch_with_cwd_override_uses_selected_profile_key_material() {
+        let ai = AiPreferences {
+            pi_binary: Some("/tmp/test-pi".to_string()),
+            selected_profile_id: Some(
+                crate::ai::agent_chat::profiles::BUILTIN_SCRIPT_KIT_PROFILE_ID.to_string(),
+            ),
+            ..AiPreferences::default()
+        };
+        let cwd = PathBuf::from("/tmp/script-kit-work");
+
+        let launch =
+            resolve_selected_pi_launch_with_cwd_override(&ai, &ctx(), Some(cwd.clone())).unwrap();
+
+        assert_eq!(launch.profile.id, "script-kit");
+        assert_eq!(launch.cwd, cwd);
+        assert!(launch.warm_key.starts_with("pi-warm-v1:"));
+        assert!(
+            crate::ai::agent_chat::warm_key::normalized_material(&launch.launch_spec)
+                .contains("cwd=/tmp/script-kit-work")
+        );
     }
 
     #[test]

@@ -183,6 +183,10 @@ impl ScriptListApp {
             profile_name = %profile.name,
             backend = ?profile.backend,
         );
+        self.prewarm_selected_agent_chat_profile_for_current_cwd(
+            &prefs.ai,
+            "agent_chat_profile_selection",
+        );
 
         if let AppView::AcpChatView { entity } = self.current_view.clone() {
             if entity.read(cx).is_setup_mode() {
@@ -380,6 +384,11 @@ impl ScriptListApp {
                     target: "script_kit::spine",
                     event = "spine_prompt_plan_profile_persist_failed",
                     profile_id = %profile.id,
+                );
+            } else {
+                self.prewarm_selected_agent_chat_profile_for_current_cwd(
+                    &prefs.ai,
+                    "spine_prompt_plan_profile_selection",
                 );
             }
             persisted
@@ -2664,9 +2673,12 @@ impl ScriptListApp {
         }
 
         let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
-        match crate::ai::agent_chat::launch::resolve_selected_pi_launch(
-            &crate::config::load_user_preferences().ai,
+        let ai_prefs = crate::config::load_user_preferences().ai;
+        let cwd_override = self.spine_cwd_for_acp_launch();
+        match crate::ai::agent_chat::launch::resolve_selected_pi_launch_with_cwd_override(
+            &ai_prefs,
             &profile_ctx,
+            cwd_override.clone(),
         ) {
             Ok(pi_launch) => {
                 match crate::ai::agent_chat::launch::warm_session_manager()
@@ -2678,6 +2690,8 @@ impl ScriptListApp {
                             event = "pi_agent_chat_warm_started",
                             profile_id = %pi_launch.profile.id,
                             warm_key = %pi_launch.warm_key,
+                            cwd = %pi_launch.cwd.display(),
+                            cwd_override = ?cwd_override,
                             generation = snapshot.generation,
                             state = ?snapshot.state,
                         );
@@ -2688,6 +2702,8 @@ impl ScriptListApp {
                             event = "pi_agent_chat_warm_unavailable",
                             profile_id = %pi_launch.profile.id,
                             warm_key = %pi_launch.warm_key,
+                            cwd = %pi_launch.cwd.display(),
+                            cwd_override = ?cwd_override,
                             error = %error,
                         );
                     }
@@ -2702,7 +2718,6 @@ impl ScriptListApp {
             }
         }
 
-        let ai_prefs = crate::config::load_user_preferences().ai;
         match crate::ai::agent_chat::launch::resolve_focused_text_pi_launch(&ai_prefs, &profile_ctx)
         {
             Ok(text_launch) => {

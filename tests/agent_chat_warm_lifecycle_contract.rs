@@ -51,14 +51,54 @@ fn warm_session_lifecycle_routes_pi_only_through_launch_helper() {
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("PiAgentChatLaunch"));
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("warm_session_manager"));
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("PiRpcRuntime::spawn"));
-    assert!(ACP_LAUNCH_SOURCE.contains("resolve_effective_profile"));
-    assert!(ACP_LAUNCH_SOURCE.contains("PiAgentChatLaunch::from_profile"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_pi_launch_with_cwd_override"));
+    assert!(ACP_LAUNCH_SOURCE.contains("resolve_selected_pi_launch_with_cwd_override"));
     assert!(ACP_LAUNCH_SOURCE.contains("manager.acquire_warm"));
     assert!(TAB_AI_MODE_SOURCE.contains("dismiss_active_agent_chat_warm_lease"));
     assert!(
         !ACP_SETUP_SOURCE.contains("PiRpcRuntime")
             && !ACP_SETUP_SOURCE.contains("AgentChatBackend::Pi"),
         "setup card routing must stay out of the Pi warm path"
+    );
+}
+
+#[test]
+fn startup_open_and_cwd_prewarm_share_selected_pi_cwd_launch_resolution() {
+    assert!(AGENT_CHAT_LAUNCH_SOURCE
+        .contains("pub(crate) fn resolve_selected_pi_launch_with_cwd_override"));
+    assert!(
+        AGENT_CHAT_LAUNCH_SOURCE
+            .contains("resolve_selected_pi_launch_with_cwd_override(ai, ctx, None)"),
+        "default selected launch must delegate to the cwd-aware helper"
+    );
+
+    let startup_body = TAB_AI_MODE_SOURCE
+        .split("pub(crate) fn warm_acp_chat_on_startup")
+        .nth(1)
+        .expect("warm_acp_chat_on_startup must exist");
+    let open_body = ACP_LAUNCH_SOURCE
+        .split("fn open_tab_ai_acp_view_from_request_impl")
+        .nth(1)
+        .expect("open_tab_ai_acp_view_from_request_impl must exist");
+    let cwd_prewarm_body = ACP_LAUNCH_SOURCE
+        .split("pub(crate) fn prewarm_selected_agent_chat_profile_for_current_cwd")
+        .nth(1)
+        .expect("prewarm selected profile helper must exist");
+
+    for (name, body) in [
+        ("startup", startup_body),
+        ("open", open_body),
+        ("cwd/profile prewarm", cwd_prewarm_body),
+    ] {
+        assert!(
+            body.contains("resolve_selected_pi_launch_with_cwd_override"),
+            "{name} must use shared selected-profile/cwd Pi launch resolution"
+        );
+    }
+
+    assert!(
+        !open_body.contains("PiAgentChatLaunch::from_profile_with_cwd_override"),
+        "open path must not hand-roll selected profile cwd launch resolution"
     );
 }
 

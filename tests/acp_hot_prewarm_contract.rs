@@ -88,8 +88,12 @@ fn acp_hot_prewarm_helper_uses_pi_warm_session() {
         "warm_acp_chat_on_startup must honor the dev opt-out before spawning an ACP runtime"
     );
     assert!(
-        body.contains("resolve_selected_pi_launch"),
-        "warm_acp_chat_on_startup must resolve the selected Pi Agent Chat profile"
+        body.contains("spine_cwd_for_acp_launch"),
+        "warm_acp_chat_on_startup must use the same cwd override as ACP launch"
+    );
+    assert!(
+        body.contains("resolve_selected_pi_launch_with_cwd_override"),
+        "warm_acp_chat_on_startup must share selected-profile/cwd launch resolution with the open path"
     );
     assert!(
         body.contains("warm_session_manager()"),
@@ -102,6 +106,43 @@ fn acp_hot_prewarm_helper_uses_pi_warm_session() {
     assert!(
         !body.contains("crate::ai::acp::hosted::spawn_hosted_view("),
         "startup prewarm must not create a hidden hosted ACP view on the UI thread"
+    );
+}
+
+#[test]
+fn profile_selection_starts_selected_profile_warm_session() {
+    let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
+    let body = fn_body(&tab_ai, "fn select_agent_chat_profile_and_relaunch(");
+
+    assert!(
+        body.contains("persist_agent_chat_profile_selection"),
+        "profile selection must persist the selected Agent Chat profile"
+    );
+    assert!(
+        body.contains("save_user_preferences"),
+        "profile selection must save preferences before warming the selected launch"
+    );
+    assert!(
+        body.contains("prewarm_selected_agent_chat_profile_for_current_cwd"),
+        "profile selection must warm the selected profile with the current cwd override before the next open"
+    );
+}
+
+#[test]
+fn spine_profile_selection_starts_selected_profile_warm_session() {
+    let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
+    let body = fn_body(
+        &tab_ai,
+        "pub(crate) fn try_submit_spine_prompt_plan_from_enter(",
+    );
+
+    assert!(
+        body.contains("persist_agent_chat_profile_selection"),
+        "Spine profile syntax must persist the selected Agent Chat profile"
+    );
+    assert!(
+        body.contains("prewarm_selected_agent_chat_profile_for_current_cwd"),
+        "Spine profile syntax must warm the selected profile before the next Cmd+Return"
     );
 }
 
@@ -200,7 +241,9 @@ fn prewarm_consume_requires_matching_default_launch() {
     let body = fn_body(&tab_ai, "fn take_prewarmed_acp_chat_for_launch(");
 
     assert!(
-        body.contains("requirements != crate::ai::acp::AcpLaunchRequirements::default()"),
+        body.contains(
+            "requirements != crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default()"
+        ),
         "prewarmed default sessions must not be consumed by capability-specific launches"
     );
     assert!(
