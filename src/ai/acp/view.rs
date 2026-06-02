@@ -7811,7 +7811,12 @@ impl AcpChatView {
                 ))
                 .into_any_element();
         }
-        self.ensure_transcript(cx).into_any_element()
+        div()
+            .flex_1()
+            .min_h(px(0.0))
+            .w_full()
+            .child(self.ensure_transcript(cx).into_any_element())
+            .into_any_element()
     }
 
     pub(crate) fn open_profile_picker(&mut self, cx: &mut Context<Self>) {

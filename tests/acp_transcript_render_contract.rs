@@ -91,6 +91,11 @@ fn agent_chat_mounts_transcript_from_existing_thread_messages() {
         "fn ensure_transcript(",
         "\n    fn confirm_setup_agent_selection(",
     );
+    let middle_area_body = source_between(
+        VIEW_SOURCE,
+        "fn render_acp_middle_area(",
+        "\n    pub(crate) fn open_profile_picker(",
+    );
     let render_body = source_between(VIEW_SOURCE, "impl Render for AcpChatView", "\n#[cfg(test)]");
 
     assert!(
@@ -102,7 +107,8 @@ fn agent_chat_mounts_transcript_from_existing_thread_messages() {
         "Agent Chat must pass existing messages into the transcript entity"
     );
     assert!(
-        render_body.contains(".child(self.ensure_transcript(cx).into_any_element())"),
-        "Agent Chat must mount the transcript even when assistant text already exists"
+        middle_area_body.contains(".child(self.ensure_transcript(cx).into_any_element())")
+            && render_body.contains("self.render_acp_middle_area("),
+        "Agent Chat must mount the transcript through the middle-area render path even when assistant text already exists"
     );
 }

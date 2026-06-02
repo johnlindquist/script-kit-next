@@ -486,11 +486,6 @@ impl Render for AcpTranscript {
             (0..messages_snapshot.len()).collect()
         };
 
-        if self.list_state.item_count() != visible_indices.len() {
-            self.list_state.reset(visible_indices.len());
-            self.list_state.set_follow_tail(true);
-        }
-
         // Reconcile/sync TextViewState entities for each message
         for msg in &messages_snapshot {
             let text_view_state = self
