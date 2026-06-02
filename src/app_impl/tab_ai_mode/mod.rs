@@ -1845,8 +1845,8 @@ impl ScriptListApp {
     ) -> bool {
         if self.spine_enabled && matches!(self.current_view, AppView::ScriptList) {
             let raw = self.filter_text.clone();
-            if !raw.trim().is_empty() {
-                return self.try_submit_spine_prompt_plan_from_enter(cx);
+            if !raw.trim().is_empty() && self.try_submit_spine_prompt_plan_from_enter(cx) {
+                return true;
             }
         }
         // Run 12 Pass 11 — `cmd-enter-inline-ai-proposal`. When the user is

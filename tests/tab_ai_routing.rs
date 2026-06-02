@@ -14,6 +14,7 @@ const RUNTIME_SIMULATE_KEY_SOURCE: &str =
     include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
 const APP_RUN_SETUP_SOURCE: &str = include_str!("../src/main_entry/app_run_setup.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_ACP_LAUNCH_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
 const RENDER_IMPL_SOURCE: &str = include_str!("../src/main_sections/render_impl.rs");
 const SCRIPT_LIST_SOURCE: &str = include_str!("../src/render_script_list/mod.rs");
 const APP_STATE_SOURCE: &str = include_str!("../src/main_sections/app_state.rs");
@@ -74,6 +75,50 @@ fn plain_tab_and_global_cmd_enter_helpers_bail_when_attachment_portal_open() {
         cmd_enter_body.contains("self.is_in_attachment_portal()")
             && cmd_enter_body.contains("return false"),
         "Global Cmd+Enter ACP helper must early-return false when an attachment portal is active"
+    );
+}
+
+#[test]
+fn global_cmd_enter_spine_probe_falls_through_to_agent_chat_route() {
+    let cmd_enter_body = source_block_after(
+        TAB_AI_MODE_SOURCE,
+        "fn try_route_global_cmd_enter_to_acp_context_capture",
+        2600,
+    );
+
+    assert!(
+        cmd_enter_body.contains("&& self.try_submit_spine_prompt_plan_from_enter(cx)")
+            && cmd_enter_body.contains("return true;"),
+        "Global Cmd+Enter may let Spine consume explicit prompt-builder syntax, \
+         but a false Spine probe must fall through to the normal Agent Chat route"
+    );
+    assert!(
+        !cmd_enter_body.contains("return self.try_submit_spine_prompt_plan_from_enter(cx);"),
+        "Global Cmd+Enter must not return the Spine probe result directly; plain launcher \
+         prose should continue to the Agent Chat route"
+    );
+    assert!(
+        cmd_enter_body.contains("tab_ai_global_cmd_enter_routed_to_acp"),
+        "Global Cmd+Enter fallthrough must still reach the ACP route telemetry"
+    );
+}
+
+#[test]
+fn pi_warmup_branch_switches_to_visible_agent_chat_setup() {
+    let warm_branch = source_block_after(
+        TAB_AI_ACP_LAUNCH_SOURCE,
+        "let Some(lease) = manager.acquire_warm_ready(&pi_launch.warm_key) else",
+        1700,
+    );
+
+    assert!(
+        warm_branch.contains("manager.prepare_warm_background(warm_spec)"),
+        "Pi Agent Chat warm miss must still start background preparation"
+    );
+    assert!(
+        warm_branch.contains("show_pi_agent_chat_warming_setup_view"),
+        "Pi Agent Chat warm miss must switch to a visible Agent Chat setup surface, \
+         not leave Cmd+Enter hidden on ScriptList with only a toast"
     );
 }
 

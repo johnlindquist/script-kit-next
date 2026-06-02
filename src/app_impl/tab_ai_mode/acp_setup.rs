@@ -67,6 +67,30 @@ impl ScriptListApp {
         self.show_embedded_acp_setup_view(source_view, setup, cx);
     }
 
+    pub(super) fn show_pi_agent_chat_warming_setup_view(
+        &mut self,
+        source_view: AppView,
+        profile_name: String,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "pi_agent_chat_warming_setup",
+            profile_name = %profile_name,
+        );
+        let setup = crate::ai::agent_chat::ui::AgentChatInlineSetupState {
+            reason_code: "piAgentChatWarming",
+            title: "Starting Pi Agent Chat".into(),
+            body: format!("{profile_name} is starting. Try again in a moment.").into(),
+            primary_action: crate::ai::agent_chat::ui::AgentChatSetupAction::Retry,
+            secondary_action: None,
+            selected_agent: None,
+            catalog_entries: Vec::new(),
+            launch_requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
+        };
+        self.show_embedded_acp_setup_view(source_view, setup, cx);
+    }
+
     /// Show a setup card when ACP launch is blocked (missing key, model
     /// capability, etc.).
     pub(super) fn show_acp_launch_blocked_setup_view(

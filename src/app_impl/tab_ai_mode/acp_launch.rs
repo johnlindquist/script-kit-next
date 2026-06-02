@@ -315,7 +315,11 @@ impl ScriptListApp {
                 )
                 .duration_ms(Some(TOAST_ERROR_MS)),
             );
-            cx.notify();
+            self.show_pi_agent_chat_warming_setup_view(
+                source_view,
+                pi_launch.profile.name.clone(),
+                cx,
+            );
             return;
         };
 
