@@ -124,7 +124,10 @@ impl ScriptListApp {
         const BUTTON_HEIGHT: f32 = 28.0;
         let main_view_has_context_zone = matches!(
             self.current_view,
-            AppView::ScriptList | AppView::FileSearchView { .. } | AppView::AcpChatView { .. }
+            AppView::ScriptList
+                | AppView::FileSearchView { .. }
+                | AppView::ProfileSearchView { .. }
+                | AppView::AcpChatView { .. }
         );
         let shell_horizontal_padding = shell.header_padding_x;
         let main_view_context_zone_height = menu_def.header_info_bar.height_px;

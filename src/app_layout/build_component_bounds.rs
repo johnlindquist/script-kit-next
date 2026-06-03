@@ -441,7 +441,10 @@ impl ScriptListApp {
 
         if matches!(
             self.current_view,
-            AppView::ScriptList | AppView::AcpChatView { .. }
+            AppView::ScriptList
+                | AppView::FileSearchView { .. }
+                | AppView::ProfileSearchView { .. }
+                | AppView::AcpChatView { .. }
         ) {
             if main_view_has_context_zone {
                 bounds.push(
@@ -488,25 +491,27 @@ impl ScriptListApp {
                 .with_padding(BoxModel::symmetric(0.0, 0.0)),
             );
 
-            let state_icon_size = menu_def
-                .icon
-                .container_size
-                .min(menu_def.search.height)
-                .max(16.0);
-            let state_icon_x = input_x
-                + px(crate::components::main_view_chrome::main_view_state_icon_left(menu_def));
-            let state_icon_y =
-                input_y + px(((menu_def.search.height - state_icon_size) * 0.5).max(0.0));
-            bounds.push(
-                ComponentBounds::new(
-                    "MainViewInputStateIcon",
-                    gpui::Bounds {
-                        origin: gpui::point(state_icon_x, state_icon_y),
-                        size: gpui::size(px(state_icon_size), px(state_icon_size)),
-                    },
-                )
-                .with_type(ComponentType::Other),
-            );
+            if !matches!(self.current_view, AppView::AcpChatView { .. }) {
+                let state_icon_size = menu_def
+                    .icon
+                    .container_size
+                    .min(menu_def.search.height)
+                    .max(16.0);
+                let state_icon_x = input_x
+                    + px(crate::components::main_view_chrome::main_view_state_icon_left(menu_def));
+                let state_icon_y =
+                    input_y + px(((menu_def.search.height - state_icon_size) * 0.5).max(0.0));
+                bounds.push(
+                    ComponentBounds::new(
+                        "MainViewInputStateIcon",
+                        gpui::Bounds {
+                            origin: gpui::point(state_icon_x, state_icon_y),
+                            size: gpui::size(px(state_icon_size), px(state_icon_size)),
+                        },
+                    )
+                    .with_type(ComponentType::Other),
+                );
+            }
         }
 
         if matches!(self.current_view, AppView::ScriptList) {

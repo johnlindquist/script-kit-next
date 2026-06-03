@@ -1585,6 +1585,9 @@ impl AcpChatView {
         }
 
         let actions_selected = crate::actions::is_actions_window_open();
+        let attach_picker_active = self.mention_session.is_some()
+            || self.acp_spine_owns_list()
+            || self.pending_portal_session.is_some();
         let mut buttons = Vec::new();
 
         match thread.status {
@@ -1616,10 +1619,14 @@ impl AcpChatView {
                     buttons.push(AcpFooterButtonSpec {
                         action: FooterAction::Run,
                         key: "↵",
-                        label: "Send",
+                        label: if attach_picker_active {
+                            "Attach"
+                        } else {
+                            "Send"
+                        },
                         selected: false,
-                        enabled: !blank && !self.context_capture_pending,
-                        disabled_reason: if blank {
+                        enabled: (attach_picker_active || !blank) && !self.context_capture_pending,
+                        disabled_reason: if blank && !attach_picker_active {
                             Some("type_message_first")
                         } else if self.context_capture_pending {
                             Some("context_capture_pending")
@@ -3100,6 +3107,7 @@ impl AcpChatView {
         use crate::footer_popup::FooterAction;
 
         match button.action {
+            FooterAction::Run if button.label == "Attach" => "↵ Attach",
             FooterAction::Run => "↵ Send",
             FooterAction::PasteResponse => "↵ Paste Response",
             FooterAction::Stop => "Esc Stop",
@@ -3158,7 +3166,16 @@ impl AcpChatView {
         }
 
         match action {
-            FooterAction::Run => self.submit_with_expanded_tokens(cx),
+            FooterAction::Run => {
+                if self.acp_spine_owns_list() && self.accept_acp_spine_projection_row(window, cx) {
+                    return;
+                }
+                if self.mention_session.is_some() {
+                    self.accept_mention_selection_impl(false, cx);
+                    return;
+                }
+                self.submit_with_expanded_tokens(cx);
+            }
             FooterAction::PasteResponse => self.trigger_paste_response_requested(window, cx),
             FooterAction::Stop => {
                 let _ = self.cancel_streaming_from_escape(cx);
@@ -7188,7 +7205,7 @@ impl AcpChatView {
                         badges: Vec::new(),
                         score: 0,
                         is_selectable: true,
-                        action_label: Some(SharedString::from("Attach")),
+                        action_label: None,
                         action: SpineListAction::ResolveSegment {
                             segment_index,
                             segment_byte_range: segment_byte_range.clone(),
@@ -7259,7 +7276,7 @@ impl AcpChatView {
                         badges: Vec::new(),
                         score: 0,
                         is_selectable: true,
-                        action_label: Some(SharedString::from("Attach")),
+                        action_label: None,
                         action: SpineListAction::ResolveSegment {
                             segment_index,
                             segment_byte_range: segment_byte_range.clone(),
@@ -8124,13 +8141,7 @@ impl AcpChatView {
             menu_def,
             crate::components::main_view_chrome::MainViewInputChrome {
                 body: input_body,
-                leading: Some(
-                    crate::components::main_view_chrome::render_main_view_state_icon(
-                        theme,
-                        menu_def,
-                        "message-circle",
-                    ),
-                ),
+                leading: None,
                 trailing: Vec::new(),
             },
         )
@@ -13146,7 +13157,7 @@ impl Render for AcpChatView {
                 footer_snapshot.cwd_display.unwrap_or_else(|| {
                     crate::components::main_view_chrome::MAIN_VIEW_CWD_UNAVAILABLE_LABEL.to_string()
                 }),
-                footer_snapshot.model_display,
+                footer_snapshot.profile_display,
             );
             let header = crate::components::main_view_chrome::MainViewHeaderChrome {
                 context: Some(

@@ -121,9 +121,10 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
         "ACP footer enrichment must suppress old left-info model/cwd marker now owned by the header"
     );
     assert!(app_view_state.contains("pub(crate) fn uses_shared_main_view_header"));
-    assert!(app_view_state.contains(
-        "AppView::ScriptList | AppView::FileSearchView { .. } | AppView::AcpChatView { .. }"
-    ));
+    assert!(app_view_state.contains("AppView::ScriptList"));
+    assert!(app_view_state.contains("| AppView::FileSearchView { .. }"));
+    assert!(app_view_state.contains("| AppView::ProfileSearchView { .. }"));
+    assert!(app_view_state.contains("| AppView::AcpChatView { .. }"));
     assert!(render_impl.contains(
         "let shared_header_owned_by_view = self.current_view.uses_shared_main_view_header();"
     ));
@@ -158,12 +159,30 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
         "ScriptList divider should align with the active theme shell inset"
     );
     assert!(acp.contains("render_main_view_input_shell"));
-    assert!(acp.contains("render_main_view_state_icon"));
     assert!(acp.contains("render_main_view_shell()"));
     assert!(acp.contains("render_main_view_chrome"));
     assert!(acp.contains("MainViewInputChrome"));
     assert!(acp.contains("MainViewHeaderChrome"));
-    assert!(acp.contains("render_main_view_context_zone_inert"));
+    assert!(
+        !acp.contains("\"message-circle\""),
+        "ACP composer input must not inject an extra leading message icon"
+    );
+    assert!(
+        acp.contains("leading: None"),
+        "ACP composer input should match main-menu input positioning without a leading icon"
+    );
+    assert!(
+        acp.contains("footer_snapshot.profile_display"),
+        "ACP shared header must show the active profile, not a model-only label"
+    );
+    assert!(
+        !acp.contains("action_label: Some(SharedString::from(\"Attach\"))"),
+        "ACP @ picker rows must not show per-row Attach accessories"
+    );
+    assert!(
+        acp.contains("FooterAction::Run if button.label == \"Attach\" => \"↵ Attach\""),
+        "ACP footer label must derive the Attach primary action from the button spec"
+    );
     assert!(acp.contains("context: Some("));
     assert!(acp.contains("MainViewDividerChrome"));
     assert!(acp.contains("visible: false"));
@@ -383,14 +402,12 @@ fn file_search_layout_model_uses_main_view_context_chrome() {
     let layout = read_source("src/app_layout/build_layout_info.rs");
     let bounds = read_source("src/app_layout/build_component_bounds.rs");
 
-    assert!(
-        layout.contains("AppView::FileSearchView { .. } | AppView::AcpChatView { .. }"),
-        "layout receipts should include the shared context zone for File Search"
-    );
-    assert!(
-        bounds.contains("AppView::FileSearchView { .. } | AppView::AcpChatView { .. }"),
-        "component bounds should include the shared context zone for File Search"
-    );
+    assert!(layout.contains("| AppView::FileSearchView { .. }"));
+    assert!(layout.contains("| AppView::ProfileSearchView { .. }"));
+    assert!(layout.contains("| AppView::AcpChatView { .. }"));
+    assert!(bounds.contains("| AppView::FileSearchView { .. }"));
+    assert!(bounds.contains("| AppView::ProfileSearchView { .. }"));
+    assert!(bounds.contains("| AppView::AcpChatView { .. }"));
 }
 
 #[test]
@@ -489,10 +506,11 @@ fn acp_component_bounds_model_uses_main_view_chrome() {
     assert!(bounds.contains("\"AcpEmptyGuidanceLabelColumn\""));
     assert!(bounds.contains("main_view_content_columns(menu_def)"));
     assert!(
-        bounds.contains(
-            "AppView::ScriptList | AppView::FileSearchView { .. } | AppView::AcpChatView { .. }"
-        ),
-        "debug component bounds should emit shared input details for ScriptList, FileSearch, and AcpChat"
+        bounds.contains("AppView::ScriptList")
+            && bounds.contains("| AppView::FileSearchView { .. }")
+            && bounds.contains("| AppView::ProfileSearchView { .. }")
+            && bounds.contains("| AppView::AcpChatView { .. }"),
+        "debug component bounds should emit shared input details for ScriptList, FileSearch, ProfileSearch, and AcpChat"
     );
 }
 
