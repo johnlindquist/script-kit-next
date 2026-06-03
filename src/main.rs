@@ -23,6 +23,7 @@ use itertools::Itertools;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 mod process_manager;
+mod profile_search;
 use cocoa::base::id;
 use cocoa::foundation::NSRect;
 use process_manager::PROCESS_MANAGER;

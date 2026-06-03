@@ -1,5 +1,10 @@
 const ACTION_HANDLER_SOURCE: &str = include_str!("../src/app_actions/handle_action/mod.rs");
+const ACTIONS_TOGGLE_SOURCE: &str = include_str!("../src/app_impl/actions_toggle.rs");
 const PROFILES_SOURCE: &str = include_str!("../src/ai/agent_chat/profiles.rs");
+const PROFILE_SEARCH_SOURCE: &str = include_str!("../src/profile_search.rs");
+const APP_IMPL_PROFILE_SEARCH_SOURCE: &str = include_str!("../src/app_impl/profile_search_view.rs");
+const RENDER_PROFILE_SEARCH_SOURCE: &str = include_str!("../src/render_builtins/profile_search.rs");
+const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
 const ACP_LAUNCH_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 const FILTER_INPUT_CORE_SOURCE: &str = include_str!("../src/app_impl/filter_input_core.rs");
@@ -23,6 +28,7 @@ const STDIN_COMMANDS_SOURCE: &str = include_str!("../src/stdin_commands/mod.rs")
 const SPINE_PROFILE_SOURCE: &str = include_str!("../src/spine/catalog_profile.rs");
 const STARTUP_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
 const STARTUP_NEW_TAB_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
+const SIMULATE_KEY_DISPATCH_SOURCE: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
 
 fn fn_body<'a>(source: &'a str, signature: &str) -> &'a str {
     let start = source.find(signature).expect("signature must exist");
@@ -150,6 +156,63 @@ fn shift_tab_routes_to_profile_switcher_copy() {
     assert!(STARTUP_NEW_TAB_SOURCE.contains("acp_shift_tab_profile_switcher"));
     assert!(!STARTUP_SOURCE.contains("Shift+Tab → Agent & Model picker"));
     assert!(!STARTUP_NEW_TAB_SOURCE.contains("Shift+Tab → Agent & Model picker"));
+}
+
+#[test]
+fn simulate_key_shift_tab_routes_to_profile_switcher_for_runtime_proof() {
+    let script_list_arm = SIMULATE_KEY_DISPATCH_SOURCE
+        .split("AppView::ScriptList =>")
+        .nth(1)
+        .expect("ScriptList simulateKey arm must exist")
+        .split("AppView::")
+        .next()
+        .expect("ScriptList simulateKey arm must have a body");
+
+    assert!(script_list_arm.contains("key_lower == \"tab\""));
+    assert!(script_list_arm.contains("has_shift"));
+    assert!(script_list_arm.contains("profile_switcher_open_shift_tab"));
+    assert!(script_list_arm.contains("open_profile_search(ctx)"));
+    assert!(script_list_arm.contains("menu_syntax_capture_form_owns_input"));
+    assert!(!script_list_arm.contains("submit_to_current_or_new_tab_ai_harness_from_text"));
+}
+
+#[test]
+fn shift_tab_profile_search_is_main_window_split_pane_not_actions_dialog() {
+    assert!(APP_VIEW_STATE_SOURCE.contains("ProfileSearchView"));
+    assert!(APP_VIEW_STATE_SOURCE.contains("SurfaceKind::ProfileSearch"));
+    assert!(APP_VIEW_STATE_SOURCE.contains("RequiredSplitPreview"));
+    assert!(STARTUP_SOURCE.contains("open_profile_search(cx)"));
+    assert!(SIMULATE_KEY_DISPATCH_SOURCE.contains("open_profile_search(ctx)"));
+
+    assert!(!ACTIONS_TOGGLE_SOURCE.contains("pub(crate) fn open_profile_switcher_window("));
+    assert!(!SIMULATE_KEY_DISPATCH_SOURCE.contains("open_profile_switcher_window"));
+    assert!(!STARTUP_SOURCE.contains("open_profile_switcher_window"));
+    assert!(!ACTIONS_TOGGLE_SOURCE.contains("set_root_route(profile_route.clone())"));
+    assert!(!ACTIONS_TOGGLE_SOURCE.contains("get_agent_chat_profile_picker_route"));
+}
+
+#[test]
+fn profile_search_persists_profile_selection_without_actions_gate() {
+    assert!(PROFILE_SEARCH_SOURCE.contains("persist_agent_chat_profile_selection"));
+    assert!(PROFILE_SEARCH_SOURCE.contains("save_user_preferences(&prefs)"));
+    assert!(PROFILE_SEARCH_SOURCE.contains("profile_search_profile_persisted"));
+    assert!(APP_IMPL_PROFILE_SEARCH_SOURCE.contains("refresh_agent_model_footer_labels"));
+    assert!(APP_IMPL_PROFILE_SEARCH_SOURCE.contains("reset_to_script_list(cx)"));
+
+    assert!(!APP_IMPL_PROFILE_SEARCH_SOURCE.contains("execute_action_for_actions_host"));
+    assert!(!APP_IMPL_PROFILE_SEARCH_SOURCE.contains("agent_chat_switch_profile_id_from_action"));
+    assert!(!APP_IMPL_PROFILE_SEARCH_SOURCE.contains("agent_model_picker_active"));
+}
+
+#[test]
+fn profile_search_renderer_has_right_pane_preview() {
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("profile-search-root"));
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("profile-search-list"));
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("profile-search-row"));
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("profile-search-preview"));
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("profile-search-preview-title"));
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("profile-search-preview-model"));
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("profile-search-preview-tools"));
 }
 
 #[test]

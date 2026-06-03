@@ -394,10 +394,17 @@ pub fn agent_chat_profile_picker_entries(
     ai: &AiPreferences,
     ctx: &AgentChatProfileContext,
 ) -> Vec<AgentChatProfilePickerEntry> {
-    let mut entries: Vec<_> = built_in_profiles(ctx)
+    resolved_agent_chat_profile_picker_profiles(ai, ctx)
         .into_iter()
         .map(AgentChatProfilePickerEntry::from_profile)
-        .collect();
+        .collect()
+}
+
+pub fn resolved_agent_chat_profile_picker_profiles(
+    ai: &AiPreferences,
+    ctx: &AgentChatProfileContext,
+) -> Vec<ResolvedAgentChatProfile> {
+    let mut entries = built_in_profiles(ctx);
 
     for profile in resolved_plugin_profiles(ctx) {
         if entries.iter().any(|entry| entry.id == profile.id) {
@@ -409,7 +416,7 @@ pub fn agent_chat_profile_picker_entries(
             );
             continue;
         }
-        entries.push(AgentChatProfilePickerEntry::from_profile(profile));
+        entries.push(profile);
     }
 
     for profile in ai
@@ -427,7 +434,7 @@ pub fn agent_chat_profile_picker_entries(
             );
             continue;
         }
-        entries.push(AgentChatProfilePickerEntry::from_profile(profile));
+        entries.push(profile);
     }
 
     entries

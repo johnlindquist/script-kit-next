@@ -431,6 +431,17 @@ impl ScriptListApp {
                 }
                 return; // Don't run main menu filter logic
             }
+            AppView::ProfileSearchView {
+                filter,
+                selected_index,
+            } => {
+                self.filter_text = new_text.clone();
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
+                    self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+                    cx.notify();
+                }
+                return; // Don't run main menu filter logic
+            }
             AppView::SettingsView {
                 filter,
                 selected_index,

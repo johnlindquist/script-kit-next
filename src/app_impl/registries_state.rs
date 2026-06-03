@@ -178,6 +178,7 @@ impl ScriptListApp {
             AppView::QuickTerminalView { .. } => "QuickTerminalView",
             AppView::WebcamView { .. } => "WebcamView",
             AppView::FileSearchView { .. } => "FileSearchView",
+            AppView::ProfileSearchView { .. } => "ProfileSearchView",
             AppView::ThemeChooserView { .. } => "ThemeChooserView",
             AppView::CreationFeedback { .. } => "CreationFeedback",
             AppView::NamingPrompt { .. } => "NamingPrompt",

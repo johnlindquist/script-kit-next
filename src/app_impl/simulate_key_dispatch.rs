@@ -223,6 +223,26 @@ impl ScriptListApp {
                         "STDIN",
                         "SimulateKey: root file direct action shortcut",
                     );
+                } else if key_lower == "tab"
+                    && has_shift
+                    && !has_cmd
+                    && !_has_alt
+                    && !_has_ctrl
+                    && view.spine_enabled
+                    && !view.show_actions_popup
+                    && !view.menu_syntax_capture_form_owns_input()
+                {
+                    tracing::info!(
+                        target: "script_kit::spine",
+                        event = "profile_switcher_open_shift_tab",
+                        source = "simulate_key",
+                        "simulateKey Shift+Tab -> Profile Search"
+                    );
+                    logging::log(
+                        "STDIN",
+                        "SimulateKey: Shift+Tab - open Profile Search",
+                    );
+                    view.open_profile_search(ctx);
                 } else if has_cmd && key_lower == "k" {
                     logging::log(
                         "STDIN",
@@ -640,6 +660,32 @@ impl ScriptListApp {
                                 ),
                             );
                         }
+                    }
+                }
+            }
+            AppView::ProfileSearchView { .. } => {
+                match key_lower.as_str() {
+                    "up" | "arrowup" => {
+                        logging::log("STDIN", "SimulateKey: Up - Profile Search selection");
+                        view.move_profile_search_selection(true, ctx);
+                    }
+                    "down" | "arrowdown" => {
+                        logging::log("STDIN", "SimulateKey: Down - Profile Search selection");
+                        view.move_profile_search_selection(false, ctx);
+                    }
+                    "enter" => {
+                        logging::log("STDIN", "SimulateKey: Enter - select Profile Search row");
+                        view.select_profile_search_result(ctx);
+                    }
+                    "escape" => {
+                        logging::log("STDIN", "SimulateKey: Escape - close Profile Search");
+                        view.go_back_or_close(window, ctx);
+                    }
+                    _ => {
+                        logging::log(
+                            "STDIN",
+                            &format!("SimulateKey: Unhandled key '{}' in ProfileSearchView", key_lower),
+                        );
                     }
                 }
             }

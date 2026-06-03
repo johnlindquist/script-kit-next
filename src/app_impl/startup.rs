@@ -1537,9 +1537,9 @@ impl ScriptListApp {
                                 tracing::info!(
                                     target: "script_kit::spine",
                                     event = "profile_switcher_open_shift_tab",
-                                    "Shift+Tab → Profile Switcher"
+                                    "Shift+Tab → Profile Search"
                                 );
-                                this.open_profile_switcher_window(window, cx);
+                                this.open_profile_search(cx);
                                 cx.stop_propagation();
                                 return;
                             }
@@ -1561,9 +1561,8 @@ impl ScriptListApp {
                             // fresh chat. Shift+Tab is the documented Profile
                             // Switcher shortcut, so route it to the in-chat
                             // Profile picker via the window-aware entry point. We
-                            // do NOT reuse open_profile_switcher_window here: that path
-                            // forces non-ScriptList views back to ScriptList,
-                            // which would leave Agent Chat mid-conversation.
+                            // Keep this on the in-chat profile picker; the
+                            // main-window Profile Search is only for ScriptList.
                             if let AppView::AcpChatView { entity, .. } = &this.current_view {
                                 if has_shift {
                                     cx.stop_propagation();
@@ -2013,6 +2012,10 @@ impl ScriptListApp {
                                         .get(*selected_index)
                                         .map(|(_, entry)| entry.id.clone());
                                     cx.notify();
+                                    cx.stop_propagation();
+                                }
+                                AppView::ProfileSearchView { .. } => {
+                                    this.move_profile_search_selection(is_up, cx);
                                     cx.stop_propagation();
                                 }
                                 AppView::AppLauncherView {

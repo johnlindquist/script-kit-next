@@ -437,7 +437,7 @@ impl ScriptListApp {
                 if !matches!(self.current_view, AppView::ScriptList) {
                     self.current_view = AppView::ScriptList;
                 }
-                self.open_profile_switcher_window(window, cx);
+                self.open_profile_search(cx);
             }
         }
     }
@@ -1484,6 +1484,10 @@ impl ScriptListApp {
                 };
                 Some((view_type, filtered_count))
             }
+            AppView::ProfileSearchView { filter, .. } => Some((
+                ViewType::MainWindow,
+                self.profile_search_visible_len(filter),
+            )),
             AppView::ThemeChooserView { ref filter, .. } => {
                 let presets = theme::presets::presets_cached();
                 let filtered_count = if filter.is_empty() {

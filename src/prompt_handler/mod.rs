@@ -3885,6 +3885,25 @@ impl ScriptListApp {
                             selection.file.as_ref().map(|file| file.name.clone()),
                         )
                     }
+                    AppView::ProfileSearchView {
+                        filter,
+                        selected_index,
+                    } => {
+                        let results = self.profile_search_results_for_filter(filter);
+                        let selected_value = results
+                            .get(*selected_index)
+                            .map(|result| result.profile.name.clone());
+                        (
+                            "profileSearch".to_string(),
+                            Some("profile-search".to_string()),
+                            Some("Search profiles...".to_string()),
+                            filter.clone(),
+                            results.len(),
+                            results.len(),
+                            *selected_index as i32,
+                            selected_value,
+                        )
+                    }
                     AppView::ThemeChooserView {
                         filter,
                         selected_index,

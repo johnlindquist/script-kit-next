@@ -540,6 +540,12 @@ impl Render for ScriptListApp {
             } => self
                 .render_file_search(query, selected_index, presentation, cx)
                 .into_any_element(),
+            AppView::ProfileSearchView {
+                ref filter,
+                selected_index,
+            } => self
+                .render_profile_search(filter.clone(), selected_index, cx)
+                .into_any_element(),
             AppView::ThemeChooserView {
                 ref filter,
                 selected_index,

@@ -15,6 +15,7 @@ impl ScriptListApp {
                     | AppView::WindowSwitcherView { .. }
                     | AppView::BrowserTabsView { .. }
                     | AppView::FileSearchView { .. }
+                    | AppView::ProfileSearchView { .. }
                     | AppView::ThemeChooserView { .. }
                     | AppView::EmojiPickerView { .. }
                     | AppView::BrowseKitsView { .. }

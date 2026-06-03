@@ -91,6 +91,7 @@ impl ScriptListApp {
             AppView::ScratchPadView { .. } => "scratchPad",
             AppView::QuickTerminalView { .. } => "quickTerminal",
             AppView::FileSearchView { .. } => "fileSearch",
+            AppView::ProfileSearchView { .. } => "profileSearch",
             AppView::ThemeChooserView { .. } => "themeChooser",
             AppView::EmojiPickerView { .. } => "emojiPicker",
             AppView::ActionsDialog => "actionsDialog",

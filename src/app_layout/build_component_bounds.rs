@@ -47,6 +47,7 @@ impl ScriptListApp {
             AppView::ScratchPadView { .. } => "ScratchPad",
             AppView::QuickTerminalView { .. } => "QuickTerminal",
             AppView::FileSearchView { .. } => "FileSearch",
+            AppView::ProfileSearchView { .. } => "ProfileSearch",
             AppView::ThemeChooserView { .. } => "ThemeChooser",
             AppView::EmojiPickerView { .. } => "EmojiPicker",
             AppView::ActionsDialog => "ActionsDialog",
@@ -74,7 +75,10 @@ impl ScriptListApp {
 
         let main_view_has_context_zone = matches!(
             self.current_view,
-            AppView::ScriptList | AppView::FileSearchView { .. } | AppView::AcpChatView { .. }
+            AppView::ScriptList
+                | AppView::FileSearchView { .. }
+                | AppView::ProfileSearchView { .. }
+                | AppView::AcpChatView { .. }
         );
         let main_view_context_zone_height = menu_def.header_info_bar.height_px;
         let main_view_header_content_height = if main_view_has_context_zone {

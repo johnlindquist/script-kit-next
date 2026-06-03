@@ -40,6 +40,8 @@ pub(crate) mod menu_syntax_ai_apply;
 mod ui_window;
 #[path = "actions_toggle.rs"]
 mod actions_toggle;
+#[path = "profile_search_view.rs"]
+mod profile_search_view;
 #[path = "about_route.rs"]
 mod about_route;
 #[path = "feedback_route.rs"]

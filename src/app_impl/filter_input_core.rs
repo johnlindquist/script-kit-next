@@ -49,6 +49,7 @@ impl ScriptListApp {
                 | AppView::FooterGalleryView { .. }
                 | AppView::ThemeChooserView { .. }
                 | AppView::FileSearchView { .. }
+                | AppView::ProfileSearchView { .. }
                 | AppView::ProcessManagerView { .. }
                 | AppView::SettingsView { .. }
                 | AppView::CurrentAppCommandsView { .. }

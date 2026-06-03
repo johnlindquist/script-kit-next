@@ -3435,6 +3435,7 @@ impl ScriptListApp {
             | AppView::WindowSwitcherView { .. }
             | AppView::BrowserTabsView { .. }
             | AppView::FileSearchView { .. }
+            | AppView::ProfileSearchView { .. }
             | AppView::ThemeChooserView { .. }
             | AppView::EmojiPickerView { .. }
             | AppView::BrowseKitsView { .. }
@@ -4740,6 +4741,7 @@ impl ScriptListApp {
             AppView::WindowSwitcherView { .. } => "WindowSwitcher".to_string(),
             AppView::BrowserTabsView { .. } => "BrowserTabs".to_string(),
             AppView::FileSearchView { .. } => "FileSearch".to_string(),
+            AppView::ProfileSearchView { .. } => "ProfileSearch".to_string(),
             AppView::ThemeChooserView { .. } => "ThemeChooser".to_string(),
             AppView::EmojiPickerView { .. } => "EmojiPicker".to_string(),
             AppView::WebcamView { .. } => "Webcam".to_string(),
@@ -4794,6 +4796,7 @@ impl ScriptListApp {
             | AppView::WindowSwitcherView { filter, .. }
             | AppView::BrowserTabsView { filter, .. }
             | AppView::ThemeChooserView { filter, .. }
+            | AppView::ProfileSearchView { filter, .. }
             | AppView::EmojiPickerView { filter, .. }
             | AppView::ProcessManagerView { filter, .. }
             | AppView::SettingsView { filter, .. }

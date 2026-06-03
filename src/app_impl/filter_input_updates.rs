@@ -422,6 +422,13 @@ impl ScriptListApp {
                 Self::sync_builtin_query_state(filter, selected_index, text);
                 true
             }
+            AppView::ProfileSearchView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
             AppView::ProcessManagerView {
                 filter,
                 selected_index,

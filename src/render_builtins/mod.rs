@@ -13,6 +13,7 @@ include!("footer_gallery.rs");
 include!("non_list_states.rs");
 include!("theme_chooser.rs");
 include!("file_search.rs");
+include!("profile_search.rs");
 include!("kit_store.rs");
 include!("process_manager.rs");
 include!("current_app_commands.rs");

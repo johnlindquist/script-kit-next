@@ -175,6 +175,11 @@ enum AppView {
         selected_index: usize,
         presentation: FileSearchPresentation,
     },
+    /// Showing Agent Chat profiles with split-pane preview
+    ProfileSearchView {
+        filter: String,
+        selected_index: usize,
+    },
     /// Showing theme chooser with live preview and search
     ThemeChooserView {
         filter: String,
@@ -369,6 +374,7 @@ pub(crate) enum SurfaceKind {
     UtilityChildContent,
     FileSearchMini,
     FileSearchFull,
+    ProfileSearch,
     ThemeChooser,
     EmojiPicker,
     Feedback,
@@ -723,6 +729,7 @@ impl AppView {
             AppView::ScratchPadView { .. } => "ScratchPadView",
             AppView::QuickTerminalView { .. } => "QuickTerminalView",
             AppView::FileSearchView { .. } => "FileSearchView",
+            AppView::ProfileSearchView { .. } => "ProfileSearchView",
             AppView::ThemeChooserView { .. } => "ThemeChooserView",
             AppView::EmojiPickerView { .. } => "EmojiPickerView",
             AppView::CreationFeedback { .. } => "CreationFeedback",
@@ -793,6 +800,7 @@ impl AppView {
                 presentation: FileSearchPresentation::Full,
                 ..
             } => SurfaceKind::FileSearchFull,
+            AppView::ProfileSearchView { .. } => SurfaceKind::ProfileSearch,
             AppView::ThemeChooserView { .. } => SurfaceKind::ThemeChooser,
             AppView::EmojiPickerView { .. } => SurfaceKind::EmojiPicker,
             AppView::CreationFeedback { .. } | AppView::ScriptIssuesView { .. } => {
@@ -822,7 +830,10 @@ impl AppView {
     pub(crate) fn uses_shared_main_view_header(&self) -> bool {
         matches!(
             self,
-            AppView::ScriptList | AppView::FileSearchView { .. } | AppView::AcpChatView { .. }
+            AppView::ScriptList
+                | AppView::FileSearchView { .. }
+                | AppView::ProfileSearchView { .. }
+                | AppView::AcpChatView { .. }
         )
     }
 
@@ -853,6 +864,7 @@ impl AppView {
             AppView::MiniPrompt { .. } => Some("mini_prompt"),
             AppView::ClipboardHistoryView { .. } => Some("clipboard_history"),
             AppView::FileSearchView { .. } => Some("file_search"),
+            AppView::ProfileSearchView { .. } => Some("profile_search"),
             AppView::WebcamView { .. } => Some("webcam_prompt"),
             AppView::NamingPrompt { .. } => Some("naming_prompt"),
             AppView::CreationFeedback { .. } => Some("creation_feedback"),
@@ -1252,6 +1264,20 @@ impl SurfaceKind {
                 SplitPreviewVisual,
                 standard,
                 "fileSearch",
+            ),
+            SurfaceKind::ProfileSearch => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    FilterableLauncherList,
+                    LauncherFilter,
+                    RequiredSplitPreview,
+                ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                SplitPreviewVisual,
+                standard,
+                "profileSearch",
             ),
             SurfaceKind::ThemeChooser => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
