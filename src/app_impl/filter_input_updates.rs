@@ -56,10 +56,12 @@ impl ScriptListApp {
         // Reveal the final selected row after selection coercion.
         self.scroll_to_selected_if_needed(reason);
 
-        // Preflight depends on filter + selection and must stay out of render().
-        // The immediate typing path restores root-file handoff selection after
-        // reconciliation, so it rebuilds once after the final row is known.
-        if reason != "filter_immediate" {
+        // Preflight depends on filter, selection, and fallback state. Immediate
+        // typing paths finish their final state after reconciliation, so those
+        // callers own the single final rebuild.
+        let caller_rebuilds_preflight_after_final_state =
+            matches!(reason, "filter_immediate" | "set_filter_text_immediate");
+        if !caller_rebuilds_preflight_after_final_state {
             self.rebuild_main_window_preflight_if_needed();
         }
 
@@ -329,6 +331,9 @@ impl ScriptListApp {
             }
         }
 
+        // Single final preflight rebuild for immediate input changes. This must
+        // stay after fallback state updates so submit diagnostics/preflight see
+        // the final filter, selection, and fallback model.
         self.rebuild_main_window_preflight_if_needed();
         if self.filter_change_can_affect_window_size() {
             self.update_window_size_deferred(window, cx);
