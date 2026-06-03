@@ -42,7 +42,9 @@ pub(super) fn build_profile_rows(
             let subtitle = if selected {
                 format!("Current Agent Chat profile · {source} · Pi")
             } else {
-                format!("Switch Agent Chat to this profile · {source} · Pi")
+                format!(
+                    "Switch to this profile in a new chat · {source} · Pi · Starts a new chat when a conversation is already active"
+                )
             };
             SpineListRow {
                 id: ss(format!("spine:|:{}", entry.id)),

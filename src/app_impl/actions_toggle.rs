@@ -1,6 +1,6 @@
 use super::*;
 
-/// Action-id prefix for provider ("Agent") rows in the Shift+Tab Agent & Model
+/// Action-id prefix for provider ("Agent") rows in the Shift+Tab Profile Switcher
 /// picker. Provider rows are drill-only; the persisted value is the namespaced
 /// model id selected within the drill.
 const PI_PROVIDER_ACTION_PREFIX: &str = "pi_provider:";
@@ -372,7 +372,7 @@ impl ScriptListApp {
                             && !crate::platform::is_main_window_focused();
 
                     app.mark_actions_popup_closed();
-                    // The Agent & Model picker only ever owns the dialog while
+                    // The Profile Switcher only ever owns the dialog while
                     // open; refresh the footer labels from the just-persisted
                     // selection, then clear its gate on any actions-popup close.
                     if app.agent_model_picker_active {
@@ -1184,7 +1184,7 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Open the global Agent & Model picker (Shift+Tab from the main menu).
+    /// Open the global Profile Switcher (Shift+Tab from the main menu).
     ///
     /// Reuses the shared actions-dialog window: the root route lists agent
     /// profiles and selecting one drills into the model catalog. Both
@@ -1194,7 +1194,7 @@ impl ScriptListApp {
     /// Profiles already bundle a model, and a picked `selected_model_id` is
     /// applied across profiles via `apply_ai_fallbacks`, so the single static
     /// model catalog is shared by every agent entry.
-    pub(crate) fn open_agent_model_picker_window(
+    pub(crate) fn open_profile_switcher_window(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -1213,7 +1213,7 @@ impl ScriptListApp {
             tracing::info!(
                 target: "script_kit::actions",
                 event = "agent_model_picker_toggle_suppressed_recent_close",
-                "Suppressed agent/model picker reopen because the dialog was just closed"
+                "Suppressed Profile Switcher reopen because the dialog was just closed"
             );
             cx.notify();
             return;
@@ -1290,7 +1290,7 @@ impl ScriptListApp {
                 })
                 .collect();
 
-        let context_title = Some("Agent & Model".to_string());
+        let context_title = Some("Profile Switcher".to_string());
         let theme_arc = std::sync::Arc::clone(&self.theme);
         let is_mini = matches!(self.main_window_mode, MainWindowMode::Mini);
         let config = crate::actions::ActionsDialogConfig {
@@ -1369,7 +1369,7 @@ impl ScriptListApp {
             d.set_on_close(Self::make_actions_window_on_close_callback(
                 app_entity.clone(),
                 host,
-                "Agent/model picker closed via escape, focus restored via coordinator",
+                "Profile Switcher closed via escape, focus restored via coordinator",
             ));
         });
 
@@ -1382,11 +1382,11 @@ impl ScriptListApp {
             display_id,
             dialog,
             position,
-            "Agent/model picker window opened",
-            "Failed to open agent/model picker window",
+            "Profile Switcher window opened",
+            "Failed to open Profile Switcher window",
         );
 
-        logging::log("FOCUS", "Agent/model picker opened, keyboard routing active");
+        logging::log("FOCUS", "Profile Switcher opened, keyboard routing active");
         cx.notify();
     }
 
@@ -1443,7 +1443,7 @@ impl ScriptListApp {
     }
 
     /// Refresh the cached footer agent/model labels from persisted preferences.
-    /// Called after the Agent & Model picker persists a new selection.
+    /// Called after the Profile Switcher persists a new selection.
     pub(crate) fn refresh_agent_model_footer_labels(&mut self) {
         let (agent_label, model_label) = Self::resolve_agent_model_footer_labels();
         self.spine_agent_label = agent_label;

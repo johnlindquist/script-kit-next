@@ -408,15 +408,15 @@ impl ScriptListApp {
                 cx.notify();
             }
             crate::footer_popup::FooterAction::AgentModel => {
-                // Click on the Agent·Model chip → open the combined
-                // agent+model picker. From Agent Chat, keep the chat surface
-                // alive and use the same in-chat picker path as Shift+Tab.
-                // From ScriptList, use the global pre-launch picker.
+                // Click on the profile/model chip. From Agent Chat, keep the
+                // chat surface alive and use the same in-chat Profile picker
+                // path as Shift+Tab. From ScriptList, use the global
+                // Profile Switcher.
                 tracing::info!(
                     target: "script_kit::footer_popup",
                     event = "main_window_footer_agent_model_chip_clicked",
                     view = ?self.current_view,
-                    "Opening agent/model picker from footer chip"
+                    "Opening Profile Switcher from footer chip"
                 );
                 if let AppView::AcpChatView { entity, .. } = &self.current_view {
                     if self.show_actions_popup || crate::actions::is_actions_window_open() {
@@ -424,7 +424,7 @@ impl ScriptListApp {
                             target: "script_kit::footer_popup",
                             event = "main_window_footer_agent_model_chip_ignored_actions_open",
                             view = ?self.current_view,
-                            "Ignored Agent·Model footer chip while actions dialog owns input"
+                            "Ignored profile/model chip while actions dialog owns input"
                         );
                         return;
                     }
@@ -437,7 +437,7 @@ impl ScriptListApp {
                 if !matches!(self.current_view, AppView::ScriptList) {
                     self.current_view = AppView::ScriptList;
                 }
-                self.open_agent_model_picker_window(window, cx);
+                self.open_profile_switcher_window(window, cx);
             }
         }
     }

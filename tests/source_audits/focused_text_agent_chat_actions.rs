@@ -201,11 +201,11 @@ fn focused_text_mini_loading_has_no_body_thinking_text() {
 }
 
 #[test]
-fn agent_chat_profile_icon_lives_in_input_not_footer() {
+fn full_agent_chat_profile_icon_moves_to_header_focused_text_keeps_icon() {
     let composer_fn = source_between(
         ACP_VIEW,
+        "fn render_composer_input_shell",
         "fn render_composer_bar",
-        "pub(crate) fn focused_text_mini_sizing_count",
     );
     let mini_render_fn = source_between(
         ACP_VIEW,
@@ -223,8 +223,9 @@ fn agent_chat_profile_icon_lives_in_input_not_footer() {
         "#[derive(Clone, Debug)]",
     );
 
-    assert!(composer_fn.contains("\"agent-chat-input-profile-icon\""));
-    assert!(composer_fn.contains("render_input_profile_icon"));
+    assert!(!composer_fn.contains("\"agent-chat-input-profile-icon\""));
+    assert!(!composer_fn.contains("let profile_icon = Self::render_input_profile_icon"));
+    assert!(composer_fn.contains("trailing: Vec::new()"));
     assert!(mini_render_fn.contains("\"focused-text-profile-icon\""));
     assert!(mini_render_fn.contains("render_input_profile_icon"));
     let input_pos = mini_render_fn

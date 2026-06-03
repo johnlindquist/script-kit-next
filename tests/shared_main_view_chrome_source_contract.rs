@@ -308,11 +308,15 @@ fn acp_composer_shell_consumes_main_menu_header_geometry() {
     assert!(!acp.contains("render_main_view_header_divider("));
     assert!(acp.contains("render_main_view_context_zone_inert"));
     assert!(acp.contains("MainViewContextLabels::new"));
-    assert!(acp.contains("footer_snapshot.model_display"));
+    assert!(acp.contains("snapshot.profile_display.clone()"));
+    assert!(acp.contains("snapshot.model_display.clone()"));
+    assert!(acp.contains(".id(\"acp-profile-display\")"));
+    assert!(acp.contains(".id(\"acp-model-display\")"));
     assert!(acp.contains("render_main_view_main_slot"));
     assert!(acp.contains("render_main_view_chrome"));
-    assert!(acp.contains("let profile_icon = Self::render_input_profile_icon"));
-    assert!(acp.contains("trailing: vec![profile_icon]"));
+    assert!(!acp.contains("\"agent-chat-input-profile-icon\""));
+    assert!(!acp.contains("trailing: vec![profile_icon]"));
+    assert!(acp.contains("trailing: Vec::new()"));
     assert!(acp.contains("padding_x: menu_def.shell.header_padding_x"));
     assert!(acp.contains("margin_x: menu_def.shell.divider_margin_x"));
     assert!(acp.contains("visible: false"));

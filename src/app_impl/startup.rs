@@ -801,8 +801,8 @@ impl ScriptListApp {
             }
         };
 
-        // Resolve the persisted agent/model into footer display labels so the
-        // selection (Shift+Tab Agent & Model picker) is visible on first paint.
+        // Resolve the persisted profile/model into header display labels so the
+        // selection (Shift+Tab Profile Switcher) is visible on first paint.
         let (initial_spine_agent_label, initial_spine_model_label) =
             Self::resolve_agent_model_footer_labels();
 
@@ -1525,9 +1525,9 @@ impl ScriptListApp {
                             }
 
                             // Shift+Tab on the main menu opens the global
-                            // Agent & Model picker so the user can pre-configure
-                            // (and persist) which agent/model the next Cmd+Enter
-                            // launch uses, without leaving the launcher.
+                            // Profile Switcher so the user can pre-configure
+                            // which profile the next Cmd+Enter launch uses,
+                            // without leaving the launcher.
                             if matches!(this.current_view, AppView::ScriptList)
                                 && has_shift
                                 && this.spine_enabled
@@ -1536,10 +1536,10 @@ impl ScriptListApp {
                             {
                                 tracing::info!(
                                     target: "script_kit::spine",
-                                    event = "agent_model_picker_open_shift_tab",
-                                    "Shift+Tab → Agent & Model picker"
+                                    event = "profile_switcher_open_shift_tab",
+                                    "Shift+Tab → Profile Switcher"
                                 );
-                                this.open_agent_model_picker_window(window, cx);
+                                this.open_profile_switcher_window(window, cx);
                                 cx.stop_propagation();
                                 return;
                             }
@@ -1558,11 +1558,10 @@ impl ScriptListApp {
 
                             // Agent Chat owns Tab locally. Plain Tab stays
                             // swallowed so the global interceptor cannot re-open a
-                            // fresh chat. Shift+Tab is the documented Agent·Model
-                            // shortcut, so route it to the in-chat profile/model
-                            // picker via the window-aware entry point (the same
-                            // method the footer Agent·Model chip uses). We do NOT
-                            // reuse open_agent_model_picker_window here: that path
+                            // fresh chat. Shift+Tab is the documented Profile
+                            // Switcher shortcut, so route it to the in-chat
+                            // Profile picker via the window-aware entry point. We
+                            // do NOT reuse open_profile_switcher_window here: that path
                             // forces non-ScriptList views back to ScriptList,
                             // which would leave Agent Chat mid-conversation.
                             if let AppView::AcpChatView { entity, .. } = &this.current_view {
@@ -1575,8 +1574,8 @@ impl ScriptListApp {
                                     }
                                     tracing::info!(
                                         target: "script_kit::keyboard",
-                                        event = "acp_shift_tab_profile_picker",
-                                        "Opening Agent Chat profile/model picker from Shift+Tab"
+                                        event = "acp_shift_tab_profile_switcher",
+                                        "Opening Agent Chat Profile picker from Shift+Tab"
                                     );
                                     let entity = entity.clone();
                                     entity.update(cx, |chat, cx| {

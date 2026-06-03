@@ -1050,14 +1050,15 @@ pub(crate) fn get_focused_text_agent_chat_root_route(
 // ── ACP route builders ───────────────────────────────────────────────────────
 /// Action ID for the root-level "Change Model" entry that pushes the model picker.
 pub const ACP_CHANGE_MODEL_ACTION_ID: &str = "acp:change_model";
-/// Action ID for the root-level "Change Profile" entry that pushes Agent Chat profiles.
+/// Action ID for the root-level "Profile picker" entry that pushes Agent Chat profiles.
 pub const AGENT_CHAT_CHANGE_PROFILE_ACTION_ID: &str = "agent_chat:change_profile";
 
 /// Stable root labels and descriptions for ACP Actions Menu parity across hosts.
 const ACP_CHANGE_MODEL_LABEL: &str = "Change Model";
 const ACP_CHANGE_MODEL_DESCRIPTION: &str = "Pick the model for this chat";
-const AGENT_CHAT_CHANGE_PROFILE_LABEL: &str = "Change Profile";
-const AGENT_CHAT_CHANGE_PROFILE_DESCRIPTION: &str = "Pick the Agent Chat profile";
+const AGENT_CHAT_CHANGE_PROFILE_LABEL: &str = "Profile picker";
+const AGENT_CHAT_CHANGE_PROFILE_DESCRIPTION: &str =
+    "Pick the Agent Chat profile. Switching profiles starts a new chat";
 /// Route ID for the ACP root actions menu.
 pub const ACP_ROOT_ROUTE_ID: &str = "acp:root";
 /// Route ID for the model picker sub-route.
@@ -1176,7 +1177,9 @@ fn agent_chat_profile_picker_actions(
             let description = if is_selected {
                 format!("Currently selected. {source} · {backend}")
             } else {
-                format!("Switch Agent Chat to this profile. {source} · {backend}")
+                format!(
+                    "Switch to this profile in a new chat. {source} · {backend} · Starts a new chat when a conversation is already active"
+                )
             };
 
             Action::new(
@@ -1456,7 +1459,7 @@ pub(crate) fn get_agent_chat_profile_picker_route_for_host(
     crate::actions::ActionsDialogRoute {
         id: AGENT_CHAT_PROFILE_PICKER_ROUTE_ID.to_string(),
         actions: filter_acp_actions_for_host(host, get_agent_chat_profile_picker_actions()),
-        context_title: Some("Change Profile".to_string()),
+        context_title: Some("Profile picker".to_string()),
         search_placeholder: Some("Search profiles...".to_string()),
         initial_selected_action_id: Some(agent_chat_switch_profile_action_id(
             &selected_agent_chat_profile_picker_id(),

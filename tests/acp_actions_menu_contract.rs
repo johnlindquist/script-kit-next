@@ -4,12 +4,21 @@
 fn acp_actions_menu_keeps_stable_root_labels() {
     let source = include_str!("../src/actions/builders/script_context.rs");
     assert!(
-        source.contains("\"Change Profile\""),
-        "ACP Actions Menu root must say Change Profile"
+        source.contains("\"Profile picker\""),
+        "ACP Actions Menu root must say Profile picker"
     );
     assert!(
         source.contains("\"Change Model\""),
         "ACP Actions Menu root must say Change Model"
+    );
+}
+
+#[test]
+fn acp_profile_picker_warns_profile_switch_starts_new_chat() {
+    let source = include_str!("../src/actions/builders/script_context.rs");
+    assert!(
+        source.contains("Starts a new chat when a conversation is already active"),
+        "Profile switch rows must warn that switching profiles starts a new chat"
     );
 }
 

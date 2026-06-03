@@ -3386,6 +3386,17 @@ impl AcpChatView {
             })
             .child(
                 div()
+                    .id("acp-profile-display")
+                    .flex()
+                    .items_center()
+                    .min_w(px(0.0))
+                    .text_xs()
+                    .text_color(rgba(hint_text_rgba))
+                    .overflow_hidden()
+                    .child(snapshot.profile_display.clone()),
+            )
+            .child(
+                div()
                     .id("acp-model-display")
                     .flex()
                     .items_center()
@@ -3393,6 +3404,7 @@ impl AcpChatView {
                     .text_xs()
                     .text_color(rgba(hint_text_rgba))
                     .overflow_hidden()
+                    .opacity(0.72)
                     .child(snapshot.model_display.clone()),
             )
             .when_some(snapshot.status_text, |d, status| {
@@ -8105,13 +8117,7 @@ impl AcpChatView {
             theme,
             None,
         );
-        let profile_icon = Self::render_input_profile_icon(
-            "agent-chat-input-profile-icon",
-            profile_icon_name,
-            profile_active_pending,
-            weak_view,
-            theme,
-        );
+        let _ = (profile_icon_name, profile_active_pending, weak_view);
 
         crate::components::main_view_chrome::render_main_view_input_shell(
             theme,
@@ -8125,7 +8131,7 @@ impl AcpChatView {
                         "message-circle",
                     ),
                 ),
-                trailing: vec![profile_icon],
+                trailing: Vec::new(),
             },
         )
     }

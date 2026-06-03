@@ -255,10 +255,9 @@
 
                             // ACP owns Tab locally. Plain Tab stays swallowed so
                             // the global interceptor cannot re-open a fresh chat.
-                            // Shift+Tab is the documented Agent·Model shortcut, so
-                            // route it to the in-chat profile/model picker via the
-                            // window-aware entry point (same method the footer
-                            // Agent·Model chip uses).
+                            // Shift+Tab is the documented Profile Switcher
+                            // shortcut, so route it to the in-chat Profile picker
+                            // via the window-aware entry point.
                             if let AppView::AcpChatView { entity, .. } = &this.current_view {
                                 if has_shift {
                                     cx.stop_propagation();
@@ -272,8 +271,8 @@
                                     }
                                     tracing::info!(
                                         target: "script_kit::keyboard",
-                                        event = "acp_shift_tab_profile_picker",
-                                        "Opening Agent Chat profile/model picker from Shift+Tab"
+                                        event = "acp_shift_tab_profile_switcher",
+                                        "Opening Agent Chat Profile picker from Shift+Tab"
                                     );
                                     let entity = entity.clone();
                                     entity.update(cx, |chat, cx| {

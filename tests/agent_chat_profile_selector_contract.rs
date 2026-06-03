@@ -21,6 +21,8 @@ const FOOTER_CHROME_SOURCE: &str = include_str!("../src/components/footer_chrome
 const FOOTER_POPUP_SOURCE: &str = include_str!("../src/footer_popup.rs");
 const STDIN_COMMANDS_SOURCE: &str = include_str!("../src/stdin_commands/mod.rs");
 const SPINE_PROFILE_SOURCE: &str = include_str!("../src/spine/catalog_profile.rs");
+const STARTUP_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
+const STARTUP_NEW_TAB_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
 
 fn fn_body<'a>(source: &'a str, signature: &str) -> &'a str {
     let start = source.find(signature).expect("signature must exist");
@@ -96,9 +98,11 @@ fn profile_selection_updates_live_agent_chat_footer_without_relaunch() {
 
 #[test]
 fn acp_launch_uses_effective_profile_for_acp_agent_and_model() {
-    assert!(ACP_LAUNCH_SOURCE.contains("resolve_effective_profile"));
-    assert!(ACP_LAUNCH_SOURCE.contains("PiAgentChatLaunch::from_profile"));
-    assert!(ACP_LAUNCH_SOURCE.contains("effective_profile.clone()"));
+    assert!(ACP_LAUNCH_SOURCE.contains("resolve_selected_pi_launch_with_cwd_override"));
+    assert!(ACP_LAUNCH_SOURCE.contains("resolve_focused_text_pi_launch"));
+    assert!(ACP_LAUNCH_SOURCE
+        .contains("profile_display_name: Some(pi_launch.profile.name.clone().into())"));
+    assert!(ACP_LAUNCH_SOURCE.contains("profile_icon_name: pi_launch.profile.icon_name.clone()"));
 }
 
 #[test]
@@ -134,6 +138,18 @@ fn profile_display_flows_through_thread_and_footer() {
     assert!(ACP_VIEW_SOURCE.contains("profile_left_info"));
     assert!(ACP_VIEW_SOURCE.contains("profile_name: Some(self.profile_display.clone())"));
     assert!(ACP_VIEW_SOURCE.contains("agent-chat-profile-display"));
+    assert!(ACP_VIEW_SOURCE.contains("snapshot.profile_display.clone()"));
+    assert!(ACP_VIEW_SOURCE.contains(".id(\"acp-profile-display\")"));
+    assert!(ACP_VIEW_SOURCE.contains(".id(\"acp-model-display\")"));
+}
+
+#[test]
+fn shift_tab_routes_to_profile_switcher_copy() {
+    assert!(STARTUP_SOURCE.contains("profile_switcher_open_shift_tab"));
+    assert!(STARTUP_SOURCE.contains("acp_shift_tab_profile_switcher"));
+    assert!(STARTUP_NEW_TAB_SOURCE.contains("acp_shift_tab_profile_switcher"));
+    assert!(!STARTUP_SOURCE.contains("Shift+Tab → Agent & Model picker"));
+    assert!(!STARTUP_NEW_TAB_SOURCE.contains("Shift+Tab → Agent & Model picker"));
 }
 
 #[test]

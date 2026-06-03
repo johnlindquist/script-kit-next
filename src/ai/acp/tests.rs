@@ -414,17 +414,17 @@ fn startup_new_tab_guard_checks_acp_chat_view() {
 
 #[test]
 fn startup_shift_tab_opens_acp_profile_picker() {
-    // QA story #5: in-chat Shift+Tab must open the Agent·Model profile/model
-    // picker (not be swallowed). Both Tab interceptors route Shift+Tab to the
+    // QA story #5: in-chat Shift+Tab must open the Profile Switcher
+    // (not be swallowed). Both Tab interceptors route Shift+Tab to the
     // window-aware picker entry while keeping plain Tab swallowed.
     for src in [STARTUP_SOURCE, STARTUP_NEW_TAB_SOURCE] {
         assert!(
-            src.contains("acp_shift_tab_profile_picker"),
-            "Shift+Tab in Agent Chat must log the profile-picker routing event"
+            src.contains("acp_shift_tab_profile_switcher"),
+            "Shift+Tab in Agent Chat must log the Profile Switcher routing event"
         );
         assert!(
             src.contains("open_profile_trigger_picker_in_window"),
-            "Shift+Tab in Agent Chat must open the in-chat profile/model picker"
+            "Shift+Tab in Agent Chat must open the in-chat Profile picker"
         );
         // Plain Tab stays swallowed via handle_tab_key(false, ...).
         assert!(
@@ -448,13 +448,13 @@ fn native_footer_agent_model_preserves_acp_chat_view() {
     );
     assert!(
         arm.contains("chat.open_profile_trigger_picker_in_window(window, cx);"),
-        "AgentModel footer clicks in Agent Chat must open the in-chat profile/model picker"
+        "AgentModel footer clicks in Agent Chat must open the in-chat Profile picker"
     );
     assert!(
         arm.contains("return;")
             && arm.find("return;")
                 < arm.find("self.current_view = AppView::ScriptList")
-                    .or_else(|| arm.find("self.open_agent_model_picker_window(window, cx);")),
+                    .or_else(|| arm.find("self.open_profile_switcher_window(window, cx);")),
         "AgentModel footer clicks in Agent Chat must return before the ScriptList/global picker fallback"
     );
 }
