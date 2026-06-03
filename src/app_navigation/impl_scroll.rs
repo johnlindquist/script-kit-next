@@ -573,13 +573,44 @@ impl ScriptListApp {
         let item_count = grouped_items.len();
         let old_list_count = self.main_list_state.item_count();
 
+        self.last_scrolled_index = None;
+
+        if old_list_count != item_count {
+            self.main_list_state.splice(0..old_list_count, item_count);
+
+            if crate::logging::filter_perf_trace_enabled() {
+                tracing::info!(
+                    target: "SCROLL_STATE",
+                    old_list_count,
+                    item_count,
+                    selected_index = self.selected_index,
+                    "spliced list state for filter replacement"
+                );
+            }
+
+            return;
+        }
+
+        if item_count == 0 {
+            if crate::logging::filter_perf_trace_enabled() {
+                tracing::info!(
+                    target: "SCROLL_STATE",
+                    old_list_count,
+                    item_count,
+                    selected_index = self.selected_index,
+                    "skipped empty list state replacement for filter replacement"
+                );
+            }
+
+            return;
+        }
+
         self.main_list_row_generation = self.main_list_row_generation.wrapping_add(1);
         self.main_list_state = ListState::new(
             item_count,
             ListAlignment::Top,
             px(crate::list_item::effective_average_item_height_for_scroll()),
         );
-        self.last_scrolled_index = None;
 
         if crate::logging::filter_perf_trace_enabled() {
             tracing::info!(
