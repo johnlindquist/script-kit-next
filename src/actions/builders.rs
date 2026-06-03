@@ -50,7 +50,8 @@ pub use file_path::{
 pub use notes::{get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions};
 pub(crate) use script_context::{
     acp_switch_model_id_from_action, agent_chat_switch_profile_id_from_action,
-    get_acp_chat_actions, get_global_actions, get_script_context_actions,
+    get_acp_chat_actions, get_acp_history_route, get_global_actions, get_script_context_actions,
+    ACP_HISTORY_SELECT_ACTION_PREFIX,
 };
 #[allow(unused_imports)]
 pub(crate) use script_context::{

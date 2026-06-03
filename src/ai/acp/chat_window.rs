@@ -299,12 +299,7 @@ pub fn open_chat_window_with_thread(
                 close_chat_window(cx);
             });
             view.set_on_open_history_command(move |_window, cx| {
-                let _ = open_picker_in_detached_chat_window(cx, |view, window, cx| {
-                    let parent_handle = window.window_handle();
-                    let parent_bounds = window.bounds();
-                    let display_id = window.display(cx).map(|display| display.id());
-                    view.open_history_popup_from_host(parent_handle, parent_bounds, display_id, cx);
-                });
+                let _ = open_detached_history_actions(cx);
             });
             let paste_entity_weak = entity_weak.clone();
             view.set_on_paste_response_requested(move |_window, cx| {
@@ -911,6 +906,137 @@ pub fn toggle_detached_actions(cx: &mut App) {
     }
 }
 
+fn open_detached_history_actions(cx: &mut App) -> bool {
+    use crate::actions::{self, ActionsDialog, WindowPosition};
+
+    if actions::is_actions_window_open() {
+        actions::close_actions_window(cx);
+    }
+
+    let (handle, view_weak) = {
+        let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+        let guard = match slot.lock() {
+            Ok(g) => g,
+            Err(_) => return false,
+        };
+        match guard.as_ref() {
+            Some(state) => (state.handle, state.view_entity.clone()),
+            None => return false,
+        }
+    };
+
+    let Some(entity_weak) = view_weak else {
+        tracing::warn!(target: "script_kit::keyboard", event = "detached_history_actions_no_view_entity");
+        return false;
+    };
+
+    let Ok((parent_window_handle, bounds, display_id)) = handle.update(cx, |_root, window, cx| {
+        (
+            window.window_handle(),
+            window.bounds(),
+            window.display(cx).map(|d| d.id()),
+        )
+    }) else {
+        return false;
+    };
+
+    let route = crate::actions::get_acp_history_route();
+    let theme_arc = std::sync::Arc::new(crate::theme::get_cached_theme());
+    let (action_tx, action_rx) = async_channel::bounded::<String>(1);
+    let callback: std::sync::Arc<dyn Fn(String) + Send + Sync> =
+        std::sync::Arc::new(move |action_id: String| {
+            tracing::info!(
+                event = "detached_history_action_selected",
+                action = %action_id,
+            );
+            let _ = action_tx.try_send(action_id);
+        });
+
+    let dialog = cx.new(|cx| {
+        let focus_handle = cx.focus_handle();
+        let mut dialog = ActionsDialog::from_actions_with_context(
+            focus_handle,
+            callback,
+            route.actions.clone(),
+            None,
+            None,
+            theme_arc,
+            crate::designs::DesignVariant::Default,
+            route.context_title.clone(),
+            ActionsDialog::acp_chat_dialog_config(),
+        );
+        dialog.set_root_route(route);
+        dialog.set_skip_track_focus(true);
+        dialog
+    });
+
+    let activation_dialog = dialog.clone();
+    dialog.update(cx, |dialog, _cx| {
+        dialog.set_on_activation(std::sync::Arc::new(move |activation, _window, cx| match activation {
+            crate::actions::ActionsDialogActivation::Executed { should_close, .. } => {
+                if should_close {
+                    let on_close = activation_dialog.read(cx).on_close.clone();
+                    if let Some(on_close) = on_close {
+                        on_close(cx);
+                    }
+                    crate::actions::close_actions_window(cx);
+                }
+            }
+            crate::actions::ActionsDialogActivation::DrillDownPushed { .. }
+            | crate::actions::ActionsDialogActivation::NoSelection => {}
+        }));
+        dialog.set_on_close(std::sync::Arc::new(|cx| {
+            activate_chat_window(cx);
+            tracing::info!(target: "script_kit::keyboard", event = "detached_history_actions_closed_restore_chat_focus");
+        }));
+    });
+
+    let parent_automation_id = crate::windows::focused_automation_window_id();
+    let actions_handle = match actions::open_actions_window(
+        cx,
+        parent_window_handle,
+        bounds,
+        display_id,
+        dialog,
+        WindowPosition::TopRight,
+        parent_automation_id.as_deref(),
+    ) {
+        Ok(handle) => handle,
+        Err(e) => {
+            tracing::warn!(target: "script_kit::keyboard", %e, "detached_history_actions_open_failed");
+            return false;
+        }
+    };
+
+    let _ = actions_handle.update(cx, |_root, window, _cx| {
+        window.activate_window();
+    });
+
+    cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+        if let Ok(action_id) = action_rx.recv().await {
+            cx.update(|cx| {
+                let handled = dispatch_detached_action_checked(&entity_weak, &action_id, cx);
+                if handled {
+                    activate_chat_window(cx);
+                }
+                tracing::info!(
+                    event = "detached_history_action_dispatch_completed",
+                    action = %action_id,
+                    handled,
+                );
+            });
+        }
+    })
+    .detach();
+
+    tracing::info!(
+        target: "script_kit::keyboard",
+        event = "detached_history_actions_opened",
+        actions_window_open_after = crate::actions::is_actions_window_open(),
+    );
+    true
+}
+
 /// Checked wrapper around `dispatch_detached_action` that logs when the
 /// view entity has already been deallocated and avoids a silent no-op.
 fn dispatch_detached_action_checked(
@@ -954,6 +1080,22 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
                 event = "detached_action_switch_model",
                 model_id = %model_id,
             );
+        }
+        return;
+    }
+
+    if let Some(session_id) =
+        action_id.strip_prefix(crate::actions::ACP_HISTORY_SELECT_ACTION_PREFIX)
+    {
+        if let Some(entity) = entity_weak.upgrade() {
+            entity.update(cx, |chat, cx| {
+                let selected = chat.select_history_session_by_id(session_id, cx);
+                tracing::info!(
+                    event = "detached_action_history_selected",
+                    session_id = %session_id,
+                    selected,
+                );
+            });
         }
         return;
     }
@@ -1097,11 +1239,8 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
             }
         }
         "acp_show_history" => {
-            // Removed: clipboard-export behavior. History browsing now uses
-            // the dedicated AcpHistory builtin in the main panel. This action
-            // is filtered out of DETACHED_SUPPORTED_ACTIONS, so this arm only
-            // fires if dispatched programmatically.
-            tracing::info!(event = "detached_action_show_history_noop");
+            let opened = open_detached_history_actions(cx);
+            tracing::info!(event = "detached_action_show_history_actions", opened);
         }
         "acp_clear_history" => {
             let kit = crate::setup::get_kit_path();

@@ -1065,12 +1065,20 @@ pub const ACP_ROOT_ROUTE_ID: &str = "acp:root";
 pub const ACP_MODEL_PICKER_ROUTE_ID: &str = "acp:model_picker";
 /// Route ID for the Agent Chat profile picker sub-route.
 pub const AGENT_CHAT_PROFILE_PICKER_ROUTE_ID: &str = "agent_chat:profile_picker";
+/// Route ID for the Agent Chat history sub-route.
+pub const ACP_HISTORY_ROUTE_ID: &str = "acp:history";
+/// Prefix for Agent Chat history row actions.
+pub const ACP_HISTORY_SELECT_ACTION_PREFIX: &str = "acp_history:select:";
 
 fn acp_model_display_name(entry: &crate::ai::acp::config::AcpModelEntry) -> String {
     entry
         .display_name
         .clone()
         .unwrap_or_else(|| entry.id.clone())
+}
+
+pub(crate) fn acp_history_select_action_id(session_id: &str) -> String {
+    format!("{ACP_HISTORY_SELECT_ACTION_PREFIX}{session_id}")
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1352,6 +1360,7 @@ fn acp_host_action_plan(host: AcpActionsDialogHost, action_id: &str) -> AcpHostA
                     | "acp_retry_last"
                     | "acp_export_markdown"
                     | "acp_save_as_note"
+                    | "acp_show_history"
                     | "acp_scroll_to_top"
                     | "acp_scroll_to_bottom"
                     | "acp_expand_all"
@@ -1449,6 +1458,32 @@ pub(crate) fn get_acp_model_picker_route_for_host(
         context_title: Some("Change Model".to_string()),
         search_placeholder: Some("Search models...".to_string()),
         initial_selected_action_id: selected_model_id.map(acp_switch_model_action_id),
+    }
+}
+
+/// Build an `ActionsDialogRoute` for recent Agent Chat conversations.
+pub(crate) fn get_acp_history_route() -> crate::actions::ActionsDialogRoute {
+    let actions = crate::ai::acp::history::load_history()
+        .into_iter()
+        .take(100)
+        .map(|entry| {
+            Action::new(
+                acp_history_select_action_id(&entry.session_id),
+                entry.title_display().to_string(),
+                Some(entry.preview_display().to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::MessageCircle)
+            .with_section("History")
+        })
+        .collect();
+
+    crate::actions::ActionsDialogRoute {
+        id: ACP_HISTORY_ROUTE_ID.to_string(),
+        actions,
+        context_title: Some("Agent Chat History".to_string()),
+        search_placeholder: Some("Search conversation history...".to_string()),
+        initial_selected_action_id: None,
     }
 }
 
@@ -1999,7 +2034,7 @@ mod tests {
         );
         assert_eq!(
             acp_host_action_plan(AcpActionsDialogHost::Detached, "acp_show_history"),
-            AcpHostActionPlan::Exclude
+            AcpHostActionPlan::IncludeWithShortcut
         );
 
         for host in [
@@ -2032,6 +2067,24 @@ mod tests {
         assert_eq!(
             change_model.description.as_deref(),
             Some("Current: Sonnet 4.6")
+        );
+    }
+
+    #[test]
+    fn detached_acp_history_routes_through_actions_dialog() {
+        let detached = get_acp_chat_root_route_for_host(&[], None, AcpActionsDialogHost::Detached);
+        assert!(
+            detached
+                .actions
+                .iter()
+                .any(|action| action.id == "acp_show_history"),
+            "detached ACP must expose history in Cmd+K instead of relying on a PromptPopup-only shortcut"
+        );
+
+        assert!(
+            acp_history_select_action_id("session-123")
+                .starts_with(ACP_HISTORY_SELECT_ACTION_PREFIX),
+            "history rows must dispatch through stable session-id action ids"
         );
     }
 

@@ -1516,6 +1516,12 @@ impl ActionsDialog {
                 host,
             ),
         );
+        if matches!(host, super::builders::AcpActionsDialogHost::Detached) {
+            dialog.register_drill_down_route(
+                "acp_show_history",
+                crate::actions::get_acp_history_route(),
+            );
+        }
 
         tracing::info!(
             target: "script_kit::tab_ai",

@@ -4136,6 +4136,27 @@ impl AcpChatView {
         cx.notify();
     }
 
+    pub(crate) fn select_history_session_by_id(
+        &mut self,
+        session_id: &str,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(entry) = super::history::load_history()
+            .into_iter()
+            .find(|entry| entry.session_id == session_id)
+        else {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "acp_history_actions_select_missing",
+                session_id = %session_id,
+            );
+            return false;
+        };
+
+        self.select_history_from_popup(&entry, cx);
+        true
+    }
+
     fn set_history_popup_query(&mut self, query: String, cx: &mut Context<Self>) {
         let hits = super::history::search_history(&query, HISTORY_POPUP_SEARCH_LIMIT);
         self.history_closed_at = None;
