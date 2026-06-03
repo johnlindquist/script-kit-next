@@ -1,3 +1,35 @@
+fn profile_search_row_description(result: &crate::profile_search::ProfileSearchResult) -> String {
+    format!(
+        "{} · {}",
+        crate::profile_search::source_label(result.profile.source),
+        crate::profile_search::profile_model_label(&result.profile)
+    )
+}
+
+fn profile_search_row_status_accessory(
+    result: &crate::profile_search::ProfileSearchResult,
+    list_colors: &crate::list_item::ListItemColors,
+    selected: bool,
+) -> AnyElement {
+    let status = if result.selected {
+        "Current"
+    } else {
+        "Profile"
+    };
+    div()
+        .max_w(px(88.0))
+        .overflow_hidden()
+        .text_xs()
+        .whitespace_nowrap()
+        .text_ellipsis()
+        .text_color(rgba(crate::list_item::row_description_text_rgba(
+            list_colors,
+            selected,
+        )))
+        .child(status)
+        .into_any_element()
+}
+
 impl ScriptListApp {
     fn render_profile_search(
         &mut self,
@@ -22,7 +54,6 @@ impl ScriptListApp {
         let text_dimmed = self.theme.colors.text.dimmed;
         let text_muted = self.theme.colors.text.muted;
         let ui_border = self.theme.colors.ui.border;
-        let accent_color = self.theme.colors.accent.selected;
 
         let results = self.profile_search_results_for_filter(&filter);
         let filtered_len = results.len();
@@ -94,89 +125,129 @@ impl ScriptListApp {
                 .items_center()
                 .justify_center()
                 .child(
-                    div()
-                        .font_family(empty_font_family)
-                        .text_color(rgb(empty_text_color))
-                        .child(if filter.trim().is_empty() {
+                    crate::list_item::EmptyState::new(
+                        if filter.trim().is_empty() {
                             "No profiles"
                         } else {
                             "No matching profiles"
-                        }),
+                        },
+                        empty_text_color,
+                        &empty_font_family,
+                    )
+                    .into_element(),
                 )
                 .into_any_element()
         } else {
-            let mut list = div()
+            // Profile Search is a split-pane built-in, but its rows must use the
+            // same shared ListItem chrome as Clipboard History and File Search.
+            // This surface originally hand-built row padding/backgrounds while the
+            // profile preview was introduced; ListItem owns selected/hover/theme
+            // behavior so row metrics and opacity packing do not drift here.
+            let profile_results_for_list = results.clone();
+            let current_selected = selected_index;
+            let profile_hovered = self.hovered_index;
+            let click_entity_handle = cx.entity().downgrade();
+            let hover_entity_handle = cx.entity().downgrade();
+            let list_element = uniform_list(
+                "profile-search-results",
+                filtered_len,
+                move |visible_range, _window, _cx| {
+                    visible_range
+                        .map(|ix| {
+                            if let Some(result) = profile_results_for_list.get(ix) {
+                                let is_selected = ix == current_selected;
+                                let is_hovered = profile_hovered == Some(ix);
+
+                                let click_entity = click_entity_handle.clone();
+                                let click_handler =
+                                    move |_event: &gpui::ClickEvent,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(app) = click_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                if let AppView::ProfileSearchView {
+                                                    selected_index,
+                                                    ..
+                                                } = &mut this.current_view
+                                                {
+                                                    *selected_index = ix;
+                                                }
+                                                this.list_scroll_handle
+                                                    .scroll_to_item(ix, ScrollStrategy::Nearest);
+                                                cx.notify();
+                                            });
+                                        }
+                                        cx.stop_propagation();
+                                    };
+
+                                let hover_entity = hover_entity_handle.clone();
+                                let hover_handler =
+                                    move |hovered: &bool,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(app) = hover_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                if *hovered {
+                                                    this.input_mode = InputMode::Mouse;
+                                                    if this.hovered_index != Some(ix) {
+                                                        this.hovered_index = Some(ix);
+                                                        cx.notify();
+                                                    }
+                                                } else if this.hovered_index == Some(ix) {
+                                                    this.hovered_index = None;
+                                                    cx.notify();
+                                                }
+                                            });
+                                        }
+                                    };
+
+                                div()
+                                    .id(ix)
+                                    .cursor_pointer()
+                                    .on_click(click_handler)
+                                    .on_hover(hover_handler)
+                                    .child(
+                                        ListItem::new(result.profile.name.clone(), list_colors)
+                                            .description(profile_search_row_description(result))
+                                            .selected(is_selected)
+                                            .hovered(is_hovered)
+                                            .with_accent_bar(true)
+                                            .semantic_id(format!(
+                                                "profile-search-row:{}",
+                                                result.profile.id
+                                            ))
+                                            .trailing_accessory(
+                                                profile_search_row_status_accessory(
+                                                    result,
+                                                    &list_colors,
+                                                    is_selected,
+                                                ),
+                                            ),
+                                    )
+                            } else {
+                                div().id(ix).h(px(LIST_ITEM_HEIGHT))
+                            }
+                        })
+                        .collect()
+                },
+            )
+            .h_full()
+            .track_scroll(&self.list_scroll_handle)
+            .into_any_element();
+            let list_scrollbar =
+                self.builtin_uniform_list_scrollbar(&self.list_scroll_handle, filtered_len, 8);
+
+            div()
                 .id("profile-search-list")
                 .relative()
                 .w_full()
                 .h_full()
                 .min_h(px(0.))
-                .overflow_y_scroll()
-                .py(px(design_spacing.padding_xs));
-
-            for (index, result) in results.iter().enumerate() {
-                let is_selected = index == selected_index;
-                let row_bg = if is_selected {
-                    crate::ui_foundation::hex_to_rgba_with_opacity(
-                        accent_color,
-                        crate::theme::opacity::OPACITY_SELECTED,
-                    )
-                } else {
-                    crate::ui_foundation::hex_to_rgba_with_opacity(
-                        list_colors.background,
-                        crate::theme::opacity::OPACITY_HIDDEN,
-                    )
-                };
-                let status = if result.selected { "Current" } else { "Profile" };
-                list = list.child(
-                    div()
-                        .id(format!("profile-search-row-{index}"))
-                        .h(px(LIST_ITEM_HEIGHT))
-                        .mx(px(4.0))
-                        .px(px(14.0))
-                        .py(px(4.0))
-                        .rounded(px(8.0))
-                        .bg(rgba(row_bg))
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_between()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .overflow_hidden()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(if is_selected {
-                                            FontWeight::SEMIBOLD
-                                        } else {
-                                            FontWeight::NORMAL
-                                        })
-                                        .text_color(rgb(text_primary))
-                                        .child(result.profile.name.clone()),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(rgb(text_muted))
-                                        .child(format!(
-                                            "{} · {}",
-                                            crate::profile_search::source_label(result.profile.source),
-                                            crate::profile_search::profile_model_label(&result.profile)
-                                        )),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(text_dimmed))
-                                .child(status),
-                        ),
-                );
-            }
-            list.into_any_element()
+                .overflow_hidden()
+                .py(px(design_spacing.padding_xs))
+                .child(list_element)
+                .child(list_scrollbar)
+                .into_any_element()
         };
 
         let preview_pane = div()
@@ -205,12 +276,11 @@ impl ScriptListApp {
                             .text_color(rgb(text_primary))
                             .child(profile.name.clone()),
                     )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_muted))
-                            .child(format!("{} · {}", crate::profile_search::source_label(profile.source), profile.id)),
-                    )
+                    .child(div().text_sm().text_color(rgb(text_muted)).child(format!(
+                        "{} · {}",
+                        crate::profile_search::source_label(profile.source),
+                        profile.id
+                    )))
                     .child(
                         div()
                             .id("profile-search-preview-model")
@@ -222,19 +292,14 @@ impl ScriptListApp {
                                 crate::profile_search::backend_label(profile.backend)
                             )),
                     )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_primary))
-                            .child(format!(
+                    .child(div().text_sm().text_color(rgb(text_primary)).child(format!(
                                 "CWD: {}",
                                 profile
                                     .cwd
                                     .as_ref()
                                     .map(|path| path.display().to_string())
                                     .unwrap_or_else(|| "Default".to_string())
-                            )),
-                    )
+                            )))
                     .child(
                         div()
                             .id("profile-search-preview-tools")
@@ -262,9 +327,8 @@ impl ScriptListApp {
 
         let hints: Vec<SharedString> = vec!["↵ Select Profile".into(), "Esc Back".into()];
         crate::components::emit_prompt_hint_audit("profile_search", &hints);
-        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
-            hints, None,
-        ));
+        let footer =
+            self.main_window_footer_slot(crate::components::render_simple_hint_strip(hints, None));
 
         crate::components::render_expanded_view_scaffold_with_footer(
             header_element,

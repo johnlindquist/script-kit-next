@@ -219,6 +219,63 @@ fn profile_search_renderer_has_right_pane_preview() {
 }
 
 #[test]
+fn profile_search_renderer_uses_shared_list_item_contract() {
+    for needle in [
+        "ListItem::new(result.profile.name.clone(), list_colors)",
+        ".description(profile_search_row_description(result))",
+        ".selected(is_selected)",
+        ".hovered(is_hovered)",
+        ".with_accent_bar(true)",
+        ".trailing_accessory(",
+        "profile_search_row_status_accessory(",
+        "ListItemColors::from_theme(&self.theme)",
+        "ListItem owns selected/hover/theme",
+    ] {
+        assert!(
+            RENDER_PROFILE_SEARCH_SOURCE.contains(needle),
+            "ProfileSearch rows must use shared ListItem contract: {needle}"
+        );
+    }
+
+    for forbidden in [
+        "let row_bg = if is_selected",
+        ".bg(rgba(row_bg))",
+        "OPACITY_SELECTED",
+        "OPACITY_HIDDEN",
+        ".mx(px(4.0))",
+        ".px(px(14.0))",
+        ".py(px(4.0))",
+        ".rounded(px(8.0))",
+    ] {
+        assert!(
+            !RENDER_PROFILE_SEARCH_SOURCE.contains(forbidden),
+            "ProfileSearch must not reintroduce one-off row styling: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn profile_search_renderer_keeps_hover_and_stable_profile_row_semantics() {
+    for needle in [
+        "let profile_hovered = self.hovered_index;",
+        "this.input_mode = InputMode::Mouse;",
+        "this.hovered_index = Some(ix);",
+        "this.hovered_index = None;",
+        ".on_hover(hover_handler)",
+        ".semantic_id(format!(",
+        "\"profile-search-row:{}\"",
+        "result.profile.id",
+        ".track_scroll(&self.list_scroll_handle)",
+        "builtin_uniform_list_scrollbar(&self.list_scroll_handle",
+    ] {
+        assert!(
+            RENDER_PROFILE_SEARCH_SOURCE.contains(needle),
+            "ProfileSearch rows must preserve hover, scroll, and stable semantics: {needle}"
+        );
+    }
+}
+
+#[test]
 fn profile_search_devtools_collector_exposes_rows_and_preview_not_current_view_fallback() {
     for needle in [
         "AppView::ProfileSearchView",
