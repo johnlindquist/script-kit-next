@@ -1324,7 +1324,7 @@ fn acp_host_action_plan(host: AcpActionsDialogHost, action_id: &str) -> AcpHostA
         AcpActionsDialogHost::Notes => {
             // Notes-hosted: same as Detached but without `acp_save_as_note`
             // (already in Notes), keeping `acp_close` (returns to editor),
-            // and opening `acp_show_history` as a Notes-anchored popup.
+            // and routing `acp_show_history` through the shared ActionsDialog.
             if matches!(
                 action_id,
                 "agent_chat:change_profile"

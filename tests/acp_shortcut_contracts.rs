@@ -17,10 +17,8 @@ fn detached_acp_window_focuses_view_and_wires_history_callback() {
 
     assert!(
         source.contains("view.set_on_open_history_command")
-            && source.contains(
-                "view.open_history_popup_from_host(parent_handle, parent_bounds, display_id, cx);"
-            ),
-        "Detached ACP windows should wire Cmd+P through the host-owned history popup callback"
+            && source.contains("let _ = open_detached_history_actions(cx);"),
+        "Detached ACP windows should wire Cmd+P through the host-owned ActionsDialog history route"
     );
 }
 
@@ -34,6 +32,22 @@ fn notes_cmd_shift_a_routes_through_existing_embedded_acp_path() {
             && source.contains("open_selected_note_cart_in_embedded_acp(\"NotesWindowCmdShiftA\"")
             && source.contains("\"NotesWindowCmdShiftA\""),
         "Notes Cmd+Shift+A should reuse the embedded ACP cart handoff path instead of duplicating AI routing"
+    );
+}
+
+#[test]
+fn notes_acp_history_uses_actions_route() {
+    let source = include_str!("../src/notes/window/acp_host.rs");
+
+    assert!(
+        source.contains("chat.set_on_open_history_command")
+            && source.contains("let _ = app.open_acp_history_actions(window, cx);"),
+        "Notes-hosted ACP Cmd+P should open the Notes-anchored ActionsDialog history route"
+    );
+    assert!(
+        source.contains("action_id.strip_prefix(crate::actions::ACP_HISTORY_SELECT_ACTION_PREFIX)")
+            && source.contains("chat.select_history_session_by_id(session_id, cx)"),
+        "Notes-hosted ACP history rows should dispatch back into the embedded ACP view by session id"
     );
 }
 

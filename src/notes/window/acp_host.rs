@@ -378,13 +378,13 @@ impl NotesApp {
             });
         });
 
-        // History command (Cmd+P): open Notes-anchored history popup.
+        // History command (Cmd+P): open the Notes-anchored ActionsDialog history route.
         let history_entity = notes_entity.clone();
         view.update(cx, |chat, _cx| {
             chat.set_on_open_history_command(move |window, cx| {
                 if let Some(entity) = history_entity.upgrade() {
                     entity.update(cx, |app, cx| {
-                        let _ = app.open_embedded_acp_history_popup(window, cx);
+                        let _ = app.open_acp_history_actions(window, cx);
                     });
                 }
             });
@@ -558,6 +558,123 @@ impl NotesApp {
         .detach();
     }
 
+    pub(super) fn open_acp_history_actions(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        use crate::actions::{self, ActionsDialog, WindowPosition};
+
+        if actions::is_actions_window_open() {
+            self.close_notes_acp_actions_via_host("history_route_reopen", Some(window), cx);
+        }
+
+        let Some(ref acp_view) = self.embedded_acp_chat else {
+            tracing::info!(event = "notes_acp_history_actions_requested", opened = false);
+            return false;
+        };
+
+        let actions_target = acp_view.downgrade();
+        let actions_generation = self.notes_acp_generation;
+        let theme_arc = std::sync::Arc::new(crate::theme::get_cached_theme());
+        let route = crate::actions::get_acp_history_route();
+        let (action_tx, action_rx) = async_channel::bounded::<String>(1);
+
+        let callback: std::sync::Arc<dyn Fn(String) + Send + Sync> =
+            std::sync::Arc::new(move |action_id: String| {
+                tracing::info!(
+                    event = "notes_acp_history_action_selected_from_popup",
+                    action = %action_id,
+                );
+                let _ = action_tx.try_send(action_id);
+            });
+
+        let dialog = cx.new(|cx| {
+            let focus_handle = cx.focus_handle();
+            let mut dialog = ActionsDialog::from_actions_with_context(
+                focus_handle,
+                callback,
+                route.actions.clone(),
+                None,
+                None,
+                theme_arc,
+                crate::designs::DesignVariant::Default,
+                route.context_title.clone(),
+                ActionsDialog::acp_chat_dialog_config(),
+            );
+            dialog.set_root_route(route);
+            dialog.set_skip_track_focus(true);
+            dialog
+        });
+
+        let activation_dialog = dialog.clone();
+        let notes_entity = cx.entity().downgrade();
+        dialog.update(cx, |dialog, _cx| {
+            let close_entity = notes_entity.clone();
+            dialog.set_on_activation(std::sync::Arc::new(move |activation, _window, cx| {
+                if let crate::actions::ActionsDialogActivation::Executed { should_close, .. } =
+                    activation
+                {
+                    if should_close {
+                        let on_close = activation_dialog.read(cx).on_close.clone();
+                        if let Some(on_close) = on_close {
+                            on_close(cx);
+                        }
+                        crate::actions::close_actions_window(cx);
+                    }
+                }
+            }));
+            dialog.set_on_close(std::sync::Arc::new(move |cx| {
+                if let Some(entity) = close_entity.upgrade() {
+                    entity.update(cx, |app, cx| {
+                        app.close_notes_acp_actions_via_host("history_dialog_on_close", None, cx);
+                    });
+                }
+            }));
+        });
+
+        let display_id = window.display(cx).map(|d| d.id());
+
+        match actions::open_actions_window(
+            cx,
+            window.window_handle(),
+            window.bounds(),
+            display_id,
+            dialog,
+            WindowPosition::TopRight,
+            Some("notes"),
+        ) {
+            Ok(handle) => {
+                let _ = handle.update(cx, |_root, window, _cx| {
+                    window.activate_window();
+                });
+            }
+            Err(e) => {
+                tracing::warn!(event = "notes_acp_history_actions_open_failed", error = %e);
+                return false;
+            }
+        }
+
+        cx.spawn_in(window, async move |this, cx| {
+            if let Ok(action_id) = action_rx.recv().await {
+                let _ = cx.update(|window, app_cx| {
+                    dispatch_notes_acp_action(
+                        this.upgrade(),
+                        actions_target.clone(),
+                        actions_generation,
+                        &action_id,
+                        window,
+                        app_cx,
+                    );
+                });
+            }
+        })
+        .detach();
+
+        tracing::info!(event = "notes_acp_history_actions_requested", opened = true);
+        true
+    }
+
     /// Relaunch the cached Notes-hosted ACP surface with fresh session state.
     ///
     /// Use this for explicit note → ACP switches so the user does not land
@@ -651,12 +768,25 @@ fn dispatch_notes_acp_action(
         action_id = %action_id,
     );
 
-    // For `acp_show_history`, open the Notes-anchored history popup.
+    if let Some(session_id) = action_id.strip_prefix(crate::actions::ACP_HISTORY_SELECT_ACTION_PREFIX)
+    {
+        let selected = acp_entity.update(cx, |chat, cx| {
+            chat.select_history_session_by_id(session_id, cx)
+        });
+        tracing::info!(
+            event = "notes_acp_action_history_selected",
+            session_id = %session_id,
+            selected,
+        );
+        return;
+    }
+
+    // For `acp_show_history`, open the Notes-anchored history actions route.
     if action_id == "acp_show_history" {
         let opened = entity.update(cx, |app: &mut NotesApp, cx| {
-            app.open_embedded_acp_history_popup(window, cx)
+            app.open_acp_history_actions(window, cx)
         });
-        tracing::info!(event = "notes_acp_action_show_history", opened);
+        tracing::info!(event = "notes_acp_action_show_history_actions", opened);
         return;
     }
 

@@ -1516,7 +1516,11 @@ impl ActionsDialog {
                 host,
             ),
         );
-        if matches!(host, super::builders::AcpActionsDialogHost::Detached) {
+        if matches!(
+            host,
+            super::builders::AcpActionsDialogHost::Detached
+                | super::builders::AcpActionsDialogHost::Notes
+        ) {
             dialog.register_drill_down_route(
                 "acp_show_history",
                 crate::actions::get_acp_history_route(),
