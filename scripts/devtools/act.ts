@@ -71,6 +71,16 @@ function isPrintableTextKey(args: Args) {
     && !/[\r\n\t]/.test(args.key);
 }
 
+function isBackspaceTextKey(args: Args) {
+  return args.actionKind === "key"
+    && args.key.toLowerCase() === "backspace"
+    && args.modifiers.length === 0;
+}
+
+function isTextEditingKey(args: Args) {
+  return isPrintableTextKey(args) || isBackspaceTextKey(args);
+}
+
 function usage() {
   return [
     "Usage:",
@@ -232,10 +242,6 @@ async function rpc(session: string, payload: JsonObject, expect: string, timeout
   return run(["bash", "scripts/agentic/session.sh", "rpc", session, JSON.stringify(payload), "--expect", expect, "--timeout", String(timeoutMs)], String(payload.type ?? "rpc"));
 }
 
-async function send(session: string, payload: JsonObject, timeoutMs: number) {
-  return run(["bash", "scripts/agentic/session.sh", "send", session, JSON.stringify(payload), "--await-parse", "--timeout", String(timeoutMs)], String(payload.type ?? "send"));
-}
-
 function responseOf(envelope: JsonObject): JsonObject {
   return (envelope.response as JsonObject | undefined) ?? envelope;
 }
@@ -252,20 +258,8 @@ async function scrollReceipt(args: Args, label: string) {
   return run(["bun", "scripts/devtools/scroll.ts", "inspect", ...args.forwarded], label);
 }
 
-function withoutExpectedSurface(args: Args): Args {
-  const forwarded: string[] = [];
-  for (let index = 0; index < args.forwarded.length; index += 1) {
-    if (args.forwarded[index] === "--surface") {
-      index += 1;
-      continue;
-    }
-    forwarded.push(args.forwarded[index]);
-  }
-  return { ...args, expectedSurfaceKind: "", forwarded };
-}
-
 function postActionReceiptArgs(args: Args): Args {
-  return isPrintableTextKey(args) ? withoutExpectedSurface(args) : args;
+  return args;
 }
 
 function safety(args: Args) {
@@ -305,9 +299,7 @@ function safety(args: Args) {
   }
 
   return {
-    channel: isPrintableTextKey(args)
-      ? "setFilterTextInput"
-      : args.actionKind === "key" ? "simulateKey" : "batch",
+    channel: args.actionKind === "key" && !isTextEditingKey(args) ? "simulateKey" : "batch",
     destructive: args.allowSubmit,
     submitAllowed: args.allowSubmit,
     submitIntent: args.submitIntent || null,
@@ -370,13 +362,29 @@ function actionPayload(args: Args, selector: JsonObject) {
   };
 }
 
-function expectedResponse(args: Args) {
-  if (isPrintableTextKey(args)) return "stdin_command_parsed";
-  return args.actionKind === "key" ? "externalCommandResult" : "batchResult";
+function textEditingKeyPayload(args: Args, selector: JsonObject, before: JsonObject) {
+  const currentInput =
+    typeof (before.keyboardOwner as JsonObject | undefined)?.inputValue === "string"
+      ? String((before.keyboardOwner as JsonObject).inputValue)
+      : "";
+  const nextInput = isBackspaceTextKey(args)
+    ? Array.from(currentInput).slice(0, -1).join("")
+    : `${currentInput}${args.key}`;
+  return {
+    type: "batch",
+    requestId: requestId("text-editing-key"),
+    target: selector,
+    commands: [{ type: "setInput", text: nextInput }],
+    options: { stopOnError: true, rollbackOnError: false, timeout: args.timeoutMs },
+    trace: "on",
+  };
 }
 
-function expectedResponseForTarget(args: Args, targetReceipt: JsonObject) {
-  if (shouldUseLauncherSetFilter(args, targetReceipt)) return "stdin_command_parsed";
+function expectedResponse(args: Args) {
+  return args.actionKind === "key" && !isTextEditingKey(args) ? "externalCommandResult" : "batchResult";
+}
+
+function expectedResponseForTarget(args: Args, _targetReceipt: JsonObject) {
   return expectedResponse(args);
 }
 
@@ -449,18 +457,6 @@ async function waitForPostIntentTarget(args: Args): Promise<JsonObject | null> {
     expected,
     attempts,
   };
-}
-
-async function printableTextKeyAction(args: Args, before: JsonObject) {
-  const currentInput =
-    typeof (before.keyboardOwner as JsonObject | undefined)?.inputValue === "string"
-      ? String((before.keyboardOwner as JsonObject).inputValue)
-      : "";
-  return send(args.session, {
-    type: "setFilter",
-    requestId: requestId("printable-key"),
-    text: `${currentInput}${args.key}`,
-  }, args.timeoutMs);
 }
 
 function visibleResult(before: JsonObject, after: JsonObject, beforeScroll: JsonObject, afterScroll: JsonObject) {
@@ -625,10 +621,6 @@ function isPromptEntityTargetReceipt(receipt: JsonObject) {
 function isPromptPopupTargetReceipt(receipt: JsonObject) {
   const resolved = targetInfo(receipt);
   return resolved?.targetKind === "PromptPopup";
-}
-
-function shouldUseLauncherSetFilter(args: Args, targetReceipt: JsonObject) {
-  return args.actionKind === "set-input" && isScriptListTargetReceipt(targetReceipt);
 }
 
 function isNonDestructiveLauncherSubmit(actionId: string | null) {
@@ -1202,6 +1194,7 @@ async function main() {
   };
 
   let actionEnvelope: JsonObject = { status: "blocked", reason: "blocked-by-unsafe-operation" };
+  let dispatchElapsedMs: number | null = null;
   if (args.preflightOnly) {
     actionEnvelope = {
       status: "ok",
@@ -1210,17 +1203,17 @@ async function main() {
       reason: "preflight-only requested",
     };
   } else if (guardWithPreflight.errors.length === 0 && targetReceipt.classification === "ok") {
-    actionEnvelope = shouldUseLauncherSetFilter(args, targetReceipt)
-      ? await send(args.session, {
-        type: "setFilter",
-        requestId: requestId("launcher-set-filter"),
-        text: args.text,
-      }, args.timeoutMs)
-      : isPrintableTextKey(args)
-      ? await printableTextKeyAction(args, before)
-      : args.actionKind === "key"
-      ? await rpc(args.session, actionPayload(args, selector), expectedResponse(args), args.timeoutMs)
-      : await rpc(args.session, actionPayload(args, selector), expectedResponse(args), args.timeoutMs);
+    const dispatchStartedAt = Date.now();
+    const payload = isTextEditingKey(args)
+      ? textEditingKeyPayload(args, selector, before)
+      : actionPayload(args, selector);
+    actionEnvelope = await rpc(
+      args.session,
+      payload,
+      expectedResponse(args),
+      args.timeoutMs,
+    );
+    dispatchElapsedMs = Date.now() - dispatchStartedAt;
   }
 
   const afterArgs = postActionReceiptArgs(args);
@@ -1296,6 +1289,13 @@ async function main() {
       postIntentTarget: expectedPostTargetForIntent(args),
     },
     actionReceipt,
+    actionTiming: {
+      dispatchElapsedMs,
+      appReportedElapsedMs:
+        typeof actionReceipt.totalElapsed === "number" ? actionReceipt.totalElapsed
+        : typeof actionReceipt.elapsed === "number" ? actionReceipt.elapsed
+        : null,
+    },
     postIntentTargetProof,
     targetAfter: after.target ?? null,
     submitDiagnostics: {
