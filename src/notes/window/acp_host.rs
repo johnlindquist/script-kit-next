@@ -220,32 +220,6 @@ impl NotesApp {
         );
     }
 
-    /// Open the ACP history popup anchored to the Notes window.
-    ///
-    /// Returns `true` if the popup was opened, `false` if no embedded ACP
-    /// view exists.
-    pub(super) fn open_embedded_acp_history_popup(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let Some(entity) = self.embedded_acp_chat.as_ref().cloned() else {
-            tracing::info!(event = "notes_acp_history_popup_requested", opened = false);
-            return false;
-        };
-
-        let parent_handle = window.window_handle();
-        let parent_bounds = window.bounds();
-        let display_id = window.display(cx).map(|display| display.id());
-
-        entity.update(cx, |view, cx| {
-            view.open_history_popup_from_host(parent_handle, parent_bounds, display_id, cx);
-        });
-
-        tracing::info!(event = "notes_acp_history_popup_requested", opened = true);
-        true
-    }
-
     /// Handle a portal open request from the embedded ACP context picker.
     ///
     /// Static helper so it can be called from the `set_on_open_portal` closure
