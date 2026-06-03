@@ -1898,19 +1898,15 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 tracing::info!(event = "acp_history_action_invoked", action = "openHistory");
-                if !self.open_embedded_acp_history_popup(window, cx) {
-                    self.open_builtin_filterable_view(
-                        AppView::AcpHistoryView {
-                            filter: String::new(),
-                            selected_index: 0,
-                        },
-                        panel_action
-                            .history_search_placeholder()
-                            .unwrap_or_default(),
-                        true,
-                        cx,
-                    );
-                }
+                self.open_builtin_filterable_view(
+                    AppView::AcpHistoryView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    panel_action.history_search_placeholder().unwrap_or_default(),
+                    true,
+                    cx,
+                );
                 let mut outcome = DispatchOutcome::success();
                 outcome.user_message = panel_action.success_message().map(String::from);
                 outcome

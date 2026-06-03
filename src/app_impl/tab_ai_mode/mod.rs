@@ -76,7 +76,7 @@ impl ScriptListApp {
             let history_app = app_entity.clone();
             view.set_on_open_history_command(move |window, cx| {
                 history_app.update(cx, |app, cx| {
-                    app.open_embedded_acp_history_popup(window, cx);
+                    app.open_acp_history_main_list(window, cx);
                 });
             });
 
@@ -2368,22 +2368,20 @@ impl ScriptListApp {
 
     /// Open the ACP chat view and stage context.
     ///
-    pub(crate) fn open_embedded_acp_history_popup(
+    pub(crate) fn open_acp_history_main_list(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> bool {
-        let AppView::AcpChatView { entity } = &self.current_view else {
-            return false;
-        };
-
-        let parent_handle = window.window_handle();
-        let parent_bounds = window.bounds();
-        let display_id = window.display(cx).map(|display| display.id());
-        entity.update(cx, |view, cx| {
-            view.open_history_popup_from_host(parent_handle, parent_bounds, display_id, cx);
-        });
-        true
+    ) {
+        self.open_builtin_filterable_view(
+            AppView::AcpHistoryView {
+                filter: String::new(),
+                selected_index: 0,
+            },
+            "Search conversation history...",
+            true,
+            cx,
+        );
     }
 
     /// Open the harness terminal immediately, then spawn a task that waits

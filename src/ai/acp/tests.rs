@@ -876,7 +876,7 @@ fn acp_footer_actions_hint_uses_shared_clickable_toggle_path() {
             && TAB_AI_MODE_SOURCE
                 .contains("app.close_tab_ai_harness_terminal_with_window(window, cx);")
             && TAB_AI_MODE_SOURCE.contains("view.set_on_open_history_command")
-            && TAB_AI_MODE_SOURCE.contains("app.open_embedded_acp_history_popup(window, cx);")
+            && TAB_AI_MODE_SOURCE.contains("app.open_acp_history_main_list(window, cx);")
             && TAB_AI_MODE_SOURCE.contains("view.set_on_paste_response_requested")
             && TAB_AI_MODE_SOURCE.contains("app.paste_latest_acp_response_to_frontmost(None, cx);"),
         "embedded ACP hosts must wire footer clicks to the existing actions, close, history popup, and paste-response paths"
@@ -1035,11 +1035,11 @@ fn acp_detached_cmd_k_keeps_detached_actions_path() {
 }
 
 #[test]
-fn acp_show_history_action_prefers_embedded_popup_before_builtin_browser() {
+fn acp_show_history_action_opens_main_history_list() {
     assert!(
-        HANDLE_ACTION_SOURCE.contains("if !self.open_embedded_acp_history_popup(window, cx) {")
+        !HANDLE_ACTION_SOURCE.contains("if !self.open_embedded_acp_history_popup(window, cx) {")
             && HANDLE_ACTION_SOURCE.contains("AppView::AcpHistoryView"),
-        "acp_show_history should open the embedded ACP popup when possible and only fall back to the builtin browser otherwise"
+        "acp_show_history should open the main AcpHistoryView list instead of the embedded history popup"
     );
 }
 
@@ -1284,8 +1284,8 @@ fn acp_history_toggle_uses_recent_close_debounce() {
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("view.set_on_open_history_command")
-            && TAB_AI_MODE_SOURCE.contains("app.open_embedded_acp_history_popup(window, cx);"),
-        "embedded ACP history host should wire the footer and shortcut into the dedicated embedded history popup path"
+            && TAB_AI_MODE_SOURCE.contains("app.open_acp_history_main_list(window, cx);"),
+        "embedded ACP history host should wire the footer and shortcut into the main AcpHistoryView path"
     );
 }
 
