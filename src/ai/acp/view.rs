@@ -3808,6 +3808,30 @@ impl AcpChatView {
         }
     }
 
+    fn trigger_toggle_actions_from_parent(
+        &mut self,
+        parent: AcpMentionPopupParentWindow,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(callback) = self.on_toggle_actions.clone() {
+            cx.spawn(async move |_this, cx| {
+                cx.background_executor()
+                    .timer(Duration::from_millis(1))
+                    .await;
+                let _ = parent.handle.update(cx, |_root, window, cx| {
+                    callback(window, cx);
+                });
+            })
+            .detach();
+        } else {
+            tracing::warn!(
+                target: "script_kit::acp",
+                event = "acp_toolbar_model_actions_no_callback",
+                "ACP model toolbar click dropped because no host actions callback was installed"
+            );
+        }
+    }
+
     fn reset_agent_chat_zoom(&mut self, cx: &mut Context<Self>) {
         let mut theme = crate::theme::get_cached_theme();
         let defaults = crate::theme::FontConfig::default();
@@ -11190,8 +11214,9 @@ impl AcpChatView {
             }
             AcpToolbarEvent::ToggleModelSelector(parent) => {
                 this.mention_popup_parent_window = Some(*parent);
-                this.model_selector_open = !this.model_selector_open;
+                this.model_selector_open = false;
                 this.sync_acp_popup_windows_from_cached_parent(cx);
+                this.trigger_toggle_actions_from_parent(*parent, cx);
                 cx.notify();
             }
             AcpToolbarEvent::ExportThread => {
