@@ -102,6 +102,27 @@ fn selector_copy_is_header_oriented_not_theme_oriented() {
 }
 
 #[test]
+fn base_header_borrows_low_contrast_vertical_spacing_without_shell_geometry_drift() {
+    let base = MainMenuThemeVariant::InfoBarBase.def();
+    let low = MainMenuThemeVariant::InfoBarLowContrastKeys.def();
+
+    assert_eq!(
+        base.header_info_bar.height_px,
+        low.header_info_bar.height_px
+    );
+    assert!(base.header_info_bar.show_keys);
+    assert_eq!(base.header_info_bar.gap_px, 7.0);
+    assert_eq!(base.header_info_bar.pill_padding_x, 0.0);
+    assert_eq!(base.header_info_bar.pill_padding_y, 0.0);
+    assert_eq!(base.header_info_bar.pill_border_alpha, 0x00);
+    assert_eq!(base.header_info_bar.pill_bg_alpha, 0x00);
+    assert_eq!(
+        MainMenuThemeVariant::InfoBarBase.geometry_signature(),
+        MainMenuThemeVariant::InfoBarLowContrastKeys.geometry_signature()
+    );
+}
+
+#[test]
 fn first_section_separator_padding_matches_header_bottom_padding() {
     let list_item = read_source("src/list_item/mod.rs");
 

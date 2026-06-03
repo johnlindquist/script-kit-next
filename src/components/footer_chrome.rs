@@ -96,6 +96,9 @@ pub(crate) struct FooterHintButtonSpec {
     pub(crate) slot_width_px: Option<f32>,
     pub(crate) key_first: bool,
     pub(crate) justify: FooterHintContentJustify,
+    pub(crate) label_font_size_px: Option<f32>,
+    pub(crate) keycap_font_size_px: Option<f32>,
+    pub(crate) keycap_height_px: Option<f32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -340,6 +343,9 @@ pub(crate) fn render_footer_hint_content(
         None,
         false,
         FooterHintContentJustify::Center,
+        None,
+        None,
+        None,
     )
 }
 
@@ -360,6 +366,9 @@ pub(crate) fn render_footer_hint_content_constrained(
         Some(slot_width_px),
         key_first,
         justify,
+        None,
+        None,
+        None,
     )
 }
 
@@ -367,20 +376,18 @@ pub(crate) fn render_footer_hint_button_like(
     spec: FooterHintButtonSpec,
     theme: &Theme,
 ) -> AnyElement {
-    match spec.slot_width_px {
-        Some(slot_width_px) => render_footer_hint_content_constrained(
-            spec.label,
-            spec.key,
-            FooterHintKeyMode::Shortcut,
-            theme,
-            slot_width_px,
-            spec.key_first,
-            spec.justify,
-        ),
-        None => {
-            render_footer_hint_content(spec.label, spec.key, FooterHintKeyMode::Shortcut, theme)
-        }
-    }
+    render_footer_hint_content_impl(
+        spec.label,
+        spec.key,
+        FooterHintKeyMode::Shortcut,
+        theme,
+        spec.slot_width_px,
+        spec.key_first,
+        spec.justify,
+        spec.label_font_size_px,
+        spec.keycap_font_size_px,
+        spec.keycap_height_px,
+    )
 }
 
 fn render_footer_hint_content_impl(
@@ -391,6 +398,9 @@ fn render_footer_hint_content_impl(
     slot_width_px: Option<f32>,
     key_first: bool,
     justify: FooterHintContentJustify,
+    label_font_size_px: Option<f32>,
+    keycap_font_size_px: Option<f32>,
+    keycap_height_px: Option<f32>,
 ) -> AnyElement {
     let footer_text = footer_hint_text_color(theme);
     let full_text = theme.colors.text.primary.to_rgb();
@@ -418,12 +428,18 @@ fn render_footer_hint_content_impl(
             full_text,
             Some(max_width_px),
             matches!(justify, FooterHintContentJustify::KeyAnchored),
+            label_font_size_px,
         )
     } else {
-        render_footer_labelcap(label, theme, footer_text, full_text)
+        render_footer_labelcap(label, theme, footer_text, full_text, label_font_size_px)
     };
     let keycaps = match mode {
-        FooterHintKeyMode::Shortcut => render_footer_shortcut_keycaps(key.to_string(), theme),
+        FooterHintKeyMode::Shortcut => render_footer_shortcut_keycaps_with_metrics(
+            key.to_string(),
+            theme,
+            keycap_font_size_px,
+            keycap_height_px,
+        ),
     };
 
     let mut row = div()
@@ -631,8 +647,17 @@ fn render_footer_labelcap(
     theme: &Theme,
     footer_text: gpui::Rgba,
     full_text: gpui::Hsla,
+    label_font_size_px: Option<f32>,
 ) -> AnyElement {
-    render_footer_labelcap_constrained(label, theme, footer_text, full_text, None, false)
+    render_footer_labelcap_constrained(
+        label,
+        theme,
+        footer_text,
+        full_text,
+        None,
+        false,
+        label_font_size_px,
+    )
 }
 
 fn render_footer_labelcap_constrained(
@@ -642,8 +667,10 @@ fn render_footer_labelcap_constrained(
     full_text: gpui::Hsla,
     max_width_px: Option<f32>,
     force_width: bool,
+    label_font_size_px: Option<f32>,
 ) -> AnyElement {
     let metrics = current_main_menu_footer_metrics();
+    let label_font_size = label_font_size_px.unwrap_or(metrics.label_font_size);
     let mut cap = div()
         .flex_none()
         .min_w(px(FOOTER_KEYCAP_HEIGHT_PX))
@@ -658,7 +685,7 @@ fn render_footer_labelcap_constrained(
         .justify_center()
         .font_family(FONT_SYSTEM_UI)
         .font_weight(FOOTER_HINT_FONT_WEIGHT_GPUI)
-        .text_size(px(metrics.label_font_size))
+        .text_size(px(label_font_size))
         .text_color(footer_text)
         .group_hover("footer-action-button", move |s| s.text_color(full_text));
 
@@ -681,8 +708,22 @@ fn render_footer_labelcap_constrained(
 }
 
 pub(crate) fn render_footer_shortcut_keycaps(shortcut: String, theme: &Theme) -> AnyElement {
+    render_footer_shortcut_keycaps_with_metrics(shortcut, theme, None, None)
+}
+
+fn render_footer_shortcut_keycaps_with_metrics(
+    shortcut: String,
+    theme: &Theme,
+    keycap_font_size_px: Option<f32>,
+    keycap_height_px: Option<f32>,
+) -> AnyElement {
     let tokens = split_footer_shortcut(&shortcut);
-    render_footer_shortcut_keycaps_from_tokens(tokens.iter().map(String::as_str), theme)
+    render_footer_shortcut_keycaps_from_tokens_with_metrics(
+        tokens.iter().map(String::as_str),
+        theme,
+        keycap_font_size_px,
+        keycap_height_px,
+    )
 }
 
 pub(crate) fn render_footer_row_shortcut_keycaps_from_tokens<'a>(
@@ -702,17 +743,30 @@ pub(crate) fn render_footer_shortcut_keycaps_from_tokens<'a>(
     tokens: impl IntoIterator<Item = &'a str>,
     theme: &Theme,
 ) -> AnyElement {
+    render_footer_shortcut_keycaps_from_tokens_with_metrics(tokens, theme, None, None)
+}
+
+fn render_footer_shortcut_keycaps_from_tokens_with_metrics<'a>(
+    tokens: impl IntoIterator<Item = &'a str>,
+    theme: &Theme,
+    keycap_font_size_px: Option<f32>,
+    keycap_height_px: Option<f32>,
+) -> AnyElement {
     div()
         .flex()
         .flex_none()
         .flex_row()
         .items_center()
         .gap(px(current_main_menu_footer_metrics().content_gap))
-        .children(
-            tokens
-                .into_iter()
-                .map(|token| render_footer_keycap(token.to_string(), None, theme)),
-        )
+        .children(tokens.into_iter().map(|token| {
+            render_footer_keycap_with_metrics(
+                token.to_string(),
+                None,
+                theme,
+                keycap_font_size_px,
+                keycap_height_px,
+            )
+        }))
         .into_any_element()
 }
 
@@ -776,27 +830,40 @@ pub(crate) fn footer_shortcut_keycap_layout_model<'a>(
     })
 }
 
+#[allow(dead_code)]
 pub(crate) fn render_footer_keycap(
     token: String,
     max_width_px: Option<f32>,
     theme: &Theme,
 ) -> AnyElement {
+    render_footer_keycap_with_metrics(token, max_width_px, theme, None, None)
+}
+
+fn render_footer_keycap_with_metrics(
+    token: String,
+    max_width_px: Option<f32>,
+    theme: &Theme,
+    keycap_font_size_px: Option<f32>,
+    keycap_height_px: Option<f32>,
+) -> AnyElement {
     let footer_text = footer_hint_text_color(theme);
     let full_text = theme.colors.text.primary.to_rgb();
     let hover_border = footer_keycap_border_hover_color(theme);
     let metrics = current_main_menu_footer_metrics();
+    let keycap_height = keycap_height_px.unwrap_or(FOOTER_KEYCAP_HEIGHT_PX);
+    let keycap_font_size = keycap_font_size_px.unwrap_or(metrics.keycap_font_size);
     let token_child: AnyElement = if let Some(path) = footer_icon_path(&token) {
         svg()
             .external_path(path)
-            .size(px(13.0))
+            .size(px((keycap_font_size + 1.0).max(10.0)))
             .flex_shrink_0()
             .text_color(footer_text)
             .group_hover("footer-action-button", move |s| s.text_color(full_text))
             .into_any_element()
     } else {
         div()
-            .h(px(FOOTER_KEYCAP_HEIGHT_PX))
-            .line_height(px(FOOTER_KEYCAP_HEIGHT_PX))
+            .h(px(keycap_height))
+            .line_height(px(keycap_height))
             .mt(px(footer_key_glyph_nudge_y(&token)))
             .child(token)
             .into_any_element()
@@ -804,10 +871,10 @@ pub(crate) fn render_footer_keycap(
 
     let mut keycap = div()
         .flex_none()
-        .min_w(px(FOOTER_KEYCAP_HEIGHT_PX))
-        .min_h(px(FOOTER_KEYCAP_HEIGHT_PX))
-        .h(px(FOOTER_KEYCAP_HEIGHT_PX))
-        .line_height(px(FOOTER_KEYCAP_HEIGHT_PX))
+        .min_w(px(keycap_height))
+        .min_h(px(keycap_height))
+        .h(px(keycap_height))
+        .line_height(px(keycap_height))
         .px(px(metrics.keycap_padding_x))
         .py(px(metrics.keycap_padding_y))
         .rounded(px(metrics.keycap_radius))
@@ -818,7 +885,7 @@ pub(crate) fn render_footer_keycap(
         .justify_center()
         .font_family(FONT_SYSTEM_UI)
         .font_weight(FOOTER_HINT_FONT_WEIGHT_GPUI)
-        .text_size(px(metrics.keycap_font_size))
+        .text_size(px(keycap_font_size))
         .text_color(footer_text)
         .group_hover("footer-action-button", move |s| {
             s.text_color(full_text).border_color(hover_border)

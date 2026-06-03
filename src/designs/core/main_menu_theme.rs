@@ -386,7 +386,7 @@ impl MainMenuThemeVariant {
         use HeaderInfoBarLayout::*;
         match self {
             MainMenuThemeVariant::InfoBarBase => header_info_bar_tokens(
-                Split, 0.50, 14.0, 7.0, 0.0, 0.0, 0.0, 0x00, 0x00, true, true, false, "·",
+                Split, 0.50, 22.0, 7.0, 0.0, 0.0, 0.0, 0x00, 0x00, true, true, true, "·",
             ),
             MainMenuThemeVariant::InfoBarBreadcrumb => header_info_bar_tokens(
                 Split, 0.52, 14.0, 8.0, 4.0, 1.0, 4.0, 0x14, 0x00, true, true, false, "›",

@@ -199,6 +199,8 @@ pub(crate) fn render_main_view_context_zone_required(
     let hover_bg = rgba((theme.colors.text.primary << 8) | def.footer.button.hover);
     let text_color = rgba((theme.colors.text.primary << 8) | text_alpha);
     let show_pills = info.pill_padding_x > 0.0 || info.pill_border_alpha > 0;
+    let header_keycap_font_size = (info.font_size * 0.88).max(8.0);
+    let header_keycap_height = (info.font_size + 7.0).max(16.0);
 
     let cwd_label = labels.cwd_label;
     let agent_model_label = labels.agent_model_label;
@@ -210,10 +212,13 @@ pub(crate) fn render_main_view_context_zone_required(
                 crate::components::footer_chrome::render_footer_hint_button_like(
                     crate::components::footer_chrome::FooterHintButtonSpec {
                         label: cwd_label.clone().into(),
-                        key: "Tab".into(),
-                        slot_width_px: Some(280.0),
+                        key: "⇥".into(),
+                        slot_width_px: None,
                         key_first: false,
                         justify: crate::components::footer_chrome::FooterHintContentJustify::Start,
+                        label_font_size_px: Some(info.font_size),
+                        keycap_font_size_px: Some(header_keycap_font_size),
+                        keycap_height_px: Some(header_keycap_height),
                     },
                     theme,
                 ),
@@ -235,10 +240,13 @@ pub(crate) fn render_main_view_context_zone_required(
                 crate::components::footer_chrome::render_footer_hint_button_like(
                     crate::components::footer_chrome::FooterHintButtonSpec {
                         label: agent_model_label.clone().into(),
-                        key: "Shift+Tab".into(),
-                        slot_width_px: Some(310.0),
+                        key: "⇧⇥".into(),
+                        slot_width_px: None,
                         key_first: false,
                         justify: crate::components::footer_chrome::FooterHintContentJustify::Start,
+                        label_font_size_px: Some(info.font_size),
+                        keycap_font_size_px: Some(header_keycap_font_size),
+                        keycap_height_px: Some(header_keycap_height),
                     },
                     theme,
                 ),

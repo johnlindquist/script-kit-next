@@ -95,6 +95,15 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
         ),
         "header Tab text should use the footer key/button renderer instead of local styling"
     );
+    assert!(shared.contains("key: \"⇥\".into()"));
+    assert!(shared.contains("key: \"⇧⇥\".into()"));
+    assert!(!shared.contains("key: \"Tab\".into()"));
+    assert!(!shared.contains("key: \"Shift+Tab\".into()"));
+    assert!(shared.contains("slot_width_px: None"));
+    assert!(!shared.contains("slot_width_px: Some(280.0)"));
+    assert!(!shared.contains("slot_width_px: Some(310.0)"));
+    assert!(shared.contains("keycap_font_size_px: Some(header_keycap_font_size)"));
+    assert!(shared.contains("keycap_height_px: Some(header_keycap_height)"));
     assert!(ui_window.contains("pub(crate) fn main_view_context_labels"));
     assert!(ui_window.contains("render_clickable_main_view_context_zone"));
     assert!(ui_window.contains("render_clickable_main_view_context_header"));
@@ -215,8 +224,15 @@ fn header_info_bar_reuses_footer_key_button_components() {
     assert!(shared.contains("render_footer_hint_button_like"));
     assert!(shared.contains("FooterHintButtonSpec"));
     assert!(shared.contains("label: cwd_label.clone().into()"));
-    assert!(shared.contains("key: \"Tab\".into()"));
-    assert!(shared.contains("key: \"Shift+Tab\".into()"));
+    assert!(shared.contains("key: \"⇥\".into()"));
+    assert!(shared.contains("key: \"⇧⇥\".into()"));
+    assert!(!shared.contains("key: \"Tab\".into()"));
+    assert!(!shared.contains("key: \"Shift+Tab\".into()"));
+    assert!(shared.contains("slot_width_px: None"));
+    assert!(!shared.contains("slot_width_px: Some(280.0)"));
+    assert!(!shared.contains("slot_width_px: Some(310.0)"));
+    assert!(shared.contains("label_font_size_px: Some(info.font_size)"));
+    assert!(shared.contains("keycap_font_size_px: Some(header_keycap_font_size)"));
     assert!(
         shared.contains(".opacity(info.key_opacity.clamp(0.0, 1.0))"),
         "header key affordance may vary opacity but must wrap the shared footer renderer"
