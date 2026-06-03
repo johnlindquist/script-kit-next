@@ -73,9 +73,9 @@ fn automation_inspect_snapshot_exposes_runtime_surface_identity() {
     }
 
     for needle in [
-        "surface_kind: (resolved.kind == protocol::AutomationWindowKind::Main)",
-        "app_view_variant: (resolved.kind == protocol::AutomationWindowKind::Main)",
-        "native_footer_surface: (resolved.kind == protocol::AutomationWindowKind::Main)",
+        "let surface_kind = (resolved.kind == protocol::AutomationWindowKind::Main)",
+        "let app_view_variant = (resolved.kind == protocol::AutomationWindowKind::Main)",
+        "let native_footer_surface = (resolved.kind == protocol::AutomationWindowKind::Main)",
     ] {
         assert!(
             PROMPT_HANDLER.contains(needle),
@@ -613,6 +613,9 @@ fn act_cli_performs_safe_protocol_first_user_actions_with_pre_post_receipts() {
         "--text",
         "--value",
         "--allow-submit",
+        "menu-syntax-trigger-accept",
+        "isScopedMenuSyntaxTriggerAccept",
+        "menuSyntaxTriggerPicker",
         "nativeEscalation: false",
     ] {
         assert!(

@@ -403,7 +403,7 @@ impl ScriptListApp {
                                     return;
                                 }
                             }
-                            if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open() {
+                            if view.menu_syntax_trigger_picker_owns_main_keyboard() {
                                 if view.apply_menu_syntax_trigger_popup_intent(
                                     crate::menu_syntax::InlinePickerKeyIntent::Accept,
                                     window,
@@ -431,7 +431,7 @@ impl ScriptListApp {
                                     return;
                                 }
                             }
-                            if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open() {
+                            if view.menu_syntax_trigger_picker_owns_main_keyboard() {
                                 if view.apply_menu_syntax_trigger_popup_intent(
                                     crate::menu_syntax::InlinePickerKeyIntent::Close,
                                     window,

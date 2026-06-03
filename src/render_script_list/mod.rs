@@ -1293,7 +1293,6 @@ impl ScriptListApp {
 
                         let scroll_top_after = this.main_list_state.logical_scroll_top();
                         this.sync_main_list_selection_to_visible_window("wheel");
-                        // doc-anchor-removed: [[design#Footer-safe list reveal]]
                         tracing::debug!(
                             target: "SCROLL_STATE",
                             delta_lines,
@@ -1683,7 +1682,7 @@ impl ScriptListApp {
                                 return;
                             }
                         }
-                        if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open() {
+                        if this.menu_syntax_trigger_picker_owns_main_keyboard() {
                             if this.apply_menu_syntax_trigger_popup_intent(
                                 crate::menu_syntax::InlinePickerKeyIntent::Close,
                                 window,

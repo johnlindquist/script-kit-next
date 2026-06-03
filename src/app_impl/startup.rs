@@ -1443,7 +1443,7 @@ impl ScriptListApp {
                             }
 
                             if matches!(this.current_view, AppView::ScriptList)
-                                && crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open()
+                                && this.menu_syntax_trigger_picker_owns_main_keyboard()
                             {
                                 let intent = if has_shift {
                                     crate::menu_syntax::InlinePickerKeyIntent::MoveUp
@@ -1666,7 +1666,7 @@ impl ScriptListApp {
                                 }
                             }
                             if matches!(this.current_view, AppView::ScriptList)
-                                && crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open()
+                                && this.menu_syntax_trigger_picker_owns_main_keyboard()
                             {
                                 if this.apply_menu_syntax_trigger_popup_intent(
                                     crate::menu_syntax::InlinePickerKeyIntent::Accept,
@@ -2273,7 +2273,7 @@ impl ScriptListApp {
                                             return;
                                         }
                                     }
-                                    if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open()
+                                    if this.menu_syntax_trigger_picker_owns_main_keyboard()
                                         && (is_up || is_down)
                                     {
                                         let intent = if is_up {

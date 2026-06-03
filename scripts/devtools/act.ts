@@ -666,6 +666,27 @@ function isScopedProfileSearchSelect(
     && selectedSemanticId.startsWith("profile-search-row:");
 }
 
+function isScopedMenuSyntaxTriggerAccept(
+  args: Args,
+  targetReceipt: JsonObject,
+  before: JsonObject,
+  selectedSemanticId: string | null,
+) {
+  const selected = before.selectedNode as JsonObject | undefined;
+  return isPlainEnter(args)
+    && args.allowSubmit
+    && args.submitIntent === "menu-syntax-trigger-accept"
+    && args.allowSubmitReason.trim().length > 0
+    && isScriptListTargetReceipt(targetReceipt)
+    && typeof selectedSemanticId === "string"
+    && selectedSemanticId.startsWith("choice:")
+    && (
+      selected?.kind === "menuSyntaxTriggerPicker"
+      || selected?.source === "menuSyntaxTriggerPicker"
+      || selected?.role === "menu-syntax-trigger-row"
+    );
+}
+
 function targetInfo(receipt: JsonObject) {
   return (receipt.resolvedTarget as JsonObject | undefined) ?? (receipt.target as JsonObject | undefined) ?? null;
 }
@@ -805,6 +826,43 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
       state: "dispatched",
       actionId: selectedSemanticId,
       allowedBy: "submitIntent:profile-search-select",
+      proofIntent: args.submitIntent,
+    };
+  }
+  if (args.submitIntent === "menu-syntax-trigger-accept") {
+    if (!args.allowSubmitReason.trim()) {
+      return {
+        state: "blocked-before-dispatch",
+        reason: "menu-syntax-trigger-accept requires --allow-submit-reason",
+        gateName: "submit.reason.required",
+        selectedSemanticId: selectedSemanticId as string | null,
+        requiredFlags: [
+          "--allow-submit",
+          "--submit-intent menu-syntax-trigger-accept",
+          "--allow-submit-reason <why>",
+        ],
+      };
+    }
+    if (!isScopedMenuSyntaxTriggerAccept(args, targetReceipt, before, selectedSemanticId)) {
+      return {
+        state: "blocked-before-dispatch",
+        reason: "menu-syntax-trigger-accept requires plain Enter on main ScriptList with a selected menuSyntaxTriggerPicker row",
+        gateName: "menu-syntax-trigger-accept.target.required",
+        selectedSemanticId: selectedSemanticId as string | null,
+        requiredFlags: [
+          "--main",
+          "--strict",
+          "--surface ScriptList",
+          "--allow-submit",
+          "--submit-intent menu-syntax-trigger-accept",
+          "--allow-submit-reason <why>",
+        ],
+      };
+    }
+    return {
+      state: "dispatched",
+      actionId: selectedSemanticId,
+      allowedBy: "submitIntent:menu-syntax-trigger-accept",
       proofIntent: args.submitIntent,
     };
   }

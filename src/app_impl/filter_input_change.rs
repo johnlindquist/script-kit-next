@@ -49,7 +49,7 @@ impl ScriptListApp {
                 }
             }
             ScriptListSpecialEntry::AcpMentionPicker => {
-                crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+                self.menu_syntax_trigger_popup_state = Default::default();
                 self.open_tab_ai_acp_with_mention_picker(window, cx);
             }
         }
@@ -726,7 +726,6 @@ impl ScriptListApp {
                 self.menu_syntax_object_selector_state = Default::default();
                 self.menu_syntax_trigger_popup_state = Default::default();
                 crate::menu_syntax_object_selector_popup_window::close_menu_syntax_object_selector_popup_window(cx);
-                crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
             } else {
                 self.run_menu_syntax_object_selector_state_machine(&new_text, window, cx);
             }
@@ -754,7 +753,7 @@ impl ScriptListApp {
                     &picker_ctx,
                 )
             };
-            let mut needs_popup_sync = false;
+            let mut trigger_state_changed = false;
             match &transition {
                 crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange => {}
                 crate::menu_syntax_trigger_popup::TriggerPopupTransition::Close => {
@@ -766,9 +765,6 @@ impl ScriptListApp {
                         );
                     }
                     self.menu_syntax_trigger_popup_state = Default::default();
-                    crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(
-                        cx,
-                    );
                 }
                 crate::menu_syntax_trigger_popup::TriggerPopupTransition::Open {
                     snapshot,
@@ -787,7 +783,7 @@ impl ScriptListApp {
                             selected_row_id: selected_row_id.clone(),
                             visible_start: 0,
                         };
-                    needs_popup_sync = true;
+                    trigger_state_changed = true;
                 }
                 crate::menu_syntax_trigger_popup::TriggerPopupTransition::Update {
                     snapshot,
@@ -816,20 +812,17 @@ impl ScriptListApp {
                             selected_row_id: selected_row_id.clone(),
                             visible_start,
                         };
-                    needs_popup_sync = true;
+                    trigger_state_changed = true;
                 }
             }
             if object_selector_owns_input {
                 self.invalidate_grouped_cache();
-            } else if needs_popup_sync {
+            } else if trigger_state_changed {
                 // Trigger snapshots now render in the main search area via
                 // `menu_syntax_main_hint_snapshot`, not in the detached popup.
                 // The popup window is still used by capture-form field
                 // suggestions, so close any stale trigger-owned popup here
                 // while preserving the snapshot that feeds the main area.
-                // Former detached flow:
-                // sync_menu_syntax_trigger_popup_window_for_filter(new_text.clone(), window, cx)
-                crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
                 // Ownership just flipped — invalidate the grouped results
                 // cache so the main launcher list is rebuilt with the
                 // trigger-aware gate in `get_grouped_results_cached`.

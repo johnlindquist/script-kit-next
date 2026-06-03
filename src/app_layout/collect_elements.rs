@@ -2540,6 +2540,51 @@ impl ScriptListApp {
             protocol::ElementInfo::list("results", total_rows),
         );
 
+        if let Some(snapshot) = self
+            .menu_syntax_trigger_popup_state
+            .snapshot
+            .as_ref()
+            .filter(|_| self.menu_syntax_trigger_popup_state.owns_main_list())
+        {
+            if let Some(list) = elements
+                .iter_mut()
+                .find(|element| element.semantic_id == "list:results")
+            {
+                list.semantic_id = "list:menu-syntax-trigger-picker".to_string();
+                list.text = Some(format!("{} rows", snapshot.rows.len()));
+                list.value = Some("menuSyntaxTriggerPicker".to_string());
+                list.kind = Some("menuSyntaxTriggerPicker".to_string());
+                list.source = Some("ScriptList".to_string());
+            }
+
+            for (index, row) in snapshot.rows.iter().enumerate() {
+                if elements.len() >= limit {
+                    break;
+                }
+                elements.push(protocol::ElementInfo {
+                    semantic_id: protocol::generate_semantic_id("choice", index, &row.id),
+                    element_type: protocol::ElementType::Choice,
+                    text: Some(row.title.clone()),
+                    value: Some(row.token.clone().unwrap_or_else(|| row.id.clone())),
+                    selected: Some(
+                        self.menu_syntax_trigger_popup_state.selected_row_id.as_deref()
+                            == Some(row.id.as_str()),
+                    ),
+                    focused: None,
+                    index: Some(index),
+                    role: Some("menu-syntax-trigger-row".to_string()),
+                    kind: Some("menuSyntaxTriggerPicker".to_string()),
+                    source: Some("menuSyntaxTriggerPicker".to_string()),
+                    source_name: Some("ScriptList".to_string()),
+                    selectable: Some(row.enabled),
+                    status_kind: None,
+                    action_disabled: (!row.enabled).then(|| "disabled".to_string()),
+                });
+            }
+
+            return (elements, snapshot.rows.len() + 2);
+        }
+
         if let Some(form) = handler_form.as_ref() {
             for (index, field) in form.fields.iter().enumerate() {
                 if elements.len() >= limit {

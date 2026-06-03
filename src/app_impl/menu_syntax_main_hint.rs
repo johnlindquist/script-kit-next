@@ -386,22 +386,18 @@ impl ScriptListApp {
                             row_count,
                         ),
                 };
-            self.sync_menu_syntax_trigger_popup_window_for_filter(
-                self.filter_text.clone(),
-                window,
-                cx,
-            );
+            let _ = window;
+            self.invalidate_grouped_cache();
+            cx.notify();
         } else if self.trigger_popup_state_is_menu_syntax_form_suggestion() {
             self.menu_syntax_trigger_popup_state = Default::default();
-            crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
         }
     }
 
-    fn close_menu_syntax_form_suggestions_and_trigger_popup(&mut self, cx: &mut Context<Self>) {
+    fn close_menu_syntax_form_suggestions_and_trigger_popup(&mut self, _cx: &mut Context<Self>) {
         self.close_menu_syntax_form_suggestions();
         if self.trigger_popup_state_is_menu_syntax_form_suggestion() {
             self.menu_syntax_trigger_popup_state = Default::default();
-            crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
         }
     }
 

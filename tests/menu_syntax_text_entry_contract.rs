@@ -1,5 +1,27 @@
 use std::fs;
 
+fn source_after<'a>(source: &'a str, signature: &str) -> &'a str {
+    let index = source
+        .find(signature)
+        .unwrap_or_else(|| panic!("source must contain `{signature}`"));
+    let tail = &source[index..];
+    let open = tail.find('{').expect("function should have body");
+    let mut depth = 0usize;
+    for (offset, ch) in tail[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return &tail[..open + offset + 1];
+                }
+            }
+            _ => {}
+        }
+    }
+    tail
+}
+
 #[test]
 fn capture_composer_suppresses_main_list_before_capture_grouping() {
     let source = fs::read_to_string("src/app_impl/filtering_cache.rs")
@@ -195,59 +217,44 @@ fn capture_target_picker_closes_when_body_composition_starts() {
 }
 
 #[test]
-fn popup_highlights_use_live_filter_snapshot_text() {
+fn trigger_picker_state_changes_rebuild_main_list() {
     let filter_input_change = fs::read_to_string("src/app_impl/filter_input_change.rs")
         .expect("Failed to read src/app_impl/filter_input_change.rs");
-    let popup_window = fs::read_to_string("src/app_impl/menu_syntax_trigger_popup_window.rs")
-        .expect("Failed to read src/app_impl/menu_syntax_trigger_popup_window.rs");
 
     assert!(
-        filter_input_change.contains("sync_menu_syntax_trigger_popup_window_for_filter")
-            && filter_input_change.contains("new_text.clone()"),
-        "filter changes should pass the just-typed text into the popup snapshot"
-    );
-    assert!(
-        popup_window.contains("raw_filter_text,")
-            && popup_window.contains(
-                "trigger_popup_row_highlight_indices(row, &self.snapshot.raw_filter_text)"
-            ),
-        "popup rows should render highlights from the snapshot raw filter"
+        filter_input_change.contains("let mut trigger_state_changed = false;")
+            && filter_input_change.contains("trigger_state_changed = true;")
+            && filter_input_change.contains("} else if trigger_state_changed {")
+            && filter_input_change.contains("self.invalidate_grouped_cache();")
+            && !filter_input_change.contains("sync_menu_syntax_trigger_popup_window_for_filter"),
+        "filter changes should keep trigger rows in state and rebuild the main list without syncing a detached popup"
     );
 }
 
 #[test]
-fn popup_footer_rows_and_visible_page_follow_inline_picker_contracts() {
-    let popup_window = fs::read_to_string("src/app_impl/menu_syntax_trigger_popup_window.rs")
+fn trigger_picker_main_list_contract_exposes_rows_without_detached_popup() {
+    let trigger_owner = fs::read_to_string("src/app_impl/menu_syntax_trigger_popup_window.rs")
         .expect("Failed to read src/app_impl/menu_syntax_trigger_popup_window.rs");
+    let collect_elements = fs::read_to_string("src/app_layout/collect_elements.rs")
+        .expect("Failed to read src/app_layout/collect_elements.rs");
+    let prompt_handler =
+        fs::read_to_string("src/prompt_handler/mod.rs").expect("Failed to read prompt_handler.rs");
 
     assert!(
-        popup_window.contains("fn set_snapshot(&mut self, mut snapshot:")
-            && popup_window.contains("snapshot.visible_start = self.visible_range().start;")
-            && popup_window
-                .contains("visible_start: self.menu_syntax_trigger_popup_state.visible_start")
-            && popup_window.contains("trigger_popup_visible_start_for_selection(")
-            && popup_window.contains("inline_dropdown_visible_range_from_start("),
-        "menu-syntax popup updates should preserve the current visible page through the shared inline-dropdown range helper"
+        trigger_owner.contains("menu_syntax_trigger_picker_owns_main_keyboard")
+            && trigger_owner.contains("self.menu_syntax_trigger_popup_state.owns_main_list()"),
+        "trigger picker keyboard ownership should be derived from ScriptList state"
     );
     assert!(
-        !popup_window.contains("|| is_footer")
-            && !popup_window.contains("let is_footer = matches!(row.kind"),
-        "enabled footer action rows should use the same click-to-accept path as other menu-syntax popup rows"
+        collect_elements.contains("list:menu-syntax-trigger-picker")
+            && collect_elements.contains("menuSyntaxTriggerPicker")
+            && collect_elements.contains("menu-syntax-trigger-row"),
+        "ScriptList getElements should expose trigger picker rows as main-list rows"
     );
     assert!(
-        popup_window.contains("CONTEXT_PICKER_SYNOPSIS_HEIGHT")
-            && popup_window.contains("selected_row_has_synopsis")
-            && popup_window.contains("row.detail.is_some() || row.example.is_some()"),
-        "menu-syntax popup window height should reserve shared inline-dropdown synopsis space when the selected row renders synopsis"
-    );
-    assert!(
-        popup_window.contains("MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID")
-            && popup_window.contains("register_attached_popup(")
-            && popup_window.contains("menuSyntaxTriggerPopup")
-            && popup_window.contains("set_automation_bounds(")
-            && popup_window
-                .contains("remove_automation_window(MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID)"),
-        "menu-syntax popup should register as an attached automation popup so screenshots and layout probes can target it directly"
+        !prompt_handler
+            .contains("menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open"),
+        "PromptPopup automation target resolution must not include main-owned trigger rows"
     );
 }
 
@@ -317,12 +324,13 @@ fn trailing_space_alias_execution_is_disabled_for_menu_syntax() {
 fn enter_in_capture_composer_executes_capture_not_main_selection() {
     let source = fs::read_to_string("src/app_impl/selection_fallback.rs")
         .expect("Failed to read src/app_impl/selection_fallback.rs");
+    let execute_selected = source_after(&source, "pub(crate) fn execute_selected");
 
-    let capture_route = source
+    let capture_route = execute_selected
         .find("capture_for(&self.filter_text)")
         .expect("execute_selected must first check for capture composer input");
-    let grouped_results = source
-        .find("self.get_grouped_results_cached()")
+    let grouped_results = execute_selected
+        .find("self.live_script_list_flat_selection_for_submit()")
         .expect("execute_selected still resolves main-list rows for normal search");
 
     assert!(
@@ -351,11 +359,12 @@ fn command_invocation_suppresses_main_list_and_routes_without_shell() {
         "`!` command composition must blank normal launcher results"
     );
 
-    let command_route = selection
+    let execute_selected = source_after(&selection, "pub(crate) fn execute_selected");
+    let command_route = execute_selected
         .find("command_for(&self.filter_text)")
         .expect("execute_selected must first check command invocation input");
-    let grouped_results = selection
-        .find("self.get_grouped_results_cached()")
+    let grouped_results = execute_selected
+        .find("self.live_script_list_flat_selection_for_submit()")
         .expect("execute_selected still resolves main-list rows for normal search");
     assert!(
         command_route < grouped_results,
@@ -512,10 +521,9 @@ fn has_shortcut_accept_transition_cannot_reopen_popup() {
             && dispatcher.contains("self.computed_filter_text = text.clone();")
             && dispatcher.contains("self.set_menu_syntax_mode_from_filter(&text);")
             && dispatcher.contains("self.invalidate_grouped_cache();")
-            && dispatcher.contains("close_menu_syntax_trigger_popup_window(cx);")
             && dispatcher
                 .contains("self.menu_syntax_trigger_popup_suppressed_filter = Some(text.clone());"),
-        "Accept must atomically replace input, advance parser/cache state, close automation popup, and suppress immediate reopen"
+        "Accept must atomically replace input, advance parser/cache state, and suppress immediate reopen"
     );
     assert!(
         filter_change.contains("popup_suppressed_for_this_text")
@@ -525,11 +533,11 @@ fn has_shortcut_accept_transition_cannot_reopen_popup() {
     assert!(
         startup.contains("InlinePickerKeyIntent::Accept")
             && startup.contains("is_plain_enter")
-            && startup.contains("is_menu_syntax_trigger_popup_window_open()")
+            && startup.contains("menu_syntax_trigger_picker_owns_main_keyboard()")
             && startup_new_tab.contains("InlinePickerKeyIntent::Accept")
             && startup_new_tab.contains("is_plain_enter")
-            && startup_new_tab.contains("is_menu_syntax_trigger_popup_window_open()"),
-        "physical Enter startup paths must route to menu-syntax popup Accept before ordinary launcher Enter"
+            && startup_new_tab.contains("menu_syntax_trigger_picker_owns_main_keyboard()"),
+        "physical Enter startup paths must route to menu-syntax trigger Accept before ordinary launcher Enter"
     );
     for source in [&simulate_key, &app_run_setup, &runtime_stdin] {
         let accept = source

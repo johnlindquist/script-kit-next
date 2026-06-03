@@ -691,8 +691,7 @@ fn resolve_automation_read_target(
                 || crate::ai::acp::model_selector_popup::is_model_selector_popup_window_open()
                 || crate::ai::acp::history_popup::is_history_popup_window_open()
                 || crate::confirm::is_confirm_popup_window_open()
-                || crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open()
-                || crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open();
+                || crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open();
             if any_open {
                 tracing::info!(
                     target: "script_kit::automation",
@@ -3368,29 +3367,57 @@ impl ScriptListApp {
                     selected_value,
                 ) = match &self.current_view {
                     AppView::ScriptList => {
-                        self.get_grouped_results_cached();
-                        let (visible_rows, selected_row_index) =
-                            self.script_list_visible_row_labels_from_cache();
-                        let filtered_len = visible_rows.len();
-                        let selected_value =
-                            selected_row_index.and_then(|index| visible_rows.get(index).cloned());
-                        (
-                            "none".to_string(),
-                            None,
-                            None,
-                            self.filter_text.clone(),
-                            // choiceCount MUST sum every collection
-                            // passed to fuzzy_search_unified_all_with_skills
-                            // (see tests/scriptlist_choicecount_includes_skills_contract.rs).
-                            self.scripts.len()
-                                + self.scriptlets.len()
-                                + self.builtin_entries.len()
-                                + self.apps.len()
-                                + self.skills.len(),
-                            filtered_len,
-                            self.selected_index as i32,
-                            selected_value,
-                        )
+                        if let Some(snapshot) = self
+                            .menu_syntax_trigger_popup_state
+                            .snapshot
+                            .as_ref()
+                            .filter(|_| self.menu_syntax_trigger_popup_state.owns_main_list())
+                        {
+                            let selected_row_index = self
+                                .menu_syntax_trigger_popup_state
+                                .selected_row_id
+                                .as_deref()
+                                .and_then(|id| snapshot.rows.iter().position(|row| row.id == id));
+                            let selected_value = selected_row_index.and_then(|index| {
+                                snapshot.rows.get(index).map(|row| {
+                                    row.token.clone().unwrap_or_else(|| row.id.clone())
+                                })
+                            });
+                            (
+                                "none".to_string(),
+                                None,
+                                None,
+                                self.filter_text.clone(),
+                                snapshot.rows.len(),
+                                snapshot.rows.len(),
+                                selected_row_index.map_or(-1, |index| index as i32),
+                                selected_value,
+                            )
+                        } else {
+                            self.get_grouped_results_cached();
+                            let (visible_rows, selected_row_index) =
+                                self.script_list_visible_row_labels_from_cache();
+                            let filtered_len = visible_rows.len();
+                            let selected_value = selected_row_index
+                                .and_then(|index| visible_rows.get(index).cloned());
+                            (
+                                "none".to_string(),
+                                None,
+                                None,
+                                self.filter_text.clone(),
+                                // choiceCount MUST sum every collection
+                                // passed to fuzzy_search_unified_all_with_skills
+                                // (see tests/scriptlist_choicecount_includes_skills_contract.rs).
+                                self.scripts.len()
+                                    + self.scriptlets.len()
+                                    + self.builtin_entries.len()
+                                    + self.apps.len()
+                                    + self.skills.len(),
+                                filtered_len,
+                                self.selected_index as i32,
+                                selected_value,
+                            )
+                        }
                     }
                     AppView::About { .. } => (
                         "about".to_string(),
@@ -6956,9 +6983,6 @@ impl ScriptListApp {
                                         if let Some(v) = crate::dictation::batch_select_dictation_microphone_popup_row_by_value(&value, cx) {
                                             return Some(v);
                                         }
-                                        if let Some(v) = _this.batch_select_menu_syntax_trigger_popup_row_by_value(&value, cx) {
-                                            return Some(v);
-                                        }
                                         None
                                     });
                                     match selected {
@@ -7010,9 +7034,6 @@ impl ScriptListApp {
                                             return Some(v);
                                         }
                                         if let Some(v) = crate::dictation::batch_select_dictation_microphone_popup_row_by_semantic_id(&semantic_id, cx) {
-                                            return Some(v);
-                                        }
-                                        if let Some(v) = _this.batch_select_menu_syntax_trigger_popup_row_by_semantic_id(&semantic_id, cx) {
                                             return Some(v);
                                         }
                                         None
@@ -9335,10 +9356,8 @@ impl ScriptListApp {
         let host = crate::footer_popup::main_window_footer_host_snapshot();
         let popup_open = self.show_actions_popup
             || self.actions_dialog.is_some()
-            || self.menu_syntax_trigger_popup_state.snapshot.is_some()
             || self.menu_syntax_object_selector_state.snapshot.is_some()
-            || crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open()
-            || crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open();
+            || crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open();
         let mut config = self.main_window_footer_config_with_cx(Some(cx));
         if let Some(ref mut cfg) = config {
             self.enrich_footer_config_with_acp_info(cfg);
@@ -9501,6 +9520,18 @@ impl ScriptListApp {
     /// Get the currently selected value if any.
     fn current_selected_value(&self) -> Option<String> {
         match &self.current_view {
+            AppView::ScriptList => self
+                .menu_syntax_trigger_popup_state
+                .snapshot
+                .as_ref()
+                .filter(|_| self.menu_syntax_trigger_popup_state.owns_main_list())
+                .and_then(|snapshot| {
+                    self.menu_syntax_trigger_popup_state
+                        .selected_row_id
+                        .as_deref()
+                        .and_then(|id| snapshot.rows.iter().find(|row| row.id == id))
+                })
+                .map(|row| row.token.clone().unwrap_or_else(|| row.id.clone())),
             AppView::ArgPrompt { choices, .. }
             | AppView::MiniPrompt { choices, .. }
             | AppView::MicroPrompt { choices, .. } => {
