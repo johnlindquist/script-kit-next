@@ -280,6 +280,7 @@ impl NotesApp {
             }
             PortalKind::FileSearch
             | PortalKind::BrowserHistory
+            | PortalKind::BrowserTabs
             | PortalKind::DictationHistory
             | PortalKind::ScriptSearch
             | PortalKind::ScriptletSearch

@@ -348,6 +348,7 @@ fn portal_prefix_for_kind(kind: PortalKind) -> &'static str {
     match kind {
         PortalKind::FileSearch => "file",
         PortalKind::BrowserHistory => "browser-history",
+        PortalKind::BrowserTabs => "tabs",
         PortalKind::ClipboardHistory => "clipboard",
         PortalKind::DictationHistory => "dictation",
         PortalKind::ScriptSearch => "script",
@@ -362,6 +363,7 @@ fn portal_kind_from_prefix(prefix: &str) -> Option<PortalKind> {
     match prefix {
         "file" => Some(PortalKind::FileSearch),
         "browser-history" => Some(PortalKind::BrowserHistory),
+        "tabs" | "browser-tabs" => Some(PortalKind::BrowserTabs),
         "clipboard" => Some(PortalKind::ClipboardHistory),
         "dictation" => Some(PortalKind::DictationHistory),
         "script" => Some(PortalKind::ScriptSearch),
@@ -927,6 +929,27 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             ],
         },
         PortalDef {
+            kind: PortalKind::BrowserTabs,
+            id: "portal:browser_tabs",
+            label: "@tabs",
+            description: "Attach an open browser tab with title, URL, and browser metadata",
+            meta: "Portal",
+            match_terms: &[
+                "tabs",
+                "tab",
+                "browser-tabs",
+                "browser",
+                "open",
+                "url",
+                "chrome",
+                "safari",
+                "firefox",
+                "arc",
+                "brave",
+                "edge",
+            ],
+        },
+        PortalDef {
             kind: PortalKind::ClipboardHistory,
             id: "portal:clipboard_history",
             label: "@clipboard",
@@ -1026,6 +1049,7 @@ fn portal_kind_detail_label(kind: PortalKind) -> &'static str {
     match kind {
         PortalKind::FileSearch => "file search",
         PortalKind::BrowserHistory => "browser history",
+        PortalKind::BrowserTabs => "browser tabs",
         PortalKind::ClipboardHistory => "clipboard history",
         PortalKind::DictationHistory => "dictation history",
         PortalKind::ScriptSearch => "script search",
@@ -1070,6 +1094,7 @@ fn collect_inline_portal_items(
         PortalKind::BrowserHistory => {
             collect_browser_history_inline_items(&inline_query.query, items)
         }
+        PortalKind::BrowserTabs => collect_browser_tabs_inline_items(&inline_query.query, items),
         PortalKind::ClipboardHistory => collect_clipboard_inline_items(&inline_query.query, items),
         PortalKind::DictationHistory => collect_dictation_inline_items(&inline_query.query, items),
         PortalKind::ScriptSearch | PortalKind::ScriptletSearch | PortalKind::SkillSearch => {
@@ -1290,6 +1315,64 @@ fn collect_browser_history_inline_items_from_entries(
                         "profile": entry.profile,
                         "lastVisitedAtMs": entry.last_visited_at_ms,
                         "visitCount": entry.visit_count,
+                    })),
+                },
+            }),
+            score: (300 + matched.score.max(0) as u32).max(300),
+            label_highlight_indices: match_query_chars(&query_lower, &label).unwrap_or_default(),
+            meta_highlight_indices: Vec::new(),
+        });
+    }
+}
+
+fn collect_browser_tabs_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+    let Ok(tabs) = crate::browser_tabs::list_open_tabs() else {
+        return;
+    };
+    collect_browser_tabs_inline_items_from_tabs(query, tabs, items);
+}
+
+fn collect_browser_tabs_inline_items_from_tabs(
+    query: &str,
+    tabs: Vec<crate::browser_tabs::BrowserTabInfo>,
+    items: &mut Vec<ContextPickerItem>,
+) {
+    let query_lower = query.trim().to_lowercase();
+    let matches = crate::browser_tabs::fuzzy_search_browser_tabs(&tabs, query);
+    for (index, matched) in matches
+        .into_iter()
+        .take(INLINE_PORTAL_RESULTS_LIMIT)
+        .enumerate()
+    {
+        let tab = matched.tab;
+        let label = tab.display_title().to_string();
+        let stable_key = crate::browser_tabs::browser_tab_stable_key(&tab);
+        let host = crate::browser_tabs::browser_tab_host(&tab);
+        items.push(ContextPickerItem {
+            id: SharedString::from(format!("portal-result:browser-tabs:{stable_key}")),
+            label: SharedString::from(label.clone()),
+            description: SharedString::from(tab.url.to_string()),
+            meta: SharedString::from(format!("@tabs:{host}")),
+            kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
+                portal_kind: PortalKind::BrowserTabs,
+                attachment: InlinePortalAttachment::FocusedTarget {
+                    source: "BrowserTabs".to_string(),
+                    kind: "browser_tab".to_string(),
+                    semantic_id: crate::protocol::generate_semantic_id(
+                        "browser-tab",
+                        index,
+                        &stable_key,
+                    ),
+                    label: label.clone(),
+                    metadata: Some(serde_json::json!({
+                        "browserName": tab.browser_name,
+                        "browserBundleId": tab.browser_bundle_id,
+                        "windowIndex": tab.window_index,
+                        "tabIndex": tab.tab_index,
+                        "title": tab.title,
+                        "url": tab.url,
+                        "host": host,
+                        "stableKey": stable_key,
                     })),
                 },
             }),

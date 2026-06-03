@@ -72,6 +72,33 @@ impl ScriptListApp {
             .collect()
     }
 
+    fn browser_tab_attachment_part(
+        index: usize,
+        tab: &crate::browser_tabs::BrowserTabInfo,
+    ) -> crate::ai::message_parts::AiContextPart {
+        let title = tab.display_title().to_string();
+        let stable_key = crate::browser_tabs::browser_tab_stable_key(tab);
+        let host = crate::browser_tabs::browser_tab_host(tab);
+        let target = crate::ai::TabAiTargetContext {
+            source: "BrowserTabs".to_string(),
+            kind: "browser_tab".to_string(),
+            semantic_id: crate::protocol::generate_semantic_id("browser-tab", index, &stable_key),
+            label: title.clone(),
+            metadata: Some(serde_json::json!({
+                "browserName": tab.browser_name,
+                "browserBundleId": tab.browser_bundle_id,
+                "windowIndex": tab.window_index,
+                "tabIndex": tab.tab_index,
+                "title": tab.title,
+                "url": tab.url,
+                "host": host,
+                "stableKey": stable_key,
+            })),
+        };
+        let label = crate::ai::format_explicit_target_chip_label(&target);
+        crate::ai::message_parts::AiContextPart::FocusedTarget { target, label }
+    }
+
     fn browser_tabs_count_label(total_count: usize) -> String {
         let suffix = if total_count == 1 { "" } else { "s" };
         format!("{} tab{}", total_count, suffix)
@@ -190,19 +217,24 @@ impl ScriptListApp {
                     } else if is_key_enter(key) {
                         if let Some(tab) = filtered_tabs.get(*selected_index).map(|m| m.tab.clone())
                         {
-                            let activation_action =
-                                BrowserTabsActivationAction::ActivateSelectedTab;
-                            match crate::browser_tabs::activate_tab(&tab) {
-                                Ok(()) => this.hide_main_and_reset(cx),
-                                Err(error) => {
-                                    this.toast_manager.push(
-                                        components::toast::Toast::error(
-                                            activation_action.failure_message(error),
-                                            &this.theme,
-                                        )
-                                        .duration_ms(Some(TOAST_ERROR_MS)),
-                                    );
-                                    cx.notify();
+                            if this.is_in_attachment_portal() {
+                                let part = Self::browser_tab_attachment_part(*selected_index, &tab);
+                                this.close_attachment_portal_with_part(part, cx);
+                            } else {
+                                let activation_action =
+                                    BrowserTabsActivationAction::ActivateSelectedTab;
+                                match crate::browser_tabs::activate_tab(&tab) {
+                                    Ok(()) => this.hide_main_and_reset(cx),
+                                    Err(error) => {
+                                        this.toast_manager.push(
+                                            components::toast::Toast::error(
+                                                activation_action.failure_message(error),
+                                                &this.theme,
+                                            )
+                                            .duration_ms(Some(TOAST_ERROR_MS)),
+                                        );
+                                        cx.notify();
+                                    }
                                 }
                             }
                         }
@@ -286,20 +318,35 @@ impl ScriptListApp {
                                                 if let gpui::ClickEvent::Mouse(mouse_event) = event
                                                 {
                                                     if mouse_event.down.click_count == 2 {
-                                                        if crate::browser_tabs::activate_tab(&tab)
-                                                            .is_ok()
-                                                        {
-                                                            this.hide_main_and_reset(cx);
-                                                        } else {
-                                                            this.toast_manager.push(
-                                                                components::toast::Toast::error(
-                                                                    activation_action
-                                                                        .generic_failure_message(),
-                                                                    &this.theme,
-                                                                )
-                                                                .duration_ms(Some(TOAST_ERROR_MS)),
+                                                        if this.is_in_attachment_portal() {
+                                                            let part =
+                                                                Self::browser_tab_attachment_part(
+                                                                    ix, &tab,
+                                                                );
+                                                            this.close_attachment_portal_with_part(
+                                                                part, cx,
                                                             );
-                                                            cx.notify();
+                                                        } else {
+                                                            match crate::browser_tabs::activate_tab(
+                                                                &tab,
+                                                            ) {
+                                                                Ok(()) => {
+                                                                    this.hide_main_and_reset(cx)
+                                                                }
+                                                                Err(_) => {
+                                                                    this.toast_manager.push(
+                                                                        components::toast::Toast::error(
+                                                                            activation_action
+                                                                                .generic_failure_message(),
+                                                                            &this.theme,
+                                                                        )
+                                                                        .duration_ms(Some(
+                                                                            TOAST_ERROR_MS,
+                                                                        )),
+                                                                    );
+                                                                    cx.notify();
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -466,10 +513,17 @@ impl ScriptListApp {
             // Footer
             .when_some(
                 self.main_window_footer_slot(crate::components::render_simple_hint_strip(
-                    vec![
-                        gpui::SharedString::from("↵ Open Tab"),
-                        gpui::SharedString::from("Esc Back"),
-                    ],
+                    if self.is_in_attachment_portal() {
+                        vec![
+                            gpui::SharedString::from("↵ Attach"),
+                            gpui::SharedString::from("Esc Cancel"),
+                        ]
+                    } else {
+                        vec![
+                            gpui::SharedString::from("↵ Open Tab"),
+                            gpui::SharedString::from("Esc Back"),
+                        ]
+                    },
                     None,
                 )),
                 |d, footer| d.child(footer),

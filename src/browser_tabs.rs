@@ -92,6 +92,17 @@ impl BrowserTabInfo {
     }
 }
 
+pub(crate) fn browser_tab_stable_key(tab: &BrowserTabInfo) -> String {
+    format!(
+        "browser-tab/{}/{}/{}/{}",
+        tab.browser_bundle_id, tab.window_index, tab.tab_index, tab.url
+    )
+}
+
+pub(crate) fn browser_tab_host(tab: &BrowserTabInfo) -> String {
+    host_from_url(&tab.url).to_string()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrowserTabMatch {
     pub tab: BrowserTabInfo,
@@ -494,7 +505,7 @@ fn search_root_browser_tabs_internal(
         .map(|tab_match| {
             let domain = host_from_url(&tab_match.tab.url).to_string();
             RootBrowserTabSearchHit {
-                stable_key: root_browser_tab_stable_key(&tab_match.tab),
+                stable_key: browser_tab_stable_key(&tab_match.tab),
                 url: tab_match.tab.url.to_string(),
                 provider_label: tab_match.tab.browser_name.to_string(),
                 tab: tab_match.tab.clone(),
@@ -850,14 +861,6 @@ fn browser_tab_provider_for_bundle_id(
         "com.microsoft.edgemac" => Some(crate::config::BrowserTabProvider::Edge),
         _ => None,
     }
-}
-
-#[allow(dead_code)]
-fn root_browser_tab_stable_key(tab: &BrowserTabInfo) -> String {
-    format!(
-        "browser-tab/{}/{}/{}/{}",
-        tab.browser_bundle_id, tab.window_index, tab.tab_index, tab.url
-    )
 }
 
 fn list_tabs_for_browser(browser: &SupportedBrowser) -> Result<Vec<BrowserTabInfo>> {

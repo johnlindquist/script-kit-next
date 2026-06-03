@@ -19,6 +19,8 @@ pub enum PortalKind {
     FileSearch,
     /// Open the recent browser history browser.
     BrowserHistory,
+    /// Open the current browser tabs browser.
+    BrowserTabs,
     /// Open the visual clipboard history browser.
     ClipboardHistory,
     /// Open the saved dictation history browser.

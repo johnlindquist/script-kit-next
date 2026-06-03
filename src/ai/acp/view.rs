@@ -849,6 +849,7 @@ impl AcpChatView {
             PortalKind::AcpHistory,
             PortalKind::FileSearch,
             PortalKind::BrowserHistory,
+            PortalKind::BrowserTabs,
             PortalKind::ClipboardHistory,
             PortalKind::DictationHistory,
             PortalKind::ScriptSearch,
@@ -10568,6 +10569,7 @@ impl AcpChatView {
                     crate::ai::window::context_picker::types::PortalKind::BrowserHistory => {
                         "browser-history"
                     }
+                    crate::ai::window::context_picker::types::PortalKind::BrowserTabs => "tabs",
                     crate::ai::window::context_picker::types::PortalKind::ClipboardHistory => {
                         "clipboard"
                     }

@@ -309,6 +309,40 @@ impl ScriptListApp {
                     cx,
                 );
             }
+            PortalKind::BrowserTabs => {
+                cx.spawn(async move |this, cx| {
+                    let result = crate::browser_tabs::list_open_tabs();
+                    this.update(cx, |this, cx| {
+                        match result {
+                            Ok(tabs) => {
+                                this.cached_browser_tabs = tabs;
+                            }
+                            Err(error) => {
+                                tracing::warn!(
+                                    target: "script_kit::acp",
+                                    event = "browser_tabs_portal_load_failed",
+                                    error = %error,
+                                );
+                                this.cached_browser_tabs.clear();
+                            }
+                        }
+                        cx.notify();
+                    })
+                    .ok();
+                })
+                .detach();
+
+                self.open_builtin_filterable_view_with_filter(
+                    AppView::BrowserTabsView {
+                        filter: portal_query.clone(),
+                        selected_index: 0,
+                    },
+                    &portal_query,
+                    "Search open browser tabs...",
+                    true,
+                    cx,
+                );
+            }
             PortalKind::ClipboardHistory => {
                 self.cached_clipboard_entries = crate::clipboard_history::get_cached_entries(100);
                 self.open_builtin_filterable_view_with_filter(

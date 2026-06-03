@@ -191,6 +191,7 @@ fn context_picker_empty_query_includes_all_portals() {
     for expected in [
         "@file",
         "@browser-history",
+        "@tabs",
         "@clipboard",
         "@script",
         "@scriptlet",
@@ -237,6 +238,8 @@ fn every_portal_colon_query_enters_inline_search_mode_with_fallback() {
     for (query, fallback_id) in [
         ("file:", "portal-full:file"),
         ("browser-history:", "portal-full:browser-history"),
+        ("tabs:", "portal-full:tabs"),
+        ("browser-tabs:", "portal-full:tabs"),
         ("clipboard:", "portal-full:clipboard"),
         ("dictation:", "portal-full:dictation"),
         ("script:", "portal-full:script"),
@@ -318,6 +321,90 @@ fn inline_script_list_portal_results_attach_like_full_portal_selection() {
             ..
         })
     ));
+}
+
+#[test]
+fn context_picker_browser_tabs_aliases_surface_portal_and_prefix() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "tabs");
+    let tabs_row = items
+        .iter()
+        .find(|item| item.label.as_ref() == "@tabs")
+        .expect("@tabs portal prefix should match tabs query");
+    match &tabs_row.kind {
+        ContextPickerItemKind::PortalPrefix(payload) => {
+            assert_eq!(payload.portal_kind, PortalKind::BrowserTabs);
+            assert_eq!(payload.prefix, "tabs");
+        }
+        other => panic!("expected BrowserTabs PortalPrefix, got {other:?}"),
+    }
+
+    for query in ["tabs:", "browser-tabs:"] {
+        let items = build_picker_items(ContextPickerTrigger::Mention, query);
+        assert!(
+            items.iter().any(|item| {
+                item.id.as_ref() == "portal-full:tabs"
+                    && matches!(
+                        item.kind,
+                        ContextPickerItemKind::Portal(PortalKind::BrowserTabs)
+                    )
+            }),
+            "{query:?} should enter browser tab inline mode with a full-portal fallback"
+        );
+    }
+}
+
+#[test]
+fn context_picker_browser_tabs_inline_result_carries_full_focused_target_metadata() {
+    let mut items = Vec::new();
+    super::collect_browser_tabs_inline_items_from_tabs(
+        "openai",
+        vec![crate::browser_tabs::BrowserTabInfo {
+            browser_name: "Google Chrome".to_string().into(),
+            browser_bundle_id: "com.google.Chrome".to_string().into(),
+            window_index: 1,
+            tab_index: 2,
+            title: "OpenAI Docs".to_string().into(),
+            url: "https://example.test/openai-docs".to_string().into(),
+        }],
+        &mut items,
+    );
+
+    let item = items
+        .iter()
+        .find(|item| item.label.as_ref() == "OpenAI Docs")
+        .expect("matching browser tab should render inline result row");
+    match &item.kind {
+        ContextPickerItemKind::PortalResult(payload) => {
+            assert_eq!(payload.portal_kind, PortalKind::BrowserTabs);
+            match &payload.attachment {
+                super::types::InlinePortalAttachment::FocusedTarget {
+                    source,
+                    kind,
+                    semantic_id,
+                    label,
+                    metadata,
+                } => {
+                    assert_eq!(source, "BrowserTabs");
+                    assert_eq!(kind, "browser_tab");
+                    assert!(semantic_id.starts_with("browser-tab:"));
+                    assert_eq!(label, "OpenAI Docs");
+                    let metadata = metadata.as_ref().expect("browser tab metadata");
+                    assert_eq!(metadata["browserName"], "Google Chrome");
+                    assert_eq!(metadata["browserBundleId"], "com.google.Chrome");
+                    assert_eq!(metadata["windowIndex"], 1);
+                    assert_eq!(metadata["tabIndex"], 2);
+                    assert_eq!(metadata["title"], "OpenAI Docs");
+                    assert_eq!(metadata["url"], "https://example.test/openai-docs");
+                    assert_eq!(metadata["host"], "example.test");
+                    assert!(metadata["stableKey"]
+                        .as_str()
+                        .is_some_and(|stable_key| stable_key.contains("com.google.Chrome")));
+                }
+                other => panic!("expected FocusedTarget attachment, got {other:?}"),
+            }
+        }
+        other => panic!("expected BrowserTabs PortalResult, got {other:?}"),
+    }
 }
 
 #[test]

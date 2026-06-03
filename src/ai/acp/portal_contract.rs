@@ -73,6 +73,7 @@ pub(crate) fn portal_kind_detail_label(kind: PortalKind) -> &'static str {
     match kind {
         PortalKind::FileSearch => "file portal",
         PortalKind::BrowserHistory => "browser history portal",
+        PortalKind::BrowserTabs => "browser tabs portal",
         PortalKind::ClipboardHistory => "clipboard portal",
         PortalKind::DictationHistory => "dictation portal",
         PortalKind::ScriptSearch => "script portal",
@@ -194,6 +195,7 @@ pub(crate) fn portal_target_from_part(part: &AiContextPart) -> Option<(PortalKin
             "scriptlet" => Some((PortalKind::ScriptletSearch, target.label.clone())),
             "note" => Some((PortalKind::NotesBrowse, target.label.clone())),
             "browser_history_entry" => Some((PortalKind::BrowserHistory, target.label.clone())),
+            "browser_tab" => Some((PortalKind::BrowserTabs, target.label.clone())),
             "clipboard_entry" => Some((PortalKind::ClipboardHistory, target.label.clone())),
             "skill" => Some((PortalKind::SkillSearch, target.label.clone())),
             "file" | "directory" => Some((
@@ -224,6 +226,7 @@ pub(crate) fn portal_target_from_inline_token(token: &str) -> Option<(PortalKind
 
     match token {
         "@browser-history" => return Some((PortalKind::BrowserHistory, String::new())),
+        "@tabs" | "@browser-tabs" => return Some((PortalKind::BrowserTabs, String::new())),
         "@clipboard" => return Some((PortalKind::ClipboardHistory, String::new())),
         "@dictation" => return Some((PortalKind::DictationHistory, String::new())),
         "@recent-scripts" => return Some((PortalKind::ScriptSearch, String::new())),
@@ -234,6 +237,7 @@ pub(crate) fn portal_target_from_inline_token(token: &str) -> Option<(PortalKind
     let value = value.trim().to_string();
     let kind = match prefix.as_str() {
         "browser-history" => PortalKind::BrowserHistory,
+        "tabs" | "browser-tabs" => PortalKind::BrowserTabs,
         "dictation" => PortalKind::DictationHistory,
         "note" => PortalKind::NotesBrowse,
         "script" => PortalKind::ScriptSearch,

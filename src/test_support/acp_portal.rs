@@ -13,6 +13,7 @@ fn parse_kind(kind: &str) -> Option<PortalKind> {
     match kind {
         "file_search" => Some(PortalKind::FileSearch),
         "browser_history" => Some(PortalKind::BrowserHistory),
+        "browser_tabs" => Some(PortalKind::BrowserTabs),
         "clipboard_history" => Some(PortalKind::ClipboardHistory),
         "dictation_history" => Some(PortalKind::DictationHistory),
         "script_search" => Some(PortalKind::ScriptSearch),
@@ -28,6 +29,7 @@ fn format_kind(kind: PortalKind) -> String {
     match kind {
         PortalKind::FileSearch => "file_search",
         PortalKind::BrowserHistory => "browser_history",
+        PortalKind::BrowserTabs => "browser_tabs",
         PortalKind::ClipboardHistory => "clipboard_history",
         PortalKind::DictationHistory => "dictation_history",
         PortalKind::ScriptSearch => "script_search",
