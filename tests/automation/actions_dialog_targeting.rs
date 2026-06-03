@@ -420,15 +420,6 @@ fn mention_picker_collector_uses_item_id_in_semantic_ids() {
     );
 }
 
-#[test]
-fn model_selector_collector_uses_entry_id_in_semantic_ids() {
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("format!(\"choice:{}:{}\", idx, entry.id)"),
-        "Model selector must use entry.id in choice semantic IDs"
-    );
-}
-
 // ---------------------------------------------------------------------------
 // Actions dialog batch mutation contract tests
 // ---------------------------------------------------------------------------

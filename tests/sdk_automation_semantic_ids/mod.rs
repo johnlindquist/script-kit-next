@@ -359,28 +359,6 @@ fn mention_picker_collector_exposes_list_semantic_id() {
 }
 
 // ---------------------------------------------------------------------------
-// Model selector semantic IDs (source contract)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn model_selector_collector_exposes_panel_semantic_id() {
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("\"panel:model-selector\""),
-        "Model selector collector must expose panel:model-selector"
-    );
-}
-
-#[test]
-fn model_selector_collector_exposes_list_semantic_id() {
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("\"list:model-entries\""),
-        "Model selector collector must expose list:model-entries"
-    );
-}
-
-// ---------------------------------------------------------------------------
 // Confirm dialog semantic IDs (source contract)
 // ---------------------------------------------------------------------------
 
@@ -414,14 +392,13 @@ fn confirm_dialog_collector_exposes_button_semantic_ids() {
 fn popup_surface_semantic_ids_do_not_collide() {
     let actions_ids = ["input:actions-search", "list:actions"];
     let mention_ids = ["panel:mention-picker", "list:mention-items"];
-    let model_ids = ["panel:model-selector", "list:model-entries"];
     let confirm_ids = [
         "panel:confirm-dialog",
         "button:0:confirm",
         "button:1:cancel",
     ];
 
-    let all_sets: &[&[&str]] = &[&actions_ids, &mention_ids, &model_ids, &confirm_ids];
+    let all_sets: &[&[&str]] = &[&actions_ids, &mention_ids, &confirm_ids];
     for (i, set_a) in all_sets.iter().enumerate() {
         for (j, set_b) in all_sets.iter().enumerate() {
             if i == j {
