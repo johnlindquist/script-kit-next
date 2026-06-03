@@ -187,6 +187,8 @@ impl ScriptListApp {
                     return;
                 }
 
+                let is_attachment_portal = this.is_in_attachment_portal();
+
                 if let AppView::BrowserTabsView {
                     filter,
                     selected_index,
@@ -217,7 +219,7 @@ impl ScriptListApp {
                     } else if is_key_enter(key) {
                         if let Some(tab) = filtered_tabs.get(*selected_index).map(|m| m.tab.clone())
                         {
-                            if this.is_in_attachment_portal() {
+                            if is_attachment_portal {
                                 let part = Self::browser_tab_attachment_part(*selected_index, &tab);
                                 this.close_attachment_portal_with_part(part, cx);
                             } else {
