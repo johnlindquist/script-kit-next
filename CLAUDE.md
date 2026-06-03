@@ -1,4 +1,4 @@
-For a map of main UI surfaces to code implementation, see [GLOSSARY.md](file:///Users/johnlindquist/dev/script-kit-gpui/GLOSSARY.md).
+For a map of main UI surfaces to code implementation, see [GLOSSARY.md]
 
 # Before Starting Work
 
@@ -9,33 +9,53 @@ For a map of main UI surfaces to code implementation, see [GLOSSARY.md](file:///
 
 ## Oracle / Packx Bundle Context
 
-For Oracle review or `oracle-packx` work in this repository, include the repo process context in the bundle or prompt unless the user explicitly excludes it: `AGENTS.md`/`CLAUDE.md`, the owning `.agents/skills/<skill>/SKILL.md`, and relevant source, tests, generated contracts, and verification notes.
+For Oracle review or `oracle-packx` work in this repository, include the repo process context in the bundle or prompt unless the user explicitly excludes it: `AGENTS.md`, the owning `.agents/skills/<skill>/SKILL.md`, and relevant source, tests, generated contracts, and verification notes.
 
-# Codex Repo Skills
+If a `packx` preview with include globs unexpectedly matches `0` files in this repository, rebuild the bundle from an explicit path list instead of widening blindly. A reliable workaround is:
 
-Use the repo-local Codex skills in `.agents/skills/` as the primary task routing map. These are the canonical skill names for this repository.
+```bash
+rg --files <scope> | rg '<owners-or-patterns>' > /tmp/script-kit-gpui-packx-files.txt
+xargs packx --preview --no-interactive -x "**/CLAUDE.md" < /tmp/script-kit-gpui-packx-files.txt
+xargs packx --limit 900k --strip-comments --minify -f markdown --no-interactive --stdout -x "**/CLAUDE.md" < /tmp/script-kit-gpui-packx-files.txt > ~/.oracle/bundles/<slug>.txt
+```
 
-Codex may load a skill automatically when the task matches the skill description. For investigation or UI proof work, explicitly name the skill in the prompt, for example `$script-kit-devtools` or `$agy-script-kit-devtools`.
+Use this when directory/include-glob matching undercounts relevant files; keep `CLAUDE.md` excluded and verify the preview count plus final non-empty bundle before consulting Oracle.
 
-For complex investigation, pair `script-kit-devtools` with the read-only subagent brief in `.agents/subagents/protocol-automation-reader.md` when you need protocol/state receipts before editing.
+## UI Consistency and Shared Component Contract
 
-## Skill and Subagent Map
+When touching app UI, treat shared components and theme/chrome tokens as the source of truth. Do not build one-off UI when an existing component, shell, list item, input, footer, popup, or token can be reused or extended.
 
-| Skill | Paired subagent | Primary ownership |
-| --- | --- | --- |
-| `script-kit-devtools` | `protocol-automation-reader` | Agent-facing DevTools primitives for inspecting, controlling, measuring, debugging, benchmarking, and proving real app UI behavior |
-| `agy-script-kit-devtools` | — | Fast agy-driven investigations using existing script-kit-devtools primitives and compact receipts |
+Before adding or changing UI:
 
-## Subagent Usage
+1. Start with `GLOSSARY.md` to identify the owning surface and nearby implementation files.
+2. Inspect the current surface, related tests, and the shared component entry points before editing.
+3. Check `src/components/mod.rs` and the relevant component modules before creating any new UI helper.
+4. Prefer extending the shared component library over adding surface-local render helpers.
+5. If a new reusable primitive is needed, add it under `src/components/**` or the appropriate theme/chrome/design layer and use it from the surface. Do not bury reusable UI in one prompt, built-in, ACP, or main-window renderer.
 
-Use `protocol-automation-reader` when the task spans multiple modules or needs evidence from stdin JSON protocol receipts before editing. The subagent must stay read-only and return relevant files/symbols, invariants, and the smallest verification command or devtools proof.
+Shared UI entry points to check first:
 
-Do not wait for a subagent when the task is small and `$script-kit-devtools` or `$agy-script-kit-devtools` already gives enough context. Subagents are not automatic; spawn them only when the user explicitly asks for subagents/parallel delegation or when the task has broad, noisy exploration that benefits from a read-only sidecar.
+- Inputs/search/menu fields: `src/components/text_input.rs`, `src/components/text_input/**`, `src/components/inline_prompt_input.rs`, `src/components/inline_dropdown/**`, `src/components/inline_picker.rs`, and `src/components/inline_popup_window.rs`.
+- List rows and sections: `src/components/unified_list_item/**`; preserve existing `crate::list_item` usage where that is the current surface contract, but do not invent a third row system.
+- Prompt shells and prompt chrome: `src/components/prompt_layout_shell.rs`, `src/components/prompt_container.rs`, `src/components/prompt_footer.rs`, and `src/components/minimal_prompt_shell.rs`.
+- Footer and hint strips: `src/components/hint_strip.rs`, `src/components/footer_chrome.rs`, `src/footer_popup.rs`, and native footer handling in `src/app_impl/ui_window.rs`.
+- Main-window chrome/layout: `src/components/main_view_chrome.rs`, `src/main_sections/**`, `src/render_script_list/**`, and `src/app_layout/**`.
+- Empty/info/non-list states: `src/components/info_state.rs` and `src/components/non_list_state.rs`.
+- Forms/buttons/toasts/shortcuts: `src/components/form_fields/**`, `src/components/button.rs`, `src/components/toast/**`, and `src/components/shortcut_recorder.rs`.
 
-## Skill Selection Defaults
+Theme and visual values must be tokenized:
 
-- Unknown user-reported UX/UI bugs, screenshots, or flexible app investigation: `$agy-script-kit-devtools` for a fast pass, then `$script-kit-devtools` for deeper inspect/act proof.
-- Stdin protocol, automation receipts, `getState`, `getElements`, or `waitFor` work: `$script-kit-devtools` with `protocol-automation-reader` when the investigation is broad.
+- Resolve colors and chrome surfaces through `crate::theme`, especially `AppChromeColors::from_theme`, `PromptColors`, theme opacity, and the design token layers.
+- Use chrome/layout constants from `src/ui/chrome/tokens.rs`, `src/theme/**`, `src/designs/core/**`, and `src/designs/traits/**`.
+- Do not hardcode new colors, opacity values, spacing, typography, border radii, borders, popup surfaces, vibrancy behavior, or chrome layer semantics in surface renderers when an existing token/helper exists.
+- If a visual value needs to become standard, add or extend a token/helper in the appropriate shared layer so theme changes propagate automatically.
+
+Cross-surface behavior must stay predictable:
+
+- Main window, prompt/make windows, built-ins, and Agent Chat/ACP should share inputs, menu/search behavior, list rows, prompt shells, hint strips, footer affordances, popup/dropdown mechanics, and chrome tokens wherever possible.
+- Actions UI should feel like the main list: same row language, same search treatment, same shortcut/keycap conventions, and no extra local chrome unless the owning contract requires it.
+- Expanded/preview surfaces may differ in layout, but their list side, footer, and chrome should still use the shared anatomy and tokens.
+- Any intentional divergence must be documented in the code or PR summary with the owning surface, the reused alternatives considered, and why the shared component could not fit.
 
 # Agent Cargo Wrapper
 
