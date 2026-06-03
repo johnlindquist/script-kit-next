@@ -616,6 +616,9 @@ fn act_cli_performs_safe_protocol_first_user_actions_with_pre_post_receipts() {
         "menu-syntax-trigger-accept",
         "isScopedMenuSyntaxTriggerAccept",
         "menuSyntaxTriggerPicker",
+        "menu-syntax-object-selector-accept",
+        "isScopedMenuSyntaxObjectSelectorAccept",
+        "menuSyntaxObjectSelector",
         "nativeEscalation: false",
     ] {
         assert!(

@@ -722,14 +722,15 @@ impl ScriptListApp {
 
             let capture_composer_owns_input =
                 self.menu_syntax_capture_form_owns_input_for(&new_text);
-            if capture_composer_owns_input {
+            let capture_form_field_owns_input =
+                self.menu_syntax_form_input_active && capture_composer_owns_input;
+            if capture_form_field_owns_input {
                 self.menu_syntax_object_selector_state = Default::default();
                 self.menu_syntax_trigger_popup_state = Default::default();
-                crate::menu_syntax_object_selector_popup_window::close_menu_syntax_object_selector_popup_window(cx);
             } else {
                 self.run_menu_syntax_object_selector_state_machine(&new_text, window, cx);
             }
-            let object_selector_owns_input = !capture_composer_owns_input
+            let object_selector_owns_input = !capture_form_field_owns_input
                 && self.menu_syntax_object_selector_state.snapshot.is_some();
 
             let picker_ctx = self.menu_syntax_trigger_picker_context(&new_text);
@@ -738,7 +739,7 @@ impl ScriptListApp {
                 // exact filter. Represent that as NoChange so the rest of
                 // the block runs uniformly.
                 crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange
-            } else if capture_composer_owns_input {
+            } else if capture_form_field_owns_input {
                 crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange
             } else if object_selector_owns_input {
                 if self.menu_syntax_trigger_popup_state.snapshot.is_some() {

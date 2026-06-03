@@ -262,16 +262,17 @@ impl ScriptListApp {
             }
             handler_form_owns_input = self.menu_syntax_capture_form_owns_input_for(&text);
             self.sync_menu_syntax_form_inputs_from_filter(window, cx);
-            if handler_form_owns_input {
+            let handler_form_field_owns_input =
+                self.menu_syntax_form_input_active && handler_form_owns_input;
+            if handler_form_field_owns_input {
                 self.menu_syntax_object_selector_state = Default::default();
                 self.menu_syntax_trigger_popup_state = Default::default();
-                crate::menu_syntax_object_selector_popup_window::close_menu_syntax_object_selector_popup_window(cx);
-                crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
                 self.sync_menu_syntax_form_inputs_from_filter(window, cx);
             } else {
                 self.run_menu_syntax_object_selector_state_machine(&text, window, cx);
             }
-            if !handler_form_owns_input && self.menu_syntax_object_selector_state.snapshot.is_none()
+            if !handler_form_field_owns_input
+                && self.menu_syntax_object_selector_state.snapshot.is_none()
             {
                 self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);
             }

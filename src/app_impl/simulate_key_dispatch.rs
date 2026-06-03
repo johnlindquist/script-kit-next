@@ -410,7 +410,7 @@ impl ScriptListApp {
                             view.move_selection_down(ctx);
                         }
                         "enter" => {
-                            if crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open() {
+                            if view.menu_syntax_object_selector_owns_main_keyboard() {
                                 if view.apply_menu_syntax_object_selector_intent(
                                     crate::menu_syntax::InlinePickerKeyIntent::Accept,
                                     window,
@@ -439,7 +439,7 @@ impl ScriptListApp {
                         }
                         "escape" => {
                             logging::log("STDIN", "SimulateKey: Escape - close menu-syntax popup, clear filter, go back, or hide");
-                            if crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open() {
+                            if view.menu_syntax_object_selector_owns_main_keyboard() {
                                 if view.apply_menu_syntax_object_selector_intent(
                                     crate::menu_syntax::InlinePickerKeyIntent::Close,
                                     window,

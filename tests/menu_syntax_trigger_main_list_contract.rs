@@ -103,11 +103,9 @@ fn active_footer_does_not_treat_trigger_picker_as_popup() {
 
     assert!(
         !footer_block.contains("menu_syntax_trigger_popup_state")
-            && !footer_block.contains("is_menu_syntax_trigger_popup_window_open"),
+            && !footer_block.contains("is_menu_syntax_trigger_popup_window_open")
+            && !footer_block.contains("menu_syntax_object_selector_state")
+            && !footer_block.contains("is_menu_syntax_object_selector_popup_window_open"),
         "main-owned trigger picker must not make active footer owner popup"
-    );
-    assert!(
-        footer_block.contains("menu_syntax_object_selector_state"),
-        "object selector popup ownership remains out of scope for this slice"
     );
 }

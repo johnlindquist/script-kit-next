@@ -567,17 +567,13 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
 
     for path in ["src/app_impl/startup.rs", "src/app_impl/startup_new_tab.rs"] {
         let source = read(path);
-        let form = source
-            .find("menu_syntax_capture_form_owns_input()")
-            .unwrap_or_else(|| {
-                panic!("{path}: physical Tab path must check handler form ownership")
-            });
-        let ai = source
-            .find("try_route_plain_tab_to_acp_context_capture")
-            .unwrap_or_else(|| panic!("{path}: physical Tab path must still contain Tab AI route"));
         assert!(
-            form < ai,
-            "{path}: physical Tab must move handler form focus before Tab AI can claim the key"
+            source.contains("menu_syntax_capture_form_owns_input()"),
+            "{path}: physical Tab path must check handler form ownership"
+        );
+        assert!(
+            !source.contains("try_route_plain_tab_to_acp_context_capture"),
+            "{path}: physical Tab must not keep a Tab-to-Agent-Chat route"
         );
     }
 
@@ -588,19 +584,8 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
     ] {
         let source = read(path);
         assert!(
-            source.contains("handle_menu_syntax_form_key_input")
-                && source.contains("SimulateKey: menu-syntax form text input"),
-            "{path}: simulateKey printable/control keys must route through handler form key handling"
-        );
-        let form = source
-            .find("menu_syntax_capture_form_owns_input()")
-            .unwrap_or_else(|| panic!("{path} must check handler form ownership"));
-        let ai = source
-            .find("try_route_plain_tab_to_acp_context_capture")
-            .unwrap_or_else(|| panic!("{path} must still contain Tab AI route"));
-        assert!(
-            form < ai,
-            "{path}: simulateKey Tab must move handler form focus before Tab AI can claim the key"
+            !source.contains("try_route_plain_tab_to_acp_context_capture"),
+            "{path}: simulateKey Tab must not keep a Tab-to-Agent-Chat route"
         );
     }
 }
@@ -612,14 +597,16 @@ fn committed_handler_form_ownership_suppresses_global_popups_on_all_filter_paths
         immediate.contains("let mut handler_form_owns_input = false;")
             && immediate
                 .contains("handler_form_owns_input = self.menu_syntax_capture_form_owns_input_for(&text);")
-            && immediate.contains("if handler_form_owns_input")
+            && immediate.contains("let handler_form_field_owns_input =")
+            && immediate.contains("self.menu_syntax_form_input_active && handler_form_owns_input")
+            && immediate.contains("if handler_form_field_owns_input")
             && immediate.contains("self.menu_syntax_object_selector_state = Default::default();")
             && immediate.contains("self.menu_syntax_trigger_popup_state = Default::default();")
-            && immediate.contains("close_menu_syntax_object_selector_popup_window(cx)")
-            && immediate.contains("close_menu_syntax_trigger_popup_window(cx)")
-            && immediate.contains("!handler_form_owns_input && self.menu_syntax_object_selector_state.snapshot.is_none()")
-            && immediate.contains("&& !handler_form_owns_input"),
-        "programmatic setFilter/setInput must build handler form state and suppress trigger/object popups before they can own the main list"
+            && !immediate.contains("close_menu_syntax_object_selector_popup_window(cx)")
+            && immediate.contains("if !handler_form_field_owns_input")
+            && immediate.contains("self.menu_syntax_object_selector_state.snapshot.is_none()")
+            && immediate.contains("self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);"),
+        "programmatic setFilter/setInput must suppress trigger/object popups only while a focused handler-form field owns input"
     );
 
     let input_change = read("src/app_impl/filter_input_change.rs");
@@ -637,16 +624,21 @@ fn committed_handler_form_ownership_suppresses_global_popups_on_all_filter_paths
         "typed input must decide handler-form ownership before object/trigger popup machines can claim the surface"
     );
     assert!(
-        input_change.contains("} else if capture_composer_owns_input {\n                crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange")
-            && input_change.contains("!capture_composer_owns_input\n                && self.menu_syntax_object_selector_state.snapshot.is_some()"),
-        "committed handler forms must prevent stale popup transitions from reopening while form mode owns the list"
+        input_change.contains("let capture_form_field_owns_input =")
+            && input_change
+                .contains("self.menu_syntax_form_input_active && capture_composer_owns_input")
+            && input_change.contains("} else if capture_form_field_owns_input {\n                crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange")
+            && input_change.contains("!capture_form_field_owns_input\n                && self.menu_syntax_object_selector_state.snapshot.is_some()"),
+        "focused handler-form fields must prevent stale popup transitions while plain object-ref segments can own the main list"
     );
 
     let render = read("src/render_script_list/mod.rs");
     assert!(
         render.contains("self.menu_syntax_capture_form_owns_input_for(&filter_text_for_render)")
             && render.contains("let popup_owns_main_list = !handler_form_owns_input_for_render")
-            && render.contains("let menu_syntax_owns_main_list = handler_form_owns_input_for_render"),
+            && render.contains("let menu_syntax_owns_main_list = !spine_owns_main_list_for_render")
+            && render.contains("capture_composer_owns_main_list")
+            && render.contains("|| popup_owns_main_list"),
         "render ownership must use the app-level form owner and give handler forms precedence over stale popups"
     );
 }
@@ -806,7 +798,9 @@ fn handler_form_autocomplete_is_state_first_and_trigger_popup_owned() {
     assert!(
         object_selector.contains("self.menu_syntax_form_input_active")
             && object_selector.contains("self.menu_syntax_capture_form_owns_input()")
-            && object_selector.contains("close_menu_syntax_object_selector_popup_window(cx)")
+            && !object_selector.contains("close_menu_syntax_object_selector_popup_window(cx)")
+            && object_selector
+                .contains("self.menu_syntax_object_selector_state = Default::default();")
             && object_selector.contains("run_menu_syntax_object_selector_state_machine"),
         "handler form @ autocomplete must suppress the global object selector state machine"
     );

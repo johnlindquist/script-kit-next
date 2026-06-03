@@ -189,7 +189,7 @@
                             // plain-Tab routing branch so menu-syntax keyboard stays
                             // consistent with the ACP slash / @ pickers.
                             if matches!(this.current_view, AppView::ScriptList)
-                                && crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open()
+                                && this.menu_syntax_object_selector_owns_main_keyboard()
                             {
                                 let intent = if has_shift {
                                     crate::menu_syntax::InlinePickerKeyIntent::MoveUp
@@ -347,7 +347,7 @@
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
                             if matches!(this.current_view, AppView::ScriptList)
-                                && crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open()
+                                && this.menu_syntax_object_selector_owns_main_keyboard()
                             {
                                 if this.apply_menu_syntax_object_selector_intent(
                                     crate::menu_syntax::InlinePickerKeyIntent::Accept,

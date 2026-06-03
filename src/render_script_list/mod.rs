@@ -680,6 +680,68 @@ fn render_spine_projection_row(
 }
 
 impl ScriptListApp {
+    fn render_menu_syntax_object_selector_main_list(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let Some(snapshot) = self.menu_syntax_object_selector_state.snapshot.as_ref() else {
+            return div().w_full().h_full().into_any_element();
+        };
+        let colors = ListItemColors::from_theme(&self.theme);
+        let selected_id = self
+            .menu_syntax_object_selector_state
+            .selected_row_id
+            .as_deref();
+        let main_menu_theme = self.current_main_menu_theme;
+
+        div()
+            .w_full()
+            .h_full()
+            .flex()
+            .flex_col()
+            .children(snapshot.rows.iter().enumerate().map(|(ix, row)| {
+                let row_id = row.id.clone();
+                let is_selected = selected_id == Some(row.id.as_str());
+                let click_handler = cx.listener(
+                    move |this: &mut ScriptListApp, _event: &gpui::ClickEvent, window, cx| {
+                        this.set_menu_syntax_object_selector_selection(row_id.clone());
+                        if this
+                            .menu_syntax_object_selector_state
+                            .snapshot
+                            .as_ref()
+                            .and_then(|snapshot| {
+                                snapshot.rows.iter().find(|row| row.id == row_id)
+                            })
+                            .is_some_and(|row| row.enabled)
+                        {
+                            this.accept_menu_syntax_object_selector_row(&row_id, Some(window), cx);
+                        } else {
+                            cx.notify();
+                        }
+                    },
+                );
+
+                let item = crate::list_item::ListItem::new(row.title.clone(), colors)
+                    .index(ix)
+                    .selected(is_selected)
+                    .main_menu_theme(main_menu_theme)
+                    .semantic_id(row.id.clone())
+                    .description_opt(row.subtitle.clone())
+                    .source_hint_opt((!row.badges.is_empty()).then(|| row.badges.join(" ")));
+
+                div()
+                    .id(ElementId::NamedInteger(
+                        "menu-syntax-object-selector-row".into(),
+                        ix as u64,
+                    ))
+                    .when(row.enabled, |d| d.on_click(click_handler))
+                    .when(!row.enabled, |d| d.opacity(0.55))
+                    .child(item)
+                    .into_any_element()
+            }))
+            .into_any_element()
+    }
+
     fn main_view_state_icon_name_for_script_list(&self, filter_text: &str) -> &'static str {
         let trimmed = filter_text.trim_start();
         if trimmed.starts_with('~') {
@@ -878,7 +940,11 @@ impl ScriptListApp {
             });
 
         let active_filter_empty_copy = "There are no search results with this filter applied.";
-        let list_element: AnyElement = if menu_syntax_owns_main_list {
+        let list_element: AnyElement = if self.menu_syntax_object_selector_state.owns_main_list()
+            && !handler_form_owns_input_for_render
+        {
+            self.render_menu_syntax_object_selector_main_list(cx)
+        } else if menu_syntax_owns_main_list {
             self.menu_syntax_main_hint_snapshot(&filter_text_for_render, false)
                 .map(|hint| {
                     render_menu_syntax_main_hint(
@@ -1681,7 +1747,7 @@ impl ScriptListApp {
                         //   2. filter non-empty → clear filter.
                         //   3. launcher-origin surface → go back to the main launcher.
                         //   4. filter empty → hide main window.
-                        if crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open() {
+                        if this.menu_syntax_object_selector_owns_main_keyboard() {
                             if this.apply_menu_syntax_object_selector_intent(
                                 crate::menu_syntax::InlinePickerKeyIntent::Close,
                                 window,

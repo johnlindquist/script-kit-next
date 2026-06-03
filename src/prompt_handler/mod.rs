@@ -690,8 +690,7 @@ fn resolve_automation_read_target(
             let any_open = crate::ai::acp::picker_popup::is_mention_popup_window_open()
                 || crate::ai::acp::model_selector_popup::is_model_selector_popup_window_open()
                 || crate::ai::acp::history_popup::is_history_popup_window_open()
-                || crate::confirm::is_confirm_popup_window_open()
-                || crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open();
+                || crate::confirm::is_confirm_popup_window_open();
             if any_open {
                 tracing::info!(
                     target: "script_kit::automation",
@@ -3368,6 +3367,32 @@ impl ScriptListApp {
                 ) = match &self.current_view {
                     AppView::ScriptList => {
                         if let Some(snapshot) = self
+                            .menu_syntax_object_selector_state
+                            .snapshot
+                            .as_ref()
+                            .filter(|_| self.menu_syntax_object_selector_state.owns_main_list())
+                        {
+                            let selected_row_index = self
+                                .menu_syntax_object_selector_state
+                                .selected_row_id
+                                .as_deref()
+                                .and_then(|id| snapshot.rows.iter().position(|row| row.id == id));
+                            let selected_value = selected_row_index.and_then(|index| {
+                                snapshot.rows.get(index).map(|row| {
+                                    row.token.clone().unwrap_or_else(|| row.id.clone())
+                                })
+                            });
+                            (
+                                "none".to_string(),
+                                None,
+                                None,
+                                self.filter_text.clone(),
+                                snapshot.rows.len(),
+                                snapshot.rows.len(),
+                                selected_row_index.map_or(-1, |index| index as i32),
+                                selected_value,
+                            )
+                        } else if let Some(snapshot) = self
                             .menu_syntax_trigger_popup_state
                             .snapshot
                             .as_ref()
@@ -9355,9 +9380,7 @@ impl ScriptListApp {
         let expected_surface = self.current_view.native_footer_surface();
         let host = crate::footer_popup::main_window_footer_host_snapshot();
         let popup_open = self.show_actions_popup
-            || self.actions_dialog.is_some()
-            || self.menu_syntax_object_selector_state.snapshot.is_some()
-            || crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open();
+            || self.actions_dialog.is_some();
         let mut config = self.main_window_footer_config_with_cx(Some(cx));
         if let Some(ref mut cfg) = config {
             self.enrich_footer_config_with_acp_info(cfg);
@@ -9520,18 +9543,34 @@ impl ScriptListApp {
     /// Get the currently selected value if any.
     fn current_selected_value(&self) -> Option<String> {
         match &self.current_view {
-            AppView::ScriptList => self
-                .menu_syntax_trigger_popup_state
-                .snapshot
-                .as_ref()
-                .filter(|_| self.menu_syntax_trigger_popup_state.owns_main_list())
-                .and_then(|snapshot| {
-                    self.menu_syntax_trigger_popup_state
-                        .selected_row_id
-                        .as_deref()
-                        .and_then(|id| snapshot.rows.iter().find(|row| row.id == id))
-                })
-                .map(|row| row.token.clone().unwrap_or_else(|| row.id.clone())),
+            AppView::ScriptList => {
+                if let Some(value) = self
+                    .menu_syntax_object_selector_state
+                    .snapshot
+                    .as_ref()
+                    .filter(|_| self.menu_syntax_object_selector_state.owns_main_list())
+                    .and_then(|snapshot| {
+                        self.menu_syntax_object_selector_state
+                            .selected_row_id
+                            .as_deref()
+                            .and_then(|id| snapshot.rows.iter().find(|row| row.id == id))
+                    })
+                    .map(|row| row.token.clone().unwrap_or_else(|| row.id.clone()))
+                {
+                    return Some(value);
+                }
+                self.menu_syntax_trigger_popup_state
+                    .snapshot
+                    .as_ref()
+                    .filter(|_| self.menu_syntax_trigger_popup_state.owns_main_list())
+                    .and_then(|snapshot| {
+                        self.menu_syntax_trigger_popup_state
+                            .selected_row_id
+                            .as_deref()
+                            .and_then(|id| snapshot.rows.iter().find(|row| row.id == id))
+                    })
+                    .map(|row| row.token.clone().unwrap_or_else(|| row.id.clone()))
+            }
             AppView::ArgPrompt { choices, .. }
             | AppView::MiniPrompt { choices, .. }
             | AppView::MicroPrompt { choices, .. } => {

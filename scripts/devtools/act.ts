@@ -687,6 +687,27 @@ function isScopedMenuSyntaxTriggerAccept(
     );
 }
 
+function isScopedMenuSyntaxObjectSelectorAccept(
+  args: Args,
+  targetReceipt: JsonObject,
+  before: JsonObject,
+  selectedSemanticId: string | null,
+) {
+  const selected = before.selectedNode as JsonObject | undefined;
+  return isPlainEnter(args)
+    && args.allowSubmit
+    && args.submitIntent === "menu-syntax-object-selector-accept"
+    && args.allowSubmitReason.trim().length > 0
+    && isScriptListTargetReceipt(targetReceipt)
+    && typeof selectedSemanticId === "string"
+    && selectedSemanticId.startsWith("choice:")
+    && (
+      selected?.kind === "menuSyntaxObjectSelector"
+      || selected?.source === "menuSyntaxObjectSelector"
+      || selected?.role === "menu-syntax-object-selector-row"
+    );
+}
+
 function targetInfo(receipt: JsonObject) {
   return (receipt.resolvedTarget as JsonObject | undefined) ?? (receipt.target as JsonObject | undefined) ?? null;
 }
@@ -863,6 +884,43 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
       state: "dispatched",
       actionId: selectedSemanticId,
       allowedBy: "submitIntent:menu-syntax-trigger-accept",
+      proofIntent: args.submitIntent,
+    };
+  }
+  if (args.submitIntent === "menu-syntax-object-selector-accept") {
+    if (!args.allowSubmitReason.trim()) {
+      return {
+        state: "blocked-before-dispatch",
+        reason: "menu-syntax-object-selector-accept requires --allow-submit-reason",
+        gateName: "submit.reason.required",
+        selectedSemanticId: selectedSemanticId as string | null,
+        requiredFlags: [
+          "--allow-submit",
+          "--submit-intent menu-syntax-object-selector-accept",
+          "--allow-submit-reason <why>",
+        ],
+      };
+    }
+    if (!isScopedMenuSyntaxObjectSelectorAccept(args, targetReceipt, before, selectedSemanticId)) {
+      return {
+        state: "blocked-before-dispatch",
+        reason: "menu-syntax-object-selector-accept requires plain Enter on main ScriptList with a selected menuSyntaxObjectSelector row",
+        gateName: "menu-syntax-object-selector-accept.target.required",
+        selectedSemanticId: selectedSemanticId as string | null,
+        requiredFlags: [
+          "--main",
+          "--strict",
+          "--surface ScriptList",
+          "--allow-submit",
+          "--submit-intent menu-syntax-object-selector-accept",
+          "--allow-submit-reason <why>",
+        ],
+      };
+    }
+    return {
+      state: "dispatched",
+      actionId: selectedSemanticId,
+      allowedBy: "submitIntent:menu-syntax-object-selector-accept",
       proofIntent: args.submitIntent,
     };
   }

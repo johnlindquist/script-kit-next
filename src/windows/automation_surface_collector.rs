@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
-use crate::menu_syntax::{ObjectSelectorSnapshot, TriggerPickerSnapshot};
+use crate::menu_syntax::TriggerPickerSnapshot;
 use crate::protocol::{AutomationWindowInfo, AutomationWindowKind, ElementInfo, ElementType};
 
 /// Machine-readable indicator of the semantic element quality level.
@@ -211,76 +211,6 @@ pub(crate) fn upsert_dictation_microphone_prompt_popup_snapshot(
 
 #[allow(dead_code)] // Binary dictation overlay uses this; lib-only builds do not.
 pub(crate) fn remove_dictation_microphone_prompt_popup_snapshot(window_id: &str) {
-    if let Ok(mut cache) = prompt_popup_semantic_cache().lock() {
-        cache.remove(window_id);
-    }
-}
-
-#[allow(dead_code)] // Binary app_impl uses this; lib-only builds do not.
-pub(crate) fn upsert_menu_syntax_object_selector_popup_snapshot(
-    window_id: &str,
-    snapshot: &ObjectSelectorSnapshot,
-    selected_row_id: Option<&str>,
-) {
-    let mut elements = Vec::new();
-    elements.push(element(
-        "panel:menu-syntax-object-selector-popup",
-        ElementType::Panel,
-        Some("Menu Syntax Object Selector".to_string()),
-        None,
-        None,
-        None,
-        None,
-    ));
-    elements.push(element(
-        "list:menu-syntax-object-selector-popup",
-        ElementType::List,
-        Some(format!("{} rows", snapshot.rows.len())),
-        None,
-        None,
-        None,
-        None,
-    ));
-
-    let mut selected_semantic_id = None;
-    for (idx, row) in snapshot.rows.iter().enumerate() {
-        let is_selected = selected_row_id == Some(row.id.as_str());
-        let semantic_id = format!("choice:{}:{}", idx, row.id);
-        if is_selected {
-            selected_semantic_id = Some(semantic_id.clone());
-        }
-
-        let mut info = element(
-            &semantic_id,
-            ElementType::Choice,
-            Some(row.title.clone()),
-            row.token.clone(),
-            Some(is_selected),
-            None,
-            Some(idx),
-        );
-        info.role = row.subtitle.clone();
-        info.kind = Some("ObjectRef".to_string());
-        info.source_name = Some(row.kind.as_str().to_string());
-        info.selectable = Some(row.enabled);
-        elements.push(info);
-    }
-
-    let focused_semantic_id = selected_semantic_id.clone();
-    if let Ok(mut cache) = prompt_popup_semantic_cache().lock() {
-        cache.insert(
-            window_id.to_string(),
-            PromptPopupElementSnapshot {
-                elements,
-                focused_semantic_id,
-                selected_semantic_id,
-            },
-        );
-    }
-}
-
-#[allow(dead_code)] // Binary app_impl uses this; lib-only builds do not.
-pub(crate) fn remove_menu_syntax_object_selector_popup_snapshot(window_id: &str) {
     if let Ok(mut cache) = prompt_popup_semantic_cache().lock() {
         cache.remove(window_id);
     }
