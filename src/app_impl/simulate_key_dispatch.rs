@@ -199,6 +199,23 @@ impl ScriptListApp {
         if !actions_popup_consumed_key {
         match &view.current_view {
             AppView::ScriptList => {
+                if view.consume_return_to_script_list_enter_guard(
+                    &key_lower,
+                    &gpui::Modifiers {
+                        platform: has_cmd,
+                        shift: has_shift,
+                        control: _has_ctrl,
+                        alt: _has_alt,
+                        function: false,
+                    },
+                ) {
+                    logging::log(
+                        "STDIN",
+                        "SimulateKey: Enter suppressed by return-to-ScriptList guard",
+                    );
+                    return;
+                }
+
                 // Main script list key handling
                 if _has_alt
                     && !has_cmd

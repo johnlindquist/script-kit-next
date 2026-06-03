@@ -1,6 +1,73 @@
 use super::*;
 
 impl ScriptListApp {
+    pub(crate) fn arm_return_to_script_list_enter_guard_from_profile_search(&mut self) {
+        self.return_to_script_list_key_guard = Some(ReturnToScriptListKeyGuard {
+            key: "enter",
+            source: ReturnToScriptListKeyGuardSource::ProfileSearch,
+            reason: "profile_search_select_return_to_script_list",
+            armed_at: std::time::Instant::now(),
+            consumed_count: 0,
+        });
+        tracing::info!(
+            target: "script_kit::keyboard",
+            event = "return_to_script_list_enter_guard_armed",
+            source = "profile_search",
+            reason = "profile_search_select_return_to_script_list",
+            "Armed ProfileSearch Enter transition guard"
+        );
+    }
+
+    pub(crate) fn consume_return_to_script_list_enter_guard(
+        &mut self,
+        key: &str,
+        modifiers: &gpui::Modifiers,
+    ) -> bool {
+        if !crate::ui_foundation::is_key_enter(key)
+            || modifiers.platform
+            || modifiers.shift
+            || modifiers.alt
+            || modifiers.control
+        {
+            return false;
+        }
+
+        let Some(guard) = self.return_to_script_list_key_guard.as_mut() else {
+            return false;
+        };
+        if guard.key != "enter" {
+            return false;
+        }
+        if guard.armed_at.elapsed() > std::time::Duration::from_millis(1200) {
+            self.return_to_script_list_key_guard = None;
+            return false;
+        }
+
+        guard.consumed_count = guard.consumed_count.saturating_add(1);
+        tracing::warn!(
+            target: "script_kit::keyboard",
+            event = "return_to_script_list_enter_guard_consumed",
+            source = ?guard.source,
+            reason = guard.reason,
+            consumed_count = guard.consumed_count,
+            "Suppressed leaked Enter after returning to ScriptList"
+        );
+        true
+    }
+
+    pub(crate) fn clear_return_to_script_list_enter_guard_on_key_up(&mut self, key: &str) {
+        if crate::ui_foundation::is_key_enter(key)
+            && self.return_to_script_list_key_guard.take().is_some()
+        {
+            tracing::info!(
+                target: "script_kit::keyboard",
+                event = "return_to_script_list_enter_guard_cleared",
+                key,
+                "Cleared ProfileSearch Enter transition guard on key-up"
+            );
+        }
+    }
+
     pub(crate) fn open_profile_search(&mut self, cx: &mut Context<Self>) {
         tracing::info!(
             target: "script_kit::spine",
@@ -89,6 +156,7 @@ impl ScriptListApp {
         let persisted = crate::profile_search::persist_profile_search_selection(&result.profile.id);
         if persisted {
             self.refresh_agent_model_footer_labels();
+            self.arm_return_to_script_list_enter_guard_from_profile_search();
             self.reset_to_script_list(cx);
         }
         cx.notify();

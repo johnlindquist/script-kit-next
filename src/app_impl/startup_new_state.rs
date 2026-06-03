@@ -94,6 +94,7 @@
             pending_programmatic_filter_echo: None,
             pending_filter_sync: false,
             history_filter_render_pending: None,
+            return_to_script_list_key_guard: None,
             pending_placeholder: None,
             last_output: None,
             focus_handle: cx.focus_handle(),

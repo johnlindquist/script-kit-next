@@ -4,6 +4,7 @@ const PROFILES_SOURCE: &str = include_str!("../src/ai/agent_chat/profiles.rs");
 const PROFILE_SEARCH_SOURCE: &str = include_str!("../src/profile_search.rs");
 const APP_IMPL_PROFILE_SEARCH_SOURCE: &str = include_str!("../src/app_impl/profile_search_view.rs");
 const RENDER_PROFILE_SEARCH_SOURCE: &str = include_str!("../src/render_builtins/profile_search.rs");
+const RENDER_SCRIPT_LIST_SOURCE: &str = include_str!("../src/render_script_list/mod.rs");
 const COLLECT_ELEMENTS_SOURCE: &str = include_str!("../src/app_layout/collect_elements.rs");
 const ACT_TS: &str = include_str!("../scripts/devtools/act.ts");
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
@@ -292,6 +293,80 @@ fn profile_search_devtools_submit_proof_is_main_surface_only() {
             "act.ts ProfileSearch Enter allowlist must include {needle}"
         );
     }
+}
+
+#[test]
+fn profile_search_enter_stops_propagation_before_selection_transition() {
+    let enter_pos = RENDER_PROFILE_SEARCH_SOURCE
+        .find("if is_key_enter(key)")
+        .expect("ProfileSearch Enter handler must exist");
+    let enter_section = &RENDER_PROFILE_SEARCH_SOURCE
+        [enter_pos..(enter_pos + 300).min(RENDER_PROFILE_SEARCH_SOURCE.len())];
+    let stop_pos = enter_section
+        .find("cx.stop_propagation();")
+        .expect("ProfileSearch Enter must stop propagation");
+    let select_pos = enter_section
+        .find("select_profile_search_result")
+        .expect("ProfileSearch Enter must select a profile");
+    assert!(
+        stop_pos < select_pos,
+        "ProfileSearch must stop propagation before resetting to ScriptList"
+    );
+}
+
+#[test]
+fn profile_search_selection_arms_enter_guard_before_reset_to_script_list() {
+    let body = fn_body(
+        APP_IMPL_PROFILE_SEARCH_SOURCE,
+        "pub(crate) fn select_profile_search_result(",
+    );
+    let guard_pos = body
+        .find("arm_return_to_script_list_enter_guard_from_profile_search")
+        .expect("ProfileSearch selection must arm Enter transition guard");
+    let reset_pos = body
+        .find("reset_to_script_list(cx)")
+        .expect("ProfileSearch selection must return to ScriptList");
+    assert!(
+        guard_pos < reset_pos,
+        "Enter transition guard must be armed before ScriptList is rendered"
+    );
+}
+
+#[test]
+fn script_list_enter_guard_runs_before_execute_selected_paths() {
+    let body = fn_body(RENDER_SCRIPT_LIST_SOURCE, "fn render_script_list(");
+    let key_handler = body
+        .split("let handle_key = cx.listener(")
+        .nth(1)
+        .expect("ScriptList render must define handle_key")
+        .split("let handle_key_up = cx.listener(")
+        .next()
+        .expect("ScriptList key handler must precede key-up handler");
+    let guard_pos = key_handler
+        .find("consume_return_to_script_list_enter_guard")
+        .expect("ScriptList must consume return-to-list Enter guard");
+    for needle in [
+        "execute_selected_fallback",
+        "try_apply_pending_menu_syntax_ai_proposal",
+        "try_handle_spine_enter",
+        "execute_selected(cx)",
+    ] {
+        let pos = key_handler
+            .find(needle)
+            .unwrap_or_else(|| panic!("ScriptList Enter path missing {needle}"));
+        assert!(
+            guard_pos < pos,
+            "return-to-ScriptList guard must run before {needle}"
+        );
+    }
+}
+
+#[test]
+fn script_list_key_up_clears_return_to_script_list_enter_guard() {
+    assert!(
+        RENDER_SCRIPT_LIST_SOURCE.contains("clear_return_to_script_list_enter_guard_on_key_up"),
+        "ScriptList key-up must clear the ProfileSearch Enter transition guard"
+    );
 }
 
 #[test]

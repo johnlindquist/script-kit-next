@@ -57,8 +57,9 @@ impl ScriptListApp {
                     return;
                 }
                 if is_key_enter(key) {
-                    this.select_profile_search_result(cx);
                     cx.stop_propagation();
+                    this.select_profile_search_result(cx);
+                    return;
                 }
             },
         );

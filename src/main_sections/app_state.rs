@@ -580,6 +580,20 @@ impl ScriptListApp {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReturnToScriptListKeyGuardSource {
+    ProfileSearch,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ReturnToScriptListKeyGuard {
+    pub(crate) key: &'static str,
+    pub(crate) source: ReturnToScriptListKeyGuardSource,
+    pub(crate) reason: &'static str,
+    pub(crate) armed_at: std::time::Instant,
+    pub(crate) consumed_count: u8,
+}
+
 struct ScriptListApp {
     /// H1 Optimization: Arc-wrapped scripts for cheap cloning during filter operations
     scripts: Vec<std::sync::Arc<scripts::Script>>,
@@ -716,6 +730,10 @@ struct ScriptListApp {
     pending_filter_sync: bool,
     /// History recall filter that must render before another key-repeat recall is accepted.
     history_filter_render_pending: Option<String>,
+    /// Plain Enter consumed by a child filterable surface while it transitions
+    /// back to ScriptList. Prevents the same physical keydown from launching
+    /// the highlighted main-menu row after the view reset.
+    return_to_script_list_key_guard: Option<ReturnToScriptListKeyGuard>,
     /// Pending placeholder text to set on next render (needs Window access).
     pending_placeholder: Option<String>,
     last_output: Option<SharedString>,

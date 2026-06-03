@@ -1368,12 +1368,20 @@ impl ScriptListApp {
                     return;
                 }
 
+                let key_str = event.keystroke.key.as_str();
+                if this.consume_return_to_script_list_enter_guard(
+                    key_str,
+                    &event.keystroke.modifiers,
+                ) {
+                    cx.stop_propagation();
+                    return;
+                }
+
                 // Global shortcuts (Cmd+W only - ScriptList has special ESC handling below)
                 if this.handle_global_shortcut_with_options(event, false, cx) {
                     return;
                 }
 
-                let key_str = event.keystroke.key.as_str();
                 let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
 
@@ -1712,6 +1720,7 @@ impl ScriptListApp {
                   _window: &mut Window,
                   _cx: &mut Context<Self>| {
                 let key = event.keystroke.key.as_str();
+                this.clear_return_to_script_list_enter_guard_on_key_up(key);
                 if sk_is_key_up(key) || sk_is_key_down(key) {
                     tracing::info!(
                         target: "script_kit::input_history",
