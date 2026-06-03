@@ -1,8 +1,8 @@
 //! Shared inline-popup window helpers.
 //!
 //! These helpers own the detached child-window mechanics used by any inline
-//! popup surface (ACP slash/@ pickers, ACP history popup, ACP model selector,
-//! and the menu-syntax `:`, `;`, and `!` trigger popups). They are intentionally
+//! popup surface (ACP slash/@ pickers, ACP history popup, and the menu-syntax
+//! `:`, `;`, and `!` trigger popups). They are intentionally
 //! neutral: no ACP types, no menu-syntax types, no domain callbacks. Callers
 //! layer their own row models and accept behavior on top.
 //!
@@ -74,8 +74,7 @@ pub fn inline_popup_width_for_window(window_width: f32) -> f32 {
 }
 
 /// Measure popup width against a set of row labels plus optional trailing
-/// accessory. Used by callers that size the popup to fit its contents (e.g.
-/// the ACP model selector picking the longest model name).
+/// accessory. Used by callers that size the popup to fit its contents.
 pub fn inline_popup_width_for_labels<'a, I>(
     window_width: f32,
     labels: I,
@@ -104,8 +103,7 @@ where
     )
 }
 
-/// Top anchor for popups that prefer to sit above the mini-shell hint strip
-/// (ACP model selector, history popup).
+/// Top anchor for popups that prefer to sit above the mini-shell hint strip.
 pub fn footer_anchored_inline_popup_top(parent_height: f32, popup_height: f32) -> f32 {
     let bottom_offset = crate::window_resize::main_layout::HINT_STRIP_HEIGHT + 4.0;
     (parent_height - bottom_offset - popup_height).max(0.0)

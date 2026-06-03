@@ -33,7 +33,6 @@ pub(crate) mod history_attachment;
 pub(crate) mod history_popup;
 pub(crate) mod hosted;
 pub(crate) mod labels;
-pub(crate) mod model_selector_popup;
 pub(crate) mod permission_broker;
 pub(crate) mod picker_popup;
 pub(crate) mod popup_registry;

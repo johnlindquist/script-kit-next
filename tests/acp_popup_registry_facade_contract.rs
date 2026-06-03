@@ -19,10 +19,6 @@ fn acp_popup_registration_facade_registers_and_removes() {
 fn all_acp_prompt_popups_hold_scoped_registration() {
     for (path, id) in [
         ("src/ai/acp/picker_popup.rs", "acp-mention-popup"),
-        (
-            "src/ai/acp/model_selector_popup.rs",
-            "acp-model-selector-popup",
-        ),
         ("src/ai/acp/history_popup.rs", "acp-history-popup"),
     ] {
         let source = read(path);

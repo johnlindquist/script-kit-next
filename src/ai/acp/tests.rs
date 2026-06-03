@@ -333,9 +333,9 @@ const HANDLE_ACTION_SOURCE: &str = include_str!("../../app_actions/handle_action
 const REGISTRIES_STATE_SOURCE: &str = include_str!("../../app_impl/registries_state.rs");
 const ACP_MOD_SOURCE: &str = include_str!("mod.rs");
 const ACP_HISTORY_POPUP_SOURCE: &str = include_str!("history_popup.rs");
-const ACP_MODEL_SELECTOR_POPUP_SOURCE: &str = include_str!("model_selector_popup.rs");
 const ACP_PICKER_POPUP_SOURCE: &str = include_str!("picker_popup.rs");
 const ACP_POPUP_WINDOW_SOURCE: &str = include_str!("popup_window.rs");
+const ACP_ACTIONS_SOURCE: &str = include_str!("../../actions/builders/script_context.rs");
 const ACP_CHAT_WINDOW_SOURCE: &str = include_str!("chat_window.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("view.rs");
 const ACP_THREAD_SOURCE: &str = include_str!("thread.rs");
@@ -748,10 +748,14 @@ fn acp_picker_popup_module_is_registered() {
 }
 
 #[test]
-fn acp_model_selector_popup_module_is_registered() {
+fn acp_model_selector_module_is_actions_only() {
     assert!(
-        ACP_MOD_SOURCE.contains("pub(crate) mod model_selector_popup;"),
-        "ACP module should register the detached model selector popup module"
+        !ACP_MOD_SOURCE.contains("pub(crate) mod model_selector_popup;"),
+        "ACP model selector should not register a detached PromptPopup module"
+    );
+    assert!(
+        ACP_ACTIONS_SOURCE.contains("pub(crate) fn get_acp_model_picker_route"),
+        "ACP model selector should be owned by the actions popup route"
     );
 }
 
@@ -784,27 +788,12 @@ fn acp_model_selector_migration_uses_popup_window_instead_of_inline_layer() {
         "ACP chat view should no longer render the model selector inline"
     );
     assert!(
-        ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("AcpModelSelectorPopupWindow")
-            && ACP_MODEL_SELECTOR_POPUP_SOURCE
-                .contains("super::popup_window::popup_window_options")
-            && ACP_MODEL_SELECTOR_POPUP_SOURCE
-                .contains("super::popup_window::configure_popup_window"),
-        "ACP model selector should render through a popup window entity"
-    );
-    assert!(
-        ACP_MODEL_SELECTOR_POPUP_SOURCE
-            .contains("render_dense_monoline_picker_row_with_accessory(")
-            && ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("IconName::Check")
-            && ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("super::popup_window::dense_picker_height")
-            && ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("InlineDropdown::new(")
-            && ACP_MODEL_SELECTOR_POPUP_SOURCE
-                .contains("super::popup_window::dense_picker_width_for_labels"),
-        "ACP model selector popup must share the dense picker row and sizing contract with slash/@ pickers"
-    );
-    assert!(
-        !ACP_MODEL_SELECTOR_POPUP_SOURCE
-            .contains("crate::ai::context_picker_row::render_dense_monoline_picker_row"),
-        "ACP model selector popup should import row renderers from shared inline_dropdown"
+        ACP_VIEW_SOURCE.contains("fn trigger_toggle_actions_from_parent")
+            && ACP_VIEW_SOURCE.contains("AcpToolbarEvent::ToggleModelSelector(parent)")
+            && ACP_VIEW_SOURCE.contains("this.trigger_toggle_actions_from_parent(*parent, cx);")
+            && ACP_ACTIONS_SOURCE.contains("get_acp_model_picker_actions")
+            && !ACP_VIEW_SOURCE.contains("model_selector_open"),
+        "ACP model selector should route through Cmd+K actions instead of an inline or PromptPopup list"
     );
 }
 
@@ -1399,9 +1388,6 @@ fn acp_view_exposes_escape_popup_dismiss_helper() {
     assert!(
         ACP_VIEW_SOURCE.contains("pub(crate) fn dismiss_escape_popup")
             && ACP_VIEW_SOURCE.contains("pub(crate) fn has_escape_dismissible_popup")
-            && ACP_VIEW_SOURCE.contains("self.model_selector_open = false;")
-            && ACP_VIEW_SOURCE
-                .contains("self.sync_model_selector_popup_window_from_cached_parent(cx);")
             && ACP_VIEW_SOURCE.contains("self.history_menu.is_some()")
             && ACP_VIEW_SOURCE.contains("self.mention_session = None;")
             && ACP_VIEW_SOURCE.contains("self.sync_mention_popup_window_from_cached_parent(cx);")

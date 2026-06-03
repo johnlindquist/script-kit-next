@@ -372,15 +372,15 @@ fn actions_dialog_fallback_preserves_panel_only_warning() {
 
 #[test]
 fn prompt_popup_collector_tries_known_popup_types() {
-    // The PromptPopup collector must try mention, model selector, and confirm
+    // The PromptPopup collector must try mention, history, and confirm.
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     assert!(
         source.contains("collect_mention_picker_snapshot"),
         "PromptPopup collector must try mention picker"
     );
     assert!(
-        source.contains("collect_model_selector_snapshot"),
-        "PromptPopup collector must try model selector"
+        source.contains("collect_history_popup_snapshot"),
+        "PromptPopup collector must try history popup"
     );
     assert!(
         source.contains("collect_confirm_popup_snapshot"),

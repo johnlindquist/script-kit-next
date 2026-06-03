@@ -6,8 +6,7 @@
 //! [`crate::components::inline_dropdown`] (see `InlineDropdown`,
 //! `render_soft_compact_picker_row`, `inline_dropdown_visible_range_from_start`,
 //! `InlineDropdownColors`, `InlineDropdownEmptyState`, `InlineDropdownSynopsis`).
-//! ACP's slash/@ mention popup and the ACP model selector both consume that
-//! renderer today.
+//! ACP's slash/@ mention popup consumes that renderer today.
 //!
 //! What this module adds is the neutral **data shape** that callers like
 //! the menu-syntax `:`, `;`, and `!` trigger popups and cross-surface automation tooling

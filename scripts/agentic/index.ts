@@ -4775,7 +4775,7 @@ switch (recipe) {
           { name: "acp-tab-accept", description: "Compatibility alias for --key tab", flags: ["--session", "--vision", "--target-json", "--surface", "--json"] },
           { name: "acp-detached-accept", description: "One-command detached ACP proof: resolve, accept, identity check", flags: ["--session", "--kind", "--index", "--key", "--vision", "--json"] },
           { name: "acp-detached-target-threading-stress", description: "Multi-window detached ACP proof with exact target threading, native input, and strict capture identity", flags: ["--session", "--kind", "--index", "--min-targets", "--key", "--vision", "--json"] },
-          { name: "acp-prompt-popup-parity", description: "State-first PromptPopup family parity proof for ACP mention, model selector, and local history", flags: ["--session", "--family", "--families", "--json"] },
+          { name: "acp-prompt-popup-parity", description: "State-first PromptPopup family parity proof for ACP mention and local history", flags: ["--session", "--family", "--families", "--json"] },
           { name: "notes-acp-delayed-action-origin-stress", description: "Fail-closed Notes ACP delayed-action origin/generation stress receipt", flags: ["--session", "--drift", "--json"] },
           { name: "file-portal-origin-roundtrip", description: "Fail-closed ACP portal origin/context-part round-trip receipt", flags: ["--session", "--origin", "--portal", "--selection", "--query", "--json"] },
           { name: "permission-privacy-preflight", description: "Read-only permission preflight that never opens System Settings or mutates OS permissions", flags: ["--session", "--kinds", "--json"] },

@@ -699,10 +699,6 @@ pub(crate) struct AcpChatView {
     history_closed_at: Option<Instant>,
     /// Whether the + attachment menu popup is open.
     attach_menu_open: bool,
-    /// Whether the model selector dropdown is open.
-    model_selector_open: bool,
-    /// Focused row within the model selector popup.
-    model_selector_selected_index: usize,
     /// Cmd+F search: (query, current_match_index). None = search hidden.
     pub(crate) search_state: Option<(String, usize)>,
     /// Cached slash commands discovered at creation, with source identity.
@@ -1039,10 +1035,8 @@ impl AcpChatView {
     fn sync_acp_popup_windows_from_cached_parent(&mut self, cx: &mut Context<Self>) {
         if self.is_setup_mode() {
             self.mention_session = None;
-            self.model_selector_open = false;
             self.history_menu = None;
             crate::ai::acp::picker_popup::close_mention_popup_window(cx);
-            crate::ai::acp::model_selector_popup::close_model_selector_popup_window(cx);
             crate::ai::acp::history_popup::close_history_popup_window(cx);
             tracing::info!(
                 target: "script_kit::tab_ai",
@@ -1052,16 +1046,7 @@ impl AcpChatView {
         }
 
         self.sync_mention_popup_window_from_cached_parent(cx);
-        self.sync_model_selector_popup_window_from_cached_parent(cx);
         self.sync_history_popup_window_from_cached_parent(cx);
-    }
-
-    fn selected_model_popup_index(&self, cx: &App) -> usize {
-        let model_count = self.live_thread().read(cx).available_models().len();
-        crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
-            self.model_selector_selected_index,
-            model_count,
-        )
     }
 
     fn profile_selector_entries(
@@ -1118,21 +1103,6 @@ impl AcpChatView {
                 .then_with(|| a.label.to_string().cmp(&b.label.to_string()))
         });
         items
-    }
-
-    fn reset_model_selector_selection(&mut self, cx: &App) {
-        let thread = self.live_thread().read(cx);
-        let selected_id = thread.selected_model_id();
-        let next_index = thread
-            .available_models()
-            .iter()
-            .position(|model| Some(model.id.as_str()) == selected_id)
-            .unwrap_or(0);
-        self.model_selector_selected_index =
-            crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
-                next_index,
-                thread.available_models().len(),
-            );
     }
 
     fn mention_popup_snapshot(
@@ -3900,7 +3870,6 @@ impl AcpChatView {
     /// surface while keeping its live thread/session intact for reuse.
     pub(crate) fn prepare_for_host_hide(&mut self, cx: &mut Context<Self>) {
         self.attach_menu_open = false;
-        self.model_selector_open = false;
         self.permission_options_open = false;
         self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.history_menu = None;
@@ -3947,7 +3916,6 @@ impl AcpChatView {
 
     pub(crate) fn prepare_for_attachment_portal_open(&mut self, cx: &mut Context<Self>) {
         self.attach_menu_open = false;
-        self.model_selector_open = false;
         self.permission_options_open = false;
         self.clear_composer_picker(AcpComposerPickerDismissReason::PortalStaged, cx);
         self.history_menu = None;
@@ -4103,169 +4071,6 @@ impl AcpChatView {
             }
         } else {
             crate::ai::acp::history_popup::close_history_popup_window(cx);
-        }
-    }
-
-    fn model_selector_popup_snapshot(
-        &self,
-        cx: &App,
-    ) -> Option<crate::ai::acp::model_selector_popup::AcpModelSelectorPopupSnapshot> {
-        if !self.model_selector_open {
-            return None;
-        }
-
-        let thread = self.live_thread().read(cx);
-        let selected_id = thread.selected_model_id().map(str::to_string);
-        let selected_index =
-            crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
-                self.model_selector_selected_index,
-                thread.available_models().len(),
-            );
-        let entries = thread
-            .available_models()
-            .iter()
-            .map(|model| {
-                let display = model
-                    .display_name
-                    .clone()
-                    .unwrap_or_else(|| model.id.clone());
-                crate::ai::acp::model_selector_popup::AcpModelSelectorPopupEntry {
-                    id: model.id.clone(),
-                    display: SharedString::from(display),
-                    is_active: selected_id.as_deref() == Some(model.id.as_str()),
-                }
-            })
-            .collect::<Vec<_>>();
-
-        if entries.is_empty() {
-            return None;
-        }
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_model_selector_popup_snapshot_built",
-            entry_count = entries.len(),
-            selected_index,
-            "Built ACP model selector popup snapshot"
-        );
-
-        Some(
-            crate::ai::acp::model_selector_popup::AcpModelSelectorPopupSnapshot {
-                selected_index,
-                entries,
-            },
-        )
-    }
-
-    pub(super) fn sync_model_selector_popup_window_from_cached_parent(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(parent) = self.mention_popup_parent_window else {
-            crate::ai::acp::model_selector_popup::close_model_selector_popup_window(cx);
-            return;
-        };
-
-        let source_view = cx.entity().downgrade();
-        if let Some(snapshot) = self.model_selector_popup_snapshot(cx) {
-            if let Err(error) =
-                crate::ai::acp::model_selector_popup::sync_model_selector_popup_window(
-                    cx,
-                    crate::ai::acp::model_selector_popup::AcpModelSelectorPopupRequest {
-                        parent_window_handle: parent.handle,
-                        parent_bounds: parent.bounds,
-                        display_id: parent.display_id,
-                        source_view,
-                        snapshot,
-                    },
-                )
-            {
-                tracing::error!(error = %error, "acp_model_selector_popup_sync_failed");
-            }
-        } else {
-            crate::ai::acp::model_selector_popup::close_model_selector_popup_window(cx);
-        }
-    }
-
-    pub(crate) fn select_model_from_popup(&mut self, model_id: &str, cx: &mut Context<Self>) {
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_model_selector_selected",
-            model_id,
-            "Selected ACP model from inline dropdown"
-        );
-        self.live_thread().update(cx, |thread, cx| {
-            thread.select_model(model_id, cx);
-        });
-        self.reset_model_selector_selection(cx);
-        self.model_selector_open = false;
-        self.sync_model_selector_popup_window_from_cached_parent(cx);
-        cx.notify();
-    }
-
-    pub(crate) fn dismiss_model_selector_popup(&mut self, cx: &mut Context<Self>) {
-        if !self.model_selector_open {
-            return;
-        }
-
-        self.model_selector_open = false;
-        self.sync_model_selector_popup_window_from_cached_parent(cx);
-        cx.notify();
-    }
-
-    pub(crate) fn move_model_selector_selection(&mut self, direction: i32, cx: &mut Context<Self>) {
-        let model_count = self.live_thread().read(cx).available_models().len();
-        if model_count == 0 {
-            return;
-        }
-
-        let selected_index = self.selected_model_popup_index(cx);
-        self.model_selector_selected_index = if direction < 0 {
-            crate::components::inline_dropdown::inline_dropdown_select_prev(
-                selected_index,
-                model_count,
-            )
-        } else {
-            crate::components::inline_dropdown::inline_dropdown_select_next(
-                selected_index,
-                model_count,
-            )
-        };
-
-        let visible = crate::components::inline_dropdown::inline_dropdown_visible_range(
-            self.model_selector_selected_index,
-            model_count,
-            crate::ai::acp::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS,
-        );
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_model_selector_selection_moved",
-            direction,
-            selected_index = self.model_selector_selected_index,
-            model_count,
-            visible_start = visible.start,
-            visible_end = visible.end,
-            "Moved ACP model selector selection"
-        );
-
-        self.sync_model_selector_popup_window_from_cached_parent(cx);
-        cx.notify();
-    }
-
-    pub(crate) fn confirm_model_selector_selection(&mut self, cx: &mut Context<Self>) {
-        let selected_index = self.selected_model_popup_index(cx);
-        let model_id = self
-            .live_thread()
-            .read(cx)
-            .available_models()
-            .get(selected_index)
-            .map(|model| model.id.clone());
-
-        if let Some(model_id) = model_id {
-            self.select_model_from_popup(&model_id, cx);
-        } else {
-            self.dismiss_model_selector_popup(cx);
         }
     }
 
@@ -4535,7 +4340,6 @@ impl AcpChatView {
             hit_count = hits.len(),
         );
         self.attach_menu_open = false;
-        self.model_selector_open = false;
         self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.history_closed_at = None;
         self.history_menu = Some(AcpHistoryMenuState {
@@ -4621,7 +4425,6 @@ impl AcpChatView {
             }
 
             self.attach_menu_open = false;
-            self.model_selector_open = false;
             self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
             self.history_closed_at = None;
             self.history_menu = Some(AcpHistoryMenuState {
@@ -4652,7 +4455,6 @@ impl AcpChatView {
             let hits = Self::recent_history_hits();
             if !hits.is_empty() {
                 self.attach_menu_open = false;
-                self.model_selector_open = false;
                 self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
                 self.history_closed_at = None;
                 self.history_menu = Some(AcpHistoryMenuState {
@@ -4673,11 +4475,6 @@ impl AcpChatView {
 
     pub(crate) fn dismiss_escape_popup(&mut self, cx: &mut Context<Self>) -> bool {
         if self.exit_focused_text_variation_editor(cx) {
-            return true;
-        }
-
-        if self.model_selector_open {
-            self.dismiss_model_selector_popup(cx);
             return true;
         }
 
@@ -4742,7 +4539,6 @@ impl AcpChatView {
 
     pub(crate) fn has_escape_dismissible_popup(&self) -> bool {
         self.focused_text_editing_variation.is_some()
-            || self.model_selector_open
             || self.mention_session.is_some()
             || self.history_menu.is_some()
             || self.attach_menu_open
@@ -4803,7 +4599,6 @@ impl AcpChatView {
         }
         if close_competing_popups {
             self.attach_menu_open = false;
-            self.model_selector_open = false;
             self.history_menu = None;
         }
         if !self.is_setup_mode() {
@@ -5290,8 +5085,6 @@ impl AcpChatView {
             history_menu: None,
             history_closed_at: None,
             attach_menu_open: false,
-            model_selector_open: false,
-            model_selector_selected_index: 0,
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: slash_task,
@@ -5374,8 +5167,6 @@ impl AcpChatView {
             history_menu: None,
             history_closed_at: None,
             attach_menu_open: false,
-            model_selector_open: false,
-            model_selector_selected_index: 0,
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: noop_slash,
@@ -5735,7 +5526,6 @@ impl AcpChatView {
         self.clear_composer_picker(AcpComposerPickerDismissReason::PortalStaged, cx);
         self.history_menu = None;
         self.attach_menu_open = false;
-        self.model_selector_open = false;
 
         tracing::info!(
             target: "script_kit::acp",
@@ -6780,7 +6570,6 @@ impl AcpChatView {
         self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.history_menu = None;
         self.attach_menu_open = false;
-        self.model_selector_open = false;
         self.last_accepted_item = None;
         self.pending_history_resume = None;
         self.pending_portal_session = None;
@@ -6851,7 +6640,6 @@ impl AcpChatView {
         self.clear_composer_picker(AcpComposerPickerDismissReason::SubmitStarted, cx);
         self.history_menu = None;
         self.attach_menu_open = false;
-        self.model_selector_open = false;
         self.last_accepted_item = None;
         self.pending_history_resume = None;
         self.pending_portal_session = None;
@@ -6896,7 +6684,6 @@ impl AcpChatView {
         self.clear_composer_picker(AcpComposerPickerDismissReason::SubmitStarted, cx);
         self.history_menu = None;
         self.attach_menu_open = false;
-        self.model_selector_open = false;
         self.last_accepted_item = None;
         self.pending_history_resume = None;
         self.pending_portal_session = None;
@@ -6985,7 +6772,6 @@ impl AcpChatView {
         }
 
         self.attach_menu_open = false;
-        self.model_selector_open = false;
         self.history_menu = None;
         self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.set_input(trigger.to_string(), cx);
@@ -11214,7 +11000,6 @@ impl AcpChatView {
             }
             AcpToolbarEvent::ToggleModelSelector(parent) => {
                 this.mention_popup_parent_window = Some(*parent);
-                this.model_selector_open = false;
                 this.sync_acp_popup_windows_from_cached_parent(cx);
                 this.trigger_toggle_actions_from_parent(*parent, cx);
                 cx.notify();
@@ -11438,7 +11223,6 @@ impl AcpChatView {
         self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.history_menu = None;
         self.attach_menu_open = false;
-        self.model_selector_open = false;
         self.last_accepted_item = None;
         self.pending_history_resume = None;
         self.pending_portal_session = snapshot.pending_portal_session;
@@ -11469,7 +11253,6 @@ impl AcpChatView {
         self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.history_menu = None;
         self.attach_menu_open = false;
-        self.model_selector_open = false;
         self.last_accepted_item = None;
         self.pending_history_resume = None;
         self.pending_portal_session = None;
@@ -12049,34 +11832,9 @@ impl AcpChatView {
             }
         }
 
-        if self.model_selector_open {
-            if crate::ui_foundation::is_key_up(key) {
-                self.move_model_selector_selection(-1, cx);
-                cx.stop_propagation();
-                return;
-            }
-
-            if crate::ui_foundation::is_key_down(key) {
-                self.move_model_selector_selection(1, cx);
-                cx.stop_propagation();
-                return;
-            }
-
-            if crate::ui_foundation::is_key_enter(key) || crate::ui_foundation::is_key_tab(key) {
-                self.confirm_model_selector_selection(cx);
-                cx.stop_propagation();
-                return;
-            }
-        }
-
-        // ── Model selector dismiss on Escape ───────────────────
         if crate::ui_foundation::is_key_escape(key) && self.dismiss_escape_popup(cx) {
             cx.stop_propagation();
             return;
-        }
-        // Close model selector on any non-modifier key
-        if self.model_selector_open {
-            self.dismiss_model_selector_popup(cx);
         }
         // ── Attach menu dismiss on Escape ───────────────────────
         if self.attach_menu_open && crate::ui_foundation::is_key_escape(key) {

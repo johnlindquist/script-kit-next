@@ -409,7 +409,7 @@ enum AutomationReadTarget {
         info: crate::protocol::AutomationWindowInfo,
         entity: gpui::Entity<crate::actions::ActionsDialog>,
     },
-    /// Prompt popup (mention picker, model selector, or confirm dialog).
+    /// Prompt popup (mention picker, history popup, or confirm dialog).
     PromptPopup {
         info: crate::protocol::AutomationWindowInfo,
     },
@@ -684,11 +684,10 @@ fn resolve_automation_read_target(
             }
         }
         crate::protocol::AutomationWindowKind::PromptPopup => {
-            // PromptPopup is a union of mention picker, model selector, and confirm dialog.
+            // PromptPopup is a union of mention picker, history popup, and confirm dialog.
             // We verify at least one popup is open. The specific sub-type is detected at
             // batch-execution time since the popup could change between resolution and use.
             let any_open = crate::ai::acp::picker_popup::is_mention_popup_window_open()
-                || crate::ai::acp::model_selector_popup::is_model_selector_popup_window_open()
                 || crate::ai::acp::history_popup::is_history_popup_window_open()
                 || crate::confirm::is_confirm_popup_window_open();
             if any_open {
@@ -6999,9 +6998,6 @@ impl ScriptListApp {
                                         if let Some(v) = crate::ai::acp::picker_popup::batch_select_mention_item_by_value(&value, cx) {
                                             return Some(v);
                                         }
-                                        if let Some(v) = crate::ai::acp::model_selector_popup::batch_select_model_by_value(&value, cx) {
-                                            return Some(v);
-                                        }
                                         if let Some(v) = crate::confirm::batch_select_confirm_button_by_value(&value) {
                                             return Some(v);
                                         }
@@ -7050,9 +7046,6 @@ impl ScriptListApp {
                                 let semantic_id = semantic_id.clone();
                                 let selected = this.update(cx, |_this, cx| {
                                         if let Some(v) = crate::ai::acp::picker_popup::batch_select_mention_item_by_semantic_id(&semantic_id, cx) {
-                                            return Some(v);
-                                        }
-                                        if let Some(v) = crate::ai::acp::model_selector_popup::batch_select_model_by_semantic_id(&semantic_id, cx) {
                                             return Some(v);
                                         }
                                         if let Some(v) = crate::confirm::batch_select_confirm_button_by_semantic_id(&semantic_id) {

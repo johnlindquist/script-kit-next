@@ -1420,7 +1420,6 @@ export async function runAcpPromptPopupParityScenario(opts: {
   const scenario = "acp-prompt-popup-parity";
   const popupMap: Record<string, { id: string; triggerText: string }> = {
     mention: { id: "acp-mention-popup", triggerText: "@" },
-    "model-selector": { id: "acp-model-selector-popup", triggerText: "/" },
     "local-history": { id: "acp-history-popup", triggerText: "" },
   };
   const popupCases: Array<Record<string, unknown>> = [];

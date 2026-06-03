@@ -908,7 +908,7 @@ pub(crate) fn collect_actions_dialog_elements(
 }
 
 // ---------------------------------------------------------------------------
-// Prompt popup collector (mention picker, model selector, confirm)
+// Prompt popup collector (mention picker, history popup, confirm)
 // ---------------------------------------------------------------------------
 
 /// Collect semantic elements from a known prompt popup type.
@@ -918,9 +918,6 @@ pub(crate) fn collect_actions_dialog_elements(
 /// back to `panel_only_prompt_popup`.
 fn collect_prompt_popup_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnapshot> {
     if let Some(snapshot) = collect_mention_picker_snapshot(cx) {
-        return Some(snapshot);
-    }
-    if let Some(snapshot) = collect_model_selector_snapshot(cx) {
         return Some(snapshot);
     }
     if let Some(snapshot) = collect_history_popup_snapshot(cx) {
@@ -986,60 +983,6 @@ fn collect_mention_picker_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnaps
             ElementType::Choice,
             Some(item.label.to_string()),
             Some(item.id.to_string()),
-            Some(is_selected),
-            None,
-            Some(idx),
-        ));
-    }
-
-    Some(SurfaceElementSnapshot {
-        total_count: elements.len(),
-        elements,
-        focused_semantic_id: selected_semantic_id.clone(),
-        selected_semantic_id,
-        warnings: Vec::new(),
-        quality: SnapshotQuality::Full,
-    })
-}
-
-fn collect_model_selector_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnapshot> {
-    let snap = crate::ai::acp::model_selector_popup::get_model_selector_popup_snapshot(cx)?;
-
-    let mut elements = vec![element(
-        "panel:model-selector",
-        ElementType::Panel,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )];
-
-    let entry_count = snap.entries.len();
-    elements.push(element(
-        "list:model-entries",
-        ElementType::List,
-        Some(format!("{entry_count} models")),
-        None,
-        None,
-        None,
-        None,
-    ));
-
-    let mut selected_semantic_id = None;
-    for (idx, entry) in snap.entries.iter().enumerate() {
-        let is_selected = idx == snap.selected_index;
-        let semantic_id = format!("choice:{}:{}", idx, entry.id);
-
-        if is_selected {
-            selected_semantic_id = Some(semantic_id.clone());
-        }
-
-        elements.push(element(
-            &semantic_id,
-            ElementType::Choice,
-            Some(entry.display.to_string()),
-            Some(entry.id.clone()),
             Some(is_selected),
             None,
             Some(idx),

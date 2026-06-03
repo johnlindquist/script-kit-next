@@ -38,8 +38,8 @@
 //!    the only audit-visible signal of the host swap.
 //!
 //! 5. `AcpChatView::prepare_for_host_hide` clears ephemeral popup state
-//!    (attach menu, model selector, permission options, mention session,
-//!    history menu, setup agent picker) but does NOT clear
+//!    (attach menu, permission options, mention session, history menu,
+//!    setup agent picker) but does NOT clear
 //!    `pending_portal_session`. This matches
 //!    `removed-docs transitions#Host hide keeps
 //!    the staged session` — the staged portal contract outlives host
@@ -204,7 +204,6 @@ fn prepare_for_host_hide_clears_popups_but_not_pending_portal_session() {
     let slice = prepare_for_host_hide_slice();
     for field in [
         "self.attach_menu_open = false;",
-        "self.model_selector_open = false;",
         "self.permission_options_open = false;",
         "self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);",
         "self.history_menu = None;",

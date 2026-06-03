@@ -9,7 +9,7 @@
 //! / `dense_picker_*` / `popup_*` name historically exposed by this module is
 //! re-exported from the shared implementation under the same ACP-specific
 //! alias, so existing ACP call sites in `picker_popup.rs`,
-//! `model_selector_popup.rs`, `history_popup.rs`, `view.rs`, and the source-
+//! `history_popup.rs`, `view.rs`, and the source-
 //! text audit tests in `src/ai/acp/tests.rs` all continue to compile without
 //! edits. Add the ACP-flavored `dense_picker_height(item_count)` convenience
 //! on top so callers can keep passing a bare item count and get
