@@ -170,6 +170,11 @@ impl ScriptListApp {
                 .into()
             }
 
+            AppView::ProfileSearchView {
+                filter,
+                selected_index,
+            } => self.collect_profile_search_elements(filter, *selected_index, limit),
+
             AppView::AppLauncherView {
                 filter,
                 selected_index,
@@ -1427,6 +1432,243 @@ impl ScriptListApp {
         }
 
         (elements, total_count)
+    }
+
+    fn collect_profile_search_elements(
+        &self,
+        filter: &str,
+        selected_index: usize,
+        limit: usize,
+    ) -> ElementCollectionOutcome {
+        let results = self.profile_search_results_for_filter(filter);
+        let selected_index = selected_index.min(results.len().saturating_sub(1));
+        let selected_result = results.get(selected_index);
+        let current_result = results
+            .iter()
+            .find(|result| result.selected)
+            .cloned()
+            .or_else(|| {
+                self.profile_search_results_for_filter("")
+                    .into_iter()
+                    .find(|result| result.selected)
+            });
+
+        let preview_count = if selected_result.is_some() { 6 } else { 1 };
+        let current_count = usize::from(current_result.is_some());
+        let total_count = 2 + results.len() + current_count + preview_count;
+        let mut elements = Vec::with_capacity(limit.min(total_count));
+        let mut truncated = false;
+
+        truncated |= !Self::push_limited_element(
+            &mut elements,
+            limit,
+            protocol::ElementInfo {
+                semantic_id: "input:profile-search-input".to_string(),
+                element_type: protocol::ElementType::Input,
+                text: Some("Search profiles".to_string()),
+                value: Some(filter.to_string()),
+                selected: None,
+                focused: Some(matches!(self.focused_input, FocusedInput::MainFilter)),
+                index: None,
+                role: Some("searchbox".to_string()),
+                kind: Some("profileSearchInput".to_string()),
+                source: Some("profileSearch".to_string()),
+                source_name: Some("Profile Search".to_string()),
+                selectable: Some(true),
+                status_kind: None,
+                action_disabled: None,
+            },
+        );
+
+        truncated |= !Self::push_limited_element(
+            &mut elements,
+            limit,
+            protocol::ElementInfo {
+                semantic_id: "list:profile-search-results".to_string(),
+                element_type: protocol::ElementType::List,
+                text: Some("Profile Search Results".to_string()),
+                value: Some(results.len().to_string()),
+                selected: None,
+                focused: None,
+                index: None,
+                role: Some("listbox".to_string()),
+                kind: Some("profileSearchResults".to_string()),
+                source: Some("profileSearch".to_string()),
+                source_name: Some("Profile Search".to_string()),
+                selectable: Some(false),
+                status_kind: None,
+                action_disabled: None,
+            },
+        );
+
+        if let Some(current) = current_result.as_ref() {
+            truncated |= !Self::push_limited_element(
+                &mut elements,
+                limit,
+                protocol::ElementInfo {
+                    semantic_id: "status:profile-search-current".to_string(),
+                    element_type: protocol::ElementType::Panel,
+                    text: Some(current.profile.name.clone()),
+                    value: Some(current.profile.id.clone()),
+                    selected: None,
+                    focused: None,
+                    index: None,
+                    role: Some("status".to_string()),
+                    kind: Some("profileSearchCurrent".to_string()),
+                    source: Some("profileSearch".to_string()),
+                    source_name: Some("Current Profile".to_string()),
+                    selectable: Some(false),
+                    status_kind: Some("current".to_string()),
+                    action_disabled: None,
+                },
+            );
+        }
+
+        for (index, result) in results.iter().enumerate() {
+            truncated |= !Self::push_limited_element(
+                &mut elements,
+                limit,
+                protocol::ElementInfo {
+                    semantic_id: format!("profile-search-row:{}", result.profile.id),
+                    element_type: protocol::ElementType::Choice,
+                    text: Some(result.profile.name.clone()),
+                    value: Some(result.profile.id.clone()),
+                    selected: Some(index == selected_index),
+                    focused: None,
+                    index: Some(index),
+                    role: Some("option".to_string()),
+                    kind: Some("profileSearchRow".to_string()),
+                    source: Some("profileSearch".to_string()),
+                    source_name: Some(crate::profile_search::source_label(result.profile.source).to_string()),
+                    selectable: Some(true),
+                    status_kind: Some(if result.selected { "current" } else { "profile" }.to_string()),
+                    action_disabled: None,
+                },
+            );
+        }
+
+        if let Some(result) = selected_result {
+            let profile = &result.profile;
+            let cwd_value = profile
+                .cwd
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "Default".to_string());
+            let preview_fields = [
+                (
+                    "profile-search-preview",
+                    protocol::ElementType::Panel,
+                    Some(profile.name.clone()),
+                    Some(profile.id.clone()),
+                    Some("region".to_string()),
+                    Some("profileSearchPreview".to_string()),
+                    Some("selected".to_string()),
+                ),
+                (
+                    "profile-search-preview-title",
+                    protocol::ElementType::Panel,
+                    Some(profile.name.clone()),
+                    Some(profile.id.clone()),
+                    Some("heading".to_string()),
+                    Some("profileSearchPreviewTitle".to_string()),
+                    None,
+                ),
+                (
+                    "profile-search-preview-model",
+                    protocol::ElementType::Panel,
+                    Some("Model".to_string()),
+                    Some(format!(
+                        "{} ({})",
+                        crate::profile_search::profile_model_label(profile),
+                        crate::profile_search::backend_label(profile.backend)
+                    )),
+                    Some("metadata".to_string()),
+                    Some("profileSearchPreviewModel".to_string()),
+                    None,
+                ),
+                (
+                    "profile-search-preview-cwd",
+                    protocol::ElementType::Panel,
+                    Some("CWD".to_string()),
+                    Some(cwd_value),
+                    Some("metadata".to_string()),
+                    Some("profileSearchPreviewCwd".to_string()),
+                    None,
+                ),
+                (
+                    "profile-search-preview-tools",
+                    protocol::ElementType::Panel,
+                    Some("Tools".to_string()),
+                    Some(crate::profile_search::profile_tools_label(profile)),
+                    Some("metadata".to_string()),
+                    Some("profileSearchPreviewTools".to_string()),
+                    None,
+                ),
+                (
+                    "profile-search-preview-prompt",
+                    protocol::ElementType::Panel,
+                    Some("Prompt".to_string()),
+                    Some(crate::profile_search::profile_prompt_summary(profile)),
+                    Some("document".to_string()),
+                    Some("profileSearchPreviewPrompt".to_string()),
+                    None,
+                ),
+            ];
+
+            for (semantic_id, element_type, text, value, role, kind, status_kind) in preview_fields {
+                truncated |= !Self::push_limited_element(
+                    &mut elements,
+                    limit,
+                    protocol::ElementInfo {
+                        semantic_id: semantic_id.to_string(),
+                        element_type,
+                        text,
+                        value,
+                        selected: None,
+                        focused: None,
+                        index: None,
+                        role,
+                        kind,
+                        source: Some("profileSearch".to_string()),
+                        source_name: Some("Profile Search".to_string()),
+                        selectable: Some(false),
+                        status_kind,
+                        action_disabled: None,
+                    },
+                );
+            }
+        } else {
+            truncated |= !Self::push_limited_element(
+                &mut elements,
+                limit,
+                protocol::ElementInfo {
+                    semantic_id: "panel:profile-search-empty".to_string(),
+                    element_type: protocol::ElementType::Panel,
+                    text: Some(if filter.trim().is_empty() {
+                        "No profiles".to_string()
+                    } else {
+                        "No matching profiles".to_string()
+                    }),
+                    value: Some(filter.to_string()),
+                    selected: None,
+                    focused: None,
+                    index: None,
+                    role: Some("empty-state".to_string()),
+                    kind: Some("profileSearchEmpty".to_string()),
+                    source: Some("profileSearch".to_string()),
+                    source_name: Some("Profile Search".to_string()),
+                    selectable: Some(false),
+                    status_kind: Some("empty".to_string()),
+                    action_disabled: None,
+                },
+            );
+        }
+
+        if truncated {
+            return ElementCollectionOutcome::new(elements, total_count)
+                .with_warning("profile_search_elements_truncated_by_limit");
+        }
+        ElementCollectionOutcome::new(elements, total_count)
     }
 
     fn collect_generic_filterable_rows(

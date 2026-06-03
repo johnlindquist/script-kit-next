@@ -4,6 +4,8 @@ const PROFILES_SOURCE: &str = include_str!("../src/ai/agent_chat/profiles.rs");
 const PROFILE_SEARCH_SOURCE: &str = include_str!("../src/profile_search.rs");
 const APP_IMPL_PROFILE_SEARCH_SOURCE: &str = include_str!("../src/app_impl/profile_search_view.rs");
 const RENDER_PROFILE_SEARCH_SOURCE: &str = include_str!("../src/render_builtins/profile_search.rs");
+const COLLECT_ELEMENTS_SOURCE: &str = include_str!("../src/app_layout/collect_elements.rs");
+const ACT_TS: &str = include_str!("../scripts/devtools/act.ts");
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
 const ACP_LAUNCH_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
@@ -213,6 +215,83 @@ fn profile_search_renderer_has_right_pane_preview() {
     assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("profile-search-preview-title"));
     assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("profile-search-preview-model"));
     assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("profile-search-preview-tools"));
+}
+
+#[test]
+fn profile_search_devtools_collector_exposes_rows_and_preview_not_current_view_fallback() {
+    for needle in [
+        "AppView::ProfileSearchView",
+        "collect_profile_search_elements",
+        "input:profile-search-input",
+        "list:profile-search-results",
+        "profile-search-row:",
+        "status:profile-search-current",
+        "profile-search-preview",
+        "profile-search-preview-title",
+        "profile-search-preview-model",
+        "profile-search-preview-cwd",
+        "profile-search-preview-tools",
+        "profile-search-preview-prompt",
+        "profile_search_elements_truncated_by_limit",
+    ] {
+        assert!(
+            COLLECT_ELEMENTS_SOURCE.contains(needle),
+            "ProfileSearch element collector must expose {needle}"
+        );
+    }
+
+    let profile_arm = COLLECT_ELEMENTS_SOURCE
+        .split("AppView::ProfileSearchView")
+        .nth(1)
+        .expect("ProfileSearch collect_elements arm must exist")
+        .split("AppView::")
+        .next()
+        .expect("ProfileSearch collect_elements arm must have a body");
+    assert!(profile_arm.contains("collect_profile_search_elements"));
+    assert!(!profile_arm.contains("collector_used_current_view_fallback"));
+}
+
+#[test]
+fn profile_search_devtools_rows_use_stable_profile_id_semantic_ids() {
+    for needle in [
+        "format!(\"profile-search-row:{}\", result.profile.id)",
+        "element_type: protocol::ElementType::Choice",
+        "selected: Some(index == selected_index)",
+        "value: Some(result.profile.id.clone())",
+        "selectable: Some(true)",
+        "if result.selected",
+    ] {
+        assert!(
+            COLLECT_ELEMENTS_SOURCE.contains(needle),
+            "ProfileSearch rows must expose stable selectable row semantics: {needle}"
+        );
+    }
+}
+
+#[test]
+fn profile_search_devtools_submit_proof_is_main_surface_only() {
+    for needle in [
+        "function isProfileSearchTargetReceipt",
+        "function isPlainEnter",
+        "function isScopedProfileSearchSelect",
+        "\"profile-search-select\"",
+        "allowedBy: \"submitIntent:profile-search-select\"",
+        "profile-search-row:",
+        "submit.reason.required",
+        "profile-search-select requires plain Enter on main ProfileSearch with a selected profile row",
+        "resolved?.automationId === \"main\"",
+        "resolved?.targetKind === \"Main\"",
+        "resolved?.surfaceKind === \"ProfileSearch\"",
+        "resolved?.semanticSurface === \"profileSearch\"",
+        "args.modifiers.length === 0",
+        "targetArgs: [\"--main\", \"--strict\", \"--surface\", \"ScriptList\"]",
+        "expectedSurfaceKind: \"ScriptList\"",
+    ] {
+        assert!(
+            ACT_TS.contains(needle),
+            "act.ts ProfileSearch Enter allowlist must include {needle}"
+        );
+    }
 }
 
 #[test]

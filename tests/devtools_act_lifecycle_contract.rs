@@ -188,6 +188,61 @@ fn act_allows_cmd_enter_agent_chat_only_by_named_intent() {
 }
 
 #[test]
+fn act_allows_profile_search_enter_only_with_named_intent_reason_and_main_target() {
+    for needle in [
+        "function isProfileSearchTargetReceipt",
+        "function isPlainEnter",
+        "function isScopedProfileSearchSelect",
+        "\"profile-search-select\"",
+        "allowedBy: \"submitIntent:profile-search-select\"",
+        "profile-search-row:",
+        "submit.reason.required",
+        "profile-search-select requires plain Enter on main ProfileSearch with a selected profile row",
+        "resolved?.automationId === \"main\"",
+        "resolved?.targetKind === \"Main\"",
+        "resolved?.surfaceKind === \"ProfileSearch\"",
+        "resolved?.semanticSurface === \"profileSearch\"",
+        "args.modifiers.length === 0",
+    ] {
+        assert!(
+            ACT_TS.contains(needle),
+            "act.ts ProfileSearch Enter allowlist must include {needle}"
+        );
+    }
+}
+
+#[test]
+fn act_profile_search_selection_uses_scriptlist_post_intent_proof() {
+    for needle in [
+        "requiresPostIntentTargetProof",
+        "profile-search-select",
+        "targetArgs: [\"--main\", \"--strict\", \"--surface\", \"ScriptList\"]",
+        "expectedSurfaceKind: \"ScriptList\"",
+        "expectedAutomationId: \"main\"",
+        "!args.preflightOnly && preflight.state === \"dispatched\"",
+    ] {
+        assert!(
+            ACT_TS.contains(needle),
+            "ProfileSearch submit must prove return to ScriptList: {needle}"
+        );
+    }
+}
+
+#[test]
+fn act_profile_search_submit_is_non_destructive_only_after_scoped_preflight() {
+    for needle in [
+        "function isNonDestructiveProfileSearchSubmit",
+        "preflight.allowedBy === \"submitIntent:profile-search-select\"",
+        "isNonDestructiveProfileSearchSubmit(preflight)",
+    ] {
+        assert!(
+            ACT_TS.contains(needle),
+            "ProfileSearch submit must be classified non-destructive only through scoped preflight: {needle}"
+        );
+    }
+}
+
+#[test]
 fn act_reports_native_footer_activation_gap_without_native_escalation() {
     for needle in [
         "profile-picker-route",

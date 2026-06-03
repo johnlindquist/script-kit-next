@@ -381,7 +381,8 @@ function expectedResponseForTarget(args: Args, targetReceipt: JsonObject) {
 }
 
 function requiresPostIntentTargetProof(args: Args) {
-  return args.submitIntent === "agent-chat-route";
+  return args.submitIntent === "agent-chat-route"
+    || args.submitIntent === "profile-search-select";
 }
 
 function expectedPostTargetForIntent(args: Args): JsonObject | null {
@@ -390,6 +391,14 @@ function expectedPostTargetForIntent(args: Args): JsonObject | null {
       intent: "agent-chat-route",
       targetArgs: ["--main", "--strict", "--surface", "AcpChat"],
       expectedSurfaceKind: "AcpChat",
+      expectedAutomationId: "main",
+    };
+  }
+  if (args.submitIntent === "profile-search-select") {
+    return {
+      intent: "profile-search-select",
+      targetArgs: ["--main", "--strict", "--surface", "ScriptList"],
+      expectedSurfaceKind: "ScriptList",
       expectedAutomationId: "main",
     };
   }
@@ -530,6 +539,13 @@ function isCmdEnter(args: Args) {
     && args.modifiers.includes("cmd");
 }
 
+function isPlainEnter(args: Args) {
+  const normalizedKey = args.key.toLowerCase();
+  return args.actionKind === "key"
+    && (normalizedKey === "enter" || normalizedKey === "return")
+    && args.modifiers.length === 0;
+}
+
 function submitGateDetails(args: Args, targetReceipt: JsonObject, before: JsonObject) {
   const target = targetInfo(targetReceipt);
   return {
@@ -588,6 +604,17 @@ function isScriptListTargetReceipt(receipt: JsonObject) {
     || resolved?.appViewVariant === "ScriptList";
 }
 
+function isProfileSearchTargetReceipt(receipt: JsonObject) {
+  const resolved = targetInfo(receipt);
+  return resolved?.automationId === "main"
+    && resolved?.targetKind === "Main"
+    && (
+      resolved?.surfaceKind === "ProfileSearch"
+      || resolved?.appViewVariant === "ProfileSearchView"
+      || resolved?.semanticSurface === "profileSearch"
+    );
+}
+
 function isPromptEntityTargetReceipt(receipt: JsonObject) {
   const resolved = receipt.resolvedTarget as JsonObject | undefined;
   return resolved?.surfaceKind === "PromptEntity"
@@ -623,6 +650,20 @@ function isNonDestructiveProfileSwitchSubmit(args: Args, before: JsonObject) {
     && selected?.sourceName === "Spine"
     && selected?.semanticId === "choice:0:ready-to-send"
     && /^\|plugin:[a-z0-9-]+\/[a-z0-9-]+\s*$/.test(inputValue);
+}
+
+function isScopedProfileSearchSelect(
+  args: Args,
+  targetReceipt: JsonObject,
+  selectedSemanticId: string | null,
+) {
+  return isPlainEnter(args)
+    && args.allowSubmit
+    && args.submitIntent === "profile-search-select"
+    && args.allowSubmitReason.trim().length > 0
+    && isProfileSearchTargetReceipt(targetReceipt)
+    && typeof selectedSemanticId === "string"
+    && selectedSemanticId.startsWith("profile-search-row:");
 }
 
 function targetInfo(receipt: JsonObject) {
@@ -685,7 +726,13 @@ function isNonDestructivePromptPopupProfileActivation(semanticId: string | null)
 function isNonDestructiveSubmit(preflight: SubmitLifecycleState) {
   return preflight.state === "dispatched"
     && (isNonDestructiveLauncherSubmit(preflight.actionId ?? null)
-      || isNonDestructiveActionsDialogSubmit(preflight.actionId ?? null, preflight.parentSubjectText ?? null));
+      || isNonDestructiveActionsDialogSubmit(preflight.actionId ?? null, preflight.parentSubjectText ?? null)
+      || isNonDestructiveProfileSearchSubmit(preflight));
+}
+
+function isNonDestructiveProfileSearchSubmit(preflight: SubmitLifecycleState) {
+  return preflight.state === "dispatched"
+    && preflight.allowedBy === "submitIntent:profile-search-select";
 }
 
 async function submitPreflight(args: Args, targetReceipt: JsonObject, before: JsonObject): Promise<SubmitLifecycleState> {
@@ -721,6 +768,44 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
       selectedSemanticId: selectedSemanticId as string | null,
       requiredFlags: ["--allow-submit", "--submit-intent <intent>", "--allow-submit-reason <why>"],
       nextSafeCommand: "rerun with --preflight-only first, then --allow-submit --submit-intent agent-chat-route --allow-submit-reason <why>",
+    };
+  }
+  if (args.submitIntent === "profile-search-select") {
+    if (!args.allowSubmitReason.trim()) {
+      return {
+        state: "blocked-before-dispatch",
+        reason: "profile-search-select requires --allow-submit-reason",
+        gateName: "submit.reason.required",
+        selectedSemanticId: selectedSemanticId as string | null,
+        requiredFlags: [
+          "--allow-submit",
+          "--submit-intent profile-search-select",
+          "--allow-submit-reason <why>",
+        ],
+        nextSafeCommand: "rerun with --preflight-only first, then --allow-submit --submit-intent profile-search-select --allow-submit-reason <why>",
+      };
+    }
+    if (!isScopedProfileSearchSelect(args, targetReceipt, selectedSemanticId)) {
+      return {
+        state: "blocked-before-dispatch",
+        reason: "profile-search-select requires plain Enter on main ProfileSearch with a selected profile row",
+        gateName: "profile-search-select.target.required",
+        selectedSemanticId: selectedSemanticId as string | null,
+        requiredFlags: [
+          "--main",
+          "--strict",
+          "--surface ProfileSearch",
+          "--allow-submit",
+          "--submit-intent profile-search-select",
+          "--allow-submit-reason <why>",
+        ],
+      };
+    }
+    return {
+      state: "dispatched",
+      actionId: selectedSemanticId,
+      allowedBy: "submitIntent:profile-search-select",
+      proofIntent: args.submitIntent,
     };
   }
   if (!isActionsDialogTargetReceipt(targetReceipt)) {
@@ -1027,7 +1112,7 @@ async function main() {
   const afterScroll = await scrollReceipt(afterArgs, "scroll.after");
   const endedAt = new Date().toISOString();
   const actionReceipt = responseOf(actionEnvelope);
-  const postIntentTargetProof = preflight.state === "dispatched"
+  const postIntentTargetProof = !args.preflightOnly && preflight.state === "dispatched"
     ? await waitForPostIntentTarget(args)
     : null;
   const parentAfterSubmit = isSubmitLike(args) ? await inspectParentAfterSubmit(args, targetReceipt) : null;
