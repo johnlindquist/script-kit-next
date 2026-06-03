@@ -2,6 +2,13 @@
 
 type JsonObject = Record<string, unknown>;
 
+type Rect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 type Args = {
   session: string;
   target?: JsonObject;
@@ -98,6 +105,23 @@ function asNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function asArray(value: unknown): JsonObject[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is JsonObject => entry != null && typeof entry === "object")
+    : [];
+}
+
+function rectFrom(value: unknown): Rect | null {
+  const rect = asObject(value);
+  const x = asNumber(rect.x);
+  const y = asNumber(rect.y);
+  const width = asNumber(rect.width);
+  const height = asNumber(rect.height);
+  return x == null || y == null || width == null || height == null
+    ? null
+    : { x, y, width, height };
+}
+
 export function notesScrollFromState(state: JsonObject) {
   const notes = asObject(state.notes);
   const view = asObject(notes.view);
@@ -132,12 +156,114 @@ function mainListScrollFromState(state: JsonObject) {
   return asObject(state.mainListScroll);
 }
 
-function classify(targetReceipt: JsonObject, stateEnvelope: JsonObject, scroll: JsonObject) {
+async function layoutMeasurement(args: Args): Promise<JsonObject | null> {
+  const layoutReceipt = await run(
+    ["bun", "scripts/devtools/layout.ts", "measure", ...args.forwarded],
+    "layout.measure",
+  );
+  return layoutReceipt.status === "error" ? null : layoutReceipt;
+}
+
+function layoutNodeBounds(layoutReceipt: JsonObject, name: string): Rect | null {
+  const nodes = asArray(layoutReceipt.nodes);
+  const node = nodes.find((entry) => entry.name === name);
+  return rectFrom(node?.bounds);
+}
+
+function normalizeScriptListScrollMeasurement(scroll: JsonObject, layoutReceipt: JsonObject | null) {
+  const listStateViewportHeight = asNumber(scroll.viewportHeight);
+  const listStateSafeViewportHeight = asNumber(scroll.safeViewportHeight);
+  const rawSelectedRowVisible = scroll.selectedRowVisible;
+  const rawSelectedRowAboveFooter = scroll.selectedRowAboveFooter;
+
+  if (listStateViewportHeight == null || listStateViewportHeight > 0) {
+    return {
+      scroll,
+      classification: null,
+      missingPrimitive: null,
+      listStateViewportHeight,
+      effectiveViewportHeight: listStateViewportHeight,
+      effectiveSafeViewportHeight: listStateSafeViewportHeight,
+      viewportMeasurementSource: "listState",
+      viewportMeasurementWarning: null,
+      selectedRowVisible: rawSelectedRowVisible ?? null,
+      selectedRowAboveFooter: rawSelectedRowAboveFooter ?? null,
+    };
+  }
+
+  const listBounds = layoutReceipt ? layoutNodeBounds(layoutReceipt, "ScriptList") : null;
+  const selectedIndex = asNumber(scroll.selectedIndex);
+  const selectedRowBounds =
+    selectedIndex == null || !layoutReceipt
+      ? null
+      : layoutNodeBounds(layoutReceipt, `ListItem[${selectedIndex}]`);
+  const footerBounds = layoutReceipt ? layoutNodeBounds(layoutReceipt, "MainViewFooter") : null;
+
+  if (!listBounds || !selectedRowBounds) {
+    return {
+      scroll: {
+        ...scroll,
+        selectedRowVisible: null,
+        selectedRowAboveFooter: null,
+      },
+      classification: "blocked-by-missing-primitive",
+      missingPrimitive: "selectedRowBounds",
+      listStateViewportHeight,
+      effectiveViewportHeight: listBounds?.height ?? null,
+      effectiveSafeViewportHeight: null,
+      viewportMeasurementSource: listBounds ? "layout" : "listState",
+      viewportMeasurementWarning: "listStateViewportUnmeasured",
+      selectedRowVisible: null,
+      selectedRowAboveFooter: null,
+    };
+  }
+
+  const effectiveViewportHeight = listBounds.height;
+  const selectedRowVisible =
+    selectedRowBounds.y >= listBounds.y
+    && selectedRowBounds.y + selectedRowBounds.height <= listBounds.y + listBounds.height;
+  const effectiveSafeViewportHeight = footerBounds
+    ? Math.max(0, footerBounds.y - listBounds.y)
+    : effectiveViewportHeight;
+  const selectedRowAboveFooter =
+    selectedRowBounds.y + selectedRowBounds.height <= listBounds.y + effectiveSafeViewportHeight;
+
+  return {
+    scroll: {
+      ...scroll,
+      viewportHeight: effectiveViewportHeight,
+      safeViewportHeight: effectiveSafeViewportHeight,
+      selectedRowTop: selectedRowBounds.y - listBounds.y,
+      selectedRowBottom: selectedRowBounds.y + selectedRowBounds.height - listBounds.y,
+      selectedRowVisible,
+      selectedRowAboveFooter,
+    },
+    classification: null,
+    missingPrimitive: null,
+    listStateViewportHeight,
+    effectiveViewportHeight,
+    effectiveSafeViewportHeight,
+    viewportMeasurementSource: "layout",
+    viewportMeasurementWarning: "listStateViewportUnmeasured",
+    selectedRowVisible,
+    selectedRowAboveFooter,
+  };
+}
+
+function classify(
+  targetReceipt: JsonObject,
+  stateEnvelope: JsonObject,
+  scroll: JsonObject,
+  measurementClassification?: string | null,
+) {
   if (targetReceipt.classification !== "ok") {
     return targetReceipt.classification ?? "blocked-by-target-ambiguity";
   }
   if (stateEnvelope.status === "error") {
     return "blocked-by-timeout";
+  }
+  if (measurementClassification) {
+    return measurementClassification;
   }
   if (Object.keys(scroll).length === 0 || scroll.scrollTop == null || scroll.viewportHeight == null) {
     return "blocked-by-missing-primitive";
@@ -160,13 +286,33 @@ async function main() {
   const resolvedKind = String(resolved.targetKind ?? "").toLowerCase();
   const resolvedSurface = String(resolved.semanticSurface ?? resolved.surfaceKind ?? "").toLowerCase();
   const isNotesTarget = resolvedKind === "notes" || resolvedSurface === "notes";
-  const scroll = isNotesTarget ? notesScrollFromState(state) : mainListScrollFromState(state);
+  const rawScroll = isNotesTarget ? notesScrollFromState(state) : mainListScrollFromState(state);
+  const normalized = isNotesTarget
+    ? {
+        scroll: rawScroll,
+        classification: null,
+        missingPrimitive: null,
+        listStateViewportHeight: asNumber(rawScroll.viewportHeight),
+        effectiveViewportHeight: asNumber(rawScroll.viewportHeight),
+        effectiveSafeViewportHeight: asNumber(rawScroll.safeViewportHeight),
+        viewportMeasurementSource: "listState",
+        viewportMeasurementWarning: null,
+        selectedRowVisible: rawScroll.selectedRowVisible ?? null,
+        selectedRowAboveFooter: rawScroll.selectedRowAboveFooter ?? null,
+      }
+    : normalizeScriptListScrollMeasurement(
+        rawScroll,
+        asNumber(rawScroll.viewportHeight) != null && (asNumber(rawScroll.viewportHeight) ?? 0) <= 0
+          ? await layoutMeasurement(args)
+          : null,
+      );
+  const scroll = normalized.scroll;
   const contentHeight = asNumber(scroll.contentHeight);
   const viewportHeight = asNumber(scroll.viewportHeight);
   const maxScrollTop = asNumber(scroll.maxScrollTop);
   const scrollTop = asNumber(scroll.scrollTop);
   const canScrollY = maxScrollTop != null ? maxScrollTop > 0 : contentHeight != null && viewportHeight != null ? contentHeight > viewportHeight : null;
-  const classification = classify(targetReceipt, stateEnvelope, scroll);
+  const classification = classify(targetReceipt, stateEnvelope, scroll, normalized.classification);
 
   console.log(JSON.stringify({
     schemaVersion: 1,
@@ -181,7 +327,12 @@ async function main() {
       scrollTopItem: scroll.scrollTopItem ?? null,
       contentHeight,
       viewportHeight,
+      listStateViewportHeight: normalized.listStateViewportHeight,
+      effectiveViewportHeight: normalized.effectiveViewportHeight,
+      viewportMeasurementSource: normalized.viewportMeasurementSource,
+      viewportMeasurementWarning: normalized.viewportMeasurementWarning,
       safeViewportHeight: scroll.safeViewportHeight ?? null,
+      effectiveSafeViewportHeight: normalized.effectiveSafeViewportHeight,
       footerHeight: scroll.footerHeight ?? null,
       maxScrollTop,
       canScrollY,
@@ -195,6 +346,7 @@ async function main() {
       activeNoteId: scroll.activeNoteId ?? null,
       generation: scroll.generation ?? null,
     },
+    missingPrimitive: normalized.missingPrimitive,
     resizePressure: {
       overflowY: canScrollY,
       hiddenContentHeight: contentHeight != null && viewportHeight != null ? Math.max(0, contentHeight - viewportHeight) : null,
@@ -206,6 +358,7 @@ async function main() {
         : "",
       stateEnvelope.status === "error" ? "stateResult" : "",
       targetReceipt.classification !== "ok" ? "strictTargetIdentity" : "",
+      normalized.missingPrimitive ?? "",
     ].filter(Boolean),
     errors: [targetReceipt, stateEnvelope].filter((value) => value.status === "error"),
     state,
