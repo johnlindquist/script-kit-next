@@ -31,6 +31,7 @@ pub mod computer_use;
 // Supports gpui_component IconName, embedded SVGs, SF Symbols, app bundles
 pub mod debug_grid;
 pub mod designs;
+pub mod dev_style_tool;
 pub mod editor;
 pub mod emoji;
 pub mod emoji_usage;

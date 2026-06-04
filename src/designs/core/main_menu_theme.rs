@@ -378,8 +378,12 @@ impl MainMenuThemeVariant {
         }
     }
 
-    pub fn def(self) -> MainMenuThemeDef {
+    pub fn base_def(self) -> MainMenuThemeDef {
         base_main_menu_theme_def(self, self.header_info_bar())
+    }
+
+    pub fn def(self) -> MainMenuThemeDef {
+        crate::dev_style_tool::runtime_overrides::apply_to_main_menu_def(self.base_def())
     }
 
     pub fn header_info_bar(self) -> HeaderInfoBarTokens {

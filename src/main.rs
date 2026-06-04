@@ -53,6 +53,7 @@ mod config;
 mod confirm;
 mod context_snapshot;
 mod designs;
+mod dev_style_tool;
 mod dictation;
 mod editor;
 #[allow(dead_code)] // Public API in lib.rs; binary only uses ErrorSeverity currently
