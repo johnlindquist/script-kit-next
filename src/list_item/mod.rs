@@ -1562,7 +1562,6 @@ impl RenderOnce for ListItem {
                 | MainMenuRowKind::StudioPaperGlass
                 | MainMenuRowKind::OperatorMonoGlass
         ) && selected;
-        let left_block = false;
         let name_underline_bold = matches!(row_kind, MainMenuRowKind::CarbonNeon) && selected;
         let badges_accent = matches!(
             row_kind,
@@ -1998,34 +1997,6 @@ impl RenderOnce for ListItem {
             .flex_row()
             .items_center()
             .gap(px(metrics.icon_text_gap));
-
-        // Left Block: a chunky filled accent block leading the row. The slot is
-        // always reserved so icons stay aligned across rows.
-        if left_block {
-            let block_alpha = if self.selected {
-                0xFF
-            } else if hover_visible {
-                0x66
-            } else {
-                0x00
-            };
-            inner_content = inner_content.child(
-                div()
-                    .w(px(10.0))
-                    .h_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .flex_shrink_0()
-                    .child(
-                        div()
-                            .w(px(6.0))
-                            .h(px(20.0))
-                            .rounded(px(3.0))
-                            .bg(accent_at(block_alpha)),
-                    ),
-            );
-        }
 
         inner_content = inner_content.child(icon_element);
 

@@ -96,3 +96,21 @@ fn list_item_metadata_badges_use_main_menu_metadata_metrics() {
     assert!(source.contains(".py(px(metrics.badge_padding_y))"));
     assert!(source.contains(".rounded(px(metrics.badge_radius))"));
 }
+
+#[test]
+fn list_item_does_not_retain_dead_left_block_accent_branch() {
+    let source = fs::read_to_string("src/list_item/mod.rs").expect("read list item source");
+
+    assert!(
+        !source.contains("let left_block = false"),
+        "dead left_block row-accent gate should not remain"
+    );
+    assert!(
+        !source.contains("if left_block"),
+        "dead left_block row-accent branch should not remain"
+    );
+    assert!(
+        !source.contains("block_alpha"),
+        "dead left_block accent alpha ladder should not remain"
+    );
+}
