@@ -5,39 +5,101 @@
  *
  * Usage:
  *   bun scripts/devtools/acp-mention.ts verify --session <name> [--start] [--file CLAUDE.md]
+ *   bun scripts/devtools/acp-mention.ts bench --session <name> [--start] [--iterations 8] [--output <path>]
  */
+
+import { mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 
 type JsonObject = Record<string, unknown>;
 
 type Args = {
-  command: "verify";
+  command: "verify" | "bench";
   session: string;
   start: boolean;
   fileLabel: string;
   timeoutMs: number;
+  iterations: number;
+  discardWarmup: number;
+  outputPath: string;
+};
+
+type ScenarioTargetKind = "main" | "acp";
+
+type BenchScenario = {
+  name: string;
+  targetKind: ScenarioTargetKind;
+  values: string[];
+};
+
+type BenchStep = {
+  label: string;
+  input: string;
+  success: boolean;
+  traceTotalElapsedMs: number | null;
+  commandElapsedMs: number | null;
+  wallMs: number;
+  effectiveElapsedMs: number | null;
+  inputTextAfter: string;
+  visibleCountAfter: number | null;
+  target: JsonObject | null;
+  error?: unknown;
+};
+
+type BenchScenarioResult = {
+  name: string;
+  targetKind: ScenarioTargetKind;
+  target: JsonObject | null;
+  steps: BenchStep[];
+  summary: BenchSummary;
+};
+
+type BenchSummary = {
+  sampleCount: number;
+  p50Ms: number | null;
+  p95Ms: number | null;
+  maxMs: number | null;
+  over16Count: number;
+  over32Count: number;
+  missingTimingCount: number;
+  missingTraceTimingCount: number;
+  failedStepCount: number;
+};
+
+const ACCEPTANCE = {
+  maxAllowedP95RatioVsMainMenu: 1.25,
+  maxAllowedAbsoluteP95Ms: 16,
+  maxAllowedSingleStepMs: 32,
 };
 
 function usage() {
   return [
     "Usage:",
     "  bun scripts/devtools/acp-mention.ts verify --session <name> [--start] [--file <basename>]",
+    "  bun scripts/devtools/acp-mention.ts bench --session <name> [--start] [--iterations 8] [--discard-warmup 2] [--output <path>]",
     "",
     "Opens Agent Chat, types @, selects a file row via batch selectByValue, and asserts",
     "the composer contains @file:<basename> (not @md:/@ts: extension prefixes).",
+    "",
+    "The bench command compares main menu search typing against ACP @ context typing",
+    "with transaction-trace timings and strict target receipts.",
   ].join("\n");
 }
 
 function parseArgs(argv: string[]): Args {
-  if (argv[0] !== "verify") {
+  if (argv[0] !== "verify" && argv[0] !== "bench") {
     console.error(usage());
     process.exit(2);
   }
   const args: Args = {
-    command: "verify",
+    command: argv[0],
     session: "default",
     start: false,
     fileLabel: "CLAUDE.md",
     timeoutMs: 20000,
+    iterations: 8,
+    discardWarmup: 2,
+    outputPath: "",
   };
   for (let i = 1; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -45,6 +107,9 @@ function parseArgs(argv: string[]): Args {
     else if (arg === "--start") args.start = true;
     else if (arg === "--file") args.fileLabel = argv[++i] ?? args.fileLabel;
     else if (arg === "--timeout") args.timeoutMs = Number(argv[++i] ?? args.timeoutMs);
+    else if (arg === "--iterations") args.iterations = Number(argv[++i] ?? args.iterations);
+    else if (arg === "--discard-warmup") args.discardWarmup = Number(argv[++i] ?? args.discardWarmup);
+    else if (arg === "--output") args.outputPath = argv[++i] ?? "";
     else if (arg === "--help" || arg === "-h") {
       console.log(usage());
       process.exit(0);
@@ -97,6 +162,14 @@ function asObject(value: unknown): JsonObject {
 
 function arrayOf(value: unknown): JsonObject[] {
   return Array.isArray(value) ? value.filter((entry): entry is JsonObject => typeof entry === "object" && entry !== null) : [];
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function stringOrEmpty(value: unknown) {
+  return typeof value === "string" ? value : "";
 }
 
 function assertFileToken(inputText: string, fileLabel: string) {
@@ -157,12 +230,334 @@ async function waitForMainTarget(args: Args) {
   return { targetsReceipt: lastTargets, main: null };
 }
 
-async function main() {
-  const args = parseArgs(Bun.argv.slice(2));
-  // Use flat /tmp/sk-agentic-sessions/<session>/ (not .../${SESSION}/${SESSION}/).
+function sortedNumbers(values: number[]) {
+  return [...values].sort((a, b) => a - b);
+}
+
+function percentile(values: number[], percentileValue: number) {
+  if (values.length === 0) return null;
+  const sorted = sortedNumbers(values);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil((percentileValue / 100) * sorted.length) - 1),
+  );
+  return sorted[index];
+}
+
+function commandElapsed(batch: JsonObject) {
+  const results = arrayOf(batch.results);
+  const setInput = results.find((entry) => entry.command === "setInput") ?? results[0];
+  return numberOrNull(setInput?.elapsed);
+}
+
+function traceElapsed(batch: JsonObject) {
+  const trace = asObject(batch.trace);
+  return numberOrNull(batch.totalElapsed)
+    ?? numberOrNull(batch.total_elapsed)
+    ?? numberOrNull(trace.totalElapsedMs)
+    ?? numberOrNull(trace.total_elapsed_ms);
+}
+
+export function summarizeBenchSteps(steps: BenchStep[], discardWarmup = 0): BenchSummary {
+  const sampled = steps.slice(Math.max(0, discardWarmup));
+  const timings = sampled
+    .map((step) => step.effectiveElapsedMs)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  return {
+    sampleCount: sampled.length,
+    p50Ms: percentile(timings, 50),
+    p95Ms: percentile(timings, 95),
+    maxMs: timings.length > 0 ? Math.max(...timings) : null,
+    over16Count: timings.filter((value) => value > 16).length,
+    over32Count: timings.filter((value) => value > 32).length,
+    missingTimingCount: sampled.length - timings.length,
+    missingTraceTimingCount: sampled.filter((step) => step.traceTotalElapsedMs == null && step.commandElapsedMs == null).length,
+    failedStepCount: sampled.filter((step) => !step.success).length,
+  };
+}
+
+function p95Of(scenarios: BenchScenarioResult[], name: string) {
+  return scenarios.find((scenario) => scenario.name === name)?.summary.p95Ms ?? null;
+}
+
+export function classifyBenchReceipt(scenarios: BenchScenarioResult[]) {
+  if (scenarios.some((scenario) => !scenario.target)) {
+    return "blocked-by-target-ambiguity";
+  }
+  if (scenarios.some((scenario) => scenario.summary.missingTimingCount > 0)) {
+    return "blocked-by-missing-primitive";
+  }
+  if (scenarios.some((scenario) => scenario.summary.failedStepCount > 0)) {
+    return "blocked-by-missing-primitive";
+  }
+  const mainMenuP95 = p95Of(scenarios, "main-menu-search-baseline");
+  if (mainMenuP95 == null || mainMenuP95 <= 0) {
+    return "blocked-by-missing-primitive";
+  }
+
+  const threshold = Math.max(
+    ACCEPTANCE.maxAllowedAbsoluteP95Ms,
+    mainMenuP95 * ACCEPTANCE.maxAllowedP95RatioVsMainMenu,
+  );
+  const acpScenarioNames = [
+    "acp-context-root",
+    "acp-file-subsearch",
+    "acp-clipboard-subsearch",
+  ];
+  const slow = acpScenarioNames.some((name) => {
+    const p95 = p95Of(scenarios, name);
+    return p95 == null || p95 > threshold;
+  });
+  const tooSlowStep = scenarios.some((scenario) => {
+    if (!acpScenarioNames.includes(scenario.name)) return false;
+    return (scenario.summary.maxMs ?? 0) > ACCEPTANCE.maxAllowedSingleStepMs;
+  });
+  return slow || tooSlowStep ? "reproduced" : "fixed";
+}
+
+function comparisonFor(scenarios: BenchScenarioResult[]) {
+  const mainMenuP95 = p95Of(scenarios, "main-menu-search-baseline");
+  const acpP95Values = ["acp-context-root", "acp-file-subsearch", "acp-clipboard-subsearch"]
+    .map((name) => p95Of(scenarios, name))
+    .filter((value): value is number => value != null);
+  const acpAtSteadyStateP95Ms = acpP95Values.length > 0 ? Math.max(...acpP95Values) : null;
+  return {
+    mainMenuP95Ms: mainMenuP95,
+    acpAtSteadyStateP95Ms,
+    ratio: mainMenuP95 && acpAtSteadyStateP95Ms != null
+      ? Number((acpAtSteadyStateP95Ms / mainMenuP95).toFixed(3))
+      : null,
+  };
+}
+
+async function ensureSessionDefaults() {
   if (!process.env.SCRIPT_KIT_SESSION_DIR) {
     process.env.SCRIPT_KIT_SESSION_DIR = "/tmp/sk-agentic-sessions";
   }
+}
+
+async function startAndShowMain(args: Args) {
+  const setupReceipts: JsonObject = {};
+  if (args.start) {
+    setupReceipts.sessionStart = await run(["bash", "scripts/agentic/session.sh", "start", args.session], "session-start");
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const status = await run(
+        ["bash", "scripts/agentic/session.sh", "status", args.session],
+        "session-status",
+      );
+      setupReceipts.lastSessionStatus = status;
+      if (status.healthy === true && status.alive === true) break;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+  setupReceipts.show = await run(
+    [
+      "bash",
+      "scripts/agentic/session.sh",
+      "send",
+      args.session,
+      JSON.stringify({ type: "show" }),
+      "--await-parse",
+      "--timeout",
+      String(args.timeoutMs),
+    ],
+    "session-show",
+  );
+  setupReceipts.mainReady = await waitForMainTarget(args);
+  return setupReceipts;
+}
+
+async function openAcp(args: Args) {
+  return run(
+    [
+      "bash",
+      "scripts/agentic/session.sh",
+      "send",
+      args.session,
+      JSON.stringify({ type: "openAi" }),
+      "--await-parse",
+      "--timeout",
+      String(args.timeoutMs),
+    ],
+    "openAi",
+  );
+}
+
+async function runSetInputStep(
+  args: Args,
+  scenario: BenchScenario,
+  target: JsonObject,
+  value: string,
+) {
+  const requestId = `devtools-acp-context-bench-${scenario.name}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const waitCondition = scenario.targetKind === "acp"
+    ? { type: "acpInputMatch", text: value }
+    : { type: "stateMatch", state: { inputValue: value } };
+  const payload = {
+    type: "batch",
+    requestId,
+    target,
+    commands: [
+      { type: "setInput", text: value },
+      { type: "waitFor", condition: waitCondition, timeout: 5000, pollInterval: 10 },
+    ],
+    options: { stopOnError: true, rollbackOnError: false, timeout: args.timeoutMs },
+    trace: "on",
+  };
+  const started = Date.now();
+  const batchEnvelope = await rpc(args.session, payload, "batchResult", args.timeoutMs);
+  const wallMs = Date.now() - started;
+  const batch = responseOf(batchEnvelope);
+  const traceTotalElapsedMs = traceElapsed(batch);
+  const commandElapsedMs = commandElapsed(batch);
+  const effectiveElapsedMs = Math.max(
+    ...[traceTotalElapsedMs, commandElapsedMs, wallMs]
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value)),
+  );
+  const stateEnvelope = await rpc(
+    args.session,
+    scenario.targetKind === "acp"
+      ? { type: "getAcpState", requestId: `${requestId}-state`, target }
+      : { type: "getState", requestId: `${requestId}-state`, target, summaryOnly: true },
+    scenario.targetKind === "acp" ? "acpStateResult" : "stateResult",
+    8000,
+  );
+  const state = responseOf(stateEnvelope);
+  const inputTextAfter = scenario.targetKind === "acp"
+    ? stringOrEmpty(state.inputText)
+    : stringOrEmpty(state.inputValue);
+  const visibleCountAfter = scenario.targetKind === "acp"
+    ? numberOrNull(asObject(state.picker).itemCount) ?? numberOrNull(asObject(state.picker).rowCount)
+    : numberOrNull(state.choiceCount) ?? numberOrNull(state.visibleCount);
+  return {
+    label: value.length === 0 ? "clear" : `set ${value}`,
+    input: value,
+    success: batch.success === true && inputTextAfter === value,
+    traceTotalElapsedMs,
+    commandElapsedMs,
+    wallMs,
+    effectiveElapsedMs,
+    inputTextAfter,
+    visibleCountAfter,
+    target,
+    error: batch.success === true ? undefined : batch.failure ?? batch.error ?? batchEnvelope,
+  } satisfies BenchStep;
+}
+
+async function runScenario(
+  args: Args,
+  scenario: BenchScenario,
+  target: JsonObject,
+) {
+  const steps: BenchStep[] = [];
+  const values = Array.from({ length: Math.max(1, args.iterations) }, () => scenario.values).flat();
+  for (const value of values) {
+    steps.push(await runSetInputStep(args, scenario, target, value));
+  }
+  return {
+    name: scenario.name,
+    targetKind: scenario.targetKind,
+    target,
+    steps,
+    summary: summarizeBenchSteps(steps, args.discardWarmup * scenario.values.length),
+  } satisfies BenchScenarioResult;
+}
+
+async function writeOutput(path: string, receipt: JsonObject) {
+  if (!path) return;
+  await mkdir(dirname(path), { recursive: true });
+  await Bun.write(path, JSON.stringify(receipt, null, 2));
+}
+
+async function runBench(args: Args) {
+  await ensureSessionDefaults();
+  const setupReceipts = await startAndShowMain(args);
+  const mainTarget = { type: "id", id: "main" };
+  const scenarios: BenchScenario[] = [
+    {
+      name: "main-menu-search-baseline",
+      targetKind: "main",
+      values: ["", "s", "se", "sel", "se", "s", ""],
+    },
+    {
+      name: "main-menu-spine-at-baseline",
+      targetKind: "main",
+      values: ["", "@", "@s", "@se", "@sel", "@se", "@s", "@", ""],
+    },
+  ];
+  const scenarioResults: BenchScenarioResult[] = [];
+  for (const scenario of scenarios) {
+    scenarioResults.push(await runScenario(args, scenario, mainTarget));
+  }
+
+  setupReceipts.openAi = await openAcp(args);
+  let { targetsReceipt, targetResolution } = await waitForAcpTarget(args);
+  const firstTargetResolution = targetResolution;
+  if (!targetResolution.target) {
+    setupReceipts.openAiRetry = await openAcp(args);
+    ({ targetsReceipt, targetResolution } = await waitForAcpTarget(args));
+  }
+
+  const acpTarget = targetResolution.target;
+  if (acpTarget) {
+    for (const scenario of [
+      {
+        name: "acp-context-root",
+        targetKind: "acp" as const,
+        values: ["", "@", "@s", "@se", "@sel", "@se", "@s", "@", ""],
+      },
+      {
+        name: "acp-file-subsearch",
+        targetKind: "acp" as const,
+        values: ["", "@file:", "@file:r", "@file:re", "@file:rea", "@file:re", "@file:r", "@file:", ""],
+      },
+      {
+        name: "acp-clipboard-subsearch",
+        targetKind: "acp" as const,
+        values: ["", "@clipboard:", "@clipboard:t", "@clipboard:te", "@clipboard:t", "@clipboard:", ""],
+      },
+    ]) {
+      scenarioResults.push(await runScenario(args, scenario, acpTarget));
+    }
+  } else {
+    for (const name of ["acp-context-root", "acp-file-subsearch", "acp-clipboard-subsearch"]) {
+      scenarioResults.push({
+        name,
+        targetKind: "acp",
+        target: null,
+        steps: [],
+        summary: summarizeBenchSteps([], 0),
+      });
+    }
+  }
+
+  const classification = classifyBenchReceipt(scenarioResults);
+  const receipt = {
+    schemaVersion: 1,
+    tool: "script-kit-devtools.at-context-typing-bench",
+    command: "bench",
+    classification,
+    session: args.session,
+    acceptance: ACCEPTANCE,
+    iterations: args.iterations,
+    discardWarmup: args.discardWarmup,
+    setupReceipts,
+    firstTargetResolution,
+    targetResolution,
+    targetsReceipt,
+    scenarios: scenarioResults,
+    comparison: comparisonFor(scenarioResults),
+    cleanup: { command: `bash scripts/agentic/session.sh stop ${args.session}` },
+  };
+  await writeOutput(args.outputPath, receipt);
+  console.log(JSON.stringify(receipt, null, 2));
+  if (classification.startsWith("blocked-")) {
+    process.exit(1);
+  }
+}
+
+async function runVerify(args: Args) {
+  await ensureSessionDefaults();
 
   const setupReceipts: JsonObject = {};
   if (args.start) {
@@ -321,6 +716,15 @@ async function main() {
   console.log(JSON.stringify(report, null, 2));
   if (classification !== "ok") {
     process.exit(1);
+  }
+}
+
+async function main() {
+  const args = parseArgs(Bun.argv.slice(2));
+  if (args.command === "bench") {
+    await runBench(args);
+  } else {
+    await runVerify(args);
   }
 }
 
