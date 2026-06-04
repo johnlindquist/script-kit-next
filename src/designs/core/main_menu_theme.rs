@@ -2,6 +2,15 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 use gpui::FontWeight;
 
+pub const MAIN_MENU_HEADER_CONTEXT_EDGE_OUTSET_X: f32 = 8.0;
+pub const MAIN_MENU_HEADER_VARIATION_BADGE_WIDTH_PX: f32 = 32.0;
+pub const MAIN_MENU_SECTION_PADDING_X: f32 = 14.0;
+pub const MAIN_MENU_SECTION_PADDING_TOP: f32 = 12.0;
+pub const MAIN_MENU_SECTION_PADDING_BOTTOM: f32 = 4.0;
+pub const MAIN_MENU_SECTION_GAP: f32 = 6.0;
+pub const MAIN_MENU_SECTION_ICON_SIZE: f32 = 10.0;
+pub const MAIN_MENU_SECTION_WEIGHT: FontWeight = FontWeight::SEMIBOLD;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[repr(u8)]
 pub enum MainMenuThemeVariant {
@@ -88,6 +97,11 @@ pub struct MainMenuListTokens {
     pub section_header_height: f32,
     pub first_section_header_height: f32,
     pub average_scroll_height: f32,
+    pub section_padding_x: f32,
+    pub section_padding_top: f32,
+    pub section_padding_bottom: f32,
+    pub section_gap: f32,
+    pub section_icon_size: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -204,6 +218,8 @@ pub struct HeaderInfoBarTokens {
     pub pill_radius: f32,
     pub pill_border_alpha: u32,
     pub pill_bg_alpha: u32,
+    pub context_edge_outset_x: f32,
+    pub variation_badge_width_px: f32,
     pub show_cwd: bool,
     pub show_agent_model: bool,
     pub show_keys: bool,
@@ -264,6 +280,8 @@ pub struct HeaderInfoBarSignature {
     pub pill_radius: u32,
     pub pill_border_alpha: u32,
     pub pill_bg_alpha: u32,
+    pub context_edge_outset_x: u32,
+    pub variation_badge_width_px: u32,
     pub show_cwd: bool,
     pub show_agent_model: bool,
     pub show_keys: bool,
@@ -454,6 +472,8 @@ impl MainMenuThemeVariant {
             pill_radius: q(tokens.pill_radius),
             pill_border_alpha: tokens.pill_border_alpha,
             pill_bg_alpha: tokens.pill_bg_alpha,
+            context_edge_outset_x: q(tokens.context_edge_outset_x),
+            variation_badge_width_px: q(tokens.variation_badge_width_px),
             show_cwd: tokens.show_cwd,
             show_agent_model: tokens.show_agent_model,
             show_keys: tokens.show_keys,
@@ -512,6 +532,8 @@ fn header_info_bar_tokens(
         pill_radius,
         pill_border_alpha,
         pill_bg_alpha,
+        context_edge_outset_x: MAIN_MENU_HEADER_CONTEXT_EDGE_OUTSET_X,
+        variation_badge_width_px: MAIN_MENU_HEADER_VARIATION_BADGE_WIDTH_PX,
         show_cwd,
         show_agent_model,
         show_keys,
@@ -585,6 +607,11 @@ fn base_main_menu_theme_def(
             section_header_height: 32.0,
             first_section_header_height: 4.0 + 16.0 + 4.0,
             average_scroll_height: ((40.0 * 3.0) + 32.0) / 4.0,
+            section_padding_x: MAIN_MENU_SECTION_PADDING_X,
+            section_padding_top: MAIN_MENU_SECTION_PADDING_TOP,
+            section_padding_bottom: MAIN_MENU_SECTION_PADDING_BOTTOM,
+            section_gap: MAIN_MENU_SECTION_GAP,
+            section_icon_size: MAIN_MENU_SECTION_ICON_SIZE,
         },
         row: MainMenuRowTokens {
             outer_padding_x: 4.0,
@@ -618,7 +645,7 @@ fn base_main_menu_theme_def(
             desc_weight: FontWeight::NORMAL,
             section_font_size: 12.0,
             section_line_height: 16.0,
-            section_weight: FontWeight::NORMAL,
+            section_weight: MAIN_MENU_SECTION_WEIGHT,
         },
         metadata: MainMenuMetadataTokens {
             metadata_alpha: 0x73,

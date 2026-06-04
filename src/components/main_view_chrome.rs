@@ -21,6 +21,7 @@ pub(crate) const MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID: &str = "main-view-context
 pub(crate) const MAIN_VIEW_HEADER_ID: &str = "main-view-header";
 pub(crate) const MAIN_VIEW_CWD_UNAVAILABLE_LABEL: &str = "No cwd";
 pub(crate) const MAIN_VIEW_AGENT_MODEL_UNAVAILABLE_LABEL: &str = "Agent model unavailable";
+const DEFAULT_CONTEXT_EDGE_OUTSET_X: f32 = 8.0;
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_HEADER_DIVIDER_ID: &str = "main-view-header-divider";
 #[allow(dead_code)]
@@ -101,7 +102,10 @@ pub(crate) fn render_main_view_chrome(
     def: MainMenuThemeDef,
     chrome: MainViewChrome,
 ) -> AnyElement {
-    root = root.child(render_main_view_header(chrome.header));
+    root = root.child(render_main_view_header_with_context_outset(
+        chrome.header,
+        def.header_info_bar.context_edge_outset_x,
+    ));
 
     if chrome.divider.visible {
         root = root.child(render_main_view_header_divider(
@@ -126,6 +130,13 @@ pub(crate) fn render_main_view_chrome(
 }
 
 pub(crate) fn render_main_view_header(chrome: MainViewHeaderChrome) -> AnyElement {
+    render_main_view_header_with_context_outset(chrome, DEFAULT_CONTEXT_EDGE_OUTSET_X)
+}
+
+pub(crate) fn render_main_view_header_with_context_outset(
+    chrome: MainViewHeaderChrome,
+    context_edge_outset_x: f32,
+) -> AnyElement {
     let mut header = div()
         .id(MAIN_VIEW_HEADER_ID)
         .w_full()
@@ -138,7 +149,7 @@ pub(crate) fn render_main_view_header(chrome: MainViewHeaderChrome) -> AnyElemen
         .gap(px(chrome.gap));
 
     if let Some(context) = chrome.context {
-        header = header.child(context);
+        header = header.child(div().w_full().mx(px(-context_edge_outset_x)).child(context));
     }
 
     header.child(chrome.input).into_any_element()
@@ -358,7 +369,7 @@ pub(crate) fn render_main_view_context_zone_required(
         .child(left_lane)
         .child(
             div()
-                .w(px(32.0))
+                .w(px(info.variation_badge_width_px))
                 .flex()
                 .items_center()
                 .justify_center()

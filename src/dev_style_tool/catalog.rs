@@ -272,6 +272,41 @@ f32_knob!(
     "list.averageScrollHeight",
     list.average_scroll_height
 );
+f32_knob!(
+    LIST_SECTION_PADDING_X_KNOB_ID,
+    get_list_section_padding_x,
+    apply_list_section_padding_x,
+    "list.sectionPaddingX",
+    list.section_padding_x
+);
+f32_knob!(
+    LIST_SECTION_PADDING_TOP_KNOB_ID,
+    get_list_section_padding_top,
+    apply_list_section_padding_top,
+    "list.sectionPaddingTop",
+    list.section_padding_top
+);
+f32_knob!(
+    LIST_SECTION_PADDING_BOTTOM_KNOB_ID,
+    get_list_section_padding_bottom,
+    apply_list_section_padding_bottom,
+    "list.sectionPaddingBottom",
+    list.section_padding_bottom
+);
+f32_knob!(
+    LIST_SECTION_GAP_KNOB_ID,
+    get_list_section_gap,
+    apply_list_section_gap,
+    "list.sectionGap",
+    list.section_gap
+);
+f32_knob!(
+    LIST_SECTION_ICON_SIZE_KNOB_ID,
+    get_list_section_icon_size,
+    apply_list_section_icon_size,
+    "list.sectionIconSize",
+    list.section_icon_size
+);
 
 f32_knob!(
     ROW_OUTER_PADDING_X_KNOB_ID,
@@ -649,6 +684,20 @@ alpha_knob!(
     "headerInfo.pillBorderAlpha",
     header_info_bar.pill_border_alpha
 );
+f32_knob!(
+    HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID,
+    get_header_info_context_edge_outset_x,
+    apply_header_info_context_edge_outset_x,
+    "headerInfo.contextEdgeOutsetX",
+    header_info_bar.context_edge_outset_x
+);
+f32_knob!(
+    HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
+    get_header_info_variation_badge_width,
+    apply_header_info_variation_badge_width,
+    "headerInfo.variationBadgeWidth",
+    header_info_bar.variation_badge_width_px
+);
 
 pub const STYLE_KNOBS: &[StyleKnob] = &[
     StyleKnob {
@@ -859,6 +908,61 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_list_average_scroll_height,
         apply: apply_list_average_scroll_height,
+    },
+    StyleKnob {
+        id: LIST_SECTION_PADDING_X_KNOB_ID,
+        label: "Section padding X",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 48.0,
+        step: 1.0,
+        get: get_list_section_padding_x,
+        apply: apply_list_section_padding_x,
+    },
+    StyleKnob {
+        id: LIST_SECTION_PADDING_TOP_KNOB_ID,
+        label: "Section padding top",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 48.0,
+        step: 1.0,
+        get: get_list_section_padding_top,
+        apply: apply_list_section_padding_top,
+    },
+    StyleKnob {
+        id: LIST_SECTION_PADDING_BOTTOM_KNOB_ID,
+        label: "Section padding bottom",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 24.0,
+        step: 1.0,
+        get: get_list_section_padding_bottom,
+        apply: apply_list_section_padding_bottom,
+    },
+    StyleKnob {
+        id: LIST_SECTION_GAP_KNOB_ID,
+        label: "Section content gap",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 24.0,
+        step: 1.0,
+        get: get_list_section_gap,
+        apply: apply_list_section_gap,
+    },
+    StyleKnob {
+        id: LIST_SECTION_ICON_SIZE_KNOB_ID,
+        label: "Section icon size",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_list_section_icon_size,
+        apply: apply_list_section_icon_size,
     },
     StyleKnob {
         id: ROW_OUTER_PADDING_X_KNOB_ID,
@@ -1442,6 +1546,28 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_header_info_pill_border_alpha,
         apply: apply_header_info_pill_border_alpha,
+    },
+    StyleKnob {
+        id: HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID,
+        label: "Header context edge outset X",
+        group: StyleKnobGroup::HeaderInfoBar,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_header_info_context_edge_outset_x,
+        apply: apply_header_info_context_edge_outset_x,
+    },
+    StyleKnob {
+        id: HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
+        label: "Header variation badge width",
+        group: StyleKnobGroup::HeaderInfoBar,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 96.0,
+        step: 1.0,
+        get: get_header_info_variation_badge_width,
+        apply: apply_header_info_variation_badge_width,
     },
 ];
 

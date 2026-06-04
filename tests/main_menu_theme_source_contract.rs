@@ -1,5 +1,6 @@
 use std::{collections::HashSet, fs};
 
+use gpui::FontWeight;
 use script_kit_gpui::designs::{
     MainMenuInputTextAlignment, MainMenuLogoPlacement, MainMenuThemeVariant,
 };
@@ -58,7 +59,7 @@ fn header_context_renders_centered_reference_number() {
     assert!(shared.contains("MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID"));
     assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID)"));
     assert!(shared.contains("(def.variant.index() + 1).to_string()"));
-    assert!(shared.contains(".w(px(32.0))"));
+    assert!(shared.contains(".w(px(info.variation_badge_width_px))"));
     assert!(shared.contains(".justify_center()"));
 }
 
@@ -96,9 +97,25 @@ fn selector_copy_is_header_oriented_not_theme_oriented() {
         assert_eq!(def.shell.divider_height, 0.0);
         assert_eq!(
             def.list.first_section_header_height,
-            def.shell.header_padding_y + def.typography.section_line_height + 4.0
+            def.shell.header_padding_y
+                + def.typography.section_line_height
+                + def.list.section_padding_bottom
         );
     }
+}
+
+#[test]
+fn main_menu_theme_owns_header_context_and_section_geometry_defaults() {
+    let def = MainMenuThemeVariant::InfoBarBase.def();
+
+    assert_eq!(def.header_info_bar.context_edge_outset_x, 8.0);
+    assert_eq!(def.header_info_bar.variation_badge_width_px, 32.0);
+    assert_eq!(def.list.section_padding_x, 14.0);
+    assert_eq!(def.list.section_padding_top, 12.0);
+    assert_eq!(def.list.section_padding_bottom, 4.0);
+    assert_eq!(def.list.section_gap, 6.0);
+    assert_eq!(def.list.section_icon_size, 10.0);
+    assert_eq!(def.typography.section_weight, FontWeight::SEMIBOLD);
 }
 
 #[test]
@@ -172,14 +189,14 @@ fn shared_main_view_columns_are_cross_theme_source_of_truth() {
 
     assert!(shared.contains("pub(crate) fn main_view_content_columns"));
     assert!(shared.contains("pub(crate) fn main_view_text_column_x"));
-    assert!(shared.contains("pub(crate) fn main_view_should_show_state_icon"));
+    assert!(!shared.contains("pub(crate) fn main_view_should_show_state_icon"));
     assert!(shared.contains(
-        "main_view_row_leading_x(def) + main_view_state_icon_slot_size(def) + def.row.icon_text_gap"
+        "main_view_row_leading_x(def) + def.icon.container_size + def.row.icon_text_gap"
     ));
-    assert!(shared.contains("!main_view_state_icon_uses_script_kit_logo(icon_name)"));
-    assert!(shared.contains("def.icon.container_size.min(def.search.height).max(16.0)"));
-    assert!(shared.contains("(text_column_x - def.shell.header_padding_x)"));
-    assert!(shared.contains(".max(def.search.text_inset_x)"));
+    assert!(!shared.contains("main_view_state_icon_uses_script_kit_logo"));
+    assert!(shared.contains("pub(crate) fn main_view_input_text_inset_left"));
+    assert!(shared.contains("def.search.text_inset_x"));
+    assert!(!shared.contains("has_leading"));
 }
 
 #[test]

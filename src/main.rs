@@ -273,8 +273,7 @@ use actions::{
     ActionsDialog, ScriptInfo,
 };
 use panel::{
-    CURSOR_GAP_X, CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH, HEADER_GAP, HEADER_PADDING_X,
-    HEADER_PADDING_Y,
+    CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH, HEADER_GAP, HEADER_PADDING_X, HEADER_PADDING_Y,
 };
 use parking_lot::Mutex as ParkingMutex;
 use protocol::{Choice, Message, ProtocolAction};

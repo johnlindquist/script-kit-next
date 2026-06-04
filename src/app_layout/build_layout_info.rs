@@ -1743,12 +1743,15 @@ impl ScriptListApp {
             0.0
         };
         if main_view_has_context_zone {
+            let context_outset_x = menu_def.header_info_bar.context_edge_outset_x;
             components.push(
                 LayoutComponentInfo::new("MainViewContextZone", LayoutComponentType::Container)
                     .with_bounds(
-                        shell_horizontal_padding,
+                        shell_horizontal_padding - context_outset_x,
                         shell.header_padding_y,
-                        (window_width - (shell_horizontal_padding * 2.0)).max(0.0),
+                        (window_width - (shell_horizontal_padding * 2.0)
+                            + context_outset_x * 2.0)
+                            .max(0.0),
                         main_view_context_zone_height,
                     )
                     .with_visual_style(

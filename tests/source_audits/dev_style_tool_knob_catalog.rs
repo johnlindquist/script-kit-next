@@ -38,6 +38,26 @@ fn dev_style_tool_catalog_owns_search_height_descriptor() {
         "metadata and footer numeric tokens must be cataloged"
     );
     assert!(
+        source.contains("HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID")
+            && source.contains("\"headerInfo.contextEdgeOutsetX\"")
+            && source.contains("HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID")
+            && source.contains("\"headerInfo.variationBadgeWidth\""),
+        "header info context geometry must be controlled through the dev style tool catalog"
+    );
+    assert!(
+        source.contains("LIST_SECTION_PADDING_X_KNOB_ID")
+            && source.contains("\"list.sectionPaddingX\"")
+            && source.contains("LIST_SECTION_PADDING_TOP_KNOB_ID")
+            && source.contains("\"list.sectionPaddingTop\"")
+            && source.contains("LIST_SECTION_PADDING_BOTTOM_KNOB_ID")
+            && source.contains("\"list.sectionPaddingBottom\"")
+            && source.contains("LIST_SECTION_GAP_KNOB_ID")
+            && source.contains("\"list.sectionGap\"")
+            && source.contains("LIST_SECTION_ICON_SIZE_KNOB_ID")
+            && source.contains("\"list.sectionIconSize\""),
+        "section header geometry must be controlled through the dev style tool catalog"
+    );
+    assert!(
         source.contains("STYLE_KNOBS"),
         "dev style controls must render from the shared STYLE_KNOBS catalog"
     );

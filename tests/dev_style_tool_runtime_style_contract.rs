@@ -1,6 +1,8 @@
 use script_kit_gpui::designs::MainMenuThemeVariant;
 use script_kit_gpui::dev_style_tool::{
-    export, runtime_overrides, StyleValue, FOOTER_SIDE_INSET_KNOB_ID, LIST_ITEM_HEIGHT_KNOB_ID,
+    export, runtime_overrides, StyleValue, FOOTER_SIDE_INSET_KNOB_ID,
+    HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID, HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
+    LIST_ITEM_HEIGHT_KNOB_ID, LIST_SECTION_GAP_KNOB_ID, LIST_SECTION_PADDING_X_KNOB_ID,
     METADATA_ALPHA_KNOB_ID, ROW_HOVER_FILL_ALPHA_KNOB_ID, ROW_INNER_PADDING_X_KNOB_ID,
     SEARCH_HEIGHT_KNOB_ID, STYLE_KNOBS,
 };
@@ -72,6 +74,20 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
         .expect("metadata alpha knob should exist");
     runtime_overrides::set_value(FOOTER_SIDE_INSET_KNOB_ID, StyleValue::Number(12.0))
         .expect("footer side inset knob should exist");
+    runtime_overrides::set_value(
+        HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
+        StyleValue::Number(72.0),
+    )
+    .expect("header variation badge width knob should exist");
+    runtime_overrides::set_value(
+        HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID,
+        StyleValue::Number(12.0),
+    )
+    .expect("header context edge outset knob should exist");
+    runtime_overrides::set_value(LIST_SECTION_PADDING_X_KNOB_ID, StyleValue::Number(28.0))
+        .expect("list section padding x knob should exist");
+    runtime_overrides::set_value(LIST_SECTION_GAP_KNOB_ID, StyleValue::Number(10.0))
+        .expect("list section gap knob should exist");
 
     let def = variant.def();
     assert_eq!(variant.base_def().list.item_height, base.list.item_height);
@@ -80,6 +96,10 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     assert_eq!(def.row.hover_fill_alpha, 77);
     assert_eq!(def.metadata.metadata_alpha, 88);
     assert_eq!(def.footer.metrics.side_inset_px, 12.0);
+    assert_eq!(def.header_info_bar.variation_badge_width_px, 72.0);
+    assert_eq!(def.header_info_bar.context_edge_outset_x, 12.0);
+    assert_eq!(def.list.section_padding_x, 28.0);
+    assert_eq!(def.list.section_gap, 10.0);
 
     runtime_overrides::reset_all();
 }

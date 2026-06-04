@@ -25,7 +25,10 @@ pub use main_menu_theme::{
     MainMenuIconTokens, MainMenuInputTextAlignment, MainMenuListTokens, MainMenuLogoPlacement,
     MainMenuMetadataTokens, MainMenuRowKind, MainMenuRowTokens, MainMenuSearchTokens,
     MainMenuShellTokens, MainMenuThemeDef, MainMenuThemeTier, MainMenuThemeVariant,
-    MainMenuTypographyTokens,
+    MainMenuTypographyTokens, MAIN_MENU_HEADER_CONTEXT_EDGE_OUTSET_X,
+    MAIN_MENU_HEADER_VARIATION_BADGE_WIDTH_PX, MAIN_MENU_SECTION_GAP, MAIN_MENU_SECTION_ICON_SIZE,
+    MAIN_MENU_SECTION_PADDING_BOTTOM, MAIN_MENU_SECTION_PADDING_TOP, MAIN_MENU_SECTION_PADDING_X,
+    MAIN_MENU_SECTION_WEIGHT,
 };
 // `FooterButtonFill` is part of the accent-variation API surface; re-exported for
 // callers that name the type even though the footer consumes it field-by-field.

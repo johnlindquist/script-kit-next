@@ -109,8 +109,10 @@ pub struct ListItemMetricsOverride {
     pub section_header_height: f32,
     pub first_section_header_height: f32,
     pub average_scroll_height: f32,
+    pub section_padding_x: f32,
     pub section_padding_top: f32,
     pub first_section_padding_top: f32,
+    pub section_padding_bottom: f32,
     pub icon_container_size: f32,
     pub icon_svg_size: f32,
     pub icon_tile_size: f32,
@@ -135,6 +137,7 @@ pub struct ListItemMetricsOverride {
     pub desc_line_height: f32,
     pub section_header_font_size: f32,
     pub section_gap: f32,
+    pub section_icon_size: f32,
     pub name_weight: FontWeight,
     pub selected_name_weight: FontWeight,
     pub desc_weight: FontWeight,
@@ -147,10 +150,13 @@ impl ListItemMetricsOverride {
         Self {
             item_height: LIST_ITEM_HEIGHT,
             section_header_height: SECTION_HEADER_HEIGHT,
-            first_section_header_height: SECTION_HEADER_HEIGHT - (SECTION_PADDING_TOP / 2.0),
+            first_section_header_height: SECTION_HEADER_HEIGHT
+                - (crate::designs::MAIN_MENU_SECTION_PADDING_TOP / 2.0),
             average_scroll_height: AVERAGE_ITEM_HEIGHT_FOR_SCROLL,
-            section_padding_top: SECTION_PADDING_TOP,
-            first_section_padding_top: SECTION_PADDING_TOP / 2.0,
+            section_padding_x: crate::designs::MAIN_MENU_SECTION_PADDING_X,
+            section_padding_top: crate::designs::MAIN_MENU_SECTION_PADDING_TOP,
+            first_section_padding_top: crate::designs::MAIN_MENU_SECTION_PADDING_TOP / 2.0,
+            section_padding_bottom: crate::designs::MAIN_MENU_SECTION_PADDING_BOTTOM,
             icon_container_size: ICON_CONTAINER_SIZE,
             icon_svg_size: ICON_SVG_SIZE,
             icon_tile_size: ICON_CONTAINER_SIZE,
@@ -174,11 +180,12 @@ impl ListItemMetricsOverride {
             desc_font_size: DESC_FONT_SIZE,
             desc_line_height: DESC_LINE_HEIGHT,
             section_header_font_size: SECTION_HEADER_FONT_SIZE,
-            section_gap: SECTION_GAP,
+            section_gap: crate::designs::MAIN_MENU_SECTION_GAP,
+            section_icon_size: crate::designs::MAIN_MENU_SECTION_ICON_SIZE,
             name_weight: FontWeight(450.0),
             selected_name_weight: FontWeight::MEDIUM,
             desc_weight: FontWeight::NORMAL,
-            section_weight: FontWeight::NORMAL,
+            section_weight: crate::designs::MAIN_MENU_SECTION_WEIGHT,
             desc_quiet_alpha: ALPHA_DESC_QUIET,
         }
     }
@@ -190,8 +197,10 @@ impl ListItemMetricsOverride {
             section_header_height: def.list.section_header_height,
             first_section_header_height: def.list.first_section_header_height,
             average_scroll_height: def.list.average_scroll_height,
-            section_padding_top: SECTION_PADDING_TOP,
+            section_padding_x: def.list.section_padding_x,
+            section_padding_top: def.list.section_padding_top,
             first_section_padding_top: def.shell.header_padding_y,
+            section_padding_bottom: def.list.section_padding_bottom,
             icon_container_size: def.icon.container_size,
             icon_svg_size: def.icon.svg_size,
             icon_tile_size: def.icon.tile_size,
@@ -215,7 +224,8 @@ impl ListItemMetricsOverride {
             desc_font_size: def.typography.desc_font_size,
             desc_line_height: def.typography.desc_line_height,
             section_header_font_size: def.typography.section_font_size,
-            section_gap: SECTION_GAP,
+            section_gap: def.list.section_gap,
+            section_icon_size: def.list.section_icon_size,
             name_weight: def.typography.name_weight,
             selected_name_weight: def.typography.selected_name_weight,
             desc_weight: def.typography.desc_weight,
@@ -335,8 +345,6 @@ const SOURCE_HINT_FONT_SIZE: f32 = 11.0;
 const TYPE_ACCESSORY_ICON_SIZE: f32 = 12.0;
 /// Section header label font size
 const SECTION_HEADER_FONT_SIZE: f32 = 12.0;
-/// Section header icon size
-const SECTION_HEADER_ICON_SIZE: f32 = 10.0;
 // =============================================================================
 // Badge & Tag Spacing
 // =============================================================================
@@ -357,14 +365,8 @@ const TOOL_BADGE_RADIUS: f32 = 3.0;
 // Section Header Spacing
 // =============================================================================
 
-/// Section header horizontal padding (matches item padding for alignment)
-const SECTION_PADDING_X: f32 = 14.0;
 /// Section header top padding (visual separation from above item)
-pub(crate) const SECTION_PADDING_TOP: f32 = 12.0;
-/// Section header bottom padding
-const SECTION_PADDING_BOTTOM: f32 = 4.0;
-/// Gap between header elements (icon, label, count)
-const SECTION_GAP: f32 = 6.0;
+pub(crate) const SECTION_PADDING_TOP: f32 = crate::designs::MAIN_MENU_SECTION_PADDING_TOP;
 // =============================================================================
 // Opacity tokens — named for intent, hex for GPUI rgba() bit-packing
 // =============================================================================
@@ -2324,7 +2326,7 @@ pub fn render_section_header(
         .items_center()
         .gap(px(metrics.section_gap))
         .text_size(px(metrics.section_header_font_size))
-        .font_weight(FontWeight::SEMIBOLD)
+        .font_weight(metrics.section_weight)
         .text_color(header_text_color);
 
     // Add icon before section name if provided — very quiet to avoid visual noise
@@ -2333,7 +2335,7 @@ pub fn render_section_header(
             content = content.child(
                 svg()
                     .external_path(icon_name.external_path())
-                    .size(px(SECTION_HEADER_ICON_SIZE))
+                    .size(px(metrics.section_icon_size))
                     .text_color(rgba((colors.text_primary << 8) | colors.alpha_muted)),
             );
         }
@@ -2346,7 +2348,7 @@ pub fn render_section_header(
         content = content.child(
             div()
                 .text_xs()
-                .font_weight(FontWeight::SEMIBOLD)
+                .font_weight(metrics.section_weight)
                 .text_color(rgba((colors.text_primary << 8) | colors.alpha_muted))
                 .child(count.to_string()),
         );
@@ -2368,9 +2370,9 @@ pub fn render_section_header(
     let mut header = div()
         .w_full()
         .h(px(header_height))
-        .px(px(SECTION_PADDING_X))
+        .px(px(metrics.section_padding_x))
         .pt(px(padding_top))
-        .pb(px(SECTION_PADDING_BOTTOM))
+        .pb(px(metrics.section_padding_bottom))
         .flex()
         .flex_col();
     header = if is_first {
@@ -2415,8 +2417,8 @@ mod render_section_header_source_tests {
     fn section_headers_use_semibold_quiet_text() {
         let body = render_section_header_source();
         assert!(
-            body.contains("font_weight(FontWeight::SEMIBOLD)"),
-            "section headers should use semibold weight for quiet but readable emphasis"
+            body.contains("font_weight(metrics.section_weight)"),
+            "section headers should use the theme section weight for quiet but readable emphasis"
         );
         assert!(
             body.contains("colors.alpha_muted"),
@@ -2451,6 +2453,35 @@ mod selected_accent_bar_removed_tests {
     fn list_item_does_not_render_left_edge_accent_bar() {
         // The selected-row left-edge accent strip was removed in favor of the
         // main-menu theme explorer. Guard against it sneaking back in.
+    #[test]
+    fn section_header_geometry_comes_from_metrics() {
+        let body = render_section_header_source();
+        for required in [
+            "metrics.section_padding_x",
+            "metrics.section_padding_bottom",
+            "metrics.section_gap",
+            "metrics.section_icon_size",
+            "metrics.section_weight",
+        ] {
+            assert!(
+                body.contains(required),
+                "render_section_header should use {required}"
+            );
+        }
+        for forbidden in [
+            "SECTION_PADDING_X",
+            "SECTION_PADDING_BOTTOM",
+            "SECTION_GAP",
+            "SECTION_HEADER_ICON_SIZE",
+            "FontWeight::SEMIBOLD",
+        ] {
+            assert!(
+                !body.contains(forbidden),
+                "render_section_header should not use local {forbidden}"
+            );
+        }
+    }
+
         // NOTE: needle is assembled via concat! so this assertion does not
         // match itself in the included source text.
         let needle = concat!("border_l(px(ACCENT_", "BAR_WIDTH))");

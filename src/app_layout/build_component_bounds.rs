@@ -447,16 +447,19 @@ impl ScriptListApp {
                 | AppView::AcpChatView { .. }
         ) {
             if main_view_has_context_zone {
+                let context_outset_x = px(menu_def.header_info_bar.context_edge_outset_x);
                 bounds.push(
                     ComponentBounds::new(
                         "MainViewContextZone",
                         gpui::Bounds {
                             origin: gpui::point(
-                                px(menu_def.shell.header_padding_x),
+                                px(menu_def.shell.header_padding_x) - context_outset_x,
                                 px(menu_def.shell.header_padding_y),
                             ),
                             size: gpui::size(
-                                (width - px(menu_def.shell.header_padding_x * 2.0)).max(px(0.)),
+                                (width - px(menu_def.shell.header_padding_x * 2.0)
+                                    + context_outset_x * 2.0)
+                                    .max(px(0.)),
                                 px(main_view_context_zone_height),
                             ),
                         },

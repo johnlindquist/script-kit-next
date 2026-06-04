@@ -86,7 +86,9 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(shared.contains("FooterHintButtonSpec"));
     assert!(shared.contains(".h(px(info.height_px))"));
     assert!(shared.contains("(def.variant.index() + 1).to_string()"));
-    assert!(shared.contains(".w(px(32.0))"));
+    assert!(shared.contains(".w(px(info.variation_badge_width_px))"));
+    assert!(!shared.contains(".w(px(32.0))"));
+    assert!(!shared.contains("MAIN_VIEW_CONTEXT_EDGE_OUTSET_X: f32 = 8.0"));
     assert!(shared.contains("def.footer.button.hover"));
     assert!(!shared.contains("theme.colors.accent.selected << 8"));
     assert!(
