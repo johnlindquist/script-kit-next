@@ -175,6 +175,7 @@ pub enum BatchCommand {
         control: String,
         value: String,
     },
+    SaveCurrentStyleSettings,
     FilterAndSelect {
         filter: String,
         #[serde(rename = "selectFirst", default)]

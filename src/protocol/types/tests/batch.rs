@@ -112,6 +112,17 @@ fn batch_command_set_theme_control_round_trips() {
 }
 
 #[test]
+fn batch_command_save_current_style_settings_round_trips() {
+    let cmd = BatchCommand::SaveCurrentStyleSettings;
+    let json = serde_json::to_value(&cmd).expect("serialize saveCurrentStyleSettings");
+    assert_eq!(json["type"], "saveCurrentStyleSettings");
+
+    let back: BatchCommand =
+        serde_json::from_value(json).expect("deserialize saveCurrentStyleSettings");
+    assert_eq!(back, cmd);
+}
+
+#[test]
 fn batch_command_filter_and_select_round_trips() {
     let cmd = BatchCommand::FilterAndSelect {
         filter: "app".to_string(),

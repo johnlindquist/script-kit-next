@@ -10,6 +10,11 @@ pub const MAIN_MENU_SECTION_PADDING_BOTTOM: f32 = 4.0;
 pub const MAIN_MENU_SECTION_GAP: f32 = 6.0;
 pub const MAIN_MENU_SECTION_ICON_SIZE: f32 = 10.0;
 pub const MAIN_MENU_SECTION_WEIGHT: FontWeight = FontWeight::SEMIBOLD;
+pub const MAIN_MENU_METADATA_SOURCE_FONT_SIZE: f32 = 11.0;
+pub const MAIN_MENU_METADATA_BADGE_FONT_SIZE: f32 = 10.0;
+pub const MAIN_MENU_METADATA_BADGE_PADDING_X: f32 = 4.0;
+pub const MAIN_MENU_METADATA_BADGE_PADDING_Y: f32 = 1.0;
+pub const MAIN_MENU_METADATA_BADGE_RADIUS: f32 = 3.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[repr(u8)]
@@ -150,6 +155,9 @@ pub struct MainMenuMetadataTokens {
     pub type_accessory_size: f32,
     pub source_font_size: f32,
     pub badge_font_size: f32,
+    pub badge_padding_x: f32,
+    pub badge_padding_y: f32,
+    pub badge_radius: f32,
     pub keycap_font_size: f32,
 }
 
@@ -650,8 +658,11 @@ fn base_main_menu_theme_def(
         metadata: MainMenuMetadataTokens {
             metadata_alpha: 0x73,
             type_accessory_size: 12.0,
-            source_font_size: 11.0,
-            badge_font_size: 10.0,
+            source_font_size: MAIN_MENU_METADATA_SOURCE_FONT_SIZE,
+            badge_font_size: MAIN_MENU_METADATA_BADGE_FONT_SIZE,
+            badge_padding_x: MAIN_MENU_METADATA_BADGE_PADDING_X,
+            badge_padding_y: MAIN_MENU_METADATA_BADGE_PADDING_Y,
+            badge_radius: MAIN_MENU_METADATA_BADGE_RADIUS,
             keycap_font_size: footer.metrics.keycap_font_size,
         },
         footer,

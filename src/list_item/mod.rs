@@ -135,6 +135,11 @@ pub struct ListItemMetricsOverride {
     pub name_line_height: f32,
     pub desc_font_size: f32,
     pub desc_line_height: f32,
+    pub source_font_size: f32,
+    pub badge_font_size: f32,
+    pub badge_padding_x: f32,
+    pub badge_padding_y: f32,
+    pub badge_radius: f32,
     pub section_header_font_size: f32,
     pub section_gap: f32,
     pub section_icon_size: f32,
@@ -179,6 +184,11 @@ impl ListItemMetricsOverride {
             name_line_height: NAME_LINE_HEIGHT,
             desc_font_size: DESC_FONT_SIZE,
             desc_line_height: DESC_LINE_HEIGHT,
+            source_font_size: crate::designs::MAIN_MENU_METADATA_SOURCE_FONT_SIZE,
+            badge_font_size: crate::designs::MAIN_MENU_METADATA_BADGE_FONT_SIZE,
+            badge_padding_x: crate::designs::MAIN_MENU_METADATA_BADGE_PADDING_X,
+            badge_padding_y: crate::designs::MAIN_MENU_METADATA_BADGE_PADDING_Y,
+            badge_radius: crate::designs::MAIN_MENU_METADATA_BADGE_RADIUS,
             section_header_font_size: SECTION_HEADER_FONT_SIZE,
             section_gap: crate::designs::MAIN_MENU_SECTION_GAP,
             section_icon_size: crate::designs::MAIN_MENU_SECTION_ICON_SIZE,
@@ -223,6 +233,11 @@ impl ListItemMetricsOverride {
             name_line_height: def.typography.name_line_height,
             desc_font_size: def.typography.desc_font_size,
             desc_line_height: def.typography.desc_line_height,
+            source_font_size: def.metadata.source_font_size,
+            badge_font_size: def.metadata.badge_font_size,
+            badge_padding_x: def.metadata.badge_padding_x,
+            badge_padding_y: def.metadata.badge_padding_y,
+            badge_radius: def.metadata.badge_radius,
             section_header_font_size: def.typography.section_font_size,
             section_gap: def.list.section_gap,
             section_icon_size: def.list.section_icon_size,
@@ -337,10 +352,6 @@ const DESC_LINE_HEIGHT: f32 = 16.0;
 const BADGE_FONT_SIZE: f32 = 11.0;
 /// Search-mode shortcut font size (kept compact to reduce clutter)
 const SEARCH_SHORTCUT_FONT_SIZE: f32 = 10.0;
-/// Tool/language badge font size (e.g. "ts", "bash")
-const TOOL_BADGE_FONT_SIZE: f32 = 10.0;
-/// Source hint font size (e.g. "main", "cleanshot")
-const SOURCE_HINT_FONT_SIZE: f32 = 11.0;
 /// Search-mode type accessory icon size (Lucide hint rendered at accent tint)
 const TYPE_ACCESSORY_ICON_SIZE: f32 = 12.0;
 /// Section header label font size
@@ -355,12 +366,6 @@ const BADGE_PADDING_X: f32 = 6.0;
 const BADGE_PADDING_Y: f32 = 2.0;
 /// Shortcut badge corner radius
 const BADGE_RADIUS: f32 = 4.0;
-/// Tool badge horizontal padding
-const TOOL_BADGE_PADDING_X: f32 = 4.0;
-/// Tool badge vertical padding
-const TOOL_BADGE_PADDING_Y: f32 = 1.0;
-/// Tool badge corner radius
-const TOOL_BADGE_RADIUS: f32 = 3.0;
 // =============================================================================
 // Section Header Spacing
 // =============================================================================
@@ -2063,12 +2068,12 @@ impl RenderOnce for ListItem {
                     };
                     accessories = accessories.child(
                         div()
-                            .text_size(px(metrics.desc_font_size.min(TOOL_BADGE_FONT_SIZE)))
+                            .text_size(px(metrics.badge_font_size))
                             .font_family(FONT_MONO)
                             .text_color(badge_text)
-                            .px(px(TOOL_BADGE_PADDING_X))
-                            .py(px(TOOL_BADGE_PADDING_Y))
-                            .rounded(px(TOOL_BADGE_RADIUS))
+                            .px(px(metrics.badge_padding_x))
+                            .py(px(metrics.badge_padding_y))
+                            .rounded(px(metrics.badge_radius))
                             .bg(badge_bg)
                             .child(badge.clone()),
                     );
@@ -2080,7 +2085,7 @@ impl RenderOnce for ListItem {
                 if let Some(ref hint) = self.source_hint {
                     accessories = accessories.child(
                         div()
-                            .text_size(px(metrics.desc_font_size.min(SOURCE_HINT_FONT_SIZE)))
+                            .text_size(px(metrics.source_font_size))
                             .text_color(rgba((colors.text_primary << 8) | colors.alpha_hint))
                             .child(hint.clone()),
                     );

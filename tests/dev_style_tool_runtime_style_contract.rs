@@ -3,7 +3,8 @@ use script_kit_gpui::dev_style_tool::{
     export, runtime_overrides, StyleValue, FOOTER_SIDE_INSET_KNOB_ID,
     HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID, HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
     LIST_ITEM_HEIGHT_KNOB_ID, LIST_SECTION_GAP_KNOB_ID, LIST_SECTION_PADDING_X_KNOB_ID,
-    METADATA_ALPHA_KNOB_ID, ROW_HOVER_FILL_ALPHA_KNOB_ID, ROW_INNER_PADDING_X_KNOB_ID,
+    METADATA_ALPHA_KNOB_ID, METADATA_BADGE_PADDING_X_KNOB_ID, METADATA_BADGE_PADDING_Y_KNOB_ID,
+    METADATA_BADGE_RADIUS_KNOB_ID, ROW_HOVER_FILL_ALPHA_KNOB_ID, ROW_INNER_PADDING_X_KNOB_ID,
     SEARCH_HEIGHT_KNOB_ID, STYLE_KNOBS,
 };
 use std::sync::{Mutex, OnceLock};
@@ -72,6 +73,12 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
         .expect("row hover alpha knob should exist");
     runtime_overrides::set_value(METADATA_ALPHA_KNOB_ID, StyleValue::Number(88.0))
         .expect("metadata alpha knob should exist");
+    runtime_overrides::set_value(METADATA_BADGE_PADDING_X_KNOB_ID, StyleValue::Number(9.0))
+        .expect("metadata badge padding x knob should exist");
+    runtime_overrides::set_value(METADATA_BADGE_PADDING_Y_KNOB_ID, StyleValue::Number(3.0))
+        .expect("metadata badge padding y knob should exist");
+    runtime_overrides::set_value(METADATA_BADGE_RADIUS_KNOB_ID, StyleValue::Number(11.0))
+        .expect("metadata badge radius knob should exist");
     runtime_overrides::set_value(FOOTER_SIDE_INSET_KNOB_ID, StyleValue::Number(12.0))
         .expect("footer side inset knob should exist");
     runtime_overrides::set_value(
@@ -95,11 +102,22 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     assert_eq!(def.row.inner_padding_x, 22.0);
     assert_eq!(def.row.hover_fill_alpha, 77);
     assert_eq!(def.metadata.metadata_alpha, 88);
+    assert_eq!(def.metadata.badge_padding_x, 9.0);
+    assert_eq!(def.metadata.badge_padding_y, 3.0);
+    assert_eq!(def.metadata.badge_radius, 11.0);
     assert_eq!(def.footer.metrics.side_inset_px, 12.0);
     assert_eq!(def.header_info_bar.variation_badge_width_px, 72.0);
     assert_eq!(def.header_info_bar.context_edge_outset_x, 12.0);
     assert_eq!(def.list.section_padding_x, 28.0);
     assert_eq!(def.list.section_gap, 10.0);
+
+    let metrics =
+        script_kit_gpui::list_item::ListItemMetricsOverride::from_main_menu_theme(variant);
+    assert_eq!(metrics.badge_padding_x, 9.0);
+    assert_eq!(metrics.badge_padding_y, 3.0);
+    assert_eq!(metrics.badge_radius, 11.0);
+    assert_eq!(metrics.source_font_size, def.metadata.source_font_size);
+    assert_eq!(metrics.badge_font_size, def.metadata.badge_font_size);
 
     runtime_overrides::reset_all();
 }
@@ -141,6 +159,11 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         .expect("overrides should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.itemHeight" && entry["value"] == 57.0));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "metadata.badgePaddingX"));
 
     let markdown = export::current_settings_markdown();
     assert!(markdown.contains("```json"));

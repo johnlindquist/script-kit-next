@@ -33,6 +33,12 @@ fn dev_style_tool_catalog_owns_search_height_descriptor() {
     assert!(
         source.contains("METADATA_ALPHA_KNOB_ID")
             && source.contains("\"metadata.typeAccessorySize\"")
+            && source.contains("METADATA_BADGE_PADDING_X_KNOB_ID")
+            && source.contains("\"metadata.badgePaddingX\"")
+            && source.contains("METADATA_BADGE_PADDING_Y_KNOB_ID")
+            && source.contains("\"metadata.badgePaddingY\"")
+            && source.contains("METADATA_BADGE_RADIUS_KNOB_ID")
+            && source.contains("\"metadata.badgeRadius\"")
             && source.contains("FOOTER_SIDE_INSET_KNOB_ID")
             && source.contains("FOOTER_BUTTON_BORDER_ALPHA_KNOB_ID"),
         "metadata and footer numeric tokens must be cataloged"
@@ -73,4 +79,20 @@ fn main_menu_theme_keeps_override_free_base_def() {
             && source.contains("apply_to_main_menu_def(self.base_def())"),
         "MainMenuThemeVariant must expose base_def() and apply runtime overrides through def()"
     );
+}
+
+#[test]
+fn list_item_metadata_badges_use_main_menu_metadata_metrics() {
+    let source = fs::read_to_string("src/list_item/mod.rs").expect("read list item source");
+
+    assert!(source.contains("source_font_size: def.metadata.source_font_size"));
+    assert!(source.contains("badge_font_size: def.metadata.badge_font_size"));
+    assert!(source.contains("badge_padding_x: def.metadata.badge_padding_x"));
+    assert!(source.contains("badge_padding_y: def.metadata.badge_padding_y"));
+    assert!(source.contains("badge_radius: def.metadata.badge_radius"));
+    assert!(source.contains("text_size(px(metrics.source_font_size))"));
+    assert!(source.contains("text_size(px(metrics.badge_font_size))"));
+    assert!(source.contains(".px(px(metrics.badge_padding_x))"));
+    assert!(source.contains(".py(px(metrics.badge_padding_y))"));
+    assert!(source.contains(".rounded(px(metrics.badge_radius))"));
 }

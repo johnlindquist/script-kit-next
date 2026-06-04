@@ -465,6 +465,27 @@ f32_knob!(
     metadata.badge_font_size
 );
 f32_knob!(
+    METADATA_BADGE_PADDING_X_KNOB_ID,
+    get_metadata_badge_padding_x,
+    apply_metadata_badge_padding_x,
+    "metadata.badgePaddingX",
+    metadata.badge_padding_x
+);
+f32_knob!(
+    METADATA_BADGE_PADDING_Y_KNOB_ID,
+    get_metadata_badge_padding_y,
+    apply_metadata_badge_padding_y,
+    "metadata.badgePaddingY",
+    metadata.badge_padding_y
+);
+f32_knob!(
+    METADATA_BADGE_RADIUS_KNOB_ID,
+    get_metadata_badge_radius,
+    apply_metadata_badge_radius,
+    "metadata.badgeRadius",
+    metadata.badge_radius
+);
+f32_knob!(
     METADATA_KEYCAP_FONT_SIZE_KNOB_ID,
     get_metadata_keycap_font_size,
     apply_metadata_keycap_font_size,
@@ -1205,6 +1226,39 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_metadata_badge_font_size,
         apply: apply_metadata_badge_font_size,
+    },
+    StyleKnob {
+        id: METADATA_BADGE_PADDING_X_KNOB_ID,
+        label: "Badge padding X",
+        group: StyleKnobGroup::Metadata,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 24.0,
+        step: 0.5,
+        get: get_metadata_badge_padding_x,
+        apply: apply_metadata_badge_padding_x,
+    },
+    StyleKnob {
+        id: METADATA_BADGE_PADDING_Y_KNOB_ID,
+        label: "Badge padding Y",
+        group: StyleKnobGroup::Metadata,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 16.0,
+        step: 0.5,
+        get: get_metadata_badge_padding_y,
+        apply: apply_metadata_badge_padding_y,
+    },
+    StyleKnob {
+        id: METADATA_BADGE_RADIUS_KNOB_ID,
+        label: "Badge radius",
+        group: StyleKnobGroup::Metadata,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 24.0,
+        step: 0.5,
+        get: get_metadata_badge_radius,
+        apply: apply_metadata_badge_radius,
     },
     StyleKnob {
         id: METADATA_KEYCAP_FONT_SIZE_KNOB_ID,

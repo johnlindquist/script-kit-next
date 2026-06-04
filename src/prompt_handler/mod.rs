@@ -482,7 +482,7 @@ impl BatchTargetCapabilities {
             AutomationBatchTargetKind::DevStyleTool => Self {
                 display_name: "DevStyleTool",
                 unsupported_target_name: "DevStyleTool",
-                supported_commands: &["setThemeControl"],
+                supported_commands: &["setThemeControl", "saveCurrentStyleSettings"],
                 concise_unsupported_message: true,
             },
         }
@@ -7332,7 +7332,11 @@ impl ScriptListApp {
                         }
 
                         if batch_target_kind == AutomationBatchTargetKind::DevStyleTool
-                            && !matches!(cmd, protocol::BatchCommand::SetThemeControl { .. })
+                            && !matches!(
+                                cmd,
+                                protocol::BatchCommand::SetThemeControl { .. }
+                                    | protocol::BatchCommand::SaveCurrentStyleSettings
+                            )
                         {
                             let command = batch_command_name(cmd);
                             results.push(protocol::BatchResultEntry {
@@ -7526,6 +7530,59 @@ impl ScriptListApp {
                                         });
                                         failed = true;
                                         if opts.stop_on_error { break; }
+                                    }
+                                }
+                            }
+                            protocol::BatchCommand::SaveCurrentStyleSettings => {
+                                if batch_target_kind != AutomationBatchTargetKind::DevStyleTool {
+                                    let command = batch_command_name(cmd);
+                                    results.push(protocol::BatchResultEntry {
+                                        index,
+                                        success: false,
+                                        command,
+                                        elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                        value: None,
+                                        error: Some(unsupported_batch_command_error(
+                                            batch_target_kind,
+                                            cmd,
+                                        )),
+                                    });
+                                    failed = true;
+                                    if opts.stop_on_error {
+                                        break;
+                                    }
+                                    continue;
+                                }
+                                match crate::dev_style_tool::export::save_current_settings_markdown()
+                                {
+                                    Ok(path) => {
+                                        let saved_path = path.to_string_lossy().into_owned();
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "saveCurrentStyleSettings", path = %saved_path, "batch.step.ok");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: true,
+                                            command: "saveCurrentStyleSettings".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: Some(saved_path),
+                                            error: None,
+                                        });
+                                    }
+                                    Err(e) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "saveCurrentStyleSettings", error = %e, "batch.step.error");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "saveCurrentStyleSettings".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(protocol::TransactionError::action_failed(
+                                                format!("{e}"),
+                                            )),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error {
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -10162,6 +10219,7 @@ fn batch_command_name(cmd: &protocol::BatchCommand) -> String {
         protocol::BatchCommand::SelectByValue { .. } => "selectByValue".to_string(),
         protocol::BatchCommand::SelectBySemanticId { .. } => "selectBySemanticId".to_string(),
         protocol::BatchCommand::SetThemeControl { .. } => "setThemeControl".to_string(),
+        protocol::BatchCommand::SaveCurrentStyleSettings => "saveCurrentStyleSettings".to_string(),
         protocol::BatchCommand::FilterAndSelect { .. } => "filterAndSelect".to_string(),
         protocol::BatchCommand::TypeAndSubmit { .. } => "typeAndSubmit".to_string(),
     }

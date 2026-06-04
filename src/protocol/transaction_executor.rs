@@ -279,6 +279,7 @@ fn command_name(command: &BatchCommand) -> &'static str {
         BatchCommand::SelectByValue { .. } => "selectByValue",
         BatchCommand::SelectBySemanticId { .. } => "selectBySemanticId",
         BatchCommand::SetThemeControl { .. } => "setThemeControl",
+        BatchCommand::SaveCurrentStyleSettings => "saveCurrentStyleSettings",
         BatchCommand::FilterAndSelect { .. } => "filterAndSelect",
         BatchCommand::TypeAndSubmit { .. } => "typeAndSubmit",
     }
@@ -824,6 +825,7 @@ pub fn execute_batch<P: TransactionStateProvider>(
             | BatchCommand::TogglePreview
             | BatchCommand::OpenNotesAcp
             | BatchCommand::SetThemeControl { .. }
+            | BatchCommand::SaveCurrentStyleSettings
             | BatchCommand::FilterAndSelect { .. }
             | BatchCommand::TypeAndSubmit { .. } => {
                 // These compound commands are not yet wired to the executor.

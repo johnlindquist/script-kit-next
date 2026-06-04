@@ -96,6 +96,12 @@ fn dev_style_tool_devtools_mutation_reuses_runtime_catalog() {
     assert!(runtime_source.contains("knob_id_from_str(control)"));
     assert!(runtime_source.contains("set_value(id, StyleValue::Number(parsed))"));
     assert!(prompt_handler_source.contains("AutomationBatchTargetKind::DevStyleTool"));
+    assert!(prompt_handler_source
+        .contains("supported_commands: &[\"setThemeControl\", \"saveCurrentStyleSettings\"]"));
+    assert!(prompt_handler_source.contains("SaveCurrentStyleSettings"));
+    assert!(prompt_handler_source.contains("\"saveCurrentStyleSettings\""));
+    assert!(prompt_handler_source
+        .contains("crate::dev_style_tool::export::save_current_settings_markdown"));
     assert!(prompt_handler_source.contains("set_number_from_devtools"));
     assert!(prompt_handler_source.contains("this.update_theme(cx);"));
 }
