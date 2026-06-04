@@ -25,6 +25,7 @@ pub enum StyleKnobGroup {
     List,
     Row,
     Icon,
+    Metadata,
     Typography,
     Footer,
     HeaderInfoBar,
@@ -38,6 +39,7 @@ impl StyleKnobGroup {
             StyleKnobGroup::List => "List",
             StyleKnobGroup::Row => "Rows",
             StyleKnobGroup::Icon => "Icons",
+            StyleKnobGroup::Metadata => "Metadata",
             StyleKnobGroup::Typography => "Typography",
             StyleKnobGroup::Footer => "Footer",
             StyleKnobGroup::HeaderInfoBar => "Header info bar",
@@ -122,6 +124,19 @@ macro_rules! alpha_knob {
     };
 }
 
+macro_rules! alpha_nested_knob {
+    ($id_const:ident, $get_fn:ident, $apply_fn:ident, $id:literal, $section:ident.$nested:ident.$field:ident) => {
+        pub const $id_const: StyleKnobId = StyleKnobId::new($id);
+        fn $get_fn(def: &MainMenuThemeDef) -> StyleValue {
+            StyleValue::Number(def.$section.$nested.$field as f32)
+        }
+        fn $apply_fn(def: &mut MainMenuThemeDef, value: StyleValue) {
+            let StyleValue::Number(value) = value;
+            def.$section.$nested.$field = value.round().clamp(0.0, 255.0) as u32;
+        }
+    };
+}
+
 f32_knob!(
     SHELL_CONTENT_INSET_X_KNOB_ID,
     get_shell_content_inset_x,
@@ -156,6 +171,27 @@ f32_knob!(
     apply_shell_header_gap,
     "shell.headerGap",
     shell.header_gap
+);
+f32_knob!(
+    SHELL_DIVIDER_MARGIN_X_KNOB_ID,
+    get_shell_divider_margin_x,
+    apply_shell_divider_margin_x,
+    "shell.dividerMarginX",
+    shell.divider_margin_x
+);
+f32_knob!(
+    SHELL_DIVIDER_HEIGHT_KNOB_ID,
+    get_shell_divider_height,
+    apply_shell_divider_height,
+    "shell.dividerHeight",
+    shell.divider_height
+);
+alpha_knob!(
+    SHELL_DIVIDER_ALPHA_KNOB_ID,
+    get_shell_divider_alpha,
+    apply_shell_divider_alpha,
+    "shell.dividerAlpha",
+    shell.divider_alpha
 );
 
 f32_knob!(
@@ -229,6 +265,13 @@ f32_knob!(
     "list.firstSectionHeaderHeight",
     list.first_section_header_height
 );
+f32_knob!(
+    LIST_AVERAGE_SCROLL_HEIGHT_KNOB_ID,
+    get_list_average_scroll_height,
+    apply_list_average_scroll_height,
+    "list.averageScrollHeight",
+    list.average_scroll_height
+);
 
 f32_knob!(
     ROW_OUTER_PADDING_X_KNOB_ID,
@@ -294,6 +337,13 @@ f32_knob!(
     row.selected_border_width
 );
 alpha_knob!(
+    ROW_SELECTED_BORDER_ALPHA_KNOB_ID,
+    get_row_selected_border_alpha,
+    apply_row_selected_border_alpha,
+    "row.selectedBorderAlpha",
+    row.selected_border_alpha
+);
+alpha_knob!(
     ROW_SELECTED_FILL_ALPHA_KNOB_ID,
     get_row_selected_fill_alpha,
     apply_row_selected_fill_alpha,
@@ -343,6 +393,49 @@ alpha_knob!(
     "icon.tileFillAlpha",
     icon.tile_fill_alpha
 );
+alpha_knob!(
+    ICON_TILE_BORDER_ALPHA_KNOB_ID,
+    get_icon_tile_border_alpha,
+    apply_icon_tile_border_alpha,
+    "icon.tileBorderAlpha",
+    icon.tile_border_alpha
+);
+
+alpha_knob!(
+    METADATA_ALPHA_KNOB_ID,
+    get_metadata_alpha,
+    apply_metadata_alpha,
+    "metadata.alpha",
+    metadata.metadata_alpha
+);
+f32_knob!(
+    METADATA_TYPE_ACCESSORY_SIZE_KNOB_ID,
+    get_metadata_type_accessory_size,
+    apply_metadata_type_accessory_size,
+    "metadata.typeAccessorySize",
+    metadata.type_accessory_size
+);
+f32_knob!(
+    METADATA_SOURCE_FONT_SIZE_KNOB_ID,
+    get_metadata_source_font_size,
+    apply_metadata_source_font_size,
+    "metadata.sourceFontSize",
+    metadata.source_font_size
+);
+f32_knob!(
+    METADATA_BADGE_FONT_SIZE_KNOB_ID,
+    get_metadata_badge_font_size,
+    apply_metadata_badge_font_size,
+    "metadata.badgeFontSize",
+    metadata.badge_font_size
+);
+f32_knob!(
+    METADATA_KEYCAP_FONT_SIZE_KNOB_ID,
+    get_metadata_keycap_font_size,
+    apply_metadata_keycap_font_size,
+    "metadata.keycapFontSize",
+    metadata.keycap_font_size
+);
 
 f32_knob!(
     TYPOGRAPHY_NAME_FONT_SIZE_KNOB_ID,
@@ -388,6 +481,13 @@ f32_knob!(
 );
 
 f32_nested_knob!(
+    FOOTER_SIDE_INSET_KNOB_ID,
+    get_footer_side_inset,
+    apply_footer_side_inset,
+    "footer.sideInset",
+    footer.metrics.side_inset_px
+);
+f32_nested_knob!(
     FOOTER_ITEM_GAP_KNOB_ID,
     get_footer_item_gap,
     apply_footer_item_gap,
@@ -414,6 +514,13 @@ f32_nested_knob!(
     apply_footer_button_padding_y,
     "footer.buttonPaddingY",
     footer.metrics.button_padding_y
+);
+f32_nested_knob!(
+    FOOTER_RUN_BUTTON_PADDING_X_KNOB_ID,
+    get_footer_run_button_padding_x,
+    apply_footer_run_button_padding_x,
+    "footer.runButtonPaddingX",
+    footer.metrics.run_button_padding_x
 );
 f32_nested_knob!(
     FOOTER_BUTTON_RADIUS_KNOB_ID,
@@ -456,6 +563,20 @@ f32_nested_knob!(
     apply_footer_keycap_font_size,
     "footer.keycapFontSize",
     footer.metrics.keycap_font_size
+);
+alpha_knob!(
+    FOOTER_DIVIDER_ALPHA_KNOB_ID,
+    get_footer_divider_alpha,
+    apply_footer_divider_alpha,
+    "footer.dividerAlpha",
+    footer.divider_alpha
+);
+alpha_nested_knob!(
+    FOOTER_BUTTON_BORDER_ALPHA_KNOB_ID,
+    get_footer_button_border_alpha,
+    apply_footer_button_border_alpha,
+    "footer.buttonBorderAlpha",
+    footer.button.border_alpha
 );
 
 f32_knob!(
@@ -586,6 +707,39 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         apply: apply_shell_header_gap,
     },
     StyleKnob {
+        id: SHELL_DIVIDER_MARGIN_X_KNOB_ID,
+        label: "Divider margin X",
+        group: StyleKnobGroup::Shell,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 64.0,
+        step: 1.0,
+        get: get_shell_divider_margin_x,
+        apply: apply_shell_divider_margin_x,
+    },
+    StyleKnob {
+        id: SHELL_DIVIDER_HEIGHT_KNOB_ID,
+        label: "Divider height",
+        group: StyleKnobGroup::Shell,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 8.0,
+        step: 0.5,
+        get: get_shell_divider_height,
+        apply: apply_shell_divider_height,
+    },
+    StyleKnob {
+        id: SHELL_DIVIDER_ALPHA_KNOB_ID,
+        label: "Divider alpha",
+        group: StyleKnobGroup::Shell,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_shell_divider_alpha,
+        apply: apply_shell_divider_alpha,
+    },
+    StyleKnob {
         id: SEARCH_HEIGHT_KNOB_ID,
         label: "Main input height",
         group: StyleKnobGroup::Search,
@@ -696,6 +850,17 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         apply: apply_list_first_section_header_height,
     },
     StyleKnob {
+        id: LIST_AVERAGE_SCROLL_HEIGHT_KNOB_ID,
+        label: "Average scroll height",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 160.0,
+        step: 1.0,
+        get: get_list_average_scroll_height,
+        apply: apply_list_average_scroll_height,
+    },
+    StyleKnob {
         id: ROW_OUTER_PADDING_X_KNOB_ID,
         label: "Item outer padding X",
         group: StyleKnobGroup::Row,
@@ -795,6 +960,17 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         apply: apply_row_selected_border_width,
     },
     StyleKnob {
+        id: ROW_SELECTED_BORDER_ALPHA_KNOB_ID,
+        label: "Selected border alpha",
+        group: StyleKnobGroup::Row,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_row_selected_border_alpha,
+        apply: apply_row_selected_border_alpha,
+    },
+    StyleKnob {
         id: ROW_SELECTED_FILL_ALPHA_KNOB_ID,
         label: "Selected fill alpha",
         group: StyleKnobGroup::Row,
@@ -872,6 +1048,72 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         apply: apply_icon_tile_fill_alpha,
     },
     StyleKnob {
+        id: ICON_TILE_BORDER_ALPHA_KNOB_ID,
+        label: "Icon tile border alpha",
+        group: StyleKnobGroup::Icon,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_icon_tile_border_alpha,
+        apply: apply_icon_tile_border_alpha,
+    },
+    StyleKnob {
+        id: METADATA_ALPHA_KNOB_ID,
+        label: "Metadata alpha",
+        group: StyleKnobGroup::Metadata,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_metadata_alpha,
+        apply: apply_metadata_alpha,
+    },
+    StyleKnob {
+        id: METADATA_TYPE_ACCESSORY_SIZE_KNOB_ID,
+        label: "Type accessory size",
+        group: StyleKnobGroup::Metadata,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 48.0,
+        step: 1.0,
+        get: get_metadata_type_accessory_size,
+        apply: apply_metadata_type_accessory_size,
+    },
+    StyleKnob {
+        id: METADATA_SOURCE_FONT_SIZE_KNOB_ID,
+        label: "Source font size",
+        group: StyleKnobGroup::Metadata,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 24.0,
+        step: 1.0,
+        get: get_metadata_source_font_size,
+        apply: apply_metadata_source_font_size,
+    },
+    StyleKnob {
+        id: METADATA_BADGE_FONT_SIZE_KNOB_ID,
+        label: "Badge font size",
+        group: StyleKnobGroup::Metadata,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 24.0,
+        step: 1.0,
+        get: get_metadata_badge_font_size,
+        apply: apply_metadata_badge_font_size,
+    },
+    StyleKnob {
+        id: METADATA_KEYCAP_FONT_SIZE_KNOB_ID,
+        label: "Metadata keycap font size",
+        group: StyleKnobGroup::Metadata,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 24.0,
+        step: 1.0,
+        get: get_metadata_keycap_font_size,
+        apply: apply_metadata_keycap_font_size,
+    },
+    StyleKnob {
         id: TYPOGRAPHY_NAME_FONT_SIZE_KNOB_ID,
         label: "Name font size",
         group: StyleKnobGroup::Typography,
@@ -938,6 +1180,17 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         apply: apply_typography_section_line_height,
     },
     StyleKnob {
+        id: FOOTER_SIDE_INSET_KNOB_ID,
+        label: "Footer side inset",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 64.0,
+        step: 1.0,
+        get: get_footer_side_inset,
+        apply: apply_footer_side_inset,
+    },
+    StyleKnob {
         id: FOOTER_ITEM_GAP_KNOB_ID,
         label: "Footer item gap",
         group: StyleKnobGroup::Footer,
@@ -980,6 +1233,17 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_footer_button_padding_y,
         apply: apply_footer_button_padding_y,
+    },
+    StyleKnob {
+        id: FOOTER_RUN_BUTTON_PADDING_X_KNOB_ID,
+        label: "Run button padding X",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 40.0,
+        step: 1.0,
+        get: get_footer_run_button_padding_x,
+        apply: apply_footer_run_button_padding_x,
     },
     StyleKnob {
         id: FOOTER_BUTTON_RADIUS_KNOB_ID,
@@ -1046,6 +1310,28 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_footer_keycap_font_size,
         apply: apply_footer_keycap_font_size,
+    },
+    StyleKnob {
+        id: FOOTER_DIVIDER_ALPHA_KNOB_ID,
+        label: "Footer divider alpha",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_footer_divider_alpha,
+        apply: apply_footer_divider_alpha,
+    },
+    StyleKnob {
+        id: FOOTER_BUTTON_BORDER_ALPHA_KNOB_ID,
+        label: "Footer button border alpha",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_footer_button_border_alpha,
+        apply: apply_footer_button_border_alpha,
     },
     StyleKnob {
         id: HEADER_INFO_FONT_SIZE_KNOB_ID,

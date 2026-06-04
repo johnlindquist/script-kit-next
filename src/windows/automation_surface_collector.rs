@@ -342,8 +342,17 @@ fn collect_dev_style_tool_snapshot() -> SurfaceElementSnapshot {
         None,
         None,
     ));
+    elements.push(element(
+        "button:dev-style-tool-save",
+        ElementType::Button,
+        Some("Save".to_string()),
+        Some("saveCurrentStyleSettings".to_string()),
+        None,
+        None,
+        Some(0),
+    ));
     for (index, knob) in crate::dev_style_tool::STYLE_KNOBS.iter().enumerate() {
-        let control_index = index * 3;
+        let control_index = index * 3 + 1;
         elements.push(element(
             &format!("slider:dev-style-tool:{}", knob.id.as_str()),
             ElementType::Slider,

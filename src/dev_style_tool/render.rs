@@ -1,3 +1,4 @@
+use gpui::prelude::FluentBuilder;
 use gpui::{
     div, px, rgb, rgba, AppContext, Div, ElementId, Entity, InteractiveElement, IntoElement,
     ParentElement, Render, StatefulInteractiveElement, Styled, Subscription, Window, WindowHandle,
@@ -12,7 +13,7 @@ use crate::dev_style_tool::{
     catalog::{
         knob_by_id, StyleKnob, StyleKnobGroup, StyleKnobId, StyleUnit, StyleValue, STYLE_KNOBS,
     },
-    runtime_overrides,
+    export, runtime_overrides,
 };
 use crate::{theme, ScriptListApp};
 
@@ -26,6 +27,7 @@ pub(crate) struct DevStyleToolApp {
     main_window: WindowHandle<Root>,
     main_app: Entity<ScriptListApp>,
     controls: Vec<StyleControlState>,
+    save_status: Option<String>,
     subscriptions: Vec<Subscription>,
 }
 
@@ -88,6 +90,7 @@ impl DevStyleToolApp {
             main_window,
             main_app,
             controls,
+            save_status: None,
             subscriptions,
         }
     }
@@ -173,6 +176,14 @@ impl DevStyleToolApp {
         let _ = self.main_window.update(cx, |_root, _window, cx| {
             cx.notify();
         });
+    }
+
+    fn save_current_settings(&mut self, cx: &mut gpui::Context<Self>) {
+        self.save_status = Some(match export::save_current_settings_markdown() {
+            Ok(path) => export::export_summary_for_path(&path),
+            Err(error) => format!("Save failed: {error}"),
+        });
+        cx.notify();
     }
 
     fn render_groups(
@@ -328,6 +339,7 @@ impl Render for DevStyleToolApp {
         ];
         let right_groups = [
             StyleKnobGroup::Icon,
+            StyleKnobGroup::Metadata,
             StyleKnobGroup::Typography,
             StyleKnobGroup::Footer,
             StyleKnobGroup::HeaderInfoBar,
@@ -358,14 +370,45 @@ impl Render for DevStyleToolApp {
                     )
                     .child(
                         div()
-                            .text_xs()
-                            .text_color(rgb(chrome.text_secondary_hex))
-                            .child(format!(
-                                "{} controls | runtime generation {generation}",
-                                STYLE_KNOBS.len()
-                            )),
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(chrome.text_secondary_hex))
+                                    .child(format!(
+                                        "{} controls | runtime generation {generation}",
+                                        STYLE_KNOBS.len()
+                                    )),
+                            )
+                            .child(
+                                div()
+                                    .id("button:dev-style-tool-save")
+                                    .px(px(8.0))
+                                    .py(px(4.0))
+                                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+                                    .border(px(1.0))
+                                    .border_color(rgba(chrome.border_rgba))
+                                    .text_xs()
+                                    .cursor_pointer()
+                                    .hover(|style| style.bg(rgba(chrome.hover_rgba)))
+                                    .on_click(cx.listener(|this, _event, _window, cx| {
+                                        this.save_current_settings(cx);
+                                    }))
+                                    .child("Save"),
+                            ),
                     ),
             )
+            .when_some(self.save_status.as_ref(), |view, status| {
+                view.child(
+                    div()
+                        .id("status:dev-style-tool-save")
+                        .text_xs()
+                        .text_color(rgb(chrome.text_secondary_hex))
+                        .child(status.clone()),
+                )
+            })
             .child(
                 div()
                     .flex()
@@ -425,6 +468,7 @@ fn group_slug(group: StyleKnobGroup) -> &'static str {
         StyleKnobGroup::List => "list",
         StyleKnobGroup::Row => "row",
         StyleKnobGroup::Icon => "icon",
+        StyleKnobGroup::Metadata => "metadata",
         StyleKnobGroup::Typography => "typography",
         StyleKnobGroup::Footer => "footer",
         StyleKnobGroup::HeaderInfoBar => "header-info-bar",

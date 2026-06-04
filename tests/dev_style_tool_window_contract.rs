@@ -40,6 +40,9 @@ fn dev_style_tool_render_is_catalog_driven_and_narrow() {
     assert!(render_source.contains("knob_by_id"));
     assert!(render_source.contains("render_groups"));
     assert!(render_source.contains("render_control"));
+    assert!(render_source.contains("save_current_settings"));
+    assert!(render_source.contains("button:dev-style-tool-save"));
+    assert!(render_source.contains("export::save_current_settings_markdown"));
     assert!(render_source.contains("runtime_overrides::set_value"));
     assert!(render_source.contains("runtime_overrides::reset_value"));
     assert!(render_source.contains("main_app.update"));
@@ -67,6 +70,8 @@ fn dev_style_tool_registers_minimal_automation_target() {
     assert!(window_source.contains("upsert_automation_window"));
     assert!(window_source.contains("remove_automation_window(DEV_STYLE_TOOL_AUTOMATION_ID)"));
     assert!(collector_source.contains("collect_dev_style_tool_snapshot"));
+    assert!(collector_source.contains("button:dev-style-tool-save"));
+    assert!(collector_source.contains("saveCurrentStyleSettings"));
     assert!(collector_source.contains("crate::dev_style_tool::STYLE_KNOBS"));
     assert!(collector_source.contains("slider:dev-style-tool:{}"));
     assert!(collector_source.contains("input:dev-style-tool:{}"));

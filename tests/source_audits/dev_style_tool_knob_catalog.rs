@@ -24,6 +24,20 @@ fn dev_style_tool_catalog_owns_search_height_descriptor() {
         "row padding must be controlled through the dev style tool catalog"
     );
     assert!(
+        source.contains("SHELL_DIVIDER_ALPHA_KNOB_ID")
+            && source.contains("LIST_AVERAGE_SCROLL_HEIGHT_KNOB_ID")
+            && source.contains("ROW_SELECTED_BORDER_ALPHA_KNOB_ID")
+            && source.contains("ICON_TILE_BORDER_ALPHA_KNOB_ID"),
+        "main window divider, list, row, and icon numeric tokens must be cataloged"
+    );
+    assert!(
+        source.contains("METADATA_ALPHA_KNOB_ID")
+            && source.contains("\"metadata.typeAccessorySize\"")
+            && source.contains("FOOTER_SIDE_INSET_KNOB_ID")
+            && source.contains("FOOTER_BUTTON_BORDER_ALPHA_KNOB_ID"),
+        "metadata and footer numeric tokens must be cataloged"
+    );
+    assert!(
         source.contains("STYLE_KNOBS"),
         "dev style controls must render from the shared STYLE_KNOBS catalog"
     );

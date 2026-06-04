@@ -55,12 +55,13 @@ mod context_snapshot;
 mod designs;
 mod dev_style_tool {
     pub mod catalog;
+    pub(crate) mod export;
     pub(crate) mod render;
     pub mod runtime_overrides;
     pub(crate) mod window;
 
     #[allow(unused_imports)]
-    pub use catalog::{StyleKnobId, StyleValue, SEARCH_HEIGHT_KNOB_ID, STYLE_KNOBS};
+    pub use catalog::*;
 }
 mod dictation;
 mod editor;
