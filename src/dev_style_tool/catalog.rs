@@ -266,6 +266,13 @@ f32_knob!(
     list.first_section_header_height
 );
 f32_knob!(
+    LIST_SOURCE_STATUS_ROW_HEIGHT_KNOB_ID,
+    get_list_source_status_row_height,
+    apply_list_source_status_row_height,
+    "list.sourceStatusRowHeight",
+    list.source_status_row_height
+);
+f32_knob!(
     LIST_AVERAGE_SCROLL_HEIGHT_KNOB_ID,
     get_list_average_scroll_height,
     apply_list_average_scroll_height,
@@ -918,6 +925,17 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_list_first_section_header_height,
         apply: apply_list_first_section_header_height,
+    },
+    StyleKnob {
+        id: LIST_SOURCE_STATUS_ROW_HEIGHT_KNOB_ID,
+        label: "Source status row height",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 12.0,
+        max: 72.0,
+        step: 1.0,
+        get: get_list_source_status_row_height,
+        apply: apply_list_source_status_row_height,
     },
     StyleKnob {
         id: LIST_AVERAGE_SCROLL_HEIGHT_KNOB_ID,

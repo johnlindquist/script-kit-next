@@ -18,6 +18,12 @@ fn dev_style_tool_catalog_owns_search_height_descriptor() {
         "list.itemHeight must be a named descriptor in the dev style tool catalog"
     );
     assert!(
+        source.contains("LIST_SOURCE_STATUS_ROW_HEIGHT_KNOB_ID")
+            && source.contains("\"list.sourceStatusRowHeight\"")
+            && source.contains("\"Source status row height\""),
+        "source status row height must be controlled through the dev style tool catalog"
+    );
+    assert!(
         source.contains("ROW_INNER_PADDING_X_KNOB_ID")
             && source.contains("\"row.innerPaddingX\"")
             && source.contains("\"Item inner padding X\""),
@@ -113,4 +119,29 @@ fn list_item_does_not_retain_dead_left_block_accent_branch() {
         !source.contains("block_alpha"),
         "dead left_block accent alpha ladder should not remain"
     );
+}
+
+#[test]
+fn source_status_row_height_is_theme_tokenized() {
+    let theme =
+        fs::read_to_string("src/designs/core/main_menu_theme.rs").expect("read theme source");
+    let list_item = fs::read_to_string("src/list_item/mod.rs").expect("read list item source");
+    let render_script_list =
+        fs::read_to_string("src/render_script_list/mod.rs").expect("read render script list");
+
+    assert!(theme.contains("pub source_status_row_height: f32"));
+    assert!(theme.contains("source_status_row_height: 32.0"));
+    assert!(list_item.contains("source_status_row_height: def.list.source_status_row_height"));
+    assert!(list_item.contains("effective_source_status_row_height_for_theme"));
+    assert!(
+        !list_item
+            .split("pub fn effective_source_status_row_height()")
+            .nth(1)
+            .and_then(|body| body.split("#[inline]").next())
+            .unwrap_or_default()
+            .contains("SOURCE_STATUS_ROW_HEIGHT"),
+        "effective_source_status_row_height must not return the raw hard-coded constant"
+    );
+    assert!(render_script_list
+        .contains("effective_source_status_row_height_for_theme(\n                                            current_main_menu_theme"));
 }

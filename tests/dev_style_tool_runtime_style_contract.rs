@@ -3,7 +3,8 @@ use script_kit_gpui::dev_style_tool::{
     export, runtime_overrides, StyleValue, FOOTER_SIDE_INSET_KNOB_ID,
     HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID, HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
     LIST_ITEM_HEIGHT_KNOB_ID, LIST_SECTION_GAP_KNOB_ID, LIST_SECTION_PADDING_X_KNOB_ID,
-    METADATA_ALPHA_KNOB_ID, METADATA_BADGE_PADDING_X_KNOB_ID, METADATA_BADGE_PADDING_Y_KNOB_ID,
+    LIST_SOURCE_STATUS_ROW_HEIGHT_KNOB_ID, METADATA_ALPHA_KNOB_ID,
+    METADATA_BADGE_PADDING_X_KNOB_ID, METADATA_BADGE_PADDING_Y_KNOB_ID,
     METADATA_BADGE_RADIUS_KNOB_ID, ROW_HOVER_FILL_ALPHA_KNOB_ID, ROW_INNER_PADDING_X_KNOB_ID,
     SEARCH_HEIGHT_KNOB_ID, STYLE_KNOBS,
 };
@@ -95,6 +96,11 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
         .expect("list section padding x knob should exist");
     runtime_overrides::set_value(LIST_SECTION_GAP_KNOB_ID, StyleValue::Number(10.0))
         .expect("list section gap knob should exist");
+    runtime_overrides::set_value(
+        LIST_SOURCE_STATUS_ROW_HEIGHT_KNOB_ID,
+        StyleValue::Number(44.0),
+    )
+    .expect("source status row height knob should exist");
 
     let def = variant.def();
     assert_eq!(variant.base_def().list.item_height, base.list.item_height);
@@ -110,9 +116,11 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     assert_eq!(def.header_info_bar.context_edge_outset_x, 12.0);
     assert_eq!(def.list.section_padding_x, 28.0);
     assert_eq!(def.list.section_gap, 10.0);
+    assert_eq!(def.list.source_status_row_height, 44.0);
 
     let metrics =
         script_kit_gpui::list_item::ListItemMetricsOverride::from_main_menu_theme(variant);
+    assert_eq!(metrics.source_status_row_height, 44.0);
     assert_eq!(metrics.badge_padding_x, 9.0);
     assert_eq!(metrics.badge_padding_y, 3.0);
     assert_eq!(metrics.badge_radius, 11.0);
@@ -134,6 +142,15 @@ fn devtools_numeric_setter_accepts_catalog_control_ids() {
     assert_eq!(
         runtime_overrides::current_value(ROW_INNER_PADDING_X_KNOB_ID),
         Some(StyleValue::Number(18.0))
+    );
+
+    let applied = runtime_overrides::set_number_from_devtools("list.sourceStatusRowHeight", "44px")
+        .expect("source status row height should be settable through devtools");
+
+    assert_eq!(applied, "list.sourceStatusRowHeight=44");
+    assert_eq!(
+        runtime_overrides::current_value(LIST_SOURCE_STATUS_ROW_HEIGHT_KNOB_ID),
+        Some(StyleValue::Number(44.0))
     );
 
     runtime_overrides::reset_all();
@@ -164,6 +181,11 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "metadata.badgePaddingX"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "list.sourceStatusRowHeight"));
 
     let markdown = export::current_settings_markdown();
     assert!(markdown.contains("```json"));

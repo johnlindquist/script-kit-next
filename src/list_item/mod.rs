@@ -108,6 +108,7 @@ pub struct ListItemMetricsOverride {
     pub item_height: f32,
     pub section_header_height: f32,
     pub first_section_header_height: f32,
+    pub source_status_row_height: f32,
     pub average_scroll_height: f32,
     pub section_padding_x: f32,
     pub section_padding_top: f32,
@@ -157,6 +158,7 @@ impl ListItemMetricsOverride {
             section_header_height: SECTION_HEADER_HEIGHT,
             first_section_header_height: SECTION_HEADER_HEIGHT
                 - (crate::designs::MAIN_MENU_SECTION_PADDING_TOP / 2.0),
+            source_status_row_height: SOURCE_STATUS_ROW_HEIGHT,
             average_scroll_height: AVERAGE_ITEM_HEIGHT_FOR_SCROLL,
             section_padding_x: crate::designs::MAIN_MENU_SECTION_PADDING_X,
             section_padding_top: crate::designs::MAIN_MENU_SECTION_PADDING_TOP,
@@ -206,6 +208,7 @@ impl ListItemMetricsOverride {
             item_height: def.list.item_height,
             section_header_height: def.list.section_header_height,
             first_section_header_height: def.list.first_section_header_height,
+            source_status_row_height: def.list.source_status_row_height,
             average_scroll_height: def.list.average_scroll_height,
             section_padding_x: def.list.section_padding_x,
             section_padding_top: def.list.section_padding_top,
@@ -297,7 +300,14 @@ pub fn effective_first_section_header_height_for_theme(
 
 #[inline]
 pub fn effective_source_status_row_height() -> f32 {
-    SOURCE_STATUS_ROW_HEIGHT
+    effective_source_status_row_height_for_theme(crate::designs::current_main_menu_theme())
+}
+
+#[inline]
+pub fn effective_source_status_row_height_for_theme(
+    theme: crate::designs::MainMenuThemeVariant,
+) -> f32 {
+    ListItemMetricsOverride::from_main_menu_theme(theme).source_status_row_height
 }
 
 #[inline]

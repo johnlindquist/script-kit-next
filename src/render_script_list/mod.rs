@@ -1069,7 +1069,9 @@ impl ScriptListApp {
                                             format!("source-status-gen-{row_generation}").into(),
                                             ix as u64,
                                         ))
-                                        .h(px(crate::list_item::effective_source_status_row_height()))
+                                        .h(px(crate::list_item::effective_source_status_row_height_for_theme(
+                                            current_main_menu_theme,
+                                        )))
                                         .px_4()
                                         .flex()
                                         .items_center()
@@ -1280,7 +1282,9 @@ impl ScriptListApp {
                             }
                         }
                         GroupedListItem::Status(..) => {
-                            crate::list_item::effective_source_status_row_height()
+                            crate::list_item::effective_source_status_row_height_for_theme(
+                                current_main_menu_theme,
+                            )
                         }
                         GroupedListItem::Item(..) => {
                             crate::list_item::effective_list_item_height_for_theme(
