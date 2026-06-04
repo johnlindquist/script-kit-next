@@ -145,3 +145,36 @@ fn source_status_row_height_is_theme_tokenized() {
     assert!(render_script_list
         .contains("effective_source_status_row_height_for_theme(\n                                            current_main_menu_theme"));
 }
+
+#[test]
+fn selected_name_underline_is_row_tokenized_and_cataloged() {
+    let theme =
+        fs::read_to_string("src/designs/core/main_menu_theme.rs").expect("read theme source");
+    let list_item = fs::read_to_string("src/list_item/mod.rs").expect("read list item source");
+    let catalog =
+        fs::read_to_string("src/dev_style_tool/catalog.rs").expect("read dev style catalog");
+
+    assert!(theme.contains("pub selected_name_underline_width: f32"));
+    assert!(theme.contains("pub selected_name_underline_padding_bottom: f32"));
+    assert!(theme.contains("selected_name_underline_width = 2.0"));
+    assert!(theme.contains("selected_name_underline_padding_bottom = 1.0"));
+    assert!(list_item
+        .contains("row_selected_name_underline_width: def.row.selected_name_underline_width"));
+    assert!(list_item.contains(".selected_name_underline_padding_bottom"));
+    assert!(list_item.contains(".border_b(px(metrics.row_selected_name_underline_width))"));
+    assert!(list_item.contains(".pb(px(metrics.row_selected_name_underline_padding_bottom))"));
+    assert!(!list_item.contains(".border_b(px(2.0))"));
+    assert!(!list_item.contains(".pb(px(1.0))"));
+    assert!(
+        !list_item.contains(
+            "let name_underline_bold = matches!(row_kind, MainMenuRowKind::CarbonNeon) && selected"
+        ),
+        "renderer should not own the CarbonNeon underline gate"
+    );
+    assert!(catalog.contains("ROW_SELECTED_NAME_UNDERLINE_WIDTH_KNOB_ID"));
+    assert!(catalog.contains("\"row.selectedNameUnderlineWidth\""));
+    assert!(catalog.contains("\"Selected name underline width\""));
+    assert!(catalog.contains("ROW_SELECTED_NAME_UNDERLINE_PADDING_BOTTOM_KNOB_ID"));
+    assert!(catalog.contains("\"row.selectedNameUnderlinePaddingBottom\""));
+    assert!(catalog.contains("\"Selected name underline padding bottom\""));
+}

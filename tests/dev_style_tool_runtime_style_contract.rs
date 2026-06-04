@@ -6,6 +6,7 @@ use script_kit_gpui::dev_style_tool::{
     LIST_SOURCE_STATUS_ROW_HEIGHT_KNOB_ID, METADATA_ALPHA_KNOB_ID,
     METADATA_BADGE_PADDING_X_KNOB_ID, METADATA_BADGE_PADDING_Y_KNOB_ID,
     METADATA_BADGE_RADIUS_KNOB_ID, ROW_HOVER_FILL_ALPHA_KNOB_ID, ROW_INNER_PADDING_X_KNOB_ID,
+    ROW_SELECTED_NAME_UNDERLINE_PADDING_BOTTOM_KNOB_ID, ROW_SELECTED_NAME_UNDERLINE_WIDTH_KNOB_ID,
     SEARCH_HEIGHT_KNOB_ID, STYLE_KNOBS,
 };
 use std::sync::{Mutex, OnceLock};
@@ -101,6 +102,16 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
         StyleValue::Number(44.0),
     )
     .expect("source status row height knob should exist");
+    runtime_overrides::set_value(
+        ROW_SELECTED_NAME_UNDERLINE_WIDTH_KNOB_ID,
+        StyleValue::Number(3.0),
+    )
+    .expect("selected name underline width knob should exist");
+    runtime_overrides::set_value(
+        ROW_SELECTED_NAME_UNDERLINE_PADDING_BOTTOM_KNOB_ID,
+        StyleValue::Number(2.0),
+    )
+    .expect("selected name underline padding bottom knob should exist");
 
     let def = variant.def();
     assert_eq!(variant.base_def().list.item_height, base.list.item_height);
@@ -117,10 +128,14 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     assert_eq!(def.list.section_padding_x, 28.0);
     assert_eq!(def.list.section_gap, 10.0);
     assert_eq!(def.list.source_status_row_height, 44.0);
+    assert_eq!(def.row.selected_name_underline_width, 3.0);
+    assert_eq!(def.row.selected_name_underline_padding_bottom, 2.0);
 
     let metrics =
         script_kit_gpui::list_item::ListItemMetricsOverride::from_main_menu_theme(variant);
     assert_eq!(metrics.source_status_row_height, 44.0);
+    assert_eq!(metrics.row_selected_name_underline_width, 3.0);
+    assert_eq!(metrics.row_selected_name_underline_padding_bottom, 2.0);
     assert_eq!(metrics.badge_padding_x, 9.0);
     assert_eq!(metrics.badge_padding_y, 3.0);
     assert_eq!(metrics.badge_radius, 11.0);
@@ -151,6 +166,28 @@ fn devtools_numeric_setter_accepts_catalog_control_ids() {
     assert_eq!(
         runtime_overrides::current_value(LIST_SOURCE_STATUS_ROW_HEIGHT_KNOB_ID),
         Some(StyleValue::Number(44.0))
+    );
+
+    let applied =
+        runtime_overrides::set_number_from_devtools("row.selectedNameUnderlineWidth", "3px")
+            .expect("selected name underline width should be settable through devtools");
+
+    assert_eq!(applied, "row.selectedNameUnderlineWidth=3");
+    assert_eq!(
+        runtime_overrides::current_value(ROW_SELECTED_NAME_UNDERLINE_WIDTH_KNOB_ID),
+        Some(StyleValue::Number(3.0))
+    );
+
+    let applied = runtime_overrides::set_number_from_devtools(
+        "row.selectedNameUnderlinePaddingBottom",
+        "2px",
+    )
+    .expect("selected name underline padding bottom should be settable through devtools");
+
+    assert_eq!(applied, "row.selectedNameUnderlinePaddingBottom=2");
+    assert_eq!(
+        runtime_overrides::current_value(ROW_SELECTED_NAME_UNDERLINE_PADDING_BOTTOM_KNOB_ID),
+        Some(StyleValue::Number(2.0))
     );
 
     runtime_overrides::reset_all();
@@ -186,6 +223,16 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.sourceStatusRowHeight"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "row.selectedNameUnderlineWidth"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "row.selectedNameUnderlinePaddingBottom"));
 
     let markdown = export::current_settings_markdown();
     assert!(markdown.contains("```json"));

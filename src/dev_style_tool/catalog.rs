@@ -399,6 +399,20 @@ alpha_knob!(
     "row.hoverFillAlpha",
     row.hover_fill_alpha
 );
+f32_knob!(
+    ROW_SELECTED_NAME_UNDERLINE_WIDTH_KNOB_ID,
+    get_row_selected_name_underline_width,
+    apply_row_selected_name_underline_width,
+    "row.selectedNameUnderlineWidth",
+    row.selected_name_underline_width
+);
+f32_knob!(
+    ROW_SELECTED_NAME_UNDERLINE_PADDING_BOTTOM_KNOB_ID,
+    get_row_selected_name_underline_padding_bottom,
+    apply_row_selected_name_underline_padding_bottom,
+    "row.selectedNameUnderlinePaddingBottom",
+    row.selected_name_underline_padding_bottom
+);
 
 f32_knob!(
     ICON_CONTAINER_SIZE_KNOB_ID,
@@ -1134,6 +1148,28 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_row_hover_fill_alpha,
         apply: apply_row_hover_fill_alpha,
+    },
+    StyleKnob {
+        id: ROW_SELECTED_NAME_UNDERLINE_WIDTH_KNOB_ID,
+        label: "Selected name underline width",
+        group: StyleKnobGroup::Row,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 6.0,
+        step: 0.5,
+        get: get_row_selected_name_underline_width,
+        apply: apply_row_selected_name_underline_width,
+    },
+    StyleKnob {
+        id: ROW_SELECTED_NAME_UNDERLINE_PADDING_BOTTOM_KNOB_ID,
+        label: "Selected name underline padding bottom",
+        group: StyleKnobGroup::Row,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 8.0,
+        step: 0.5,
+        get: get_row_selected_name_underline_padding_bottom,
+        apply: apply_row_selected_name_underline_padding_bottom,
     },
     StyleKnob {
         id: ICON_CONTAINER_SIZE_KNOB_ID,

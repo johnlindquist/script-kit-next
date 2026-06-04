@@ -124,6 +124,8 @@ pub struct MainMenuRowTokens {
     pub selected_border_alpha: u32,
     pub selected_fill_alpha: u32,
     pub hover_fill_alpha: u32,
+    pub selected_name_underline_width: f32,
+    pub selected_name_underline_padding_bottom: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -553,10 +555,37 @@ fn header_info_bar_tokens(
     }
 }
 
+fn main_menu_row_tokens(row_kind: MainMenuRowKind) -> MainMenuRowTokens {
+    let mut row = MainMenuRowTokens {
+        outer_padding_x: 4.0,
+        outer_padding_y: 2.0,
+        inner_padding_x: 14.0,
+        inner_padding_y: 4.0,
+        radius: 8.0,
+        name_desc_gap: (40.0_f32 / 18.0).clamp(1.5, 3.5),
+        icon_text_gap: (20.0_f32 * 0.42).clamp(7.0, 12.0),
+        accessory_gap: (14.0_f32 * 0.45).clamp(5.0, 9.0),
+        selected_border_width: 0.0,
+        selected_border_alpha: 0x00,
+        selected_fill_alpha: 0x20,
+        hover_fill_alpha: 0x12,
+        selected_name_underline_width: 0.0,
+        selected_name_underline_padding_bottom: 0.0,
+    };
+
+    if matches!(row_kind, MainMenuRowKind::CarbonNeon) {
+        row.selected_name_underline_width = 2.0;
+        row.selected_name_underline_padding_bottom = 1.0;
+    }
+
+    row
+}
+
 fn base_main_menu_theme_def(
     variant: MainMenuThemeVariant,
     header_info_bar: HeaderInfoBarTokens,
 ) -> MainMenuThemeDef {
+    let row_kind = MainMenuRowKind::IconTile;
     let footer = FooterTheme {
         text_accent: false,
         keycap_accent: false,
@@ -590,7 +619,7 @@ fn base_main_menu_theme_def(
         name: variant.info_bar_name(),
         intent: variant.info_bar_intent(),
         tier: MainMenuThemeTier::TahoeClose,
-        row_kind: MainMenuRowKind::IconTile,
+        row_kind,
         shell: MainMenuShellTokens {
             content_inset_x: 16.0,
             content_inset_bottom: 16.0 * 0.35,
@@ -623,20 +652,7 @@ fn base_main_menu_theme_def(
             section_gap: MAIN_MENU_SECTION_GAP,
             section_icon_size: MAIN_MENU_SECTION_ICON_SIZE,
         },
-        row: MainMenuRowTokens {
-            outer_padding_x: 4.0,
-            outer_padding_y: 2.0,
-            inner_padding_x: 14.0,
-            inner_padding_y: 4.0,
-            radius: 8.0,
-            name_desc_gap: (40.0_f32 / 18.0).clamp(1.5, 3.5),
-            icon_text_gap: (20.0_f32 * 0.42).clamp(7.0, 12.0),
-            accessory_gap: (14.0_f32 * 0.45).clamp(5.0, 9.0),
-            selected_border_width: 0.0,
-            selected_border_alpha: 0x00,
-            selected_fill_alpha: 0x20,
-            hover_fill_alpha: 0x12,
-        },
+        row: main_menu_row_tokens(row_kind),
         icon: MainMenuIconTokens {
             container_size: 20.0,
             svg_size: 16.0,

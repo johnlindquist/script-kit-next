@@ -129,6 +129,8 @@ pub struct ListItemMetricsOverride {
     pub row_selected_border_alpha: u32,
     pub row_selected_fill_alpha: u32,
     pub row_hover_fill_alpha: u32,
+    pub row_selected_name_underline_width: f32,
+    pub row_selected_name_underline_padding_bottom: f32,
     pub icon_text_gap: f32,
     pub name_desc_gap: f32,
     pub accessory_gap: f32,
@@ -179,6 +181,8 @@ impl ListItemMetricsOverride {
             row_selected_border_alpha: 0x00,
             row_selected_fill_alpha: 0x20,
             row_hover_fill_alpha: 0x12,
+            row_selected_name_underline_width: 0.0,
+            row_selected_name_underline_padding_bottom: 0.0,
             icon_text_gap: ITEM_ICON_TEXT_GAP,
             name_desc_gap: ITEM_NAME_DESC_GAP,
             accessory_gap: ITEM_ACCESSORIES_GAP,
@@ -229,6 +233,10 @@ impl ListItemMetricsOverride {
             row_selected_border_alpha: def.row.selected_border_alpha,
             row_selected_fill_alpha: def.row.selected_fill_alpha,
             row_hover_fill_alpha: def.row.hover_fill_alpha,
+            row_selected_name_underline_width: def.row.selected_name_underline_width,
+            row_selected_name_underline_padding_bottom: def
+                .row
+                .selected_name_underline_padding_bottom,
             icon_text_gap: def.row.icon_text_gap,
             name_desc_gap: def.row.name_desc_gap,
             accessory_gap: def.row.accessory_gap,
@@ -1572,7 +1580,6 @@ impl RenderOnce for ListItem {
                 | MainMenuRowKind::StudioPaperGlass
                 | MainMenuRowKind::OperatorMonoGlass
         ) && selected;
-        let name_underline_bold = matches!(row_kind, MainMenuRowKind::CarbonNeon) && selected;
         let badges_accent = matches!(
             row_kind,
             MainMenuRowKind::FrostedCommand
@@ -1834,12 +1841,13 @@ impl RenderOnce for ListItem {
                 .child(self.name)
         };
 
-        // Accent Name: a thick accent underline beneath the bright-accent title.
-        let name_element = if name_underline_bold {
+        // Accent Name: optional underline beneath the bright-accent title.
+        let name_underline_selected = selected && metrics.row_selected_name_underline_width > 0.0;
+        let name_element = if name_underline_selected {
             name_element
-                .border_b(px(2.0))
+                .border_b(px(metrics.row_selected_name_underline_width))
                 .border_color(accent_at(0xFF))
-                .pb(px(1.0))
+                .pb(px(metrics.row_selected_name_underline_padding_bottom))
         } else {
             name_element
         };
