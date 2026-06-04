@@ -12,6 +12,18 @@ fn dev_style_tool_catalog_owns_search_height_descriptor() {
         "search.height must be a named descriptor in the dev style tool catalog"
     );
     assert!(
+        source.contains("LIST_ITEM_HEIGHT_KNOB_ID")
+            && source.contains("\"list.itemHeight\"")
+            && source.contains("\"Item height\""),
+        "list.itemHeight must be a named descriptor in the dev style tool catalog"
+    );
+    assert!(
+        source.contains("ROW_INNER_PADDING_X_KNOB_ID")
+            && source.contains("\"row.innerPaddingX\"")
+            && source.contains("\"Item inner padding X\""),
+        "row padding must be controlled through the dev style tool catalog"
+    );
+    assert!(
         source.contains("STYLE_KNOBS"),
         "dev style controls must render from the shared STYLE_KNOBS catalog"
     );

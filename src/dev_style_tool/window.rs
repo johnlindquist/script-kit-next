@@ -65,7 +65,7 @@ pub(crate) fn open_dev_style_tool_window(
 
     let bounds = Bounds {
         origin: point(px(820.0), px(160.0)),
-        size: size(px(360.0), px(220.0)),
+        size: size(px(760.0), px(760.0)),
     };
     let window = cx.open_window(
         WindowOptions {

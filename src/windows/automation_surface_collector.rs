@@ -342,33 +342,36 @@ fn collect_dev_style_tool_snapshot() -> SurfaceElementSnapshot {
         None,
         None,
     ));
-    elements.push(element(
-        "slider:dev-style-tool:search-height",
-        ElementType::Slider,
-        Some("Main input height".to_string()),
-        Some("search.height".to_string()),
-        None,
-        None,
-        Some(0),
-    ));
-    elements.push(element(
-        "input:dev-style-tool:search-height",
-        ElementType::Input,
-        Some("Main input height".to_string()),
-        Some("search.height".to_string()),
-        None,
-        None,
-        Some(1),
-    ));
-    elements.push(element(
-        "button:dev-style-tool-reset-search-height",
-        ElementType::Button,
-        Some("Reset".to_string()),
-        Some("search.height".to_string()),
-        None,
-        None,
-        Some(2),
-    ));
+    for (index, knob) in crate::dev_style_tool::STYLE_KNOBS.iter().enumerate() {
+        let control_index = index * 3;
+        elements.push(element(
+            &format!("slider:dev-style-tool:{}", knob.id.as_str()),
+            ElementType::Slider,
+            Some(knob.label.to_string()),
+            Some(knob.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index),
+        ));
+        elements.push(element(
+            &format!("input:dev-style-tool:{}", knob.id.as_str()),
+            ElementType::Input,
+            Some(knob.label.to_string()),
+            Some(knob.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index + 1),
+        ));
+        elements.push(element(
+            &format!("button:dev-style-tool-reset:{}", knob.id.as_str()),
+            ElementType::Button,
+            Some(format!("Reset {}", knob.label)),
+            Some(knob.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index + 2),
+        ));
+    }
 
     SurfaceElementSnapshot {
         total_count: elements.len(),

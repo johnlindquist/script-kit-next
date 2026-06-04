@@ -36,13 +36,15 @@ fn dev_style_tool_render_is_catalog_driven_and_narrow() {
     let render_source =
         fs::read_to_string("src/dev_style_tool/render.rs").expect("read dev style render source");
 
-    assert!(render_source.contains("SEARCH_HEIGHT_KNOB_ID"));
+    assert!(render_source.contains("STYLE_KNOBS"));
     assert!(render_source.contains("knob_by_id"));
+    assert!(render_source.contains("render_groups"));
+    assert!(render_source.contains("render_control"));
     assert!(render_source.contains("runtime_overrides::set_value"));
     assert!(render_source.contains("runtime_overrides::reset_value"));
     assert!(render_source.contains("main_app.update"));
     assert!(render_source.contains("update_theme"));
-    assert!(!render_source.contains("list.item_height"));
+    assert!(!render_source.contains("SEARCH_HEIGHT_KNOB_ID"));
     assert!(!render_source.contains("build_layout_info"));
     assert!(!render_source.contains("build_component_bounds"));
     assert!(!render_source.contains("render_script_list"));
@@ -65,9 +67,10 @@ fn dev_style_tool_registers_minimal_automation_target() {
     assert!(window_source.contains("upsert_automation_window"));
     assert!(window_source.contains("remove_automation_window(DEV_STYLE_TOOL_AUTOMATION_ID)"));
     assert!(collector_source.contains("collect_dev_style_tool_snapshot"));
-    assert!(collector_source.contains("slider:dev-style-tool:search-height"));
-    assert!(collector_source.contains("input:dev-style-tool:search-height"));
-    assert!(collector_source.contains("button:dev-style-tool-reset-search-height"));
+    assert!(collector_source.contains("crate::dev_style_tool::STYLE_KNOBS"));
+    assert!(collector_source.contains("slider:dev-style-tool:{}"));
+    assert!(collector_source.contains("input:dev-style-tool:{}"));
+    assert!(collector_source.contains("button:dev-style-tool-reset:{}"));
 }
 
 #[test]
@@ -80,6 +83,10 @@ fn dev_style_tool_devtools_mutation_reuses_runtime_catalog() {
         fs::read_to_string("src/prompt_handler/mod.rs").expect("read prompt handler");
 
     assert!(catalog_source.contains("knob_id_from_str"));
+    assert!(catalog_source.contains("LIST_ITEM_HEIGHT_KNOB_ID"));
+    assert!(catalog_source.contains("ROW_INNER_PADDING_X_KNOB_ID"));
+    assert!(catalog_source.contains("FOOTER_BUTTON_RADIUS_KNOB_ID"));
+    assert!(catalog_source.contains("HEADER_INFO_HEIGHT_KNOB_ID"));
     assert!(runtime_source.contains("set_number_from_devtools"));
     assert!(runtime_source.contains("knob_id_from_str(control)"));
     assert!(runtime_source.contains("set_value(id, StyleValue::Number(parsed))"));
