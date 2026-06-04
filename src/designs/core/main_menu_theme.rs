@@ -148,6 +148,9 @@ pub struct MainMenuListTokens {
     pub main_hint_form_bg_alpha: u32,
     pub main_hint_form_label_alpha: u32,
     pub main_hint_form_value_alpha: u32,
+    pub inline_calc_selected_overlay_min_alpha: u32,
+    pub inline_calc_selected_hint_alpha: u32,
+    pub inline_calc_hint_alpha: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -731,6 +734,9 @@ fn base_main_menu_theme_def(
             main_hint_form_bg_alpha: 0x24,
             main_hint_form_label_alpha: 0xB3,
             main_hint_form_value_alpha: 0xFF,
+            inline_calc_selected_overlay_min_alpha: 0x2E,
+            inline_calc_selected_hint_alpha: 0xD9,
+            inline_calc_hint_alpha: 0x8C,
         },
         row: main_menu_row_tokens(row_kind),
         icon: MainMenuIconTokens {

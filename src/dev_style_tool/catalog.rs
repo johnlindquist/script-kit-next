@@ -594,6 +594,27 @@ alpha_knob!(
     "list.mainHintFormValueAlpha",
     list.main_hint_form_value_alpha
 );
+alpha_knob!(
+    LIST_INLINE_CALC_SELECTED_OVERLAY_MIN_ALPHA_KNOB_ID,
+    get_list_inline_calc_selected_overlay_min_alpha,
+    apply_list_inline_calc_selected_overlay_min_alpha,
+    "list.inlineCalcSelectedOverlayMinAlpha",
+    list.inline_calc_selected_overlay_min_alpha
+);
+alpha_knob!(
+    LIST_INLINE_CALC_SELECTED_HINT_ALPHA_KNOB_ID,
+    get_list_inline_calc_selected_hint_alpha,
+    apply_list_inline_calc_selected_hint_alpha,
+    "list.inlineCalcSelectedHintAlpha",
+    list.inline_calc_selected_hint_alpha
+);
+alpha_knob!(
+    LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID,
+    get_list_inline_calc_hint_alpha,
+    apply_list_inline_calc_hint_alpha,
+    "list.inlineCalcHintAlpha",
+    list.inline_calc_hint_alpha
+);
 
 f32_knob!(
     ROW_OUTER_PADDING_X_KNOB_ID,
@@ -1736,6 +1757,39 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_list_main_hint_form_value_alpha,
         apply: apply_list_main_hint_form_value_alpha,
+    },
+    StyleKnob {
+        id: LIST_INLINE_CALC_SELECTED_OVERLAY_MIN_ALPHA_KNOB_ID,
+        label: "Inline calc selected overlay minimum alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_inline_calc_selected_overlay_min_alpha,
+        apply: apply_list_inline_calc_selected_overlay_min_alpha,
+    },
+    StyleKnob {
+        id: LIST_INLINE_CALC_SELECTED_HINT_ALPHA_KNOB_ID,
+        label: "Inline calc selected hint alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_inline_calc_selected_hint_alpha,
+        apply: apply_list_inline_calc_selected_hint_alpha,
+    },
+    StyleKnob {
+        id: LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID,
+        label: "Inline calc hint alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_inline_calc_hint_alpha,
+        apply: apply_list_inline_calc_hint_alpha,
     },
     StyleKnob {
         id: ROW_OUTER_PADDING_X_KNOB_ID,

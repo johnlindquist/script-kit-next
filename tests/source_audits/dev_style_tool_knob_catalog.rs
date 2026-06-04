@@ -346,3 +346,39 @@ fn menu_syntax_main_hint_form_field_chrome_is_list_tokenized() {
     let main_hint_body = function_body(&render_script_list, "render_menu_syntax_main_hint");
     assert!(main_hint_body.contains("render_menu_syntax_form(\n                theme,\n                list_tokens,"));
 }
+
+#[test]
+fn inline_calc_row_chrome_is_list_tokenized() {
+    let theme =
+        fs::read_to_string("src/designs/core/main_menu_theme.rs").expect("read theme source");
+    let catalog =
+        fs::read_to_string("src/dev_style_tool/catalog.rs").expect("read dev style catalog");
+    let render_script_list =
+        fs::read_to_string("src/render_script_list/mod.rs").expect("read render script list");
+
+    assert!(theme.contains("pub inline_calc_selected_overlay_min_alpha: u32"));
+    assert!(theme.contains("pub inline_calc_selected_hint_alpha: u32"));
+    assert!(theme.contains("pub inline_calc_hint_alpha: u32"));
+
+    assert!(catalog.contains("LIST_INLINE_CALC_SELECTED_OVERLAY_MIN_ALPHA_KNOB_ID"));
+    assert!(catalog.contains("\"list.inlineCalcSelectedOverlayMinAlpha\""));
+    assert!(catalog.contains("\"Inline calc selected overlay minimum alpha\""));
+    assert!(catalog.contains("LIST_INLINE_CALC_SELECTED_HINT_ALPHA_KNOB_ID"));
+    assert!(catalog.contains("\"list.inlineCalcSelectedHintAlpha\""));
+    assert!(catalog.contains("LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID"));
+    assert!(catalog.contains("\"list.inlineCalcHintAlpha\""));
+
+    let overlay_body =
+        function_body(&render_script_list, "inline_calc_list_item_selected_overlay_rgba");
+    assert!(overlay_body.contains("list_tokens.inline_calc_selected_overlay_min_alpha"));
+    assert!(!overlay_body.contains(".max(0x2E)"));
+
+    let row_body = function_body(&render_script_list, "render_inline_calc_list_item");
+    assert!(row_body.contains("list_tokens.inline_calc_selected_hint_alpha"));
+    assert!(row_body.contains("list_tokens.inline_calc_hint_alpha"));
+    assert!(!row_body.contains("0xD9"));
+    assert!(!row_body.contains("0x8C"));
+    assert!(render_script_list.contains(
+        "this.current_main_menu_theme.def().list,\n                                            this.current_design,"
+    ));
+}

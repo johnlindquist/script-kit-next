@@ -57,10 +57,12 @@ fn inline_calc_list_item_hint_text_color(color_resolver: crate::theme::ColorReso
 
 fn inline_calc_list_item_selected_overlay_rgba(
     theme: &crate::theme::Theme,
+    list_tokens: crate::designs::MainMenuListTokens,
     color_resolver: crate::theme::ColorResolver,
 ) -> u32 {
     let selected_overlay_alpha =
-        ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round() as u32).max(0x2E);
+        ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round() as u32)
+            .max(list_tokens.inline_calc_selected_overlay_min_alpha);
     (color_resolver.primary_accent() << 8) | selected_overlay_alpha
 }
 
@@ -68,6 +70,7 @@ fn render_inline_calc_list_item(
     calculator: &crate::calculator::CalculatorInlineResult,
     is_selected: bool,
     theme: &crate::theme::Theme,
+    list_tokens: crate::designs::MainMenuListTokens,
     design_variant: DesignVariant,
     color_resolver: crate::theme::ColorResolver,
 ) -> AnyElement {
@@ -79,7 +82,11 @@ fn render_inline_calc_list_item(
     let result_text_color =
         inline_calc_list_item_result_text_color(is_selected, design_variant, theme, color_resolver);
     let hint_text_color = inline_calc_list_item_hint_text_color(color_resolver);
-    let hint_alpha = if is_selected { 0xD9 } else { 0x8C };
+    let hint_alpha = if is_selected {
+        list_tokens.inline_calc_selected_hint_alpha
+    } else {
+        list_tokens.inline_calc_hint_alpha
+    };
 
     div()
         .w_full()
@@ -89,6 +96,7 @@ fn render_inline_calc_list_item(
         .when(is_selected, |div| {
             div.bg(rgba(inline_calc_list_item_selected_overlay_rgba(
                 theme,
+                list_tokens,
                 color_resolver,
             )))
         })
@@ -1217,6 +1225,7 @@ impl ScriptListApp {
                                             calculator,
                                             is_selected,
                                             &this.theme,
+                                            this.current_main_menu_theme.def().list,
                                             this.current_design,
                                             color_resolver,
                                         )
@@ -2335,11 +2344,19 @@ mod render_script_list_footer_tests {
         let color_resolver = ColorResolver::new(&theme, DesignVariant::NeonCyberpunk);
 
         let expected_alpha =
-            ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round() as u32).max(0x2E);
+            ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round() as u32)
+                .max(crate::designs::MainMenuThemeVariant::InfoBarBase
+                    .def()
+                    .list
+                    .inline_calc_selected_overlay_min_alpha);
         let expected = (color_resolver.primary_accent() << 8) | expected_alpha;
 
         assert_eq!(
-            inline_calc_list_item_selected_overlay_rgba(&theme, color_resolver),
+            inline_calc_list_item_selected_overlay_rgba(
+                &theme,
+                crate::designs::MainMenuThemeVariant::InfoBarBase.def().list,
+                color_resolver
+            ),
             expected
         );
     }
