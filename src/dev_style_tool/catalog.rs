@@ -314,6 +314,188 @@ f32_knob!(
     "list.sectionIconSize",
     list.section_icon_size
 );
+f32_knob!(
+    LIST_MAIN_HINT_CHIP_PADDING_X_KNOB_ID,
+    get_list_main_hint_chip_padding_x,
+    apply_list_main_hint_chip_padding_x,
+    "list.mainHintChipPaddingX",
+    list.main_hint_chip_padding_x
+);
+f32_knob!(
+    LIST_MAIN_HINT_CHIP_PADDING_Y_KNOB_ID,
+    get_list_main_hint_chip_padding_y,
+    apply_list_main_hint_chip_padding_y,
+    "list.mainHintChipPaddingY",
+    list.main_hint_chip_padding_y
+);
+f32_knob!(
+    LIST_MAIN_HINT_CHIP_RADIUS_KNOB_ID,
+    get_list_main_hint_chip_radius,
+    apply_list_main_hint_chip_radius,
+    "list.mainHintChipRadius",
+    list.main_hint_chip_radius
+);
+f32_knob!(
+    LIST_MAIN_HINT_CHIP_FONT_SIZE_KNOB_ID,
+    get_list_main_hint_chip_font_size,
+    apply_list_main_hint_chip_font_size,
+    "list.mainHintChipFontSize",
+    list.main_hint_chip_font_size
+);
+alpha_knob!(
+    LIST_MAIN_HINT_CHIP_BORDER_ALPHA_KNOB_ID,
+    get_list_main_hint_chip_border_alpha,
+    apply_list_main_hint_chip_border_alpha,
+    "list.mainHintChipBorderAlpha",
+    list.main_hint_chip_border_alpha
+);
+alpha_knob!(
+    LIST_MAIN_HINT_CHIP_BG_ALPHA_KNOB_ID,
+    get_list_main_hint_chip_bg_alpha,
+    apply_list_main_hint_chip_bg_alpha,
+    "list.mainHintChipBgAlpha",
+    list.main_hint_chip_bg_alpha
+);
+f32_knob!(
+    LIST_MAIN_HINT_ROW_GAP_KNOB_ID,
+    get_list_main_hint_row_gap,
+    apply_list_main_hint_row_gap,
+    "list.mainHintRowGap",
+    list.main_hint_row_gap
+);
+f32_knob!(
+    LIST_MAIN_HINT_ROW_LABEL_WIDTH_KNOB_ID,
+    get_list_main_hint_row_label_width,
+    apply_list_main_hint_row_label_width,
+    "list.mainHintRowLabelWidth",
+    list.main_hint_row_label_width
+);
+f32_knob!(
+    LIST_MAIN_HINT_ROW_LABEL_FONT_SIZE_KNOB_ID,
+    get_list_main_hint_row_label_font_size,
+    apply_list_main_hint_row_label_font_size,
+    "list.mainHintRowLabelFontSize",
+    list.main_hint_row_label_font_size
+);
+f32_knob!(
+    LIST_MAIN_HINT_ROW_LABEL_LINE_HEIGHT_KNOB_ID,
+    get_list_main_hint_row_label_line_height,
+    apply_list_main_hint_row_label_line_height,
+    "list.mainHintRowLabelLineHeight",
+    list.main_hint_row_label_line_height
+);
+alpha_knob!(
+    LIST_MAIN_HINT_ROW_LABEL_ALPHA_KNOB_ID,
+    get_list_main_hint_row_label_alpha,
+    apply_list_main_hint_row_label_alpha,
+    "list.mainHintRowLabelAlpha",
+    list.main_hint_row_label_alpha
+);
+f32_knob!(
+    LIST_MAIN_HINT_ROW_VALUE_FONT_SIZE_KNOB_ID,
+    get_list_main_hint_row_value_font_size,
+    apply_list_main_hint_row_value_font_size,
+    "list.mainHintRowValueFontSize",
+    list.main_hint_row_value_font_size
+);
+f32_knob!(
+    LIST_MAIN_HINT_ROW_VALUE_LINE_HEIGHT_KNOB_ID,
+    get_list_main_hint_row_value_line_height,
+    apply_list_main_hint_row_value_line_height,
+    "list.mainHintRowValueLineHeight",
+    list.main_hint_row_value_line_height
+);
+alpha_knob!(
+    LIST_MAIN_HINT_ROW_VALUE_ALPHA_KNOB_ID,
+    get_list_main_hint_row_value_alpha,
+    apply_list_main_hint_row_value_alpha,
+    "list.mainHintRowValueAlpha",
+    list.main_hint_row_value_alpha
+);
+f32_knob!(
+    LIST_MAIN_HINT_FRAGMENT_ROW_GAP_KNOB_ID,
+    get_list_main_hint_fragment_row_gap,
+    apply_list_main_hint_fragment_row_gap,
+    "list.mainHintFragmentRowGap",
+    list.main_hint_fragment_row_gap
+);
+f32_knob!(
+    LIST_MAIN_HINT_FRAGMENT_ROLE_WIDTH_KNOB_ID,
+    get_list_main_hint_fragment_role_width,
+    apply_list_main_hint_fragment_role_width,
+    "list.mainHintFragmentRoleWidth",
+    list.main_hint_fragment_role_width
+);
+f32_knob!(
+    LIST_MAIN_HINT_FRAGMENT_ROLE_PADDING_X_KNOB_ID,
+    get_list_main_hint_fragment_role_padding_x,
+    apply_list_main_hint_fragment_role_padding_x,
+    "list.mainHintFragmentRolePaddingX",
+    list.main_hint_fragment_role_padding_x
+);
+f32_knob!(
+    LIST_MAIN_HINT_FRAGMENT_ROLE_PADDING_Y_KNOB_ID,
+    get_list_main_hint_fragment_role_padding_y,
+    apply_list_main_hint_fragment_role_padding_y,
+    "list.mainHintFragmentRolePaddingY",
+    list.main_hint_fragment_role_padding_y
+);
+f32_knob!(
+    LIST_MAIN_HINT_FRAGMENT_ROLE_RADIUS_KNOB_ID,
+    get_list_main_hint_fragment_role_radius,
+    apply_list_main_hint_fragment_role_radius,
+    "list.mainHintFragmentRoleRadius",
+    list.main_hint_fragment_role_radius
+);
+f32_knob!(
+    LIST_MAIN_HINT_FRAGMENT_ROLE_FONT_SIZE_KNOB_ID,
+    get_list_main_hint_fragment_role_font_size,
+    apply_list_main_hint_fragment_role_font_size,
+    "list.mainHintFragmentRoleFontSize",
+    list.main_hint_fragment_role_font_size
+);
+f32_knob!(
+    LIST_MAIN_HINT_FRAGMENT_ROLE_LINE_HEIGHT_KNOB_ID,
+    get_list_main_hint_fragment_role_line_height,
+    apply_list_main_hint_fragment_role_line_height,
+    "list.mainHintFragmentRoleLineHeight",
+    list.main_hint_fragment_role_line_height
+);
+alpha_knob!(
+    LIST_MAIN_HINT_FRAGMENT_ROLE_BORDER_ALPHA_KNOB_ID,
+    get_list_main_hint_fragment_role_border_alpha,
+    apply_list_main_hint_fragment_role_border_alpha,
+    "list.mainHintFragmentRoleBorderAlpha",
+    list.main_hint_fragment_role_border_alpha
+);
+alpha_knob!(
+    LIST_MAIN_HINT_FRAGMENT_ROLE_BG_ALPHA_KNOB_ID,
+    get_list_main_hint_fragment_role_bg_alpha,
+    apply_list_main_hint_fragment_role_bg_alpha,
+    "list.mainHintFragmentRoleBgAlpha",
+    list.main_hint_fragment_role_bg_alpha
+);
+f32_knob!(
+    LIST_MAIN_HINT_FRAGMENT_VALUE_FONT_SIZE_KNOB_ID,
+    get_list_main_hint_fragment_value_font_size,
+    apply_list_main_hint_fragment_value_font_size,
+    "list.mainHintFragmentValueFontSize",
+    list.main_hint_fragment_value_font_size
+);
+f32_knob!(
+    LIST_MAIN_HINT_FRAGMENT_VALUE_LINE_HEIGHT_KNOB_ID,
+    get_list_main_hint_fragment_value_line_height,
+    apply_list_main_hint_fragment_value_line_height,
+    "list.mainHintFragmentValueLineHeight",
+    list.main_hint_fragment_value_line_height
+);
+alpha_knob!(
+    LIST_MAIN_HINT_FRAGMENT_VALUE_ALPHA_KNOB_ID,
+    get_list_main_hint_fragment_value_alpha,
+    apply_list_main_hint_fragment_value_alpha,
+    "list.mainHintFragmentValueAlpha",
+    list.main_hint_fragment_value_alpha
+);
 
 f32_knob!(
     ROW_OUTER_PADDING_X_KNOB_ID,
@@ -1016,6 +1198,292 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_list_section_icon_size,
         apply: apply_list_section_icon_size,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_CHIP_PADDING_X_KNOB_ID,
+        label: "Main hint chip padding X",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 24.0,
+        step: 0.5,
+        get: get_list_main_hint_chip_padding_x,
+        apply: apply_list_main_hint_chip_padding_x,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_CHIP_PADDING_Y_KNOB_ID,
+        label: "Main hint chip padding Y",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 16.0,
+        step: 0.5,
+        get: get_list_main_hint_chip_padding_y,
+        apply: apply_list_main_hint_chip_padding_y,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_CHIP_RADIUS_KNOB_ID,
+        label: "Main hint chip radius",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 24.0,
+        step: 0.5,
+        get: get_list_main_hint_chip_radius,
+        apply: apply_list_main_hint_chip_radius,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_CHIP_FONT_SIZE_KNOB_ID,
+        label: "Main hint chip font size",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 20.0,
+        step: 0.5,
+        get: get_list_main_hint_chip_font_size,
+        apply: apply_list_main_hint_chip_font_size,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_CHIP_BORDER_ALPHA_KNOB_ID,
+        label: "Main hint chip border alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_chip_border_alpha,
+        apply: apply_list_main_hint_chip_border_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_CHIP_BG_ALPHA_KNOB_ID,
+        label: "Main hint chip background alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_chip_bg_alpha,
+        apply: apply_list_main_hint_chip_bg_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_ROW_GAP_KNOB_ID,
+        label: "Main hint row gap",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_list_main_hint_row_gap,
+        apply: apply_list_main_hint_row_gap,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_ROW_LABEL_WIDTH_KNOB_ID,
+        label: "Main hint label width",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 160.0,
+        step: 1.0,
+        get: get_list_main_hint_row_label_width,
+        apply: apply_list_main_hint_row_label_width,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_ROW_LABEL_FONT_SIZE_KNOB_ID,
+        label: "Main hint label font size",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 20.0,
+        step: 0.5,
+        get: get_list_main_hint_row_label_font_size,
+        apply: apply_list_main_hint_row_label_font_size,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_ROW_LABEL_LINE_HEIGHT_KNOB_ID,
+        label: "Main hint label line height",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 32.0,
+        step: 0.5,
+        get: get_list_main_hint_row_label_line_height,
+        apply: apply_list_main_hint_row_label_line_height,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_ROW_LABEL_ALPHA_KNOB_ID,
+        label: "Main hint label alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_row_label_alpha,
+        apply: apply_list_main_hint_row_label_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_ROW_VALUE_FONT_SIZE_KNOB_ID,
+        label: "Main hint value font size",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 22.0,
+        step: 0.5,
+        get: get_list_main_hint_row_value_font_size,
+        apply: apply_list_main_hint_row_value_font_size,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_ROW_VALUE_LINE_HEIGHT_KNOB_ID,
+        label: "Main hint value line height",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 32.0,
+        step: 0.5,
+        get: get_list_main_hint_row_value_line_height,
+        apply: apply_list_main_hint_row_value_line_height,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_ROW_VALUE_ALPHA_KNOB_ID,
+        label: "Main hint value alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_row_value_alpha,
+        apply: apply_list_main_hint_row_value_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FRAGMENT_ROW_GAP_KNOB_ID,
+        label: "Main hint fragment row gap",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_list_main_hint_fragment_row_gap,
+        apply: apply_list_main_hint_fragment_row_gap,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FRAGMENT_ROLE_WIDTH_KNOB_ID,
+        label: "Main hint fragment role width",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 180.0,
+        step: 1.0,
+        get: get_list_main_hint_fragment_role_width,
+        apply: apply_list_main_hint_fragment_role_width,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FRAGMENT_ROLE_PADDING_X_KNOB_ID,
+        label: "Main hint fragment role padding X",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 24.0,
+        step: 0.5,
+        get: get_list_main_hint_fragment_role_padding_x,
+        apply: apply_list_main_hint_fragment_role_padding_x,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FRAGMENT_ROLE_PADDING_Y_KNOB_ID,
+        label: "Main hint fragment role padding Y",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 16.0,
+        step: 0.5,
+        get: get_list_main_hint_fragment_role_padding_y,
+        apply: apply_list_main_hint_fragment_role_padding_y,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FRAGMENT_ROLE_RADIUS_KNOB_ID,
+        label: "Main hint fragment role radius",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 24.0,
+        step: 0.5,
+        get: get_list_main_hint_fragment_role_radius,
+        apply: apply_list_main_hint_fragment_role_radius,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FRAGMENT_ROLE_FONT_SIZE_KNOB_ID,
+        label: "Main hint fragment role font size",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 20.0,
+        step: 0.5,
+        get: get_list_main_hint_fragment_role_font_size,
+        apply: apply_list_main_hint_fragment_role_font_size,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FRAGMENT_ROLE_LINE_HEIGHT_KNOB_ID,
+        label: "Main hint fragment role line height",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 28.0,
+        step: 0.5,
+        get: get_list_main_hint_fragment_role_line_height,
+        apply: apply_list_main_hint_fragment_role_line_height,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FRAGMENT_ROLE_BORDER_ALPHA_KNOB_ID,
+        label: "Main hint fragment role border alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_fragment_role_border_alpha,
+        apply: apply_list_main_hint_fragment_role_border_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FRAGMENT_ROLE_BG_ALPHA_KNOB_ID,
+        label: "Main hint fragment role background alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_fragment_role_bg_alpha,
+        apply: apply_list_main_hint_fragment_role_bg_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FRAGMENT_VALUE_FONT_SIZE_KNOB_ID,
+        label: "Main hint fragment value font size",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 22.0,
+        step: 0.5,
+        get: get_list_main_hint_fragment_value_font_size,
+        apply: apply_list_main_hint_fragment_value_font_size,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FRAGMENT_VALUE_LINE_HEIGHT_KNOB_ID,
+        label: "Main hint fragment value line height",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 32.0,
+        step: 0.5,
+        get: get_list_main_hint_fragment_value_line_height,
+        apply: apply_list_main_hint_fragment_value_line_height,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FRAGMENT_VALUE_ALPHA_KNOB_ID,
+        label: "Main hint fragment value alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_fragment_value_alpha,
+        apply: apply_list_main_hint_fragment_value_alpha,
     },
     StyleKnob {
         id: ROW_OUTER_PADDING_X_KNOB_ID,

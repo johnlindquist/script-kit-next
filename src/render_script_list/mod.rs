@@ -157,17 +157,18 @@ fn menu_syntax_input_span_role_name(
 
 fn render_menu_syntax_hint_chip(
     theme: &crate::theme::Theme,
+    list_tokens: crate::designs::MainMenuListTokens,
     chip: &crate::menu_syntax::MenuSyntaxMainHintChip,
 ) -> AnyElement {
     let color = menu_syntax_hint_tone_color(theme, chip.tone);
     div()
-        .px(px(8.0))
-        .py(px(3.0))
-        .rounded(px(6.0))
+        .px(px(list_tokens.main_hint_chip_padding_x))
+        .py(px(list_tokens.main_hint_chip_padding_y))
+        .rounded(px(list_tokens.main_hint_chip_radius))
         .border_1()
-        .border_color(rgba((color << 8) | 0x66))
-        .bg(rgba((color << 8) | 0x18))
-        .text_size(px(11.0))
+        .border_color(rgba((color << 8) | list_tokens.main_hint_chip_border_alpha))
+        .bg(rgba((color << 8) | list_tokens.main_hint_chip_bg_alpha))
+        .text_size(px(list_tokens.main_hint_chip_font_size))
         .font_weight(FontWeight::MEDIUM)
         .text_color(rgb(color))
         .child(chip.label.clone())
@@ -189,6 +190,7 @@ fn menu_syntax_text_contains_line_break(raw: &str) -> bool {
 
 fn render_menu_syntax_hint_row(
     theme: &crate::theme::Theme,
+    list_tokens: crate::designs::MainMenuListTokens,
     row: &crate::menu_syntax::MenuSyntaxMainHintRow,
 ) -> AnyElement {
     let row_value = menu_syntax_single_line_text_for_gpui(&row.value);
@@ -196,14 +198,16 @@ fn render_menu_syntax_hint_row(
         .w_full()
         .flex()
         .items_start()
-        .gap(px(12.0))
+        .gap(px(list_tokens.main_hint_row_gap))
         .child(
             div()
-                .w(px(76.0))
+                .w(px(list_tokens.main_hint_row_label_width))
                 .flex_shrink_0()
-                .text_size(px(12.0))
-                .line_height(px(18.0))
-                .text_color(rgba((theme.colors.text.muted << 8) | 0xCC))
+                .text_size(px(list_tokens.main_hint_row_label_font_size))
+                .line_height(px(list_tokens.main_hint_row_label_line_height))
+                .text_color(rgba(
+                    (theme.colors.text.muted << 8) | list_tokens.main_hint_row_label_alpha,
+                ))
                 .child(row.label.clone()),
         )
         .child(
@@ -212,21 +216,24 @@ fn render_menu_syntax_hint_row(
                 .min_w(px(0.0))
                 .overflow_hidden()
                 .text_ellipsis()
-                .text_size(px(13.0))
-                .line_height(px(18.0))
-                .text_color(rgba((theme.colors.text.primary << 8) | 0xE6))
+                .text_size(px(list_tokens.main_hint_row_value_font_size))
+                .line_height(px(list_tokens.main_hint_row_value_line_height))
+                .text_color(rgba(
+                    (theme.colors.text.primary << 8) | list_tokens.main_hint_row_value_alpha,
+                ))
                 .child(row_value),
         )
         .children(
             row.chips
                 .iter()
-                .map(|chip| render_menu_syntax_hint_chip(theme, chip)),
+                .map(|chip| render_menu_syntax_hint_chip(theme, list_tokens, chip)),
         )
         .into_any_element()
 }
 
 fn render_menu_syntax_fragment_preview_row(
     theme: &crate::theme::Theme,
+    list_tokens: crate::designs::MainMenuListTokens,
     row: &crate::menu_syntax::MenuSyntaxFragmentPreviewRow,
 ) -> AnyElement {
     let color = menu_syntax_hint_tone_color(theme, row.tone);
@@ -236,19 +243,23 @@ fn render_menu_syntax_fragment_preview_row(
         .w_full()
         .flex()
         .items_start()
-        .gap(px(10.0))
+        .gap(px(list_tokens.main_hint_fragment_row_gap))
         .child(
             div()
-                .w(px(82.0))
+                .w(px(list_tokens.main_hint_fragment_role_width))
                 .flex_shrink_0()
-                .px(px(7.0))
-                .py(px(2.0))
-                .rounded(px(5.0))
+                .px(px(list_tokens.main_hint_fragment_role_padding_x))
+                .py(px(list_tokens.main_hint_fragment_role_padding_y))
+                .rounded(px(list_tokens.main_hint_fragment_role_radius))
                 .border_1()
-                .border_color(rgba((color << 8) | 0x55))
-                .bg(rgba((color << 8) | 0x14))
-                .text_size(px(10.0))
-                .line_height(px(14.0))
+                .border_color(rgba(
+                    (color << 8) | list_tokens.main_hint_fragment_role_border_alpha,
+                ))
+                .bg(rgba(
+                    (color << 8) | list_tokens.main_hint_fragment_role_bg_alpha,
+                ))
+                .text_size(px(list_tokens.main_hint_fragment_role_font_size))
+                .line_height(px(list_tokens.main_hint_fragment_role_line_height))
                 .text_color(rgb(color))
                 .child(format!("{:?}", row.role).to_ascii_lowercase()),
         )
@@ -258,15 +269,18 @@ fn render_menu_syntax_fragment_preview_row(
                 .min_w(px(0.0))
                 .overflow_hidden()
                 .text_ellipsis()
-                .text_size(px(12.0))
-                .line_height(px(17.0))
-                .text_color(rgba((theme.colors.text.primary << 8) | 0xE6))
+                .text_size(px(list_tokens.main_hint_fragment_value_font_size))
+                .line_height(px(list_tokens.main_hint_fragment_value_line_height))
+                .text_color(rgba(
+                    (theme.colors.text.primary << 8)
+                        | list_tokens.main_hint_fragment_value_alpha,
+                ))
                 .child(preview_text),
         )
         .children(
             row.chips
                 .iter()
-                .map(|chip| render_menu_syntax_hint_chip(theme, chip)),
+                .map(|chip| render_menu_syntax_hint_chip(theme, list_tokens, chip)),
         )
         .into_any_element()
 }
@@ -412,6 +426,7 @@ fn render_menu_syntax_main_hint(
     hint: &crate::menu_syntax::MenuSyntaxMainHintSnapshot,
     scroll_handle: &ScrollHandle,
     theme: &crate::theme::Theme,
+    list_tokens: crate::designs::MainMenuListTokens,
     design_variant: DesignVariant,
     form_inputs: &[(String, Entity<gpui_component::input::InputState>)],
     cx: &mut Context<ScriptListApp>,
@@ -478,7 +493,7 @@ fn render_menu_syntax_main_hint(
                         .items_center()
                         .gap(px(6.0))
                         .when_some(hint.mode_chip.as_ref(), |d, chip| {
-                            d.child(render_menu_syntax_hint_chip(theme, chip))
+                            d.child(render_menu_syntax_hint_chip(theme, list_tokens, chip))
                         })
                         // Multi-chip capture-validation row (Pass 22 added the data,
                         // Pass 23 wires the rendering): when `status_chips` is non-empty
@@ -491,7 +506,9 @@ fn render_menu_syntax_main_hint(
                                 hint.status_chips
                                     .iter()
                                     .skip(skip)
-                                    .map(|chip| render_menu_syntax_hint_chip(theme, chip)),
+                                    .map(|chip| {
+                                        render_menu_syntax_hint_chip(theme, list_tokens, chip)
+                                    }),
                             )
                         })
                         // Single-chip status (legacy non-capture path) — only render
@@ -501,7 +518,7 @@ fn render_menu_syntax_main_hint(
                             hint.status_chip
                                 .as_ref()
                                 .filter(|_| hint.status_chips.is_empty()),
-                            |d, chip| d.child(render_menu_syntax_hint_chip(theme, chip)),
+                            |d, chip| d.child(render_menu_syntax_hint_chip(theme, list_tokens, chip)),
                         ),
                 ),
         )
@@ -528,7 +545,7 @@ fn render_menu_syntax_main_hint(
                 div().flex().flex_col().gap(px(7.0)).children(
                     hint.rows
                         .iter()
-                        .map(|row| render_menu_syntax_hint_row(theme, row)),
+                        .map(|row| render_menu_syntax_hint_row(theme, list_tokens, row)),
                 ),
             )
         })
@@ -539,7 +556,9 @@ fn render_menu_syntax_main_hint(
                         preview
                             .rows
                             .iter()
-                            .map(|row| render_menu_syntax_fragment_preview_row(theme, row)),
+                            .map(|row| {
+                                render_menu_syntax_fragment_preview_row(theme, list_tokens, row)
+                            }),
                     ),
                 )
             })
@@ -939,6 +958,7 @@ impl ScriptListApp {
                 )
             });
 
+        let main_hint_list_tokens = self.current_main_menu_theme.def().list;
         let active_filter_empty_copy = "There are no search results with this filter applied.";
         let list_element: AnyElement = if self.menu_syntax_object_selector_state.owns_main_list()
             && !handler_form_owns_input_for_render
@@ -951,6 +971,7 @@ impl ScriptListApp {
                         &hint,
                         &self.menu_syntax_main_hint_scroll_handle,
                         &self.theme,
+                        main_hint_list_tokens,
                         self.current_design,
                         &self.menu_syntax_form_inputs,
                         cx,
@@ -962,6 +983,7 @@ impl ScriptListApp {
                 &hint,
                 &self.menu_syntax_main_hint_scroll_handle,
                 &self.theme,
+                main_hint_list_tokens,
                 self.current_design,
                 &self.menu_syntax_form_inputs,
                 cx,
@@ -973,6 +995,7 @@ impl ScriptListApp {
                     &hint,
                     &self.menu_syntax_main_hint_scroll_handle,
                     &self.theme,
+                    main_hint_list_tokens,
                     self.current_design,
                     &self.menu_syntax_form_inputs,
                     cx,

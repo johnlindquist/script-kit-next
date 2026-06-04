@@ -178,3 +178,65 @@ fn selected_name_underline_is_row_tokenized_and_cataloged() {
     assert!(catalog.contains("\"row.selectedNameUnderlinePaddingBottom\""));
     assert!(catalog.contains("\"Selected name underline padding bottom\""));
 }
+
+fn function_body<'a>(source: &'a str, fn_name: &str) -> &'a str {
+    source
+        .split(&format!("fn {fn_name}"))
+        .nth(1)
+        .unwrap_or_else(|| panic!("missing function {fn_name}"))
+        .split("\nfn ")
+        .next()
+        .expect("function body should be present")
+}
+
+#[test]
+fn menu_syntax_main_hint_helper_chrome_is_list_tokenized() {
+    let theme =
+        fs::read_to_string("src/designs/core/main_menu_theme.rs").expect("read theme source");
+    let catalog =
+        fs::read_to_string("src/dev_style_tool/catalog.rs").expect("read dev style catalog");
+    let render_script_list =
+        fs::read_to_string("src/render_script_list/mod.rs").expect("read render script list");
+
+    assert!(theme.contains("pub main_hint_chip_padding_x: f32"));
+    assert!(theme.contains("pub main_hint_chip_border_alpha: u32"));
+    assert!(theme.contains("pub main_hint_row_label_width: f32"));
+    assert!(theme.contains("pub main_hint_fragment_role_width: f32"));
+    assert!(theme.contains("pub main_hint_fragment_role_bg_alpha: u32"));
+
+    assert!(catalog.contains("LIST_MAIN_HINT_CHIP_PADDING_X_KNOB_ID"));
+    assert!(catalog.contains("\"list.mainHintChipPaddingX\""));
+    assert!(catalog.contains("\"Main hint chip padding X\""));
+    assert!(catalog.contains("LIST_MAIN_HINT_ROW_LABEL_WIDTH_KNOB_ID"));
+    assert!(catalog.contains("\"list.mainHintRowLabelWidth\""));
+    assert!(catalog.contains("\"Main hint label width\""));
+    assert!(catalog.contains("LIST_MAIN_HINT_FRAGMENT_ROLE_WIDTH_KNOB_ID"));
+    assert!(catalog.contains("\"list.mainHintFragmentRoleWidth\""));
+    assert!(catalog.contains("\"Main hint fragment role width\""));
+
+    let chip_body = function_body(&render_script_list, "render_menu_syntax_hint_chip");
+    assert!(chip_body.contains("list_tokens.main_hint_chip_padding_x"));
+    assert!(chip_body.contains("list_tokens.main_hint_chip_border_alpha"));
+    assert!(!chip_body.contains(".px(px(8.0))"));
+    assert!(!chip_body.contains("| 0x66"));
+    assert!(!chip_body.contains("| 0x18"));
+
+    let row_body = function_body(&render_script_list, "render_menu_syntax_hint_row");
+    assert!(row_body.contains("list_tokens.main_hint_row_gap"));
+    assert!(row_body.contains("list_tokens.main_hint_row_label_width"));
+    assert!(row_body.contains("list_tokens.main_hint_row_value_alpha"));
+    assert!(!row_body.contains(".gap(px(12.0))"));
+    assert!(!row_body.contains(".w(px(76.0))"));
+    assert!(!row_body.contains("| 0xCC"));
+    assert!(!row_body.contains("| 0xE6"));
+
+    let fragment_body = function_body(&render_script_list, "render_menu_syntax_fragment_preview_row");
+    assert!(fragment_body.contains("list_tokens.main_hint_fragment_row_gap"));
+    assert!(fragment_body.contains("list_tokens.main_hint_fragment_role_width"));
+    assert!(fragment_body.contains("list_tokens.main_hint_fragment_role_bg_alpha"));
+    assert!(fragment_body.contains("list_tokens.main_hint_fragment_value_alpha"));
+    assert!(!fragment_body.contains(".gap(px(10.0))"));
+    assert!(!fragment_body.contains(".w(px(82.0))"));
+    assert!(!fragment_body.contains("| 0x55"));
+    assert!(!fragment_body.contains("| 0x14"));
+}
