@@ -142,6 +142,12 @@ pub struct MainMenuListTokens {
     pub main_hint_divider_height: f32,
     pub main_hint_examples_group_gap: f32,
     pub main_hint_example_row_gap: f32,
+    pub main_hint_form_focused_border_alpha: u32,
+    pub main_hint_form_border_alpha: u32,
+    pub main_hint_form_focused_bg_alpha: u32,
+    pub main_hint_form_bg_alpha: u32,
+    pub main_hint_form_label_alpha: u32,
+    pub main_hint_form_value_alpha: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -719,6 +725,12 @@ fn base_main_menu_theme_def(
             main_hint_divider_height: 1.0,
             main_hint_examples_group_gap: 5.0,
             main_hint_example_row_gap: 3.0,
+            main_hint_form_focused_border_alpha: 0xF2,
+            main_hint_form_border_alpha: 0x80,
+            main_hint_form_focused_bg_alpha: 0x3D,
+            main_hint_form_bg_alpha: 0x24,
+            main_hint_form_label_alpha: 0xB3,
+            main_hint_form_value_alpha: 0xFF,
         },
         row: main_menu_row_tokens(row_kind),
         icon: MainMenuIconTokens {

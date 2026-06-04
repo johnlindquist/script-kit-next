@@ -287,6 +287,7 @@ fn render_menu_syntax_fragment_preview_row(
 
 fn render_menu_syntax_form_field(
     theme: &crate::theme::Theme,
+    list_tokens: crate::designs::MainMenuListTokens,
     design_variant: DesignVariant,
     field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
     input: Option<Entity<gpui_component::input::InputState>>,
@@ -294,9 +295,9 @@ fn render_menu_syntax_form_field(
     let field_metrics =
         crate::components::FormFieldMetrics::from_theme_and_design(theme, design_variant);
     let border_color = if field.focused {
-        rgba((theme.colors.accent.selected << 8) | 0xF2)
+        rgba((theme.colors.accent.selected << 8) | list_tokens.main_hint_form_focused_border_alpha)
     } else {
-        rgba((theme.colors.ui.border << 8) | 0x80)
+        rgba((theme.colors.ui.border << 8) | list_tokens.main_hint_form_border_alpha)
     };
     let placeholder_color =
         rgba(crate::theme::AppChromeColors::from_theme(theme).placeholder_text_rgba);
@@ -316,9 +317,10 @@ fn render_menu_syntax_form_field(
         .border_1()
         .border_color(border_color)
         .bg(if field.focused {
-            rgba((theme.colors.background.search_box << 8) | 0x3D)
+            rgba((theme.colors.background.search_box << 8)
+                | list_tokens.main_hint_form_focused_bg_alpha)
         } else {
-            rgba((theme.colors.background.search_box << 8) | 0x24)
+            rgba((theme.colors.background.search_box << 8) | list_tokens.main_hint_form_bg_alpha)
         })
         .child(
             div()
@@ -332,7 +334,10 @@ fn render_menu_syntax_form_field(
                         .text_size(px(field_metrics.label_font_size))
                         .line_height(px(field_metrics.label_line_height))
                         .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgba((theme.colors.text.muted << 8) | 0xB3))
+                        .text_color(rgba(
+                            (theme.colors.text.muted << 8)
+                                | list_tokens.main_hint_form_label_alpha,
+                        ))
                         .child(field.label.clone()),
                 ),
         );
@@ -373,7 +378,10 @@ fn render_menu_syntax_form_field(
                 .text_size(px(input_rendered_font_size))
                 .line_height(px(field_metrics.input_line_height))
                 .text_color(if has_value {
-                    rgba((theme.colors.text.primary << 8) | 0xFF)
+                    rgba(
+                        (theme.colors.text.primary << 8)
+                            | list_tokens.main_hint_form_value_alpha,
+                    )
                 } else {
                     placeholder_color
                 })
@@ -392,6 +400,7 @@ fn render_menu_syntax_form_field(
 
 fn render_menu_syntax_form(
     theme: &crate::theme::Theme,
+    list_tokens: crate::designs::MainMenuListTokens,
     design_variant: DesignVariant,
     form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
     inputs: &[(String, Entity<gpui_component::input::InputState>)],
@@ -416,7 +425,7 @@ fn render_menu_syntax_form(
                     let input = inputs
                         .iter()
                         .find_map(|(id, input)| (id == &field.id).then(|| input.clone()));
-                    render_menu_syntax_form_field(theme, design_variant, field, input)
+                    render_menu_syntax_form_field(theme, list_tokens, design_variant, field, input)
                 })),
         )
         .into_any_element()
@@ -537,6 +546,7 @@ fn render_menu_syntax_main_hint(
         .when_some(hint.form.as_ref(), |d, form| {
             d.child(render_menu_syntax_form(
                 theme,
+                list_tokens,
                 design_variant,
                 form,
                 form_inputs,

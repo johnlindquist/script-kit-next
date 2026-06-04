@@ -6,6 +6,10 @@ use script_kit_gpui::dev_style_tool::{
     LIST_SOURCE_STATUS_ROW_HEIGHT_KNOB_ID, LIST_MAIN_HINT_CHIP_BORDER_ALPHA_KNOB_ID,
     LIST_MAIN_HINT_CHIP_PADDING_X_KNOB_ID, LIST_MAIN_HINT_DIVIDER_HEIGHT_KNOB_ID,
     LIST_MAIN_HINT_EXAMPLE_ROW_GAP_KNOB_ID, LIST_MAIN_HINT_EXAMPLES_GROUP_GAP_KNOB_ID,
+    LIST_MAIN_HINT_FORM_BG_ALPHA_KNOB_ID, LIST_MAIN_HINT_FORM_BORDER_ALPHA_KNOB_ID,
+    LIST_MAIN_HINT_FORM_FOCUSED_BG_ALPHA_KNOB_ID,
+    LIST_MAIN_HINT_FORM_FOCUSED_BORDER_ALPHA_KNOB_ID, LIST_MAIN_HINT_FORM_LABEL_ALPHA_KNOB_ID,
+    LIST_MAIN_HINT_FORM_VALUE_ALPHA_KNOB_ID,
     LIST_MAIN_HINT_FRAGMENT_ROLE_BG_ALPHA_KNOB_ID,
     LIST_MAIN_HINT_FRAGMENT_ROLE_WIDTH_KNOB_ID, LIST_MAIN_HINT_ROW_LABEL_WIDTH_KNOB_ID,
     LIST_MAIN_HINT_ROWS_GAP_KNOB_ID, LIST_MAIN_HINT_STATUS_CHIP_GAP_KNOB_ID,
@@ -178,6 +182,33 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
         StyleValue::Number(9.0),
     )
     .expect("main hint example row gap knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_FORM_FOCUSED_BORDER_ALPHA_KNOB_ID,
+        StyleValue::Number(210.0),
+    )
+    .expect("main hint form focused border alpha knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_FORM_BORDER_ALPHA_KNOB_ID,
+        StyleValue::Number(111.0),
+    )
+    .expect("main hint form border alpha knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_FORM_FOCUSED_BG_ALPHA_KNOB_ID,
+        StyleValue::Number(74.0),
+    )
+    .expect("main hint form focused bg alpha knob should exist");
+    runtime_overrides::set_value(LIST_MAIN_HINT_FORM_BG_ALPHA_KNOB_ID, StyleValue::Number(37.0))
+        .expect("main hint form bg alpha knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_FORM_LABEL_ALPHA_KNOB_ID,
+        StyleValue::Number(143.0),
+    )
+    .expect("main hint form label alpha knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_FORM_VALUE_ALPHA_KNOB_ID,
+        StyleValue::Number(244.0),
+    )
+    .expect("main hint form value alpha knob should exist");
 
     let def = variant.def();
     assert_eq!(variant.base_def().list.item_height, base.list.item_height);
@@ -207,6 +238,12 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     assert_eq!(def.list.main_hint_divider_height, 4.0);
     assert_eq!(def.list.main_hint_examples_group_gap, 10.0);
     assert_eq!(def.list.main_hint_example_row_gap, 9.0);
+    assert_eq!(def.list.main_hint_form_focused_border_alpha, 210);
+    assert_eq!(def.list.main_hint_form_border_alpha, 111);
+    assert_eq!(def.list.main_hint_form_focused_bg_alpha, 74);
+    assert_eq!(def.list.main_hint_form_bg_alpha, 37);
+    assert_eq!(def.list.main_hint_form_label_alpha, 143);
+    assert_eq!(def.list.main_hint_form_value_alpha, 244);
     assert_eq!(def.row.selected_name_underline_width, 3.0);
     assert_eq!(def.row.selected_name_underline_padding_bottom, 2.0);
 
@@ -305,6 +342,25 @@ fn devtools_numeric_setter_accepts_catalog_control_ids() {
         Some(StyleValue::Number(9.0))
     );
 
+    let applied =
+        runtime_overrides::set_number_from_devtools("list.mainHintFormFocusedBorderAlpha", "210")
+            .expect("main hint form focused border alpha should be settable through devtools");
+
+    assert_eq!(applied, "list.mainHintFormFocusedBorderAlpha=210");
+    assert_eq!(
+        runtime_overrides::current_value(LIST_MAIN_HINT_FORM_FOCUSED_BORDER_ALPHA_KNOB_ID),
+        Some(StyleValue::Number(210.0))
+    );
+
+    let applied = runtime_overrides::set_number_from_devtools("list.mainHintFormBgAlpha", "37")
+        .expect("main hint form bg alpha should be settable through devtools");
+
+    assert_eq!(applied, "list.mainHintFormBgAlpha=37");
+    assert_eq!(
+        runtime_overrides::current_value(LIST_MAIN_HINT_FORM_BG_ALPHA_KNOB_ID),
+        Some(StyleValue::Number(37.0))
+    );
+
     runtime_overrides::reset_all();
 }
 
@@ -368,6 +424,16 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.mainHintExampleRowGap"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "list.mainHintFormFocusedBorderAlpha"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "list.mainHintFormBgAlpha"));
 
     let markdown = export::current_settings_markdown();
     assert!(markdown.contains("```json"));

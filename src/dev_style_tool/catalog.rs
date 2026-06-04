@@ -552,6 +552,48 @@ f32_knob!(
     "list.mainHintExampleRowGap",
     list.main_hint_example_row_gap
 );
+alpha_knob!(
+    LIST_MAIN_HINT_FORM_FOCUSED_BORDER_ALPHA_KNOB_ID,
+    get_list_main_hint_form_focused_border_alpha,
+    apply_list_main_hint_form_focused_border_alpha,
+    "list.mainHintFormFocusedBorderAlpha",
+    list.main_hint_form_focused_border_alpha
+);
+alpha_knob!(
+    LIST_MAIN_HINT_FORM_BORDER_ALPHA_KNOB_ID,
+    get_list_main_hint_form_border_alpha,
+    apply_list_main_hint_form_border_alpha,
+    "list.mainHintFormBorderAlpha",
+    list.main_hint_form_border_alpha
+);
+alpha_knob!(
+    LIST_MAIN_HINT_FORM_FOCUSED_BG_ALPHA_KNOB_ID,
+    get_list_main_hint_form_focused_bg_alpha,
+    apply_list_main_hint_form_focused_bg_alpha,
+    "list.mainHintFormFocusedBgAlpha",
+    list.main_hint_form_focused_bg_alpha
+);
+alpha_knob!(
+    LIST_MAIN_HINT_FORM_BG_ALPHA_KNOB_ID,
+    get_list_main_hint_form_bg_alpha,
+    apply_list_main_hint_form_bg_alpha,
+    "list.mainHintFormBgAlpha",
+    list.main_hint_form_bg_alpha
+);
+alpha_knob!(
+    LIST_MAIN_HINT_FORM_LABEL_ALPHA_KNOB_ID,
+    get_list_main_hint_form_label_alpha,
+    apply_list_main_hint_form_label_alpha,
+    "list.mainHintFormLabelAlpha",
+    list.main_hint_form_label_alpha
+);
+alpha_knob!(
+    LIST_MAIN_HINT_FORM_VALUE_ALPHA_KNOB_ID,
+    get_list_main_hint_form_value_alpha,
+    apply_list_main_hint_form_value_alpha,
+    "list.mainHintFormValueAlpha",
+    list.main_hint_form_value_alpha
+);
 
 f32_knob!(
     ROW_OUTER_PADDING_X_KNOB_ID,
@@ -1628,6 +1670,72 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 0.5,
         get: get_list_main_hint_example_row_gap,
         apply: apply_list_main_hint_example_row_gap,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FORM_FOCUSED_BORDER_ALPHA_KNOB_ID,
+        label: "Main hint form focused border alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_form_focused_border_alpha,
+        apply: apply_list_main_hint_form_focused_border_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FORM_BORDER_ALPHA_KNOB_ID,
+        label: "Main hint form border alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_form_border_alpha,
+        apply: apply_list_main_hint_form_border_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FORM_FOCUSED_BG_ALPHA_KNOB_ID,
+        label: "Main hint form focused background alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_form_focused_bg_alpha,
+        apply: apply_list_main_hint_form_focused_bg_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FORM_BG_ALPHA_KNOB_ID,
+        label: "Main hint form background alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_form_bg_alpha,
+        apply: apply_list_main_hint_form_bg_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FORM_LABEL_ALPHA_KNOB_ID,
+        label: "Main hint form label alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_form_label_alpha,
+        apply: apply_list_main_hint_form_label_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FORM_VALUE_ALPHA_KNOB_ID,
+        label: "Main hint form value alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_form_value_alpha,
+        apply: apply_list_main_hint_form_value_alpha,
     },
     StyleKnob {
         id: ROW_OUTER_PADDING_X_KNOB_ID,

@@ -291,3 +291,58 @@ fn menu_syntax_main_hint_container_chrome_is_list_tokenized() {
     assert!(!body.contains(".gap(px(5.0))"));
     assert!(!body.contains(".gap(px(3.0))"));
 }
+
+#[test]
+fn menu_syntax_main_hint_form_field_chrome_is_list_tokenized() {
+    let theme =
+        fs::read_to_string("src/designs/core/main_menu_theme.rs").expect("read theme source");
+    let catalog =
+        fs::read_to_string("src/dev_style_tool/catalog.rs").expect("read dev style catalog");
+    let render_script_list =
+        fs::read_to_string("src/render_script_list/mod.rs").expect("read render script list");
+
+    assert!(theme.contains("pub main_hint_form_focused_border_alpha: u32"));
+    assert!(theme.contains("pub main_hint_form_border_alpha: u32"));
+    assert!(theme.contains("pub main_hint_form_focused_bg_alpha: u32"));
+    assert!(theme.contains("pub main_hint_form_bg_alpha: u32"));
+    assert!(theme.contains("pub main_hint_form_label_alpha: u32"));
+    assert!(theme.contains("pub main_hint_form_value_alpha: u32"));
+
+    assert!(catalog.contains("LIST_MAIN_HINT_FORM_FOCUSED_BORDER_ALPHA_KNOB_ID"));
+    assert!(catalog.contains("\"list.mainHintFormFocusedBorderAlpha\""));
+    assert!(catalog.contains("\"Main hint form focused border alpha\""));
+    assert!(catalog.contains("LIST_MAIN_HINT_FORM_BG_ALPHA_KNOB_ID"));
+    assert!(catalog.contains("\"list.mainHintFormBgAlpha\""));
+    assert!(catalog.contains("\"Main hint form background alpha\""));
+    assert!(catalog.contains("LIST_MAIN_HINT_FORM_VALUE_ALPHA_KNOB_ID"));
+    assert!(catalog.contains("\"list.mainHintFormValueAlpha\""));
+    assert!(catalog.contains("\"Main hint form value alpha\""));
+
+    let field_body = function_body(&render_script_list, "render_menu_syntax_form_field");
+    assert!(field_body.contains("list_tokens.main_hint_form_focused_border_alpha"));
+    assert!(field_body.contains("list_tokens.main_hint_form_border_alpha"));
+    assert!(field_body.contains("list_tokens.main_hint_form_focused_bg_alpha"));
+    assert!(field_body.contains("list_tokens.main_hint_form_bg_alpha"));
+    assert!(field_body.contains("list_tokens.main_hint_form_label_alpha"));
+    assert!(field_body.contains("list_tokens.main_hint_form_value_alpha"));
+    assert!(!field_body.contains("| 0xF2"));
+    assert!(!field_body.contains("| 0x80"));
+    assert!(!field_body.contains("| 0x3D"));
+    assert!(!field_body.contains("| 0x24"));
+    assert!(!field_body.contains("| 0xB3"));
+    assert!(!field_body.contains("| 0xFF"));
+
+    let form_body = render_script_list
+        .split("fn render_menu_syntax_form(")
+        .nth(1)
+        .expect("missing render_menu_syntax_form")
+        .split("\nfn ")
+        .next()
+        .expect("render_menu_syntax_form body should be present");
+    let compact_form_body: String = form_body.split_whitespace().collect();
+    assert!(compact_form_body.contains(
+        "render_menu_syntax_form_field(theme,list_tokens,design_variant,field,input)"
+    ));
+    let main_hint_body = function_body(&render_script_list, "render_menu_syntax_main_hint");
+    assert!(main_hint_body.contains("render_menu_syntax_form(\n                theme,\n                list_tokens,"));
+}
