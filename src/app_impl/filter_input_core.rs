@@ -12,7 +12,7 @@ impl ScriptListApp {
     /// Transient first-character launch triggers should not persist when the
     /// user returns to the ScriptList surface.
     pub(crate) fn is_transient_script_list_trigger(new_text: &str) -> bool {
-        matches!(new_text, "~" | ">" | "?")
+        matches!(new_text, "~" | "!" | "?")
     }
 
     /// Parse `raw` through the menu-syntax classifier and store the result in
@@ -22,7 +22,7 @@ impl ScriptListApp {
     /// snapshot tied to the current raw input instead of racing the filter
     /// coalescer's `computed_filter_text` field.
     pub(crate) fn set_menu_syntax_mode_from_filter(&mut self, raw: &str) {
-        if self.spine_enabled && raw.starts_with('>') {
+        if self.spine_enabled && (raw.starts_with('>') || raw.starts_with('!')) {
             self.menu_syntax_mode = crate::menu_syntax::MenuSyntaxMode::default();
             self.menu_syntax_object_selector_state = Default::default();
             self.menu_syntax_trigger_popup_state = Default::default();
@@ -120,7 +120,8 @@ impl ScriptListApp {
         }
 
         match new_text {
-            ">" => Some(ScriptListSpecialEntry::QuickTerminal),
+            "!" => Some(ScriptListSpecialEntry::QuickTerminal),
+            ">" => None,
             "?" => Some(ScriptListSpecialEntry::ActionsHelp),
             "@" => Some(ScriptListSpecialEntry::AcpMentionPicker),
             _ => None,
@@ -578,7 +579,7 @@ mod tests {
         assert_eq!(ScriptListApp::special_entry_from_script_list_filter("|"), None);
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter("!"),
-            None
+            Some(ScriptListSpecialEntry::QuickTerminal)
         );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter("!dep"),
@@ -586,7 +587,7 @@ mod tests {
         );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter(">"),
-            Some(ScriptListSpecialEntry::QuickTerminal)
+            None
         );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter(">deploy"),
@@ -614,7 +615,7 @@ mod tests {
     fn test_is_transient_script_list_trigger() {
         use super::ScriptListApp;
 
-        for trigger in ["~", ">", "?"] {
+        for trigger in ["~", "!", "?"] {
             assert!(
                 ScriptListApp::is_transient_script_list_trigger(trigger),
                 "expected '{trigger}' to be transient"
@@ -622,7 +623,8 @@ mod tests {
         }
 
         for query in [
-            "!", "!dep", "/", "@", "|", ".", ";", "~/src", "@browser", "/tmp", "foo", "",
+            ">", ">deploy", "!dep", "/", "@", "|", ".", ";", "~/src", "@browser", "/tmp",
+            "foo", "",
         ] {
             assert!(
                 !ScriptListApp::is_transient_script_list_trigger(query),
@@ -644,7 +646,7 @@ mod tests {
             "todo: Renew passport tomorrow",
             "cal: Lunch next friday",
             ">deploy -- prod",
-            "!",
+            "!dep",
             "#finance search",
         ] {
             assert_eq!(
@@ -659,12 +661,16 @@ mod tests {
     fn test_power_syntax_prefixes_are_not_transient_triggers() {
         use super::ScriptListApp;
 
-        for prefix in [":", "+", "!", "#"] {
+        for prefix in [":", "+", "#"] {
             assert!(
                 !ScriptListApp::is_transient_script_list_trigger(prefix),
                 "power-user prefix '{prefix}' must not be classified as a transient trigger"
             );
         }
+        assert!(
+            !ScriptListApp::is_transient_script_list_trigger("!dep"),
+            "bang-prefixed query text must not be classified as a transient trigger"
+        );
     }
 
     #[test]

@@ -1,4 +1,5 @@
 const FILTER_CHANGE: &str = include_str!("../src/app_impl/filter_input_change.rs");
+const FILTER_CORE: &str = include_str!("../src/app_impl/filter_input_core.rs");
 const FILTER_UPDATES: &str = include_str!("../src/app_impl/filter_input_updates.rs");
 
 #[test]
@@ -27,5 +28,32 @@ fn set_filter_text_immediate_does_not_acp_only_special_case_sigil_routing() {
     assert!(
         !body.contains("ScriptListSpecialEntry::AcpProfilePicker =>"),
         "setFilter must not special-case only ACP profile routing"
+    );
+}
+
+#[test]
+fn bang_is_quick_terminal_sigil_and_greater_than_is_plain_filter() {
+    assert!(
+        FILTER_CORE.contains("\"!\" => Some(ScriptListSpecialEntry::QuickTerminal)")
+            || FILTER_CORE.contains("\"!\"=>Some(ScriptListSpecialEntry::QuickTerminal)"),
+        "bare ! must route to Quick Terminal through the shared ScriptList special-entry router"
+    );
+    assert!(
+        !FILTER_CORE.contains("\">\" => Some(ScriptListSpecialEntry::QuickTerminal)")
+            && !FILTER_CORE.contains("\">\"=>Some(ScriptListSpecialEntry::QuickTerminal)"),
+        "bare > must not route to Quick Terminal"
+    );
+    assert!(
+        FILTER_CORE.contains("\">\" => None") || FILTER_CORE.contains("\">\"=>None"),
+        "bare > should be explicitly pinned as a non-handoff ScriptList query"
+    );
+}
+
+#[test]
+fn bang_prefixed_queries_are_not_quick_terminal_handoffs() {
+    assert!(
+        FILTER_CORE.contains("special_entry_from_script_list_filter(\"!dep\")")
+            && FILTER_CORE.contains("None"),
+        "!dep must remain normal query text, not a Quick Terminal handoff"
     );
 }
