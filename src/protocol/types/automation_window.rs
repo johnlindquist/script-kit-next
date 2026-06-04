@@ -36,6 +36,7 @@ pub enum AutomationWindowKind {
     MiniAi,
     AcpDetached,
     Dictation,
+    DevStyleTool,
     ActionsDialog,
     PromptPopup,
 }
@@ -53,6 +54,7 @@ impl AutomationWindowKind {
             AutomationWindowKind::MiniAi => "miniAi",
             AutomationWindowKind::AcpDetached => "acpDetached",
             AutomationWindowKind::Dictation => "dictation",
+            AutomationWindowKind::DevStyleTool => "devStyleTool",
             AutomationWindowKind::ActionsDialog => "actionsDialog",
             AutomationWindowKind::PromptPopup => "promptPopup",
         }

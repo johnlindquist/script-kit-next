@@ -302,6 +302,7 @@ pub fn collect_surface_snapshot(
                 )
             }),
         AutomationWindowKind::Dictation => collect_dictation_snapshot(resolved),
+        AutomationWindowKind::DevStyleTool => collect_dev_style_tool_snapshot(),
         AutomationWindowKind::MiniAi
             if resolved.id == crate::inline_agent::window::INLINE_AGENT_WINDOW_AUTOMATION_ID =>
         {
@@ -328,6 +329,55 @@ pub fn collect_surface_snapshot(
     );
 
     Some(snapshot)
+}
+
+fn collect_dev_style_tool_snapshot() -> SurfaceElementSnapshot {
+    let mut elements = Vec::new();
+    elements.push(element(
+        "panel:dev-style-tool",
+        ElementType::Panel,
+        Some("Script Kit Dev Style Tool".to_string()),
+        None,
+        None,
+        None,
+        None,
+    ));
+    elements.push(element(
+        "slider:dev-style-tool:search-height",
+        ElementType::Slider,
+        Some("Main input height".to_string()),
+        Some("search.height".to_string()),
+        None,
+        None,
+        Some(0),
+    ));
+    elements.push(element(
+        "input:dev-style-tool:search-height",
+        ElementType::Input,
+        Some("Main input height".to_string()),
+        Some("search.height".to_string()),
+        None,
+        None,
+        Some(1),
+    ));
+    elements.push(element(
+        "button:dev-style-tool-reset-search-height",
+        ElementType::Button,
+        Some("Reset".to_string()),
+        Some("search.height".to_string()),
+        None,
+        None,
+        Some(2),
+    ));
+
+    SurfaceElementSnapshot {
+        total_count: elements.len(),
+        elements,
+        focused_semantic_id: None,
+        selected_semantic_id: None,
+        warnings: Vec::new(),
+        quality: SnapshotQuality::Full,
+    }
 }
 
 fn collect_dictation_snapshot(resolved: &AutomationWindowInfo) -> SurfaceElementSnapshot {

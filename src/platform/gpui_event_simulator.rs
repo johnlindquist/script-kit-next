@@ -167,7 +167,8 @@ fn automation_kind_to_window_role(
         AutomationWindowKind::AcpDetached => Some(WindowRole::AcpChat),
         // Attached surfaces and popup-only windows use exact runtime handles
         // when available and do not map to the shared role registry.
-        AutomationWindowKind::ActionsDialog
+        AutomationWindowKind::DevStyleTool
+        | AutomationWindowKind::ActionsDialog
         | AutomationWindowKind::Dictation
         | AutomationWindowKind::PromptPopup => None,
     }

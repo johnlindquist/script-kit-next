@@ -535,6 +535,9 @@ app.run(move |cx: &mut App| {
             }
         };
 
+        #[cfg(debug_assertions)]
+        crate::dev_style_tool::window::maybe_open_startup_sidecar(window, app_entity.clone(), cx);
+
         let (mcp_computer_ui_tx, mcp_computer_ui_rx) = async_channel::bounded(16);
         mcp_computer_runtime.install(mcp_computer_ui_tx);
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {

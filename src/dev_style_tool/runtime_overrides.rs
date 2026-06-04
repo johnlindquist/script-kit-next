@@ -3,7 +3,7 @@ use std::sync::{OnceLock, RwLock};
 
 use crate::designs::MainMenuThemeDef;
 
-use super::catalog::{knob_by_id, StyleKnobId, StyleValue, STYLE_KNOBS};
+use super::catalog::{knob_by_id, knob_id_from_str, StyleKnobId, StyleValue, STYLE_KNOBS};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AppliedStyleChange {
@@ -80,6 +80,21 @@ pub fn current_value(id: StyleKnobId) -> Option<StyleValue> {
         .values
         .get(&id)
         .copied()
+}
+
+pub fn set_number_from_devtools(control: &str, value: &str) -> anyhow::Result<String> {
+    let id = knob_id_from_str(control)
+        .ok_or_else(|| anyhow::anyhow!("unknown dev style control '{control}'"))?;
+    let parsed = value
+        .trim()
+        .trim_end_matches("px")
+        .trim()
+        .parse::<f32>()
+        .map_err(|_| anyhow::anyhow!("invalid numeric value '{value}'"))?;
+    let change = set_value(id, StyleValue::Number(parsed))
+        .ok_or_else(|| anyhow::anyhow!("unknown dev style control '{control}'"))?;
+    let StyleValue::Number(applied) = change.applied;
+    Ok(format!("{}={applied}", id.as_str()))
 }
 
 pub fn apply_to_main_menu_def(mut def: MainMenuThemeDef) -> MainMenuThemeDef {

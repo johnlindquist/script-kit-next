@@ -84,6 +84,7 @@ fn automation_window_kind_all_variants_round_trip() {
         (AutomationWindowKind::MiniAi, "miniAi"),
         (AutomationWindowKind::AcpDetached, "acpDetached"),
         (AutomationWindowKind::Dictation, "dictation"),
+        (AutomationWindowKind::DevStyleTool, "devStyleTool"),
         (AutomationWindowKind::ActionsDialog, "actionsDialog"),
         (AutomationWindowKind::PromptPopup, "promptPopup"),
     ];

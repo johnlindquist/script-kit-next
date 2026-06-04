@@ -67,6 +67,16 @@ pub fn knob_by_id(id: StyleKnobId) -> Option<&'static StyleKnob> {
     STYLE_KNOBS.iter().find(|knob| knob.id == id)
 }
 
+pub fn knob_id_from_str(value: &str) -> Option<StyleKnobId> {
+    let normalized = value
+        .strip_prefix("control:dev-style-tool:")
+        .unwrap_or(value);
+    STYLE_KNOBS
+        .iter()
+        .find(|knob| knob.id.as_str() == normalized)
+        .map(|knob| knob.id)
+}
+
 fn get_search_height(def: &MainMenuThemeDef) -> StyleValue {
     StyleValue::Number(def.search.height)
 }

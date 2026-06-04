@@ -53,8 +53,9 @@ fn kind_rank(kind: AutomationWindowKind) -> u8 {
         AutomationWindowKind::MiniAi => 3,
         AutomationWindowKind::AcpDetached => 4,
         AutomationWindowKind::Dictation => 5,
-        AutomationWindowKind::ActionsDialog => 6,
-        AutomationWindowKind::PromptPopup => 7,
+        AutomationWindowKind::DevStyleTool => 6,
+        AutomationWindowKind::ActionsDialog => 7,
+        AutomationWindowKind::PromptPopup => 8,
     }
 }
 

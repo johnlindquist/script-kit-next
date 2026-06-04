@@ -53,7 +53,15 @@ mod config;
 mod confirm;
 mod context_snapshot;
 mod designs;
-mod dev_style_tool;
+mod dev_style_tool {
+    pub mod catalog;
+    pub(crate) mod render;
+    pub mod runtime_overrides;
+    pub(crate) mod window;
+
+    #[allow(unused_imports)]
+    pub use catalog::{StyleKnobId, StyleValue, SEARCH_HEIGHT_KNOB_ID, STYLE_KNOBS};
+}
 mod dictation;
 mod editor;
 #[allow(dead_code)] // Public API in lib.rs; binary only uses ErrorSeverity currently

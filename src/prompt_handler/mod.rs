@@ -413,6 +413,10 @@ enum AutomationReadTarget {
     PromptPopup {
         info: crate::protocol::AutomationWindowInfo,
     },
+    /// Dev style sidecar window.
+    DevStyleTool {
+        info: crate::protocol::AutomationWindowInfo,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -422,6 +426,7 @@ enum AutomationBatchTargetKind {
     Notes,
     ActionsDialog,
     PromptPopup,
+    DevStyleTool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -474,6 +479,12 @@ impl BatchTargetCapabilities {
                 supported_commands: &["selectByValue", "selectBySemanticId", "waitFor"],
                 concise_unsupported_message: false,
             },
+            AutomationBatchTargetKind::DevStyleTool => Self {
+                display_name: "DevStyleTool",
+                unsupported_target_name: "DevStyleTool",
+                supported_commands: &["setThemeControl"],
+                concise_unsupported_message: true,
+            },
         }
     }
 }
@@ -487,6 +498,7 @@ fn batch_target_kind_for_resolved_target(
         AutomationReadTarget::Notes { .. } => AutomationBatchTargetKind::Notes,
         AutomationReadTarget::ActionsDialog { .. } => AutomationBatchTargetKind::ActionsDialog,
         AutomationReadTarget::PromptPopup { .. } => AutomationBatchTargetKind::PromptPopup,
+        AutomationReadTarget::DevStyleTool { .. } => AutomationBatchTargetKind::DevStyleTool,
     }
 }
 
@@ -507,6 +519,9 @@ fn unsupported_batch_command_error(
         }
         AutomationBatchTargetKind::PromptPopup => {
             format!("PromptPopup batch supports: {supported}. Got: {command}")
+        }
+        AutomationBatchTargetKind::DevStyleTool => {
+            format!("DevStyleTool batch supports: {supported}. Got: {command}")
         }
         _ => format!(
             "{} is not supported for {} batch targets",
@@ -707,6 +722,9 @@ fn resolve_automation_read_target(
                 )))
             }
         }
+        crate::protocol::AutomationWindowKind::DevStyleTool => Ok(AutomationReadTarget::DevStyleTool {
+            info: resolved,
+        }),
         other_kind => {
             tracing::warn!(
                 target: "script_kit::automation",
@@ -7313,6 +7331,28 @@ impl ScriptListApp {
                             break;
                         }
 
+                        if batch_target_kind == AutomationBatchTargetKind::DevStyleTool
+                            && !matches!(cmd, protocol::BatchCommand::SetThemeControl { .. })
+                        {
+                            let command = batch_command_name(cmd);
+                            results.push(protocol::BatchResultEntry {
+                                index,
+                                success: false,
+                                command,
+                                elapsed: Some(0),
+                                value: None,
+                                error: Some(unsupported_batch_command_error(
+                                    batch_target_kind,
+                                    cmd,
+                                )),
+                            });
+                            failed = true;
+                            if opts.stop_on_error {
+                                break;
+                            }
+                            continue;
+                        }
+
                         let cmd_start = std::time::Instant::now();
                         match cmd {
                             protocol::BatchCommand::SetInput { text } => {
@@ -7439,7 +7479,20 @@ impl ScriptListApp {
                                 let control = control.clone();
                                 let value = value.clone();
                                 match this.update(cx, |this, cx| {
-                                    if !matches!(this.current_view, AppView::ThemeChooserView { .. }) {
+                                    if batch_target_kind == AutomationBatchTargetKind::DevStyleTool {
+                                        let applied =
+                                            crate::dev_style_tool::runtime_overrides::set_number_from_devtools(
+                                                &control,
+                                                &value,
+                                            )?;
+                                        this.update_theme(cx);
+                                        cx.notify();
+                                        return Ok(applied);
+                                    }
+                                    if !matches!(
+                                        this.current_view,
+                                        AppView::ThemeChooserView { .. }
+                                    ) {
                                         return Err(anyhow::anyhow!(
                                             "setThemeControl requires ThemeChooserView"
                                         ));
