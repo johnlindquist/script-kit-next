@@ -1,28 +1,45 @@
 # Script Kit GPUI Vision
 
-This document is a product and architecture vision for Script Kit GPUI. It should
-guide launch decisions, product tradeoffs, and implementation direction, but
-current source, tests, generated contracts, and repo docs remain the source of
-truth.
+This document is the product and architecture vision for Script Kit GPUI. It
+guides launch decisions, product tradeoffs, implementation direction, and
+tool-facing documentation. Current source, tests, generated contracts, and repo
+docs remain the source of truth for behavior.
 
 When updating this document or making product-facing changes, start from
 `AGENTS.md`, `README.md`, `GLOSSARY.md`, `.impeccable.md`, and the current
-source/tests. Do not use `CLAUDE.md` as source context for this vision. If this
-document conflicts with current code, generated contracts, or verified runtime
-receipts, update the document or the implementation intentionally.
+source/tests. `CLAUDE.md` is a protected tool-facing root document; changes to
+`CLAUDE.md` should align with this vision instead of redefining the product
+direction. If this document conflicts with current code, generated contracts, or
+verified runtime receipts, update the document or the implementation
+intentionally.
 
 Owning context: this is a product architecture document. It owns launch vision,
 product identity, decision rules, anti-goals, and verification expectations. It
-does not replace `README.md`, `GLOSSARY.md`, `AGENTS.md`, generated contracts,
-tests, or source code.
+does not replace `README.md`, `GLOSSARY.md`, `AGENTS.md`, `CLAUDE.md`,
+generated contracts, tests, or source code.
 
 ## One-Sentence Vision
 
-Script Kit GPUI is a native, keyboard-first command center for developers and
-automation-minded users who want their desktop workflows to be programmable,
-inspectable, and owned by them.
+Script Kit GPUI is a native, keyboard-first programmable command center for
+people who want their desktop workflows to be fast, local, inspectable, and
+owned by them.
 
-## Launch Thesis
+## Launch Promise
+
+Within the first few minutes, a new user should understand the promise:
+
+- The launcher appears instantly and responds like a native Mac tool.
+- Scripts are local TypeScript files the user can inspect, edit, and version.
+- Prompt UIs feel coherent across scripts, built-ins, and Agent Chat.
+- AI behavior is selected through explicit profiles, not hidden personas.
+- Important product claims can be backed by semantic state, layout, logs, and
+  receipts.
+
+That promise is more important than feature breadth. A small number of coherent,
+fast, ownable workflows beats a large surface area that feels fragmented or
+opaque.
+
+## Product Loop
 
 Script Kit GPUI uses launcher speed as the front door, but the launcher is not
 the whole product. The product is the loop:
@@ -31,20 +48,31 @@ the whole product. The product is the loop:
 search -> choose -> prompt -> act -> automate -> verify -> return
 ```
 
+Each step is a product lens:
+
+- Search: find scripts, built-ins, profiles, commands, capture targets, and
+  context through one keyboard-first command surface.
+- Choose: make the right object obvious through shared rows, preview rules,
+  source labels, and predictable focus.
+- Prompt: turn workflows into native-feeling prompt UIs instead of one-off app
+  panels.
+- Act: run the selected workflow, switch profile, open Actions, or stage intent
+  for Agent Chat.
+- Automate: expose state and actions semantically so scripts and agents can
+  operate without timing guesses or coordinate hacks.
+- Verify: produce receipts for target identity, semantic state, layout,
+  transcript, and runtime behavior.
+- Return: finish quickly and get out of the user's way.
+
 At launch, Script Kit GPUI should feel like one coherent native tool across
-scripts, prompt UIs, built-ins, Actions, Agent Chat, profiles, Kit Store plugins,
-and semantic automation receipts.
-
-The durable identity is:
-
-> Raycast-grade launcher feel; Script Kit-grade local ownership, prompt-driven
-> workflows, Agent Chat profiles, and verifiable automation.
+scripts, prompt UIs, built-ins, Actions, Agent Chat, profiles, shareable plugin
+artifacts, and semantic automation receipts.
 
 ## What Script Kit GPUI Is Trying To Be
 
 Script Kit GPUI is a fast native GPUI launcher shell over a programmable local
 automation runtime. The shell should appear instantly, accept intent, execute or
-stage the right workflow, and get out of the way.
+stage the right workflow, and disappear.
 
 It is a Bun-powered TypeScript runtime where users can write and version their
 own scripts, bring their own dependencies, and keep control of the code that runs
@@ -55,21 +83,17 @@ composition model for personal automation. Stable prompt surfaces should share
 chrome, focus behavior, footer discipline, semantic IDs, and layout receipts.
 
 It is a shared native UI system for scripts, prompts, built-ins, and Agent Chat.
-The product should feel coherent because the surfaces share main search,
-Actions, list row language, prompt shells, footer affordances, theme tokens, and
+The product should feel coherent because surfaces share main search, Actions,
+list row language, prompt shells, footer affordances, theme tokens, and
 automation semantics.
 
 It is a local plugin workspace for scripts, scriptlets, skills, profiles, and
-shareable kits. The filesystem model is part of the product: users should be
-able to inspect, edit, version, and migrate the artifacts they run.
-
-It is a Kit Store installer for local plugin repos, not a marketplace-first
-identity. Kit Store should help users discover, install, update, and remove
-plugin repos while preserving local ownership.
+shareable plugin repos. The filesystem model is part of the product: users
+should be able to inspect, edit, version, and migrate the artifacts they run.
 
 It is an Agent Chat profile runtime. Profiles should make AI behavior
 attributable, selectable, warmable, logged, and testable through explicit prompt,
-provider/model, tool, cwd, session, and ambient-resource posture.
+model, tool, cwd, session, and ambient-resource posture.
 
 It is a semantic automation surface with receipts. Script Kit should prefer
 target identity, semantic IDs, layout info, deterministic `waitFor`/`batch`
@@ -82,9 +106,9 @@ Script Kit GPUI is not a drop-in replacement for old Script Kit. The spirit
 carries forward: fast scripting, prompt APIs, keyboard-first automation, and
 local control. The old giant global helper surface does not.
 
-Script Kit GPUI is not trying to become Raycast with more extensions. Raycast is
-the polish benchmark. Script Kit's wedge is local ownership, programmable
-prompts, plugin artifacts, Agent Chat profiles, and verifiable automation.
+Script Kit GPUI is not a marketplace-first product with local scripts bolted on.
+Discovery and installation matter, but they should preserve local ownership,
+inspectability, and editability.
 
 Script Kit GPUI is not a web dashboard in native clothing. It should appear,
 accept intent, perform the job, and disappear.
@@ -93,33 +117,56 @@ Script Kit GPUI is not an unrestricted AI agent shell. Agent Chat and profiles
 must be attributable, scoped, inspectable, and honest about what the runtime can
 actually enforce.
 
-## Differentiation From Raycast
+## Why It Is Different
 
-Raycast proves that a launcher can be fast, polished, keyboard-first, and
-native-feeling. Script Kit GPUI should meet that quality bar.
+Modern launchers prove that users value fast command surfaces, polished keyboard
+flow, and native-feeling interactions. Script Kit GPUI should meet that quality
+bar, but its center of gravity is different.
 
-The difference is the center of gravity. Raycast primarily asks:
+Script Kit GPUI is attractive because it lets users turn personal workflows into
+local artifacts they can own:
 
-> What command can I run from a polished launcher?
+| Dimension | Script Kit GPUI direction |
+| --- | --- |
+| Core unit | User-owned script, prompt, plugin artifact, or profile |
+| Customization | TypeScript, Bun packages, prompt APIs, plugin folders, config/theme files |
+| Distribution | Shareable plugin repos that remain local and inspectable after install |
+| AI | Profile-scoped Agent Chat runtime with tools, cwd, prompt, session policy, and receipts |
+| Automation | Semantic state, `getElements`, `getLayoutInfo`, `waitFor`, `batch`, logs, and receipts |
+| Migration | Preserve prompt spirit, drop helper sprawl, convert durable AI behavior into explicit profiles |
 
-Script Kit GPUI asks:
+The product should not win by copying another launcher feature-for-feature. It
+should win by making the user's own workflows feel native, fast, programmable,
+and verifiable.
 
-> What personal workflow can I turn into a local script, prompt UI, plugin
-> artifact, Agent Chat profile, or agent-operable surface that I can inspect and
-> verify?
+## Audience
 
-| Dimension | Raycast-like launcher direction | Script Kit GPUI direction |
-| --- | --- | --- |
-| Core unit | Extension command | User-owned script, prompt, plugin artifact, or profile |
-| Customization | Extension settings | TypeScript, Bun packages, prompt APIs, plugin folders, config/theme files |
-| Distribution | Marketplace-centered | Kit Store as install/update/remove plumbing for local plugin repos |
-| AI | Assistant feature or extension | Profile-scoped Agent Chat runtime with tools, cwd, prompt, session policy, and receipts |
-| Automation | App/extension behavior | Semantic state, `getElements`, `getLayoutInfo`, `waitFor`, `batch`, logs, and receipts |
-| Migration | Install more commands | Preserve prompt spirit, drop helper sprawl, convert durable AI behavior into explicit profiles |
+Script Kit GPUI should serve developers and automation-minded users first. These
+users value speed, keyboard control, local ownership, inspectability, and the
+ability to build their own workflows.
 
-This distinction should stay respectful. Raycast is excellent at what it does.
-Script Kit should not win by dismissing that category. It should win by owning a
-different category: programmable local automation with native launcher speed.
+The product should still welcome technically curious Mac users who want
+installable examples, scriptable workflows, and AI profiles without starting from
+scratch. The onboarding can be approachable, but product tradeoffs should remain
+clear: local ownership and programmable control are the core.
+
+## Priority Ladder
+
+When launch priorities conflict, use this ladder:
+
+1. Native speed and confidence.
+2. Prompt coherence across scripts, built-ins, and Agent Chat.
+3. Local artifact ownership: scripts, plugins, skills, and profiles should be
+   inspectable and editable.
+4. Agent Chat/profile attribution: AI behavior should have an explicit runtime
+   boundary.
+5. Semantic receipts: target identity, state, layout, logs, and transcripts
+   should prove important claims.
+
+The ladder is not a rigid roadmap. It is a tie-breaker. A feature that improves
+distribution but weakens local ownership should lose. A feature that adds AI
+power but weakens attribution should wait. A feature that looks polished but
+cannot be operated or verified semantically is not launch-ready.
 
 ## Product Pillars
 
@@ -145,9 +192,9 @@ source treats them as explicit coming-soon stubs.
 
 ### The Launcher Is The Spine
 
-Main Menu Search is the entry point for scripts, built-ins, profiles, Kit Store
-entries, menu syntax, context staging, and Agent Chat intent. Avoid side-channel
-pickers unless they are contextual Actions.
+Main Menu Search is the entry point for scripts, built-ins, profiles, command
+syntax, context staging, and Agent Chat intent. Avoid side-channel pickers unless
+they are contextual Actions.
 
 The launcher should not become a cluttered dashboard. It is the command spine:
 type intent, choose the right object, run or stage the workflow, then return the
@@ -181,18 +228,21 @@ artifacts. The local filesystem model is a product contract, not an
 implementation detail.
 
 Users should be able to inspect the plugin folder, understand what will run,
-version it, edit it, and migrate it. Kit Store should support that ownership
+version it, edit it, and migrate it. Distribution should support that ownership
 model rather than obscure it.
 
 ### Profiles Are Runtime Boundaries
 
-An Agent Chat profile owns meaningful runtime identity: prompt, provider/model,
-tools, cwd, session behavior, ambient-resource posture, warm-key material, logs,
-and receipts.
+A profile is the selected AI runtime boundary. It defines the prompt, model,
+tools, cwd, session behavior, logs, and receipts for Agent Chat.
 
-Do not describe profiles as magic hidden agents. Keep launch profile selection
-explicit, attributable, and testable. If future work adds profile handoffs or
-subagent-like flows, the UI, logs, and receipts must show who acted and why.
+A profile is not a hidden agent, magic persona, or vague preset. Keep launch
+profile selection explicit, attributable, and testable. Durable AI behavior
+should become explicit local profile artifacts rather than hidden configuration
+blobs.
+
+If future work adds profile handoffs or subagent-like flows, the UI, logs, and
+receipts must show who acted and why.
 
 ### Skills Are Recipes, Not Ambient Magic
 
@@ -203,16 +253,6 @@ attribution.
 Schema and runtime design should keep skills understandable: a skill says how to
 do a task; a profile says what runtime boundary the task runs inside.
 
-### Kit Store Distributes Local Ownership
-
-Kit Store should help users discover, install, update, and remove plugin repos.
-It should not become the product's main identity or pull Script Kit into
-marketplace clone territory.
-
-The goal is distribution without surrendering ownership: after installation, a
-kit should be local, inspectable, and governed by the same plugin artifact model
-as user-authored work.
-
 ### Automation Must Be Semantic And Receipted
 
 Prefer `getState`, `getElements`, `getLayoutInfo`, `waitFor`, `batch`, semantic
@@ -220,39 +260,51 @@ IDs, action receipts, transcripts, and logs over sleeps, coordinates,
 screenshot-only proof, or unrestricted keyboard/mouse injection.
 
 Automation should be legible to humans and agents through the same state model.
-If a surface cannot report what it is, what is focused, what is selected, and
-what changed, it is not agent-ready.
+If a launch-facing surface cannot report what it is, what is focused, what is
+selected, and what changed, it is not agent-ready.
+
+Exploratory prototypes can use lighter proof while ideas are still forming. Once
+a claim becomes launch-facing, receipts are non-negotiable.
 
 ## Source-Of-Truth Map
 
-- Product/process: `README.md`, `AGENTS.md`, `GLOSSARY.md`, `.impeccable.md`
-- Surface model: `src/main_sections/app_view_state.rs`
-- Main launcher: `src/render_script_list/mod.rs`
-- View routing/root shell: `src/main_sections/render_impl.rs`
-- App state and launcher context: `src/main_sections/app_state.rs`
-- Prompt protocol: `src/main_sections/prompt_messages.rs`
+- Product/process docs: `README.md`, `AGENTS.md`, `CLAUDE.md`, `GLOSSARY.md`,
+  `.impeccable.md`. These define the public promise, agent process, UI map, and
+  visual taste. They should align with this vision.
+- Surface model: `src/main_sections/app_view_state.rs`. This backs surface
+  families, contracts, footer ownership, and view identity.
+- Main launcher: `src/render_script_list/mod.rs`. This owns the primary command
+  spine and its keyboard/footer behavior.
+- View routing/root shell: `src/main_sections/render_impl.rs`. This keeps
+  surfaces inside one coherent main-window family.
+- App state and launcher context: `src/main_sections/app_state.rs`. This backs
+  launcher context, passive frames, and app-level state.
+- Prompt protocol: `src/main_sections/prompt_messages.rs`. This defines prompt
+  display, state, elements, layout, waits, batches, and inspection messages.
 - Semantic elements/layout receipts: `src/app_layout/collect_elements.rs`,
   `src/app_layout/build_layout_info.rs`,
-  `src/app_layout/build_component_bounds.rs`
+  `src/app_layout/build_component_bounds.rs`. These make the UI inspectable.
 - Shared chrome/components: `src/components/main_view_chrome.rs`,
   `src/components/prompt_layout_shell.rs`,
   `src/components/minimal_prompt_shell.rs`,
   `src/components/prompt_container.rs`, `src/components/prompt_footer.rs`,
-  `src/components/hint_strip.rs`
-- Actions: `src/actions/**`, `src/render_builtins/actions.rs`
-- Built-ins: `src/render_builtins/**`
+  `src/components/hint_strip.rs`. These keep surfaces visually and behaviorally
+  aligned.
+- Actions: `src/actions/**`, `src/render_builtins/actions.rs`. These back the
+  universal discovery layer.
+- Built-ins: `src/render_builtins/**`. Built-ins should model first-party use of
+  the shared surface language.
 - Agent Chat/profiles: `src/ai/agent_chat/**`, `src/ai/acp/**`,
-  `src/app_impl/tab_ai_mode/**`
-- Plugin artifacts: `src/plugins/**`
-- Kit Store: `src/kit_store/**`, `src/render_builtins/kit_store.rs`
-- Menu syntax: `src/menu_syntax/**`
+  `src/app_impl/tab_ai_mode/**`. Product language should say Agent Chat even
+  where compatibility implementation names remain.
+- Plugin artifacts: `src/plugins/**`. Plugin profile artifacts are parsed and
+  validated by the plugin profile module.
+- Menu syntax: `src/menu_syntax/**`. This backs command/capture grammar.
 - DevTools/automation receipts: `scripts/devtools/**`,
-  `src/agentic_protocol_bus.rs`
+  `src/agentic_protocol_bus.rs`. These back target-scoped proof.
 
-Keep these references source-aware but not brittle. For example, avoid freezing
-exact struct ownership when a module may move. Prefer statements like "plugin
-profile artifacts are parsed and validated by the plugin profile module" over
-"this type must live in this exact file forever."
+Keep these references source-aware but not brittle. Prefer subsystem ownership
+over freezing exact type placement forever.
 
 ## Decision Rules
 
@@ -270,15 +322,15 @@ Build as a plugin when the feature should be shareable and carry scripts,
 scriptlets, skills, profiles, or compatibility agent artifacts together.
 
 Build as a profile when the main distinction is AI runtime identity: prompt,
-tools, cwd, provider/model, session policy, ambient-resource posture, or
-warm/runtime behavior.
+tools, cwd, model, session policy, ambient-resource posture, or warm/runtime
+behavior.
 
 Build as a skill when it is a repeatable AI task recipe that should run inside an
 existing profile instead of defining a new runtime.
 
 Expose through Main Menu Search when the object is first-class and
-runnable/selectable: scripts, built-ins, profiles, Kit Store entries, command
-grammar heads, or capture targets.
+runnable/selectable: scripts, built-ins, profiles, command grammar heads, or
+capture targets.
 
 Expose through Actions when the user is asking what can be done with the current
 context.
@@ -307,11 +359,12 @@ bundled helper global.
 Migration ladder:
 
 - Existing script idea -> TypeScript script under the plugin workspace.
+- Old helper dependency -> explicit Bun package import.
 - Reusable UI flow -> prompt APIs.
 - Reusable capture or text grammar -> menu syntax or scriptlet artifact.
 - Reusable AI task -> skill.
 - Distinct AI runtime or policy -> profile artifact.
-- Shareable package -> plugin repo installable through Kit Store.
+- Shareable package -> plugin repo.
 - Legacy agent -> compatibility/import input that becomes an explicit profile
   when durable Agent Chat behavior is needed.
 
@@ -338,18 +391,37 @@ Screenshots can support visual debugging, but they are not proof by themselves.
 Target identity, semantic state, layout state, and interaction receipts come
 first.
 
+## Risks
+
+- Category drift: the product can collapse into "just another launcher" if local
+  scripts, prompts, profiles, and receipts stop being the center.
+- Distribution drift: shareable plugins can become opaque if install flows hide
+  local files instead of making them inspectable.
+- AI overclaim: profiles can sound safer than they are if docs imply sandboxing
+  beyond current enforcement.
+- Hidden-agent drift: profile handoffs and subagent-like flows can become
+  untrustworthy if attribution, logs, and receipts are missing.
+- Source-map staleness: exact paths will move. Keep subsystem intent current.
+- UI islands: every one-off renderer weakens the native product family.
+- Receipt gaps: launch-facing claims without semantic proof will erode trust.
+
 ## Anti-Goals
 
-Do not become a Raycast clone with scripts bolted on.
+Do not become a launcher clone with scripts bolted on. The goal is programmable
+local automation with native command speed.
 
 Do not become a marketplace-first product whose local scripts, profiles, and
-skills are secondary implementation details.
+skills are secondary implementation details. Distribution should preserve local
+ownership.
 
-Do not recreate the old giant helper SDK just to reduce migration pain.
+Do not recreate the old giant helper SDK just to reduce migration pain. Bring
+dependencies through Bun and keep the prompt model sharp.
 
-Do not become a web dashboard in native clothing.
+Do not become a web dashboard in native clothing. Script Kit should appear,
+accept intent, act, and disappear.
 
-Do not let Agent Chat become multiple user-facing chat products.
+Do not let Agent Chat become multiple user-facing chat products. Keep product
+language singular even where compatibility implementation names remain.
 
 Do not introduce hidden background subagents without explicit profile handoff UI,
 logs, attribution, and receipts.
