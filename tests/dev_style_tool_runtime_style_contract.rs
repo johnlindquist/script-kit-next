@@ -4,8 +4,13 @@ use script_kit_gpui::dev_style_tool::{
     HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID, HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
     LIST_ITEM_HEIGHT_KNOB_ID, LIST_SECTION_GAP_KNOB_ID, LIST_SECTION_PADDING_X_KNOB_ID,
     LIST_SOURCE_STATUS_ROW_HEIGHT_KNOB_ID, LIST_MAIN_HINT_CHIP_BORDER_ALPHA_KNOB_ID,
-    LIST_MAIN_HINT_CHIP_PADDING_X_KNOB_ID, LIST_MAIN_HINT_FRAGMENT_ROLE_BG_ALPHA_KNOB_ID,
+    LIST_MAIN_HINT_CHIP_PADDING_X_KNOB_ID, LIST_MAIN_HINT_DIVIDER_HEIGHT_KNOB_ID,
+    LIST_MAIN_HINT_EXAMPLE_ROW_GAP_KNOB_ID, LIST_MAIN_HINT_EXAMPLES_GROUP_GAP_KNOB_ID,
+    LIST_MAIN_HINT_FRAGMENT_ROLE_BG_ALPHA_KNOB_ID,
     LIST_MAIN_HINT_FRAGMENT_ROLE_WIDTH_KNOB_ID, LIST_MAIN_HINT_ROW_LABEL_WIDTH_KNOB_ID,
+    LIST_MAIN_HINT_ROWS_GAP_KNOB_ID, LIST_MAIN_HINT_STATUS_CHIP_GAP_KNOB_ID,
+    LIST_MAIN_HINT_WARNING_BG_ALPHA_KNOB_ID, LIST_MAIN_HINT_WARNING_BORDER_ALPHA_KNOB_ID,
+    LIST_MAIN_HINT_FRAGMENT_ROWS_GAP_KNOB_ID,
     METADATA_ALPHA_KNOB_ID, METADATA_BADGE_PADDING_X_KNOB_ID, METADATA_BADGE_PADDING_Y_KNOB_ID,
     METADATA_BADGE_RADIUS_KNOB_ID, ROW_HOVER_FILL_ALPHA_KNOB_ID, ROW_INNER_PADDING_X_KNOB_ID,
     ROW_SELECTED_NAME_UNDERLINE_PADDING_BOTTOM_KNOB_ID, ROW_SELECTED_NAME_UNDERLINE_WIDTH_KNOB_ID,
@@ -136,6 +141,43 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
         StyleValue::Number(19.0),
     )
     .expect("main hint fragment role bg alpha knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_STATUS_CHIP_GAP_KNOB_ID,
+        StyleValue::Number(11.0),
+    )
+    .expect("main hint status chip gap knob should exist");
+    runtime_overrides::set_value(LIST_MAIN_HINT_ROWS_GAP_KNOB_ID, StyleValue::Number(12.0))
+        .expect("main hint rows gap knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_FRAGMENT_ROWS_GAP_KNOB_ID,
+        StyleValue::Number(13.0),
+    )
+    .expect("main hint fragment rows gap knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_WARNING_BORDER_ALPHA_KNOB_ID,
+        StyleValue::Number(102.0),
+    )
+    .expect("main hint warning border alpha knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_WARNING_BG_ALPHA_KNOB_ID,
+        StyleValue::Number(96.0),
+    )
+    .expect("main hint warning bg alpha knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_DIVIDER_HEIGHT_KNOB_ID,
+        StyleValue::Number(4.0),
+    )
+    .expect("main hint divider height knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_EXAMPLES_GROUP_GAP_KNOB_ID,
+        StyleValue::Number(10.0),
+    )
+    .expect("main hint examples group gap knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_EXAMPLE_ROW_GAP_KNOB_ID,
+        StyleValue::Number(9.0),
+    )
+    .expect("main hint example row gap knob should exist");
 
     let def = variant.def();
     assert_eq!(variant.base_def().list.item_height, base.list.item_height);
@@ -157,6 +199,14 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     assert_eq!(def.list.main_hint_fragment_role_width, 112.0);
     assert_eq!(def.list.main_hint_chip_border_alpha, 101);
     assert_eq!(def.list.main_hint_fragment_role_bg_alpha, 19);
+    assert_eq!(def.list.main_hint_status_chip_gap, 11.0);
+    assert_eq!(def.list.main_hint_rows_gap, 12.0);
+    assert_eq!(def.list.main_hint_fragment_rows_gap, 13.0);
+    assert_eq!(def.list.main_hint_warning_border_alpha, 102);
+    assert_eq!(def.list.main_hint_warning_bg_alpha, 96);
+    assert_eq!(def.list.main_hint_divider_height, 4.0);
+    assert_eq!(def.list.main_hint_examples_group_gap, 10.0);
+    assert_eq!(def.list.main_hint_example_row_gap, 9.0);
     assert_eq!(def.row.selected_name_underline_width, 3.0);
     assert_eq!(def.row.selected_name_underline_padding_bottom, 2.0);
 
@@ -228,6 +278,33 @@ fn devtools_numeric_setter_accepts_catalog_control_ids() {
         Some(StyleValue::Number(13.0))
     );
 
+    let applied = runtime_overrides::set_number_from_devtools("list.mainHintDividerHeight", "4px")
+        .expect("main hint divider height should be settable through devtools");
+
+    assert_eq!(applied, "list.mainHintDividerHeight=4");
+    assert_eq!(
+        runtime_overrides::current_value(LIST_MAIN_HINT_DIVIDER_HEIGHT_KNOB_ID),
+        Some(StyleValue::Number(4.0))
+    );
+
+    let applied = runtime_overrides::set_number_from_devtools("list.mainHintWarningBgAlpha", "96")
+        .expect("main hint warning bg alpha should be settable through devtools");
+
+    assert_eq!(applied, "list.mainHintWarningBgAlpha=96");
+    assert_eq!(
+        runtime_overrides::current_value(LIST_MAIN_HINT_WARNING_BG_ALPHA_KNOB_ID),
+        Some(StyleValue::Number(96.0))
+    );
+
+    let applied = runtime_overrides::set_number_from_devtools("list.mainHintExampleRowGap", "9px")
+        .expect("main hint example row gap should be settable through devtools");
+
+    assert_eq!(applied, "list.mainHintExampleRowGap=9");
+    assert_eq!(
+        runtime_overrides::current_value(LIST_MAIN_HINT_EXAMPLE_ROW_GAP_KNOB_ID),
+        Some(StyleValue::Number(9.0))
+    );
+
     runtime_overrides::reset_all();
 }
 
@@ -276,6 +353,21 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.mainHintChipPaddingX"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "list.mainHintDividerHeight"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "list.mainHintWarningBgAlpha"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "list.mainHintExampleRowGap"));
 
     let markdown = export::current_settings_markdown();
     assert!(markdown.contains("```json"));

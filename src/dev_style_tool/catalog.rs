@@ -357,6 +357,20 @@ alpha_knob!(
     list.main_hint_chip_bg_alpha
 );
 f32_knob!(
+    LIST_MAIN_HINT_STATUS_CHIP_GAP_KNOB_ID,
+    get_list_main_hint_status_chip_gap,
+    apply_list_main_hint_status_chip_gap,
+    "list.mainHintStatusChipGap",
+    list.main_hint_status_chip_gap
+);
+f32_knob!(
+    LIST_MAIN_HINT_ROWS_GAP_KNOB_ID,
+    get_list_main_hint_rows_gap,
+    apply_list_main_hint_rows_gap,
+    "list.mainHintRowsGap",
+    list.main_hint_rows_gap
+);
+f32_knob!(
     LIST_MAIN_HINT_ROW_GAP_KNOB_ID,
     get_list_main_hint_row_gap,
     apply_list_main_hint_row_gap,
@@ -411,6 +425,13 @@ alpha_knob!(
     apply_list_main_hint_row_value_alpha,
     "list.mainHintRowValueAlpha",
     list.main_hint_row_value_alpha
+);
+f32_knob!(
+    LIST_MAIN_HINT_FRAGMENT_ROWS_GAP_KNOB_ID,
+    get_list_main_hint_fragment_rows_gap,
+    apply_list_main_hint_fragment_rows_gap,
+    "list.mainHintFragmentRowsGap",
+    list.main_hint_fragment_rows_gap
 );
 f32_knob!(
     LIST_MAIN_HINT_FRAGMENT_ROW_GAP_KNOB_ID,
@@ -495,6 +516,41 @@ alpha_knob!(
     apply_list_main_hint_fragment_value_alpha,
     "list.mainHintFragmentValueAlpha",
     list.main_hint_fragment_value_alpha
+);
+alpha_knob!(
+    LIST_MAIN_HINT_WARNING_BORDER_ALPHA_KNOB_ID,
+    get_list_main_hint_warning_border_alpha,
+    apply_list_main_hint_warning_border_alpha,
+    "list.mainHintWarningBorderAlpha",
+    list.main_hint_warning_border_alpha
+);
+alpha_knob!(
+    LIST_MAIN_HINT_WARNING_BG_ALPHA_KNOB_ID,
+    get_list_main_hint_warning_bg_alpha,
+    apply_list_main_hint_warning_bg_alpha,
+    "list.mainHintWarningBgAlpha",
+    list.main_hint_warning_bg_alpha
+);
+f32_knob!(
+    LIST_MAIN_HINT_DIVIDER_HEIGHT_KNOB_ID,
+    get_list_main_hint_divider_height,
+    apply_list_main_hint_divider_height,
+    "list.mainHintDividerHeight",
+    list.main_hint_divider_height
+);
+f32_knob!(
+    LIST_MAIN_HINT_EXAMPLES_GROUP_GAP_KNOB_ID,
+    get_list_main_hint_examples_group_gap,
+    apply_list_main_hint_examples_group_gap,
+    "list.mainHintExamplesGroupGap",
+    list.main_hint_examples_group_gap
+);
+f32_knob!(
+    LIST_MAIN_HINT_EXAMPLE_ROW_GAP_KNOB_ID,
+    get_list_main_hint_example_row_gap,
+    apply_list_main_hint_example_row_gap,
+    "list.mainHintExampleRowGap",
+    list.main_hint_example_row_gap
 );
 
 f32_knob!(
@@ -1266,6 +1322,28 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         apply: apply_list_main_hint_chip_bg_alpha,
     },
     StyleKnob {
+        id: LIST_MAIN_HINT_STATUS_CHIP_GAP_KNOB_ID,
+        label: "Main hint status chip gap",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_list_main_hint_status_chip_gap,
+        apply: apply_list_main_hint_status_chip_gap,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_ROWS_GAP_KNOB_ID,
+        label: "Main hint rows gap",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_list_main_hint_rows_gap,
+        apply: apply_list_main_hint_rows_gap,
+    },
+    StyleKnob {
         id: LIST_MAIN_HINT_ROW_GAP_KNOB_ID,
         label: "Main hint row gap",
         group: StyleKnobGroup::List,
@@ -1352,6 +1430,17 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_list_main_hint_row_value_alpha,
         apply: apply_list_main_hint_row_value_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FRAGMENT_ROWS_GAP_KNOB_ID,
+        label: "Main hint fragment rows gap",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_list_main_hint_fragment_rows_gap,
+        apply: apply_list_main_hint_fragment_rows_gap,
     },
     StyleKnob {
         id: LIST_MAIN_HINT_FRAGMENT_ROW_GAP_KNOB_ID,
@@ -1484,6 +1573,61 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_list_main_hint_fragment_value_alpha,
         apply: apply_list_main_hint_fragment_value_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_WARNING_BORDER_ALPHA_KNOB_ID,
+        label: "Main hint warning border alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_warning_border_alpha,
+        apply: apply_list_main_hint_warning_border_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_WARNING_BG_ALPHA_KNOB_ID,
+        label: "Main hint warning background alpha",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_list_main_hint_warning_bg_alpha,
+        apply: apply_list_main_hint_warning_bg_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_DIVIDER_HEIGHT_KNOB_ID,
+        label: "Main hint divider height",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 8.0,
+        step: 0.5,
+        get: get_list_main_hint_divider_height,
+        apply: apply_list_main_hint_divider_height,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_EXAMPLES_GROUP_GAP_KNOB_ID,
+        label: "Main hint examples group gap",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 0.5,
+        get: get_list_main_hint_examples_group_gap,
+        apply: apply_list_main_hint_examples_group_gap,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_EXAMPLE_ROW_GAP_KNOB_ID,
+        label: "Main hint example row gap",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 24.0,
+        step: 0.5,
+        get: get_list_main_hint_example_row_gap,
+        apply: apply_list_main_hint_example_row_gap,
     },
     StyleKnob {
         id: ROW_OUTER_PADDING_X_KNOB_ID,

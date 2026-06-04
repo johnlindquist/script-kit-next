@@ -489,9 +489,10 @@ fn render_menu_syntax_main_hint(
                 )
                 .child(
                     div()
+                        .id("menu-syntax-main-hint-status-chip-row")
                         .flex()
                         .items_center()
-                        .gap(px(6.0))
+                        .gap(px(list_tokens.main_hint_status_chip_gap))
                         .when_some(hint.mode_chip.as_ref(), |d, chip| {
                             d.child(render_menu_syntax_hint_chip(theme, list_tokens, chip))
                         })
@@ -518,7 +519,9 @@ fn render_menu_syntax_main_hint(
                             hint.status_chip
                                 .as_ref()
                                 .filter(|_| hint.status_chips.is_empty()),
-                            |d, chip| d.child(render_menu_syntax_hint_chip(theme, list_tokens, chip)),
+                            |d, chip| {
+                                d.child(render_menu_syntax_hint_chip(theme, list_tokens, chip))
+                            },
                         ),
                 ),
         )
@@ -542,39 +545,57 @@ fn render_menu_syntax_main_hint(
         })
         .when(!hint.rows.is_empty(), |d| {
             d.child(
-                div().flex().flex_col().gap(px(7.0)).children(
-                    hint.rows
-                        .iter()
-                        .map(|row| render_menu_syntax_hint_row(theme, list_tokens, row)),
-                ),
+                div()
+                    .id("menu-syntax-main-hint-rows")
+                    .flex()
+                    .flex_col()
+                    .gap(px(list_tokens.main_hint_rows_gap))
+                    .children(
+                        hint.rows
+                            .iter()
+                            .map(|row| render_menu_syntax_hint_row(theme, list_tokens, row)),
+                    ),
             )
         })
         .when_some(hint.fragment_preview.as_ref(), |d, preview| {
             d.when(!preview.rows.is_empty(), |d| {
                 d.child(
-                    div().flex().flex_col().gap(px(6.0)).children(
-                        preview
-                            .rows
-                            .iter()
-                            .map(|row| {
+                    div()
+                        .id("menu-syntax-main-hint-fragment-rows")
+                        .flex()
+                        .flex_col()
+                        .gap(px(list_tokens.main_hint_fragment_rows_gap))
+                        .children(
+                            preview.rows.iter().map(|row| {
                                 render_menu_syntax_fragment_preview_row(theme, list_tokens, row)
                             }),
-                    ),
+                        ),
                 )
             })
         })
         .when_some(hint.warning.as_ref(), |d, warning| {
             d.child(
                 crate::components::non_list_card("menu-syntax-main-hint-warning", palette, metrics)
-                    .border_color(rgba((theme.colors.ui.warning << 8) | 0x66))
-                    .bg(rgba((theme.colors.ui.warning << 8) | 0x14))
+                    .border_color(rgba(
+                        (theme.colors.ui.warning << 8)
+                            | list_tokens.main_hint_warning_border_alpha,
+                    ))
+                    .bg(rgba(
+                        (theme.colors.ui.warning << 8) | list_tokens.main_hint_warning_bg_alpha,
+                    ))
                     .text_size(px(metrics.body_size))
                     .line_height(px(metrics.body_line))
                     .text_color(rgb(theme.colors.ui.warning))
                     .child(warning.clone()),
             )
         })
-        .child(div().h(px(1.0)).w_full().bg(palette.border))
+        .child(
+            div()
+                .id("menu-syntax-main-hint-divider")
+                .h(px(list_tokens.main_hint_divider_height))
+                .w_full()
+                .bg(palette.border),
+        )
         .when_some(hint.primary_hint.as_ref(), |d, primary| {
             d.child(
                 div()
@@ -597,9 +618,10 @@ fn render_menu_syntax_main_hint(
         .when(!examples.is_empty(), |d| {
             d.child(
                 div()
+                    .id("menu-syntax-main-hint-examples-group")
                     .flex()
                     .flex_col()
-                    .gap(px(5.0))
+                    .gap(px(list_tokens.main_hint_examples_group_gap))
                     .child(
                         div()
                             .text_size(px(metrics.body_size - 1.0))
@@ -619,7 +641,7 @@ fn render_menu_syntax_main_hint(
                         )
                         .flex()
                         .flex_col()
-                        .gap(px(3.0))
+                        .gap(px(list_tokens.main_hint_example_row_gap))
                         .text_size(px(metrics.body_size))
                         .line_height(px(metrics.body_line))
                         .font_family("JetBrains Mono")

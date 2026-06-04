@@ -240,3 +240,54 @@ fn menu_syntax_main_hint_helper_chrome_is_list_tokenized() {
     assert!(!fragment_body.contains("| 0x55"));
     assert!(!fragment_body.contains("| 0x14"));
 }
+
+#[test]
+fn menu_syntax_main_hint_container_chrome_is_list_tokenized() {
+    let theme =
+        fs::read_to_string("src/designs/core/main_menu_theme.rs").expect("read theme source");
+    let catalog =
+        fs::read_to_string("src/dev_style_tool/catalog.rs").expect("read dev style catalog");
+    let render_script_list =
+        fs::read_to_string("src/render_script_list/mod.rs").expect("read render script list");
+
+    assert!(theme.contains("pub main_hint_status_chip_gap: f32"));
+    assert!(theme.contains("pub main_hint_rows_gap: f32"));
+    assert!(theme.contains("pub main_hint_fragment_rows_gap: f32"));
+    assert!(theme.contains("pub main_hint_warning_border_alpha: u32"));
+    assert!(theme.contains("pub main_hint_warning_bg_alpha: u32"));
+    assert!(theme.contains("pub main_hint_divider_height: f32"));
+    assert!(theme.contains("pub main_hint_examples_group_gap: f32"));
+    assert!(theme.contains("pub main_hint_example_row_gap: f32"));
+
+    assert!(catalog.contains("LIST_MAIN_HINT_STATUS_CHIP_GAP_KNOB_ID"));
+    assert!(catalog.contains("\"list.mainHintStatusChipGap\""));
+    assert!(catalog.contains("\"Main hint status chip gap\""));
+    assert!(catalog.contains("LIST_MAIN_HINT_WARNING_BG_ALPHA_KNOB_ID"));
+    assert!(catalog.contains("\"list.mainHintWarningBgAlpha\""));
+    assert!(catalog.contains("\"Main hint warning background alpha\""));
+    assert!(catalog.contains("LIST_MAIN_HINT_DIVIDER_HEIGHT_KNOB_ID"));
+    assert!(catalog.contains("\"list.mainHintDividerHeight\""));
+    assert!(catalog.contains("\"Main hint divider height\""));
+    assert!(catalog.contains("LIST_MAIN_HINT_EXAMPLE_ROW_GAP_KNOB_ID"));
+    assert!(catalog.contains("\"list.mainHintExampleRowGap\""));
+    assert!(catalog.contains("\"Main hint example row gap\""));
+
+    let body = function_body(&render_script_list, "render_menu_syntax_main_hint");
+    assert!(body.contains("list_tokens.main_hint_status_chip_gap"));
+    assert!(body.contains("list_tokens.main_hint_rows_gap"));
+    assert!(body.contains("list_tokens.main_hint_fragment_rows_gap"));
+    assert!(body.contains("list_tokens.main_hint_warning_border_alpha"));
+    assert!(body.contains("list_tokens.main_hint_warning_bg_alpha"));
+    assert!(body.contains("list_tokens.main_hint_divider_height"));
+    assert!(body.contains("list_tokens.main_hint_examples_group_gap"));
+    assert!(body.contains("list_tokens.main_hint_example_row_gap"));
+    assert!(body.contains("\"menu-syntax-main-hint-divider\""));
+    assert!(body.contains("\"menu-syntax-main-hint-examples-group\""));
+    assert!(!body.contains(".gap(px(6.0))"));
+    assert!(!body.contains(".gap(px(7.0))"));
+    assert!(!body.contains("| 0x66"));
+    assert!(!body.contains("| 0x14"));
+    assert!(!body.contains(".h(px(1.0))"));
+    assert!(!body.contains(".gap(px(5.0))"));
+    assert!(!body.contains(".gap(px(3.0))"));
+}
