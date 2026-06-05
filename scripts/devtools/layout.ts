@@ -676,7 +676,7 @@ async function main() {
           schemaVersion: 1,
           generatedAt: new Date().toISOString(),
           auditSchema: "panel-radius-v2",
-          requiredPanelRadiusNodes: ["ContentArea", "ScriptList", "PreviewPanel"],
+          requiredPanelRadiusNodes: ["MainViewMain", "ScriptList", "PreviewPanel"],
           sourceFingerprint: await layoutSourceFingerprint(),
         },
         promptType: analysis.promptType,

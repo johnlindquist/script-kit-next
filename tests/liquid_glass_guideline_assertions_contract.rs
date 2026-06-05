@@ -2,6 +2,16 @@
 
 use std::fs;
 
+fn layout_component_source<'a>(layout: &'a str, node: &str) -> &'a str {
+    let inline = format!("LayoutComponentInfo::new(\"{node}\"");
+    let multiline = format!("LayoutComponentInfo::new(\n                    \"{node}\"");
+    let start = layout
+        .find(&inline)
+        .or_else(|| layout.find(&multiline))
+        .unwrap_or_else(|| panic!("{node} layout node should exist"));
+    &layout[start..]
+}
+
 #[test]
 fn layout_visual_audit_emits_guideline_assertion_buckets() {
     let layout =
@@ -170,17 +180,17 @@ fn measured_native_baselines_are_probe_backed_and_pinned() {
 
 /// Slice 5 (Oracle session `tahoe-apple-guideline-metrics`): the proven input
 /// padding fix. The main-launcher SearchInput now both RENDERS and EMITS the
-/// measured native NSTextField inset (SEARCH_INPUT_TEXT_INSET_X_PX = 9pt) instead
+/// configured main-input inset (SEARCH_INPUT_TEXT_INSET_X_PX = 16pt) instead
 /// of flush 0pt text. The conformance engine therefore classifies it withinBand.
 /// This pins the token, the render-layer left padding, and the layout emission so
-/// the audit can never claim 9pt while the UI still renders 0pt (no fake-green).
+/// the audit can never claim padding while the UI still renders 0pt (no fake-green).
 #[test]
-fn search_input_renders_and_emits_native_nine_point_content_inset() {
+fn search_input_renders_and_emits_configured_content_inset() {
     let tokens =
         fs::read_to_string("src/ui/chrome/tokens.rs").expect("failed to read chrome tokens.rs");
     assert!(
-        tokens.contains("pub const SEARCH_INPUT_TEXT_INSET_X_PX: f32 = 9.0;"),
-        "the search-input inset token must be the measured native 9pt"
+        tokens.contains("pub const SEARCH_INPUT_TEXT_INSET_X_PX: f32 = 16.0;"),
+        "the search-input inset token must match the saved main input padding X default"
     );
 
     let style = fs::read_to_string("src/protocol/types/grid_layout.rs")
@@ -191,41 +201,55 @@ fn search_input_renders_and_emits_native_nine_point_content_inset() {
         "LayoutVisualStyle must carry an emittable content_insets field + builder"
     );
 
-    // The REAL render layer must apply the padding (not just the audit emission),
-    // so the audit cannot fake-green.
-    let render = fs::read_to_string("src/render_script_list/mod.rs")
-        .expect("failed to read render_script_list/mod.rs");
+    // The REAL render layer must apply the padding through the shared main-view
+    // input shell, not just emit it in the audit, so the audit cannot fake-green.
+    let render = fs::read_to_string("src/components/main_view_chrome.rs")
+        .expect("failed to read main_view_chrome.rs");
     assert!(
-        render.contains(".pl(px(crate::ui::chrome::SEARCH_INPUT_TEXT_INSET_X_PX))"),
-        "the search input must render its 9pt left padding, not only emit it in the audit"
+        render.contains(
+            "pub(crate) fn main_view_input_text_inset_left(def: MainMenuThemeDef) -> f32"
+        ) && render.contains("def.search.text_inset_x")
+            && render.contains(".pl(px(text_inset_left))"),
+        "the search input must render its configured left padding, not only emit it in the audit"
+    );
+
+    let theme = fs::read_to_string("src/designs/core/main_menu_theme.rs")
+        .expect("failed to read main_menu_theme.rs");
+    assert!(
+        theme.contains("text_inset_x: crate::ui::chrome::SEARCH_INPUT_TEXT_INSET_X_PX"),
+        "main menu search token must use the shared input inset token"
     );
 
     let layout = fs::read_to_string("src/app_layout/build_layout_info.rs")
         .expect("failed to read build_layout_info.rs");
-    let start = layout
-        .find("LayoutComponentInfo::new(\"SearchInput\"")
-        .expect("main-launcher SearchInput node should exist");
-    let node = &layout[start..];
+    assert!(
+        layout.contains(
+            "crate::components::main_view_chrome::main_view_input_text_inset_left(menu_def)"
+        ),
+        "MainViewInput layout must source its left inset from the shared main_view_chrome helper"
+    );
+    let node = layout_component_source(&layout, "MainViewInput");
     let end = node
-        .find(".with_visual_token(\"chrome.searchInput\")")
-        .expect("SearchInput should declare its visual token");
+        .find(".with_visual_token(\"chrome.mainViewInput\")")
+        .expect("MainViewInput should declare its visual token");
     let node = &node[..end];
     assert!(
         node.contains(".with_content_insets(")
-            && node.contains("chrome_tokens::SEARCH_INPUT_TEXT_INSET_X_PX"),
-        "SearchInput must emit the 9pt native content inset, matching the render layer"
+            && node.contains("input_text_inset_left")
+            && node.contains("search.text_inset_x"),
+        "MainViewInput must emit the configured content inset, matching the render layer"
     );
     assert!(
         !node.contains(
             "0.0,\n                    crate::panel::CURSOR_MARGIN_Y,\n                    0.0,"
         ),
-        "SearchInput must no longer emit the pre-fix flush 0.0pt horizontal inset"
+        "MainViewInput must no longer emit the pre-fix flush 0.0pt horizontal inset"
     );
 }
 
 /// Slice 3b (Oracle session `tahoe-apple-guideline-metrics`): the main-launcher
 /// must EMIT a footer rail node carrying its real inter-item gap (boxModel.gap =
-/// FOOTER_ACTION_ITEM_GAP_PX) so the conformance engine can MEASURE the user's
+/// footer_metrics.item_gap_px) so the conformance engine can MEASURE the user's
 /// "footer lacks padding" concern (6pt observed vs the soft ~12pt floor). The
 /// metric is SOFT — footer hint chips are not regular buttons — so we must not
 /// overstate it as a hard Apple violation.
@@ -233,21 +257,18 @@ fn search_input_renders_and_emits_native_nine_point_content_inset() {
 fn main_footer_emits_measured_item_gap_for_soft_conformance() {
     let layout = fs::read_to_string("src/app_layout/build_layout_info.rs")
         .expect("failed to read build_layout_info.rs");
-    let start = layout
-        .find("LayoutComponentInfo::new(\"MainFooter\"")
-        .expect("main-launcher MainFooter node should exist");
-    let node = &layout[start..];
+    let node = layout_component_source(&layout, "MainViewFooter");
     let end = node
         .find(".with_explanation(")
-        .expect("MainFooter should declare an explanation");
+        .expect("MainViewFooter should declare an explanation");
     let node = &node[..end];
     assert!(
-        node.contains(".with_gap(FOOTER_ACTION_ITEM_GAP_PX)"),
-        "MainFooter must emit its real inter-item gap as boxModel.gap"
+        node.contains(".with_gap(footer_metrics.item_gap_px)"),
+        "MainViewFooter must emit its real inter-item gap as boxModel.gap"
     );
     assert!(
         node.contains(".with_content_insets("),
-        "MainFooter must emit its content insets (side padding)"
+        "MainViewFooter must emit its content insets (side padding)"
     );
 
     let constants = fs::read_to_string("scripts/devtools/apple-guideline-constants.ts")
@@ -443,11 +464,8 @@ fn shared_prompt_layout_nodes_use_liquid_glass_radius_tokens() {
     let layout = fs::read_to_string("src/app_layout/build_layout_info.rs")
         .expect("failed to read build_layout_info.rs");
 
-    for node in ["ContentArea", "ScriptList", "PreviewPanel"] {
-        let start = layout
-            .find(&format!("LayoutComponentInfo::new(\"{node}\""))
-            .unwrap_or_else(|| panic!("{node} layout node should exist"));
-        let node_source = &layout[start..];
+    for node in ["MainViewMain", "ScriptList", "PreviewPanel"] {
+        let node_source = layout_component_source(&layout, node);
         let end = node_source
             .find(".with_visual_token")
             .unwrap_or_else(|| panic!("{node} should declare visual metadata"));
@@ -495,10 +513,7 @@ fn creation_feedback_content_nodes_use_liquid_glass_panel_radius() {
         "CreationFeedbackPathSection",
         "CreationFeedbackActions",
     ] {
-        let start = layout
-            .find(&format!("LayoutComponentInfo::new(\"{node}\""))
-            .unwrap_or_else(|| panic!("{node} layout node should exist"));
-        let node_source = &layout[start..];
+        let node_source = layout_component_source(&layout, node);
         let end = node_source
             .find(".with_visual_token")
             .unwrap_or_else(|| panic!("{node} should declare visual metadata"));

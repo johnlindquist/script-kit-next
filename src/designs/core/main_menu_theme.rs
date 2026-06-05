@@ -714,7 +714,7 @@ fn base_main_menu_theme_def(
         search: MainMenuSearchTokens {
             height: 26.0,
             radius: 9.0,
-            text_inset_x: (16.0_f32 * 0.55).clamp(8.0, 16.0),
+            text_inset_x: crate::ui::chrome::SEARCH_INPUT_TEXT_INSET_X_PX,
             text_inset_y: 0.0,
             surface_alpha: 0x00,
             border_alpha: 0x00,
