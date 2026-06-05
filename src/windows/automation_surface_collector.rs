@@ -351,9 +351,36 @@ fn collect_dev_style_tool_snapshot() -> SurfaceElementSnapshot {
         None,
         Some(0),
     ));
+    elements.push(element(
+        "button:dev-style-tool-undo",
+        ElementType::Button,
+        Some("Undo".to_string()),
+        Some("undoStyleChange".to_string()),
+        None,
+        None,
+        Some(1),
+    ));
+    elements.push(element(
+        "button:dev-style-tool-redo",
+        ElementType::Button,
+        Some("Redo".to_string()),
+        Some("redoStyleChange".to_string()),
+        None,
+        None,
+        Some(2),
+    ));
+    elements.push(element(
+        "button:dev-style-tool-reset-all",
+        ElementType::Button,
+        Some("Reset All".to_string()),
+        Some("resetStyleControls".to_string()),
+        None,
+        None,
+        Some(3),
+    ));
     let mut seen_groups = Vec::new();
     let mut seen_sections = Vec::new();
-    let mut next_index = 1usize;
+    let mut next_index = 4usize;
     for knob in crate::dev_style_tool::STYLE_KNOBS {
         if !seen_groups.contains(&knob.group) {
             seen_groups.push(knob.group);

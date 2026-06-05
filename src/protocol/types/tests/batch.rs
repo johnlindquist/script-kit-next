@@ -123,6 +123,21 @@ fn batch_command_save_current_style_settings_round_trips() {
 }
 
 #[test]
+fn batch_command_dev_style_history_controls_round_trip() {
+    for (cmd, wire_type) in [
+        (BatchCommand::UndoStyleChange, "undoStyleChange"),
+        (BatchCommand::RedoStyleChange, "redoStyleChange"),
+        (BatchCommand::ResetStyleControls, "resetStyleControls"),
+    ] {
+        let json = serde_json::to_value(&cmd).expect("serialize dev style history command");
+        assert_eq!(json["type"], wire_type);
+        let back: BatchCommand =
+            serde_json::from_value(json).expect("deserialize dev style history command");
+        assert_eq!(back, cmd);
+    }
+}
+
+#[test]
 fn batch_command_filter_and_select_round_trips() {
     let cmd = BatchCommand::FilterAndSelect {
         filter: "app".to_string(),

@@ -2,7 +2,15 @@
 
 type JsonObject = Record<string, unknown>;
 
-type ActionKind = "set-input" | "select" | "key" | "open-actions" | "set-theme-control";
+type ActionKind =
+  | "set-input"
+  | "select"
+  | "key"
+  | "open-actions"
+  | "set-theme-control"
+  | "undo-style-change"
+  | "redo-style-change"
+  | "reset-style-controls";
 
 type Args = {
   actionKind: ActionKind;
@@ -92,6 +100,9 @@ function usage() {
     "  bun scripts/devtools/act.ts key --key Enter --modifiers cmd --allow-submit --submit-intent agent-chat-route --allow-submit-reason <why> [target args]",
     "  bun scripts/devtools/act.ts open-actions [target args]",
     "  bun scripts/devtools/act.ts set-theme-control --control <id> --value <value> --surface ThemeChooser [target args]",
+    "  bun scripts/devtools/act.ts undo-style-change --target-id dev-style-tool [target args]",
+    "  bun scripts/devtools/act.ts redo-style-change --target-id dev-style-tool [target args]",
+    "  bun scripts/devtools/act.ts reset-style-controls --target-id dev-style-tool [target args]",
     "",
     "Target args match scripts/devtools/targets.ts inspect, e.g. --session <name> --main --strict --surface ScriptList.",
   ].join("\n");
@@ -104,7 +115,19 @@ function parseArgs(argv: string[]): Args {
   }
 
   const command = argv[0] as ActionKind | undefined;
-  if (!command || !["set-input", "select", "key", "open-actions", "set-theme-control"].includes(command)) {
+  if (
+    !command
+    || ![
+      "set-input",
+      "select",
+      "key",
+      "open-actions",
+      "set-theme-control",
+      "undo-style-change",
+      "redo-style-change",
+      "reset-style-controls",
+    ].includes(command)
+  ) {
     console.error(usage());
     process.exit(2);
   }
@@ -349,6 +372,36 @@ function actionPayload(args: Args, selector: JsonObject) {
       requestId: requestId("set-theme-control"),
       target: selector,
       commands: [{ type: "setThemeControl", control: args.control, value: args.value }],
+      options: { stopOnError: true, rollbackOnError: false, timeout: args.timeoutMs },
+      trace: "on",
+    };
+  }
+  if (args.actionKind === "undo-style-change") {
+    return {
+      type: "batch",
+      requestId: requestId("undo-style-change"),
+      target: selector,
+      commands: [{ type: "undoStyleChange" }],
+      options: { stopOnError: true, rollbackOnError: false, timeout: args.timeoutMs },
+      trace: "on",
+    };
+  }
+  if (args.actionKind === "redo-style-change") {
+    return {
+      type: "batch",
+      requestId: requestId("redo-style-change"),
+      target: selector,
+      commands: [{ type: "redoStyleChange" }],
+      options: { stopOnError: true, rollbackOnError: false, timeout: args.timeoutMs },
+      trace: "on",
+    };
+  }
+  if (args.actionKind === "reset-style-controls") {
+    return {
+      type: "batch",
+      requestId: requestId("reset-style-controls"),
+      target: selector,
+      commands: [{ type: "resetStyleControls" }],
       options: { stopOnError: true, rollbackOnError: false, timeout: args.timeoutMs },
       trace: "on",
     };

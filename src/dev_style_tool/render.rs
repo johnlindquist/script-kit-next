@@ -138,6 +138,37 @@ impl DevStyleToolApp {
         self.refresh_main_window(cx);
     }
 
+    fn undo_style_change(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
+        if runtime_overrides::undo_last().is_some() {
+            self.sync_all_controls(window, cx);
+            self.refresh_main_window(cx);
+        }
+    }
+
+    fn redo_style_change(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
+        if runtime_overrides::redo_last().is_some() {
+            self.sync_all_controls(window, cx);
+            self.refresh_main_window(cx);
+        }
+    }
+
+    fn reset_all_controls(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
+        runtime_overrides::reset_all();
+        self.sync_all_controls(window, cx);
+        self.refresh_main_window(cx);
+    }
+
+    fn sync_all_controls(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
+        let knob_ids: Vec<StyleKnobId> = self
+            .controls
+            .iter()
+            .map(|control| control.knob_id)
+            .collect();
+        for knob_id in knob_ids {
+            self.sync_control_to_value(knob_id, current_knob_value(knob_id), window, cx);
+        }
+    }
+
     fn sync_control_to_value(
         &mut self,
         knob_id: StyleKnobId,
@@ -232,7 +263,9 @@ impl DevStyleToolApp {
                     .child(group.label()),
             )
             .children(self.group_controls_by_section(controls).into_iter().map(
-                |(section, controls)| self.render_control_section(group, section, controls, chrome, cx),
+                |(section, controls)| {
+                    self.render_control_section(group, section, controls, chrome, cx)
+                },
             ))
     }
 
@@ -268,12 +301,7 @@ impl DevStyleToolApp {
     ) -> impl IntoElement {
         div()
             .id(ElementId::Name(
-                format!(
-                    "style-subsection:{}:{}",
-                    group_slug(group),
-                    section.slug
-                )
-                .into(),
+                format!("style-subsection:{}:{}", group_slug(group), section.slug).into(),
             ))
             .flex()
             .flex_col()
@@ -378,6 +406,27 @@ impl DevStyleToolApp {
                     ),
             )
     }
+
+    fn render_toolbar_button(
+        &self,
+        semantic_id: &'static str,
+        label: &'static str,
+        enabled: bool,
+        chrome: theme::AppChromeColors,
+    ) -> gpui::Stateful<Div> {
+        div()
+            .id(semantic_id)
+            .px(px(8.0))
+            .py(px(4.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(rgba(chrome.border_rgba))
+            .text_xs()
+            .cursor_pointer()
+            .opacity(if enabled { 1.0 } else { 0.45 })
+            .hover(|style| style.bg(rgba(chrome.hover_rgba)))
+            .child(label)
+    }
 }
 
 impl Render for DevStyleToolApp {
@@ -385,6 +434,7 @@ impl Render for DevStyleToolApp {
         let theme = theme::get_cached_theme();
         let chrome = theme::AppChromeColors::from_theme(&theme);
         let generation = runtime_overrides::generation();
+        let history = runtime_overrides::history_state();
         let left_groups = [
             StyleKnobGroup::Shell,
             StyleKnobGroup::Search,
@@ -438,20 +488,56 @@ impl Render for DevStyleToolApp {
                                     )),
                             )
                             .child(
-                                div()
-                                    .id("button:dev-style-tool-save")
-                                    .px(px(8.0))
-                                    .py(px(4.0))
-                                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
-                                    .border(px(1.0))
-                                    .border_color(rgba(chrome.border_rgba))
-                                    .text_xs()
-                                    .cursor_pointer()
-                                    .hover(|style| style.bg(rgba(chrome.hover_rgba)))
-                                    .on_click(cx.listener(|this, _event, _window, cx| {
+                                self.render_toolbar_button(
+                                    "button:dev-style-tool-undo",
+                                    "Undo",
+                                    history.can_undo,
+                                    chrome,
+                                )
+                                .on_click(cx.listener(
+                                    |this, _event, window, cx| {
+                                        this.undo_style_change(window, cx);
+                                    },
+                                )),
+                            )
+                            .child(
+                                self.render_toolbar_button(
+                                    "button:dev-style-tool-redo",
+                                    "Redo",
+                                    history.can_redo,
+                                    chrome,
+                                )
+                                .on_click(cx.listener(
+                                    |this, _event, window, cx| {
+                                        this.redo_style_change(window, cx);
+                                    },
+                                )),
+                            )
+                            .child(
+                                self.render_toolbar_button(
+                                    "button:dev-style-tool-reset-all",
+                                    "Reset All",
+                                    history.override_count > 0,
+                                    chrome,
+                                )
+                                .on_click(cx.listener(
+                                    |this, _event, window, cx| {
+                                        this.reset_all_controls(window, cx);
+                                    },
+                                )),
+                            )
+                            .child(
+                                self.render_toolbar_button(
+                                    "button:dev-style-tool-save",
+                                    "Save",
+                                    true,
+                                    chrome,
+                                )
+                                .on_click(cx.listener(
+                                    |this, _event, _window, cx| {
                                         this.save_current_settings(cx);
-                                    }))
-                                    .child("Save"),
+                                    },
+                                )),
                             ),
                     ),
             )

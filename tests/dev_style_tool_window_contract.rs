@@ -46,6 +46,13 @@ fn dev_style_tool_render_is_catalog_driven_and_narrow() {
     assert!(render_source.contains("style-subsection:{}:{}"));
     assert!(render_source.contains("save_current_settings"));
     assert!(render_source.contains("button:dev-style-tool-save"));
+    assert!(render_source.contains("button:dev-style-tool-undo"));
+    assert!(render_source.contains("button:dev-style-tool-redo"));
+    assert!(render_source.contains("button:dev-style-tool-reset-all"));
+    assert!(render_source.contains("undo_style_change"));
+    assert!(render_source.contains("redo_style_change"));
+    assert!(render_source.contains("reset_all_controls"));
+    assert!(render_source.contains("sync_all_controls"));
     assert!(render_source.contains("body:dev-style-tool-scroll"));
     assert!(render_source.contains(".min_h_0()"));
     assert!(render_source.contains(".overflow_y_scroll()"));
@@ -79,6 +86,12 @@ fn dev_style_tool_registers_minimal_automation_target() {
     assert!(window_source.contains("fn is_dev_style_tool_open"));
     assert!(collector_source.contains("collect_dev_style_tool_snapshot"));
     assert!(collector_source.contains("button:dev-style-tool-save"));
+    assert!(collector_source.contains("button:dev-style-tool-undo"));
+    assert!(collector_source.contains("button:dev-style-tool-redo"));
+    assert!(collector_source.contains("button:dev-style-tool-reset-all"));
+    assert!(collector_source.contains("undoStyleChange"));
+    assert!(collector_source.contains("redoStyleChange"));
+    assert!(collector_source.contains("resetStyleControls"));
     assert!(collector_source.contains("saveCurrentStyleSettings"));
     assert!(collector_source.contains("crate::dev_style_tool::STYLE_KNOBS"));
     assert!(collector_source.contains("style-section:{}"));
@@ -135,6 +148,8 @@ fn dev_style_tool_devtools_mutation_reuses_runtime_catalog() {
         .expect("read dev style runtime overrides");
     let prompt_handler_source =
         fs::read_to_string("src/prompt_handler/mod.rs").expect("read prompt handler");
+    let protocol_source =
+        fs::read_to_string("src/protocol/types/batch_wait.rs").expect("read batch protocol");
 
     assert!(catalog_source.contains("knob_id_from_str"));
     assert!(catalog_source.contains("LIST_ITEM_HEIGHT_KNOB_ID"));
@@ -144,10 +159,22 @@ fn dev_style_tool_devtools_mutation_reuses_runtime_catalog() {
     assert!(runtime_source.contains("set_number_from_devtools"));
     assert!(runtime_source.contains("knob_id_from_str(control)"));
     assert!(runtime_source.contains("set_value(id, StyleValue::Number(parsed))"));
+    assert!(runtime_source.contains("undo_stack"));
+    assert!(runtime_source.contains("redo_stack"));
+    assert!(runtime_source.contains("pub fn undo_last"));
+    assert!(runtime_source.contains("pub fn redo_last"));
+    assert!(runtime_source.contains("pub fn reset_all"));
+    assert!(protocol_source.contains("UndoStyleChange"));
+    assert!(protocol_source.contains("RedoStyleChange"));
+    assert!(protocol_source.contains("ResetStyleControls"));
     assert!(prompt_handler_source.contains("AutomationBatchTargetKind::DevStyleTool"));
-    assert!(prompt_handler_source
-        .contains("supported_commands: &[\"setThemeControl\", \"saveCurrentStyleSettings\"]"));
+    assert!(prompt_handler_source.contains("\"undoStyleChange\""));
+    assert!(prompt_handler_source.contains("\"redoStyleChange\""));
+    assert!(prompt_handler_source.contains("\"resetStyleControls\""));
     assert!(prompt_handler_source.contains("SaveCurrentStyleSettings"));
+    assert!(prompt_handler_source.contains("UndoStyleChange"));
+    assert!(prompt_handler_source.contains("RedoStyleChange"));
+    assert!(prompt_handler_source.contains("ResetStyleControls"));
     assert!(prompt_handler_source.contains("\"saveCurrentStyleSettings\""));
     assert!(prompt_handler_source
         .contains("crate::dev_style_tool::export::save_current_settings_markdown"));

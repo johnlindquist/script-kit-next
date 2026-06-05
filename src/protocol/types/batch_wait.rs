@@ -175,6 +175,9 @@ pub enum BatchCommand {
         control: String,
         value: String,
     },
+    UndoStyleChange,
+    RedoStyleChange,
+    ResetStyleControls,
     SaveCurrentStyleSettings,
     FilterAndSelect {
         filter: String,

@@ -279,6 +279,9 @@ fn command_name(command: &BatchCommand) -> &'static str {
         BatchCommand::SelectByValue { .. } => "selectByValue",
         BatchCommand::SelectBySemanticId { .. } => "selectBySemanticId",
         BatchCommand::SetThemeControl { .. } => "setThemeControl",
+        BatchCommand::UndoStyleChange => "undoStyleChange",
+        BatchCommand::RedoStyleChange => "redoStyleChange",
+        BatchCommand::ResetStyleControls => "resetStyleControls",
         BatchCommand::SaveCurrentStyleSettings => "saveCurrentStyleSettings",
         BatchCommand::FilterAndSelect { .. } => "filterAndSelect",
         BatchCommand::TypeAndSubmit { .. } => "typeAndSubmit",
@@ -825,6 +828,9 @@ pub fn execute_batch<P: TransactionStateProvider>(
             | BatchCommand::TogglePreview
             | BatchCommand::OpenNotesAcp
             | BatchCommand::SetThemeControl { .. }
+            | BatchCommand::UndoStyleChange
+            | BatchCommand::RedoStyleChange
+            | BatchCommand::ResetStyleControls
             | BatchCommand::SaveCurrentStyleSettings
             | BatchCommand::FilterAndSelect { .. }
             | BatchCommand::TypeAndSubmit { .. } => {

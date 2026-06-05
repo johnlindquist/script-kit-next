@@ -482,7 +482,13 @@ impl BatchTargetCapabilities {
             AutomationBatchTargetKind::DevStyleTool => Self {
                 display_name: "DevStyleTool",
                 unsupported_target_name: "DevStyleTool",
-                supported_commands: &["setThemeControl", "saveCurrentStyleSettings"],
+                supported_commands: &[
+                    "setThemeControl",
+                    "undoStyleChange",
+                    "redoStyleChange",
+                    "resetStyleControls",
+                    "saveCurrentStyleSettings",
+                ],
                 concise_unsupported_message: true,
             },
         }
@@ -7335,6 +7341,9 @@ impl ScriptListApp {
                             && !matches!(
                                 cmd,
                                 protocol::BatchCommand::SetThemeControl { .. }
+                                    | protocol::BatchCommand::UndoStyleChange
+                                    | protocol::BatchCommand::RedoStyleChange
+                                    | protocol::BatchCommand::ResetStyleControls
                                     | protocol::BatchCommand::SaveCurrentStyleSettings
                             )
                         {
@@ -7524,6 +7533,167 @@ impl ScriptListApp {
                                             index,
                                             success: false,
                                             command: "setThemeControl".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error { break; }
+                                    }
+                                }
+                            }
+                            protocol::BatchCommand::UndoStyleChange => {
+                                if batch_target_kind != AutomationBatchTargetKind::DevStyleTool {
+                                    let command = batch_command_name(cmd);
+                                    results.push(protocol::BatchResultEntry {
+                                        index,
+                                        success: false,
+                                        command,
+                                        elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                        value: None,
+                                        error: Some(unsupported_batch_command_error(
+                                            batch_target_kind,
+                                            cmd,
+                                        )),
+                                    });
+                                    failed = true;
+                                    if opts.stop_on_error {
+                                        break;
+                                    }
+                                    continue;
+                                }
+                                match this.update(cx, |this, cx| {
+                                    let result = crate::dev_style_tool::runtime_overrides::undo_last()
+                                        .ok_or_else(|| anyhow::anyhow!("no dev style change to undo"))?;
+                                    this.update_theme(cx);
+                                    cx.notify();
+                                    Ok::<String, anyhow::Error>(result)
+                                }) {
+                                    Ok(Ok(value)) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "undoStyleChange", value = %value, "batch.step.ok");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: true,
+                                            command: "undoStyleChange".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: Some(value),
+                                            error: None,
+                                        });
+                                    }
+                                    Ok(Err(e)) | Err(e) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "undoStyleChange", error = %e, "batch.step.error");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "undoStyleChange".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error { break; }
+                                    }
+                                }
+                            }
+                            protocol::BatchCommand::RedoStyleChange => {
+                                if batch_target_kind != AutomationBatchTargetKind::DevStyleTool {
+                                    let command = batch_command_name(cmd);
+                                    results.push(protocol::BatchResultEntry {
+                                        index,
+                                        success: false,
+                                        command,
+                                        elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                        value: None,
+                                        error: Some(unsupported_batch_command_error(
+                                            batch_target_kind,
+                                            cmd,
+                                        )),
+                                    });
+                                    failed = true;
+                                    if opts.stop_on_error {
+                                        break;
+                                    }
+                                    continue;
+                                }
+                                match this.update(cx, |this, cx| {
+                                    let result = crate::dev_style_tool::runtime_overrides::redo_last()
+                                        .ok_or_else(|| anyhow::anyhow!("no dev style change to redo"))?;
+                                    this.update_theme(cx);
+                                    cx.notify();
+                                    Ok::<String, anyhow::Error>(result)
+                                }) {
+                                    Ok(Ok(value)) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "redoStyleChange", value = %value, "batch.step.ok");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: true,
+                                            command: "redoStyleChange".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: Some(value),
+                                            error: None,
+                                        });
+                                    }
+                                    Ok(Err(e)) | Err(e) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "redoStyleChange", error = %e, "batch.step.error");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "redoStyleChange".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error { break; }
+                                    }
+                                }
+                            }
+                            protocol::BatchCommand::ResetStyleControls => {
+                                if batch_target_kind != AutomationBatchTargetKind::DevStyleTool {
+                                    let command = batch_command_name(cmd);
+                                    results.push(protocol::BatchResultEntry {
+                                        index,
+                                        success: false,
+                                        command,
+                                        elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                        value: None,
+                                        error: Some(unsupported_batch_command_error(
+                                            batch_target_kind,
+                                            cmd,
+                                        )),
+                                    });
+                                    failed = true;
+                                    if opts.stop_on_error {
+                                        break;
+                                    }
+                                    continue;
+                                }
+                                match this.update(cx, |this, cx| {
+                                    let generation =
+                                        crate::dev_style_tool::runtime_overrides::reset_all();
+                                    this.update_theme(cx);
+                                    cx.notify();
+                                    Ok::<String, anyhow::Error>(format!(
+                                        "resetStyleControls generation={generation}"
+                                    ))
+                                }) {
+                                    Ok(Ok(value)) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "resetStyleControls", value = %value, "batch.step.ok");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: true,
+                                            command: "resetStyleControls".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: Some(value),
+                                            error: None,
+                                        });
+                                    }
+                                    Ok(Err(e)) | Err(e) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "resetStyleControls", error = %e, "batch.step.error");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "resetStyleControls".to_string(),
                                             elapsed: Some(cmd_start.elapsed().as_millis() as u64),
                                             value: None,
                                             error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
@@ -10219,6 +10389,9 @@ fn batch_command_name(cmd: &protocol::BatchCommand) -> String {
         protocol::BatchCommand::SelectByValue { .. } => "selectByValue".to_string(),
         protocol::BatchCommand::SelectBySemanticId { .. } => "selectBySemanticId".to_string(),
         protocol::BatchCommand::SetThemeControl { .. } => "setThemeControl".to_string(),
+        protocol::BatchCommand::UndoStyleChange => "undoStyleChange".to_string(),
+        protocol::BatchCommand::RedoStyleChange => "redoStyleChange".to_string(),
+        protocol::BatchCommand::ResetStyleControls => "resetStyleControls".to_string(),
         protocol::BatchCommand::SaveCurrentStyleSettings => "saveCurrentStyleSettings".to_string(),
         protocol::BatchCommand::FilterAndSelect { .. } => "filterAndSelect".to_string(),
         protocol::BatchCommand::TypeAndSubmit { .. } => "typeAndSubmit".to_string(),
