@@ -276,6 +276,22 @@ fn theme_chooser_management_buttons_use_theme_aware_hover_states() {
 }
 
 #[test]
+fn theme_chooser_outer_input_uses_shared_main_view_chrome() {
+    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+
+    assert!(
+        chooser.contains("render_builtin_main_input_header(")
+            && chooser.contains("render_main_view_chrome("),
+        "Theme Designer should use the shared main input/header chrome for its outer search"
+    );
+    assert!(
+        !chooser.contains("let header_divider = div()")
+            && !chooser.contains("let header_padding_x = design_spacing.padding_lg"),
+        "Theme Designer should not rebuild local header padding/divider around the main input"
+    );
+}
+
+#[test]
 fn theme_chooser_customize_cards_use_whisper_tokens_not_panel_tokens() {
     let chooser = read_source("src/render_builtins/theme_chooser.rs");
     let render_code = chooser

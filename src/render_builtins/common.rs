@@ -64,6 +64,82 @@ impl ScriptListApp {
         gpui::div().w_full().child(self.render_search_input())
     }
 
+    pub(crate) fn render_builtin_main_input_count_label(
+        &self,
+        label: impl Into<gpui::SharedString>,
+    ) -> gpui::AnyElement {
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
+        gpui::div()
+            .flex_none()
+            .whitespace_nowrap()
+            .pr(gpui::px(self.current_main_menu_theme.def().search.text_inset_x))
+            .text_sm()
+            .text_color(gpui::rgba(chrome.text_hint_rgba))
+            .child(label.into())
+            .into_any_element()
+    }
+
+    pub(crate) fn render_builtin_main_input_shell(
+        &self,
+        trailing: Vec<gpui::AnyElement>,
+    ) -> gpui::AnyElement {
+        let menu_def = self.current_main_menu_theme.def();
+        crate::components::main_view_chrome::render_main_view_input_shell(
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewInputChrome {
+                body: self.render_search_input().into_any_element(),
+                trailing,
+            },
+        )
+    }
+
+    pub(crate) fn render_builtin_main_input_header(
+        &self,
+        trailing: Vec<gpui::AnyElement>,
+    ) -> crate::components::main_view_chrome::MainViewHeaderChrome {
+        let shell = self.current_main_menu_theme.def().shell;
+        crate::components::main_view_chrome::MainViewHeaderChrome {
+            context: None,
+            input: self.render_builtin_main_input_shell(trailing),
+            padding_x: shell.header_padding_x,
+            padding_y: shell.header_padding_y,
+            gap: shell.header_gap,
+        }
+    }
+
+    pub(crate) fn render_builtin_main_input_surface(
+        &self,
+        key_context: &'static str,
+        trailing: Vec<gpui::AnyElement>,
+        main: gpui::AnyElement,
+        footer: Option<gpui::AnyElement>,
+    ) -> gpui::AnyElement {
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
+        crate::components::main_view_chrome::render_main_view_chrome(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .text_color(gpui::rgb(chrome.text_primary_hex))
+                .font_family(self.theme_font_family())
+                .key_context(key_context)
+                .track_focus(&self.focus_handle),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header: self.render_builtin_main_input_header(trailing),
+                divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                    margin_x: shell.divider_margin_x,
+                    height: shell.divider_height,
+                    visible: shell.divider_height > 0.0,
+                },
+                main,
+                footer,
+                overlays: Vec::new(),
+            },
+        )
+    }
+
     pub(crate) fn render_generic_filterable_search_surface(
         &self,
         key_context: &'static str,
@@ -71,32 +147,6 @@ impl ScriptListApp {
         list_element: gpui::AnyElement,
         footer: Option<gpui::AnyElement>,
     ) -> gpui::AnyElement {
-        let tokens = get_tokens(self.current_design);
-        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
-        let text_primary = self.theme.colors.text.primary;
-        let text_dimmed = self.theme.colors.text.dimmed;
-
-        let header = gpui::div()
-            .flex_1()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap_3()
-            .child(
-                gpui::div()
-                    .flex_1()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .child(self.render_search_input()),
-            )
-            .child(
-                gpui::div()
-                    .text_size(gpui::px(tokens.typography().font_size_sm))
-                    .text_color(gpui::rgb(text_dimmed))
-                    .child(count_label),
-            );
-
         let content = gpui::div()
             .flex_1()
             .min_h(gpui::px(0.))
@@ -104,20 +154,12 @@ impl ScriptListApp {
             .overflow_hidden()
             .child(list_element);
 
-        crate::components::render_minimal_list_prompt_shell_with_footer(
-            tokens.visual().radius_lg,
-            Some(gpui::rgba(chrome.panel_surface_rgba)),
-            header,
-            content,
+        self.render_builtin_main_input_surface(
+            key_context,
+            vec![self.render_builtin_main_input_count_label(count_label)],
+            content.into_any_element(),
             footer,
         )
-        .w_full()
-        .h_full()
-        .text_color(gpui::rgb(text_primary))
-        .font_family(self.theme_font_family())
-        .key_context(key_context)
-        .track_focus(&self.focus_handle)
-        .into_any_element()
     }
 
     /// Emit a structured scroll log line for builtin views.

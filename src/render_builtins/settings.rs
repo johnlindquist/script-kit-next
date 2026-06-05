@@ -425,7 +425,6 @@ impl ScriptListApp {
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
         let _design_typography = tokens.typography();
-        let design_visual = tokens.visual();
         let color_resolver =
             crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
         let typography_resolver =
@@ -638,37 +637,6 @@ impl ScriptListApp {
                 .into_any_element()
         };
 
-        let header = div()
-            .w_full()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap_3()
-            .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w(px(0.))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .child(
-                        self.render_search_input(),
-                    ),
-            )
-            .child(
-                div()
-                    .flex_none()
-                    .whitespace_nowrap()
-                    .text_sm()
-                    .text_color(rgba(chrome.text_hint_rgba))
-                    .child(format!(
-                        "{} setting{}",
-                        item_count,
-                        if item_count == 1 { "" } else { "s" }
-                    )),
-            );
-
         let content = div()
             .flex_1()
             .min_h(px(0.))
@@ -685,18 +653,35 @@ impl ScriptListApp {
             None,
         ));
 
-        crate::components::render_minimal_list_prompt_shell_with_footer(
-            design_visual.radius_lg,
-            crate::ui_foundation::get_vibrancy_background(&self.theme),
-            header,
-            content,
-            footer,
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
+
+        crate::components::main_view_chrome::render_main_view_chrome(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .text_color(rgb(chrome.text_primary_hex))
+                .font_family(self.theme_font_family())
+                .key_context("settings")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header: self.render_builtin_main_input_header(vec![
+                    self.render_builtin_main_input_count_label(format!(
+                        "{} setting{}",
+                        item_count,
+                        if item_count == 1 { "" } else { "s" }
+                    )),
+                ]),
+                divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                    margin_x: shell.divider_margin_x,
+                    height: shell.divider_height,
+                    visible: shell.divider_height > 0.0,
+                },
+                main: content.into_any_element(),
+                footer,
+                overlays: Vec::new(),
+            },
         )
-        .text_color(rgb(chrome.text_primary_hex))
-        .font_family(self.theme_font_family())
-        .key_context("settings")
-        .track_focus(&self.focus_handle)
-        .on_key_down(handle_key)
-        .into_any_element()
     }
 }

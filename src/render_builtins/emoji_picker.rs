@@ -451,24 +451,6 @@ impl ScriptListApp {
         let list_scrollbar =
             self.builtin_uniform_list_scrollbar(&self.emoji_scroll_handle, rows.len(), 8);
 
-        let header = div()
-            .w_full()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap_3()
-            .child(
-                div().flex_1().flex().flex_row().items_center().child(
-                    self.render_search_input()
-                ),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(text_dimmed))
-                    .child(format!("{} emojis", filtered_len)),
-            );
-
         let content = div()
             .flex_1()
             .min_h(px(0.0))
@@ -494,40 +476,32 @@ impl ScriptListApp {
             None,
         );
         let footer = self.main_window_footer_slot(gpui_footer);
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
 
-        div()
-            .w_full()
-            .h_full()
-            .flex()
-            .flex_col()
-            .child(
-                div()
-                    .w_full()
-                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
-                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .child(header),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .w_full()
-                    .overflow_hidden()
-                    .child(content),
-            )
-            .when_some(footer, |d, f| d.child(f))
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(self.theme_font_family())
-            .key_context("emoji_picker")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            .into_any_element()
+        crate::components::main_view_chrome::render_main_view_chrome(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .text_color(rgb(text_primary))
+                .font_family(self.theme_font_family())
+                .key_context("emoji_picker")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header: self.render_builtin_main_input_header(vec![
+                    self.render_builtin_main_input_count_label(format!("{} emojis", filtered_len)),
+                ]),
+                divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                    margin_x: shell.divider_margin_x,
+                    height: shell.divider_height,
+                    visible: shell.divider_height > 0.0,
+                },
+                main: content.into_any_element(),
+                footer,
+                overlays: Vec::new(),
+            },
+        )
     }
 }
 

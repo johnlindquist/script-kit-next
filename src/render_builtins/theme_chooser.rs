@@ -2891,7 +2891,6 @@ impl ScriptListApp {
     ) -> AnyElement {
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
-        let design_visual = tokens.visual();
         let chrome = theme::AppChromeColors::from_theme(self.theme.as_ref());
         let text_primary = chrome.text_primary_hex;
         let text_dimmed = chrome.text_dimmed_hex;
@@ -3377,35 +3376,6 @@ impl ScriptListApp {
         .into_any_element();
 
         // ── Header with search input + summary strip ─────────────────
-        let header_divider = div()
-            .mx(px(design_spacing.padding_lg))
-            .h(px(1.0))
-            .bg(divider_bg);
-
-        let header_padding_x = design_spacing.padding_lg;
-        let header_padding_top = design_spacing.padding_sm;
-        let header_padding_bottom = design_spacing.padding_sm;
-        let header_gap = design_spacing.gap_md;
-
-        let header = div()
-            .w_full()
-            .px(px(header_padding_x))
-            .pt(px(header_padding_top))
-            .pb(px(header_padding_bottom))
-            .flex()
-            .flex_col()
-            .gap(px(header_gap))
-            .child(
-                div().flex().flex_row().items_center().child(
-                    div()
-                        .flex_1()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .child(self.render_search_input()),
-                ),
-            );
-
         // Resolve selected preset name for live preview header
         let selected_preset_name = filtered_indices
             .get(selected_index)
@@ -3958,73 +3928,80 @@ impl ScriptListApp {
                 ),
             )
         };
+        let native_footer_hover_blocker = uses_native_footer.then(|| {
+            crate::components::prompt_layout_shell::render_native_main_window_footer_hover_blocker()
+                .into_any_element()
+        });
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
 
         // ── Empty state when filter has no matches ─────────────────
         if filtered_count == 0 {
-            return div()
-                .flex()
-                .flex_col()
-                .w_full()
-                .h_full()
-                .rounded(px(design_visual.radius_lg))
-                .text_color(rgb(text_primary))
-                .font_family(self.theme_font_family())
-                .relative()
-                .key_context("theme_chooser")
-                .track_focus(&self.focus_handle)
-                .on_key_down(handle_key)
-                .child(header)
-                .child(header_divider)
-                .child(self.render_theme_chooser_empty_state_body(filter, summary, &chrome))
-                .when_some(footer, |d, footer| d.child(footer))
-                .when(uses_native_footer, |d| {
-                    d.child(
-                        crate::components::prompt_layout_shell::render_native_main_window_footer_hover_blocker(),
-                    )
-                })
-                .into_any_element();
+            return crate::components::main_view_chrome::render_main_view_chrome(
+                crate::components::main_view_chrome::render_main_view_shell()
+                    .text_color(rgb(text_primary))
+                    .font_family(self.theme_font_family())
+                    .key_context("theme_chooser")
+                    .track_focus(&self.focus_handle)
+                    .on_key_down(handle_key),
+                &self.theme,
+                menu_def,
+                crate::components::main_view_chrome::MainViewChrome {
+                    header: self.render_builtin_main_input_header(Vec::new()),
+                    divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                        margin_x: shell.divider_margin_x,
+                        height: shell.divider_height,
+                        visible: shell.divider_height > 0.0,
+                    },
+                    main: self
+                        .render_theme_chooser_empty_state_body(filter, summary, &chrome)
+                        .into_any_element(),
+                    footer,
+                    overlays: native_footer_hover_blocker.into_iter().collect(),
+                },
+            );
         }
 
         // ── Main layout: list + preview panel ──────────────────────
-        div()
+        let main = div()
+            .flex_1()
+            .overflow_hidden()
             .flex()
-            .flex_col()
-            .w_full()
-            .h_full()
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(self.theme_font_family())
-            .relative()
-            .key_context("theme_chooser")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            .child(header)
-            .child(header_divider)
+            .flex_row()
             .child(
-                div()
-                    .flex_1()
-                    .overflow_hidden()
-                    .flex()
-                    .flex_row()
-                    .child(
-                        div().w_1_2().h_full().py(px(4.0)).child(
-                            div()
-                                .relative()
-                                .w_full()
-                                .h_full()
-                                .child(list)
-                                .vertical_scrollbar(&self.theme_chooser_list_state),
-                        ),
-                    )
-                    .child(preview_panel),
+                div().w_1_2().h_full().py(px(4.0)).child(
+                    div()
+                        .relative()
+                        .w_full()
+                        .h_full()
+                        .child(list)
+                        .vertical_scrollbar(&self.theme_chooser_list_state),
+                ),
             )
-            .when_some(footer, |d, footer| d.child(footer))
-            .when(uses_native_footer, |d| {
-                d.child(
-                    crate::components::prompt_layout_shell::render_native_main_window_footer_hover_blocker(),
-                )
-            })
-            .into_any_element()
+            .child(preview_panel)
+            .into_any_element();
+
+        crate::components::main_view_chrome::render_main_view_chrome(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .text_color(rgb(text_primary))
+                .font_family(self.theme_font_family())
+                .key_context("theme_chooser")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header: self.render_builtin_main_input_header(Vec::new()),
+                divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                    margin_x: shell.divider_margin_x,
+                    height: shell.divider_height,
+                    visible: shell.divider_height > 0.0,
+                },
+                main,
+                footer,
+                overlays: native_footer_hover_blocker.into_iter().collect(),
+            },
+        )
     }
 }
 

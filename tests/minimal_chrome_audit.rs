@@ -111,6 +111,50 @@ fn emoji_picker_no_longer_uses_prompt_footer() {
 }
 
 #[test]
+fn builtin_main_input_surfaces_use_shared_input_chrome() {
+    let common = production_source(include_str!("../src/render_builtins/common.rs"));
+    assert!(
+        common.contains("fn render_builtin_main_input_shell(")
+            && common.contains("render_main_view_input_shell(")
+            && common.contains("fn render_builtin_main_input_header(")
+            && common.contains("fn render_builtin_main_input_surface("),
+        "common built-in renderer should own the shared main input shell adapters"
+    );
+    assert!(
+        common.contains("render_generic_filterable_search_surface(")
+            && common.contains("render_builtin_main_input_surface("),
+        "generic filterable built-ins should inherit the shared main input surface"
+    );
+
+    for (surface, source) in [
+        (
+            "emoji_picker",
+            production_source(include_str!("../src/render_builtins/emoji_picker.rs")),
+        ),
+        (
+            "settings",
+            production_source(include_str!("../src/render_builtins/settings.rs")),
+        ),
+        (
+            "theme_chooser",
+            production_source(include_str!("../src/render_builtins/theme_chooser.rs")),
+        ),
+    ] {
+        assert!(
+            source.contains("render_builtin_main_input_header(")
+                && source.contains("render_main_view_chrome("),
+            "{surface} should route its main input header through shared main-view chrome"
+        );
+        assert!(
+            !source.contains("HEADER_PADDING_X") && !source.contains("HEADER_PADDING_Y"),
+            "{surface} should not hardcode local header padding around the main input"
+        );
+    }
+
+    eprintln!("{{\"audit\":\"main_input_style_parity\",\"surfaces\":[\"emoji_picker\",\"settings\",\"theme_chooser\",\"generic_filterable\"],\"status\":\"pass\"}}");
+}
+
+#[test]
 fn file_search_uses_shared_main_view_chrome_contract() {
     let entry_source = production_source(include_str!("../src/render_builtins/file_search.rs"));
 
