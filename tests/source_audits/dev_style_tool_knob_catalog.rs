@@ -12,6 +12,12 @@ fn dev_style_tool_catalog_owns_search_height_descriptor() {
         "search.height must be a named descriptor in the dev style tool catalog"
     );
     assert!(
+        source.contains("SEARCH_TEXT_INSET_X_KNOB_ID")
+            && source.contains("\"search.textInsetX\"")
+            && source.contains("\"Main input padding X\""),
+        "search.textInsetX must be exposed as main input horizontal padding"
+    );
+    assert!(
         source.contains("LIST_ITEM_HEIGHT_KNOB_ID")
             && source.contains("\"list.itemHeight\"")
             && source.contains("\"Item height\""),

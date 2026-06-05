@@ -5,6 +5,10 @@ use serde_json::json;
 use super::{runtime_overrides, StyleValue, STYLE_KNOBS};
 
 pub fn save_current_settings_markdown() -> anyhow::Result<PathBuf> {
+    save_current_settings_markdown_with_contents().map(|(path, _contents)| path)
+}
+
+pub fn save_current_settings_markdown_with_contents() -> anyhow::Result<(PathBuf, String)> {
     let dir = dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".scriptkit")
@@ -12,8 +16,9 @@ pub fn save_current_settings_markdown() -> anyhow::Result<PathBuf> {
     std::fs::create_dir_all(&dir)?;
     let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
     let path = dir.join(format!("main-window-style-{timestamp}.md"));
-    std::fs::write(&path, current_settings_markdown())?;
-    Ok(path)
+    let contents = current_settings_markdown();
+    std::fs::write(&path, &contents)?;
+    Ok((path, contents))
 }
 
 pub fn current_settings_markdown() -> String {

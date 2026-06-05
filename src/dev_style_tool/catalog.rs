@@ -1400,7 +1400,7 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
     },
     StyleKnob {
         id: SEARCH_TEXT_INSET_X_KNOB_ID,
-        label: "Input text inset X",
+        label: "Main input padding X",
         group: StyleKnobGroup::Search,
         unit: StyleUnit::Px,
         min: 0.0,

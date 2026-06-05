@@ -58,6 +58,19 @@ fn main_menu_def_applies_runtime_search_height_override() {
 }
 
 #[test]
+fn saved_main_window_style_values_are_project_defaults() {
+    let _guard = runtime_test_guard();
+    runtime_overrides::reset_all();
+    let base = MainMenuThemeVariant::InfoBarBase.base_def();
+
+    assert_eq!(base.shell.header_padding_x, 6.0);
+    assert_eq!(base.shell.header_padding_y, 2.0);
+    assert_eq!(base.shell.header_gap, 2.0);
+    assert_eq!(base.search.height, 26.0);
+    assert_eq!(base.icon.container_size, 20.0);
+}
+
+#[test]
 fn runtime_search_height_override_is_clamped_and_generation_counted() {
     let _guard = runtime_test_guard();
     runtime_overrides::reset_all();

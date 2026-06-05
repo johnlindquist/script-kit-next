@@ -1,11 +1,15 @@
+use std::path::PathBuf;
+
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    div, px, rgb, rgba, AppContext, Div, ElementId, Entity, InteractiveElement, IntoElement,
-    ParentElement, Render, StatefulInteractiveElement, Styled, Subscription, Window, WindowHandle,
+    div, px, rgb, rgba, AppContext, ClipboardItem, Div, ElementId, Entity, InteractiveElement,
+    IntoElement, ParentElement, Render, StatefulInteractiveElement, Styled, Subscription, Window,
+    WindowHandle,
 };
 use gpui_component::{
     input::{Input, InputEvent, InputState},
     slider::{Slider, SliderEvent, SliderState, SliderValue},
+    tab::{Tab, TabBar},
     Root, Sizable,
 };
 
@@ -29,6 +33,9 @@ pub(crate) struct DevStyleToolApp {
     main_app: Entity<ScriptListApp>,
     controls: Vec<StyleControlState>,
     save_status: Option<String>,
+    save_path: Option<PathBuf>,
+    saved_markdown: Entity<InputState>,
+    active_group: StyleKnobGroup,
     subscriptions: Vec<Subscription>,
 }
 
@@ -86,12 +93,21 @@ impl DevStyleToolApp {
                 }
             })
             .collect();
+        let saved_markdown = cx.new(|cx| {
+            InputState::new(window, cx)
+                .multi_line(true)
+                .tab_navigation(true)
+                .default_value("")
+        });
 
         Self {
             main_window,
             main_app,
             controls,
             save_status: None,
+            save_path: None,
+            saved_markdown,
+            active_group: StyleKnobGroup::Search,
             subscriptions,
         }
     }
@@ -210,12 +226,105 @@ impl DevStyleToolApp {
         });
     }
 
-    fn save_current_settings(&mut self, cx: &mut gpui::Context<Self>) {
-        self.save_status = Some(match export::save_current_settings_markdown() {
-            Ok(path) => export::export_summary_for_path(&path),
-            Err(error) => format!("Save failed: {error}"),
-        });
+    fn save_current_settings(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
+        self.save_status = Some(
+            match export::save_current_settings_markdown_with_contents() {
+                Ok((path, contents)) => {
+                    self.save_path = Some(path.clone());
+                    self.saved_markdown.update(cx, |input, cx| {
+                        input.set_value(contents, window, cx);
+                    });
+                    export::export_summary_for_path(&path)
+                }
+                Err(error) => format!("Save failed: {error}"),
+            },
+        );
         cx.notify();
+    }
+
+    fn copy_saved_markdown(&self, cx: &mut gpui::Context<Self>) {
+        let markdown = self.saved_markdown.read(cx).value().to_string();
+        if !markdown.is_empty() {
+            cx.write_to_clipboard(ClipboardItem::new_string(markdown));
+        }
+    }
+
+    fn render_group_tabs(
+        &self,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        let selected_index = STYLE_KNOB_GROUPS
+            .iter()
+            .position(|group| *group == self.active_group)
+            .unwrap_or(0);
+        div()
+            .id("tabs:dev-style-tool-groups")
+            .child(
+                TabBar::new("tabbar:dev-style-tool-groups")
+                    .segmented()
+                    .small()
+                    .selected_index(selected_index)
+                    .children(STYLE_KNOB_GROUPS.iter().map(|group| {
+                        let group = *group;
+                        Tab::new().label(group.label()).on_click(cx.listener(
+                            move |this, _event, _window, cx| {
+                                this.active_group = group;
+                                cx.notify();
+                            },
+                        ))
+                    })),
+            )
+            .text_color(rgb(chrome.text_primary_hex))
+    }
+
+    fn render_saved_markdown(
+        &self,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        let title = self
+            .save_path
+            .as_ref()
+            .map(|path| format!("Saved export: {}", path.display()))
+            .unwrap_or_else(|| "Saved export".to_string());
+        div()
+            .id("panel:dev-style-tool-export")
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(chrome.text_secondary_hex))
+                            .child(title),
+                    )
+                    .child(
+                        self.render_toolbar_button(
+                            "button:dev-style-tool-copy-markdown",
+                            "Copy Markdown",
+                            true,
+                            chrome,
+                        )
+                        .on_click(cx.listener(
+                            |this, _event, _window, cx| {
+                                this.copy_saved_markdown(cx);
+                            },
+                        )),
+                    ),
+            )
+            .child(
+                div()
+                    .id("input:dev-style-tool-saved-markdown")
+                    .h(px(160.0))
+                    .child(Input::new(&self.saved_markdown).small().h_full()),
+            )
     }
 
     fn render_groups(
@@ -435,19 +544,6 @@ impl Render for DevStyleToolApp {
         let chrome = theme::AppChromeColors::from_theme(&theme);
         let generation = runtime_overrides::generation();
         let history = runtime_overrides::history_state();
-        let left_groups = [
-            StyleKnobGroup::Shell,
-            StyleKnobGroup::Search,
-            StyleKnobGroup::List,
-            StyleKnobGroup::Row,
-        ];
-        let right_groups = [
-            StyleKnobGroup::Icon,
-            StyleKnobGroup::Metadata,
-            StyleKnobGroup::Typography,
-            StyleKnobGroup::Footer,
-            StyleKnobGroup::HeaderInfoBar,
-        ];
 
         div()
             .id("dev-style-tool")
@@ -534,8 +630,8 @@ impl Render for DevStyleToolApp {
                                     chrome,
                                 )
                                 .on_click(cx.listener(
-                                    |this, _event, _window, cx| {
-                                        this.save_current_settings(cx);
+                                    |this, _event, window, cx| {
+                                        this.save_current_settings(window, cx);
                                     },
                                 )),
                             ),
@@ -550,21 +646,36 @@ impl Render for DevStyleToolApp {
                         .child(status.clone()),
                 )
             })
+            .when_some(self.save_path.as_ref(), |view, _| {
+                view.child(self.render_saved_markdown(chrome, cx))
+            })
+            .child(self.render_group_tabs(chrome, cx))
             .child(
                 div()
                     .id("body:dev-style-tool-scroll")
                     .flex()
-                    .flex_row()
+                    .flex_col()
                     .flex_1()
                     .min_h_0()
-                    .gap(px(14.0))
+                    .gap(px(10.0))
                     .pr(px(4.0))
                     .overflow_y_scroll()
-                    .child(self.render_groups(&left_groups, chrome, cx))
-                    .child(self.render_groups(&right_groups, chrome, cx)),
+                    .child(self.render_groups(&[self.active_group], chrome, cx)),
             )
     }
 }
+
+const STYLE_KNOB_GROUPS: &[StyleKnobGroup] = &[
+    StyleKnobGroup::Shell,
+    StyleKnobGroup::Search,
+    StyleKnobGroup::List,
+    StyleKnobGroup::Row,
+    StyleKnobGroup::Icon,
+    StyleKnobGroup::Metadata,
+    StyleKnobGroup::Typography,
+    StyleKnobGroup::Footer,
+    StyleKnobGroup::HeaderInfoBar,
+];
 
 fn current_knob_value(knob_id: StyleKnobId) -> f32 {
     match runtime_overrides::current_value(knob_id).unwrap_or_else(|| {

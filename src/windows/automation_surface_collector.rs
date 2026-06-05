@@ -378,12 +378,40 @@ fn collect_dev_style_tool_snapshot() -> SurfaceElementSnapshot {
         None,
         Some(3),
     ));
+    elements.push(element(
+        "button:dev-style-tool-copy-markdown",
+        ElementType::Button,
+        Some("Copy Markdown".to_string()),
+        Some("copySavedStyleMarkdown".to_string()),
+        None,
+        None,
+        Some(4),
+    ));
+    elements.push(element(
+        "input:dev-style-tool-saved-markdown",
+        ElementType::Input,
+        Some("Saved style markdown".to_string()),
+        Some("savedStyleMarkdown".to_string()),
+        None,
+        None,
+        Some(5),
+    ));
     let mut seen_groups = Vec::new();
     let mut seen_sections = Vec::new();
-    let mut next_index = 4usize;
+    let mut next_index = 6usize;
     for knob in crate::dev_style_tool::STYLE_KNOBS {
         if !seen_groups.contains(&knob.group) {
             seen_groups.push(knob.group);
+            elements.push(element(
+                &format!("tab:dev-style-tool:{}", dev_style_group_slug(knob.group)),
+                ElementType::Button,
+                Some(knob.group.label().to_string()),
+                Some(dev_style_group_slug(knob.group).to_string()),
+                None,
+                None,
+                Some(next_index),
+            ));
+            next_index += 1;
             elements.push(element(
                 &format!("style-section:{}", dev_style_group_slug(knob.group)),
                 ElementType::Panel,

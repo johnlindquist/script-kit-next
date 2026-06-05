@@ -49,6 +49,13 @@ fn dev_style_tool_render_is_catalog_driven_and_narrow() {
     assert!(render_source.contains("button:dev-style-tool-undo"));
     assert!(render_source.contains("button:dev-style-tool-redo"));
     assert!(render_source.contains("button:dev-style-tool-reset-all"));
+    assert!(render_source.contains("button:dev-style-tool-copy-markdown"));
+    assert!(render_source.contains("tabs:dev-style-tool-groups"));
+    assert!(render_source.contains("TabBar::new"));
+    assert!(render_source.contains("Tab::new"));
+    assert!(render_source.contains("active_group"));
+    assert!(render_source.contains("input:dev-style-tool-saved-markdown"));
+    assert!(render_source.contains("save_current_settings_markdown_with_contents"));
     assert!(render_source.contains("undo_style_change"));
     assert!(render_source.contains("redo_style_change"));
     assert!(render_source.contains("reset_all_controls"));
@@ -89,11 +96,15 @@ fn dev_style_tool_registers_minimal_automation_target() {
     assert!(collector_source.contains("button:dev-style-tool-undo"));
     assert!(collector_source.contains("button:dev-style-tool-redo"));
     assert!(collector_source.contains("button:dev-style-tool-reset-all"));
+    assert!(collector_source.contains("button:dev-style-tool-copy-markdown"));
+    assert!(collector_source.contains("input:dev-style-tool-saved-markdown"));
     assert!(collector_source.contains("undoStyleChange"));
     assert!(collector_source.contains("redoStyleChange"));
     assert!(collector_source.contains("resetStyleControls"));
     assert!(collector_source.contains("saveCurrentStyleSettings"));
+    assert!(collector_source.contains("copySavedStyleMarkdown"));
     assert!(collector_source.contains("crate::dev_style_tool::STYLE_KNOBS"));
+    assert!(collector_source.contains("tab:dev-style-tool:{}"));
     assert!(collector_source.contains("style-section:{}"));
     assert!(collector_source.contains("style-subsection:{}:{}"));
     assert!(collector_source.contains("StyleKnobSection::for_knob"));
@@ -176,8 +187,10 @@ fn dev_style_tool_devtools_mutation_reuses_runtime_catalog() {
     assert!(prompt_handler_source.contains("RedoStyleChange"));
     assert!(prompt_handler_source.contains("ResetStyleControls"));
     assert!(prompt_handler_source.contains("\"saveCurrentStyleSettings\""));
-    assert!(prompt_handler_source
-        .contains("crate::dev_style_tool::export::save_current_settings_markdown"));
+    assert!(
+        prompt_handler_source
+            .contains("crate::dev_style_tool::export::save_current_settings_markdown")
+    );
     assert!(prompt_handler_source.contains("set_number_from_devtools"));
     assert!(prompt_handler_source.contains("this.update_theme(cx);"));
 }
