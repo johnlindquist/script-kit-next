@@ -21,7 +21,6 @@ pub(crate) const FOOTER_KEYCAP_PADDING_X_PX: f32 = 5.0;
 pub(crate) const FOOTER_KEYCAP_RADIUS_PX: f32 = 6.0;
 pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;
-pub(crate) const FOOTER_SEMICOLON_GLYPH_NUDGE_Y_PX: f32 = -1.0;
 pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;
 // Inter-item gap for footer hint chips. Kept compact now that only actual
 // keycaps carry borders; label text no longer needs the wider bordered-chip
@@ -109,19 +108,27 @@ pub(crate) enum FooterHintContentJustify {
 }
 
 pub(crate) fn footer_action_slot_width(slot: FooterActionSlot) -> f32 {
+    let metrics = current_main_menu_footer_metrics();
+    footer_action_slot_width_for_metrics(slot, metrics)
+}
+
+pub(crate) fn footer_action_slot_width_for_metrics(
+    slot: FooterActionSlot,
+    metrics: crate::designs::FooterMetricsTokens,
+) -> f32 {
     match slot {
-        FooterActionSlot::Run => FOOTER_RUN_SLOT_MIN_WIDTH_PX,
-        FooterActionSlot::Actions => FOOTER_ACTIONS_SLOT_WIDTH_PX,
-        FooterActionSlot::Ai => FOOTER_AI_SLOT_WIDTH_PX,
-        FooterActionSlot::Apply => FOOTER_APPLY_SLOT_WIDTH_PX,
-        FooterActionSlot::Replace => FOOTER_APPLY_SLOT_WIDTH_PX,
-        FooterActionSlot::Append => FOOTER_APPLY_SLOT_WIDTH_PX,
-        FooterActionSlot::Copy => FOOTER_APPLY_SLOT_WIDTH_PX,
-        FooterActionSlot::Expand => FOOTER_APPLY_SLOT_WIDTH_PX,
-        FooterActionSlot::Retry => FOOTER_STOP_SLOT_WIDTH_PX,
-        FooterActionSlot::Close => FOOTER_CLOSE_SLOT_WIDTH_PX,
-        FooterActionSlot::Stop => FOOTER_STOP_SLOT_WIDTH_PX,
-        FooterActionSlot::PasteResponse => FOOTER_PASTE_RESPONSE_SLOT_WIDTH_PX,
+        FooterActionSlot::Run => metrics.run_slot_min_width,
+        FooterActionSlot::Actions => metrics.actions_slot_width,
+        FooterActionSlot::Ai => metrics.ai_slot_width,
+        FooterActionSlot::Apply => metrics.apply_slot_width,
+        FooterActionSlot::Replace => metrics.apply_slot_width,
+        FooterActionSlot::Append => metrics.apply_slot_width,
+        FooterActionSlot::Copy => metrics.apply_slot_width,
+        FooterActionSlot::Expand => metrics.apply_slot_width,
+        FooterActionSlot::Retry => metrics.stop_slot_width,
+        FooterActionSlot::Close => metrics.close_slot_width,
+        FooterActionSlot::Stop => metrics.stop_slot_width,
+        FooterActionSlot::PasteResponse => metrics.paste_response_slot_width,
     }
 }
 
@@ -310,12 +317,13 @@ pub(crate) fn is_footer_return_key_glyph(key: &str) -> bool {
 }
 
 pub(crate) fn footer_key_glyph_nudge_y(key: &str) -> f32 {
+    let metrics = current_main_menu_footer_metrics();
     if is_footer_return_key_glyph(key) {
-        FOOTER_KEY_GLYPH_NUDGE_Y_PX + FOOTER_RETURN_GLYPH_NUDGE_Y_PX
+        metrics.key_glyph_nudge_y + metrics.return_glyph_nudge_y
     } else if key == ";" {
-        FOOTER_SEMICOLON_GLYPH_NUDGE_Y_PX
+        metrics.semicolon_glyph_nudge_y
     } else {
-        FOOTER_KEY_GLYPH_NUDGE_Y_PX
+        metrics.key_glyph_nudge_y
     }
 }
 
@@ -565,13 +573,14 @@ fn footer_labelcap_estimated_width_px(label: &str) -> f32 {
 
     let metrics = current_main_menu_footer_metrics();
     (estimated_text_width + metrics.keycap_padding_x * 2.0)
-        .max(FOOTER_KEYCAP_HEIGHT_PX)
+        .max(metrics.keycap_height)
         .ceil()
 }
 
 fn footer_keycap_estimated_width_px(token: &str) -> f32 {
+    let metrics = current_main_menu_footer_metrics();
     if is_footer_icon_token(token) {
-        return FOOTER_KEYCAP_HEIGHT_PX;
+        return metrics.keycap_height;
     }
 
     let estimated_text_width = token
@@ -584,9 +593,8 @@ fn footer_keycap_estimated_width_px(token: &str) -> f32 {
             }
         })
         .sum::<f32>();
-    let metrics = current_main_menu_footer_metrics();
     (estimated_text_width + metrics.keycap_padding_x * 2.0)
-        .max(FOOTER_KEYCAP_HEIGHT_PX)
+        .max(metrics.keycap_height)
         .ceil()
 }
 
@@ -639,7 +647,8 @@ pub(crate) fn footer_labelcap_max_width_for_slot_with_padding(
     } else {
         0.0
     };
-    (slot_width_px - (edge_padding_x * 2.0) - key_gap - key_width_px).max(FOOTER_KEYCAP_HEIGHT_PX)
+    (slot_width_px - (edge_padding_x * 2.0) - key_gap - key_width_px)
+        .max(current_main_menu_footer_metrics().keycap_height)
 }
 
 fn render_footer_labelcap(
@@ -673,10 +682,10 @@ fn render_footer_labelcap_constrained(
     let label_font_size = label_font_size_px.unwrap_or(metrics.label_font_size);
     let mut cap = div()
         .flex_none()
-        .min_w(px(FOOTER_KEYCAP_HEIGHT_PX))
-        .min_h(px(FOOTER_KEYCAP_HEIGHT_PX))
-        .h(px(FOOTER_KEYCAP_HEIGHT_PX))
-        .line_height(px(FOOTER_KEYCAP_HEIGHT_PX))
+        .min_w(px(metrics.keycap_height))
+        .min_h(px(metrics.keycap_height))
+        .h(px(metrics.keycap_height))
+        .line_height(px(metrics.keycap_height))
         .px(px(metrics.keycap_padding_x))
         .py(px(metrics.keycap_padding_y))
         .rounded(px(metrics.keycap_radius))
@@ -791,11 +800,11 @@ pub(crate) fn footer_shortcut_keycap_layout_model<'a>(
                 "x": x,
                 "y": origin_y,
                 "width": width,
-                "height": FOOTER_KEYCAP_HEIGHT_PX,
+                "height": metrics.keycap_height,
             },
             "widthExact": false,
             "widthSource": "footer-keycap-estimate",
-            "heightSource": "footer-keycap-constant",
+            "heightSource": "footer-metrics-keycap-height",
             "glyphNudgeY": footer_key_glyph_nudge_y(token),
             "borderWidth": 1.0,
             "radius": metrics.keycap_radius,
@@ -816,13 +825,13 @@ pub(crate) fn footer_shortcut_keycap_layout_model<'a>(
             "x": origin_x,
             "y": origin_y,
             "width": (x - origin_x).max(0.0),
-            "height": if token_bounds.is_empty() { 0.0 } else { FOOTER_KEYCAP_HEIGHT_PX },
+            "height": if token_bounds.is_empty() { 0.0 } else { metrics.keycap_height },
         },
         "boundsAvailable": true,
         "coordinateSpace": "providedOriginLogicalPx",
         "units": "logicalPx",
         "gap": metrics.content_gap,
-        "heightSource": "footer-keycap-constant",
+        "heightSource": "footer-metrics-keycap-height",
         "widthSource": "footer-keycap-token-model",
         "exactTokenBounds": false,
         "measurementSource": FOOTER_SHORTCUT_LAYOUT_MEASUREMENT_SOURCE,
@@ -850,7 +859,7 @@ fn render_footer_keycap_with_metrics(
     let full_text = theme.colors.text.primary.to_rgb();
     let hover_border = footer_keycap_border_hover_color(theme);
     let metrics = current_main_menu_footer_metrics();
-    let keycap_height = keycap_height_px.unwrap_or(FOOTER_KEYCAP_HEIGHT_PX);
+    let keycap_height = keycap_height_px.unwrap_or(metrics.keycap_height);
     let keycap_font_size = keycap_font_size_px.unwrap_or(metrics.keycap_font_size);
     let token_child: AnyElement = if let Some(path) = footer_icon_path(&token) {
         svg()

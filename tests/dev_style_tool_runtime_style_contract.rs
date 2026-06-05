@@ -1,6 +1,11 @@
 use script_kit_gpui::designs::MainMenuThemeVariant;
 use script_kit_gpui::dev_style_tool::{
     export, runtime_overrides, StyleValue, FOOTER_SIDE_INSET_KNOB_ID,
+    FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID, FOOTER_AI_SLOT_WIDTH_KNOB_ID,
+    FOOTER_KEY_GLYPH_NUDGE_Y_KNOB_ID, FOOTER_KEYCAP_HEIGHT_KNOB_ID,
+    FOOTER_PASTE_RESPONSE_SLOT_WIDTH_KNOB_ID, FOOTER_RETURN_GLYPH_NUDGE_Y_KNOB_ID,
+    FOOTER_RUN_SLOT_MAX_WIDTH_KNOB_ID, FOOTER_RUN_SLOT_MIN_WIDTH_KNOB_ID,
+    FOOTER_SEMICOLON_GLYPH_NUDGE_Y_KNOB_ID,
     HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID, HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
     LIST_ITEM_HEIGHT_KNOB_ID, LIST_SECTION_GAP_KNOB_ID, LIST_SECTION_PADDING_X_KNOB_ID,
     LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID, LIST_INLINE_CALC_HINT_FONT_SIZE_KNOB_ID,
@@ -100,6 +105,33 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
         .expect("metadata badge radius knob should exist");
     runtime_overrides::set_value(FOOTER_SIDE_INSET_KNOB_ID, StyleValue::Number(12.0))
         .expect("footer side inset knob should exist");
+    runtime_overrides::set_value(FOOTER_KEYCAP_HEIGHT_KNOB_ID, StyleValue::Number(24.0))
+        .expect("footer keycap height knob should exist");
+    runtime_overrides::set_value(FOOTER_KEY_GLYPH_NUDGE_Y_KNOB_ID, StyleValue::Number(1.5))
+        .expect("footer key glyph nudge knob should exist");
+    runtime_overrides::set_value(
+        FOOTER_RETURN_GLYPH_NUDGE_Y_KNOB_ID,
+        StyleValue::Number(2.0),
+    )
+    .expect("footer return glyph nudge knob should exist");
+    runtime_overrides::set_value(
+        FOOTER_SEMICOLON_GLYPH_NUDGE_Y_KNOB_ID,
+        StyleValue::Number(-1.5),
+    )
+    .expect("footer semicolon glyph nudge knob should exist");
+    runtime_overrides::set_value(FOOTER_RUN_SLOT_MIN_WIDTH_KNOB_ID, StyleValue::Number(104.0))
+        .expect("footer run slot min width knob should exist");
+    runtime_overrides::set_value(FOOTER_RUN_SLOT_MAX_WIDTH_KNOB_ID, StyleValue::Number(260.0))
+        .expect("footer run slot max width knob should exist");
+    runtime_overrides::set_value(FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID, StyleValue::Number(106.0))
+        .expect("footer actions slot width knob should exist");
+    runtime_overrides::set_value(FOOTER_AI_SLOT_WIDTH_KNOB_ID, StyleValue::Number(64.0))
+        .expect("footer ai slot width knob should exist");
+    runtime_overrides::set_value(
+        FOOTER_PASTE_RESPONSE_SLOT_WIDTH_KNOB_ID,
+        StyleValue::Number(156.0),
+    )
+    .expect("footer paste response slot width knob should exist");
     runtime_overrides::set_value(
         HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
         StyleValue::Number(72.0),
@@ -278,6 +310,15 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     assert_eq!(def.metadata.badge_padding_y, 3.0);
     assert_eq!(def.metadata.badge_radius, 11.0);
     assert_eq!(def.footer.metrics.side_inset_px, 12.0);
+    assert_eq!(def.footer.metrics.keycap_height, 24.0);
+    assert_eq!(def.footer.metrics.key_glyph_nudge_y, 1.5);
+    assert_eq!(def.footer.metrics.return_glyph_nudge_y, 2.0);
+    assert_eq!(def.footer.metrics.semicolon_glyph_nudge_y, -1.5);
+    assert_eq!(def.footer.metrics.run_slot_min_width, 104.0);
+    assert_eq!(def.footer.metrics.run_slot_max_width, 260.0);
+    assert_eq!(def.footer.metrics.actions_slot_width, 106.0);
+    assert_eq!(def.footer.metrics.ai_slot_width, 64.0);
+    assert_eq!(def.footer.metrics.paste_response_slot_width, 156.0);
     assert_eq!(def.header_info_bar.variation_badge_width_px, 72.0);
     assert_eq!(def.header_info_bar.context_edge_outset_x, 12.0);
     assert_eq!(def.list.section_padding_x, 28.0);
@@ -479,6 +520,33 @@ fn devtools_numeric_setter_accepts_catalog_control_ids() {
         Some(StyleValue::Number(11.0))
     );
 
+    let applied = runtime_overrides::set_number_from_devtools("footer.keycapHeight", "24px")
+        .expect("footer keycap height should be settable through devtools");
+
+    assert_eq!(applied, "footer.keycapHeight=24");
+    assert_eq!(
+        runtime_overrides::current_value(FOOTER_KEYCAP_HEIGHT_KNOB_ID),
+        Some(StyleValue::Number(24.0))
+    );
+
+    let applied = runtime_overrides::set_number_from_devtools("footer.runSlotMinWidth", "104px")
+        .expect("footer run slot min width should be settable through devtools");
+
+    assert_eq!(applied, "footer.runSlotMinWidth=104");
+    assert_eq!(
+        runtime_overrides::current_value(FOOTER_RUN_SLOT_MIN_WIDTH_KNOB_ID),
+        Some(StyleValue::Number(104.0))
+    );
+
+    let applied = runtime_overrides::set_number_from_devtools("footer.aiSlotWidth", "64px")
+        .expect("footer ai slot width should be settable through devtools");
+
+    assert_eq!(applied, "footer.aiSlotWidth=64");
+    assert_eq!(
+        runtime_overrides::current_value(FOOTER_AI_SLOT_WIDTH_KNOB_ID),
+        Some(StyleValue::Number(64.0))
+    );
+
     runtime_overrides::reset_all();
 }
 
@@ -577,6 +645,21 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.inlineCalcHintFontSize"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "footer.keycapHeight"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "footer.runSlotMinWidth"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "footer.aiSlotWidth"));
 
     let markdown = export::current_settings_markdown();
     assert!(markdown.contains("```json"));

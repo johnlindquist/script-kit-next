@@ -234,6 +234,18 @@ pub struct FooterMetricsTokens {
     pub keycap_padding_y: f32,
     pub keycap_radius: f32,
     pub keycap_font_size: f32,
+    pub keycap_height: f32,
+    pub key_glyph_nudge_y: f32,
+    pub return_glyph_nudge_y: f32,
+    pub semicolon_glyph_nudge_y: f32,
+    pub run_slot_min_width: f32,
+    pub run_slot_max_width: f32,
+    pub actions_slot_width: f32,
+    pub ai_slot_width: f32,
+    pub apply_slot_width: f32,
+    pub close_slot_width: f32,
+    pub stop_slot_width: f32,
+    pub paste_response_slot_width: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -667,6 +679,18 @@ fn base_main_menu_theme_def(
             keycap_padding_y: 2.0,
             keycap_radius: 6.0,
             keycap_font_size: 12.0,
+            keycap_height: 22.0,
+            key_glyph_nudge_y: 1.0,
+            return_glyph_nudge_y: 1.0,
+            semicolon_glyph_nudge_y: -1.0,
+            run_slot_min_width: 92.0,
+            run_slot_max_width: 242.0,
+            actions_slot_width: 92.0,
+            ai_slot_width: 52.0,
+            apply_slot_width: 84.0,
+            close_slot_width: 84.0,
+            stop_slot_width: 76.0,
+            paste_response_slot_width: 140.0,
         },
     };
 

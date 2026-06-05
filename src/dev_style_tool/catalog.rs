@@ -1033,6 +1033,90 @@ f32_nested_knob!(
     "footer.keycapFontSize",
     footer.metrics.keycap_font_size
 );
+f32_nested_knob!(
+    FOOTER_KEYCAP_HEIGHT_KNOB_ID,
+    get_footer_keycap_height,
+    apply_footer_keycap_height,
+    "footer.keycapHeight",
+    footer.metrics.keycap_height
+);
+f32_nested_knob!(
+    FOOTER_KEY_GLYPH_NUDGE_Y_KNOB_ID,
+    get_footer_key_glyph_nudge_y,
+    apply_footer_key_glyph_nudge_y,
+    "footer.keyGlyphNudgeY",
+    footer.metrics.key_glyph_nudge_y
+);
+f32_nested_knob!(
+    FOOTER_RETURN_GLYPH_NUDGE_Y_KNOB_ID,
+    get_footer_return_glyph_nudge_y,
+    apply_footer_return_glyph_nudge_y,
+    "footer.returnGlyphNudgeY",
+    footer.metrics.return_glyph_nudge_y
+);
+f32_nested_knob!(
+    FOOTER_SEMICOLON_GLYPH_NUDGE_Y_KNOB_ID,
+    get_footer_semicolon_glyph_nudge_y,
+    apply_footer_semicolon_glyph_nudge_y,
+    "footer.semicolonGlyphNudgeY",
+    footer.metrics.semicolon_glyph_nudge_y
+);
+f32_nested_knob!(
+    FOOTER_RUN_SLOT_MIN_WIDTH_KNOB_ID,
+    get_footer_run_slot_min_width,
+    apply_footer_run_slot_min_width,
+    "footer.runSlotMinWidth",
+    footer.metrics.run_slot_min_width
+);
+f32_nested_knob!(
+    FOOTER_RUN_SLOT_MAX_WIDTH_KNOB_ID,
+    get_footer_run_slot_max_width,
+    apply_footer_run_slot_max_width,
+    "footer.runSlotMaxWidth",
+    footer.metrics.run_slot_max_width
+);
+f32_nested_knob!(
+    FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID,
+    get_footer_actions_slot_width,
+    apply_footer_actions_slot_width,
+    "footer.actionsSlotWidth",
+    footer.metrics.actions_slot_width
+);
+f32_nested_knob!(
+    FOOTER_AI_SLOT_WIDTH_KNOB_ID,
+    get_footer_ai_slot_width,
+    apply_footer_ai_slot_width,
+    "footer.aiSlotWidth",
+    footer.metrics.ai_slot_width
+);
+f32_nested_knob!(
+    FOOTER_APPLY_SLOT_WIDTH_KNOB_ID,
+    get_footer_apply_slot_width,
+    apply_footer_apply_slot_width,
+    "footer.applySlotWidth",
+    footer.metrics.apply_slot_width
+);
+f32_nested_knob!(
+    FOOTER_CLOSE_SLOT_WIDTH_KNOB_ID,
+    get_footer_close_slot_width,
+    apply_footer_close_slot_width,
+    "footer.closeSlotWidth",
+    footer.metrics.close_slot_width
+);
+f32_nested_knob!(
+    FOOTER_STOP_SLOT_WIDTH_KNOB_ID,
+    get_footer_stop_slot_width,
+    apply_footer_stop_slot_width,
+    "footer.stopSlotWidth",
+    footer.metrics.stop_slot_width
+);
+f32_nested_knob!(
+    FOOTER_PASTE_RESPONSE_SLOT_WIDTH_KNOB_ID,
+    get_footer_paste_response_slot_width,
+    apply_footer_paste_response_slot_width,
+    "footer.pasteResponseSlotWidth",
+    footer.metrics.paste_response_slot_width
+);
 alpha_knob!(
     FOOTER_DIVIDER_ALPHA_KNOB_ID,
     get_footer_divider_alpha,
@@ -2530,6 +2614,138 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_footer_keycap_font_size,
         apply: apply_footer_keycap_font_size,
+    },
+    StyleKnob {
+        id: FOOTER_KEYCAP_HEIGHT_KNOB_ID,
+        label: "Footer keycap height",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: 12.0,
+        max: 40.0,
+        step: 1.0,
+        get: get_footer_keycap_height,
+        apply: apply_footer_keycap_height,
+    },
+    StyleKnob {
+        id: FOOTER_KEY_GLYPH_NUDGE_Y_KNOB_ID,
+        label: "Footer key glyph nudge Y",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: -6.0,
+        max: 6.0,
+        step: 0.5,
+        get: get_footer_key_glyph_nudge_y,
+        apply: apply_footer_key_glyph_nudge_y,
+    },
+    StyleKnob {
+        id: FOOTER_RETURN_GLYPH_NUDGE_Y_KNOB_ID,
+        label: "Footer return glyph nudge Y",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: -6.0,
+        max: 6.0,
+        step: 0.5,
+        get: get_footer_return_glyph_nudge_y,
+        apply: apply_footer_return_glyph_nudge_y,
+    },
+    StyleKnob {
+        id: FOOTER_SEMICOLON_GLYPH_NUDGE_Y_KNOB_ID,
+        label: "Footer semicolon glyph nudge Y",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: -6.0,
+        max: 6.0,
+        step: 0.5,
+        get: get_footer_semicolon_glyph_nudge_y,
+        apply: apply_footer_semicolon_glyph_nudge_y,
+    },
+    StyleKnob {
+        id: FOOTER_RUN_SLOT_MIN_WIDTH_KNOB_ID,
+        label: "Footer run slot min width",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: 40.0,
+        max: 260.0,
+        step: 1.0,
+        get: get_footer_run_slot_min_width,
+        apply: apply_footer_run_slot_min_width,
+    },
+    StyleKnob {
+        id: FOOTER_RUN_SLOT_MAX_WIDTH_KNOB_ID,
+        label: "Footer run slot max width",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: 80.0,
+        max: 360.0,
+        step: 1.0,
+        get: get_footer_run_slot_max_width,
+        apply: apply_footer_run_slot_max_width,
+    },
+    StyleKnob {
+        id: FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID,
+        label: "Footer actions slot width",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: 40.0,
+        max: 180.0,
+        step: 1.0,
+        get: get_footer_actions_slot_width,
+        apply: apply_footer_actions_slot_width,
+    },
+    StyleKnob {
+        id: FOOTER_AI_SLOT_WIDTH_KNOB_ID,
+        label: "Footer agent slot width",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: 32.0,
+        max: 160.0,
+        step: 1.0,
+        get: get_footer_ai_slot_width,
+        apply: apply_footer_ai_slot_width,
+    },
+    StyleKnob {
+        id: FOOTER_APPLY_SLOT_WIDTH_KNOB_ID,
+        label: "Footer apply slot width",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: 40.0,
+        max: 180.0,
+        step: 1.0,
+        get: get_footer_apply_slot_width,
+        apply: apply_footer_apply_slot_width,
+    },
+    StyleKnob {
+        id: FOOTER_CLOSE_SLOT_WIDTH_KNOB_ID,
+        label: "Footer close slot width",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: 40.0,
+        max: 180.0,
+        step: 1.0,
+        get: get_footer_close_slot_width,
+        apply: apply_footer_close_slot_width,
+    },
+    StyleKnob {
+        id: FOOTER_STOP_SLOT_WIDTH_KNOB_ID,
+        label: "Footer stop slot width",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: 40.0,
+        max: 180.0,
+        step: 1.0,
+        get: get_footer_stop_slot_width,
+        apply: apply_footer_stop_slot_width,
+    },
+    StyleKnob {
+        id: FOOTER_PASTE_RESPONSE_SLOT_WIDTH_KNOB_ID,
+        label: "Footer paste response slot width",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: 60.0,
+        max: 260.0,
+        step: 1.0,
+        get: get_footer_paste_response_slot_width,
+        apply: apply_footer_paste_response_slot_width,
     },
     StyleKnob {
         id: FOOTER_DIVIDER_ALPHA_KNOB_ID,

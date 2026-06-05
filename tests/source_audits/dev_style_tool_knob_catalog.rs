@@ -470,3 +470,84 @@ fn main_menu_font_sizes_are_design_tool_controls() {
     assert!(!form_body.contains("field_metrics.label_font_size"));
     assert!(!form_body.contains("field_metrics.input_font_size"));
 }
+
+#[test]
+fn footer_keycap_and_slot_sizes_are_design_tool_controls() {
+    let theme =
+        fs::read_to_string("src/designs/core/main_menu_theme.rs").expect("read theme source");
+    let catalog =
+        fs::read_to_string("src/dev_style_tool/catalog.rs").expect("read dev style catalog");
+    let footer =
+        fs::read_to_string("src/components/footer_chrome.rs").expect("read footer chrome source");
+
+    for required in [
+        "pub keycap_height: f32",
+        "pub key_glyph_nudge_y: f32",
+        "pub return_glyph_nudge_y: f32",
+        "pub semicolon_glyph_nudge_y: f32",
+        "pub run_slot_min_width: f32",
+        "pub run_slot_max_width: f32",
+        "pub actions_slot_width: f32",
+        "pub ai_slot_width: f32",
+        "pub apply_slot_width: f32",
+        "pub close_slot_width: f32",
+        "pub stop_slot_width: f32",
+        "pub paste_response_slot_width: f32",
+    ] {
+        assert!(theme.contains(required), "missing footer metric {required}");
+    }
+
+    for required in [
+        "FOOTER_KEYCAP_HEIGHT_KNOB_ID",
+        "\"footer.keycapHeight\"",
+        "FOOTER_KEY_GLYPH_NUDGE_Y_KNOB_ID",
+        "\"footer.keyGlyphNudgeY\"",
+        "FOOTER_RETURN_GLYPH_NUDGE_Y_KNOB_ID",
+        "\"footer.returnGlyphNudgeY\"",
+        "FOOTER_SEMICOLON_GLYPH_NUDGE_Y_KNOB_ID",
+        "\"footer.semicolonGlyphNudgeY\"",
+        "FOOTER_RUN_SLOT_MIN_WIDTH_KNOB_ID",
+        "\"footer.runSlotMinWidth\"",
+        "FOOTER_RUN_SLOT_MAX_WIDTH_KNOB_ID",
+        "\"footer.runSlotMaxWidth\"",
+        "FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID",
+        "\"footer.actionsSlotWidth\"",
+        "FOOTER_AI_SLOT_WIDTH_KNOB_ID",
+        "\"footer.aiSlotWidth\"",
+        "FOOTER_APPLY_SLOT_WIDTH_KNOB_ID",
+        "\"footer.applySlotWidth\"",
+        "FOOTER_CLOSE_SLOT_WIDTH_KNOB_ID",
+        "\"footer.closeSlotWidth\"",
+        "FOOTER_STOP_SLOT_WIDTH_KNOB_ID",
+        "\"footer.stopSlotWidth\"",
+        "FOOTER_PASTE_RESPONSE_SLOT_WIDTH_KNOB_ID",
+        "\"footer.pasteResponseSlotWidth\"",
+    ] {
+        assert!(catalog.contains(required), "missing footer control {required}");
+    }
+
+    let slot_body = function_body(&footer, "footer_action_slot_width_for_metrics");
+    assert!(slot_body.contains("metrics.run_slot_min_width"));
+    assert!(slot_body.contains("metrics.actions_slot_width"));
+    assert!(slot_body.contains("metrics.ai_slot_width"));
+    assert!(slot_body.contains("metrics.apply_slot_width"));
+    assert!(slot_body.contains("metrics.close_slot_width"));
+    assert!(slot_body.contains("metrics.stop_slot_width"));
+    assert!(slot_body.contains("metrics.paste_response_slot_width"));
+    assert!(!slot_body.contains("FOOTER_RUN_SLOT_MIN_WIDTH_PX"));
+    assert!(!slot_body.contains("FOOTER_ACTIONS_SLOT_WIDTH_PX"));
+
+    let keycap_body = function_body(&footer, "render_footer_keycap_with_metrics");
+    assert!(keycap_body.contains("keycap_height_px.unwrap_or(metrics.keycap_height)"));
+    assert!(!keycap_body.contains("keycap_height_px.unwrap_or(FOOTER_KEYCAP_HEIGHT_PX)"));
+
+    let labelcap_body = function_body(&footer, "render_footer_labelcap_constrained");
+    assert!(labelcap_body.contains(".min_h(px(metrics.keycap_height))"));
+    assert!(labelcap_body.contains(".line_height(px(metrics.keycap_height))"));
+    assert!(!labelcap_body.contains("FOOTER_KEYCAP_HEIGHT_PX"));
+
+    let nudge_body = function_body(&footer, "footer_key_glyph_nudge_y");
+    assert!(nudge_body.contains("metrics.key_glyph_nudge_y"));
+    assert!(nudge_body.contains("metrics.return_glyph_nudge_y"));
+    assert!(nudge_body.contains("metrics.semicolon_glyph_nudge_y"));
+}
