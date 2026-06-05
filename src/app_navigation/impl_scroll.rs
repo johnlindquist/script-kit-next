@@ -1,6 +1,6 @@
 #[inline]
 fn main_list_footer_overlay_height() -> gpui::Pixels {
-    gpui::px(crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT)
+    gpui::px(crate::components::footer_chrome::current_main_menu_footer_height())
 }
 
 #[inline]

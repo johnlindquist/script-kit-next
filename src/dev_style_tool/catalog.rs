@@ -1,4 +1,5 @@
 use crate::designs::MainMenuThemeDef;
+use gpui::FontWeight;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StyleKnobId(&'static str);
@@ -115,6 +116,7 @@ pub enum StyleUnit {
     Px,
     Alpha,
     Opacity,
+    Weight,
 }
 
 impl StyleUnit {
@@ -123,6 +125,7 @@ impl StyleUnit {
             StyleUnit::Px => "px",
             StyleUnit::Alpha => "alpha",
             StyleUnit::Opacity => "opacity",
+            StyleUnit::Weight => "weight",
         }
     }
 }
@@ -313,6 +316,34 @@ f32_knob!(
     apply_list_item_height,
     "list.itemHeight",
     list.item_height
+);
+f32_knob!(
+    LIST_ITEM_OUTER_PADDING_X_KNOB_ID,
+    get_list_item_outer_padding_x,
+    apply_list_item_outer_padding_x,
+    "list.itemOuterPaddingX",
+    row.outer_padding_x
+);
+f32_knob!(
+    LIST_ITEM_OUTER_PADDING_Y_KNOB_ID,
+    get_list_item_outer_padding_y,
+    apply_list_item_outer_padding_y,
+    "list.itemOuterPaddingY",
+    row.outer_padding_y
+);
+f32_knob!(
+    LIST_ITEM_INNER_PADDING_X_KNOB_ID,
+    get_list_item_inner_padding_x,
+    apply_list_item_inner_padding_x,
+    "list.itemInnerPaddingX",
+    row.inner_padding_x
+);
+f32_knob!(
+    LIST_ITEM_INNER_PADDING_Y_KNOB_ID,
+    get_list_item_inner_padding_y,
+    apply_list_item_inner_padding_y,
+    "list.itemInnerPaddingY",
+    row.inner_padding_y
 );
 f32_knob!(
     LIST_SECTION_HEADER_HEIGHT_KNOB_ID,
@@ -1020,6 +1051,13 @@ f32_knob!(
 );
 
 f32_nested_knob!(
+    FOOTER_HEIGHT_KNOB_ID,
+    get_footer_height,
+    apply_footer_height,
+    "footer.height",
+    footer.metrics.height_px
+);
+f32_nested_knob!(
     FOOTER_SIDE_INSET_KNOB_ID,
     get_footer_side_inset,
     apply_footer_side_inset,
@@ -1096,6 +1134,14 @@ f32_nested_knob!(
     "footer.labelFontSize",
     footer.metrics.label_font_size
 );
+pub const FOOTER_FONT_WEIGHT_KNOB_ID: StyleKnobId = StyleKnobId::new("footer.fontWeight");
+fn get_footer_font_weight(def: &MainMenuThemeDef) -> StyleValue {
+    StyleValue::Number(def.footer.metrics.font_weight.0)
+}
+fn apply_footer_font_weight(def: &mut MainMenuThemeDef, value: StyleValue) {
+    let StyleValue::Number(value) = value;
+    def.footer.metrics.font_weight = FontWeight(value);
+}
 f32_nested_knob!(
     FOOTER_KEYCAP_FONT_SIZE_KNOB_ID,
     get_footer_keycap_font_size,
@@ -1463,6 +1509,50 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_list_item_height,
         apply: apply_list_item_height,
+    },
+    StyleKnob {
+        id: LIST_ITEM_OUTER_PADDING_X_KNOB_ID,
+        label: "Item outer padding X",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_list_item_outer_padding_x,
+        apply: apply_list_item_outer_padding_x,
+    },
+    StyleKnob {
+        id: LIST_ITEM_OUTER_PADDING_Y_KNOB_ID,
+        label: "Item outer padding Y",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 24.0,
+        step: 1.0,
+        get: get_list_item_outer_padding_y,
+        apply: apply_list_item_outer_padding_y,
+    },
+    StyleKnob {
+        id: LIST_ITEM_INNER_PADDING_X_KNOB_ID,
+        label: "Item inner padding X",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 48.0,
+        step: 1.0,
+        get: get_list_item_inner_padding_x,
+        apply: apply_list_item_inner_padding_x,
+    },
+    StyleKnob {
+        id: LIST_ITEM_INNER_PADDING_Y_KNOB_ID,
+        label: "Item inner padding Y",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 24.0,
+        step: 1.0,
+        get: get_list_item_inner_padding_y,
+        apply: apply_list_item_inner_padding_y,
     },
     StyleKnob {
         id: LIST_SECTION_HEADER_HEIGHT_KNOB_ID,
@@ -2565,6 +2655,17 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         apply: apply_typography_section_line_height,
     },
     StyleKnob {
+        id: FOOTER_HEIGHT_KNOB_ID,
+        label: "Footer height",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: 20.0,
+        max: 72.0,
+        step: 1.0,
+        get: get_footer_height,
+        apply: apply_footer_height,
+    },
+    StyleKnob {
         id: FOOTER_SIDE_INSET_KNOB_ID,
         label: "Footer side inset",
         group: StyleKnobGroup::Footer,
@@ -2684,6 +2785,17 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_footer_label_font_size,
         apply: apply_footer_label_font_size,
+    },
+    StyleKnob {
+        id: FOOTER_FONT_WEIGHT_KNOB_ID,
+        label: "Footer font weight",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Weight,
+        min: 100.0,
+        max: 900.0,
+        step: 25.0,
+        get: get_footer_font_weight,
+        apply: apply_footer_font_weight,
     },
     StyleKnob {
         id: FOOTER_KEYCAP_FONT_SIZE_KNOB_ID,

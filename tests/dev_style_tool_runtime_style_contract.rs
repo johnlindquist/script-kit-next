@@ -1,7 +1,9 @@
+use gpui::FontWeight;
 use script_kit_gpui::designs::MainMenuThemeVariant;
 use script_kit_gpui::dev_style_tool::{
     export, runtime_overrides, StyleValue, FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID,
-    FOOTER_AI_SLOT_WIDTH_KNOB_ID, FOOTER_KEYCAP_HEIGHT_KNOB_ID, FOOTER_KEY_GLYPH_NUDGE_Y_KNOB_ID,
+    FOOTER_AI_SLOT_WIDTH_KNOB_ID, FOOTER_FONT_WEIGHT_KNOB_ID, FOOTER_HEIGHT_KNOB_ID,
+    FOOTER_KEYCAP_HEIGHT_KNOB_ID, FOOTER_KEY_GLYPH_NUDGE_Y_KNOB_ID,
     FOOTER_PASTE_RESPONSE_SLOT_WIDTH_KNOB_ID, FOOTER_RETURN_GLYPH_NUDGE_Y_KNOB_ID,
     FOOTER_RUN_SLOT_MAX_WIDTH_KNOB_ID, FOOTER_RUN_SLOT_MIN_WIDTH_KNOB_ID,
     FOOTER_SEMICOLON_GLYPH_NUDGE_Y_KNOB_ID, FOOTER_SIDE_INSET_KNOB_ID,
@@ -9,6 +11,7 @@ use script_kit_gpui::dev_style_tool::{
     LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID, LIST_INLINE_CALC_HINT_FONT_SIZE_KNOB_ID,
     LIST_INLINE_CALC_RESULT_FONT_SIZE_KNOB_ID, LIST_INLINE_CALC_SELECTED_HINT_ALPHA_KNOB_ID,
     LIST_INLINE_CALC_SELECTED_OVERLAY_MIN_ALPHA_KNOB_ID, LIST_ITEM_HEIGHT_KNOB_ID,
+    LIST_ITEM_INNER_PADDING_Y_KNOB_ID, LIST_ITEM_OUTER_PADDING_Y_KNOB_ID,
     LIST_MAIN_HINT_BODY_FONT_SIZE_KNOB_ID, LIST_MAIN_HINT_CHIP_BORDER_ALPHA_KNOB_ID,
     LIST_MAIN_HINT_CHIP_PADDING_X_KNOB_ID, LIST_MAIN_HINT_DIVIDER_HEIGHT_KNOB_ID,
     LIST_MAIN_HINT_EXAMPLES_GROUP_GAP_KNOB_ID, LIST_MAIN_HINT_EXAMPLE_LABEL_FONT_SIZE_KNOB_ID,
@@ -63,10 +66,18 @@ fn saved_main_window_style_values_are_project_defaults() {
     runtime_overrides::reset_all();
     let base = MainMenuThemeVariant::InfoBarBase.base_def();
 
-    assert_eq!(base.shell.header_padding_x, 6.0);
-    assert_eq!(base.shell.header_padding_y, 2.0);
+    assert_eq!(base.shell.header_padding_x, 2.0);
+    assert_eq!(base.shell.header_padding_y, 4.0);
     assert_eq!(base.shell.header_gap, 2.0);
     assert_eq!(base.search.height, 26.0);
+    assert_eq!(base.search.text_inset_x, 16.0);
+    assert_eq!(base.list.item_height, 44.0);
+    assert_eq!(base.footer.metrics.height_px, 32.0);
+    assert_eq!(base.row.outer_padding_y, 2.0);
+    assert_eq!(base.typography.name_font_size, 14.0);
+    assert_eq!(base.typography.name_line_height, 16.0);
+    assert_eq!(base.header_info_bar.key_opacity, 0.5);
+    assert_eq!(base.header_info_bar.context_edge_outset_x, 8.0);
     assert_eq!(base.icon.container_size, 20.0);
 }
 
@@ -102,6 +113,10 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
 
     runtime_overrides::set_value(LIST_ITEM_HEIGHT_KNOB_ID, StyleValue::Number(54.0))
         .expect("list item height knob should exist");
+    runtime_overrides::set_value(LIST_ITEM_OUTER_PADDING_Y_KNOB_ID, StyleValue::Number(0.0))
+        .expect("list item outer padding y knob should exist");
+    runtime_overrides::set_value(LIST_ITEM_INNER_PADDING_Y_KNOB_ID, StyleValue::Number(1.0))
+        .expect("list item inner padding y knob should exist");
     runtime_overrides::set_value(SEARCH_FONT_SIZE_KNOB_ID, StyleValue::Number(21.0))
         .expect("search font size knob should exist");
     runtime_overrides::set_value(LIST_SCROLLBAR_WIDTH_KNOB_ID, StyleValue::Number(18.0))
@@ -120,6 +135,10 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
         .expect("metadata badge radius knob should exist");
     runtime_overrides::set_value(FOOTER_SIDE_INSET_KNOB_ID, StyleValue::Number(12.0))
         .expect("footer side inset knob should exist");
+    runtime_overrides::set_value(FOOTER_HEIGHT_KNOB_ID, StyleValue::Number(40.0))
+        .expect("footer height knob should exist");
+    runtime_overrides::set_value(FOOTER_FONT_WEIGHT_KNOB_ID, StyleValue::Number(475.0))
+        .expect("footer font weight knob should exist");
     runtime_overrides::set_value(FOOTER_KEYCAP_HEIGHT_KNOB_ID, StyleValue::Number(24.0))
         .expect("footer keycap height knob should exist");
     runtime_overrides::set_value(FOOTER_KEY_GLYPH_NUDGE_Y_KNOB_ID, StyleValue::Number(1.5))
@@ -324,6 +343,8 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     let def = variant.def();
     assert_eq!(variant.base_def().list.item_height, base.list.item_height);
     assert_eq!(def.list.item_height, 54.0);
+    assert_eq!(def.row.outer_padding_y, 0.0);
+    assert_eq!(def.row.inner_padding_y, 1.0);
     assert_eq!(def.search.font_size, 21.0);
     assert_eq!(def.list.scrollbar_width, 18.0);
     assert_eq!(def.row.inner_padding_x, 22.0);
@@ -333,6 +354,8 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     assert_eq!(def.metadata.badge_padding_y, 3.0);
     assert_eq!(def.metadata.badge_radius, 11.0);
     assert_eq!(def.footer.metrics.side_inset_px, 12.0);
+    assert_eq!(def.footer.metrics.height_px, 40.0);
+    assert_eq!(def.footer.metrics.font_weight, FontWeight(475.0));
     assert_eq!(def.footer.metrics.keycap_height, 24.0);
     assert_eq!(def.footer.metrics.key_glyph_nudge_y, 1.5);
     assert_eq!(def.footer.metrics.return_glyph_nudge_y, 2.0);
@@ -406,6 +429,24 @@ fn devtools_numeric_setter_accepts_catalog_control_ids() {
     assert_eq!(
         runtime_overrides::current_value(ROW_INNER_PADDING_X_KNOB_ID),
         Some(StyleValue::Number(18.0))
+    );
+
+    let applied = runtime_overrides::set_number_from_devtools("list.itemOuterPaddingY", "0px")
+        .expect("list item outer padding y should be settable through devtools");
+
+    assert_eq!(applied, "list.itemOuterPaddingY=0");
+    assert_eq!(
+        runtime_overrides::current_value(LIST_ITEM_OUTER_PADDING_Y_KNOB_ID),
+        Some(StyleValue::Number(0.0))
+    );
+
+    let applied = runtime_overrides::set_number_from_devtools("list.itemInnerPaddingY", "1px")
+        .expect("list item inner padding y should be settable through devtools");
+
+    assert_eq!(applied, "list.itemInnerPaddingY=1");
+    assert_eq!(
+        runtime_overrides::current_value(LIST_ITEM_INNER_PADDING_Y_KNOB_ID),
+        Some(StyleValue::Number(1.0))
     );
 
     let applied = runtime_overrides::set_number_from_devtools("list.sourceStatusRowHeight", "44px")
@@ -570,6 +611,24 @@ fn devtools_numeric_setter_accepts_catalog_control_ids() {
         Some(StyleValue::Number(24.0))
     );
 
+    let applied = runtime_overrides::set_number_from_devtools("footer.height", "40px")
+        .expect("footer height should be settable through devtools");
+
+    assert_eq!(applied, "footer.height=40");
+    assert_eq!(
+        runtime_overrides::current_value(FOOTER_HEIGHT_KNOB_ID),
+        Some(StyleValue::Number(40.0))
+    );
+
+    let applied = runtime_overrides::set_number_from_devtools("footer.fontWeight", "475")
+        .expect("footer font weight should be settable through devtools");
+
+    assert_eq!(applied, "footer.fontWeight=475");
+    assert_eq!(
+        runtime_overrides::current_value(FOOTER_FONT_WEIGHT_KNOB_ID),
+        Some(StyleValue::Number(475.0))
+    );
+
     let applied = runtime_overrides::set_number_from_devtools("footer.runSlotMinWidth", "104px")
         .expect("footer run slot min width should be settable through devtools");
 
@@ -641,6 +700,16 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.mainHintDividerHeight"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "footer.height"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "footer.fontWeight"));
     assert!(json["effective"]
         .as_array()
         .expect("effective should be an array")

@@ -416,6 +416,7 @@ static MAIN_WINDOW_FOOTER_HOST_STATE: std::sync::Mutex<MainWindowFooterHostSnaps
 struct MainWindowFooterRefreshSignature {
     config: MainWindowFooterConfig,
     content_width_bits: u64,
+    runtime_style_generation: u64,
     dark: bool,
     material: crate::theme::VibrancyMaterial,
     divider_rgba: u32,
@@ -439,6 +440,9 @@ struct MainWindowFooterRefreshSignature {
 static MAIN_WINDOW_FOOTER_REFRESH_SIGNATURE: std::sync::Mutex<
     Option<MainWindowFooterRefreshSignature>,
 > = std::sync::Mutex::new(None);
+
+static MAIN_WINDOW_FOOTER_LAST_CONFIG: std::sync::Mutex<Option<MainWindowFooterConfig>> =
+    std::sync::Mutex::new(None);
 
 struct GpuiFooterOverlaySlot {
     handle: WindowHandle<GpuiFooterOverlay>,
@@ -585,15 +589,14 @@ impl GpuiFooterOverlay {
         }
 
         if !info.model_name.trim().is_empty() {
+            let metrics = crate::components::footer_chrome::current_main_menu_footer_metrics();
             row = row.child(
                 div()
                     .id("acp-model-display")
                     .min_w(px(0.0))
                     .font_family(crate::list_item::FONT_SYSTEM_UI)
-                    .font_weight(crate::components::footer_chrome::FOOTER_HINT_FONT_WEIGHT_GPUI)
-                    .text_size(px(
-                        crate::components::footer_chrome::FOOTER_HINT_FONT_SIZE_PX,
-                    ))
+                    .font_weight(metrics.font_weight)
+                    .text_size(px(metrics.label_font_size))
                     .text_color(crate::components::footer_chrome::footer_hint_text_color(
                         theme,
                     ))
@@ -620,7 +623,7 @@ impl GpuiFooterOverlay {
         let hover_bg = rgba(chrome.hover_rgba);
         let active_bg = rgba(chrome.selection_rgba);
         let item_height = crate::components::footer_chrome::footer_button_height(
-            crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+            crate::components::footer_chrome::current_main_menu_footer_height(),
         );
         let key_first = is_footer_left_pinned_button(&button)
             && !matches!(action, FooterAction::Cwd | FooterAction::AgentModel);
@@ -785,7 +788,7 @@ fn gpui_footer_overlay_spike_enabled() -> bool {
 }
 
 fn gpui_footer_overlay_bounds(parent_bounds: Bounds<Pixels>) -> Bounds<Pixels> {
-    let footer_height = crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT;
+    let footer_height = crate::components::footer_chrome::current_main_menu_footer_height();
     Bounds {
         origin: gpui::point(
             parent_bounds.origin.x,
@@ -818,6 +821,20 @@ fn clear_main_window_footer_refresh_signature() {
     *MAIN_WINDOW_FOOTER_REFRESH_SIGNATURE
         .lock()
         .unwrap_or_else(|poison| poison.into_inner()) = None;
+}
+
+fn set_main_window_footer_last_config(config: Option<&MainWindowFooterConfig>) {
+    *MAIN_WINDOW_FOOTER_LAST_CONFIG
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner()) = config.cloned();
+}
+
+pub(crate) fn refresh_main_footer_popup_for_runtime_style(window: &mut Window, cx: &mut App) {
+    let config = MAIN_WINDOW_FOOTER_LAST_CONFIG
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner())
+        .clone();
+    notify_main_footer_popup(window, config.as_ref(), cx);
 }
 
 fn close_gpui_footer_overlay(cx: &mut App) {
@@ -955,6 +972,7 @@ pub(crate) fn sync_main_footer_popup(
     config: Option<&MainWindowFooterConfig>,
     cx: &mut App,
 ) {
+    set_main_window_footer_last_config(config);
     let requested_surface = config.map(|cfg| cfg.surface);
     update_main_window_footer_host_state(requested_surface, None, false);
     let parent_window_handle = window.window_handle();
@@ -1046,6 +1064,7 @@ pub(crate) fn notify_main_footer_popup(
     config: Option<&MainWindowFooterConfig>,
     cx: &mut App,
 ) {
+    set_main_window_footer_last_config(config);
     let requested_surface = config.map(|cfg| cfg.surface);
     update_main_window_footer_host_state(requested_surface, None, false);
     let parent_window_handle = window.window_handle();
@@ -1093,6 +1112,7 @@ pub(crate) fn notify_main_footer_popup(
 }
 
 pub(crate) fn close_main_footer_popup(cx: &mut App) {
+    set_main_window_footer_last_config(None);
     clear_main_window_footer_refresh_signature();
     update_main_window_footer_host_state(None, None, false);
     close_gpui_footer_overlay(cx);
@@ -1467,6 +1487,7 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
     let signature = MainWindowFooterRefreshSignature {
         config: config.clone(),
         content_width_bits: content_bounds.size.width.to_bits(),
+        runtime_style_generation: crate::dev_style_tool::runtime_overrides::generation(),
         dark: is_dark,
         material: theme.get_vibrancy().material,
         divider_rgba: chrome.divider_rgba,
@@ -1492,9 +1513,16 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
             update_main_window_footer_host_state(Some(config.surface), Some(config.surface), true);
             return true;
         }
+        let runtime_styles_changed = guard
+            .as_ref()
+            .map(|previous| previous.runtime_style_generation != signature.runtime_style_generation)
+            .unwrap_or(true);
         let footer_geometry_changed = guard
             .as_ref()
-            .map(|previous| previous.content_width_bits != signature.content_width_bits)
+            .map(|previous| {
+                previous.content_width_bits != signature.content_width_bits
+                    || runtime_styles_changed
+            })
             .unwrap_or(true);
         let footer_content_changed = guard
             .as_ref()
@@ -1507,6 +1535,7 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
                     // lighter visuals-only recolor path doesn't reach every
                     // AppKit subview reliably).
                     || previous.main_menu_theme != signature.main_menu_theme
+                    || runtime_styles_changed
             })
             .unwrap_or(true);
         let footer_visuals_changed = guard
@@ -1520,6 +1549,7 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
                     || previous.hover_rgba != signature.hover_rgba
                     || previous.left_dot_hex != signature.left_dot_hex
                     || previous.main_menu_theme != signature.main_menu_theme
+                    || runtime_styles_changed
             })
             .unwrap_or(true);
         let effect_theme_changed = guard
@@ -1641,7 +1671,13 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
             }
         }
     }
-    invalidate_footer_effect_view_theme(footer_view, effect_theme_changed);
+    invalidate_footer_effect_view_theme(
+        footer_view,
+        effect_theme_changed
+            || footer_geometry_changed
+            || footer_content_changed
+            || footer_visuals_changed,
+    );
 
     tracing::debug!(
         target: "script_kit::footer_popup",
@@ -1734,7 +1770,7 @@ unsafe fn find_subview_by_identifier(parent: id, identifier: &str) -> id {
 
 #[cfg(target_os = "macos")]
 fn footer_height() -> f64 {
-    crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT as f64
+    crate::components::footer_chrome::current_main_menu_footer_height() as f64
 }
 
 #[cfg(target_os = "macos")]
@@ -1983,8 +2019,8 @@ unsafe fn ensure_footer_model_label(left_info_view: id, text: &str, text_color: 
 
     let font: id = msg_send![
         class!(NSFont),
-        systemFontOfSize: crate::components::footer_chrome::FOOTER_HINT_FONT_SIZE_PX as f64
-        weight: crate::components::footer_chrome::FOOTER_HINT_FONT_WEIGHT_APPKIT
+        systemFontOfSize: crate::components::footer_chrome::current_main_menu_footer_metrics().label_font_size as f64
+        weight: crate::components::footer_chrome::current_main_menu_footer_appkit_font_weight()
     ];
     let label = find_subview_by_identifier(left_info_view, FOOTER_MODEL_LABEL_ID);
     if label != nil {
@@ -2080,8 +2116,8 @@ unsafe fn ensure_footer_cwd_chip_label(left_info_view: id, text: &str, text_colo
 
     let font: id = msg_send![
         class!(NSFont),
-        systemFontOfSize: crate::components::footer_chrome::FOOTER_HINT_FONT_SIZE_PX as f64
-        weight: crate::components::footer_chrome::FOOTER_HINT_FONT_WEIGHT_APPKIT
+        systemFontOfSize: crate::components::footer_chrome::current_main_menu_footer_metrics().label_font_size as f64
+        weight: crate::components::footer_chrome::current_main_menu_footer_appkit_font_weight()
     ];
     let label = find_subview_by_identifier(left_info_view, FOOTER_CWD_CHIP_LABEL_ID);
     if label != nil {
@@ -2461,10 +2497,12 @@ unsafe fn layout_footer_hints(
     let hints_bounds: NSRect = msg_send![hints_view, bounds];
     let font: id = msg_send![
         objc::class!(NSFont),
-        systemFontOfSize: crate::components::footer_chrome::FOOTER_HINT_FONT_SIZE_PX as f64
-        weight: crate::components::footer_chrome::FOOTER_HINT_FONT_WEIGHT_APPKIT
+        systemFontOfSize: crate::components::footer_chrome::current_main_menu_footer_metrics().label_font_size as f64
+        weight: crate::components::footer_chrome::current_main_menu_footer_appkit_font_weight()
     ];
 
+    let metrics = crate::components::footer_chrome::current_main_menu_footer_metrics();
+    let item_gap = metrics.item_gap_px as f64;
     let mut items = Vec::new();
     let mut trailing_item_width = 0.0_f64;
     for button_cfg in buttons {
@@ -2479,7 +2517,7 @@ unsafe fn layout_footer_hints(
         let left_pinned = is_footer_left_pinned_button(button_cfg);
         if !left_pinned {
             if trailing_item_width > 0.0 {
-                trailing_item_width += FOOTER_HINT_ITEM_GAP;
+                trailing_item_width += item_gap;
             }
             trailing_item_width += target_width;
         }
@@ -2495,7 +2533,7 @@ unsafe fn layout_footer_hints(
     let left_pinned_width = items
         .iter()
         .filter(|(_, _, _, _, left_pinned)| *left_pinned)
-        .map(|(_, target_width, _, _, _)| *target_width + FOOTER_HINT_ITEM_GAP)
+        .map(|(_, target_width, _, _, _)| *target_width + item_gap)
         .sum::<f64>();
     let mut trailing_x = (hints_bounds.size.width - trailing_item_width)
         .max(left_pinned_width)
@@ -2505,7 +2543,7 @@ unsafe fn layout_footer_hints(
     let mut left_x = 0.0;
     for (item, target_width, action, enabled, left_pinned) in items {
         let x = if left_pinned { left_x } else { trailing_x };
-        let item_y = crate::components::footer_chrome::FOOTER_BUTTON_VERTICAL_INSET_PX as f64;
+        let item_y = metrics.button_padding_y as f64;
         let item_height =
             crate::components::footer_chrome::footer_button_height(hints_bounds.size.height as f32)
                 as f64;
@@ -2527,9 +2565,9 @@ unsafe fn layout_footer_hints(
         let _: () = msg_send![item, setFrame: frame];
         let _: () = msg_send![hints_view, addSubview: item];
         if left_pinned {
-            left_x += target_width + FOOTER_HINT_ITEM_GAP;
+            left_x += target_width + item_gap;
         } else {
-            trailing_x += target_width + FOOTER_HINT_ITEM_GAP;
+            trailing_x += target_width + item_gap;
         }
     }
 }
@@ -2572,6 +2610,7 @@ fn footer_hint_max_item_width(
     hints_width: f64,
     buttons: &[FooterButtonConfig],
 ) -> Option<f64> {
+    let metrics = crate::components::footer_chrome::current_main_menu_footer_metrics();
     let mic_button = buttons
         .iter()
         .find(|button| is_footer_left_pinned_button(button));
@@ -2582,10 +2621,10 @@ fn footer_hint_max_item_width(
                 .filter(|button| !is_footer_left_pinned_button(button))
                 .map(|button| footer_hint_slot_width(button.action))
                 .sum::<f64>()
-                + buttons.len().saturating_sub(1) as f64 * FOOTER_HINT_ITEM_GAP;
+                + buttons.len().saturating_sub(1) as f64 * metrics.item_gap_px as f64;
             return Some(
                 (hints_width - trailing_reserved_width)
-                    .clamp(FOOTER_AI_SLOT_WIDTH, 220.0)
+                    .clamp(metrics.ai_slot_width as f64, 220.0)
                     .round(),
             );
         }
@@ -2595,7 +2634,7 @@ fn footer_hint_max_item_width(
         return None;
     }
 
-    let gap_width = buttons.len().saturating_sub(1) as f64 * FOOTER_HINT_ITEM_GAP;
+    let gap_width = buttons.len().saturating_sub(1) as f64 * metrics.item_gap_px as f64;
     let reserved_width = buttons
         .iter()
         .filter(|button| !matches!(button.action, FooterAction::Run))
@@ -2605,29 +2644,34 @@ fn footer_hint_max_item_width(
 
     Some(
         (hints_width - reserved_width)
-            .clamp(FOOTER_RUN_SLOT_MIN_WIDTH, FOOTER_RUN_SLOT_MAX_WIDTH)
+            .clamp(
+                metrics.run_slot_min_width as f64,
+                metrics.run_slot_max_width as f64,
+            )
             .round(),
     )
 }
 
 #[cfg(target_os = "macos")]
 fn footer_hint_slot_width(action: FooterAction) -> f64 {
+    let metrics = crate::components::footer_chrome::current_main_menu_footer_metrics();
     match action {
-        FooterAction::Run => FOOTER_RUN_SLOT_MIN_WIDTH,
-        FooterAction::Actions => FOOTER_ACTIONS_SLOT_WIDTH,
-        FooterAction::Ai => FOOTER_AI_SLOT_WIDTH,
-        FooterAction::Apply => FOOTER_APPLY_SLOT_WIDTH,
-        FooterAction::Replace => FOOTER_APPLY_SLOT_WIDTH,
-        FooterAction::Append => FOOTER_APPLY_SLOT_WIDTH,
-        FooterAction::Copy => FOOTER_APPLY_SLOT_WIDTH,
-        FooterAction::Expand => FOOTER_APPLY_SLOT_WIDTH,
-        FooterAction::Retry => FOOTER_STOP_SLOT_WIDTH,
-        FooterAction::Close => FOOTER_CLOSE_SLOT_WIDTH,
-        FooterAction::Stop => FOOTER_STOP_SLOT_WIDTH,
-        FooterAction::PasteResponse => FOOTER_PASTE_RESPONSE_SLOT_WIDTH,
-        FooterAction::Cwd => FOOTER_AI_SLOT_WIDTH,
-        FooterAction::AgentModel => FOOTER_AI_SLOT_WIDTH,
+        FooterAction::Run => metrics.run_slot_min_width,
+        FooterAction::Actions => metrics.actions_slot_width,
+        FooterAction::Ai => metrics.ai_slot_width,
+        FooterAction::Apply => metrics.apply_slot_width,
+        FooterAction::Replace => metrics.apply_slot_width,
+        FooterAction::Append => metrics.apply_slot_width,
+        FooterAction::Copy => metrics.apply_slot_width,
+        FooterAction::Expand => metrics.apply_slot_width,
+        FooterAction::Retry => metrics.stop_slot_width,
+        FooterAction::Close => metrics.close_slot_width,
+        FooterAction::Stop => metrics.stop_slot_width,
+        FooterAction::PasteResponse => metrics.paste_response_slot_width,
+        FooterAction::Cwd => metrics.ai_slot_width,
+        FooterAction::AgentModel => metrics.ai_slot_width,
     }
+    .into()
 }
 
 fn footer_hint_content_layout(
@@ -2635,18 +2679,20 @@ fn footer_hint_content_layout(
     item_width: f64,
     label_width: f64,
     key_width: f64,
+    content_gap: f64,
+    run_padding_x: f64,
 ) -> (f64, f64, f64) {
     let has_label = label_width > 0.0;
     let has_key = key_width > 0.0;
     let gap_width = if has_label && has_key {
-        FOOTER_HINT_KEY_LABEL_GAP
+        content_gap
     } else {
         0.0
     };
     let content_width = label_width + gap_width + key_width;
 
     if matches!(action, FooterAction::Run) {
-        let key_x = (item_width - FOOTER_RUN_HINT_PADDING_X - key_width).round();
+        let key_x = (item_width - run_padding_x - key_width).round();
         let label_x = (key_x - gap_width - label_width).max(0.0).round();
         return (label_x, key_x, content_width);
     }
@@ -2661,6 +2707,9 @@ fn footer_hint_content_layout_for_button(
     item_width: f64,
     label_width: f64,
     key_width: f64,
+    content_gap: f64,
+    button_padding_x: f64,
+    run_padding_x: f64,
 ) -> (f64, f64, f64) {
     if matches!(
         button_cfg.action,
@@ -2669,26 +2718,33 @@ fn footer_hint_content_layout_for_button(
         // Left-pinned, but label appears LEFT of the keycap to mirror the
         // trailing buttons' "label then key" reading order.
         let gap_width = if label_width > 0.0 && key_width > 0.0 {
-            FOOTER_HINT_KEY_LABEL_GAP
+            content_gap
         } else {
             0.0
         };
-        let label_x = FOOTER_RUN_HINT_PADDING_X.round();
+        let label_x = run_padding_x.round();
         let key_x = (label_x + label_width + gap_width).round();
         return (label_x, key_x, label_width + gap_width + key_width);
     }
     if is_footer_left_pinned_button(button_cfg) {
         let gap_width = if label_width > 0.0 && key_width > 0.0 {
-            FOOTER_HINT_KEY_LABEL_GAP
+            content_gap
         } else {
             0.0
         };
-        let key_x = FOOTER_HINT_PADDING_X.round();
+        let key_x = button_padding_x.round();
         let label_x = (key_x + key_width + gap_width).round();
         return (label_x, key_x, label_width + gap_width + key_width);
     }
 
-    footer_hint_content_layout(button_cfg.action, item_width, label_width, key_width)
+    footer_hint_content_layout(
+        button_cfg.action,
+        item_width,
+        label_width,
+        key_width,
+        content_gap,
+        run_padding_x,
+    )
 }
 
 #[cfg(target_os = "macos")]
@@ -2889,6 +2945,7 @@ unsafe fn make_footer_hint_item(
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     use objc::{class, msg_send, sel, sel_impl};
 
+    let metrics = crate::components::footer_chrome::current_main_menu_footer_metrics();
     let item_height =
         crate::components::footer_chrome::footer_button_height(footer_height() as f32) as f64;
 
@@ -2920,15 +2977,19 @@ unsafe fn make_footer_hint_item(
         button_cfg.action,
         FooterAction::Run | FooterAction::Cwd | FooterAction::AgentModel
     ) {
-        FOOTER_RUN_HINT_PADDING_X
+        metrics.run_button_padding_x as f64
     } else {
-        FOOTER_HINT_PADDING_X
+        metrics.button_padding_x as f64
     };
     let keycap_border_color = ns_color_from_hex_with_alpha(
         footer_keycap_hex(theme),
         footer_keycap_border_alpha(theme, button_cfg.selected),
     );
-    let key_font: id = font;
+    let key_font: id = msg_send![
+        class!(NSFont),
+        systemFontOfSize: metrics.keycap_font_size as f64
+        weight: crate::components::footer_chrome::current_main_menu_footer_appkit_font_weight()
+    ];
 
     let shortcut_keys =
         crate::components::footer_chrome::split_footer_shortcut(button_cfg.key.as_ref());
@@ -2947,7 +3008,7 @@ unsafe fn make_footer_hint_item(
     // Keycap-to-keycap spacing must match the width the estimator reserves
     // (FOOTER_ACTION_CONTENT_GAP_PX), so multi-key groups like ⇧⇥ / ⌘K are laid
     // out exactly as sized — no AppKit-only magic number.
-    let key_gap = crate::components::footer_chrome::FOOTER_ACTION_CONTENT_GAP_PX as f64;
+    let key_gap = metrics.content_gap as f64;
 
     for (i, key_str) in shortcut_keys.iter().enumerate() {
         let chip_view: id = msg_send![class!(NSView), alloc];
@@ -2964,7 +3025,7 @@ unsafe fn make_footer_hint_item(
         if chip_layer != nil {
             let _: () = msg_send![
                 chip_layer,
-                setCornerRadius: crate::components::footer_chrome::FOOTER_KEYCAP_RADIUS_PX as f64
+                setCornerRadius: metrics.keycap_radius as f64
             ];
             let _: () = msg_send![chip_layer, setBorderWidth: 1.0_f64];
             if keycap_border_color != nil {
@@ -2976,8 +3037,9 @@ unsafe fn make_footer_hint_item(
         }
 
         let is_icon = crate::components::footer_chrome::is_footer_icon_token(key_str);
-        let chip_padding_x = crate::components::footer_chrome::FOOTER_KEYCAP_PADDING_X_PX as f64;
-        let chip_height = crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX as f64;
+        let chip_padding_x = metrics.keycap_padding_x as f64;
+        let chip_padding_y = metrics.keycap_padding_y as f64;
+        let chip_height = metrics.keycap_height as f64;
         let (glyph_view, glyph_size) = if is_icon {
             let image = footer_icon_image(key_str);
             if image == nil {
@@ -2988,7 +3050,7 @@ unsafe fn make_footer_hint_item(
                 image_view,
                 initWithFrame: NSRect::new(
                     NSPoint::new(0.0, 0.0),
-                    NSSize::new(13.0_f64, 13.0_f64)
+                    NSSize::new(metrics.keycap_font_size as f64, metrics.keycap_font_size as f64)
                 )
             ];
             if image_view == nil {
@@ -2998,7 +3060,13 @@ unsafe fn make_footer_hint_item(
             let _: () = msg_send![image_view, setContentTintColor: text_color];
             let _: () = msg_send![image_view, setAlphaValue: 1.0_f64];
             let _: () = msg_send![image_view, setImageScaling: 0usize];
-            (image_view, NSSize::new(13.0_f64, 13.0_f64))
+            (
+                image_view,
+                NSSize::new(
+                    metrics.keycap_font_size as f64,
+                    metrics.keycap_font_size as f64,
+                ),
+            )
         } else {
             let glyph_field = make_footer_hint_text_field(
                 key_str,
@@ -3015,11 +3083,12 @@ unsafe fn make_footer_hint_item(
         let chip_width = (glyph_size.width + chip_padding_x * 2.0).max(chip_height);
 
         let glyph_x = ((chip_width - glyph_size.width) / 2.0).round();
-        let glyph_y = crate::components::footer_chrome::footer_appkit_glyph_y(
-            key_str,
-            chip_height,
-            glyph_size.height,
-        );
+        let glyph_y = chip_padding_y
+            + crate::components::footer_chrome::footer_appkit_glyph_y(
+                key_str,
+                (chip_height - chip_padding_y * 2.0).max(0.0),
+                glyph_size.height,
+            );
 
         let _: () = msg_send![
             glyph_view,
@@ -3057,8 +3126,8 @@ unsafe fn make_footer_hint_item(
         )
     ];
 
-    let label_padding_x = crate::components::footer_chrome::FOOTER_KEYCAP_PADDING_X_PX as f64;
-    let label_chip_height = crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX as f64;
+    let label_padding_x = metrics.keycap_padding_x as f64;
+    let label_chip_height = metrics.keycap_height as f64;
 
     // Optional leading status dot (e.g. Agent Chat streaming dot on the Agent·Model
     // chip), rendered inside the chip ahead of the label. The lane is a FIXED
@@ -3097,7 +3166,7 @@ unsafe fn make_footer_hint_item(
         if label_layer != nil {
             let _: () = msg_send![
                 label_layer,
-                setCornerRadius: crate::components::footer_chrome::FOOTER_KEYCAP_RADIUS_PX as f64
+                setCornerRadius: metrics.keycap_radius as f64
             ];
             let _: () = msg_send![label_layer, setBorderWidth: 0.0_f64];
         }
@@ -3121,7 +3190,7 @@ unsafe fn make_footer_hint_item(
     // after it. Using the group width everywhere keeps the dot non-overlapping.
     let label_group_width = label_chip_width + leading_dot_width;
     let gap_width = if label_group_width > 0.0 && keys_view_width > 0.0 {
-        FOOTER_HINT_KEY_LABEL_GAP
+        metrics.content_gap as f64
     } else {
         0.0
     };
@@ -3145,6 +3214,9 @@ unsafe fn make_footer_hint_item(
         item_width,
         label_group_width,
         keys_view_width,
+        metrics.content_gap as f64,
+        metrics.button_padding_x as f64,
+        metrics.run_button_padding_x as f64,
     );
     let dot_x = label_group_x;
     let label_x = label_group_x + leading_dot_width;
@@ -3359,8 +3431,15 @@ mod footer_layout_tests {
         let key_width = 20.0;
         let item_width =
             label_width + FOOTER_HINT_KEY_LABEL_GAP + key_width + FOOTER_RUN_HINT_PADDING_X * 2.0;
-        let (label_x, key_x, _) =
-            footer_hint_content_layout_for_button(&button, item_width, label_width, key_width);
+        let (label_x, key_x, _) = footer_hint_content_layout_for_button(
+            &button,
+            item_width,
+            label_width,
+            key_width,
+            FOOTER_HINT_KEY_LABEL_GAP,
+            FOOTER_HINT_PADDING_X,
+            FOOTER_RUN_HINT_PADDING_X,
+        );
         // Label anchored at the leading padding, keycap exactly one content-gap
         // after the label — identical spacing to the right-side buttons.
         assert_eq!(label_x, FOOTER_RUN_HINT_PADDING_X.round());
@@ -3393,19 +3472,42 @@ mod footer_layout_tests {
         let label_width = 34.0;
         let key_width = 18.0;
 
-        let (label_x, key_x, content_width) =
-            footer_hint_content_layout(FooterAction::Actions, item_width, label_width, key_width);
+        let (label_x, key_x, content_width) = footer_hint_content_layout(
+            FooterAction::Actions,
+            item_width,
+            label_width,
+            key_width,
+            FOOTER_HINT_KEY_LABEL_GAP,
+            FOOTER_RUN_HINT_PADDING_X,
+        );
         let left_padding = label_x;
         let right_padding = item_width - (key_x + key_width);
 
-        assert_eq!(content_width, label_width + 2.0 + key_width);
+        assert_eq!(
+            content_width,
+            label_width + FOOTER_HINT_KEY_LABEL_GAP + key_width
+        );
         assert!((left_padding - right_padding).abs() <= 1.0);
     }
 
     #[test]
     fn run_hint_keeps_key_glyph_anchored_to_trailing_padding() {
-        let short = footer_hint_content_layout(FooterAction::Run, 92.0, 20.0, 18.0);
-        let long = footer_hint_content_layout(FooterAction::Run, 140.0, 64.0, 18.0);
+        let short = footer_hint_content_layout(
+            FooterAction::Run,
+            92.0,
+            20.0,
+            18.0,
+            FOOTER_HINT_KEY_LABEL_GAP,
+            FOOTER_RUN_HINT_PADDING_X,
+        );
+        let long = footer_hint_content_layout(
+            FooterAction::Run,
+            140.0,
+            64.0,
+            18.0,
+            FOOTER_HINT_KEY_LABEL_GAP,
+            FOOTER_RUN_HINT_PADDING_X,
+        );
 
         assert_eq!(short.1, 68.0);
         assert_eq!(long.1, 116.0);
@@ -3419,8 +3521,14 @@ mod footer_layout_tests {
         let key_width = 20.0;
         let item_width =
             label_width + FOOTER_HINT_KEY_LABEL_GAP + key_width + FOOTER_RUN_HINT_PADDING_X * 2.0;
-        let (label_x, key_x, _) =
-            footer_hint_content_layout(FooterAction::Run, item_width, label_width, key_width);
+        let (label_x, key_x, _) = footer_hint_content_layout(
+            FooterAction::Run,
+            item_width,
+            label_width,
+            key_width,
+            FOOTER_HINT_KEY_LABEL_GAP,
+            FOOTER_RUN_HINT_PADDING_X,
+        );
 
         assert_eq!(label_x, FOOTER_RUN_HINT_PADDING_X);
         assert_eq!(item_width - (key_x + key_width), FOOTER_RUN_HINT_PADDING_X);

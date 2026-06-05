@@ -221,7 +221,8 @@ impl DevStyleToolApp {
             view.update_theme(cx);
             cx.notify();
         });
-        let _ = self.main_window.update(cx, |_root, _window, cx| {
+        let _ = self.main_window.update(cx, |_root, window, cx| {
+            crate::footer_popup::refresh_main_footer_popup_for_runtime_style(window, cx);
             cx.notify();
         });
     }
@@ -698,6 +699,7 @@ fn parse_style_value(value: &str, unit: StyleUnit) -> Result<f32, std::num::Pars
         StyleUnit::Px => trimmed.trim_end_matches("px").trim(),
         StyleUnit::Alpha => trimmed.trim_end_matches("alpha").trim(),
         StyleUnit::Opacity => trimmed.trim_end_matches('%').trim(),
+        StyleUnit::Weight => trimmed.trim_end_matches("weight").trim(),
     };
     let parsed = trimmed.parse::<f32>()?;
     Ok(
@@ -713,6 +715,7 @@ fn format_style_value(value: f32, unit: StyleUnit) -> String {
     match unit {
         StyleUnit::Opacity => format!("{value:.2}"),
         StyleUnit::Alpha => format!("{value:.0}"),
+        StyleUnit::Weight => format!("{value:.0}"),
         StyleUnit::Px if (value.fract()).abs() < f32::EPSILON => format!("{value:.0}"),
         StyleUnit::Px => format!("{value:.1}"),
     }

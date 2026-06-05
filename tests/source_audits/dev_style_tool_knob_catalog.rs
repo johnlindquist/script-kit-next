@@ -20,8 +20,12 @@ fn dev_style_tool_catalog_owns_search_height_descriptor() {
     assert!(
         source.contains("LIST_ITEM_HEIGHT_KNOB_ID")
             && source.contains("\"list.itemHeight\"")
-            && source.contains("\"Item height\""),
-        "list.itemHeight must be a named descriptor in the dev style tool catalog"
+            && source.contains("\"Item height\"")
+            && source.contains("LIST_ITEM_OUTER_PADDING_Y_KNOB_ID")
+            && source.contains("\"list.itemOuterPaddingY\"")
+            && source.contains("LIST_ITEM_INNER_PADDING_Y_KNOB_ID")
+            && source.contains("\"list.itemInnerPaddingY\""),
+        "list item height and spacing must be named descriptors in the dev style tool catalog"
     );
     assert!(
         source.contains("LIST_SOURCE_STATUS_ROW_HEIGHT_KNOB_ID")
@@ -51,6 +55,10 @@ fn dev_style_tool_catalog_owns_search_height_descriptor() {
             && source.contains("\"metadata.badgePaddingY\"")
             && source.contains("METADATA_BADGE_RADIUS_KNOB_ID")
             && source.contains("\"metadata.badgeRadius\"")
+            && source.contains("FOOTER_HEIGHT_KNOB_ID")
+            && source.contains("\"footer.height\"")
+            && source.contains("FOOTER_FONT_WEIGHT_KNOB_ID")
+            && source.contains("\"footer.fontWeight\"")
             && source.contains("FOOTER_SIDE_INSET_KNOB_ID")
             && source.contains("FOOTER_BUTTON_BORDER_ALPHA_KNOB_ID"),
         "metadata and footer numeric tokens must be cataloged"
@@ -505,6 +513,8 @@ fn footer_keycap_and_slot_sizes_are_design_tool_controls() {
         fs::read_to_string("src/components/footer_chrome.rs").expect("read footer chrome source");
 
     for required in [
+        "pub height_px: f32",
+        "pub font_weight: FontWeight",
         "pub keycap_height: f32",
         "pub key_glyph_nudge_y: f32",
         "pub return_glyph_nudge_y: f32",
@@ -522,6 +532,10 @@ fn footer_keycap_and_slot_sizes_are_design_tool_controls() {
     }
 
     for required in [
+        "FOOTER_HEIGHT_KNOB_ID",
+        "\"footer.height\"",
+        "FOOTER_FONT_WEIGHT_KNOB_ID",
+        "\"footer.fontWeight\"",
         "FOOTER_KEYCAP_HEIGHT_KNOB_ID",
         "\"footer.keycapHeight\"",
         "FOOTER_KEY_GLYPH_NUDGE_Y_KNOB_ID",
@@ -566,12 +580,20 @@ fn footer_keycap_and_slot_sizes_are_design_tool_controls() {
 
     let keycap_body = function_body(&footer, "render_footer_keycap_with_metrics");
     assert!(keycap_body.contains("keycap_height_px.unwrap_or(metrics.keycap_height)"));
+    assert!(keycap_body.contains(".font_weight(metrics.font_weight)"));
     assert!(!keycap_body.contains("keycap_height_px.unwrap_or(FOOTER_KEYCAP_HEIGHT_PX)"));
 
     let labelcap_body = function_body(&footer, "render_footer_labelcap_constrained");
     assert!(labelcap_body.contains(".min_h(px(metrics.keycap_height))"));
     assert!(labelcap_body.contains(".line_height(px(metrics.keycap_height))"));
+    assert!(labelcap_body.contains(".font_weight(metrics.font_weight)"));
     assert!(!labelcap_body.contains("FOOTER_KEYCAP_HEIGHT_PX"));
+
+    let rail_body = function_body(&footer, "footer_rail_chrome");
+    assert!(rail_body.contains("height_px: metrics.height_px"));
+    assert!(!rail_body.contains(
+        "height_px: crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT"
+    ));
 
     let nudge_body = function_body(&footer, "footer_key_glyph_nudge_y");
     assert!(nudge_body.contains("metrics.key_glyph_nudge_y"));
@@ -594,4 +616,49 @@ fn list_scrollbar_width_is_design_tool_controlled() {
     assert!(render_script_list
         .contains(".w(px(self.current_main_menu_theme.def().list.scrollbar_width))"));
     assert!(!render_script_list.contains(".w(px(16.0))"));
+}
+
+#[test]
+fn dev_style_tool_refreshes_native_footer_runtime_controls() {
+    let footer_popup = fs::read_to_string("src/footer_popup.rs").expect("read footer popup source");
+    let sidecar = fs::read_to_string("src/dev_style_tool/render.rs").expect("read sidecar source");
+    let theme_focus =
+        fs::read_to_string("src/app_impl/theme_focus.rs").expect("read theme focus source");
+    let prompt_handler =
+        fs::read_to_string("src/prompt_handler/mod.rs").expect("read prompt handler source");
+
+    for required in [
+        "runtime_style_generation",
+        "runtime_overrides::generation()",
+        "MAIN_WINDOW_FOOTER_LAST_CONFIG",
+        "refresh_main_footer_popup_for_runtime_style",
+        "previous.content_width_bits != signature.content_width_bits",
+        "|| runtime_styles_changed",
+        "effect_theme_changed\n            || footer_geometry_changed\n            || footer_content_changed\n            || footer_visuals_changed",
+        "current_main_menu_footer_metrics().label_font_size",
+        "current_main_menu_footer_appkit_font_weight()",
+        "metrics.keycap_font_size",
+        "metrics.keycap_padding_x",
+        "metrics.keycap_padding_y",
+        "metrics.keycap_height",
+        "metrics.keycap_radius",
+        "metrics.content_gap",
+        "metrics.item_gap_px",
+        "metrics.run_slot_min_width",
+        "metrics.actions_slot_width",
+    ] {
+        assert!(
+            footer_popup.contains(required),
+            "native footer refresh path missing {required}"
+        );
+    }
+
+    assert!(sidecar.contains("refresh_main_footer_popup_for_runtime_style(window, cx)"));
+    assert!(theme_focus.contains("pub(crate) fn refresh_runtime_style_controls"));
+    assert!(theme_focus.contains("refresh_main_menu_theme_layout_metrics"));
+    assert!(theme_focus.contains("refresh_main_footer_popup_for_runtime_style(window, cx)"));
+    assert!(prompt_handler.contains("this.refresh_runtime_style_controls(cx);"));
+    assert!(!prompt_handler.contains(
+        "runtime_overrides::set_number_from_devtools(\n                                                &control,\n                                                &value,\n                                            )?;\n                                        this.update_theme(cx);\n                                        cx.notify();"
+    ));
 }

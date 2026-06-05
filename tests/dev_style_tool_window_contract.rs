@@ -187,10 +187,8 @@ fn dev_style_tool_devtools_mutation_reuses_runtime_catalog() {
     assert!(prompt_handler_source.contains("RedoStyleChange"));
     assert!(prompt_handler_source.contains("ResetStyleControls"));
     assert!(prompt_handler_source.contains("\"saveCurrentStyleSettings\""));
-    assert!(
-        prompt_handler_source
-            .contains("crate::dev_style_tool::export::save_current_settings_markdown")
-    );
+    assert!(prompt_handler_source
+        .contains("crate::dev_style_tool::export::save_current_settings_markdown"));
     assert!(prompt_handler_source.contains("set_number_from_devtools"));
     assert!(prompt_handler_source.contains("this.update_theme(cx);"));
 }

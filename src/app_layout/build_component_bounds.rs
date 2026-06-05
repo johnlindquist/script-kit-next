@@ -618,8 +618,7 @@ impl ScriptListApp {
         } // End of ScriptList-specific bounds
 
         {
-            use crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT;
-            let footer_height = px(NATIVE_MAIN_WINDOW_FOOTER_HEIGHT);
+            let footer_height = px(menu_def.footer.metrics.height_px);
             bounds.push(
                 ComponentBounds::new(
                     "MainViewFooter",

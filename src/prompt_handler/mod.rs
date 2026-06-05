@@ -7510,8 +7510,7 @@ impl ScriptListApp {
                                                 &control,
                                                 &value,
                                             )?;
-                                        this.update_theme(cx);
-                                        cx.notify();
+                                        this.refresh_runtime_style_controls(cx);
                                         return Ok(applied);
                                     }
                                     if !matches!(
@@ -7577,8 +7576,7 @@ impl ScriptListApp {
                                 match this.update(cx, |this, cx| {
                                     let result = crate::dev_style_tool::runtime_overrides::undo_last()
                                         .ok_or_else(|| anyhow::anyhow!("no dev style change to undo"))?;
-                                    this.update_theme(cx);
-                                    cx.notify();
+                                    this.refresh_runtime_style_controls(cx);
                                     Ok::<String, anyhow::Error>(result)
                                 }) {
                                     Ok(Ok(value)) => {
@@ -7630,8 +7628,7 @@ impl ScriptListApp {
                                 match this.update(cx, |this, cx| {
                                     let result = crate::dev_style_tool::runtime_overrides::redo_last()
                                         .ok_or_else(|| anyhow::anyhow!("no dev style change to redo"))?;
-                                    this.update_theme(cx);
-                                    cx.notify();
+                                    this.refresh_runtime_style_controls(cx);
                                     Ok::<String, anyhow::Error>(result)
                                 }) {
                                     Ok(Ok(value)) => {
@@ -7683,8 +7680,7 @@ impl ScriptListApp {
                                 match this.update(cx, |this, cx| {
                                     let generation =
                                         crate::dev_style_tool::runtime_overrides::reset_all();
-                                    this.update_theme(cx);
-                                    cx.notify();
+                                    this.refresh_runtime_style_controls(cx);
                                     Ok::<String, anyhow::Error>(format!(
                                         "resetStyleControls generation={generation}"
                                     ))

@@ -223,6 +223,7 @@ pub struct MainMenuMetadataTokens {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FooterMetricsTokens {
+    pub height_px: f32,
     pub side_inset_px: f32,
     pub item_gap_px: f32,
     pub content_gap: f32,
@@ -231,6 +232,7 @@ pub struct FooterMetricsTokens {
     pub run_button_padding_x: f32,
     pub button_radius: f32,
     pub label_font_size: f32,
+    pub font_weight: FontWeight,
     pub keycap_padding_x: f32,
     pub keycap_padding_y: f32,
     pub keycap_radius: f32,
@@ -668,6 +670,7 @@ fn base_main_menu_theme_def(
             uses_accent: false,
         },
         metrics: FooterMetricsTokens {
+            height_px: 32.0,
             side_inset_px: 14.0,
             item_gap_px: 6.0,
             content_gap: 4.0,
@@ -676,6 +679,7 @@ fn base_main_menu_theme_def(
             run_button_padding_x: 6.0,
             button_radius: 6.0,
             label_font_size: 12.0,
+            font_weight: crate::components::footer_chrome::FOOTER_HINT_FONT_WEIGHT_GPUI,
             keycap_padding_x: 5.0,
             keycap_padding_y: 2.0,
             keycap_radius: 6.0,
@@ -704,8 +708,8 @@ fn base_main_menu_theme_def(
         shell: MainMenuShellTokens {
             content_inset_x: 16.0,
             content_inset_bottom: 16.0 * 0.35,
-            header_padding_x: 6.0,
-            header_padding_y: 2.0,
+            header_padding_x: 2.0,
+            header_padding_y: 4.0,
             header_gap: 2.0,
             divider_margin_x: 16.0,
             divider_height: 0.0,
@@ -722,11 +726,11 @@ fn base_main_menu_theme_def(
             font_weight: FontWeight(430.0),
         },
         list: MainMenuListTokens {
-            item_height: 40.0,
+            item_height: 44.0,
             section_header_height: 32.0,
             first_section_header_height: 4.0 + 16.0 + 4.0,
             source_status_row_height: 32.0,
-            average_scroll_height: ((40.0 * 3.0) + 32.0) / 4.0,
+            average_scroll_height: ((44.0 * 3.0) + 32.0) / 4.0,
             scrollbar_width: 16.0,
             section_padding_x: MAIN_MENU_SECTION_PADDING_X,
             section_padding_top: MAIN_MENU_SECTION_PADDING_TOP,
@@ -801,7 +805,7 @@ fn base_main_menu_theme_def(
         },
         typography: MainMenuTypographyTokens {
             name_font_size: 14.0,
-            name_line_height: 20.0,
+            name_line_height: 16.0,
             name_weight: FontWeight(450.0),
             selected_name_weight: FontWeight::MEDIUM,
             desc_font_size: 12.0,

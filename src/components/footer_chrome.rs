@@ -9,6 +9,7 @@ use crate::theme::Theme;
 use crate::ui_foundation::HexColorExt;
 
 pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.0;
+#[allow(dead_code)]
 pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.14;
 // Footer action/keycap text weight. Lowered 560 -> 500 (Medium) so the footer
 // buttons no longer read as bold/semibold. Apple's macOS type system uses Regular
@@ -139,11 +140,20 @@ pub(crate) fn current_main_menu_footer_metrics() -> crate::designs::FooterMetric
         .metrics
 }
 
+pub(crate) fn current_main_menu_footer_height() -> f32 {
+    current_main_menu_footer_metrics().height_px
+}
+
+pub(crate) fn current_main_menu_footer_appkit_font_weight() -> f64 {
+    let gpui_weight = current_main_menu_footer_metrics().font_weight.0;
+    ((gpui_weight - 400.0) / 700.0).clamp(-1.0, 1.0) as f64
+}
+
 pub(crate) fn footer_rail_chrome(theme: &Theme) -> FooterRailChrome {
     let chrome = crate::theme::AppChromeColors::from_theme(theme);
     let metrics = current_main_menu_footer_metrics();
     FooterRailChrome {
-        height_px: crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+        height_px: metrics.height_px,
         side_inset_px: metrics.side_inset_px,
         item_gap_px: metrics.item_gap_px,
         surface_rgba: chrome.inline_dropdown_surface_rgba,
@@ -693,7 +703,7 @@ fn render_footer_labelcap_constrained(
         .items_center()
         .justify_center()
         .font_family(FONT_SYSTEM_UI)
-        .font_weight(FOOTER_HINT_FONT_WEIGHT_GPUI)
+        .font_weight(metrics.font_weight)
         .text_size(px(label_font_size))
         .text_color(footer_text)
         .group_hover("footer-action-button", move |s| s.text_color(full_text));
@@ -893,7 +903,7 @@ fn render_footer_keycap_with_metrics(
         .items_center()
         .justify_center()
         .font_family(FONT_SYSTEM_UI)
-        .font_weight(FOOTER_HINT_FONT_WEIGHT_GPUI)
+        .font_weight(metrics.font_weight)
         .text_size(px(keycap_font_size))
         .text_color(footer_text)
         .group_hover("footer-action-button", move |s| {
@@ -1069,10 +1079,7 @@ mod tests {
 
         let chrome = crate::theme::AppChromeColors::from_theme(&theme);
         let rail = footer_rail_chrome(&theme);
-        assert_eq!(
-            rail.height_px,
-            crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT
-        );
+        assert_eq!(rail.height_px, current_main_menu_footer_height());
         assert_eq!(
             rail.side_inset_px,
             crate::window_resize::main_layout::HINT_STRIP_PADDING_X

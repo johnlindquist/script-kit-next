@@ -1737,11 +1737,9 @@ impl ScriptListApp {
                 )
                 // Measured internal text inset so the Apple-guideline conformance
                 // engine can compare against the native NSTextField baseline
-                // (9pt H / 3pt V, macOS 26). The search text now renders with
-                // SEARCH_INPUT_TEXT_INSET_X_PX (9pt) left padding in
-                // render_script_list/mod.rs, matching the native NSTextField inset;
-                // the vertical inset is CURSOR_MARGIN_Y. (Before slice 5 this was
-                // 0pt flush — the proven outOfBand "input lacks padding" gap.)
+                // The search text now renders with SEARCH_INPUT_TEXT_INSET_X_PX
+                // left padding in render_script_list/mod.rs, keeping the measured
+                // content inset and the design-tool default on the same token path.
                 .with_content_insets(
                     search.text_inset_y,
                     search.text_inset_x,
@@ -2251,11 +2249,11 @@ impl ScriptListApp {
         // (6pt) carried as boxModel.gap, which the engine classifies against the
         // soft ~12pt floor (Apple's hard regular-control gap is 16pt).
         {
-            use crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT;
-            let footer_y = window_height - NATIVE_MAIN_WINDOW_FOOTER_HEIGHT;
+            let footer_height = footer_metrics.height_px;
+            let footer_y = window_height - footer_height;
             components.push(
                 LayoutComponentInfo::new("MainViewFooter", LayoutComponentType::Panel)
-                    .with_bounds(0.0, footer_y, window_width, NATIVE_MAIN_WINDOW_FOOTER_HEIGHT)
+                    .with_bounds(0.0, footer_y, window_width, footer_height)
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_FUNCTIONAL,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,

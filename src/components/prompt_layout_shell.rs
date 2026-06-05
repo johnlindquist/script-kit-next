@@ -753,7 +753,7 @@ pub(crate) fn render_native_main_window_footer_spacer() -> AnyElement {
         .id("native-main-window-footer-spacer")
         .w_full()
         .h(px(
-            crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+            crate::components::footer_chrome::current_main_menu_footer_height(),
         ))
         .into_any_element()
 }
@@ -770,7 +770,7 @@ pub(crate) fn render_native_main_window_footer_hover_blocker() -> AnyElement {
             .left_0()
             .w_full()
             .h(px(
-                crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+                crate::components::footer_chrome::current_main_menu_footer_height(),
             ))
             .block_mouse_except_scroll(),
     )

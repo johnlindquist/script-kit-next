@@ -140,6 +140,17 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    pub(crate) fn refresh_runtime_style_controls(&mut self, cx: &mut Context<Self>) {
+        self.update_theme(cx);
+        self.refresh_main_menu_theme_layout_metrics("refresh_runtime_style_controls", cx);
+        if let Some(window_handle) = crate::get_main_window_handle() {
+            let _ = window_handle.update(cx, |_root, window, cx| {
+                crate::footer_popup::refresh_main_footer_popup_for_runtime_style(window, cx);
+            });
+        }
+        cx.notify();
+    }
+
     pub(crate) fn update_config(&mut self, cx: &mut Context<Self>) {
         self.config = config::load_config();
         clipboard_history::set_max_text_content_len(
