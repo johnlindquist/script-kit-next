@@ -382,3 +382,81 @@ fn inline_calc_row_chrome_is_list_tokenized() {
         "this.current_main_menu_theme.def().list,\n                                            this.current_design,"
     ));
 }
+
+#[test]
+fn main_menu_font_sizes_are_design_tool_controls() {
+    let theme =
+        fs::read_to_string("src/designs/core/main_menu_theme.rs").expect("read theme source");
+    let catalog =
+        fs::read_to_string("src/dev_style_tool/catalog.rs").expect("read dev style catalog");
+    let render_script_list =
+        fs::read_to_string("src/render_script_list/mod.rs").expect("read render script list");
+
+    for required in [
+        "SEARCH_FONT_SIZE_KNOB_ID",
+        "TYPOGRAPHY_NAME_FONT_SIZE_KNOB_ID",
+        "TYPOGRAPHY_DESC_FONT_SIZE_KNOB_ID",
+        "TYPOGRAPHY_SECTION_FONT_SIZE_KNOB_ID",
+        "METADATA_SOURCE_FONT_SIZE_KNOB_ID",
+        "METADATA_BADGE_FONT_SIZE_KNOB_ID",
+        "METADATA_KEYCAP_FONT_SIZE_KNOB_ID",
+        "FOOTER_LABEL_FONT_SIZE_KNOB_ID",
+        "FOOTER_KEYCAP_FONT_SIZE_KNOB_ID",
+        "HEADER_INFO_FONT_SIZE_KNOB_ID",
+        "LIST_MAIN_HINT_CHIP_FONT_SIZE_KNOB_ID",
+        "LIST_MAIN_HINT_ROW_LABEL_FONT_SIZE_KNOB_ID",
+        "LIST_MAIN_HINT_ROW_VALUE_FONT_SIZE_KNOB_ID",
+        "LIST_MAIN_HINT_FRAGMENT_ROLE_FONT_SIZE_KNOB_ID",
+        "LIST_MAIN_HINT_FRAGMENT_VALUE_FONT_SIZE_KNOB_ID",
+        "LIST_MAIN_HINT_TITLE_FONT_SIZE_KNOB_ID",
+        "LIST_MAIN_HINT_BODY_FONT_SIZE_KNOB_ID",
+        "LIST_MAIN_HINT_EXAMPLE_LABEL_FONT_SIZE_KNOB_ID",
+        "LIST_MAIN_HINT_FORM_LABEL_FONT_SIZE_KNOB_ID",
+        "LIST_MAIN_HINT_FORM_INPUT_FONT_SIZE_KNOB_ID",
+        "LIST_MAIN_HINT_FORM_VALUE_FONT_SIZE_KNOB_ID",
+    ] {
+        assert!(catalog.contains(required), "missing font-size knob {required}");
+    }
+
+    for id in [
+        "\"search.fontSize\"",
+        "\"typography.nameFontSize\"",
+        "\"typography.descFontSize\"",
+        "\"typography.sectionFontSize\"",
+        "\"metadata.sourceFontSize\"",
+        "\"metadata.badgeFontSize\"",
+        "\"metadata.keycapFontSize\"",
+        "\"footer.labelFontSize\"",
+        "\"footer.keycapFontSize\"",
+        "\"headerInfo.fontSize\"",
+        "\"list.mainHintTitleFontSize\"",
+        "\"list.mainHintBodyFontSize\"",
+        "\"list.mainHintExampleLabelFontSize\"",
+        "\"list.mainHintFormLabelFontSize\"",
+        "\"list.mainHintFormInputFontSize\"",
+        "\"list.mainHintFormValueFontSize\"",
+    ] {
+        assert!(catalog.contains(id), "missing font-size control id {id}");
+    }
+
+    assert!(theme.contains("pub main_hint_title_font_size: f32"));
+    assert!(theme.contains("pub main_hint_body_font_size: f32"));
+    assert!(theme.contains("pub main_hint_example_label_font_size: f32"));
+    assert!(theme.contains("pub main_hint_form_label_font_size: f32"));
+    assert!(theme.contains("pub main_hint_form_input_font_size: f32"));
+    assert!(theme.contains("pub main_hint_form_value_font_size: f32"));
+
+    let main_hint_body = function_body(&render_script_list, "render_menu_syntax_main_hint");
+    assert!(main_hint_body.contains("list_tokens.main_hint_title_font_size"));
+    assert!(main_hint_body.contains("list_tokens.main_hint_body_font_size"));
+    assert!(main_hint_body.contains("list_tokens.main_hint_example_label_font_size"));
+    assert!(!main_hint_body.contains("metrics.body_size - 1.0"));
+    assert!(!main_hint_body.contains("metrics.body_line - 2.0"));
+
+    let form_body = function_body(&render_script_list, "render_menu_syntax_form_field");
+    assert!(form_body.contains("list_tokens.main_hint_form_label_font_size"));
+    assert!(form_body.contains("list_tokens.main_hint_form_input_font_size"));
+    assert!(form_body.contains("list_tokens.main_hint_form_value_font_size"));
+    assert!(!form_body.contains("field_metrics.label_font_size"));
+    assert!(!form_body.contains("field_metrics.input_font_size"));
+}

@@ -310,7 +310,6 @@ fn render_menu_syntax_form_field(
     let placeholder_color =
         rgba(crate::theme::AppChromeColors::from_theme(theme).placeholder_text_rgba);
     let single_line_input_height = field_metrics.menu_syntax_single_line_height_px();
-    let input_rendered_font_size = field_metrics.menu_syntax_input_rendered_font_size_px();
     let multiline_min_height = field_metrics.menu_syntax_multiline_min_height_px();
     let multiline_max_height = field_metrics.menu_syntax_multiline_max_height_px();
     let mut field_node = div()
@@ -339,8 +338,8 @@ fn render_menu_syntax_form_field(
                 .gap(px(field_metrics.field_header_gap_px))
                 .child(
                     div()
-                        .text_size(px(field_metrics.label_font_size))
-                        .line_height(px(field_metrics.label_line_height))
+                        .text_size(px(list_tokens.main_hint_form_label_font_size))
+                        .line_height(px(list_tokens.main_hint_form_label_line_height))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(rgba(
                             (theme.colors.text.muted << 8)
@@ -353,11 +352,11 @@ fn render_menu_syntax_form_field(
     field_node = if let Some(input) = input {
         let input_element = gpui_component::input::Input::new(&input)
             .w_full()
-            .line_height(px(field_metrics.input_line_height))
+            .line_height(px(list_tokens.main_hint_form_input_line_height))
             .px(px(0.0))
             .py(px(0.0))
             .with_size(gpui_component::Size::Size(
-                px(field_metrics.input_font_size),
+                px(list_tokens.main_hint_form_input_font_size),
             ))
             .appearance(false)
             .bordered(false)
@@ -380,11 +379,11 @@ fn render_menu_syntax_form_field(
         field_node.child(
             div()
                 .w_full()
-                .min_h(px(field_metrics.input_line_height))
+                .min_h(px(list_tokens.main_hint_form_input_line_height))
                 .flex()
                 .items_center()
-                .text_size(px(input_rendered_font_size))
-                .line_height(px(field_metrics.input_line_height))
+                .text_size(px(list_tokens.main_hint_form_value_font_size))
+                .line_height(px(list_tokens.main_hint_form_input_line_height))
                 .text_color(if has_value {
                     rgba(
                         (theme.colors.text.primary << 8)
@@ -498,8 +497,8 @@ fn render_menu_syntax_main_hint(
                         .min_w(px(0.0))
                         .overflow_hidden()
                         .text_ellipsis()
-                        .text_size(px(metrics.title_size))
-                        .line_height(px(metrics.title_line))
+                        .text_size(px(list_tokens.main_hint_title_font_size))
+                        .line_height(px(list_tokens.main_hint_title_line_height))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(palette.title)
                         .child(hint.title.clone()),
@@ -545,8 +544,8 @@ fn render_menu_syntax_main_hint(
         .when_some(hint.subtitle.as_ref(), |d, subtitle| {
             d.child(
                 div()
-                    .text_size(px(metrics.body_size))
-                    .line_height(px(metrics.body_line))
+                    .text_size(px(list_tokens.main_hint_body_font_size))
+                    .line_height(px(list_tokens.main_hint_body_line_height))
                     .text_color(palette.body)
                     .child(subtitle.clone()),
             )
@@ -601,8 +600,8 @@ fn render_menu_syntax_main_hint(
                     .bg(rgba(
                         (theme.colors.ui.warning << 8) | list_tokens.main_hint_warning_bg_alpha,
                     ))
-                    .text_size(px(metrics.body_size))
-                    .line_height(px(metrics.body_line))
+                    .text_size(px(list_tokens.main_hint_body_font_size))
+                    .line_height(px(list_tokens.main_hint_body_line_height))
                     .text_color(rgb(theme.colors.ui.warning))
                     .child(warning.clone()),
             )
@@ -617,8 +616,8 @@ fn render_menu_syntax_main_hint(
         .when_some(hint.primary_hint.as_ref(), |d, primary| {
             d.child(
                 div()
-                    .text_size(px(metrics.body_size))
-                    .line_height(px(metrics.body_line))
+                    .text_size(px(list_tokens.main_hint_body_font_size))
+                    .line_height(px(list_tokens.main_hint_body_line_height))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(palette.accent)
                     .child(primary.clone()),
@@ -627,8 +626,8 @@ fn render_menu_syntax_main_hint(
         .when_some(hint.secondary_hint.as_ref(), |d, secondary| {
             d.child(
                 div()
-                    .text_size(px(metrics.body_size))
-                    .line_height(px(metrics.body_line))
+                    .text_size(px(list_tokens.main_hint_body_font_size))
+                    .line_height(px(list_tokens.main_hint_body_line_height))
                     .text_color(palette.hint)
                     .child(secondary.clone()),
             )
@@ -642,8 +641,8 @@ fn render_menu_syntax_main_hint(
                     .gap(px(list_tokens.main_hint_examples_group_gap))
                     .child(
                         div()
-                            .text_size(px(metrics.body_size - 1.0))
-                            .line_height(px(metrics.body_line - 2.0))
+                            .text_size(px(list_tokens.main_hint_example_label_font_size))
+                            .line_height(px(list_tokens.main_hint_example_label_line_height))
                             .text_color(palette.hint)
                             .child(if examples.len() == 1 {
                                 "Example"
@@ -660,8 +659,8 @@ fn render_menu_syntax_main_hint(
                         .flex()
                         .flex_col()
                         .gap(px(list_tokens.main_hint_example_row_gap))
-                        .text_size(px(metrics.body_size))
-                        .line_height(px(metrics.body_line))
+                        .text_size(px(list_tokens.main_hint_body_font_size))
+                        .line_height(px(list_tokens.main_hint_body_line_height))
                         .font_family("JetBrains Mono")
                         .text_color(palette.body)
                         .children(examples.iter().map(|example| {

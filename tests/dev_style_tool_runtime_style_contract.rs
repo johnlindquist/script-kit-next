@@ -11,7 +11,10 @@ use script_kit_gpui::dev_style_tool::{
     LIST_MAIN_HINT_FORM_BG_ALPHA_KNOB_ID, LIST_MAIN_HINT_FORM_BORDER_ALPHA_KNOB_ID,
     LIST_MAIN_HINT_FORM_FOCUSED_BG_ALPHA_KNOB_ID,
     LIST_MAIN_HINT_FORM_FOCUSED_BORDER_ALPHA_KNOB_ID, LIST_MAIN_HINT_FORM_LABEL_ALPHA_KNOB_ID,
-    LIST_MAIN_HINT_FORM_VALUE_ALPHA_KNOB_ID,
+    LIST_MAIN_HINT_FORM_INPUT_FONT_SIZE_KNOB_ID, LIST_MAIN_HINT_FORM_LABEL_FONT_SIZE_KNOB_ID,
+    LIST_MAIN_HINT_FORM_VALUE_ALPHA_KNOB_ID, LIST_MAIN_HINT_FORM_VALUE_FONT_SIZE_KNOB_ID,
+    LIST_MAIN_HINT_BODY_FONT_SIZE_KNOB_ID, LIST_MAIN_HINT_EXAMPLE_LABEL_FONT_SIZE_KNOB_ID,
+    LIST_MAIN_HINT_TITLE_FONT_SIZE_KNOB_ID,
     LIST_MAIN_HINT_FRAGMENT_ROLE_BG_ALPHA_KNOB_ID,
     LIST_MAIN_HINT_FRAGMENT_ROLE_WIDTH_KNOB_ID, LIST_MAIN_HINT_ROW_LABEL_WIDTH_KNOB_ID,
     LIST_MAIN_HINT_ROWS_GAP_KNOB_ID, LIST_MAIN_HINT_STATUS_CHIP_GAP_KNOB_ID,
@@ -223,6 +226,36 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     .expect("inline calc selected hint alpha knob should exist");
     runtime_overrides::set_value(LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID, StyleValue::Number(122.0))
         .expect("inline calc hint alpha knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_TITLE_FONT_SIZE_KNOB_ID,
+        StyleValue::Number(20.0),
+    )
+    .expect("main hint title font size knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_BODY_FONT_SIZE_KNOB_ID,
+        StyleValue::Number(14.0),
+    )
+    .expect("main hint body font size knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_EXAMPLE_LABEL_FONT_SIZE_KNOB_ID,
+        StyleValue::Number(13.0),
+    )
+    .expect("main hint example label font size knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_FORM_LABEL_FONT_SIZE_KNOB_ID,
+        StyleValue::Number(13.0),
+    )
+    .expect("main hint form label font size knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_FORM_INPUT_FONT_SIZE_KNOB_ID,
+        StyleValue::Number(17.0),
+    )
+    .expect("main hint form input font size knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_FORM_VALUE_FONT_SIZE_KNOB_ID,
+        StyleValue::Number(15.0),
+    )
+    .expect("main hint form value font size knob should exist");
 
     let def = variant.def();
     assert_eq!(variant.base_def().list.item_height, base.list.item_height);
@@ -261,6 +294,12 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     assert_eq!(def.list.inline_calc_selected_overlay_min_alpha, 51);
     assert_eq!(def.list.inline_calc_selected_hint_alpha, 201);
     assert_eq!(def.list.inline_calc_hint_alpha, 122);
+    assert_eq!(def.list.main_hint_title_font_size, 20.0);
+    assert_eq!(def.list.main_hint_body_font_size, 14.0);
+    assert_eq!(def.list.main_hint_example_label_font_size, 13.0);
+    assert_eq!(def.list.main_hint_form_label_font_size, 13.0);
+    assert_eq!(def.list.main_hint_form_input_font_size, 17.0);
+    assert_eq!(def.list.main_hint_form_value_font_size, 15.0);
     assert_eq!(def.row.selected_name_underline_width, 3.0);
     assert_eq!(def.row.selected_name_underline_padding_bottom, 2.0);
 
@@ -388,6 +427,25 @@ fn devtools_numeric_setter_accepts_catalog_control_ids() {
         Some(StyleValue::Number(51.0))
     );
 
+    let applied = runtime_overrides::set_number_from_devtools("list.mainHintTitleFontSize", "20px")
+        .expect("main hint title font size should be settable through devtools");
+
+    assert_eq!(applied, "list.mainHintTitleFontSize=20");
+    assert_eq!(
+        runtime_overrides::current_value(LIST_MAIN_HINT_TITLE_FONT_SIZE_KNOB_ID),
+        Some(StyleValue::Number(20.0))
+    );
+
+    let applied =
+        runtime_overrides::set_number_from_devtools("list.mainHintFormInputFontSize", "17px")
+            .expect("main hint form input font size should be settable through devtools");
+
+    assert_eq!(applied, "list.mainHintFormInputFontSize=17");
+    assert_eq!(
+        runtime_overrides::current_value(LIST_MAIN_HINT_FORM_INPUT_FONT_SIZE_KNOB_ID),
+        Some(StyleValue::Number(17.0))
+    );
+
     runtime_overrides::reset_all();
 }
 
@@ -466,6 +524,16 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.inlineCalcSelectedOverlayMinAlpha"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "list.mainHintTitleFontSize"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "list.mainHintFormInputFontSize"));
 
     let markdown = export::current_settings_markdown();
     assert!(markdown.contains("```json"));

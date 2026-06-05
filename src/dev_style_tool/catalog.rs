@@ -364,6 +364,48 @@ f32_knob!(
     list.main_hint_status_chip_gap
 );
 f32_knob!(
+    LIST_MAIN_HINT_TITLE_FONT_SIZE_KNOB_ID,
+    get_list_main_hint_title_font_size,
+    apply_list_main_hint_title_font_size,
+    "list.mainHintTitleFontSize",
+    list.main_hint_title_font_size
+);
+f32_knob!(
+    LIST_MAIN_HINT_TITLE_LINE_HEIGHT_KNOB_ID,
+    get_list_main_hint_title_line_height,
+    apply_list_main_hint_title_line_height,
+    "list.mainHintTitleLineHeight",
+    list.main_hint_title_line_height
+);
+f32_knob!(
+    LIST_MAIN_HINT_BODY_FONT_SIZE_KNOB_ID,
+    get_list_main_hint_body_font_size,
+    apply_list_main_hint_body_font_size,
+    "list.mainHintBodyFontSize",
+    list.main_hint_body_font_size
+);
+f32_knob!(
+    LIST_MAIN_HINT_BODY_LINE_HEIGHT_KNOB_ID,
+    get_list_main_hint_body_line_height,
+    apply_list_main_hint_body_line_height,
+    "list.mainHintBodyLineHeight",
+    list.main_hint_body_line_height
+);
+f32_knob!(
+    LIST_MAIN_HINT_EXAMPLE_LABEL_FONT_SIZE_KNOB_ID,
+    get_list_main_hint_example_label_font_size,
+    apply_list_main_hint_example_label_font_size,
+    "list.mainHintExampleLabelFontSize",
+    list.main_hint_example_label_font_size
+);
+f32_knob!(
+    LIST_MAIN_HINT_EXAMPLE_LABEL_LINE_HEIGHT_KNOB_ID,
+    get_list_main_hint_example_label_line_height,
+    apply_list_main_hint_example_label_line_height,
+    "list.mainHintExampleLabelLineHeight",
+    list.main_hint_example_label_line_height
+);
+f32_knob!(
     LIST_MAIN_HINT_ROWS_GAP_KNOB_ID,
     get_list_main_hint_rows_gap,
     apply_list_main_hint_rows_gap,
@@ -593,6 +635,41 @@ alpha_knob!(
     apply_list_main_hint_form_value_alpha,
     "list.mainHintFormValueAlpha",
     list.main_hint_form_value_alpha
+);
+f32_knob!(
+    LIST_MAIN_HINT_FORM_LABEL_FONT_SIZE_KNOB_ID,
+    get_list_main_hint_form_label_font_size,
+    apply_list_main_hint_form_label_font_size,
+    "list.mainHintFormLabelFontSize",
+    list.main_hint_form_label_font_size
+);
+f32_knob!(
+    LIST_MAIN_HINT_FORM_LABEL_LINE_HEIGHT_KNOB_ID,
+    get_list_main_hint_form_label_line_height,
+    apply_list_main_hint_form_label_line_height,
+    "list.mainHintFormLabelLineHeight",
+    list.main_hint_form_label_line_height
+);
+f32_knob!(
+    LIST_MAIN_HINT_FORM_INPUT_FONT_SIZE_KNOB_ID,
+    get_list_main_hint_form_input_font_size,
+    apply_list_main_hint_form_input_font_size,
+    "list.mainHintFormInputFontSize",
+    list.main_hint_form_input_font_size
+);
+f32_knob!(
+    LIST_MAIN_HINT_FORM_INPUT_LINE_HEIGHT_KNOB_ID,
+    get_list_main_hint_form_input_line_height,
+    apply_list_main_hint_form_input_line_height,
+    "list.mainHintFormInputLineHeight",
+    list.main_hint_form_input_line_height
+);
+f32_knob!(
+    LIST_MAIN_HINT_FORM_VALUE_FONT_SIZE_KNOB_ID,
+    get_list_main_hint_form_value_font_size,
+    apply_list_main_hint_form_value_font_size,
+    "list.mainHintFormValueFontSize",
+    list.main_hint_form_value_font_size
 );
 alpha_knob!(
     LIST_INLINE_CALC_SELECTED_OVERLAY_MIN_ALPHA_KNOB_ID,
@@ -1396,6 +1473,72 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         apply: apply_list_main_hint_status_chip_gap,
     },
     StyleKnob {
+        id: LIST_MAIN_HINT_TITLE_FONT_SIZE_KNOB_ID,
+        label: "Main hint title font size",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 10.0,
+        max: 32.0,
+        step: 0.5,
+        get: get_list_main_hint_title_font_size,
+        apply: apply_list_main_hint_title_font_size,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_TITLE_LINE_HEIGHT_KNOB_ID,
+        label: "Main hint title line height",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 10.0,
+        max: 40.0,
+        step: 0.5,
+        get: get_list_main_hint_title_line_height,
+        apply: apply_list_main_hint_title_line_height,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_BODY_FONT_SIZE_KNOB_ID,
+        label: "Main hint body font size",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 24.0,
+        step: 0.5,
+        get: get_list_main_hint_body_font_size,
+        apply: apply_list_main_hint_body_font_size,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_BODY_LINE_HEIGHT_KNOB_ID,
+        label: "Main hint body line height",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 32.0,
+        step: 0.5,
+        get: get_list_main_hint_body_line_height,
+        apply: apply_list_main_hint_body_line_height,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_EXAMPLE_LABEL_FONT_SIZE_KNOB_ID,
+        label: "Main hint example label font size",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 24.0,
+        step: 0.5,
+        get: get_list_main_hint_example_label_font_size,
+        apply: apply_list_main_hint_example_label_font_size,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_EXAMPLE_LABEL_LINE_HEIGHT_KNOB_ID,
+        label: "Main hint example label line height",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 32.0,
+        step: 0.5,
+        get: get_list_main_hint_example_label_line_height,
+        apply: apply_list_main_hint_example_label_line_height,
+    },
+    StyleKnob {
         id: LIST_MAIN_HINT_ROWS_GAP_KNOB_ID,
         label: "Main hint rows gap",
         group: StyleKnobGroup::List,
@@ -1757,6 +1900,61 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_list_main_hint_form_value_alpha,
         apply: apply_list_main_hint_form_value_alpha,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FORM_LABEL_FONT_SIZE_KNOB_ID,
+        label: "Main hint form label font size",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 24.0,
+        step: 0.5,
+        get: get_list_main_hint_form_label_font_size,
+        apply: apply_list_main_hint_form_label_font_size,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FORM_LABEL_LINE_HEIGHT_KNOB_ID,
+        label: "Main hint form label line height",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 32.0,
+        step: 0.5,
+        get: get_list_main_hint_form_label_line_height,
+        apply: apply_list_main_hint_form_label_line_height,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FORM_INPUT_FONT_SIZE_KNOB_ID,
+        label: "Main hint form input font size",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 28.0,
+        step: 0.5,
+        get: get_list_main_hint_form_input_font_size,
+        apply: apply_list_main_hint_form_input_font_size,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FORM_INPUT_LINE_HEIGHT_KNOB_ID,
+        label: "Main hint form input line height",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 36.0,
+        step: 0.5,
+        get: get_list_main_hint_form_input_line_height,
+        apply: apply_list_main_hint_form_input_line_height,
+    },
+    StyleKnob {
+        id: LIST_MAIN_HINT_FORM_VALUE_FONT_SIZE_KNOB_ID,
+        label: "Main hint form value font size",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 28.0,
+        step: 0.5,
+        get: get_list_main_hint_form_value_font_size,
+        apply: apply_list_main_hint_form_value_font_size,
     },
     StyleKnob {
         id: LIST_INLINE_CALC_SELECTED_OVERLAY_MIN_ALPHA_KNOB_ID,
