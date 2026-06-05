@@ -8,6 +8,8 @@ type Args = {
   includeEnvPayload: boolean;
   start: boolean;
   show: boolean;
+  openOverlayFixture: boolean;
+  keepOpen: boolean;
   timeoutMs: number;
   target: string;
   fixtureId: string;
@@ -17,7 +19,7 @@ type Args = {
 function usage() {
   return [
     "Usage:",
-    "  bun scripts/devtools/dictation.ts inspect [--session <name>] [--start] [--show] [--include-env-payload]",
+    "  bun scripts/devtools/dictation.ts inspect [--session <name>] [--start] [--show] [--open-overlay-fixture] [--keep-open] [--include-env-payload]",
     "  bun scripts/devtools/dictation.ts deliver-fixture [--session <name>] [--start] [--show] [--target <label>] [--fixture-id <id>] [--expect-refusal]",
   ].join("\n");
 }
@@ -37,6 +39,8 @@ function parseArgs(argv: string[]): Args {
     includeEnvPayload: false,
     start: false,
     show: false,
+    openOverlayFixture: false,
+    keepOpen: false,
     timeoutMs: 8000,
     target: "mainWindowFilter",
     fixtureId: "short-phrase",
@@ -52,6 +56,10 @@ function parseArgs(argv: string[]): Args {
       args.start = true;
     } else if (arg === "--show") {
       args.show = true;
+    } else if (arg === "--open-overlay-fixture") {
+      args.openOverlayFixture = true;
+    } else if (arg === "--keep-open") {
+      args.keepOpen = true;
     } else if (arg === "--timeout") {
       args.timeoutMs = Number(argv[++index] ?? args.timeoutMs);
     } else if (arg === "--target") {
@@ -89,6 +97,57 @@ async function maybeStartAndShow(args: Args) {
   if (args.show) {
     await run(["bash", "scripts/agentic/session.sh", "send", args.session, JSON.stringify({ type: "show" }), "--await-parse", "--timeout", String(args.timeoutMs)], "session-show");
   }
+}
+
+async function openOverlayFixture(args: Args) {
+  if (!args.openOverlayFixture) {
+    return null;
+  }
+  const requestId = `devtools-dictation-overlay-fixture-${Date.now()}`;
+  const openReceipt = await run([
+    "bash",
+    "scripts/agentic/session.sh",
+    "send",
+    args.session,
+    JSON.stringify({
+      type: "openDictationOverlayFixture",
+      requestId,
+    }),
+    "--await-parse",
+    "--timeout",
+    String(args.timeoutMs),
+  ], "openDictationOverlayFixture");
+
+  let targetReceipt: JsonObject | null = null;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    targetReceipt = await run([
+      "bun",
+      "scripts/devtools/targets.ts",
+      "inspect",
+      "--session",
+      args.session,
+      "--target-kind",
+      "dictation",
+      "--surface",
+      "Dictation",
+      "--strict",
+      "--timeout",
+      String(args.timeoutMs),
+    ], "targets.inspect.dictation");
+    if (targetReceipt.classification === "ok") {
+      break;
+    }
+    await Bun.sleep(150);
+  }
+
+  return {
+    requestId,
+    keepOpen: args.keepOpen,
+    noMicrophoneCaptureRequired: true,
+    command: "openDictationOverlayFixture",
+    openReceipt,
+    targetReceipt,
+  };
 }
 
 async function rpc(session: string, payload: JsonObject, expect: string, timeoutMs: number) {
@@ -386,6 +445,7 @@ async function main() {
     return;
   }
   await maybeStartAndShow(args);
+  const overlayFixture = await openOverlayFixture(args);
   const [coverage, typesSource, runtimeSource, stdinSource] = await Promise.all([
     run(["bun", "scripts/devtools/coverage.ts", "--surface", "dictation"], "coverage.dictation"),
     read("src/dictation/types.rs"),
@@ -452,7 +512,9 @@ async function main() {
       noSystemSettingsRequired: true,
       noTccMutationRequired: true,
       noSyntheticTranscriptInjected: true,
+      visualOverlayFixtureOpened: Boolean(overlayFixture),
     },
+    overlayFixture,
     redaction: {
       transcriptContentReturned: false,
       deviceLabelsReturned: false,
