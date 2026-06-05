@@ -11,7 +11,8 @@ use gpui_component::{
 
 use crate::dev_style_tool::{
     catalog::{
-        knob_by_id, StyleKnob, StyleKnobGroup, StyleKnobId, StyleUnit, StyleValue, STYLE_KNOBS,
+        knob_by_id, StyleKnob, StyleKnobGroup, StyleKnobId, StyleKnobSection, StyleUnit,
+        StyleValue, STYLE_KNOBS,
     },
     export, runtime_overrides,
 };
@@ -229,6 +230,59 @@ impl DevStyleToolApp {
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .text_color(rgb(chrome.text_secondary_hex))
                     .child(group.label()),
+            )
+            .children(self.group_controls_by_section(controls).into_iter().map(
+                |(section, controls)| self.render_control_section(group, section, controls, chrome, cx),
+            ))
+    }
+
+    fn group_controls_by_section<'a>(
+        &self,
+        controls: Vec<&'a StyleControlState>,
+    ) -> Vec<(StyleKnobSection, Vec<&'a StyleControlState>)> {
+        let mut sections: Vec<(StyleKnobSection, Vec<&StyleControlState>)> = Vec::new();
+        for control in controls {
+            let Some(knob) = knob_by_id(control.knob_id) else {
+                continue;
+            };
+            let section = StyleKnobSection::for_knob(knob);
+            if let Some((_, section_controls)) = sections
+                .iter_mut()
+                .find(|(existing, _)| *existing == section)
+            {
+                section_controls.push(control);
+            } else {
+                sections.push((section, vec![control]));
+            }
+        }
+        sections
+    }
+
+    fn render_control_section(
+        &self,
+        group: StyleKnobGroup,
+        section: StyleKnobSection,
+        controls: Vec<&StyleControlState>,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        div()
+            .id(ElementId::Name(
+                format!(
+                    "style-subsection:{}:{}",
+                    group_slug(group),
+                    section.slug
+                )
+                .into(),
+            ))
+            .flex()
+            .flex_col()
+            .gap(px(4.0))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(chrome.text_secondary_hex))
+                    .child(section.label),
             )
             .children(
                 controls

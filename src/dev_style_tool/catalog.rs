@@ -48,6 +48,69 @@ impl StyleKnobGroup {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StyleKnobSection {
+    pub label: &'static str,
+    pub slug: &'static str,
+}
+
+impl StyleKnobSection {
+    pub const fn new(label: &'static str, slug: &'static str) -> Self {
+        Self { label, slug }
+    }
+
+    pub fn for_knob(knob: &StyleKnob) -> Self {
+        let id = knob.id.as_str();
+        match knob.group {
+            StyleKnobGroup::Shell => Self::new("Window shell", "window-shell"),
+            StyleKnobGroup::Search => Self::new("Search input", "search-input"),
+            StyleKnobGroup::List if id.contains("mainHintForm") => {
+                Self::new("Main hint form", "main-hint-form")
+            }
+            StyleKnobGroup::List if id.contains("mainHintFragment") => {
+                Self::new("Main hint fragments", "main-hint-fragments")
+            }
+            StyleKnobGroup::List if id.contains("mainHintRow") => {
+                Self::new("Main hint rows", "main-hint-rows")
+            }
+            StyleKnobGroup::List if id.contains("mainHint") => {
+                Self::new("Main hint panel", "main-hint-panel")
+            }
+            StyleKnobGroup::List if id.contains("inlineCalc") => {
+                Self::new("Inline calculator", "inline-calculator")
+            }
+            StyleKnobGroup::List if id.contains("section") => {
+                Self::new("List sections", "list-sections")
+            }
+            StyleKnobGroup::List => Self::new("List geometry", "list-geometry"),
+            StyleKnobGroup::Row if id.contains("selected") || id.contains("hover") => {
+                Self::new("Row states", "row-states")
+            }
+            StyleKnobGroup::Row => Self::new("Row layout", "row-layout"),
+            StyleKnobGroup::Icon => Self::new("Icon tiles", "icon-tiles"),
+            StyleKnobGroup::Metadata => Self::new("Metadata chips", "metadata-chips"),
+            StyleKnobGroup::Typography => Self::new("Row typography", "row-typography"),
+            StyleKnobGroup::Footer if id.contains("Slot") => {
+                Self::new("Footer action slots", "footer-action-slots")
+            }
+            StyleKnobGroup::Footer if id.contains("Glyph") => {
+                Self::new("Footer glyph alignment", "footer-glyph-alignment")
+            }
+            StyleKnobGroup::Footer if id.contains("keycap") || id.contains("Keycap") => {
+                Self::new("Footer keycaps", "footer-keycaps")
+            }
+            StyleKnobGroup::Footer if id.contains("divider") || id.contains("Border") => {
+                Self::new("Footer chrome", "footer-chrome")
+            }
+            StyleKnobGroup::Footer => Self::new("Footer layout", "footer-layout"),
+            StyleKnobGroup::HeaderInfoBar if id.contains("pill") || id.contains("key") => {
+                Self::new("Header pills and keys", "header-pills-keys")
+            }
+            StyleKnobGroup::HeaderInfoBar => Self::new("Header layout", "header-layout"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StyleUnit {
     Px,
     Alpha,

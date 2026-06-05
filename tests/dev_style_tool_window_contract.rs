@@ -40,6 +40,10 @@ fn dev_style_tool_render_is_catalog_driven_and_narrow() {
     assert!(render_source.contains("knob_by_id"));
     assert!(render_source.contains("render_groups"));
     assert!(render_source.contains("render_control"));
+    assert!(render_source.contains("group_controls_by_section"));
+    assert!(render_source.contains("render_control_section"));
+    assert!(render_source.contains("StyleKnobSection::for_knob"));
+    assert!(render_source.contains("style-subsection:{}:{}"));
     assert!(render_source.contains("save_current_settings"));
     assert!(render_source.contains("button:dev-style-tool-save"));
     assert!(render_source.contains("export::save_current_settings_markdown"));
@@ -73,9 +77,50 @@ fn dev_style_tool_registers_minimal_automation_target() {
     assert!(collector_source.contains("button:dev-style-tool-save"));
     assert!(collector_source.contains("saveCurrentStyleSettings"));
     assert!(collector_source.contains("crate::dev_style_tool::STYLE_KNOBS"));
+    assert!(collector_source.contains("style-section:{}"));
+    assert!(collector_source.contains("style-subsection:{}:{}"));
+    assert!(collector_source.contains("StyleKnobSection::for_knob"));
     assert!(collector_source.contains("slider:dev-style-tool:{}"));
     assert!(collector_source.contains("input:dev-style-tool:{}"));
     assert!(collector_source.contains("button:dev-style-tool-reset:{}"));
+}
+
+#[test]
+fn dev_style_tool_sections_are_catalog_driven_by_control_criteria() {
+    let catalog_source =
+        fs::read_to_string("src/dev_style_tool/catalog.rs").expect("read dev style catalog");
+    let render_source =
+        fs::read_to_string("src/dev_style_tool/render.rs").expect("read dev style render source");
+
+    assert!(catalog_source.contains("pub struct StyleKnobSection"));
+    assert!(catalog_source.contains("pub fn for_knob(knob: &StyleKnob) -> Self"));
+
+    for expected in [
+        "List geometry",
+        "List sections",
+        "Main hint panel",
+        "Main hint rows",
+        "Main hint fragments",
+        "Main hint form",
+        "Inline calculator",
+        "Footer action slots",
+        "Footer glyph alignment",
+        "Footer keycaps",
+        "Header pills and keys",
+    ] {
+        assert!(
+            catalog_source.contains(expected),
+            "missing section label {expected}"
+        );
+    }
+
+    assert!(render_source.contains("group_controls_by_section"));
+    assert!(render_source.contains("render_control_section"));
+    assert!(render_source.contains("style-subsection:{}:{}"));
+    assert!(
+        render_source.contains("render_control(control, chrome, cx)"),
+        "sectioning must preserve existing control rendering and semantic ids"
+    );
 }
 
 #[test]

@@ -351,8 +351,43 @@ fn collect_dev_style_tool_snapshot() -> SurfaceElementSnapshot {
         None,
         Some(0),
     ));
-    for (index, knob) in crate::dev_style_tool::STYLE_KNOBS.iter().enumerate() {
-        let control_index = index * 3 + 1;
+    let mut seen_groups = Vec::new();
+    let mut seen_sections = Vec::new();
+    let mut next_index = 1usize;
+    for knob in crate::dev_style_tool::STYLE_KNOBS {
+        if !seen_groups.contains(&knob.group) {
+            seen_groups.push(knob.group);
+            elements.push(element(
+                &format!("style-section:{}", dev_style_group_slug(knob.group)),
+                ElementType::Panel,
+                Some(knob.group.label().to_string()),
+                Some(dev_style_group_slug(knob.group).to_string()),
+                None,
+                None,
+                Some(next_index),
+            ));
+            next_index += 1;
+        }
+        let section = crate::dev_style_tool::StyleKnobSection::for_knob(knob);
+        if !seen_sections.contains(&(knob.group, section)) {
+            seen_sections.push((knob.group, section));
+            elements.push(element(
+                &format!(
+                    "style-subsection:{}:{}",
+                    dev_style_group_slug(knob.group),
+                    section.slug
+                ),
+                ElementType::Panel,
+                Some(section.label.to_string()),
+                Some(section.slug.to_string()),
+                None,
+                None,
+                Some(next_index),
+            ));
+            next_index += 1;
+        }
+        let control_index = next_index;
+        next_index += 3;
         elements.push(element(
             &format!("slider:dev-style-tool:{}", knob.id.as_str()),
             ElementType::Slider,
@@ -389,6 +424,20 @@ fn collect_dev_style_tool_snapshot() -> SurfaceElementSnapshot {
         selected_semantic_id: None,
         warnings: Vec::new(),
         quality: SnapshotQuality::Full,
+    }
+}
+
+fn dev_style_group_slug(group: crate::dev_style_tool::StyleKnobGroup) -> &'static str {
+    match group {
+        crate::dev_style_tool::StyleKnobGroup::Shell => "shell",
+        crate::dev_style_tool::StyleKnobGroup::Search => "search",
+        crate::dev_style_tool::StyleKnobGroup::List => "list",
+        crate::dev_style_tool::StyleKnobGroup::Row => "row",
+        crate::dev_style_tool::StyleKnobGroup::Icon => "icon",
+        crate::dev_style_tool::StyleKnobGroup::Metadata => "metadata",
+        crate::dev_style_tool::StyleKnobGroup::Typography => "typography",
+        crate::dev_style_tool::StyleKnobGroup::Footer => "footer",
+        crate::dev_style_tool::StyleKnobGroup::HeaderInfoBar => "header-info-bar",
     }
 }
 
