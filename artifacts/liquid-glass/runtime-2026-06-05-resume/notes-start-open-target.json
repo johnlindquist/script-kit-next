@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.inspect",
+  "session": "liquid-glass-runtime-notes",
+  "classification": "ok",
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "notes"
+    },
+    "strict": true,
+    "expectedSurfaceKind": null
+  },
+  "resolvedTarget": {
+    "automationId": "notes",
+    "stableTargetId": "notes",
+    "targetKind": "Notes",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "semanticSurface": "notes",
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": 1,
+    "surfaceGeneration": 1,
+    "dataGeneration": 1,
+    "bounds": {
+      "x": 1112,
+      "y": 50,
+      "width": 350,
+      "height": 280
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 350,
+      "height": 280,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 350,
+        "height": 280
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 60926,
+    "strictTargetMatch": true,
+    "strictTargetMismatch": null,
+    "ambiguity": []
+  },
+  "windows": [
+    {
+      "index": 0,
+      "automationId": "main",
+      "windowKind": "Main",
+      "title": "Script Kit",
+      "visible": false,
+      "focused": false,
+      "bounds": {
+        "x": 364,
+        "y": -986,
+        "width": 750,
+        "height": 480
+      },
+      "surfaceKind": null,
+      "semanticSurface": "scriptList",
+      "appViewVariant": null,
+      "parentAutomationId": null,
+      "parentKind": null,
+      "pid": 60926
+    },
+    {
+      "index": 1,
+      "automationId": "notes",
+      "windowKind": "Notes",
+      "title": "Notes",
+      "visible": true,
+      "focused": true,
+      "bounds": {
+        "x": 1112,
+        "y": 50,
+        "width": 350,
+        "height": 280
+      },
+      "surfaceKind": null,
+      "semanticSurface": "notes",
+      "appViewVariant": null,
+      "parentAutomationId": null,
+      "parentKind": null,
+      "pid": 60926
+    }
+  ],
+  "rawInspect": {
+    "type": "automationInspectResult",
+    "requestId": "devtools-targets-inspect-1780679924384-a71039",
+    "schemaVersion": 4,
+    "windowId": "notes",
+    "windowKind": "Notes",
+    "targetGeneration": 1,
+    "surfaceGeneration": 1,
+    "dataGeneration": 1,
+    "title": "Notes",
+    "resolvedBounds": {
+      "x": 1112,
+      "y": 50,
+      "width": 350,
+      "height": 280
+    },
+    "targetBoundsInScreenshot": {
+      "x": 0,
+      "y": 0,
+      "width": 350,
+      "height": 280
+    },
+    "surfaceHitPoint": {
+      "x": 175,
+      "y": 140
+    },
+    "suggestedHitPoints": [
+      {
+        "semanticId": "input:notes-editor",
+        "x": 175,
+        "y": 140,
+        "reason": "surface_center"
+      }
+    ],
+    "elements": [
+      {
+        "semanticId": "panel:notes-window",
+        "type": "panel",
+        "text": "Notes"
+      },
+      {
+        "semanticId": "input:notes-editor",
+        "type": "input",
+        "value": "Project alpha launch\nCall Alice about alpha launch blockers\n\nCall",
+        "focused": true
+      }
+    ],
+    "totalCount": 2,
+    "focusedSemanticId": "input:notes-editor",
+    "screenshotWidth": 350,
+    "screenshotHeight": 280,
+    "osWindowId": 5005,
+    "semanticQuality": "full",
+    "pid": 60926
+  },
+  "lifecycleCodes": [],
+  "lifecycleDetails": null,
+  "sessionLifecycle": null,
+  "parsedError": null,
+  "errors": []
+}

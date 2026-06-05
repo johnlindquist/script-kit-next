@@ -1,0 +1,601 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.layout",
+  "command": "layout.measure",
+  "classification": "blocked-by-missing-primitive",
+  "session": "liquid-glass-runtime",
+  "include": [
+    "nodes",
+    "regions",
+    "overlaps",
+    "resize"
+  ],
+  "limit": 240,
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "notes"
+    },
+    "strict": false,
+    "expectedSurfaceKind": "Notes"
+  },
+  "target": {
+    "automationId": "",
+    "stableTargetId": "",
+    "targetKind": "unknown",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "semanticSurface": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": null,
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": null,
+      "height": null,
+      "targetBoundsInScreenshot": null,
+      "nonBlankRatio": null
+    },
+    "pid": null,
+    "strictTargetMatch": false,
+    "strictTargetMismatch": null,
+    "ambiguity": []
+  },
+  "layoutEvidenceFreshness": {
+    "schemaVersion": 1,
+    "generatedAt": "2026-06-05T17:17:52.044Z",
+    "auditSchema": "panel-radius-v2",
+    "requiredPanelRadiusNodes": [
+      "MainViewMain",
+      "ScriptList",
+      "PreviewPanel"
+    ],
+    "sourceFingerprint": {
+      "schemaVersion": 1,
+      "algorithm": "sha256",
+      "files": [
+        {
+          "path": "src/app_layout/build_layout_info.rs",
+          "sha256": "6ecfff04e2a16d40105ad52fda2e39c9e06404d7c8cce0b78bd8933297d0408f"
+        },
+        {
+          "path": "scripts/devtools/layout.ts",
+          "sha256": "4299d30470ccd1cc803a5bde29dadbff3c9ea3b84507f09a74343cbbe46d1022"
+        },
+        {
+          "path": "src/ui/chrome/tokens.rs",
+          "sha256": "aa19c31a9cd5d684e75cb8697d4b72a19d87b04f338c89a4ff5f3ec51bffe56c"
+        }
+      ]
+    }
+  },
+  "promptType": "",
+  "timestamp": "",
+  "componentCount": 0,
+  "window": {
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0
+    },
+    "visible": null,
+    "focused": null
+  },
+  "viewport": {
+    "clientWidth": 0,
+    "clientHeight": 0,
+    "contentWidth": 0,
+    "contentHeight": 0,
+    "scrollWidth": 0,
+    "scrollHeight": 0,
+    "canScrollX": false,
+    "canScrollY": false,
+    "scrollTop": null,
+    "maxScrollTop": 0,
+    "overflowPolicyY": "hidden"
+  },
+  "pressure": {
+    "overflowY": false,
+    "hiddenContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "footerOverlapCount": 0,
+    "inputOverlapCount": 0,
+    "pressureScore": 0
+  },
+  "viewportRect": {
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0
+  },
+  "windowRect": {
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0
+  },
+  "regions": [],
+  "nodes": [],
+  "overlaps": [],
+  "resizePressure": {
+    "windowCanGrow": null,
+    "overflowY": false,
+    "desiredContentHeight": 0,
+    "measuredContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "pressureScore": 0
+  },
+  "visualAudit": {
+    "nodeCount": 0,
+    "styledNodeCount": 0,
+    "unstyledNodeCount": 0,
+    "controlsWithHitFailures": [],
+    "contentGlassNodes": [],
+    "contentNativeMaterialNodes": [],
+    "glassLayerViolations": [],
+    "missingStyleNodeNames": [],
+    "chromeLayers": {},
+    "guidelineAssertions": {
+      "appleDocumented": {
+        "hitTargets": {
+          "source": "apple-documented",
+          "macosMinimumHitSize": {
+            "width": 28,
+            "height": 28
+          },
+          "macosMinimumVisualSize": {
+            "width": 20,
+            "height": 20
+          },
+          "failures": []
+        },
+        "buttonCenterDistance": {
+          "source": "apple-documented",
+          "requiredCenterDistance": 60,
+          "failures": []
+        },
+        "materialLayering": {
+          "source": "apple-documented",
+          "contentGlassNodes": [],
+          "contentNativeMaterialNodes": [],
+          "glassLayerViolations": []
+        },
+        "colorAdaptivity": {
+          "source": "apple-documented",
+          "hardcodedColorNodes": []
+        },
+        "safeAreaLayout": {
+          "source": "apple-documented",
+          "clippedNodeCount": 0,
+          "overflowY": false
+        },
+        "cornerGeometry": {
+          "source": "apple-documented-and-derived",
+          "backingScaleFactor": null,
+          "constants": [
+            {
+              "id": "shape.capsule.radius",
+              "category": "cornerRadius",
+              "confidence": "documented",
+              "normativeStrength": "hard",
+              "target": {
+                "kind": "formula",
+                "expression": "radiusPt = heightPt / 2"
+              },
+              "tolerance": {
+                "absPt": 0.5,
+                "nearAbsPt": 1
+              },
+              "appleReference": {
+                "referenceId": "apple-wwdc25-new-design-system-shapes",
+                "title": "Get to know the new design system",
+                "section": "Shape types and concentric layouts",
+                "retrievedAt": "2026-05-30",
+                "platform": "macOS",
+                "osVersion": "26"
+              },
+              "copyrightSafeSummary": "Apple defines a capsule's curvature as half the control height."
+            },
+            {
+              "id": "shape.concentric.childRadius",
+              "category": "concentricity",
+              "confidence": "documented",
+              "normativeStrength": "hard",
+              "target": {
+                "kind": "formula",
+                "expression": "childRadiusPt = max(0, parentRadiusPt - separationPt)"
+              },
+              "tolerance": {
+                "absPt": 1,
+                "pct": 0.05,
+                "nearAbsPt": 2,
+                "nearPct": 0.1
+              },
+              "appleReference": {
+                "referenceId": "apple-wwdc25-new-design-system-shapes",
+                "title": "Get to know the new design system",
+                "section": "Concentricity",
+                "retrievedAt": "2026-05-30",
+                "platform": "macOS",
+                "osVersion": "26"
+              },
+              "copyrightSafeSummary": "Apple says nested rounded shapes should preserve concentric radii (inner = outer − inset)."
+            },
+            {
+              "id": "macos.glassEffectView.defaultRadius",
+              "category": "cornerRadius",
+              "confidence": "measuredNative",
+              "normativeStrength": "soft",
+              "target": {
+                "kind": "constant",
+                "valuePt": 8
+              },
+              "tolerance": {
+                "absPt": 1,
+                "pct": 0.05,
+                "nearAbsPt": 2
+              },
+              "nativeMeasurement": {
+                "probeId": "macos26-nsglasseffectview-default-radius",
+                "probeSource": "scripts/devtools/tahoe_native_baseline.swift",
+                "receiptPath": "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+                "osVersion": "26.5",
+                "measuredAt": "2026-05-30",
+                "control": "NSGlassEffectView",
+                "field": "defaultCornerRadiusPt"
+              },
+              "derivation": {
+                "fromMetricIds": [
+                  "shape.concentric.childRadius"
+                ],
+                "formula": "NSGlassEffectView().cornerRadius default = 8pt (measured)",
+                "notes": "A free-standing glass element's default radius; NOT the launcher window/panel mask radius, which remains a separate native probe."
+              },
+              "copyrightSafeSummary": "A default NSGlassEffectView rounds to 8pt on macOS 26.5 (measured); a free element default, not the window mask."
+            },
+            {
+              "id": "macos.window.toolbarRadius.nativeBaseline",
+              "category": "cornerRadius",
+              "confidence": "measuredNative",
+              "normativeStrength": "soft",
+              "target": {
+                "kind": "minimum",
+                "minPt": 15
+              },
+              "tolerance": {
+                "absPt": 1,
+                "pct": 0.05,
+                "nearAbsPt": 2
+              },
+              "nativeMeasurement": {
+                "probeId": "macos26-nswindow-mask-corner-radius",
+                "probeSource": "scripts/devtools/tahoe_window_mask_probe.swift",
+                "receiptPath": "artifacts/liquid-glass/receipts/tahoe-window-mask-baseline.json",
+                "osVersion": "26.5",
+                "measuredAt": "2026-05-30",
+                "control": "NSWindow (titled / fullSizeContent / glass)",
+                "field": "cornerRadiusPt"
+              },
+              "copyrightSafeSummary": "Native Tahoe titled/glass windows round at 15pt (measured, macOS 26.5); a launcher should be at least that rounded."
+            }
+          ],
+          "deviations": [],
+          "failures": [],
+          "nearMisses": []
+        },
+        "padding": {
+          "source": "apple-documented-and-derived",
+          "constants": [
+            {
+              "id": "layout.bezelElement.padding",
+              "category": "padding",
+              "confidence": "documented",
+              "normativeStrength": "soft",
+              "target": {
+                "kind": "minimum",
+                "minPt": 12
+              },
+              "tolerance": {
+                "absPt": 2,
+                "nearAbsPt": 4
+              },
+              "appleReference": {
+                "referenceId": "apple-hig-accessibility-layout",
+                "title": "Accessibility",
+                "section": "Layout and spacing",
+                "retrievedAt": "2026-05-30",
+                "platform": "macOS",
+                "osVersion": "26"
+              },
+              "copyrightSafeSummary": "Apple accessibility guidance recommends ~12pt padding around bezeled elements (~24pt without a bezel)."
+            },
+            {
+              "id": "control.searchField.textInset.horizontal",
+              "category": "padding",
+              "confidence": "measuredNative",
+              "normativeStrength": "hard",
+              "target": {
+                "kind": "constant",
+                "valuePt": 9
+              },
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 2
+              },
+              "nativeMeasurement": {
+                "probeId": "macos26-nstextfield-regular-content-inset",
+                "probeSource": "scripts/devtools/tahoe_native_baseline.swift",
+                "receiptPath": "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+                "osVersion": "26.5",
+                "measuredAt": "2026-05-30",
+                "control": "NSTextField (regular, rounded bezel)",
+                "field": "contentHorizontalInsetPt"
+              },
+              "derivation": {
+                "fromMetricIds": [
+                  "layout.bezelElement.padding"
+                ],
+                "formula": "textInsetX = NSTextField regular drawingRect.minX − bounds.minX = 9pt (measured)",
+                "notes": "A plain input lane should match the native regular NSTextField horizontal inset (9pt); within the ~12pt bezel-padding soft band."
+              },
+              "copyrightSafeSummary": "Native regular NSTextField insets its text 9pt horizontally on macOS 26.5 (measured)."
+            },
+            {
+              "id": "control.searchField.textInset.vertical",
+              "category": "padding",
+              "confidence": "measuredNative",
+              "normativeStrength": "hard",
+              "target": {
+                "kind": "constant",
+                "valuePt": 3
+              },
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 2
+              },
+              "nativeMeasurement": {
+                "probeId": "macos26-nstextfield-regular-content-inset-vertical",
+                "probeSource": "scripts/devtools/tahoe_native_baseline.swift",
+                "receiptPath": "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+                "osVersion": "26.5",
+                "measuredAt": "2026-05-30",
+                "control": "NSTextField (regular, rounded bezel)",
+                "field": "contentVerticalInsetPt"
+              },
+              "copyrightSafeSummary": "Native regular NSTextField insets its text 3pt vertically on macOS 26.5 (measured)."
+            }
+          ],
+          "deviations": [],
+          "unmeasured": [],
+          "failures": []
+        },
+        "spacing": {
+          "source": "apple-documented",
+          "constants": [
+            {
+              "id": "layout.regularButton.centerDistance",
+              "category": "spacing",
+              "confidence": "documented",
+              "normativeStrength": "hard",
+              "target": {
+                "kind": "minimum",
+                "minPt": 60
+              },
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 4
+              },
+              "appleReference": {
+                "referenceId": "apple-hig-spatial-layout",
+                "title": "Layout",
+                "section": "Spatial layout — control spacing",
+                "retrievedAt": "2026-05-30",
+                "platform": "macOS",
+                "osVersion": "26"
+              },
+              "copyrightSafeSummary": "Apple spatial-layout guidance gives a 60pt minimum center distance for regular buttons."
+            },
+            {
+              "id": "layout.regularButton.minimumGap",
+              "category": "spacing",
+              "confidence": "documented",
+              "normativeStrength": "hard",
+              "target": {
+                "kind": "minimum",
+                "minPt": 16
+              },
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 4
+              },
+              "appleReference": {
+                "referenceId": "apple-hig-spatial-layout",
+                "title": "Layout",
+                "section": "Spatial layout — control spacing",
+                "retrievedAt": "2026-05-30",
+                "platform": "macOS",
+                "osVersion": "26"
+              },
+              "copyrightSafeSummary": "Apple recommends 16pt or more of visible gap between regular buttons."
+            },
+            {
+              "id": "layout.footer.itemGap",
+              "category": "spacing",
+              "confidence": "derived",
+              "normativeStrength": "soft",
+              "target": {
+                "kind": "minimum",
+                "minPt": 12
+              },
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 3
+              },
+              "derivation": {
+                "fromMetricIds": [
+                  "layout.regularButton.minimumGap",
+                  "layout.bezelElement.padding"
+                ],
+                "formula": "footer item gap should be >= ~12pt (bezel-padding floor); Apple's hard regular-control gap is 16pt",
+                "notes": "Soft because footer hint chips are compact, non-bezeled controls Apple's HIG does not size explicitly."
+              },
+              "copyrightSafeSummary": "Derived (soft): adjacent compact footer controls should keep ~12pt+ of gap; 6pt reads as cramped vs Apple's 16pt regular-control gap."
+            }
+          ],
+          "buttonCenterDistance": {
+            "source": "apple-documented",
+            "requiredCenterDistance": 60,
+            "failures": []
+          }
+        },
+        "typography": {
+          "source": "apple-documented-and-measured-native",
+          "constants": [
+            {
+              "id": "typography.native.body.fontSize",
+              "category": "typography",
+              "confidence": "measuredNative",
+              "normativeStrength": "soft",
+              "target": {
+                "kind": "constant",
+                "valuePt": 13
+              },
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 2
+              },
+              "nativeMeasurement": {
+                "probeId": "macos26-regular-control-content-font-size",
+                "probeSource": "scripts/devtools/tahoe_native_baseline.swift",
+                "receiptPath": "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+                "osVersion": "26.5",
+                "measuredAt": "2026-05-30",
+                "control": "NSFont.controlContentFont(.regular) / NSSearchField regular",
+                "field": "fontMetrics.regularControlContentFont.pointSizePt"
+              },
+              "copyrightSafeSummary": "Native regular macOS control/body text is 13pt (measured, macOS 26.5); a launcher hero search field may run larger by design."
+            },
+            {
+              "id": "typography.native.body.lineHeight",
+              "category": "typography",
+              "confidence": "measuredNative",
+              "normativeStrength": "soft",
+              "target": {
+                "kind": "constant",
+                "valuePt": 16
+              },
+              "tolerance": {
+                "absPt": 1,
+                "nearAbsPt": 3
+              },
+              "nativeMeasurement": {
+                "probeId": "macos26-regular-control-content-font-lineheight",
+                "probeSource": "scripts/devtools/tahoe_native_baseline.swift",
+                "receiptPath": "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+                "osVersion": "26.5",
+                "measuredAt": "2026-05-30",
+                "control": "NSLayoutManager.defaultLineHeight(for: regular control content font)",
+                "field": "fontMetrics.regularControlContentFont.defaultLineHeightPt"
+              },
+              "copyrightSafeSummary": "Native default line height for 13pt regular control/body text is 16pt (measured, macOS 26.5)."
+            },
+            {
+              "id": "typography.native.input.fontWeight",
+              "category": "typography",
+              "confidence": "measuredNative",
+              "normativeStrength": "hard",
+              "target": {
+                "kind": "constant",
+                "valuePt": 400
+              },
+              "tolerance": {
+                "absPt": 50,
+                "nearAbsPt": 150
+              },
+              "nativeMeasurement": {
+                "probeId": "macos26-regular-control-content-font-weight",
+                "probeSource": "scripts/devtools/tahoe_native_baseline.swift",
+                "receiptPath": "artifacts/liquid-glass/receipts/tahoe-native-baseline.json",
+                "osVersion": "26.5",
+                "measuredAt": "2026-05-30",
+                "control": "NSSearchField / NSTextField regular font",
+                "field": "fontMetrics.regularControlContentFont.weightTrait (0 == Regular == 400)"
+              },
+              "copyrightSafeSummary": "Native regular search/input text is Regular weight (trait 0 == 400); Semibold is reserved for emphasis, so input text must not be bold."
+            }
+          ],
+          "deviations": [],
+          "unmeasured": [],
+          "failures": [],
+          "nearMisses": []
+        },
+        "conformanceScore": {
+          "weightedScore": 1,
+          "hardPass": true,
+          "hardFailureCount": 0,
+          "softFailureCount": 0,
+          "measuredNodeCount": 0,
+          "unmeasuredCount": 0
+        }
+      },
+      "projectLocal": {
+        "cornerRadiusTokens": {
+          "source": "project-local",
+          "note": "smoke-only: positive-radius presence; numeric Apple comparison is appleDocumented.cornerGeometry",
+          "failures": []
+        },
+        "paddingTokens": {
+          "source": "project-local",
+          "minimumPanelPadding": 16,
+          "minimumCompactRowHorizontalPadding": 10
+        },
+        "spacingTokens": {
+          "source": "project-local",
+          "minimumFooterActionGap": 8
+        },
+        "windowBackdropPolicy": {
+          "source": "project-local",
+          "contentGlassNodeCount": 0
+        },
+        "themeTokenUsage": {
+          "source": "project-local",
+          "hardcodedColorNodes": []
+        },
+        "renderReadbackPixelThresholds": {
+          "source": "project-local",
+          "minimumNonBlackRatio": 0.01
+        }
+      }
+    }
+  },
+  "handlerForm": null,
+  "missingPrimitives": [
+    "layoutComponents"
+  ],
+  "warnings": [],
+  "errors": [],
+  "rawLayout": {
+    "type": "layoutInfoResult",
+    "requestId": "devtools-layout-measure-1780679871966-e884d5",
+    "windowWidth": 0,
+    "windowHeight": 0,
+    "promptType": "",
+    "components": [],
+    "timestamp": ""
+  }
+}

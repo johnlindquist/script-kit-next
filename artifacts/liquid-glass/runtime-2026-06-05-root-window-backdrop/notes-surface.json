@@ -1,0 +1,700 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.surface",
+  "command": "surface.inspect",
+  "classification": "blocked-by-unknown-surface",
+  "requestedSurfaceKind": "Notes",
+  "target": {
+    "automationId": "notes",
+    "stableTargetId": "notes",
+    "targetKind": "Notes",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "semanticSurface": "notes",
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": 1,
+    "surfaceGeneration": 1,
+    "dataGeneration": 1,
+    "bounds": {
+      "x": 1112,
+      "y": 50,
+      "width": 350,
+      "height": 280
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 350,
+      "height": 280,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 350,
+        "height": 280
+      },
+      "nonBlankRatio": null
+    },
+    "pid": 3991,
+    "strictTargetMatch": true,
+    "strictTargetMismatch": null,
+    "ambiguity": []
+  },
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "notes"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "Notes"
+  },
+  "contract": null,
+  "runtime": {
+    "activeFooterSurface": null,
+    "inputOwnerSemanticId": null,
+    "previewSemanticId": null,
+    "focusedSemanticId": "input:notes-editor",
+    "selectedSemanticId": null,
+    "rowCountVisible": 0,
+    "rowCountTotal": 0,
+    "filterText": "",
+    "sourceFilter": null,
+    "capabilities": [
+      "targetIdentity",
+      "strictTargetInspect",
+      "screenshotMetadata",
+      "stateResult"
+    ],
+    "missingPrimitives": [
+      "selectedSemanticId"
+    ],
+    "selectedIndex": -1,
+    "selectedValue": null,
+    "windowVisible": true,
+    "isFocused": true
+  },
+  "missingPrimitives": [
+    "surfaceContract",
+    "selectedSemanticId"
+  ],
+  "state": {
+    "type": "stateResult",
+    "requestId": "devtools-surface-state-1780680906135-17bfb7",
+    "promptType": "notes",
+    "promptId": "target:Notes:notes",
+    "inputValue": "",
+    "choiceCount": 0,
+    "visibleChoiceCount": 0,
+    "selectedIndex": -1,
+    "isFocused": true,
+    "windowVisible": true,
+    "notes": {
+      "schemaVersion": 1,
+      "passive": true,
+      "redacted": true,
+      "activeNoteId": "77064b51-3438-414a-b552-b37091810cf7",
+      "dirtyState": {
+        "hasUnsavedChanges": false,
+        "lastSaveConfirmedMsAgo": null,
+        "lastSaveAttemptMsAgo": null
+      },
+      "selectedNote": {
+        "id": "77064b51-3438-414a-b552-b37091810cf7",
+        "titleLength": 20,
+        "titleFingerprint": "fnv1a64:8b1a4b258dae4eb1",
+        "contentLength": 65,
+        "contentFingerprint": "fnv1a64:4bec2139365f1832",
+        "isPinned": false,
+        "deleted": false,
+        "metadata": {
+          "tags": [],
+          "aliases": [
+            "Project alpha launch"
+          ],
+          "tagCount": 0,
+          "aliasCount": 1,
+          "outboundLinkCount": 0,
+          "backlinkCount": 0
+        },
+        "position": {
+          "index": 1,
+          "total": 3
+        }
+      },
+      "editor": {
+        "textLength": 65,
+        "textFingerprint": "fnv1a64:4bec2139365f1832",
+        "selectionRange": [
+          65,
+          65
+        ],
+        "selectionLength": 0,
+        "hasSelection": false,
+        "cursor": 65,
+        "cursorLine": {
+          "line": 4,
+          "total": 4
+        },
+        "lastLineCount": 4
+      },
+      "draftSnapshot": {
+        "schemaVersion": 1,
+        "source": "runtime.notes.automationState",
+        "redacted": true,
+        "contentReturned": false,
+        "titleReturned": false,
+        "noteIdFingerprint": "fnv1a64:bbb5e4b652bf97e4",
+        "noteIdLength": 36,
+        "storageGeneration": 0,
+        "focusTransitionGeneration": 0,
+        "dirty": false,
+        "draft": {
+          "bodyLength": 65,
+          "bodyByteLength": 65,
+          "bodyFingerprint": "fnv1a64:4bec2139365f1832",
+          "lineCount": 4,
+          "selectionRange": [
+            65,
+            65
+          ],
+          "selectionUnit": "utf8ByteOffset",
+          "selectionFingerprint": "fnv1a64:0ef75902c2e70e35"
+        },
+        "persisted": {
+          "titleLength": 20,
+          "titleFingerprint": "fnv1a64:8b1a4b258dae4eb1",
+          "contentLength": 65,
+          "contentFingerprint": "fnv1a64:4bec2139365f1832",
+          "updatedAtMs": 1780461726039,
+          "deleted": false,
+          "isPinned": false
+        }
+      },
+      "editorAnchor": {
+        "schemaVersion": 1,
+        "source": "runtime.notes.automationState",
+        "redacted": true,
+        "available": true,
+        "anchor": {
+          "schemaVersion": 1,
+          "redacted": true,
+          "cursor": 65,
+          "offsetUnit": "utf8ByteOffset",
+          "line": {
+            "index": 3,
+            "total": 4,
+            "start": 61,
+            "end": 65,
+            "length": 4,
+            "byteLength": 4,
+            "fingerprint": "fnv1a64:dfa47b9ce9ac1889"
+          },
+          "selectionRange": [
+            65,
+            65
+          ],
+          "selectionUnit": "utf8ByteOffset",
+          "selectionFingerprint": "fnv1a64:0ef75902c2e70e35"
+        },
+        "scrollMetricsAvailable": true,
+        "scrollTopAvailable": true,
+        "scrollHeightAvailable": true,
+        "clientHeightAvailable": true,
+        "scroll": {
+          "schemaVersion": 1,
+          "source": "gpui_component.input.InputState",
+          "available": true,
+          "offsetUnit": "logicalPx",
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "liveScrollTop": 0,
+          "liveScrollLeft": 0,
+          "hasDeferredScrollOffset": false,
+          "scrollHeight": 176,
+          "scrollWidth": 284,
+          "clientHeight": 176,
+          "clientWidth": 294,
+          "maxScrollTop": 0,
+          "maxScrollLeft": 0,
+          "canScrollY": false,
+          "canScrollX": false
+        },
+        "stopReason": null
+      },
+      "previewAnchor": {
+        "schemaVersion": 1,
+        "source": "runtime.notes.automationState",
+        "redacted": true,
+        "available": false,
+        "previewEnabled": false,
+        "anchor": null,
+        "scrollMetricsAvailable": false,
+        "scrollTopAvailable": false,
+        "scrollHeightAvailable": false,
+        "clientHeightAvailable": false,
+        "scroll": null,
+        "stopReason": "Notes markdown preview is not mounted"
+      },
+      "view": {
+        "viewMode": "AllNotes",
+        "surfaceMode": "Notes",
+        "focusSurface": "Editor",
+        "focusMode": false,
+        "sortMode": "Updated",
+        "showSearch": false,
+        "showFormatToolbar": false,
+        "previewEnabled": false,
+        "showActionsPanel": false,
+        "showBrowsePanel": false,
+        "autoSizingEnabled": true,
+        "initialHeight": 280,
+        "lastWindowHeight": 280,
+        "notesAcpGeneration": 0
+      },
+      "autosize": {
+        "schemaVersion": 1,
+        "redacted": true,
+        "generation": 0,
+        "enabled": true,
+        "lastWindowHeight": 280,
+        "initialHeight": 280,
+        "minHeight": 280,
+        "maxHeight": 600,
+        "lineCount": 4,
+        "desiredHeight": 168,
+        "clampedHeight": 280,
+        "threshold": 5,
+        "lastCause": "unknown",
+        "lastAppliedHeight": null,
+        "lastAppliedAt": null
+      },
+      "generations": {
+        "schemaVersion": 1,
+        "state": 0,
+        "editorText": "fnv1a64:4bec2139365f1832",
+        "autosize": 0,
+        "storage": 0,
+        "focus": 0,
+        "target": null,
+        "surface": null
+      },
+      "lastAutosizeTransition": null,
+      "commandBars": {
+        "actions": {
+          "schemaVersion": 1,
+          "surface": "notes.actions",
+          "redacted": true,
+          "open": false,
+          "configuredActionCount": 12,
+          "configuredSectionCount": 5,
+          "configuredSections": {
+            "AI": 1,
+            "Copy": 4,
+            "Edit": 2,
+            "Export": 1,
+            "Notes": 4
+          },
+          "configuredShortcutCount": 11,
+          "closePolicy": {
+            "closeOnSelect": true,
+            "closeOnClickOutside": true,
+            "closeOnEscape": true
+          },
+          "config": {
+            "searchPosition": "top",
+            "sectionMode": "headers",
+            "anchor": "top",
+            "showIcons": true,
+            "showFooter": false,
+            "maxHeight": 400
+          }
+        },
+        "noteSwitcher": {
+          "schemaVersion": 1,
+          "surface": "notes.switcher",
+          "redacted": true,
+          "open": false,
+          "configuredActionCount": 3,
+          "configuredSectionCount": 1,
+          "configuredSections": {
+            "Recent": 3
+          },
+          "configuredShortcutCount": 0,
+          "closePolicy": {
+            "closeOnSelect": true,
+            "closeOnClickOutside": true,
+            "closeOnEscape": true
+          },
+          "config": {
+            "searchPosition": "top",
+            "sectionMode": "headers",
+            "anchor": "top",
+            "showIcons": true,
+            "showFooter": false,
+            "maxHeight": 560
+          }
+        }
+      },
+      "embeddedAcp": {
+        "schemaVersion": 1,
+        "source": "runtime.notes.embeddedAcpIsolation",
+        "redacted": true,
+        "host": "notes",
+        "active": false,
+        "cached": false,
+        "generation": 0,
+        "automationId": "notes:ai",
+        "parentWindowId": "notes",
+        "parentKind": "notes",
+        "semanticSurface": "notesAcpChat",
+        "actionsParentAutomationId": "notes",
+        "usesMainAiAutomationWindow": false,
+        "mainAiAutomationId": "ai",
+        "mainAiWindowPresent": false,
+        "registered": null
+      },
+      "shortcutRegistry": {
+        "schemaVersion": 1,
+        "redacted": true,
+        "activeScope": "editor",
+        "currentFocusSurface": "Editor",
+        "pendingFocusSurface": null,
+        "modalGuard": {
+          "activeDialogFirst": true,
+          "handles": [
+            "Enter",
+            "Escape",
+            "Tab",
+            "Shift+Tab"
+          ]
+        },
+        "scopes": [
+          {
+            "id": "actionsPanel",
+            "open": false,
+            "owner": "Notes CommandBar",
+            "toggle": "Cmd+K",
+            "handles": [
+              "Escape",
+              "Cmd+K",
+              "Enter",
+              "ArrowUp",
+              "ArrowDown",
+              "Home",
+              "End",
+              "PageUp",
+              "PageDown",
+              "Backspace",
+              "Delete",
+              "text input"
+            ]
+          },
+          {
+            "id": "noteSwitcher",
+            "open": false,
+            "owner": "Notes note switcher",
+            "toggle": "Cmd+P",
+            "handles": [
+              "Escape",
+              "Cmd+P",
+              "Enter",
+              "ArrowUp",
+              "ArrowDown",
+              "Home",
+              "End",
+              "PageUp",
+              "PageDown",
+              "Backspace",
+              "Delete",
+              "text input"
+            ]
+          },
+          {
+            "id": "embeddedAcp",
+            "open": false,
+            "owner": "Notes-hosted ACP",
+            "toggle": "Cmd+Enter",
+            "handles": [
+              "Escape",
+              "Cmd+K",
+              "Cmd+W",
+              "Cmd+Shift+A"
+            ]
+          },
+          {
+            "id": "editor",
+            "open": true,
+            "owner": "Notes editor",
+            "handles": [
+              "Escape",
+              "Tab",
+              "Shift+Tab",
+              "Alt+Up",
+              "Alt+Down",
+              "Alt+Shift+Up",
+              "Alt+Shift+Down",
+              "Ctrl+Shift+K",
+              "Cmd+Enter",
+              "Cmd+K",
+              "Cmd+Shift+O",
+              "Cmd+P",
+              "Cmd+Shift+P",
+              "Cmd+F",
+              "Cmd+Shift+F",
+              "Cmd+Shift+A",
+              "Cmd+N",
+              "Cmd+Shift+N",
+              "Cmd+Shift+T",
+              "Cmd+W",
+              "Cmd+.",
+              "Cmd+Shift+.",
+              "Cmd+Shift+S",
+              "Cmd+Z",
+              "Cmd+D",
+              "Cmd+Shift+D",
+              "Cmd+Shift+X",
+              "Cmd+L",
+              "Cmd+Shift+L",
+              "Cmd+Shift+-",
+              "Cmd+Shift+H",
+              "Cmd+V",
+              "Cmd+Shift+C",
+              "Cmd+E",
+              "Cmd+J",
+              "Cmd+Shift+U",
+              "Cmd+B",
+              "Cmd+I",
+              "Cmd+Shift+I",
+              "Cmd+Up",
+              "Cmd+Down",
+              "Cmd+Shift+Up",
+              "Cmd+Shift+Down",
+              "Cmd+[",
+              "Cmd+]",
+              "Cmd+Shift+Backspace",
+              "Cmd+Shift+Delete",
+              "Cmd+Shift+7",
+              "Cmd+Shift+8",
+              "Cmd+1..Cmd+9"
+            ]
+          }
+        ]
+      },
+      "focusTransitions": {
+        "schemaVersion": 1,
+        "redacted": true,
+        "generation": 0,
+        "entryCount": 0,
+        "entries": []
+      },
+      "ghostAutocomplete": {
+        "schemaVersion": 1,
+        "source": "runtime.notes.automationState",
+        "redacted": true,
+        "visible": false,
+        "kind": null,
+        "sourceKind": null,
+        "sourceRank": null,
+        "acceptsTab": false,
+        "confidence": null,
+        "generation": 0,
+        "suffixReturned": false,
+        "suffixLength": null,
+        "suffixFingerprint": null,
+        "queryPrefixLength": null,
+        "queryPrefixFingerprint": null,
+        "lastAction": null
+      },
+      "search": {
+        "visible": false,
+        "queryLength": 0,
+        "queryFingerprint": "fnv1a64:cbf29ce484222325"
+      },
+      "storage": {
+        "schemaVersion": 1,
+        "redacted": true,
+        "generation": 0,
+        "rootSearchCacheGeneration": 0,
+        "dbPathFingerprint": "fnv1a64:06e58fc7bce87e86",
+        "dbPathLength": 47,
+        "testSandbox": false
+      },
+      "counts": {
+        "notes": 3,
+        "deletedNotes": 2,
+        "visibleNotes": 3,
+        "historyBack": 0,
+        "historyForward": 0
+      }
+    }
+  },
+  "targetReceipt": {
+    "schemaVersion": 1,
+    "tool": "script-kit-devtools.targets",
+    "command": "targets.inspect",
+    "session": "liquid-glass-root-window-backdrop-notes",
+    "classification": "ok",
+    "requestedTarget": {
+      "selector": {
+        "type": "kind",
+        "kind": "notes"
+      },
+      "strict": true,
+      "expectedSurfaceKind": "Notes"
+    },
+    "resolvedTarget": {
+      "automationId": "notes",
+      "stableTargetId": "notes",
+      "targetKind": "Notes",
+      "hostKind": null,
+      "parentAutomationId": null,
+      "openerAutomationId": null,
+      "surfaceKind": null,
+      "semanticSurface": "notes",
+      "appViewVariant": null,
+      "nativeFooterSurface": null,
+      "surfaceFamily": null,
+      "routeId": null,
+      "routeStack": [],
+      "targetGeneration": 1,
+      "surfaceGeneration": 1,
+      "dataGeneration": 1,
+      "bounds": {
+        "x": 1112,
+        "y": 50,
+        "width": 350,
+        "height": 280
+      },
+      "screenId": null,
+      "zOrder": null,
+      "visible": null,
+      "frontmost": null,
+      "focused": null,
+      "screenshotIdentity": {
+        "width": 350,
+        "height": 280,
+        "targetBoundsInScreenshot": {
+          "x": 0,
+          "y": 0,
+          "width": 350,
+          "height": 280
+        },
+        "nonBlankRatio": null
+      },
+      "pid": 3991,
+      "strictTargetMatch": true,
+      "strictTargetMismatch": null,
+      "ambiguity": []
+    },
+    "windows": [
+      {
+        "index": 0,
+        "automationId": "main",
+        "windowKind": "Main",
+        "title": "Script Kit",
+        "visible": false,
+        "focused": false,
+        "bounds": {
+          "x": 364,
+          "y": -986,
+          "width": 750,
+          "height": 480
+        },
+        "surfaceKind": null,
+        "semanticSurface": "scriptList",
+        "appViewVariant": null,
+        "parentAutomationId": null,
+        "parentKind": null,
+        "pid": 3991
+      },
+      {
+        "index": 1,
+        "automationId": "notes",
+        "windowKind": "Notes",
+        "title": "Notes",
+        "visible": true,
+        "focused": true,
+        "bounds": {
+          "x": 1112,
+          "y": 50,
+          "width": 350,
+          "height": 280
+        },
+        "surfaceKind": null,
+        "semanticSurface": "notes",
+        "appViewVariant": null,
+        "parentAutomationId": null,
+        "parentKind": null,
+        "pid": 3991
+      }
+    ],
+    "rawInspect": {
+      "type": "automationInspectResult",
+      "requestId": "devtools-targets-inspect-1780680904883-fdf353",
+      "schemaVersion": 4,
+      "windowId": "notes",
+      "windowKind": "Notes",
+      "targetGeneration": 1,
+      "surfaceGeneration": 1,
+      "dataGeneration": 1,
+      "title": "Notes",
+      "resolvedBounds": {
+        "x": 1112,
+        "y": 50,
+        "width": 350,
+        "height": 280
+      },
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 350,
+        "height": 280
+      },
+      "surfaceHitPoint": {
+        "x": 175,
+        "y": 140
+      },
+      "suggestedHitPoints": [
+        {
+          "semanticId": "input:notes-editor",
+          "x": 175,
+          "y": 140,
+          "reason": "surface_center"
+        }
+      ],
+      "elements": [
+        {
+          "semanticId": "panel:notes-window",
+          "type": "panel",
+          "text": "Notes"
+        },
+        {
+          "semanticId": "input:notes-editor",
+          "type": "input",
+          "value": "Project alpha launch\nCall Alice about alpha launch blockers\n\nCall",
+          "focused": true
+        }
+      ],
+      "totalCount": 2,
+      "focusedSemanticId": "input:notes-editor",
+      "screenshotWidth": 350,
+      "screenshotHeight": 280,
+      "osWindowId": 5031,
+      "semanticQuality": "full",
+      "pid": 3991
+    },
+    "lifecycleCodes": [],
+    "lifecycleDetails": null,
+    "sessionLifecycle": null,
+    "parsedError": null,
+    "errors": []
+  }
+}
