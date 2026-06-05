@@ -671,6 +671,20 @@ f32_knob!(
     "list.mainHintFormValueFontSize",
     list.main_hint_form_value_font_size
 );
+f32_knob!(
+    LIST_INLINE_CALC_RESULT_FONT_SIZE_KNOB_ID,
+    get_list_inline_calc_result_font_size,
+    apply_list_inline_calc_result_font_size,
+    "list.inlineCalcResultFontSize",
+    list.inline_calc_result_font_size
+);
+f32_knob!(
+    LIST_INLINE_CALC_HINT_FONT_SIZE_KNOB_ID,
+    get_list_inline_calc_hint_font_size,
+    apply_list_inline_calc_hint_font_size,
+    "list.inlineCalcHintFontSize",
+    list.inline_calc_hint_font_size
+);
 alpha_knob!(
     LIST_INLINE_CALC_SELECTED_OVERLAY_MIN_ALPHA_KNOB_ID,
     get_list_inline_calc_selected_overlay_min_alpha,
@@ -1955,6 +1969,28 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 0.5,
         get: get_list_main_hint_form_value_font_size,
         apply: apply_list_main_hint_form_value_font_size,
+    },
+    StyleKnob {
+        id: LIST_INLINE_CALC_RESULT_FONT_SIZE_KNOB_ID,
+        label: "Inline calc result font size",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 32.0,
+        step: 0.5,
+        get: get_list_inline_calc_result_font_size,
+        apply: apply_list_inline_calc_result_font_size,
+    },
+    StyleKnob {
+        id: LIST_INLINE_CALC_HINT_FONT_SIZE_KNOB_ID,
+        label: "Inline calc hint font size",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 24.0,
+        step: 0.5,
+        get: get_list_inline_calc_hint_font_size,
+        apply: apply_list_inline_calc_hint_font_size,
     },
     StyleKnob {
         id: LIST_INLINE_CALC_SELECTED_OVERLAY_MIN_ALPHA_KNOB_ID,

@@ -359,6 +359,8 @@ fn inline_calc_row_chrome_is_list_tokenized() {
     assert!(theme.contains("pub inline_calc_selected_overlay_min_alpha: u32"));
     assert!(theme.contains("pub inline_calc_selected_hint_alpha: u32"));
     assert!(theme.contains("pub inline_calc_hint_alpha: u32"));
+    assert!(theme.contains("pub inline_calc_result_font_size: f32"));
+    assert!(theme.contains("pub inline_calc_hint_font_size: f32"));
 
     assert!(catalog.contains("LIST_INLINE_CALC_SELECTED_OVERLAY_MIN_ALPHA_KNOB_ID"));
     assert!(catalog.contains("\"list.inlineCalcSelectedOverlayMinAlpha\""));
@@ -367,6 +369,10 @@ fn inline_calc_row_chrome_is_list_tokenized() {
     assert!(catalog.contains("\"list.inlineCalcSelectedHintAlpha\""));
     assert!(catalog.contains("LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID"));
     assert!(catalog.contains("\"list.inlineCalcHintAlpha\""));
+    assert!(catalog.contains("LIST_INLINE_CALC_RESULT_FONT_SIZE_KNOB_ID"));
+    assert!(catalog.contains("\"list.inlineCalcResultFontSize\""));
+    assert!(catalog.contains("LIST_INLINE_CALC_HINT_FONT_SIZE_KNOB_ID"));
+    assert!(catalog.contains("\"list.inlineCalcHintFontSize\""));
 
     let overlay_body =
         function_body(&render_script_list, "inline_calc_list_item_selected_overlay_rgba");
@@ -376,6 +382,10 @@ fn inline_calc_row_chrome_is_list_tokenized() {
     let row_body = function_body(&render_script_list, "render_inline_calc_list_item");
     assert!(row_body.contains("list_tokens.inline_calc_selected_hint_alpha"));
     assert!(row_body.contains("list_tokens.inline_calc_hint_alpha"));
+    assert!(row_body.contains("list_tokens.inline_calc_result_font_size"));
+    assert!(row_body.contains("list_tokens.inline_calc_hint_font_size"));
+    assert!(!row_body.contains("typography.font_size_lg"));
+    assert!(!row_body.contains("typography.font_size_xs"));
     assert!(!row_body.contains("0xD9"));
     assert!(!row_body.contains("0x8C"));
     assert!(render_script_list.contains(

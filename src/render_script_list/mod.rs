@@ -109,14 +109,14 @@ fn render_inline_calc_list_item(
             div()
                 .flex_1()
                 .overflow_x_hidden()
-                .text_size(px(typography.font_size_lg))
+                .text_size(px(list_tokens.inline_calc_result_font_size))
                 .font_weight(typography.font_weight_semibold)
                 .text_color(rgb(result_text_color))
                 .child(result_title),
         )
         .child(
             div()
-                .text_size(px(typography.font_size_xs))
+                .text_size(px(list_tokens.inline_calc_hint_font_size))
                 .text_color(rgba((hint_text_color << 8) | hint_alpha))
                 .child(inline_calc_list_copy_hint()),
         )
