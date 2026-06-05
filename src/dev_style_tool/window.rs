@@ -27,6 +27,13 @@ pub(crate) fn dev_style_tool_enabled() -> bool {
         )
 }
 
+pub(crate) fn is_dev_style_tool_open() -> bool {
+    handle_slot()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .is_some()
+}
+
 #[cfg(debug_assertions)]
 pub(crate) fn maybe_open_startup_sidecar(
     main_window: WindowHandle<Root>,

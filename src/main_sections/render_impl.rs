@@ -220,6 +220,7 @@ impl Render for ScriptListApp {
                 && !self.is_pinned
                 && !actions_popup_active_or_closing
                 && !confirm::is_confirm_window_open()
+                && !crate::dev_style_tool::window::is_dev_style_tool_open()
                 && !ai::acp::chat_window::is_chat_window_open()
                 && !crate::dictation::is_dictation_overlay_open()
                 && !crate::dictation::is_dictation_recording()
@@ -258,6 +259,11 @@ impl Render for ScriptListApp {
                 logging::log(
                     "FOCUS",
                     "Main window lost focus but confirm popup is open - staying open",
+                );
+            } else if crate::dev_style_tool::window::is_dev_style_tool_open() {
+                logging::log(
+                    "FOCUS",
+                    "Main window lost focus but dev style tool is open - staying open",
                 );
             } else if self.is_pinned {
                 logging::log(

@@ -46,6 +46,9 @@ fn dev_style_tool_render_is_catalog_driven_and_narrow() {
     assert!(render_source.contains("style-subsection:{}:{}"));
     assert!(render_source.contains("save_current_settings"));
     assert!(render_source.contains("button:dev-style-tool-save"));
+    assert!(render_source.contains("body:dev-style-tool-scroll"));
+    assert!(render_source.contains(".min_h_0()"));
+    assert!(render_source.contains(".overflow_y_scroll()"));
     assert!(render_source.contains("export::save_current_settings_markdown"));
     assert!(render_source.contains("runtime_overrides::set_value"));
     assert!(render_source.contains("runtime_overrides::reset_value"));
@@ -73,6 +76,7 @@ fn dev_style_tool_registers_minimal_automation_target() {
     assert!(registry_source.contains("AutomationWindowKind::DevStyleTool"));
     assert!(window_source.contains("upsert_automation_window"));
     assert!(window_source.contains("remove_automation_window(DEV_STYLE_TOOL_AUTOMATION_ID)"));
+    assert!(window_source.contains("fn is_dev_style_tool_open"));
     assert!(collector_source.contains("collect_dev_style_tool_snapshot"));
     assert!(collector_source.contains("button:dev-style-tool-save"));
     assert!(collector_source.contains("saveCurrentStyleSettings"));

@@ -38,12 +38,14 @@ fn render_focus_loss_treats_deferred_actions_state_as_actions_open() {
     let focus_branch = source_block_after(
         RENDER_IMPL,
         "self.was_window_focused && !is_window_focused",
-        2400,
+        5200,
     );
 
     assert!(focus_branch.contains("self.show_actions_popup"));
     assert!(focus_branch.contains("self.actions_dialog.is_some()"));
     assert!(focus_branch.contains("actions::is_actions_window_open()"));
+    assert!(focus_branch.contains("!crate::dev_style_tool::window::is_dev_style_tool_open()"));
+    assert!(focus_branch.contains("dev style tool is open - staying open"));
     assert!(focus_branch.contains("!actions_popup_active_or_closing"));
 }
 

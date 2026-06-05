@@ -409,6 +409,7 @@ impl Render for DevStyleToolApp {
             .bg(rgba(chrome.window_surface_rgba))
             .text_color(rgb(chrome.text_primary_hex))
             .font_family(crate::list_item::FONT_SYSTEM_UI)
+            .overflow_hidden()
             .child(
                 div()
                     .id("panel:dev-style-tool")
@@ -465,9 +466,14 @@ impl Render for DevStyleToolApp {
             })
             .child(
                 div()
+                    .id("body:dev-style-tool-scroll")
                     .flex()
                     .flex_row()
+                    .flex_1()
+                    .min_h_0()
                     .gap(px(14.0))
+                    .pr(px(4.0))
+                    .overflow_y_scroll()
                     .child(self.render_groups(&left_groups, chrome, cx))
                     .child(self.render_groups(&right_groups, chrome, cx)),
             )
