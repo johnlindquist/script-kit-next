@@ -228,6 +228,7 @@ pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
     // this window by its automation ID without collapsing to WindowRole.
     crate::windows::upsert_runtime_window_handle(&automation_id, any_handle);
     upsert_acp_detached_automation_window(&automation_id, automation_bounds);
+    configure_acp_chat_vibrancy(cx);
 
     tracing::info!("acp_chat_window_opened");
     Ok(())

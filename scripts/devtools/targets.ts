@@ -201,11 +201,23 @@ function surfaceCandidates(snapshot: JsonObject, listedWindow: JsonObject): Surf
     .map(([field, value]) => ({ field, value }));
 }
 
+function acceptedSurfaceValues(expectedSurfaceKind: string): Set<string> {
+  const values = new Set<string>([expectedSurfaceKind]);
+  // ACP detached windows expose their UI contract through automation
+  // semanticSurface while their window kind remains AcpDetached.
+  if (expectedSurfaceKind === "AcpChat") {
+    values.add("acpChat");
+  }
+  return values;
+}
+
 function surfaceMatch(snapshot: JsonObject, listedWindow: JsonObject, expectedSurfaceKind: string) {
   if (!expectedSurfaceKind) {
     return {
       ok: true,
       expectedSurfaceKind: null,
+      acceptedValues: [] as string[],
+      matchedCandidate: null as SurfaceCandidate | null,
       candidates: [] as SurfaceCandidate[],
       actualValues: [] as string[],
       mismatchReason: null,
@@ -213,10 +225,14 @@ function surfaceMatch(snapshot: JsonObject, listedWindow: JsonObject, expectedSu
   }
   const candidates = surfaceCandidates(snapshot, listedWindow);
   const actualValues = [...new Set(candidates.map((candidate) => candidate.value))];
-  const ok = candidates.some((candidate) => candidate.value === expectedSurfaceKind);
+  const acceptedValues = acceptedSurfaceValues(expectedSurfaceKind);
+  const matchedCandidate = candidates.find((candidate) => acceptedValues.has(candidate.value)) ?? null;
+  const ok = matchedCandidate != null;
   return {
     ok,
     expectedSurfaceKind,
+    acceptedValues: [...acceptedValues],
+    matchedCandidate,
     candidates,
     actualValues,
     mismatchReason: ok ? null : "expected-surface-not-found",

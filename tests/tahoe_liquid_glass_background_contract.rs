@@ -215,6 +215,116 @@ fn footer_native_host_uses_theme_vibrancy_and_reports_installed_surface() {
 }
 
 #[test]
+fn acp_detached_chat_window_uses_default_vibrancy_native_backdrop_and_runtime_identity() {
+    let chat_window = read_source("src/ai/acp/chat_window.rs");
+    let platform = read_source("src/platform/secondary_window_config.rs");
+    let devtools_acp = read_source("scripts/devtools/acp.ts");
+
+    let options = chat_window
+        .split("fn chat_window_options(")
+        .nth(1)
+        .and_then(|tail| tail.split("pub fn open_chat_window(").next())
+        .expect("chat_window_options should be present");
+    for needle in [
+        "theme::get_cached_theme().is_vibrancy_enabled()",
+        "gpui::WindowBackgroundAppearance::Blurred",
+        "gpui::WindowBackgroundAppearance::Opaque",
+        "kind: WindowKind::PopUp",
+    ] {
+        assert!(
+            options.contains(needle),
+            "ACP detached chat options must preserve background/window marker: {needle}"
+        );
+    }
+
+    for needle in [
+        "AutomationWindowKind::AcpDetached",
+        "semantic_surface: Some(\"acpChat\".to_string())",
+    ] {
+        assert!(
+            chat_window.contains(needle),
+            "ACP detached automation identity must preserve marker: {needle}"
+        );
+    }
+    assert!(
+        !chat_window.contains("surfaceKind: Some(\"AcpChat\""),
+        "ACP detached runtime identity should use semanticSurface acpChat instead of inventing a surfaceKind field"
+    );
+
+    let placeholder = chat_window
+        .split("pub fn open_chat_window(")
+        .nth(1)
+        .and_then(|tail| tail.split("pub fn open_chat_window_with_thread(").next())
+        .expect("open_chat_window placeholder body should be present");
+    assert!(
+        placeholder.contains("upsert_acp_detached_automation_window(&automation_id, automation_bounds);")
+            && placeholder.contains("configure_acp_chat_vibrancy(cx);"),
+        "ACP detached placeholder fixture must configure native vibrancy/backdrop after automation registration"
+    );
+
+    let with_thread = chat_window
+        .split("pub fn open_chat_window_with_thread(")
+        .nth(1)
+        .and_then(|tail| tail.split("pub fn get_detached_acp_view_entity(").next())
+        .expect("open_chat_window_with_thread body should be present");
+    assert!(
+        with_thread.contains("configure_acp_chat_vibrancy(cx);"),
+        "ACP detached live-thread path must configure native vibrancy/backdrop"
+    );
+
+    for needle in [
+        "\"Script Kit Agent Chat\"",
+        "configure_secondary_window_vibrancy(",
+        "configure_window_vibrancy_common(",
+        "configure_tahoe_window_backdrop(window, log_target, window_name)",
+        "should_refresh_secondary_window_appearance(&title_string)",
+    ] {
+        assert!(
+            platform.contains(needle),
+            "ACP detached native backdrop refresh path must preserve marker: {needle}"
+        );
+    }
+
+    for needle in [
+        "open-detached-placeholder",
+        "openAcpDetachedFixture",
+        "targets.inspect.acpDetached",
+        "AcpChat",
+        "providerRequired: false",
+    ] {
+        assert!(
+            devtools_acp.contains(needle),
+            "ACP DevTools opener must preserve no-provider detached placeholder marker: {needle}"
+        );
+    }
+}
+
+#[test]
+fn devtools_targets_match_acp_chat_by_semantic_surface_alias() {
+    let targets = read_source("scripts/devtools/targets.ts");
+    assert!(
+        targets.contains("[\"snapshot.semanticSurface\", snapshot.semanticSurface]")
+            && targets.contains("[\"listedWindow.semanticSurface\", listedWindow.semanticSurface]"),
+        "targets.ts must consider runtime semanticSurface candidates for strict surface matching"
+    );
+    assert!(
+        targets.contains("function acceptedSurfaceValues")
+            && targets.contains("expectedSurfaceKind === \"AcpChat\"")
+            && targets.contains("values.add(\"acpChat\")"),
+        "AcpChat strict target matching must accept the acpChat automation semantic surface"
+    );
+    assert!(
+        targets.contains("acceptedValues.has(candidate.value)"),
+        "surfaceMatch must match against accepted surface aliases, not only exact surfaceKind strings"
+    );
+    assert!(
+        targets.contains("matchedCandidate")
+            && targets.contains("acceptedValues: [...acceptedValues]"),
+        "surfaceMatch receipts must explain which semantic alias matched"
+    );
+}
+
+#[test]
 fn file_search_mini_layout_receipt_uses_window_backdrop() {
     let receipt = read_source(
         "artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-layout.json",
