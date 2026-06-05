@@ -162,6 +162,59 @@ fn root_window_layout_material_is_backdrop_not_content_glass() {
 }
 
 #[test]
+fn footer_native_host_uses_theme_vibrancy_and_reports_installed_surface() {
+    let footer = read_source("src/footer_popup.rs");
+    let platform = read_source("src/platform/secondary_window_config.rs");
+
+    for needle in [
+        "MainWindowFooterHostSnapshot",
+        "native_host_installed",
+        "active_main_window_footer_surface",
+        "ensure_main_footer_host(ns_window)",
+        "refresh_main_footer_host(ns_window, config)",
+        "update_main_window_footer_host_state(",
+        "installed.then_some(config.surface)",
+        "AppChromeColors::from_theme(&theme)",
+        "theme.get_vibrancy().material",
+        "setAppearance:",
+        "setMaterial: material",
+        "setState: 1isize",
+        "setBlendingMode: 1isize",
+        "setEmphasized: is_dark",
+    ] {
+        assert!(
+            footer.contains(needle),
+            "native main-window footer host must preserve theme/vibrancy/state marker: {needle}"
+        );
+    }
+
+    let sync_main_footer = footer
+        .split("pub(crate) fn sync_main_footer_popup(")
+        .nth(1)
+        .and_then(|tail| tail.split("pub(crate) fn sync_window_footer_popup(").next())
+        .expect("sync_main_footer_popup body should be present");
+    assert!(
+        !sync_main_footer.contains("SCRIPT_KIT_GPUI_FOOTER_OVERLAY_SPIKE")
+            && !sync_main_footer.contains("gpui_footer_overlay_spike_enabled()"),
+        "default native footer host proof must not depend on the experimental GPUI footer overlay spike"
+    );
+
+    for needle in [
+        "pub unsafe fn configure_footer_popup_window(window: id, is_dark: bool)",
+        "configure_confirm_popup_window(window, is_dark)",
+        "setIgnoresMouseEvents: true",
+        "c\"Script Kit Footer\".as_ptr()",
+        "\"Script Kit Footer\"",
+        "should_refresh_secondary_window_appearance",
+    ] {
+        assert!(
+            platform.contains(needle),
+            "standalone footer popup configuration/refresh must preserve marker: {needle}"
+        );
+    }
+}
+
+#[test]
 fn file_search_mini_layout_receipt_uses_window_backdrop() {
     let receipt = read_source(
         "artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-layout.json",
