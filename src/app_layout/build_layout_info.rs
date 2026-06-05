@@ -37,6 +37,7 @@ impl ScriptListApp {
             | AppView::BrowserHistoryView { .. }
             | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. }
+            | AppView::ProfileSearchView { .. }
             | AppView::AcpChatView { .. } => crate::window_resize::ViewType::MainWindow,
             AppView::AppLauncherView { .. }
             | AppView::WindowSwitcherView { .. }
@@ -126,6 +127,7 @@ impl ScriptListApp {
             self.current_view,
             AppView::ScriptList
                 | AppView::FileSearchView { .. }
+                | AppView::ClipboardHistoryView { .. }
                 | AppView::ProfileSearchView { .. }
                 | AppView::AcpChatView { .. }
         );
@@ -1015,22 +1017,16 @@ impl ScriptListApp {
             };
         }
 
-        if let AppView::InstalledKitsView { kits, .. } = &self.current_view {
+        if let AppView::InstalledKitsView { filter, kits, .. } = &self.current_view {
             const KIT_STORE_HEADER_HEIGHT: f32 = 44.0;
             const KIT_STORE_HEADER_PADDING_X: f32 = 16.0;
             const KIT_STORE_HEADER_PADDING_Y: f32 = 8.0;
-            const KIT_STORE_TITLE_WIDTH: f32 = 132.0;
+            const KIT_STORE_HEADER_GAP: f32 = 12.0;
             const KIT_STORE_COUNT_WIDTH: f32 = 96.0;
+            const KIT_STORE_INPUT_HEIGHT: f32 = 28.0;
             const KIT_STORE_DIVIDER_HEIGHT: f32 = 1.0;
             const KIT_STORE_LIST_PADDING_Y: f32 = 4.0;
-            const KIT_STORE_ROW_HEIGHT: f32 = 72.0;
-            const KIT_STORE_ROW_PADDING_X: f32 = 12.0;
-            const KIT_STORE_ROW_PADDING_Y: f32 = 8.0;
-            const KIT_STORE_ROW_GAP: f32 = 12.0;
-            const KIT_STORE_ACTION_GAP: f32 = 8.0;
-            const KIT_STORE_UPDATE_WIDTH: f32 = 62.0;
-            const KIT_STORE_REMOVE_WIDTH: f32 = 66.0;
-            const KIT_STORE_ACTION_HEIGHT: f32 = 28.0;
+            const KIT_STORE_ROW_HEIGHT: f32 = crate::list_item::LIST_ITEM_HEIGHT;
             const KIT_STORE_FOOTER_HEIGHT: f32 = 34.0;
 
             let divider_y = KIT_STORE_HEADER_HEIGHT;
@@ -1038,6 +1034,9 @@ impl ScriptListApp {
             let footer_y = window_height - KIT_STORE_FOOTER_HEIGHT;
             let list_height = (footer_y - list_top - KIT_STORE_LIST_PADDING_Y).max(0.0);
             let count_x = window_width - KIT_STORE_HEADER_PADDING_X - KIT_STORE_COUNT_WIDTH;
+            let input_width =
+                (count_x - KIT_STORE_HEADER_GAP - KIT_STORE_HEADER_PADDING_X).max(0.0);
+            let input_y = KIT_STORE_HEADER_PADDING_Y + (KIT_STORE_INPUT_HEIGHT - 28.0) / 2.0;
 
             components.push(
                 LayoutComponentInfo::new("KitStoreInstalledSurface", LayoutComponentType::Panel)
@@ -1068,30 +1067,29 @@ impl ScriptListApp {
                         KIT_STORE_HEADER_PADDING_Y,
                         KIT_STORE_HEADER_PADDING_X,
                     )
+                    .with_gap(KIT_STORE_HEADER_GAP)
                     .with_flex_row()
                     .with_depth(2)
                     .with_parent("KitStoreInstalledSurface")
-                    .with_explanation(
-                        "Custom installed-kits header owns the title and installed count.",
-                    ),
+                    .with_explanation("Shared installed-kits header owns the main search input and installed count."),
             );
             components.push(
-                LayoutComponentInfo::new("KitStoreInstalledTitle", LayoutComponentType::Other)
+                LayoutComponentInfo::new("KitStoreInstalledSearch", LayoutComponentType::Input)
                     .with_bounds(
                         KIT_STORE_HEADER_PADDING_X,
-                        KIT_STORE_HEADER_PADDING_Y,
-                        KIT_STORE_TITLE_WIDTH,
+                        input_y,
+                        input_width,
                         28.0,
                     )
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_FUNCTIONAL,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        None,
+                        Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
                     )
-                    .with_visual_token("kitStoreInstalled.title")
+                    .with_visual_token("kitStoreInstalled.search")
                     .with_depth(3)
                     .with_parent("KitStoreInstalledHeader")
-                    .with_explanation("Static Installed Kits title in the custom header."),
+                    .with_explanation("Installed Kits uses the shared MainViewInput search lane, matching Browse Kit Store and launcher-family lists."),
             );
             components.push(
                 LayoutComponentInfo::new("KitStoreInstalledCount", LayoutComponentType::Other)
@@ -1115,12 +1113,7 @@ impl ScriptListApp {
             );
             components.push(
                 LayoutComponentInfo::new("KitStoreInstalledDivider", LayoutComponentType::Other)
-                    .with_bounds(
-                        KIT_STORE_HEADER_PADDING_X,
-                        divider_y,
-                        window_width - KIT_STORE_HEADER_PADDING_X * 2.0,
-                        KIT_STORE_DIVIDER_HEIGHT,
-                    )
+                    .with_bounds(0.0, divider_y, window_width, KIT_STORE_DIVIDER_HEIGHT)
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_FUNCTIONAL,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
@@ -1129,9 +1122,7 @@ impl ScriptListApp {
                     .with_visual_token("kitStoreInstalled.divider")
                     .with_depth(2)
                     .with_parent("KitStoreInstalledSurface")
-                    .with_explanation(
-                        "One-pixel divider inset to the same 16px horizontal header padding.",
-                    ),
+                    .with_explanation("Shared full-width SectionDivider separates the search header from the installed-kits list."),
             );
             components.push(
                 LayoutComponentInfo::new("KitStoreInstalledList", LayoutComponentType::List)
@@ -1145,13 +1136,12 @@ impl ScriptListApp {
                     .with_flex_column()
                     .with_depth(2)
                     .with_parent("KitStoreInstalledSurface")
-                    .with_explanation(
-                        "Custom installed-kits list region uses full width and 72px rows.",
-                    ),
+                    .with_explanation("Installed Kits list region renders shared ListItem rows filtered by the main search input."),
             );
 
+            let visible_kits = Self::kit_store_installed_visible_rows(kits, filter);
             let visible_rows = ((list_height / KIT_STORE_ROW_HEIGHT) as usize)
-                .min(kits.len())
+                .min(visible_kits.len())
                 .min(5);
             if visible_rows == 0 {
                 components.push(
@@ -1168,14 +1158,11 @@ impl ScriptListApp {
                     .with_visual_token("kitStoreInstalled.emptyState")
                     .with_depth(3)
                     .with_parent("KitStoreInstalledList")
-                    .with_explanation("Centered empty state occupies the installed-kits list when no kits are installed."),
+                    .with_explanation("Centered empty state occupies the installed-kits list when no kits match the shared search input."),
                 );
             } else {
                 for i in 0..visible_rows {
                     let row_y = list_top + i as f32 * KIT_STORE_ROW_HEIGHT;
-                    let remove_x = window_width - KIT_STORE_ROW_PADDING_X - KIT_STORE_REMOVE_WIDTH;
-                    let update_x = remove_x - KIT_STORE_ACTION_GAP - KIT_STORE_UPDATE_WIDTH;
-                    let action_y = row_y + (KIT_STORE_ROW_HEIGHT - KIT_STORE_ACTION_HEIGHT) / 2.0;
                     components.push(
                         LayoutComponentInfo::new(
                             format!("KitStoreInstalledRow[{}]", i),
@@ -1188,48 +1175,13 @@ impl ScriptListApp {
                             Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
                         )
                         .with_visual_token("kitStoreInstalled.row")
-                        .with_padding(
-                            KIT_STORE_ROW_PADDING_Y,
-                            KIT_STORE_ROW_PADDING_X,
-                            KIT_STORE_ROW_PADDING_Y,
-                            KIT_STORE_ROW_PADDING_X,
-                        )
-                        .with_gap(KIT_STORE_ROW_GAP)
+                        .with_padding(2.0, 4.0, 2.0, 4.0)
+                        .with_gap(8.0)
                         .with_flex_row()
                         .with_depth(3)
                         .with_parent("KitStoreInstalledList")
-                        .with_explanation("Installed kit rows are 72px tall with 12px horizontal padding, 8px vertical padding, and a 12px text/action gap."),
+                        .with_explanation("Installed kit rows use the shared ListItem chrome, selection accent, semantic row id, and launcher-family spacing."),
                     );
-                    for (name, x, width) in [
-                        (
-                            "KitStoreInstalledUpdateButton",
-                            update_x,
-                            KIT_STORE_UPDATE_WIDTH,
-                        ),
-                        (
-                            "KitStoreInstalledRemoveButton",
-                            remove_x,
-                            KIT_STORE_REMOVE_WIDTH,
-                        ),
-                    ] {
-                        components.push(
-                            LayoutComponentInfo::new(
-                                format!("{}[{}]", name, i),
-                                LayoutComponentType::Button,
-                            )
-                            .with_bounds(x, action_y, width, KIT_STORE_ACTION_HEIGHT)
-                            .with_visual_style(
-                                chrome_tokens::CHROME_LAYER_FUNCTIONAL,
-                                chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                                Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
-                            )
-                            .with_visual_token("kitStoreInstalled.actionButton")
-                            .with_hit_bounds(x, action_y, width, KIT_STORE_ACTION_HEIGHT)
-                            .with_depth(4)
-                            .with_parent(format!("KitStoreInstalledRow[{}]", i))
-                            .with_explanation("Inline installed-kit action keeps a badge-sized visual with a 28px minimum hit target."),
-                        );
-                    }
                 }
             }
 
@@ -1773,13 +1725,7 @@ impl ScriptListApp {
         let input_y = shell.header_padding_y + context_offset_y;
         let input_width = (window_width - (shell_horizontal_padding * 2.0)).max(0.0);
         let input_text_inset_left =
-            crate::components::main_view_chrome::main_view_input_text_inset_left(
-                menu_def,
-                matches!(
-                    menu_def.header_info_bar.logo_placement,
-                    crate::designs::MainMenuLogoPlacement::InputLeading
-                ),
-            );
+            crate::components::main_view_chrome::main_view_input_text_inset_left(menu_def);
 
         components.push(
             LayoutComponentInfo::new("MainViewInput", LayoutComponentType::Input)
@@ -1802,13 +1748,13 @@ impl ScriptListApp {
                     search.text_inset_y,
                     input_text_inset_left,
                 )
-                // Rendered typography, sourced from the same larger theme input size
-                // that render_search_input uses. The theme tokens still vary search
-                // geometry, but the launcher input keeps its established XL text size.
+                // Rendered typography, sourced from the same main-menu search token
+                // that render_search_input uses so design-tool edits are reflected
+                // in layout receipts.
                 .with_typography(
                     "searchInput",
                     Some(self.theme_font_family()),
-                    self.theme_font_size_xl(),
+                    search.font_size,
                     "regular",
                     search.font_weight.0,
                     search.height,
@@ -1829,25 +1775,6 @@ impl ScriptListApp {
                     window_width, shell_horizontal_padding, input_width
                 )),
         );
-
-        if matches!(
-            menu_def.header_info_bar.logo_placement,
-            crate::designs::MainMenuLogoPlacement::InputLeading
-        ) {
-            let state_icon_size = menu_def.icon.container_size.min(search.height).max(16.0);
-            let state_icon_x = shell_horizontal_padding
-                + crate::components::main_view_chrome::main_view_state_icon_left(menu_def);
-            let state_icon_y = input_y + ((search.height - state_icon_size) * 0.5).max(0.0);
-            components.push(
-                LayoutComponentInfo::new("MainViewInputStateIcon", LayoutComponentType::Other)
-                    .with_bounds(state_icon_x, state_icon_y, state_icon_size, state_icon_size)
-                    .with_parent("MainViewInput")
-                    .with_depth(3)
-                    .with_explanation(
-                        "Absolutely positioned state icon shares the row icon column while MainViewInput keeps the text-column inset.",
-                    ),
-            );
-        }
 
         // Content area
         components.push(

@@ -1362,7 +1362,7 @@ impl ScriptListApp {
                     .top_0()
                     .right_0()
                     .h(safe_viewport_height)
-                    .w(px(16.0))
+                    .w(px(self.current_main_menu_theme.def().list.scrollbar_width))
                     .child(
                         GpuiScrollbar::vertical(&self.main_list_state)
                             .id("launcher-main-scrollbar")
@@ -1968,16 +1968,14 @@ impl ScriptListApp {
         {
             div()
                 .w_full()
-                .h(px(
-                    crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0)
-                ))
+                .h(px(search.height))
                 .flex()
                 .items_center()
                 .overflow_hidden()
                 .text_ellipsis()
-                .text_size(px(self.theme_font_size_xl()))
+                .text_size(px(search.font_size))
                 .font_weight(search.font_weight)
-                .line_height(px(crate::panel::CURSOR_HEIGHT_LG))
+                .line_height(px(search.height))
                 .text_color(rgb(text_primary))
                 .child(menu_syntax_single_line_text_for_gpui(
                     &filter_text_for_render,

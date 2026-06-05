@@ -47,7 +47,7 @@ impl ScriptListApp {
 
     pub(crate) fn render_search_input(&self) -> gpui_component::input::Input {
         let search = self.current_main_menu_theme.def().search;
-        let input_font_size = self.theme_font_size_xl();
+        let input_font_size = search.font_size;
         gpui_component::input::Input::new(&self.gpui_input_state)
             .w_full()
             .h(gpui::px(search.height))
@@ -62,6 +62,62 @@ impl ScriptListApp {
 
     pub(crate) fn render_search_input_with_ghost(&self, _cx: &gpui::Context<Self>) -> gpui::Div {
         gpui::div().w_full().child(self.render_search_input())
+    }
+
+    pub(crate) fn render_generic_filterable_search_surface(
+        &self,
+        key_context: &'static str,
+        count_label: String,
+        list_element: gpui::AnyElement,
+        footer: Option<gpui::AnyElement>,
+    ) -> gpui::AnyElement {
+        let tokens = get_tokens(self.current_design);
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
+        let text_primary = self.theme.colors.text.primary;
+        let text_dimmed = self.theme.colors.text.dimmed;
+
+        let header = gpui::div()
+            .flex_1()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_3()
+            .child(
+                gpui::div()
+                    .flex_1()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .child(self.render_search_input()),
+            )
+            .child(
+                gpui::div()
+                    .text_size(gpui::px(tokens.typography().font_size_sm))
+                    .text_color(gpui::rgb(text_dimmed))
+                    .child(count_label),
+            );
+
+        let content = gpui::div()
+            .flex_1()
+            .min_h(gpui::px(0.))
+            .w_full()
+            .overflow_hidden()
+            .child(list_element);
+
+        crate::components::render_minimal_list_prompt_shell_with_footer(
+            tokens.visual().radius_lg,
+            Some(gpui::rgba(chrome.panel_surface_rgba)),
+            header,
+            content,
+            footer,
+        )
+        .w_full()
+        .h_full()
+        .text_color(gpui::rgb(text_primary))
+        .font_family(self.theme_font_family())
+        .key_context(key_context)
+        .track_focus(&self.focus_handle)
+        .into_any_element()
     }
 
     /// Emit a structured scroll log line for builtin views.

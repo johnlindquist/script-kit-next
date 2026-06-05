@@ -401,6 +401,10 @@ fn main_menu_font_sizes_are_design_tool_controls() {
         fs::read_to_string("src/dev_style_tool/catalog.rs").expect("read dev style catalog");
     let render_script_list =
         fs::read_to_string("src/render_script_list/mod.rs").expect("read render script list");
+    let render_builtins_common =
+        fs::read_to_string("src/render_builtins/common.rs").expect("read common renderer source");
+    let layout_info =
+        fs::read_to_string("src/app_layout/build_layout_info.rs").expect("read layout info source");
 
     for required in [
         "SEARCH_FONT_SIZE_KNOB_ID",
@@ -455,6 +459,11 @@ fn main_menu_font_sizes_are_design_tool_controls() {
     assert!(theme.contains("pub main_hint_form_label_font_size: f32"));
     assert!(theme.contains("pub main_hint_form_input_font_size: f32"));
     assert!(theme.contains("pub main_hint_form_value_font_size: f32"));
+
+    let search_input_body = function_body(&render_builtins_common, "render_search_input");
+    assert!(search_input_body.contains("let input_font_size = search.font_size"));
+    assert!(!search_input_body.contains("let input_font_size = self.theme_font_size_xl()"));
+    assert!(layout_info.contains("search.font_size,\n                    \"regular\""));
 
     let main_hint_body = function_body(&render_script_list, "render_menu_syntax_main_hint");
     assert!(main_hint_body.contains("list_tokens.main_hint_title_font_size"));
@@ -550,4 +559,20 @@ fn footer_keycap_and_slot_sizes_are_design_tool_controls() {
     assert!(nudge_body.contains("metrics.key_glyph_nudge_y"));
     assert!(nudge_body.contains("metrics.return_glyph_nudge_y"));
     assert!(nudge_body.contains("metrics.semicolon_glyph_nudge_y"));
+}
+
+#[test]
+fn list_scrollbar_width_is_design_tool_controlled() {
+    let theme =
+        fs::read_to_string("src/designs/core/main_menu_theme.rs").expect("read theme source");
+    let catalog =
+        fs::read_to_string("src/dev_style_tool/catalog.rs").expect("read dev style catalog");
+    let render_script_list =
+        fs::read_to_string("src/render_script_list/mod.rs").expect("read render script list");
+
+    assert!(theme.contains("pub scrollbar_width: f32"));
+    assert!(catalog.contains("LIST_SCROLLBAR_WIDTH_KNOB_ID"));
+    assert!(catalog.contains("\"list.scrollbarWidth\""));
+    assert!(render_script_list.contains(".w(px(self.current_main_menu_theme.def().list.scrollbar_width))"));
+    assert!(!render_script_list.contains(".w(px(16.0))"));
 }

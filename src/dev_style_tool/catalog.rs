@@ -280,6 +280,13 @@ f32_knob!(
     list.average_scroll_height
 );
 f32_knob!(
+    LIST_SCROLLBAR_WIDTH_KNOB_ID,
+    get_list_scrollbar_width,
+    apply_list_scrollbar_width,
+    "list.scrollbarWidth",
+    list.scrollbar_width
+);
+f32_knob!(
     LIST_SECTION_PADDING_X_KNOB_ID,
     get_list_section_padding_x,
     apply_list_section_padding_x,
@@ -1437,6 +1444,17 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_list_average_scroll_height,
         apply: apply_list_average_scroll_height,
+    },
+    StyleKnob {
+        id: LIST_SCROLLBAR_WIDTH_KNOB_ID,
+        label: "List scrollbar width",
+        group: StyleKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_list_scrollbar_width,
+        apply: apply_list_scrollbar_width,
     },
     StyleKnob {
         id: LIST_SECTION_PADDING_X_KNOB_ID,

@@ -7,7 +7,8 @@ use script_kit_gpui::dev_style_tool::{
     FOOTER_RUN_SLOT_MAX_WIDTH_KNOB_ID, FOOTER_RUN_SLOT_MIN_WIDTH_KNOB_ID,
     FOOTER_SEMICOLON_GLYPH_NUDGE_Y_KNOB_ID,
     HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID, HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
-    LIST_ITEM_HEIGHT_KNOB_ID, LIST_SECTION_GAP_KNOB_ID, LIST_SECTION_PADDING_X_KNOB_ID,
+    LIST_ITEM_HEIGHT_KNOB_ID, LIST_SCROLLBAR_WIDTH_KNOB_ID, LIST_SECTION_GAP_KNOB_ID,
+    LIST_SECTION_PADDING_X_KNOB_ID,
     LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID, LIST_INLINE_CALC_HINT_FONT_SIZE_KNOB_ID,
     LIST_INLINE_CALC_RESULT_FONT_SIZE_KNOB_ID, LIST_INLINE_CALC_SELECTED_HINT_ALPHA_KNOB_ID,
     LIST_INLINE_CALC_SELECTED_OVERLAY_MIN_ALPHA_KNOB_ID,
@@ -29,7 +30,7 @@ use script_kit_gpui::dev_style_tool::{
     METADATA_ALPHA_KNOB_ID, METADATA_BADGE_PADDING_X_KNOB_ID, METADATA_BADGE_PADDING_Y_KNOB_ID,
     METADATA_BADGE_RADIUS_KNOB_ID, ROW_HOVER_FILL_ALPHA_KNOB_ID, ROW_INNER_PADDING_X_KNOB_ID,
     ROW_SELECTED_NAME_UNDERLINE_PADDING_BOTTOM_KNOB_ID, ROW_SELECTED_NAME_UNDERLINE_WIDTH_KNOB_ID,
-    SEARCH_HEIGHT_KNOB_ID, STYLE_KNOBS,
+    SEARCH_FONT_SIZE_KNOB_ID, SEARCH_HEIGHT_KNOB_ID, STYLE_KNOBS,
 };
 use std::sync::{Mutex, OnceLock};
 
@@ -91,6 +92,10 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
 
     runtime_overrides::set_value(LIST_ITEM_HEIGHT_KNOB_ID, StyleValue::Number(54.0))
         .expect("list item height knob should exist");
+    runtime_overrides::set_value(SEARCH_FONT_SIZE_KNOB_ID, StyleValue::Number(21.0))
+        .expect("search font size knob should exist");
+    runtime_overrides::set_value(LIST_SCROLLBAR_WIDTH_KNOB_ID, StyleValue::Number(18.0))
+        .expect("list scrollbar width knob should exist");
     runtime_overrides::set_value(ROW_INNER_PADDING_X_KNOB_ID, StyleValue::Number(22.0))
         .expect("row inner padding knob should exist");
     runtime_overrides::set_value(ROW_HOVER_FILL_ALPHA_KNOB_ID, StyleValue::Number(77.0))
@@ -303,6 +308,8 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     let def = variant.def();
     assert_eq!(variant.base_def().list.item_height, base.list.item_height);
     assert_eq!(def.list.item_height, 54.0);
+    assert_eq!(def.search.font_size, 21.0);
+    assert_eq!(def.list.scrollbar_width, 18.0);
     assert_eq!(def.row.inner_padding_x, 22.0);
     assert_eq!(def.row.hover_fill_alpha, 77);
     assert_eq!(def.metadata.metadata_alpha, 88);
@@ -414,6 +421,24 @@ fn devtools_numeric_setter_accepts_catalog_control_ids() {
     assert_eq!(
         runtime_overrides::current_value(ROW_SELECTED_NAME_UNDERLINE_PADDING_BOTTOM_KNOB_ID),
         Some(StyleValue::Number(2.0))
+    );
+
+    let applied = runtime_overrides::set_number_from_devtools("search.fontSize", "21px")
+        .expect("search font size should be settable through devtools");
+
+    assert_eq!(applied, "search.fontSize=21");
+    assert_eq!(
+        runtime_overrides::current_value(SEARCH_FONT_SIZE_KNOB_ID),
+        Some(StyleValue::Number(21.0))
+    );
+
+    let applied = runtime_overrides::set_number_from_devtools("list.scrollbarWidth", "18px")
+        .expect("list scrollbar width should be settable through devtools");
+
+    assert_eq!(applied, "list.scrollbarWidth=18");
+    assert_eq!(
+        runtime_overrides::current_value(LIST_SCROLLBAR_WIDTH_KNOB_ID),
+        Some(StyleValue::Number(18.0))
     );
 
     let applied = runtime_overrides::set_number_from_devtools("list.mainHintChipPaddingX", "13px")
@@ -660,6 +685,16 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "footer.aiSlotWidth"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "search.fontSize"));
+    assert!(json["effective"]
+        .as_array()
+        .expect("effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "list.scrollbarWidth"));
 
     let markdown = export::current_settings_markdown();
     assert!(markdown.contains("```json"));
