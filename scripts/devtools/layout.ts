@@ -189,6 +189,10 @@ function responseOf(envelope: JsonObject): JsonObject {
   return (envelope.response as JsonObject | undefined) ?? envelope;
 }
 
+function asObject(value: unknown): JsonObject {
+  return typeof value === "object" && value !== null ? value as JsonObject : {};
+}
+
 function asArray(value: unknown): JsonObject[] {
   return Array.isArray(value)
     ? value.filter(
@@ -349,9 +353,73 @@ function buttonCenterDistanceAssertions(nodes: Array<{
   };
 }
 
+function liquidGlassWindowBackdropVisualStyle(bounds: Rect): JsonObject {
+  return {
+    chromeLayer: "windowBackdrop",
+    materialSource: "nativeWindowBackdrop",
+    tokenSource: "window.backdrop",
+    cornerRadius: {
+      topLeft: 22,
+      topRight: 22,
+      bottomRight: 22,
+      bottomLeft: 22,
+    },
+    visualBounds: bounds,
+    hitBounds: bounds,
+  };
+}
+
+function ensureRootWindowBackdropNode(
+  components: JsonObject[],
+  targetBounds: Rect,
+  viewportRect: Rect,
+) {
+  const alreadyHasBackdrop = components.some((component) => {
+    const style = asObject(component.visualStyle);
+    return component.name === "Window" || style.chromeLayer === "windowBackdrop";
+  });
+  if (alreadyHasBackdrop) {
+    return components;
+  }
+
+  const bounds = {
+    x: 0,
+    y: 0,
+    width: viewportRect.width || targetBounds.width,
+    height: viewportRect.height || targetBounds.height,
+  };
+  const windowNode: JsonObject = {
+    name: "Window",
+    type: "container",
+    bounds,
+    depth: 0,
+    parent: null,
+    children: components
+      .filter((component) => component.parent == null && component.name)
+      .map((component) => component.name),
+    explanation:
+      "Root native window backdrop metadata derived from strict target bounds; target layout provider describes the content subtree.",
+    visualStyle: liquidGlassWindowBackdropVisualStyle(bounds),
+  };
+
+  return [
+    windowNode,
+    ...components.map((component) => {
+      if (component.parent != null || component.name === "Window") {
+        return component;
+      }
+      return {
+        ...component,
+        parent: "Window",
+        depth: asNumber(component.depth, 0) + 1,
+      };
+    }),
+  ];
+}
+
 function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
   const info = (layout.info as JsonObject | undefined) ?? layout;
-  const components = asArray(info.components);
+  const rawComponents = asArray(info.components);
   const targetBounds = rectFrom(
     (targetReceipt.resolvedTarget as JsonObject | undefined)?.bounds,
   );
@@ -361,6 +429,7 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
     width: asNumber(info.windowWidth, targetBounds.width),
     height: asNumber(info.windowHeight, targetBounds.height),
   };
+  const components = ensureRootWindowBackdropNode(rawComponents, targetBounds, viewportRect);
   const nodes = components.map((component) => {
     const bounds = rectFrom(component.bounds);
     return {
@@ -672,6 +741,7 @@ async function main() {
         limit: args.limit,
         requestedTarget: targetReceipt.requestedTarget ?? { selector },
         target: targetReceipt.resolvedTarget ?? null,
+        rawLayout: layout,
         layoutEvidenceFreshness: {
           schemaVersion: 1,
           generatedAt: new Date().toISOString(),

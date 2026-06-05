@@ -33,6 +33,27 @@ fn layout_visual_audit_emits_guideline_assertion_buckets() {
     }
 }
 
+#[test]
+fn secondary_target_layout_receipts_synthesize_window_backdrop_metadata() {
+    let layout =
+        fs::read_to_string("scripts/devtools/layout.ts").expect("failed to read layout.ts");
+
+    for needle in [
+        "ensureRootWindowBackdropNode",
+        "windowBackdrop",
+        "nativeWindowBackdrop",
+        "window.backdrop",
+        "contentNativeMaterialNodes",
+        "glassLayerViolations",
+        "rawLayout",
+    ] {
+        assert!(
+            layout.contains(needle),
+            "layout.ts must expose secondary-window backdrop proof marker {needle}"
+        );
+    }
+}
+
 /// The `appleDocumented` bucket must encode Apple's documented numeric
 /// guidelines as real per-node deviation math, NOT the previous
 /// `exactAppleRadiusConstants: null` placeholder. Apple publishes formulas
