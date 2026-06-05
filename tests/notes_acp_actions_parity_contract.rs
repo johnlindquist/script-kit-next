@@ -10,7 +10,6 @@ fn body<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &rest[..end_idx]
 }
 
-// doc-anchor-removed: [[tests/notes-acp#Notes ACP actions originating view#Actions popup refreshes models before snapshot]]
 #[test]
 fn notes_acp_actions_refresh_models_before_dialog_context_snapshot() {
     let toggle = body(
@@ -26,7 +25,6 @@ fn notes_acp_actions_refresh_models_before_dialog_context_snapshot() {
     assert!(toggle.contains("parent_automation_id = Some(\"notes\".to_string())"));
 }
 
-// doc-anchor-removed: [[tests/notes-acp#Notes ACP actions originating view#Actions dispatch rejects stale Notes ACP generation]]
 #[test]
 fn dispatch_uses_originating_acp_target_and_generation_not_current_cache() {
     assert!(NOTES_WINDOW_SOURCE.contains("notes_acp_generation: u64"));

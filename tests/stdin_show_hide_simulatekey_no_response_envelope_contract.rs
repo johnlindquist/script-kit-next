@@ -183,7 +183,6 @@ fn assert_no_response_sink(arm: &str, label: &str) {
     }
 }
 
-// doc-anchor-removed: [[removed-docs and control messages]]
 #[test]
 fn show_arm_emits_no_response_envelope() {
     // Both source-audit snippets AND the mega-dispatcher must keep
@@ -198,7 +197,6 @@ fn show_arm_emits_no_response_envelope() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs and control messages]]
 #[test]
 fn hide_arm_emits_no_response_envelope() {
     assert_no_response_sink(
@@ -274,7 +272,6 @@ fn simulatekey_arm_snapshots_sender_before_dispatch_and_acks_after() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs and control messages]]
 #[test]
 fn dispatcher_snippets_do_not_import_response_sender() {
     // Show/Hide source-audit snippets remain response-channel-free.

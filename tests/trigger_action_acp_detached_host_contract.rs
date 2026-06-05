@@ -38,7 +38,6 @@ const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 const ACTIONS_DIALOG: &str = include_str!("../src/app_impl/actions_dialog.rs");
 const CHAT_WINDOW: &str = include_str!("../src/ai/acp/chat_window.rs");
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn actions_dialog_host_enum_defines_acp_detached_variant() {
     // The enum variant itself is the anchor — every other arm in the
@@ -65,7 +64,6 @@ fn actions_dialog_host_enum_defines_acp_detached_variant() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn trigger_action_host_parser_accepts_acp_detached() {
     // The parser lives in the single TriggerAction dispatcher site at
@@ -95,7 +93,6 @@ fn trigger_action_host_parser_accepts_acp_detached() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn execute_action_for_actions_host_routes_acp_detached_to_chat_window_helper() {
     // The router in `execute_action_for_actions_host` is the seam: it
@@ -123,7 +120,6 @@ fn execute_action_for_actions_host_routes_acp_detached_to_chat_window_helper() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn chat_window_exposes_dispatch_action_to_detached_helper() {
     // Pin the public helper's signature so it stays callable from
@@ -152,7 +148,6 @@ fn chat_window_exposes_dispatch_action_to_detached_helper() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn acp_close_arm_still_closes_chat_window_in_detached_dispatcher() {
     // The detached dispatcher's `"acp_close"` arm at the end of

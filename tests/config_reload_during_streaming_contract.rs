@@ -49,7 +49,6 @@
 const ACP_CONFIG_SOURCE: &str = include_str!("../src/ai/acp/config.rs");
 const LOADER_SOURCE: &str = include_str!("../src/config/loader.rs");
 
-// doc-anchor-removed: [[removed-docs Chat#Agent switching]]
 #[test]
 fn acp_agent_config_is_cached_per_process_via_oncelock() {
     assert!(
@@ -65,7 +64,6 @@ fn acp_agent_config_is_cached_per_process_via_oncelock() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Agent switching]]
 #[test]
 fn cached_agent_config_hot_path_short_circuits_on_cached_value() {
     assert!(
@@ -87,7 +85,6 @@ fn cached_agent_config_hot_path_short_circuits_on_cached_value() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Agent switching]]
 #[test]
 fn agent_config_cache_has_no_invalidation_path() {
     for forbidden in [
@@ -109,7 +106,6 @@ fn agent_config_cache_has_no_invalidation_path() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Agent switching]]
 #[test]
 fn prewarm_primes_the_agent_config_cache_on_startup() {
     assert!(
@@ -130,7 +126,6 @@ fn prewarm_primes_the_agent_config_cache_on_startup() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Agent switching]]
 #[test]
 fn load_config_holds_no_process_global_oncelock_of_config() {
     for forbidden in [
@@ -154,7 +149,6 @@ fn load_config_holds_no_process_global_oncelock_of_config() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Agent switching]]
 #[test]
 fn load_config_uses_file_fingerprint_for_disk_cache_lookup() {
     for needed in [

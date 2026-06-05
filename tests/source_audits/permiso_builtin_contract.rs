@@ -1,6 +1,5 @@
 use std::fs;
 
-// doc-anchor-removed: [[tests/permission-assistant#Permission Assistant#Built-in assistant entry points]]
 #[test]
 fn permiso_builtin_contract_allow_commands_route_to_retained_assistant() {
     let builtins = fs::read_to_string("src/builtins/mod.rs").expect("read builtins");

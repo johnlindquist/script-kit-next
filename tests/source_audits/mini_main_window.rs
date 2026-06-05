@@ -1,4 +1,4 @@
-//! Source audits for the Mini Main Window builtin and reset behavior.
+//! Source audits for the main-window builtin and reset behavior.
 
 use super::read_source as read;
 
@@ -8,9 +8,9 @@ fn mini_main_window_builtin_uses_shared_helper() {
 
     for expected in [
         "enum UtilityOpenBuiltinAction",
-        "UtilityOpenBuiltinAction::MiniMainWindow => self.open_mini_main_window(cx)",
-        "Self::MiniMainWindow => Some(\"Opening Mini Main Window\")",
-        "Self::MiniMainWindow => \"open_mini_main_window\"",
+        "UtilityOpenBuiltinAction::MainWindow => self.open_main_window(cx)",
+        "Self::MainWindow => Some(\"Opening Main Window\")",
+        "Self::MainWindow => \"open_main_window\"",
         "Self::builtin_success(dctx, action.success_detail())",
     ] {
         assert!(
@@ -21,12 +21,12 @@ fn mini_main_window_builtin_uses_shared_helper() {
 }
 
 #[test]
-fn open_mini_main_window_sets_mini_mode_contract() {
+fn open_main_window_sets_mini_mode_contract() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let fn_start = content
-        .find("fn open_mini_main_window(&mut self, cx: &mut Context<Self>) {")
-        .expect("Expected open_mini_main_window helper");
+        .find("fn open_main_window(&mut self, cx: &mut Context<Self>) {")
+        .expect("Expected open_main_window helper");
     let body = &content[fn_start..content.len().min(fn_start + 1800)];
 
     for expected in [
@@ -35,7 +35,7 @@ fn open_mini_main_window_sets_mini_mode_contract() {
         "self.pending_filter_sync = true;",
         "self.pending_placeholder = Some(\"Search scripts, apps, and commands…\".to_string());",
         "self.show_script_list_with_main_filter_focus();",
-        "self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, \"open_mini_main_window\");",
+        "self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, \"open_main_window\");",
         "self.hovered_index = None;",
         "self.selected_index = 0;",
         "self.opened_from_main_menu = true;",
@@ -45,30 +45,29 @@ fn open_mini_main_window_sets_mini_mode_contract() {
         "let item_count = grouped_items.len();",
         // Skip section headers so selected_index points to a real item
         "self.selected_index = first_selectable;",
-        "resize_to_view_sync(ViewType::MiniMainWindow, item_count);",
+        "resize_to_view_sync(ViewType::MainWindow, item_count);",
         "cx.notify();",
     ] {
         assert!(
             body.contains(expected),
-            "open_mini_main_window missing required line: {expected}"
+            "open_main_window missing required line: {expected}"
         );
     }
 }
 
 #[test]
-fn width_for_view_returns_mini_width_for_mini_main_window() {
+fn width_for_view_returns_main_window_width_for_main_window_views() {
     let content = read("src/window_resize/mod.rs");
     assert!(
-        content
-            .contains("ViewType::MiniMainWindow | ViewType::MiniPrompt | ViewType::MiniAiChat =>")
-            && content.contains("Some(MINI_MAIN_WINDOW_WIDTH)"),
-        "width_for_view must return MINI_MAIN_WINDOW_WIDTH for MiniMainWindow"
+        content.contains("ViewType::MainWindow")
+            && content.contains("ViewType::MiniPrompt")
+            && content.contains("ViewType::MiniAiChat")
+            && content.contains("Some(MAIN_WINDOW_WIDTH)"),
+        "width_for_view must return MAIN_WINDOW_WIDTH for main-window-sized views"
     );
     assert!(
-        content.contains(
-            "ViewType::ScriptList | ViewType::ExpandedMainWindow => Some(FULL_MAIN_WINDOW_WIDTH)"
-        ),
-        "width_for_view must return FULL_MAIN_WINDOW_WIDTH for ScriptList and ExpandedMainWindow"
+        content.contains("ViewType::ScriptList => Some(MAIN_WINDOW_WIDTH)"),
+        "width_for_view must return MAIN_WINDOW_WIDTH for ScriptList"
     );
 }
 
@@ -78,7 +77,7 @@ fn resize_to_view_sync_uses_width_aware_path() {
     let fn_start = content
         .find("pub fn resize_to_view_sync(")
         .expect("Expected resize_to_view_sync function");
-    let body = &content[fn_start..content.len().min(fn_start + 900)];
+    let body = &content[fn_start..content.len().min(fn_start + 1400)];
     assert!(
         body.contains("width_for_view(view_type)"),
         "resize_to_view_sync must call width_for_view"
@@ -88,8 +87,8 @@ fn resize_to_view_sync_uses_width_aware_path() {
         "resize_to_view_sync must call resize_first_window_to_size when width is Some"
     );
     assert!(
-        body.contains("mini_main_window sizing selected"),
-        "resize_to_view_sync must emit a structured sizing trace for MiniMainWindow"
+        body.contains("main_window sizing selected"),
+        "resize_to_view_sync must emit a structured sizing trace for MainWindow"
     );
 }
 
@@ -126,17 +125,14 @@ fn simulate_key_escape_delegates_to_go_back_when_opened_from_main_menu() {
     // The SimulateKey escape handler in ScriptList must check opened_from_main_menu
     // and delegate to go_back_or_close. Without this, ESC from mini main window
     // via stdin protocol would hide the window instead of restoring full mode.
-    for path in [
-        "src/main_entry/app_run_setup.rs",
-        "src/main_entry/runtime_stdin_match_simulate_key.rs",
-    ] {
+    for path in ["src/app_impl/simulate_key_dispatch.rs"] {
         let source = read(path);
         let escape_start = source
             .find("SimulateKey: Escape - close menu-syntax popup, clear filter, go back, or hide")
             .unwrap_or_else(|| panic!("SimulateKey escape handler must exist in {path}"));
         let escape_body = &source[escape_start..source.len().min(escape_start + 1800)];
         for marker in [
-            "is_menu_syntax_trigger_popup_window_open",
+            "menu_syntax_trigger_picker_owns_main_keyboard()",
             "!view.filter_text.is_empty()",
             "view.opened_from_main_menu",
             "view.go_back_or_close(window, ctx)",
@@ -148,7 +144,7 @@ fn simulate_key_escape_delegates_to_go_back_when_opened_from_main_menu() {
         }
 
         let popup_ix = escape_body
-            .find("is_menu_syntax_trigger_popup_window_open")
+            .find("menu_syntax_trigger_picker_owns_main_keyboard()")
             .unwrap();
         let filter_ix = escape_body.find("!view.filter_text.is_empty()").unwrap();
         let origin_ix = escape_body.find("view.opened_from_main_menu").unwrap();
@@ -168,10 +164,10 @@ fn physical_script_list_escape_delegates_to_go_back_when_opened_from_main_menu()
     let escape_start = source
         .find("Escape order on ScriptList:")
         .expect("ScriptList physical Escape branch should document its order");
-    let escape_body = &source[escape_start..source.len().min(escape_start + 1800)];
+    let escape_body = &source[escape_start..source.len().min(escape_start + 2600)];
 
     for marker in [
-        "is_menu_syntax_trigger_popup_window_open",
+        "menu_syntax_trigger_picker_owns_main_keyboard()",
         "!this.filter_text.is_empty()",
         "this.opened_from_main_menu",
         "this.close_and_reset_window(cx)",
@@ -183,7 +179,7 @@ fn physical_script_list_escape_delegates_to_go_back_when_opened_from_main_menu()
     }
 
     let popup_ix = escape_body
-        .find("is_menu_syntax_trigger_popup_window_open")
+        .find("menu_syntax_trigger_picker_owns_main_keyboard()")
         .unwrap();
     let filter_ix = escape_body.find("!this.filter_text.is_empty()").unwrap();
     let origin_ix = escape_body.find("this.opened_from_main_menu").unwrap();

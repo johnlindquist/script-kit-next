@@ -9,7 +9,6 @@
 //!
 //! Receipt: `cargo test --lib app_impl::menu_syntax_actions`.
 //!
-//! doc-anchor-removed: [[removed-docs Syntax#Cmd+K Power Syntax Actions]]
 
 use crate::actions::{Action, ActionCategory};
 use crate::menu_syntax::{current_menu_syntax_actions, MenuSyntaxAction, MenuSyntaxActionState};

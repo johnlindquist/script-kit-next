@@ -68,7 +68,6 @@ fn body_of<'a>(fn_name: &str, file: &'a str) -> &'a str {
     &file[body_start..i]
 }
 
-// doc-anchor-removed: [[removed-docs registry]]
 #[test]
 fn dispatch_trigger_builtin_name_body_has_no_current_view_gate() {
     let body = body_of("pub fn dispatch_trigger_builtin_name(", DISPATCH);
@@ -89,7 +88,6 @@ fn dispatch_trigger_builtin_name_body_has_no_current_view_gate() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs registry]]
 #[test]
 fn apply_trigger_builtin_body_has_no_current_view_gate() {
     let body = body_of("fn apply_trigger_builtin(", DISPATCH);
@@ -104,7 +102,6 @@ fn apply_trigger_builtin_body_has_no_current_view_gate() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs registry]]
 #[test]
 fn dispatch_clears_opened_from_main_menu_before_registry_resolve() {
     let body = body_of("pub fn dispatch_trigger_builtin_name(", DISPATCH);

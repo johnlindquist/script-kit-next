@@ -146,6 +146,14 @@ fn info_footer_shortcut_notes_use_footer_keycaps_not_raw_text() {
         "InfoState footer shortcut notes must render through footer keycaps"
     );
     assert!(
+        note_renderer.contains("render_info_guidance_text(note.text, None, palette)"),
+        "InfoState footer shortcut notes must share guidance row text styling instead of using a separate dim footer-note style"
+    );
+    assert!(
+        !note_renderer.contains(".text_color(palette.hint)"),
+        "shortcut-bearing help notes should not render as dim footer-note text when they visually behave like guidance rows"
+    );
+    assert!(
         !note_renderer.contains(".child(note.shortcut)")
             && !note_renderer.contains(".child(note.shortcut.to_string())")
             && !info.contains(".footer_note(\"⌘K shows every chat action.\")"),
@@ -169,7 +177,10 @@ fn footer_chrome_exposes_only_shared_shortcut_keycap_row_for_help_surfaces() {
         "shared footer shortcut keycap renderer must keep using the footer parser and token helper"
     );
     assert!(
-        footer.contains("render_footer_keycap(token.to_string(), None, theme)"),
+        shortcut_renderer.contains("render_footer_keycap_with_metrics")
+            && shortcut_renderer.contains("token.to_string()")
+            && shortcut_renderer.contains("keycap_font_size_px")
+            && shortcut_renderer.contains("keycap_height_px"),
         "shared footer shortcut token helper must keep using the footer keycap primitive"
     );
     assert!(

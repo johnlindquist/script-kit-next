@@ -5,7 +5,6 @@ const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 const UI_WINDOW: &str = include_str!("../src/app_impl/ui_window.rs");
 
-// doc-anchor-removed: [[removed-docs AI snapshot and close telemetry]]
 #[test]
 fn mini_ai_close_snapshot_carries_required_fields() {
     for field in [
@@ -28,7 +27,6 @@ fn mini_ai_close_snapshot_carries_required_fields() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs AI close telemetry]]
 #[test]
 fn mini_ai_close_path_emits_snapshot_before_close() {
     assert!(
@@ -61,7 +59,6 @@ fn mini_ai_close_path_emits_snapshot_before_close() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs AI getState snapshot]]
 #[test]
 fn get_state_exposes_mini_ai_snapshot_shape() {
     assert!(

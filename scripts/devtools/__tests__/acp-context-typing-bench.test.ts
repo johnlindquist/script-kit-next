@@ -12,15 +12,42 @@ function step(ms: number | null, success = true) {
     effectiveElapsedMs: ms,
     inputTextAfter: "@",
     visibleCountAfter: 1,
+    spine: {
+      ownsList: true,
+      activeSegmentKind: "contextMention",
+      rowCount: 3,
+      selectableRowCount: 3,
+      selectedIndex: 0,
+      rowFingerprint: "fnv1a64:0000000000000001",
+      selectedRowFingerprint: "fnv1a64:0000000000000002",
+      refreshElapsedMs: 1,
+    },
+    spineProof: { required: true, ok: true },
     target: { type: "id", id: "ai" },
   };
 }
 
 function scenario(name: string, p95: number, target: unknown = { type: "id", id: "ai" }) {
-  const steps = [step(p95 - 2), step(p95 - 1), step(p95)];
+  const targetKind = name.startsWith("acp") ? "acp" as const : "main" as const;
+  const steps = [step(p95 - 2), step(p95 - 1), step(p95)].map((entry) => {
+    if (targetKind === "main") {
+      return {
+        ...entry,
+        spine: null,
+        spineProof: { required: false, ok: true },
+      };
+    }
+    if (name === "acp-file-subsearch") {
+      return { ...entry, spine: { ...entry.spine, subsearchSource: "file" } };
+    }
+    if (name === "acp-clipboard-subsearch") {
+      return { ...entry, spine: { ...entry.spine, subsearchSource: "clipboard" } };
+    }
+    return entry;
+  });
   return {
     name,
-    targetKind: name.startsWith("acp") ? "acp" as const : "main" as const,
+    targetKind,
     target,
     steps,
     summary: summarizeBenchSteps(steps),
@@ -38,6 +65,8 @@ describe("acp context typing benchmark receipt", () => {
     expect(summary.over32Count).toBe(1);
     expect(summary.missingTimingCount).toBe(1);
     expect(summary.missingTraceTimingCount).toBe(1);
+    expect(summary.missingSpineCount).toBe(0);
+    expect(summary.failedSpineProofCount).toBe(0);
     expect(summary.failedStepCount).toBe(1);
   });
 
@@ -50,6 +79,15 @@ describe("acp context typing benchmark receipt", () => {
 
     expect(summary.p95Ms).toBe(120);
     expect(summary.over32Count).toBe(1);
+  });
+
+  test("uses ACP spine row count as visible count after input", () => {
+    const entry = {
+      ...step(8),
+      visibleCountAfter: 3,
+    };
+
+    expect(entry.visibleCountAfter).toBe(entry.spine?.rowCount);
   });
 
   test("classifies slow ACP context typing as reproduced relative to main menu", () => {
@@ -96,6 +134,56 @@ describe("acp context typing benchmark receipt", () => {
       missingTiming,
       scenario("acp-file-subsearch", 10),
       scenario("acp-clipboard-subsearch", 10),
+    ])).toBe("blocked-by-missing-primitive");
+  });
+
+  test("fails closed when ACP spine receipt is missing for @ input", () => {
+    const missingSpine = {
+      ...scenario("acp-context-root", 9),
+      steps: [{ ...step(9), spine: null, spineProof: { required: true, ok: false, reason: "missing-spine" } }],
+    };
+    missingSpine.summary = summarizeBenchSteps(missingSpine.steps);
+
+    expect(classifyBenchReceipt([
+      scenario("main-menu-search-baseline", 8, { type: "id", id: "main" }),
+      scenario("main-menu-spine-at-baseline", 8, { type: "id", id: "main" }),
+      missingSpine,
+      scenario("acp-file-subsearch", 10),
+      scenario("acp-clipboard-subsearch", 10),
+    ])).toBe("blocked-by-missing-primitive");
+  });
+
+  test("requires subsearch source for ACP file and clipboard scenarios", () => {
+    const badFile = scenario("acp-file-subsearch", 10);
+    badFile.steps = badFile.steps.map((entry) => ({
+      ...entry,
+      spine: entry.spine ? { ...entry.spine, subsearchSource: undefined } : null,
+      spineProof: { required: true, ok: false, reason: "missing-file-subsearch-source" },
+    }));
+    badFile.summary = summarizeBenchSteps(badFile.steps);
+
+    expect(classifyBenchReceipt([
+      scenario("main-menu-search-baseline", 8, { type: "id", id: "main" }),
+      scenario("main-menu-spine-at-baseline", 8, { type: "id", id: "main" }),
+      scenario("acp-context-root", 9),
+      badFile,
+      scenario("acp-clipboard-subsearch", 10),
+    ])).toBe("blocked-by-missing-primitive");
+
+    const badClipboard = scenario("acp-clipboard-subsearch", 10);
+    badClipboard.steps = badClipboard.steps.map((entry) => ({
+      ...entry,
+      spine: entry.spine ? { ...entry.spine, subsearchSource: undefined } : null,
+      spineProof: { required: true, ok: false, reason: "missing-clipboard-subsearch-source" },
+    }));
+    badClipboard.summary = summarizeBenchSteps(badClipboard.steps);
+
+    expect(classifyBenchReceipt([
+      scenario("main-menu-search-baseline", 8, { type: "id", id: "main" }),
+      scenario("main-menu-spine-at-baseline", 8, { type: "id", id: "main" }),
+      scenario("acp-context-root", 9),
+      scenario("acp-file-subsearch", 10),
+      badClipboard,
     ])).toBe("blocked-by-missing-primitive");
   });
 });

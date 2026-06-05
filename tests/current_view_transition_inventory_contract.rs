@@ -135,7 +135,6 @@ fn expected_transition_contract(helper: &str) -> serde_json::Value {
     }
 }
 
-// doc-anchor-removed: [[removed-docs Current-View Transition Inventory]]
 #[test]
 fn generated_current_view_transition_inventory_is_not_stale() {
     let output = Command::new("bun")
@@ -246,8 +245,8 @@ fn inventory_captures_known_transition_classes() {
         ),
         (
             "src/app_execute/builtin_execution.rs",
-            "execute_kit_store_builtin",
-            "AppView::BrowseKitsView",
+            "open_main_window",
+            "AppView::ScriptList",
         ),
         (
             "src/app_actions/handle_action/mod.rs",
@@ -278,7 +277,7 @@ fn inventory_captures_named_transition_helper_call_sites() {
         ),
         (
             "src/app_impl/tab_ai_mode/acp_launch.rs",
-            "open_tab_ai_acp_view_from_request_impl",
+            "open_standard_agent_chat_mock_fixture",
             "enter_embedded_acp_chat_surface",
             "AppView::AcpChatView",
         ),
@@ -290,7 +289,7 @@ fn inventory_captures_named_transition_helper_call_sites() {
         ),
         (
             "src/app_execute/builtin_execution.rs",
-            "open_mini_main_window",
+            "open_main_window",
             "show_script_list_with_main_filter_focus",
             "AppView::ScriptList",
         ),

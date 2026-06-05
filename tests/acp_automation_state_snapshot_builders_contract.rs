@@ -15,7 +15,6 @@ fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a st
     &source[start..start + end_rel]
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Automation state snapshots]]
 #[test]
 fn collect_acp_state_snapshot_delegates_to_named_builders() {
     let body = source_between(
@@ -48,6 +47,7 @@ fn live_snapshot_builder_names_all_state_parts() {
     for required in [
         "Self::acp_thread_status_label(thread.status)",
         "picker: self.build_acp_picker_state_snapshot()",
+        "spine: self.build_acp_spine_state_snapshot()",
         "Self::build_acp_context_summary(pending_parts)",
         "Self::build_acp_input_layout_metrics(",
         "Self::build_acp_live_setup_snapshot(thread, setup_snapshot)",
@@ -118,11 +118,52 @@ fn picker_layout_and_context_builders_preserve_snapshot_fields() {
 }
 
 #[test]
+fn spine_snapshot_builder_is_redacted_and_structural() {
+    let body = source_between(
+        ACP_VIEW,
+        "fn build_acp_spine_state_snapshot(",
+        "\n    fn build_acp_input_layout_metrics(",
+    );
+
+    for required in [
+        "fn build_acp_spine_state_snapshot(",
+        "self.acp_spine_owns_list()",
+        "self.acp_spine_rows()",
+        "self.composer_spine",
+        "selected_index",
+        "row_count",
+        "selectable_row_count",
+        "selected_row_fingerprint",
+        "row_fingerprint",
+        "refresh_elapsed_ms",
+        "active_segment_kind",
+        "subsearch_source",
+    ] {
+        assert!(
+            body.contains(required),
+            "spine snapshot builder must contain: {required}"
+        );
+    }
+
+    for forbidden in [
+        "row.title.to_string()",
+        "row.subtitle",
+        "thread.input.text().to_string()",
+        "format!(\"{:?}\", projection.active_segment_kind)",
+    ] {
+        assert!(
+            !body.contains(forbidden),
+            "spine snapshot builder must not expose raw data via: {forbidden}"
+        );
+    }
+}
+
+#[test]
 fn test_probe_snapshot_embeds_the_same_state_builder() {
     let body = source_between(
         ACP_VIEW,
         "pub(crate) fn test_probe_snapshot(",
-        "\n    /// Emit structured ACP key-routing telemetry.",
+        "\n    /// Emit structured key-routing telemetry",
     );
 
     assert!(

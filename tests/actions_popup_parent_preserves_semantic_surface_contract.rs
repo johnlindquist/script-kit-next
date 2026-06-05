@@ -98,7 +98,6 @@ const PASS_21_COMMENT_PHRASES: &[&str] = &[
     "Run 7 Pass #17",
 ];
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn resolve_actions_popup_parent_automation_id_function_exists() {
     let count = ACTIONS_WINDOW.matches(FN_HEAD).count();
@@ -113,7 +112,6 @@ fn resolve_actions_popup_parent_automation_id_function_exists() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn resolve_actions_popup_parent_reads_registry_before_upsert() {
     let fn_start = ACTIONS_WINDOW
@@ -195,7 +193,6 @@ fn resolve_actions_popup_parent_reads_registry_before_upsert() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn resolve_actions_popup_parent_forbids_hardcoded_scriptlist_upsert() {
     let fn_start = ACTIONS_WINDOW
@@ -238,7 +235,6 @@ fn resolve_actions_popup_parent_forbids_hardcoded_scriptlist_upsert() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn resolve_actions_popup_parent_carries_pass_21_anchor_comment() {
     let fn_start = ACTIONS_WINDOW

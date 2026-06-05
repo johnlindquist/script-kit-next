@@ -1393,7 +1393,8 @@ fn actions_dialog_state_uses_shared_destructive_detection() {
         "getState actionsDialog.visibleActions must report the same destructive status used by the renderer"
     );
     assert!(
-        actions_mod.contains("pub(crate) use dialog::is_destructive_action;"),
+        actions_mod.contains("pub(crate) use dialog::")
+            && actions_mod.contains("is_destructive_action"),
         "shared destructive detection should be available to state receipts"
     );
 }

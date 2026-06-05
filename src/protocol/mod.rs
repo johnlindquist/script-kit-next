@@ -79,7 +79,7 @@ pub use types::{
     target_bounds_in_screenshot_with_main, AcpAcceptedItem, AcpFocusedTextActionReceipt,
     AcpFocusedTextState, AcpInputLayoutMetrics, AcpInputLayoutTelemetry, AcpKeyRoute,
     AcpKeyRouteTelemetry, AcpLastInteractionTrace, AcpPickerItemAcceptedTelemetry, AcpPickerState,
-    AcpResolvedTarget, AcpSetupActionKind, AcpSetupSnapshot, AcpStateSnapshot,
+    AcpResolvedTarget, AcpSetupActionKind, AcpSetupSnapshot, AcpSpineSnapshot, AcpStateSnapshot,
     AcpTestProbeSnapshot, AcpWaitCondition, ActiveFooterButtonSnapshot,
     ActiveFooterCwdChipSnapshot, ActiveFooterLeftInfoSnapshot, ActiveFooterSnapshot, AiChatInfo,
     AiContextPartInput, AiMessageInfo, AutomationInspectSnapshot, AutomationSurfaceSnapshot,

@@ -1202,7 +1202,9 @@ pub struct ListItem {
     description: Option<String>,
     shortcut: Option<String>,
     shortcut_tokens: Option<Vec<String>>,
+    shortcut_visibility_policy: RowShortcutVisibilityPolicy,
     icon: Option<IconKind>,
+    destructive_text_color: Option<u32>,
     selected: bool,
     /// Whether this item is being hovered (subtle visual feedback, separate from selected)
     hovered: bool,
@@ -1281,7 +1283,9 @@ impl ListItem {
             description: None,
             shortcut: None,
             shortcut_tokens: None,
+            shortcut_visibility_policy: RowShortcutVisibilityPolicy::SelectedOnly,
             icon: None,
+            destructive_text_color: None,
             selected: false,
             hovered: false,
             colors,
@@ -1372,6 +1376,21 @@ impl ListItem {
             self.shortcut_tokens = None;
         }
         self.shortcut = s;
+        self
+    }
+
+    /// Set when shortcut chrome should be visible for this row.
+    pub(crate) fn shortcut_visibility_policy(
+        mut self,
+        policy: RowShortcutVisibilityPolicy,
+    ) -> Self {
+        self.shortcut_visibility_policy = policy;
+        self
+    }
+
+    /// Render primary row text/icon with a destructive color.
+    pub(crate) fn destructive_text_color(mut self, color: u32) -> Self {
+        self.destructive_text_color = Some(color);
         self
     }
 
@@ -1532,6 +1551,8 @@ impl RenderOnce for ListItem {
         let item_index = index.unwrap_or(0);
         let on_hover_callback = self.on_hover;
         let semantic_id = self.semantic_id;
+        let shortcut_visibility_policy = self.shortcut_visibility_policy;
+        let destructive_text_color = self.destructive_text_color;
 
         // GPUI input modality: suppress hover visuals during keyboard navigation.
         // This replaces per-view InputMode::Mouse gating — GPUI tracks modality natively.
@@ -1641,7 +1662,9 @@ impl RenderOnce for ListItem {
 
         // Icon element (if present) - displayed on the left
         // Supports both emoji strings and PNG image data
-        let icon_text_color = if on_accent_text || icon_tile {
+        let icon_text_color = if let Some(color) = destructive_text_color {
+            rgb(color)
+        } else if on_accent_text || icon_tile {
             // On a solid accent fill/tile, the glyph flips to the contrast color.
             rgb(colors.text_on_accent)
         } else if icon_is_accent_bright {
@@ -1768,7 +1791,9 @@ impl RenderOnce for ListItem {
         };
         let name_element = if let Some(ref indices) = self.highlight_indices {
             // Build StyledText with highlighted matched characters.
-            let highlight_color = if on_accent_text {
+            let highlight_color = if let Some(color) = destructive_text_color {
+                rgb(color)
+            } else if on_accent_text {
                 rgb(colors.text_on_accent)
             } else if name_is_accent {
                 accent_at(0xFF)
@@ -1817,7 +1842,9 @@ impl RenderOnce for ListItem {
                 .child(styled)
         } else {
             // Plain text rendering (no search active)
-            let name_color = if on_accent_text {
+            let name_color = if let Some(color) = destructive_text_color {
+                rgb(color)
+            } else if on_accent_text {
                 rgb(colors.text_on_accent)
             } else if name_is_accent {
                 accent_at(0xFF)
@@ -1957,7 +1984,7 @@ impl RenderOnce for ListItem {
             resolved_shortcut_tokens.as_ref()
         {
             let show_shortcut =
-                should_show_search_shortcut(is_filtering, self.selected, hover_visible);
+                should_show_row_shortcut(shortcut_visibility_policy, self.selected, hover_visible);
             if show_shortcut {
                 crate::components::hint_strip::emit_shortcut_chrome_audit(
                     "list_item",
@@ -2421,33 +2448,6 @@ mod render_section_header_source_tests {
     }
 
     #[test]
-    fn section_headers_do_not_render_separator_lines() {
-        let body = render_section_header_source();
-        assert!(
-            !body.contains("border_t_1"),
-            "section headers should rely on spacing, not separator lines"
-        );
-    }
-
-    #[test]
-    fn section_header_docs_do_not_reference_removed_top_border_behavior() {
-        let body = render_section_header_source();
-        assert!(
-            !body.contains("suppresses top border"),
-            "render_section_header docs should not describe removed separator behavior"
-        );
-    }
-}
-
-#[cfg(test)]
-mod selected_accent_bar_removed_tests {
-    const SOURCE: &str = include_str!("mod.rs");
-
-    #[test]
-    fn list_item_does_not_render_left_edge_accent_bar() {
-        // The selected-row left-edge accent strip was removed in favor of the
-        // main-menu theme explorer. Guard against it sneaking back in.
-    #[test]
     fn section_header_geometry_comes_from_metrics() {
         let body = render_section_header_source();
         for required in [
@@ -2476,6 +2476,33 @@ mod selected_accent_bar_removed_tests {
         }
     }
 
+    #[test]
+    fn section_headers_do_not_render_separator_lines() {
+        let body = render_section_header_source();
+        assert!(
+            !body.contains("border_t_1"),
+            "section headers should rely on spacing, not separator lines"
+        );
+    }
+
+    #[test]
+    fn section_header_docs_do_not_reference_removed_top_border_behavior() {
+        let body = render_section_header_source();
+        assert!(
+            !body.contains("suppresses top border"),
+            "render_section_header docs should not describe removed separator behavior"
+        );
+    }
+}
+
+#[cfg(test)]
+mod selected_accent_bar_removed_tests {
+    const SOURCE: &str = include_str!("mod.rs");
+
+    #[test]
+    fn list_item_does_not_render_left_edge_accent_bar() {
+        // The selected-row left-edge accent strip was removed in favor of the
+        // main-menu theme explorer. Guard against it sneaking back in.
         // NOTE: needle is assembled via concat! so this assertion does not
         // match itself in the included source text.
         let needle = concat!("border_l(px(ACCENT_", "BAR_WIDTH))");

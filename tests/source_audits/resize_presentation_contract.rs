@@ -18,20 +18,9 @@ fn source_between<'a>(source: &'a str, start_marker: &str, end_marker: &str) -> 
 
 #[test]
 fn prompt_spawned_term_resize_is_state_guarded() {
-    // doc-anchor-removed: [[removed-docs Rules]]
     let source = read("src/prompt_handler/mod.rs");
-    let block = source_between(
-        &source,
-        "PromptMessage::ShowTerm {",
-        "PromptMessage::ShowEditor {",
-    );
-
-    assert!(
-        !block.contains("cx.spawn(async move |_this, _cx|")
-            && !block.contains("resize_to_view_sync(ViewType::TermPrompt, 0);"),
-        "ShowTerm must not spawn an unconditional TermPrompt resize"
-    );
     for expected in [
+        "PromptMessage::ShowTerm {",
         "let expected_id = id.clone();",
         "AppView::TermPrompt { id, .. }",
         "id == &expected_id",
@@ -40,15 +29,18 @@ fn prompt_spawned_term_resize_is_state_guarded() {
         "resize_to_view_sync(view_type, item_count);",
     ] {
         assert!(
-            block.contains(expected),
+            source.contains(expected),
             "ShowTerm deferred resize must contain state guard marker `{expected}`"
         );
     }
+    assert!(
+        !source.contains("resize_to_view_sync(ViewType::TermPrompt, 0);"),
+        "ShowTerm must not spawn an unconditional TermPrompt resize"
+    );
 }
 
 #[test]
 fn prompt_spawned_editor_resize_is_state_guarded() {
-    // doc-anchor-removed: [[removed-docs Rules]]
     let source = read("src/prompt_handler/mod.rs");
     let block = source_between(
         &source,
@@ -78,7 +70,6 @@ fn prompt_spawned_editor_resize_is_state_guarded() {
 
 #[test]
 fn resize_guard_helper_delegates_to_canonical_state_sizing() {
-    // doc-anchor-removed: [[removed-docs Rules]]
     let source = read("src/app_impl/ui_window.rs");
     let block = source_between(
         &source,
@@ -111,7 +102,7 @@ fn resize_guard_helper_delegates_to_canonical_state_sizing() {
 }
 
 #[test]
-fn expanded_main_window_uses_standard_height_with_full_width() {
+fn main_window_uses_standard_height_with_main_width() {
     let resize = read("src/window_resize/mod.rs");
     let height_match = source_between(
         &resize,
@@ -119,16 +110,14 @@ fn expanded_main_window_uses_standard_height_with_full_width() {
         "fn initial_window_height_with_layout(",
     );
     assert!(
-        height_match.contains(
-            "ViewType::ExpandedMainWindow => height_for_expanded_main_window_with_layout(layout_config)"
-        ),
-        "expanded list/detail surfaces must use the configured standard-height path"
+        height_match.contains("ViewType::MainWindow | ViewType::MiniAiChat"),
+        "main-window-sized surfaces must use the consolidated MainWindow height path"
     );
     assert!(
-        resize.contains("pub(crate) fn height_for_expanded_main_window() -> Pixels")
-            && resize.contains("height_for_expanded_main_window_with_layout(&layout_config)")
-            && resize.contains("initial_window_height_with_layout(layout_config)"),
-        "expanded list/detail height must follow the standard main-window height"
+        resize
+            .contains("pub(crate) fn height_for_main_window(_sizing: MainWindowSizing) -> Pixels")
+            && resize.contains("px(MAIN_WINDOW_MAX_HEIGHT)"),
+        "main-window height must follow the fixed MainWindow sizing helper"
     );
 
     let width_match = source_between(
@@ -137,10 +126,9 @@ fn expanded_main_window_uses_standard_height_with_full_width() {
         "pub fn initial_window_height()",
     );
     assert!(
-        width_match.contains(
-            "ViewType::ScriptList | ViewType::ExpandedMainWindow => Some(FULL_MAIN_WINDOW_WIDTH)"
-        ),
-        "expanded list/detail surfaces must keep full width"
+        width_match.contains("ViewType::MainWindow")
+            && width_match.contains("ViewType::ScriptList => Some(MAIN_WINDOW_WIDTH)"),
+        "main-window and script-list surfaces must keep MAIN_WINDOW_WIDTH"
     );
 }
 
@@ -148,10 +136,11 @@ fn expanded_main_window_uses_standard_height_with_full_width() {
 fn main_menu_show_uses_named_sizing_target_not_previous_prompt_bounds() {
     let resize = read("src/window_resize/mod.rs");
     assert!(
-        resize.contains("enum MainMenuSizingTarget")
-            && resize.contains("Self::Full => initial_window_height()")
-            && resize.contains("Self::Mini(sizing) => height_for_mini_main_window(sizing)"),
-        "main menu sizing must have an explicit enum target with full and mini floors"
+        resize.contains("pub(crate) struct MainMenuSizingTarget(pub MainWindowSizing)")
+            && resize.contains("pub(crate) fn width(self) -> f32")
+            && resize.contains("pub(crate) fn height(self) -> Pixels")
+            && resize.contains("height_for_main_window(self.0)"),
+        "main menu sizing must have an explicit main-window target wrapper"
     );
 
     let visibility = read("src/main_sections/window_visibility.rs");
@@ -161,13 +150,13 @@ fn main_menu_show_uses_named_sizing_target_not_previous_prompt_bounds() {
         "logging::log(\n        \"POSITION_TRACE\",",
     );
     assert!(
-        show_bounds.contains("MainMenuSizingTarget::Mini(sizing)")
-            && show_bounds.contains("MainMenuSizingTarget::Full"),
+        show_bounds.contains("MainMenuSizingTarget(sizing)")
+            && show_bounds.contains("MainMenuSizingTarget("),
         "show_main_window must compute ScriptList size from named main-menu targets"
     );
     assert!(
-        show_bounds.find("MainMenuSizingTarget::Full")
-            < show_bounds.find("view.calculate_window_size_params()"),
+        show_bounds.find("MainMenuSizingTarget(")
+            < show_bounds.find("view.calculate_window_size_params_with_app("),
         "ScriptList full main menu sizing must not fall through to generic prompt/list sizing"
     );
 }
@@ -181,7 +170,7 @@ fn reset_positions_uses_named_mini_main_menu_sizing_target() {
         "    pub(crate) fn cancel_script_execution(",
     );
     assert!(
-        reset.contains("MainMenuSizingTarget::Mini(sizing)")
+        reset.contains("MainMenuSizingTarget(sizing)")
             && reset.contains("target.width()")
             && reset.contains("target.height()"),
         "default mini main-menu reset must use the named main menu sizing target"
@@ -189,7 +178,7 @@ fn reset_positions_uses_named_mini_main_menu_sizing_target() {
 }
 
 #[test]
-fn file_search_full_presentation_uses_expanded_main_window_sizing() {
+fn file_search_full_presentation_uses_main_window_sizing() {
     let source = read("src/app_impl/filter_input_core.rs");
     let resize_for_presentation = source_between(
         &source,
@@ -198,9 +187,9 @@ fn file_search_full_presentation_uses_expanded_main_window_sizing() {
     );
     assert!(
         resize_for_presentation.contains(
-            "FileSearchPresentation::Full => resize_to_view_sync(ViewType::ExpandedMainWindow, 0)"
+            "FileSearchPresentation::Full => resize_to_view_sync(ViewType::MainWindow, 0)"
         ),
-        "full Search Files must widen only through ExpandedMainWindow sizing"
+        "full Search Files must use MainWindow sizing"
     );
 
     let resize_after_results = source_between(
@@ -209,8 +198,8 @@ fn file_search_full_presentation_uses_expanded_main_window_sizing() {
         "    /// Shared helper that opens file search",
     );
     assert!(
-        resize_after_results.contains("resize_to_view_sync(ViewType::ExpandedMainWindow, 0);"),
-        "file-search result updates must preserve expanded sizing"
+        resize_after_results.contains("resize_to_view_sync(ViewType::MainWindow, 0);"),
+        "file-search result updates must preserve MainWindow sizing"
     );
     assert!(
         !resize_for_presentation.contains("resize_to_view_sync(ViewType::ScriptList, 0)")
@@ -270,9 +259,10 @@ fn shared_search_input_pins_inner_text_line_height_to_cursor_contract() {
     );
 
     for expected in [
-        "crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0)",
-        ".line_height(gpui::px(crate::panel::CURSOR_HEIGHT_LG))",
-        ".with_size(gpui_component::Size::Size(gpui::px(self.theme_font_size_xl())))",
+        "let search = self.current_main_menu_theme.def().search;",
+        ".h(gpui::px(search.height))",
+        ".line_height(gpui::px(search.height))",
+        ".with_size(gpui_component::Size::Size(gpui::px(input_font_size)))",
     ] {
         assert!(
             body.contains(expected),

@@ -15,7 +15,6 @@ fn function_body(marker: &str) -> &str {
     &tail[..end]
 }
 
-// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn find_rejects_typed_unsupported_before_send() {
     let body = function_body("globalThis.find = function find(");
@@ -46,7 +45,6 @@ fn find_rejects_typed_unsupported_before_send() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs and control messages]]
 #[test]
 fn sdk_no_longer_defines_a_find_protocol_message_shape() {
     assert!(
@@ -63,7 +61,6 @@ fn sdk_no_longer_defines_a_find_protocol_message_shape() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn rust_protocol_exposes_file_search_but_not_find_prompt() {
     assert!(
@@ -80,7 +77,6 @@ fn rust_protocol_exposes_file_search_but_not_find_prompt() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn sdk_reference_marks_find_as_unsupported_with_file_search_alternative() {
     assert!(

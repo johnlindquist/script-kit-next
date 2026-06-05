@@ -183,7 +183,7 @@ fn context_picker_empty_query_includes_all_portals() {
     let portal_labels: Vec<String> = items
         .iter()
         .filter_map(|item| match item.kind {
-            ContextPickerItemKind::PortalPrefix(_) => Some(item.label.to_string()),
+            ContextPickerItemKind::Portal(_) => Some(item.label.to_string()),
             _ => None,
         })
         .collect();
@@ -198,6 +198,7 @@ fn context_picker_empty_query_includes_all_portals() {
         "@skill",
         "@note",
         "@history",
+        "@terminal",
     ] {
         assert!(
             portal_labels.iter().any(|label| label == expected),
@@ -247,6 +248,7 @@ fn every_portal_colon_query_enters_inline_search_mode_with_fallback() {
         ("skill:", "portal-full:skill"),
         ("note:", "portal-full:note"),
         ("history:", "portal-full:history"),
+        ("terminal:", "portal-full:terminal"),
     ] {
         let items = build_picker_items(ContextPickerTrigger::Mention, query);
         assert!(
@@ -324,19 +326,16 @@ fn inline_script_list_portal_results_attach_like_full_portal_selection() {
 }
 
 #[test]
-fn context_picker_browser_tabs_aliases_surface_portal_and_prefix() {
+fn context_picker_browser_tabs_aliases_open_full_portal_and_keep_colon_fallback() {
     let items = build_picker_items(ContextPickerTrigger::Mention, "tabs");
     let tabs_row = items
         .iter()
         .find(|item| item.label.as_ref() == "@tabs")
-        .expect("@tabs portal prefix should match tabs query");
-    match &tabs_row.kind {
-        ContextPickerItemKind::PortalPrefix(payload) => {
-            assert_eq!(payload.portal_kind, PortalKind::BrowserTabs);
-            assert_eq!(payload.prefix, "tabs");
-        }
-        other => panic!("expected BrowserTabs PortalPrefix, got {other:?}"),
-    }
+        .expect("@tabs portal should match tabs query");
+    assert!(matches!(
+        tabs_row.kind,
+        ContextPickerItemKind::Portal(PortalKind::BrowserTabs)
+    ));
 
     for query in ["tabs:", "browser-tabs:"] {
         let items = build_picker_items(ContextPickerTrigger::Mention, query);
@@ -408,18 +407,71 @@ fn context_picker_browser_tabs_inline_result_carries_full_focused_target_metadat
 }
 
 #[test]
-fn portal_prefix_rows_insert_colon_instead_of_opening_full_portal() {
+fn top_level_portal_rows_open_full_portals() {
     let items = build_picker_items(ContextPickerTrigger::Mention, "browser");
     let row = items
         .iter()
         .find(|item| item.label.as_ref() == "@browser-history")
-        .expect("browser history prefix should match browser query");
-    match &row.kind {
-        ContextPickerItemKind::PortalPrefix(payload) => {
-            assert_eq!(payload.portal_kind, PortalKind::BrowserHistory);
-            assert_eq!(payload.prefix, "browser-history");
-        }
-        other => panic!("expected PortalPrefix, got {other:?}"),
+        .expect("browser history portal should match browser query");
+    assert!(matches!(
+        row.kind,
+        ContextPickerItemKind::Portal(PortalKind::BrowserHistory)
+    ));
+}
+
+#[test]
+fn context_picker_terminal_query_matches_portal() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "terminal");
+    let row = items
+        .iter()
+        .find(|item| item.label.as_ref() == "@terminal")
+        .expect("@terminal portal should match terminal query");
+    assert!(matches!(
+        row.kind,
+        ContextPickerItemKind::Portal(PortalKind::Terminal)
+    ));
+}
+
+#[test]
+fn terminal_colon_query_returns_terminal_history_results() {
+    crate::terminal_history::clear_for_tests();
+    crate::terminal_history::record(crate::terminal_history::TerminalHistoryEntry {
+        label: "Terminal Output".to_string(),
+        source: "terminal://quick-terminal/test".to_string(),
+        text: "Terminal session\n--- output ---\npnpm test passed".to_string(),
+        line_count: 3,
+        truncated: false,
+        captured_at: "2026-06-04T00:00:00Z".to_string(),
+    });
+
+    let items = build_picker_items(ContextPickerTrigger::Mention, "terminal:test");
+    assert!(items.iter().any(|item| {
+        matches!(
+            &item.kind,
+            ContextPickerItemKind::PortalResult(super::types::InlinePortalResultPayload {
+                portal_kind: PortalKind::Terminal,
+                attachment: super::types::InlinePortalAttachment::TextBlock { .. },
+            })
+        )
+    }));
+}
+
+#[test]
+fn context_picker_top_level_clipboard_and_file_open_full_portals() {
+    for (query, label, expected_kind) in [
+        ("clipboard", "@clipboard", PortalKind::ClipboardHistory),
+        ("file", "@file", PortalKind::FileSearch),
+    ] {
+        let items = build_picker_items(ContextPickerTrigger::Mention, query);
+        let row = items
+            .iter()
+            .find(|item| item.label.as_ref() == label)
+            .unwrap_or_else(|| panic!("{label} portal should match {query:?}"));
+        assert!(
+            matches!(row.kind, ContextPickerItemKind::Portal(kind) if kind == expected_kind),
+            "{label} should open the full portal surface, got {:?}",
+            row.kind
+        );
     }
 }
 
@@ -500,7 +552,10 @@ fn context_picker_clipboard_query_keeps_builtin_ahead_of_portal() {
         .iter()
         .position(|item| {
             item.label.as_ref() == "@clipboard"
-                && matches!(item.kind, ContextPickerItemKind::PortalPrefix(_))
+                && matches!(
+                    item.kind,
+                    ContextPickerItemKind::Portal(PortalKind::ClipboardHistory)
+                )
         })
         .expect("clipboard portal should be present");
 
@@ -877,6 +932,64 @@ fn context_picker_render_uses_list_not_children() {
         !source.contains(".children(rows)"),
         "Context picker must not use .children(rows) — use list() for scroll reveal"
     );
+}
+
+#[test]
+fn context_picker_rows_use_main_list_item_chrome() {
+    let source = include_str!("render.rs");
+    assert!(source.contains("ListItem::new"));
+    assert!(source.contains("ListItemColors::from_theme"));
+    assert!(source.contains(".selected(is_selected)"));
+    assert!(source.contains(".main_menu_theme("));
+    assert!(source.contains(".semantic_id(format!(\"ctx-picker-{ix}\"))"));
+    assert!(!source.contains("render_soft_compact_picker_row"));
+    assert!(!source.contains("render_dense_monoline_picker_row"));
+}
+
+#[test]
+fn context_picker_overlay_shell_and_click_contract_are_preserved() {
+    let source = include_str!("render.rs");
+    for needle in [
+        "let picker_list = list(",
+        "self.context_picker_list_state.clone()",
+        "InlineDropdown::new(",
+        "\"context-picker-overlay\"",
+        ".empty_state_opt(empty_state)",
+        ".synopsis(synopsis)",
+        ".vertical_padding(4.0)",
+        "picker.selected_index = ix",
+        "accept_context_picker_selection(window, cx)",
+    ] {
+        assert!(
+            source.contains(needle),
+            "missing preserved contract: {needle}"
+        );
+    }
+}
+
+#[test]
+fn context_picker_empty_state_hint_chips_remain_clickable() {
+    let source = include_str!("render.rs");
+    for needle in [
+        "format!(\"hint-{}\", hint.display)",
+        "ai_context_picker_empty_hint_applied",
+        "set_composer_value(hint_insertion_for_click.clone(), window, cx)",
+        "No matching commands",
+        "No matching context",
+        "No matching profiles",
+    ] {
+        assert!(
+            source.contains(needle),
+            "missing empty-state contract: {needle}"
+        );
+    }
+}
+
+#[test]
+fn context_picker_open_log_uses_main_list_item_layout() {
+    let source = include_str!("mod.rs");
+    assert!(source.contains("layout = \"main_list_item\""));
+    assert!(!source.contains("layout = \"dense_monoline_shared\""));
 }
 
 #[test]
@@ -1335,7 +1448,6 @@ fn provider_backed_items_are_hidden_when_unavailable() {
 }
 
 #[test]
-// doc-anchor-removed: [[tests/tests#Context picker provider hints]]
 fn provider_backed_items_appear_when_slot_data_exists() {
     let _env = ProviderTestEnv::new();
 

@@ -39,7 +39,6 @@
 
 const SIMULATOR: &str = include_str!("../src/platform/gpui_event_simulator.rs");
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn main_kind_branch_reacquires_from_global_handle() {
     // The Main-kind branch is the exact seam Pass #5 introduced — it
@@ -78,7 +77,6 @@ fn main_kind_branch_reacquires_from_global_handle() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn ok_branch_dispatches_synchronously_with_main_reacquire_global_label() {
     // The Ok branch — reached when the outer update is NOT already
@@ -113,7 +111,6 @@ fn ok_branch_dispatches_synchronously_with_main_reacquire_global_label() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn err_branch_defers_via_cx_spawn_and_reports_main_deferred() {
     // The Err branch is the Pass #2 blocker's actual fix: when the
@@ -160,7 +157,6 @@ fn err_branch_defers_via_cx_spawn_and_reports_main_deferred() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn deferred_body_emits_complete_and_failed_tracing_events() {
     // The deferred body must emit matching success/failure tracing
@@ -198,7 +194,6 @@ fn deferred_body_emits_complete_and_failed_tracing_events() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn detached_exact_handle_dispatch_defers_out_of_stdin_update_stack() {
     // Detached ACP exact-id dispatch can route back through shared app
@@ -229,7 +224,6 @@ fn detached_exact_handle_dispatch_defers_out_of_stdin_update_stack() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn apply_simulated_event_helper_is_extracted_and_shared() {
     // `apply_simulated_event` must exist as a shared helper so the

@@ -8,7 +8,6 @@ const KIT_STORE_GITHUB_ACCEPT: &str = "application/vnd.github+json";
 const KIT_STORE_GITHUB_VERSION: &str = "2022-11-28";
 const KIT_STORE_GITHUB_USER_AGENT: &str = "script-kit-gpui-kit-store-view";
 const KIT_STORE_GITHUB_TOPICS: [&str; 2] = ["scriptkit-kit", "script-kit"];
-const KIT_STORE_ROW_HEIGHT: f32 = 72.0;
 
 /// A kit repository discovered from GitHub search results.
 #[derive(Debug, Clone, Default)]
@@ -194,18 +193,21 @@ impl KitStoreBrowseEmptyState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreInstalledEmptyState {
     Empty,
+    NoSearchResults,
 }
 
 impl KitStoreInstalledEmptyState {
     fn title(self) -> &'static str {
         match self {
             Self::Empty => "No installed kits",
+            Self::NoSearchResults => "No installed kits match your search",
         }
     }
 
     fn message(self) -> &'static str {
         match self {
             Self::Empty => "Use \"Browse Kit Store\" to install one",
+            Self::NoSearchResults => "Try a different search query",
         }
     }
 }
@@ -417,15 +419,17 @@ impl ScriptListApp {
 
     fn kit_store_refresh_installed_view(&mut self, _cx: &mut Context<Self>) {
         if let AppView::InstalledKitsView {
+            filter,
             selected_index,
             kits,
         } = &mut self.current_view
         {
             *kits = Self::kit_store_list_installed();
-            if kits.is_empty() {
+            let visible_len = Self::kit_store_installed_visible_rows(kits, filter).len();
+            if visible_len == 0 {
                 *selected_index = 0;
             } else {
-                *selected_index = (*selected_index).min(kits.len().saturating_sub(1));
+                *selected_index = (*selected_index).min(visible_len.saturating_sub(1));
                 self.list_scroll_handle
                     .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
             }
@@ -440,8 +444,18 @@ impl ScriptListApp {
 
     fn kit_store_installed_visible_rows<'a>(
         kits: &'a [script_kit_gpui::kit_store::InstalledKit],
+        filter: &str,
     ) -> Vec<(usize, &'a script_kit_gpui::kit_store::InstalledKit)> {
-        kits.iter().enumerate().collect()
+        let needle = filter.trim().to_lowercase();
+        kits.iter()
+            .enumerate()
+            .filter(|(_, kit)| {
+                needle.is_empty()
+                    || kit.name.to_lowercase().contains(&needle)
+                    || kit.repo_url.to_lowercase().contains(&needle)
+                    || kit.git_hash.to_lowercase().contains(&needle)
+            })
+            .collect()
     }
 
     fn kit_store_browse_selected_visible_result(
@@ -455,9 +469,10 @@ impl ScriptListApp {
 
     fn kit_store_installed_selected_visible_kit(
         kits: &[script_kit_gpui::kit_store::InstalledKit],
+        filter: &str,
         selected_index: usize,
     ) -> Option<script_kit_gpui::kit_store::InstalledKit> {
-        Self::kit_store_installed_visible_rows(kits)
+        Self::kit_store_installed_visible_rows(kits, filter)
             .get(selected_index)
             .map(|(_, kit)| (*kit).clone())
     }
@@ -473,10 +488,11 @@ impl ScriptListApp {
 
     fn kit_store_installed_dataset_and_visible_counts(
         kits: &[script_kit_gpui::kit_store::InstalledKit],
+        filter: &str,
     ) -> (usize, usize) {
         (
             kits.len(),
-            Self::kit_store_installed_visible_rows(kits).len(),
+            Self::kit_store_installed_visible_rows(kits, filter).len(),
         )
     }
 
@@ -489,8 +505,9 @@ impl ScriptListApp {
 
     fn kit_store_installed_visible_row_labels(
         kits: &[script_kit_gpui::kit_store::InstalledKit],
+        filter: &str,
     ) -> Vec<String> {
-        Self::kit_store_installed_visible_rows(kits)
+        Self::kit_store_installed_visible_rows(kits, filter)
             .into_iter()
             .map(|(_, kit)| kit.name.clone())
             .collect()
@@ -504,12 +521,16 @@ impl ScriptListApp {
         }
     }
 
-    fn kit_store_browse_input_display(query: &str) -> SharedString {
-        if query.is_empty() {
-            SharedString::from("Search GitHub kits...")
-        } else {
-            SharedString::from(query.to_string())
-        }
+    fn kit_store_browse_row_title(result: &KitStoreSearchResult) -> String {
+        result.name.clone()
+    }
+
+    fn kit_store_browse_row_source_hint(result: &KitStoreSearchResult) -> Option<String> {
+        Some(format!("{} · ★ {}", result.full_name, result.stars))
+    }
+
+    fn kit_store_browse_row_semantic_id(ix: usize, result: &KitStoreSearchResult) -> String {
+        format!("kit-store-browse-row:{ix}:{}", result.full_name)
     }
 
     fn kit_store_browse_count_label(total_results: usize) -> String {
@@ -521,6 +542,37 @@ impl ScriptListApp {
         kit: &script_kit_gpui::kit_store::InstalledKit,
     ) -> String {
         format!("commit {}", kit.git_hash)
+    }
+
+    fn kit_store_installed_row_title(kit: &script_kit_gpui::kit_store::InstalledKit) -> String {
+        kit.name.clone()
+    }
+
+    fn kit_store_installed_row_description(
+        kit: &script_kit_gpui::kit_store::InstalledKit,
+    ) -> String {
+        kit.repo_url.clone()
+    }
+
+    fn kit_store_installed_row_source_hint(
+        kit: &script_kit_gpui::kit_store::InstalledKit,
+    ) -> Option<String> {
+        Some(Self::kit_store_installed_row_commit_label(kit))
+    }
+
+    fn kit_store_installed_row_semantic_id(
+        ix: usize,
+        kit: &script_kit_gpui::kit_store::InstalledKit,
+    ) -> String {
+        format!("kit-store-installed-row:{ix}:{}", kit.name)
+    }
+
+    fn kit_store_installed_empty_state_from_filter(filter: &str) -> KitStoreInstalledEmptyState {
+        if filter.trim().is_empty() {
+            KitStoreInstalledEmptyState::Empty
+        } else {
+            KitStoreInstalledEmptyState::NoSearchResults
+        }
     }
 
     fn kit_store_installed_count_label(total_kits: usize) -> String {
@@ -718,12 +770,13 @@ impl ScriptListApp {
 
     pub(crate) fn kit_store_update_current_selection(&mut self, cx: &mut Context<Self>) -> bool {
         let selected = if let AppView::InstalledKitsView {
+            filter,
             selected_index,
             kits,
             ..
         } = &self.current_view
         {
-            Self::kit_store_installed_selected_visible_kit(kits, *selected_index)
+            Self::kit_store_installed_selected_visible_kit(kits, filter, *selected_index)
         } else {
             None
         };
@@ -738,12 +791,13 @@ impl ScriptListApp {
 
     pub(crate) fn kit_store_remove_current_selection(&mut self, cx: &mut Context<Self>) -> bool {
         let selected = if let AppView::InstalledKitsView {
+            filter,
             selected_index,
             kits,
             ..
         } = &self.current_view
         {
-            Self::kit_store_installed_selected_visible_kit(kits, *selected_index)
+            Self::kit_store_installed_selected_visible_kit(kits, filter, *selected_index)
         } else {
             None
         };
@@ -808,7 +862,11 @@ impl ScriptListApp {
         true
     }
 
-    fn kit_store_set_browse_query(&mut self, next_query: String, cx: &mut Context<Self>) {
+    pub(crate) fn kit_store_set_browse_query(
+        &mut self,
+        next_query: String,
+        cx: &mut Context<Self>,
+    ) {
         if let AppView::BrowseKitsView {
             query,
             selected_index,
@@ -865,19 +923,11 @@ impl ScriptListApp {
         let design_visual = tokens.visual();
 
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
-        let text_primary = chrome.text_primary_hex;
         let text_name = rgba((chrome.text_primary_hex << 8) | 0xff);
         let text_muted = rgba(chrome.text_muted_rgba);
         let text_hint = rgba(chrome.text_hint_rgba);
-        let text_placeholder = rgba(chrome.placeholder_text_rgba);
-        let divider_bg = rgba(chrome.divider_rgba);
-        let selected_row_bg = rgba(chrome.selection_rgba);
-        let hover_row_bg = rgba(chrome.hover_rgba);
-        let accent_badge_bg = rgba(chrome.accent_badge_bg_rgba);
-        let accent_badge_text = rgba((chrome.accent_badge_text_hex << 8) | 0xff);
 
         let query_owned = query.to_string();
-        let input_display = Self::kit_store_browse_input_display(&query_owned);
         let input_is_empty = query_owned.is_empty();
         let total_results = results.len();
 
@@ -897,8 +947,6 @@ impl ScriptListApp {
                     return;
                 }
 
-                // Handle browse view state transitions from keyboard.
-                let mut next_query: Option<String> = None;
                 let mut install_selected = false;
 
                 if let AppView::BrowseKitsView {
@@ -913,7 +961,7 @@ impl ScriptListApp {
                             if query.is_empty() {
                                 this.go_back_or_close(window, cx);
                             } else {
-                                next_query = Some(String::new());
+                                this.kit_store_set_browse_query(String::new(), cx);
                             }
                         }
                         _ if is_key_up(key) => {
@@ -935,39 +983,14 @@ impl ScriptListApp {
                         _ if is_key_enter(key) => {
                             install_selected = true;
                         }
-                        "backspace" => {
-                            let mut updated = query.clone();
-                            if !updated.is_empty() {
-                                updated.pop();
-                                next_query = Some(updated);
-                            } else {
-                                handled = false;
-                            }
-                        }
-                        _ => {
-                            handled = false;
-                            if !has_cmd {
-                                if let Some(key_char) = &event.keystroke.key_char {
-                                    if let Some(ch) = key_char.chars().next() {
-                                        if !ch.is_control() {
-                                            let mut updated = query.clone();
-                                            updated.push(ch);
-                                            next_query = Some(updated);
-                                            handled = true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        _ => handled = false,
                     }
                     if handled {
                         cx.stop_propagation();
                     }
                 }
 
-                if let Some(next_query) = next_query {
-                    this.kit_store_set_browse_query(next_query, cx);
-                } else if install_selected {
+                if install_selected {
                     let selected = if let AppView::BrowseKitsView {
                         selected_index,
                         results,
@@ -987,8 +1010,11 @@ impl ScriptListApp {
 
         let selected_row = selected_index;
         let click_entity = cx.entity().downgrade();
-        let install_entity = cx.entity().downgrade();
+        let hover_entity = cx.entity().downgrade();
         let results_for_list = results.clone();
+        let list_colors = ListItemColors::from_theme(&self.theme);
+        let main_menu_theme = self.current_main_menu_theme;
+        let hovered = self.hovered_index;
 
         let list: AnyElement = if results_for_list.is_empty() {
             let empty_state = KitStoreBrowseEmptyState::from_query(&query_owned);
@@ -1018,122 +1044,91 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some(result) = results_for_list.get(ix) {
                                 let is_selected = ix == selected_row;
+                                let is_hovered = hovered == Some(ix);
 
                                 let row_entity = click_entity.clone();
-                                let install_btn_entity = install_entity.clone();
-                                let result_for_install = result.clone();
+                                let hover_entity = hover_entity.clone();
+                                let result_for_click = result.clone();
 
-                                div()
-                                    .id(ElementId::NamedInteger(
-                                        "kit-store-browse-row".into(),
-                                        ix as u64,
-                                    ))
-                                    .w_full()
-                                    .h(px(KIT_STORE_ROW_HEIGHT))
-                                    .px(px(12.0))
-                                    .py(px(8.0))
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap(px(12.0))
-                                    .when(is_selected, |row| row.bg(selected_row_bg))
-                                    .when(!is_selected, |row| {
-                                        row.hover(move |style| style.bg(hover_row_bg))
-                                    })
-                                    .cursor_pointer()
-                                    .on_click(move |_event, _window, cx| {
-                                        cx.stop_propagation();
+                                let click_handler =
+                                    move |event: &gpui::ClickEvent,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
                                         if let Some(entity) = row_entity.upgrade() {
+                                            let selected_result = result_for_click.clone();
                                             entity.update(cx, |this, cx| {
-                                                if let AppView::BrowseKitsView {
+                                                let should_submit = if let AppView::BrowseKitsView {
                                                     selected_index,
                                                     ..
                                                 } = &mut this.current_view
                                                 {
+                                                    let was_selected = *selected_index == ix;
                                                     *selected_index = ix;
+                                                    crate::ui_foundation::should_submit_selected_row_click(
+                                                        was_selected,
+                                                        event.click_count(),
+                                                    )
+                                                } else {
+                                                    false
+                                                };
+                                                if should_submit {
+                                                    this.kit_store_install_selected_result(
+                                                        &selected_result,
+                                                        cx,
+                                                    );
                                                 }
                                                 cx.notify();
                                             });
                                         }
-                                    })
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w(px(0.0))
-                                            .overflow_hidden()
-                                            .flex()
-                                            .flex_col()
-                                            .gap(px(2.0))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(text_name)
-                                                    .overflow_hidden()
-                                                    .text_ellipsis()
-                                                    .child(format!(
-                                                        "{}  •  ★ {}",
-                                                        result.name, result.stars
-                                                    )),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(text_hint)
-                                                    .overflow_hidden()
-                                                    .text_ellipsis()
-                                                    .child(result.full_name.clone()),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(text_muted)
-                                                    .overflow_hidden()
-                                                    .text_ellipsis()
-                                                    .child(Self::kit_store_browse_row_description(
-                                                        result,
-                                                    )),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .id(ElementId::NamedInteger(
-                                                "kit-store-install-btn".into(),
-                                                ix as u64,
-                                            ))
-                                            .px(px(10.0))
-                                            .py(px(6.0))
-                                            .rounded(px(6.0))
-                                            .bg(accent_badge_bg)
-                                            .text_xs()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(accent_badge_text)
-                                            .cursor_pointer()
-                                            .on_click(move |_event, _window, cx| {
-                                                cx.stop_propagation();
-                                                if let Some(entity) = install_btn_entity.upgrade() {
-                                                    let result_for_install =
-                                                        result_for_install.clone();
-                                                    entity.update(cx, |this, cx| {
-                                                        if let AppView::BrowseKitsView {
-                                                            selected_index,
-                                                            ..
-                                                        } = &mut this.current_view
-                                                        {
-                                                            *selected_index = ix;
-                                                        }
-                                                        this.kit_store_install_selected_result(
-                                                            &result_for_install,
-                                                            cx,
-                                                        );
-                                                    });
+                                        cx.stop_propagation();
+                                    };
+
+                                let hover_handler =
+                                    move |is_hovered: &bool,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(entity) = hover_entity.upgrade() {
+                                            entity.update(cx, |this, cx| {
+                                                if *is_hovered {
+                                                    this.input_mode = InputMode::Mouse;
+                                                    if this.hovered_index != Some(ix) {
+                                                        this.hovered_index = Some(ix);
+                                                        cx.notify();
+                                                    }
+                                                } else if this.hovered_index == Some(ix) {
+                                                    this.hovered_index = None;
+                                                    cx.notify();
                                                 }
-                                            })
-                                            .child("Install"),
+                                            });
+                                        }
+                                    };
+
+                                div()
+                                    .id(ix)
+                                    .cursor_pointer()
+                                    .on_click(click_handler)
+                                    .on_hover(hover_handler)
+                                    .child(
+                                        ListItem::new(
+                                            Self::kit_store_browse_row_title(result),
+                                            list_colors,
+                                        )
+                                        .description_opt(Some(Self::kit_store_browse_row_description(
+                                            result,
+                                        )))
+                                        .source_hint_opt(Self::kit_store_browse_row_source_hint(
+                                            result,
+                                        ))
+                                        .selected(is_selected)
+                                        .hovered(is_hovered)
+                                        .main_menu_theme(main_menu_theme)
+                                        .semantic_id(Self::kit_store_browse_row_semantic_id(
+                                            ix, result,
+                                        ))
+                                        .with_accent_bar(true),
                                     )
                             } else {
-                                div().id(ix).h(px(KIT_STORE_ROW_HEIGHT))
+                                div().id(ix).h(px(LIST_ITEM_HEIGHT))
                             }
                         })
                         .collect()
@@ -1178,62 +1173,21 @@ impl ScriptListApp {
             .child(
                 div()
                     .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
+                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                    .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
                     .flex()
                     .flex_row()
                     .items_center()
                     .gap_3()
                     .child(
                         div()
-                            .text_sm()
-                            .text_color(text_hint)
-                            .flex_none()
-                            .whitespace_nowrap()
-                            .child("🧰 Browse Kit Store"),
-                    )
-                    .child(
-                        div()
                             .flex_1()
                             .min_w(px(0.0))
-                            .overflow_hidden()
                             .flex()
                             .flex_row()
                             .items_center()
-                            .text_lg()
-                            .text_color(if input_is_empty {
-                                text_placeholder
-                            } else {
-                                text_name
-                            })
-                            .when(input_is_empty, |d| {
-                                d.child(
-                                    div()
-                                        .w(px(CURSOR_WIDTH))
-                                        .h(px(CURSOR_HEIGHT_LG))
-                                        .my(px(CURSOR_MARGIN_Y))
-                                        .mr(px(CURSOR_GAP_X))
-                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
-                                )
-                            })
-                            .when(input_is_empty, |d| {
-                                d.child(
-                                    div()
-                                        .ml(px(-(CURSOR_WIDTH + CURSOR_GAP_X)))
-                                        .child(input_display.clone()),
-                                )
-                            })
-                            .when(!input_is_empty, |d| d.child(input_display.clone()))
-                            .when(!input_is_empty, |d| {
-                                d.child(
-                                    div()
-                                        .w(px(CURSOR_WIDTH))
-                                        .h(px(CURSOR_HEIGHT_LG))
-                                        .my(px(CURSOR_MARGIN_Y))
-                                        .ml(px(CURSOR_GAP_X))
-                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
-                                )
-                            }),
+                            .child(self.render_search_input()),
                     )
                     .child(
                         div()
@@ -1244,12 +1198,7 @@ impl ScriptListApp {
                             .child(Self::kit_store_browse_count_label(total_results)),
                     ),
             )
-            .child(
-                div()
-                    .mx(px(design_spacing.padding_lg))
-                    .h(px(design_visual.border_thin))
-                    .bg(divider_bg),
-            )
+            .child(crate::components::SectionDivider::new())
             .child(
                 div()
                     .flex()
@@ -1315,6 +1264,7 @@ impl ScriptListApp {
 
     fn render_installed_kits(
         &mut self,
+        filter: &str,
         selected_index: usize,
         kits: Vec<script_kit_gpui::kit_store::InstalledKit>,
         cx: &mut Context<Self>,
@@ -1331,14 +1281,11 @@ impl ScriptListApp {
         let text_name = rgba((chrome.text_primary_hex << 8) | 0xff);
         let text_muted = rgba(chrome.text_muted_rgba);
         let text_hint = rgba(chrome.text_hint_rgba);
-        let divider_bg = rgba(chrome.divider_rgba);
-        let selected_row_bg = rgba(chrome.selection_rgba);
-        let hover_row_bg = rgba(chrome.hover_rgba);
-        let accent_badge_bg = rgba(chrome.accent_badge_bg_rgba);
-        let accent_badge_text = rgba((chrome.accent_badge_text_hex << 8) | 0xff);
-        let badge_bg = rgba(chrome.badge_bg_rgba);
-        let badge_text = rgba((chrome.badge_text_hex << 8) | 0xff);
-        let total_kits = kits.len();
+        let filter_owned = filter.to_string();
+        let visible_rows = Self::kit_store_installed_visible_rows(&kits, &filter_owned);
+        let total_kits = visible_rows.len();
+        let dataset_kits = kits.len();
+        let input_is_empty = filter_owned.is_empty();
 
         let handle_key = cx.listener(
             move |this: &mut Self,
@@ -1362,10 +1309,12 @@ impl ScriptListApp {
                 }
 
                 if let AppView::InstalledKitsView {
+                    filter,
                     selected_index,
                     kits,
                 } = &mut this.current_view
                 {
+                    let visible_len = Self::kit_store_installed_visible_rows(kits, filter).len();
                     let mut handled = true;
                     match key {
                         _ if is_key_up(key) => {
@@ -1377,7 +1326,7 @@ impl ScriptListApp {
                             }
                         }
                         _ if is_key_down(key) => {
-                            if *selected_index < kits.len().saturating_sub(1) {
+                            if *selected_index < visible_len.saturating_sub(1) {
                                 *selected_index += 1;
                                 this.list_scroll_handle
                                     .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
@@ -1387,15 +1336,17 @@ impl ScriptListApp {
                         _ if is_key_enter(key) => {
                             let selected = Self::kit_store_installed_selected_visible_kit(
                                 kits,
+                                filter,
                                 *selected_index,
                             );
                             if let Some(selected) = selected {
                                 this.kit_store_update_selected_kit(&selected, cx);
                             }
                         }
-                        "delete" | "backspace" => {
+                        "delete" => {
                             let selected = Self::kit_store_installed_selected_visible_kit(
                                 kits,
+                                filter,
                                 *selected_index,
                             );
                             if let Some(selected) = selected {
@@ -1415,12 +1366,21 @@ impl ScriptListApp {
 
         let selected_row = selected_index;
         let click_entity = cx.entity().downgrade();
-        let update_entity = cx.entity().downgrade();
-        let remove_entity = cx.entity().downgrade();
-        let kits_for_list = kits.clone();
+        let hover_entity = cx.entity().downgrade();
+        let kits_for_list: Vec<script_kit_gpui::kit_store::InstalledKit> = visible_rows
+            .into_iter()
+            .map(|(_, kit)| kit.clone())
+            .collect();
+        let list_colors = ListItemColors::from_theme(&self.theme);
+        let main_menu_theme = self.current_main_menu_theme;
+        let hovered = self.hovered_index;
 
         let list: AnyElement = if kits_for_list.is_empty() {
-            let empty_state = KitStoreInstalledEmptyState::Empty;
+            let empty_state = if dataset_kits == 0 {
+                KitStoreInstalledEmptyState::Empty
+            } else {
+                Self::kit_store_installed_empty_state_from_filter(&filter_owned)
+            };
             div()
                 .w_full()
                 .h_full()
@@ -1447,171 +1407,92 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some(kit) = kits_for_list.get(ix) {
                                 let is_selected = ix == selected_row;
+                                let is_hovered = hovered == Some(ix);
 
                                 let row_entity = click_entity.clone();
-                                let update_btn_entity = update_entity.clone();
-                                let remove_btn_entity = remove_entity.clone();
-                                let kit_for_update = kit.clone();
-                                let kit_for_remove = kit.clone();
+                                let hover_entity = hover_entity.clone();
+                                let kit_for_click = kit.clone();
 
-                                div()
-                                    .id(ElementId::NamedInteger(
-                                        "kit-store-installed-row".into(),
-                                        ix as u64,
-                                    ))
-                                    .w_full()
-                                    .h(px(KIT_STORE_ROW_HEIGHT))
-                                    .px(px(12.0))
-                                    .py(px(8.0))
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap(px(12.0))
-                                    .when(is_selected, |row| row.bg(selected_row_bg))
-                                    .when(!is_selected, |row| {
-                                        row.hover(move |style| style.bg(hover_row_bg))
-                                    })
-                                    .cursor_pointer()
-                                    .on_click(move |_event, _window, cx| {
-                                        cx.stop_propagation();
+                                let click_handler =
+                                    move |event: &gpui::ClickEvent,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
                                         if let Some(entity) = row_entity.upgrade() {
+                                            let selected_kit = kit_for_click.clone();
                                             entity.update(cx, |this, cx| {
-                                                if let AppView::InstalledKitsView {
-                                                    selected_index,
-                                                    ..
-                                                } = &mut this.current_view
-                                                {
-                                                    *selected_index = ix;
+                                                let should_submit =
+                                                    if let AppView::InstalledKitsView {
+                                                        selected_index,
+                                                        ..
+                                                    } = &mut this.current_view
+                                                    {
+                                                        let was_selected = *selected_index == ix;
+                                                        *selected_index = ix;
+                                                        crate::ui_foundation::should_submit_selected_row_click(
+                                                            was_selected,
+                                                            event.click_count(),
+                                                        )
+                                                    } else {
+                                                        false
+                                                    };
+                                                if should_submit {
+                                                    this.kit_store_update_selected_kit(
+                                                        &selected_kit,
+                                                        cx,
+                                                    );
                                                 }
                                                 cx.notify();
                                             });
                                         }
-                                    })
+                                        cx.stop_propagation();
+                                    };
+
+                                let hover_handler =
+                                    move |is_hovered: &bool,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(entity) = hover_entity.upgrade() {
+                                            entity.update(cx, |this, cx| {
+                                                if *is_hovered {
+                                                    this.input_mode = InputMode::Mouse;
+                                                    if this.hovered_index != Some(ix) {
+                                                        this.hovered_index = Some(ix);
+                                                        cx.notify();
+                                                    }
+                                                } else if this.hovered_index == Some(ix) {
+                                                    this.hovered_index = None;
+                                                    cx.notify();
+                                                }
+                                            });
+                                        }
+                                    };
+
+                                div()
+                                    .id(ix)
+                                    .cursor_pointer()
+                                    .on_click(click_handler)
+                                    .on_hover(hover_handler)
                                     .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w(px(0.0))
-                                            .overflow_hidden()
-                                            .flex()
-                                            .flex_col()
-                                            .gap(px(2.0))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(text_name)
-                                                    .overflow_hidden()
-                                                    .text_ellipsis()
-                                                    .child(kit.name.clone()),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(text_hint)
-                                                    .overflow_hidden()
-                                                    .text_ellipsis()
-                                                    .child(kit.repo_url.clone()),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(text_muted)
-                                                    .overflow_hidden()
-                                                    .text_ellipsis()
-                                                    .child(
-                                                        Self::kit_store_installed_row_commit_label(
-                                                            kit,
-                                                        ),
-                                                    ),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex_none()
-                                            .flex()
-                                            .flex_row()
-                                            .items_center()
-                                            .gap(px(8.0))
-                                            .child(
-                                                div()
-                                                    .id(ElementId::NamedInteger(
-                                                        "kit-store-update-btn".into(),
-                                                        ix as u64,
-                                                    ))
-                                                    .px(px(10.0))
-                                                    .py(px(6.0))
-                                                    .rounded(px(6.0))
-                                                    .bg(accent_badge_bg)
-                                                    .text_xs()
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(accent_badge_text)
-                                                    .cursor_pointer()
-                                                    .on_click(move |_event, _window, cx| {
-                                                        cx.stop_propagation();
-                                                        if let Some(entity) =
-                                                            update_btn_entity.upgrade()
-                                                        {
-                                                            let kit_for_update =
-                                                                kit_for_update.clone();
-                                                            entity.update(cx, |this, cx| {
-                                                                if let AppView::InstalledKitsView {
-                                                                    selected_index,
-                                                                    ..
-                                                                } = &mut this.current_view
-                                                                {
-                                                                    *selected_index = ix;
-                                                                }
-                                                                this.kit_store_update_selected_kit(
-                                                                    &kit_for_update,
-                                                                    cx,
-                                                                );
-                                                            });
-                                                        }
-                                                    })
-                                                    .child("Update"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .id(ElementId::NamedInteger(
-                                                        "kit-store-remove-btn".into(),
-                                                        ix as u64,
-                                                    ))
-                                                    .px(px(10.0))
-                                                    .py(px(6.0))
-                                                    .rounded(px(6.0))
-                                                    .bg(badge_bg)
-                                                    .text_xs()
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(badge_text)
-                                                    .cursor_pointer()
-                                                    .on_click(move |_event, _window, cx| {
-                                                        cx.stop_propagation();
-                                                        if let Some(entity) =
-                                                            remove_btn_entity.upgrade()
-                                                        {
-                                                            let kit_for_remove =
-                                                                kit_for_remove.clone();
-                                                            entity.update(cx, |this, cx| {
-                                                                if let AppView::InstalledKitsView {
-                                                                    selected_index,
-                                                                    ..
-                                                                } = &mut this.current_view
-                                                                {
-                                                                    *selected_index = ix;
-                                                                }
-                                                                this.kit_store_remove_selected_kit(
-                                                                    &kit_for_remove,
-                                                                    cx,
-                                                                );
-                                                            });
-                                                        }
-                                                    })
-                                                    .child("Remove"),
-                                            ),
+                                        ListItem::new(
+                                            Self::kit_store_installed_row_title(kit),
+                                            list_colors,
+                                        )
+                                        .description_opt(Some(
+                                            Self::kit_store_installed_row_description(kit),
+                                        ))
+                                        .source_hint_opt(Self::kit_store_installed_row_source_hint(
+                                            kit,
+                                        ))
+                                        .selected(is_selected)
+                                        .hovered(is_hovered)
+                                        .main_menu_theme(main_menu_theme)
+                                        .semantic_id(Self::kit_store_installed_row_semantic_id(
+                                            ix, kit,
+                                        ))
+                                        .with_accent_bar(true),
                                     )
                             } else {
-                                div().id(ix).h(px(KIT_STORE_ROW_HEIGHT))
+                                div().id(ix).h(px(LIST_ITEM_HEIGHT))
                             }
                         })
                         .collect()
@@ -1624,7 +1505,15 @@ impl ScriptListApp {
         let list_scrollbar =
             self.builtin_uniform_list_scrollbar(&self.list_scroll_handle, total_kits, 8);
 
-        let footer_hints: Vec<gpui::SharedString> = vec!["↵ Update".into(), "⌫ Remove".into()];
+        let footer_hints: Vec<gpui::SharedString> = vec![
+            "↵ Update".into(),
+            "⌦ Remove".into(),
+            if input_is_empty {
+                "Esc Back".into()
+            } else {
+                "Esc Clear Search".into()
+            },
+        ];
         crate::components::emit_surface_prompt_hint_audit(
             "kit_store_installed",
             &footer_hints,
@@ -1649,19 +1538,21 @@ impl ScriptListApp {
             .child(
                 div()
                     .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
+                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                    .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
                     .flex()
                     .flex_row()
                     .items_center()
-                    .justify_between()
+                    .gap_3()
                     .child(
                         div()
-                            .text_sm()
-                            .text_color(text_hint)
-                            .flex_none()
-                            .whitespace_nowrap()
-                            .child("📦 Installed Kits"),
+                            .flex_1()
+                            .min_w(px(0.0))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .child(self.render_search_input()),
                     )
                     .child(
                         div()
@@ -1669,15 +1560,10 @@ impl ScriptListApp {
                             .text_color(text_hint)
                             .flex_none()
                             .whitespace_nowrap()
-                            .child(Self::kit_store_installed_count_label(total_kits)),
+                            .child(Self::kit_store_installed_count_label(dataset_kits)),
                     ),
             )
-            .child(
-                div()
-                    .mx(px(design_spacing.padding_lg))
-                    .h(px(design_visual.border_thin))
-                    .bg(divider_bg),
-            )
+            .child(crate::components::SectionDivider::new())
             .child(
                 div()
                     .flex()
@@ -1694,11 +1580,16 @@ impl ScriptListApp {
                             .on_scroll_wheel(cx.listener(
                                 move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
                                     let view_state = if let AppView::InstalledKitsView {
+                                        filter,
                                         selected_index,
                                         kits,
                                     } = &this.current_view
                                     {
-                                        Some((*selected_index, kits.len()))
+                                        Some((
+                                            *selected_index,
+                                            Self::kit_store_installed_visible_rows(kits, filter)
+                                                .len(),
+                                        ))
                                     } else {
                                         None
                                     };

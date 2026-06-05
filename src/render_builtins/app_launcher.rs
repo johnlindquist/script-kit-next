@@ -225,36 +225,11 @@ impl ScriptListApp {
                                 }
                             }
                         }
-                        // Note: "escape" is handled by handle_global_shortcut_with_options above
-                        "backspace" => {
-                            if !filter.is_empty() {
-                                filter.pop();
-                                *selected_index = 0;
-                                cx.notify();
-                            }
-                        }
-                        _ => {
-                            if let Some(ref key_char) = event.keystroke.key_char {
-                                if let Some(ch) = key_char.chars().next() {
-                                    if !ch.is_control() {
-                                        filter.push(ch);
-                                        *selected_index = 0;
-                                        cx.notify();
-                                    }
-                                }
-                            }
-                        }
+                        _ => {}
                     }
                 }
             },
         );
-
-        let input_display = if filter.is_empty() {
-            SharedString::from("Search applications...")
-        } else {
-            SharedString::from(filter.clone())
-        };
-        let input_is_empty = filter.is_empty();
 
         let color_resolver =
             crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
@@ -266,7 +241,7 @@ impl ScriptListApp {
         // Pre-compute colors
         let list_colors = ListItemColors::from_theme(&self.theme);
         let text_primary = self.theme.colors.text.primary;
-        let text_muted = self.theme.colors.text.muted;
+        let main_menu_theme = self.current_main_menu_theme;
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
@@ -396,6 +371,7 @@ impl ScriptListApp {
                                             .description_opt(description)
                                             .selected(is_selected)
                                             .hovered(is_hovered)
+                                            .main_menu_theme(main_menu_theme)
                                             .with_accent_bar(true),
                                     )
                             } else {
@@ -412,54 +388,15 @@ impl ScriptListApp {
         let list_scrollbar =
             self.builtin_uniform_list_scrollbar(&self.list_scroll_handle, filtered_len, 8);
 
-        let header = div()
-            .w_full()
-            .flex()
-            .flex_row()
-            .items_center()
-            // Search input with blinking cursor
-            // ALIGNMENT FIX: Uses canonical cursor constants and negative margin for placeholder
-            .child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .text_lg()
-                    .text_color(if input_is_empty {
-                        rgb(text_muted)
-                    } else {
-                        rgb(text_primary)
-                    })
-                    .when(input_is_empty, |d| {
-                        d.child(
-                            div()
-                                .w(px(CURSOR_WIDTH))
-                                .h(px(CURSOR_HEIGHT_LG))
-                                .my(px(CURSOR_MARGIN_Y))
-                                .mr(px(CURSOR_GAP_X))
-                                .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
-                        )
-                    })
-                    .when(input_is_empty, |d| {
-                        d.child(
-                            div()
-                                .ml(px(-(CURSOR_WIDTH + CURSOR_GAP_X)))
-                                .child(input_display.clone()),
-                        )
-                    })
-                    .when(!input_is_empty, |d| d.child(input_display.clone()))
-                    .when(!input_is_empty, |d| {
-                        d.child(
-                            div()
-                                .w(px(CURSOR_WIDTH))
-                                .h(px(CURSOR_HEIGHT_LG))
-                                .my(px(CURSOR_MARGIN_Y))
-                                .ml(px(CURSOR_GAP_X))
-                                .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
-                        )
-                    }),
-            );
+        let header = div().w_full().flex().flex_row().items_center().child(
+            div()
+                .flex_1()
+                .min_w(px(0.0))
+                .flex()
+                .flex_row()
+                .items_center()
+                .child(self.render_search_input()),
+        );
 
         let content = div()
             .flex()

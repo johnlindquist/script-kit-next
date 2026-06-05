@@ -47,7 +47,6 @@ fn external_command_request_id_block() -> &'static str {
     &after[..terminator]
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn external_command_request_id_is_transparent_newtype_over_bare_string() {
     // The declaration MUST be a transparent newtype over `String`.
@@ -72,7 +71,6 @@ fn external_command_request_id_is_transparent_newtype_over_bare_string() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn external_command_request_id_has_no_length_bounded_wrapper() {
     // Forbid specific length-cap construct names in the declaration +
@@ -99,7 +97,6 @@ fn external_command_request_id_has_no_length_bounded_wrapper() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn external_command_request_id_from_string_is_pass_through() {
     // `impl From<String>` MUST be a bare `Self(value)` pass-through
@@ -139,7 +136,6 @@ fn external_command_request_id_from_string_is_pass_through() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn max_stdin_command_bytes_remains_sole_bound() {
     // The verbatim-requestId contract names `MAX_STDIN_COMMAND_BYTES =
@@ -155,7 +151,6 @@ fn max_stdin_command_bytes_remains_sole_bound() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn state_result_request_id_is_bare_string_with_verbatim_doc() {
     // The response side (`StateResult.request_id`) MUST remain a bare

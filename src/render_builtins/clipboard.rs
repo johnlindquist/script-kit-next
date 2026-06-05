@@ -493,7 +493,6 @@ impl ScriptListApp {
         let text_primary = self.theme.colors.text.primary;
         #[allow(unused_variables)]
         let text_muted = self.theme.colors.text.muted;
-        let text_dimmed = self.theme.colors.text.dimmed;
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
@@ -680,32 +679,6 @@ impl ScriptListApp {
             &design_visual,
         );
 
-        let header_element = div()
-            .flex_1()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap_3()
-            .child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .child(self.render_search_input()),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(text_dimmed))
-                    .child({
-                        use std::fmt::Write as _;
-                        let mut label = String::with_capacity(32);
-                        let _ = write!(label, "{} entries", self.cached_clipboard_entries.len());
-                        label
-                    }),
-            );
-
         // List pane with scrollbar overlay
         let list_pane = div()
             .relative()
@@ -783,41 +756,117 @@ impl ScriptListApp {
             crate::components::universal_prompt_hints_with_primary_label("Paste")
         };
         crate::components::emit_prompt_hint_audit("clipboard_history", &hints);
+        let footer =
+            self.main_window_footer_slot(crate::components::render_simple_hint_strip(hints, None));
 
         tracing::info!(
             target: "script_kit::prompt_chrome",
             surface = "clipboard_history",
-            layout_mode = "expanded_scaffold",
+            layout_mode = "main_view_chrome",
             "clipboard_history_chrome_checkpoint"
         );
 
-        // Assemble via shared expanded-view scaffold with explicit hints
-        crate::components::render_expanded_view_scaffold_with_hints(
-            header_element,
-            list_pane,
-            preview_panel,
-            hints,
-            None,
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
+        let input = crate::components::main_view_chrome::render_main_view_input_shell(
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewInputChrome {
+                body: self.render_search_input().into_any_element(),
+                trailing: Vec::new(),
+            },
+        );
+        let header = crate::components::main_view_chrome::MainViewHeaderChrome {
+            context: Some(self.render_clickable_main_view_context_zone(menu_def, cx)),
+            input,
+            padding_x: shell.header_padding_x,
+            padding_y: shell.header_padding_y,
+            gap: shell.header_gap,
+        };
+        let divider = crate::components::main_view_chrome::MainViewDividerChrome {
+            margin_x: shell.divider_margin_x,
+            height: shell.divider_height,
+            visible: false,
+        };
+        let main = div()
+            .id("clipboard-history-root")
+            .flex()
+            .flex_row()
+            .h_full()
+            .min_h(px(0.))
+            .w_full()
+            .overflow_hidden()
+            .child(
+                div()
+                    .flex_1()
+                    .h_full()
+                    .min_h(px(0.))
+                    .overflow_hidden()
+                    .child(list_pane),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .h_full()
+                    .min_h(px(0.))
+                    .overflow_hidden()
+                    .child(preview_panel),
+            )
+            .into_any_element();
+
+        crate::components::main_view_chrome::render_main_view_chrome(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .text_color(rgb(text_primary))
+                .font_family(self.theme_font_family())
+                .key_context("clipboard_history")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header,
+                divider,
+                main,
+                footer,
+                overlays: Vec::new(),
+            },
         )
-        .text_color(rgb(text_primary))
-        .font_family(self.theme_font_family())
-        .key_context("clipboard_history")
-        .track_focus(&self.focus_handle)
-        .on_key_down(handle_key)
-        .into_any_element()
     }
 }
 
 #[cfg(test)]
 mod clipboard_chrome_audit {
-    #[test]
-    fn clipboard_history_uses_shared_expanded_view_shell() {
-        let source = include_str!("clipboard.rs");
+    fn production_source() -> &'static str {
+        include_str!("clipboard.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production source should exist")
+    }
 
-        // Must route through the shared expanded-view scaffold
+    #[test]
+    fn clipboard_history_uses_shared_main_view_chrome() {
+        let source = production_source();
+
+        // Must route through the shared main-view chrome and native footer.
         assert!(
-            source.contains("render_expanded_view_scaffold_with_hints("),
-            "clipboard must use the shared expanded-view scaffold with hints"
+            source.contains("render_main_view_chrome("),
+            "clipboard must use the shared main-view chrome"
+        );
+        assert!(
+            source.contains("render_main_view_input_shell("),
+            "clipboard must use the shared MainMenuInput shell"
+        );
+        assert!(
+            source.contains("render_clickable_main_view_context_zone("),
+            "clipboard must render the shared main-view context zone"
+        );
+        assert!(
+            source.contains("main_window_footer_slot("),
+            "clipboard footer must route through the persistent main-window footer"
+        );
+        assert!(
+            !source.contains(&("render_expanded_view_scaffold".to_owned() + "_with_hints(")),
+            "clipboard must not keep the old expanded scaffold"
         );
 
         // Must emit expanded layout audit
@@ -831,13 +880,6 @@ mod clipboard_chrome_audit {
         assert!(
             !source.contains(&divider_call),
             "clipboard must not use SectionDivider — expanded shell has no divider"
-        );
-
-        // Header entry count is acceptable as a secondary label in the scaffold header
-        let entries_label = "{} ".to_owned() + "entries";
-        assert!(
-            source.contains(&entries_label),
-            "clipboard should show entries count in the scaffold header"
         );
 
         // Must NOT use legacy PromptFooter

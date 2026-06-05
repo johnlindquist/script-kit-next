@@ -88,10 +88,16 @@ pub fn build_object_selector_snapshot(
         .filter(|candidate| candidate.kind == selector.kind)
         .filter(|candidate| candidate_matches(candidate, &selector.query))
         .take(12)
-        .map(|candidate| {
+        .enumerate()
+        .map(|(index, candidate)| {
             let token = candidate.token();
             ObjectSelectorRow {
-                id: format!("object:{}:{}", candidate.kind.as_str(), candidate.id),
+                id: format!(
+                    "object:{}:{}:{}",
+                    candidate.kind.as_str(),
+                    index,
+                    candidate.id
+                ),
                 kind: candidate.kind,
                 title: candidate.label.clone(),
                 token: Some(token),
@@ -240,6 +246,36 @@ pub fn object_selector_candidate_matches(candidate: &ObjectSelectorCandidate, qu
     candidate_matches(candidate, query)
 }
 
+pub fn object_selector_row_to_main_list_row(row: &ObjectSelectorRow) -> crate::spine::SpineListRow {
+    let meta = row
+        .token
+        .as_ref()
+        .map(|token| gpui::SharedString::from(token.clone()));
+
+    crate::spine::SpineListRow {
+        id: gpui::SharedString::from(format!("menu-syntax-object:{}", row.id)),
+        kind: crate::spine::list::SpineListRowKind::CaptureTarget {
+            target: gpui::SharedString::from(row.kind.as_str().to_string()),
+        },
+        title: gpui::SharedString::from(row.title.clone()),
+        subtitle: row
+            .subtitle
+            .as_ref()
+            .map(|subtitle| gpui::SharedString::from(subtitle.clone())),
+        meta,
+        icon: Some(gpui::SharedString::from("at-sign")),
+        badges: row
+            .badges
+            .iter()
+            .map(|badge| gpui::SharedString::from(badge.clone()))
+            .collect(),
+        score: row.enabled.then_some(0).unwrap_or(i32::MIN),
+        is_selectable: row.enabled,
+        action_label: Some(gpui::SharedString::from("Insert")),
+        action: crate::spine::SpineListAction::Noop,
+    }
+}
+
 fn preserve_or_pick_first_enabled(
     snapshot: &ObjectSelectorSnapshot,
     previous_id: Option<&str>,
@@ -372,6 +408,33 @@ mod tests {
             .expect("object selector snapshot");
         assert_eq!(snap.rows.len(), 1);
         assert_eq!(snap.rows[0].token.as_deref(), Some("@snippet:format-date"));
+    }
+
+    #[test]
+    fn object_selector_row_ids_are_unique_when_candidates_share_ids() {
+        let ctx = ObjectSelectorContext {
+            candidates: vec![
+                ObjectSelectorCandidate {
+                    kind: CaptureObjectKind::Snippet,
+                    id: "@gma".to_string(),
+                    label: "email".to_string(),
+                    subtitle: "Snippet · md".to_string(),
+                },
+                ObjectSelectorCandidate {
+                    kind: CaptureObjectKind::Snippet,
+                    id: "@gma".to_string(),
+                    label: "john@example.com".to_string(),
+                    subtitle: "Snippet · json".to_string(),
+                },
+            ],
+        };
+        let snap =
+            build_object_selector_snapshot(";snippet update @", &[], &ctx).expect("snapshot");
+
+        assert_eq!(snap.rows.len(), 2);
+        assert_ne!(snap.rows[0].id, snap.rows[1].id);
+        assert_eq!(snap.rows[0].token.as_deref(), Some("@snippet:@gma"));
+        assert_eq!(snap.rows[1].token.as_deref(), Some("@snippet:@gma"));
     }
 
     #[test]

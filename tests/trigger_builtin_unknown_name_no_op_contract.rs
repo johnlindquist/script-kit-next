@@ -53,7 +53,6 @@ fn trigger_builtin_arm<'a>(source: &'a str, path: &str) -> &'a str {
     &arm[..end]
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn unknown_trigger_builtin_path_logs_without_mutating_view_or_registry() {
     let dispatch_body = body_of(DISPATCH, "pub fn dispatch_trigger_builtin_name(");

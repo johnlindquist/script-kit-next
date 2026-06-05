@@ -1046,7 +1046,8 @@ fn mini_mode_hides_docked_sidebar_in_root() {
 #[test]
 fn mini_ai_has_stdin_protocol_commands() {
     // openMiniAi and openMiniAiWithMockData must exist as stdin commands
-    // for DX/testing — opens the mini AI window via the JSON protocol.
+    // for DX/testing. They are legacy compatibility aliases that now open
+    // Agent Chat through the shared handoff path, not the old Mini AI window.
     let stdin = read("src/stdin_commands/mod.rs");
     assert!(
         stdin.contains("OpenMiniAi"),
@@ -1081,8 +1082,8 @@ fn mini_ai_has_stdin_protocol_commands() {
             "{dispatch_file} must dispatch ExternalCommand::OpenMiniAiWithMockData"
         );
         assert!(
-            source.contains("open_mini_ai_window"),
-            "{dispatch_file} must call open_mini_ai_window"
+            source.contains("open_tab_ai_acp_with_entry_intent(None,"),
+            "{dispatch_file} must route openMiniAi compatibility aliases through Agent Chat"
         );
     }
 }
@@ -1677,13 +1678,17 @@ fn presets_dropdown_preserves_overlay_dismiss_on_click_outside() {
 }
 
 #[test]
-fn presets_dropdown_uses_dense_monoline_picker_rows() {
-    // The presets dropdown must render rows using the shared dense monoline
-    // picker row renderer, matching the visual style of ACP and context pickers.
+fn presets_dropdown_uses_main_list_item_chrome() {
+    // The presets dropdown must render rows using the shared main-list row
+    // chrome, matching the current launcher/search visual language.
     let overlay_src = read("src/ai/window/render_overlays_dropdowns.rs");
 
     assert!(
-        overlay_src.contains("render_dense_monoline_picker_row_with_leading_visual"),
-        "presets must render rows with the shared dense monoline picker renderer (leading visual variant)"
+        overlay_src.contains("crate::list_item::ListItem::new")
+            && overlay_src.contains("crate::list_item::ListItemColors::from_theme")
+            && overlay_src.contains(".selected(is_selected)")
+            && overlay_src.contains(".main_menu_theme(")
+            && !overlay_src.contains("render_dense_monoline_picker_row_with_leading_visual"),
+        "presets must render rows with shared main-list ListItem chrome"
     );
 }

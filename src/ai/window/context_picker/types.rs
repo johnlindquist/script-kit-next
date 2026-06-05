@@ -35,6 +35,8 @@ pub enum PortalKind {
     NotesBrowse,
     /// Open the ACP conversation history browser (prefiltered by typed query).
     AcpHistory,
+    /// Open Quick Terminal and attach its transcript back to Agent Chat.
+    Terminal,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,6 +61,12 @@ pub enum InlinePortalAttachment {
         skill_name: String,
         owner_label: String,
         slash_name: String,
+    },
+    TextBlock {
+        label: String,
+        source: String,
+        text: String,
+        mime_type: Option<String>,
     },
     FocusedTarget {
         source: String,

@@ -29,7 +29,7 @@ pub use acp_state::{
     AcpAcceptedItem, AcpFocusedTextActionReceipt, AcpFocusedTextState, AcpInputLayoutMetrics,
     AcpInputLayoutTelemetry, AcpKeyRoute, AcpKeyRouteTelemetry, AcpLastInteractionTrace,
     AcpPickerItemAcceptedTelemetry, AcpPickerState, AcpResolvedTarget, AcpSetupActionKind,
-    AcpSetupSnapshot, AcpStateSnapshot, AcpTestProbeSnapshot, AcpWaitCondition,
+    AcpSetupSnapshot, AcpSpineSnapshot, AcpStateSnapshot, AcpTestProbeSnapshot, AcpWaitCondition,
     ACP_STATE_SCHEMA_VERSION, ACP_TEST_PROBE_MAX_EVENTS, ACP_TEST_PROBE_SCHEMA_VERSION,
 };
 pub use ai::{AiChatInfo, AiContextPartInput, AiMessageInfo};

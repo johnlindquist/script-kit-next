@@ -4,12 +4,22 @@ fn read_source(path: &str) -> String {
     fs::read_to_string(path).unwrap_or_else(|err| panic!("failed to read {path}: {err}"))
 }
 
+fn production_source(path: &str) -> String {
+    read_source(path)
+        .split("#[cfg(test)]")
+        .next()
+        .expect("production source should exist")
+        .to_string()
+}
+
 #[test]
-fn script_list_and_acp_use_shared_main_view_input_shell() {
+fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     let shared = read_source("src/components/main_view_chrome.rs");
-    let script_list = read_source("src/render_script_list/mod.rs");
-    let acp = read_source("src/ai/acp/view.rs");
-    let file_search = read_source("src/render_builtins/file_search.rs");
+    let script_list = production_source("src/render_script_list/mod.rs");
+    let acp = production_source("src/ai/acp/view.rs");
+    let file_search = production_source("src/render_builtins/file_search.rs");
+    let clipboard = production_source("src/render_builtins/clipboard.rs");
+    let profile_search = production_source("src/render_builtins/profile_search.rs");
     let ui_window = read_source("src/app_impl/ui_window.rs");
     let render_impl = read_source("src/main_sections/render_impl.rs");
     let app_view_state = read_source("src/main_sections/app_view_state.rs");
@@ -21,7 +31,7 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(shared.contains("pub(crate) fn render_main_view_main_slot"));
     assert!(shared.contains("pub(crate) fn render_main_view_shell"));
     assert!(shared.contains("pub(crate) fn main_view_input_text_inset_left"));
-    assert!(shared.contains("pub(crate) fn render_main_view_state_icon"));
+    assert!(!shared.contains("render_main_view_state_icon"));
     assert!(shared.contains("pub(crate) fn render_main_view_context_zone"));
     assert!(shared.contains("pub(crate) fn render_main_view_context_zone_required"));
     assert!(shared.contains("pub(crate) fn render_main_view_context_zone_inert"));
@@ -30,7 +40,6 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(shared.contains("MAIN_VIEW_AGENT_MODEL_UNAVAILABLE_LABEL"));
     assert!(shared.contains("\"Agent model unavailable\""));
     assert!(!shared.contains("\"Choose agent · model\""));
-    assert!(shared.contains("pub(crate) fn main_view_state_icon_left"));
     assert!(shared.contains("pub(crate) fn render_main_view_chrome"));
     assert!(shared.contains("pub(crate) struct MainViewInputChrome"));
     assert!(shared.contains("pub(crate) struct MainViewHeaderChrome"));
@@ -39,7 +48,6 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(shared.contains("pub(crate) struct MainViewColumnMetrics"));
     assert!(shared.contains("pub(crate) fn main_view_content_columns"));
     assert!(shared.contains("pub(crate) fn main_view_text_column_x"));
-    assert!(shared.contains("main_view_state_icon_slot_size(def)"));
     assert!(
         !shared.contains("pre_main") && !shared.contains("post_main"),
         "shared main-view chrome should expose exactly one main slot so ScriptList and Agent Chat only swap the main section"
@@ -51,7 +59,7 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(shared.contains("MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID"));
     assert!(shared.contains("MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID"));
     assert!(shared.contains("MAIN_VIEW_INPUT_SHELL_ID"));
-    assert!(shared.contains("MAIN_VIEW_INPUT_STATE_ICON_ID"));
+    assert!(!shared.contains("MAIN_VIEW_INPUT_STATE_ICON_ID"));
     assert!(shared.contains("MAIN_VIEW_HEADER_DIVIDER_ID"));
     assert!(shared.contains("MAIN_VIEW_MAIN_ID"));
     assert!(shared.contains(".id(MAIN_VIEW_HEADER_ID)"));
@@ -61,19 +69,15 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_SHELL_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_INPUT_SHELL_ID)"));
-    assert!(shared.contains(".id(MAIN_VIEW_INPUT_STATE_ICON_ID)"));
-    assert!(shared.contains(".absolute()"));
-    assert!(shared.contains("main_view_state_icon_left(def)"));
-    assert!(shared.contains("main_view_state_icon_uses_script_kit_logo"));
-    assert!(shared.contains("main_view_should_show_state_icon"));
-    assert!(shared.contains("theme.colors.accent.selected"));
+    assert!(!shared.contains(".id(MAIN_VIEW_INPUT_STATE_ICON_ID)"));
     assert!(
-        shared.contains("\"search\" | \"find\" | \"magnifyingglass\""),
-        "default search icon names should resolve to the accent-tinted Script Kit logo"
+        !shared.contains("leading: Option<AnyElement>"),
+        "shared main-view input chrome must not expose a leading slot that can shift input geometry"
     );
     assert!(
-        shared.contains("!main_view_state_icon_uses_script_kit_logo(icon_name)"),
-        "shared main-view input chrome should suppress the default Script Kit logo while preserving real contextual icons"
+        !shared.contains("main_view_state_icon_uses_script_kit_logo")
+            && !shared.contains("main_view_should_show_state_icon"),
+        "state icons belong outside the persistent MainMenuInput chrome"
     );
     assert!(shared.contains(".id(MAIN_VIEW_HEADER_DIVIDER_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_MAIN_ID)"));
@@ -134,6 +138,7 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(app_view_state.contains("pub(crate) fn uses_shared_main_view_header"));
     assert!(app_view_state.contains("AppView::ScriptList"));
     assert!(app_view_state.contains("| AppView::FileSearchView { .. }"));
+    assert!(app_view_state.contains("| AppView::ClipboardHistoryView { .. }"));
     assert!(app_view_state.contains("| AppView::ProfileSearchView { .. }"));
     assert!(app_view_state.contains("| AppView::AcpChatView { .. }"));
     assert!(render_impl.contains(
@@ -144,16 +149,15 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
 
     assert!(script_list.contains("render_main_view_input_shell"));
     assert!(script_list.contains("render_clickable_main_view_context_zone"));
-    assert!(script_list.contains("render_main_view_state_icon"));
-    assert!(script_list.contains("main_view_should_show_state_icon"));
     assert!(script_list.contains("hide_initial_section_header"));
-    assert!(script_list.contains("main_view_state_icon_name_for_script_list"));
+    assert!(!script_list.contains("main_view_state_icon_name_for_script_list"));
     assert!(script_list.contains("render_main_view_shell()"));
     assert!(script_list.contains("render_main_view_chrome"));
     assert!(script_list.contains("MainViewInputChrome"));
     assert!(script_list.contains("MainViewHeaderChrome"));
     assert!(script_list.contains("context: Some("));
     assert!(script_list.contains("trailing: Vec::new()"));
+    assert!(!script_list.contains("leading:"));
     assert!(
         !script_list.contains("render_launcher_ask_ai_hint"),
         "ScriptList input should stay query-only; Agent belongs in the footer action zone"
@@ -179,8 +183,8 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
         "ACP composer input must not inject an extra leading message icon"
     );
     assert!(
-        acp.contains("leading: None"),
-        "ACP composer input should match main-menu input positioning without a leading icon"
+        !acp.contains("leading:"),
+        "ACP composer input should match main-menu input positioning without a leading slot"
     );
     assert!(
         acp.contains("footer_snapshot.profile_display"),
@@ -200,12 +204,14 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
     assert!(acp.contains("MainViewChrome"));
     assert!(file_search.contains("render_main_view_input_shell"));
     assert!(file_search.contains("render_clickable_main_view_context_zone"));
-    assert!(file_search.contains("render_main_view_state_icon"));
+    assert!(!file_search.contains("render_main_view_state_icon"));
     assert!(file_search.contains("render_main_view_shell()"));
     assert!(file_search.contains("render_main_view_chrome"));
     assert!(file_search.contains("MainViewInputChrome"));
     assert!(file_search.contains("MainViewHeaderChrome"));
     assert!(file_search.contains("context: Some("));
+    assert!(file_search.contains("trailing: Vec::new()"));
+    assert!(!file_search.contains("leading:"));
     assert!(file_search.contains("MainViewDividerChrome"));
     assert!(file_search.contains("visible: false"));
     assert!(file_search.contains("MainViewChrome"));
@@ -213,6 +219,39 @@ fn script_list_and_acp_use_shared_main_view_input_shell() {
         !file_search.contains("render_expanded_view_scaffold_with_footer")
             && !file_search.contains("render_minimal_list_prompt_shell_with_footer"),
         "File Search should use the shared main-view chrome instead of feature-local prompt scaffolds"
+    );
+    assert!(clipboard.contains("render_main_view_input_shell"));
+    assert!(clipboard.contains("render_clickable_main_view_context_zone"));
+    assert!(clipboard.contains("render_main_view_shell()"));
+    assert!(clipboard.contains("render_main_view_chrome"));
+    assert!(clipboard.contains("MainViewInputChrome"));
+    assert!(clipboard.contains("MainViewHeaderChrome"));
+    assert!(clipboard.contains("context: Some("));
+    assert!(clipboard.contains("trailing: Vec::new()"));
+    assert!(!clipboard.contains("leading:"));
+    assert!(clipboard.contains("MainViewDividerChrome"));
+    assert!(clipboard.contains("visible: false"));
+    assert!(
+        !clipboard.contains("render_expanded_view_scaffold_with_hints")
+            && !clipboard.contains("render_expanded_view_scaffold_with_footer")
+            && !clipboard.contains("render_minimal_list_prompt_shell_with_footer"),
+        "Clipboard History should use the shared main-view chrome instead of feature-local prompt scaffolds"
+    );
+    assert!(profile_search.contains("render_main_view_input_shell"));
+    assert!(profile_search.contains("render_clickable_main_view_context_zone"));
+    assert!(profile_search.contains("render_main_view_shell()"));
+    assert!(profile_search.contains("render_main_view_chrome"));
+    assert!(profile_search.contains("MainViewInputChrome"));
+    assert!(profile_search.contains("MainViewHeaderChrome"));
+    assert!(profile_search.contains("context: Some("));
+    assert!(profile_search.contains("trailing: Vec::new()"));
+    assert!(!profile_search.contains("leading:"));
+    assert!(profile_search.contains("MainViewDividerChrome"));
+    assert!(profile_search.contains("visible: false"));
+    assert!(
+        !profile_search.contains("render_expanded_view_scaffold_with_footer")
+            && !profile_search.contains("render_minimal_list_prompt_shell_with_footer"),
+        "Profile Search should use the shared main-view chrome instead of feature-local prompt scaffolds"
     );
 }
 
@@ -254,14 +293,12 @@ fn shared_main_view_columns_own_text_column_math() {
         "row leading x should come from the same row padding used by list rows"
     );
     assert!(
-        shared.contains(
-            "main_view_row_leading_x(def) + main_view_state_icon_slot_size(def) + def.row.icon_text_gap"
-        ),
-        "input text column should be row leading plus rendered state-icon slot plus icon/text gap"
+        shared.contains("main_view_row_leading_x(def) + def.icon.container_size + def.row.icon_text_gap"),
+        "text column math should stay available for rows without leaking icons into the input chrome"
     );
     assert!(
-        shared.contains("def.icon.container_size.min(def.search.height).max(16.0)"),
-        "state icon slot must match the rendered/clamped logo size so the input placeholder does not drift right"
+        shared.contains("def.search.text_inset_x"),
+        "input text inset should come directly from shared search tokens"
     );
     assert!(shared.contains("text_column_x"));
     assert!(
@@ -273,38 +310,25 @@ fn shared_main_view_columns_own_text_column_math() {
         "main-view info/content surfaces should start on the same vertical rhythm as first list content"
     );
     assert!(
-        shared.contains("(main_view_row_leading_x(def) - def.shell.header_padding_x).max(0.0)"),
-        "state icon should align with the row icon column without shifting the input text column"
+        !shared.contains("main_view_state_icon_left"),
+        "MainMenuInput must not carry a leading state icon positioner"
     );
     assert!(
         shared.contains(".pl(px(text_inset_left))"),
-        "input text should keep using the text-column inset even when a state icon is present"
+        "input text should use the shared tokenized inset"
     );
 }
 
 #[test]
-fn main_view_state_icon_maps_script_list_sources() {
+fn main_view_input_chrome_rejects_left_state_icons() {
     let script_list = read_source("src/render_script_list/mod.rs");
+    let file_search = read_source("src/render_builtins/file_search.rs");
 
-    assert!(script_list.contains("fn main_view_state_icon_name_for_script_list"));
-    for (source, icon) in [
-        ("RootUnifiedSourceFilter::Files", "\"folder-open\""),
-        ("RootUnifiedSourceFilter::ClipboardHistory", "\"clipboard\""),
-        (
-            "RootUnifiedSourceFilter::Conversations",
-            "\"message-circle\"",
-        ),
-        ("RootUnifiedSourceFilter::Scripts", "\"code\""),
-        ("RootUnifiedSourceFilter::Commands", "\"code\""),
-    ] {
-        assert!(
-            script_list.contains(source) && script_list.contains(icon),
-            "script-list input state icon mapping missing {source} -> {icon}"
-        );
-    }
-    assert!(script_list.contains("trimmed.starts_with('~')"));
-    assert!(script_list.contains("positive_includes().next()"));
-    assert!(script_list.contains("\"search\""));
+    assert!(!script_list.contains("render_main_view_state_icon"));
+    assert!(!script_list.contains("main_view_state_icon_name_for_script_list"));
+    assert!(!script_list.contains("main_view_should_show_state_icon"));
+    assert!(!file_search.contains("render_main_view_state_icon"));
+    assert!(!file_search.contains("leading:"));
 }
 
 #[test]
@@ -380,7 +404,6 @@ fn layout_model_exposes_shared_main_view_chrome_names() {
         "MainViewHeader",
         "MainViewContextZone",
         "MainViewInput",
-        "MainViewInputStateIcon",
         "MainViewMain",
         "MainViewFooter",
     ] {
@@ -410,8 +433,8 @@ fn layout_model_exposes_shared_main_view_chrome_names() {
         "layout model should report the shared input text inset used by the render layer"
     );
     assert!(
-        layout.contains("main_view_state_icon_left(menu_def)"),
-        "layout model should report the shared state icon x used by the render layer"
+        !layout.contains("MainViewInputStateIcon"),
+        "layout model should not report a left state icon inside MainMenuInput"
     );
 }
 
@@ -421,9 +444,11 @@ fn file_search_layout_model_uses_main_view_context_chrome() {
     let bounds = read_source("src/app_layout/build_component_bounds.rs");
 
     assert!(layout.contains("| AppView::FileSearchView { .. }"));
+    assert!(layout.contains("| AppView::ClipboardHistoryView { .. }"));
     assert!(layout.contains("| AppView::ProfileSearchView { .. }"));
     assert!(layout.contains("| AppView::AcpChatView { .. }"));
     assert!(bounds.contains("| AppView::FileSearchView { .. }"));
+    assert!(bounds.contains("| AppView::ClipboardHistoryView { .. }"));
     assert!(bounds.contains("| AppView::ProfileSearchView { .. }"));
     assert!(bounds.contains("| AppView::AcpChatView { .. }"));
 }
@@ -516,7 +541,7 @@ fn acp_component_bounds_model_uses_main_view_chrome() {
     assert!(bounds.contains("\"MainViewMain\""));
     assert!(bounds.contains("\"AcpConversation\""));
     assert!(bounds.contains("\"MainViewInput\""));
-    assert!(bounds.contains("\"MainViewInputStateIcon\""));
+    assert!(!bounds.contains("\"MainViewInputStateIcon\""));
     assert!(bounds.contains("\"MainViewFooter\""));
     assert!(bounds.contains("\"AcpEmptyGuidance\""));
     assert!(bounds.contains("\"AcpEmptyGuidanceTitle\""));
@@ -526,9 +551,10 @@ fn acp_component_bounds_model_uses_main_view_chrome() {
     assert!(
         bounds.contains("AppView::ScriptList")
             && bounds.contains("| AppView::FileSearchView { .. }")
+            && bounds.contains("| AppView::ClipboardHistoryView { .. }")
             && bounds.contains("| AppView::ProfileSearchView { .. }")
             && bounds.contains("| AppView::AcpChatView { .. }"),
-        "debug component bounds should emit shared input details for ScriptList, FileSearch, ProfileSearch, and AcpChat"
+        "debug component bounds should emit shared input details for ScriptList, FileSearch, Clipboard History, ProfileSearch, and AcpChat"
     );
 }
 

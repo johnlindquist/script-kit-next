@@ -1788,64 +1788,68 @@ mod prompt_layout_shell_tests {
 
     #[test]
     fn clipboard_history_source_matches_expanded_contract() {
-        let source = include_str!("../render_builtins/clipboard_history_layout.rs");
+        let source = include_str!("../render_builtins/clipboard.rs");
         // Expanded-view contract: no SectionDivider (spacing defines structure per .impeccable.md)
         assert!(
             !source.contains("SectionDivider::new()"),
-            "clipboard_history_layout.rs should not use SectionDivider (whisper chrome: spacing defines structure)"
+            "clipboard.rs should not use SectionDivider (whisper chrome: spacing defines structure)"
         );
         // Uses universal prompt hints
         assert!(
-            source.contains("universal_prompt_hints()"),
-            "clipboard_history_layout.rs should use canonical universal prompt hints"
+            source.contains("universal_prompt_hints_with_primary_label(\"Paste\")"),
+            "clipboard.rs should use canonical universal prompt hints with Paste as primary"
         );
         // Must route through the shared expanded-view scaffold
         assert!(
             source.contains("render_expanded_view_scaffold_with_hints(")
                 || source.contains("render_expanded_view_scaffold_with_footer(")
                 || source.contains("render_expanded_view_scaffold("),
-            "clipboard_history_layout.rs should route through the shared expanded-view scaffold"
+            "clipboard.rs should route through the shared expanded-view scaffold"
         );
         // No PromptFooter after migration
         assert!(
             !source.contains("PromptFooter::new("),
-            "clipboard_history_layout.rs should not construct PromptFooter after migration"
+            "clipboard.rs should not construct PromptFooter after migration"
         );
         // Emits hint audit with the universal three-key footer
         assert!(
             source.contains("emit_prompt_hint_audit("),
-            "clipboard history layout should emit a prompt hint audit"
+            "clipboard history should emit a prompt hint audit"
         );
         // Sharp edges — no rounded corners on main container
         assert!(
             !source.contains(".rounded(px(design_visual.radius_lg))"),
-            "clipboard_history_layout.rs should not use rounded corners on main container"
+            "clipboard.rs should not use rounded corners on main container"
         );
     }
 
     #[test]
-    fn file_search_source_matches_expanded_contract() {
-        // The live rendering is in file_search.rs; file_search_layout.rs is a legacy stub.
+    fn file_search_source_matches_main_view_chrome_contract() {
         let source = include_str!("../render_builtins/file_search.rs");
-        // Must route through the shared expanded-view scaffold
         assert!(
-            source.contains("render_expanded_view_scaffold(")
-                || source.contains("render_expanded_view_scaffold_with_hints(")
-                || source.contains("render_expanded_view_scaffold_with_footer("),
-            "file search must use the shared expanded-view scaffold"
+            source.contains("render_main_view_chrome("),
+            "file search must use shared main-view chrome"
         );
-        // Must NOT have hand-rolled SectionDivider (scaffold owns structure)
+        assert!(
+            source.contains("render_main_view_context_zone("),
+            "file search must keep the shared context zone"
+        );
+        assert!(
+            source.contains("render_main_view_input_shell("),
+            "file search must keep the shared input shell"
+        );
+        assert!(
+            source.contains("main_window_footer_slot("),
+            "file search must route footer content through the native footer slot"
+        );
+        assert!(
+            source.contains("render_simple_hint_strip(file_search_hints, None)"),
+            "file search must build the shared hint strip"
+        );
         let divider = "SectionDivider".to_owned() + "::new()";
         assert!(
             !source.contains(&divider),
-            "file search must not use SectionDivider (scaffold owns structure)"
-        );
-
-        // Legacy layout file must not contain chrome markers
-        let legacy = include_str!("../render_builtins/file_search_layout.rs");
-        assert!(
-            !legacy.contains("render_expanded_view_scaffold("),
-            "legacy file_search_layout.rs must not contain chrome markers"
+            "file search must not use SectionDivider"
         );
     }
 
@@ -1884,10 +1888,10 @@ mod prompt_layout_shell_tests {
 
     #[test]
     fn clipboard_history_uses_universal_hint_strip() {
-        let layout_source = include_str!("../render_builtins/clipboard_history_layout.rs");
+        let layout_source = include_str!("../render_builtins/clipboard.rs");
         assert!(
-            layout_source.contains("universal_prompt_hints()"),
-            "clipboard history should use the canonical three-key footer"
+            layout_source.contains("universal_prompt_hints_with_primary_label(\"Paste\")"),
+            "clipboard history should use canonical universal hints with Paste as primary"
         );
         assert!(
             !layout_source.contains("SharedString::from(\"↵ Paste\")"),
@@ -2099,7 +2103,7 @@ mod prompt_layout_shell_tests {
             "path prompt entity should not use legacy PromptContainer"
         );
         assert!(
-            !source.contains("PromptHeader::new("),
+            !source.contains(&["PromptHeader", "::new("].concat()),
             "path prompt entity should not use legacy PromptHeader"
         );
     }

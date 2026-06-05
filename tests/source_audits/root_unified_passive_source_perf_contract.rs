@@ -34,7 +34,7 @@ fn root_passive_frame_times_every_passive_source() {
 }
 
 #[test]
-fn implicit_browser_history_uses_cached_lookup_on_typing_path() {
+fn browser_history_lookup_is_confined_to_explicit_source_filter() {
     let filtering = include_str!("../../src/app_impl/filtering_cache.rs");
     let section = filtering
         .split("let browser_history_hits = timed_root_passive_source(")
@@ -47,13 +47,12 @@ fn implicit_browser_history_uses_cached_lookup_on_typing_path() {
         "browser history branch must distinguish explicit from implicit source filters"
     );
     assert!(
-        section.contains("search_root_browser_history_meta_cached"),
-        "implicit browser history must use the cached/snapshot lookup"
+        section.contains("search_root_browser_history_meta_direct"),
+        "explicit browser history should use the direct lookup branch"
     );
     assert!(
-        section.find("search_root_browser_history_meta_direct")
-            < section.find("search_root_browser_history_meta_cached"),
-        "direct browser history lookup should be confined to the explicit branch"
+        !section.contains("search_root_browser_history_meta_cached"),
+        "implicit browser history should stay out of the ordinary typing path"
     );
 }
 

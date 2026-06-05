@@ -132,10 +132,7 @@ impl ScriptListApp {
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
-        let design_visual = tokens.visual();
 
-        let text_primary = self.theme.colors.text.primary;
-        let text_dimmed = self.theme.colors.text.dimmed;
         let text_muted = self.theme.colors.text.muted;
 
         // Load all presets (defaults + user-saved)
@@ -253,31 +250,6 @@ impl ScriptListApp {
                 .into_any_element()
         };
 
-        let header = div()
-            .flex_1()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap_3()
-            .child(
-                div().flex_1().flex().flex_row().items_center().child(
-                    self.render_search_input()
-                ),
-            )
-            .child(
-                div()
-                    .text_size(px(design_typography.font_size_sm))
-                    .text_color(rgb(text_dimmed))
-                    .child(format!("{} presets", count)),
-            );
-
-        let content = div()
-            .flex_1()
-            .min_h(px(0.))
-            .w_full()
-            .overflow_hidden()
-            .child(list_element);
-
         let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
             vec![
                 gpui::SharedString::from("↵ Select"),
@@ -286,38 +258,12 @@ impl ScriptListApp {
             None,
         ));
 
-        div()
-            .w_full()
-            .h_full()
-            .flex()
-            .flex_col()
-            .child(
-                div()
-                    .w_full()
-                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
-                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .child(header),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .w_full()
-                    .overflow_hidden()
-                    .child(content),
-            )
-            .when_some(footer, |d, footer| d.child(footer))
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(self.theme_font_family())
-            .key_context("search_ai_presets")
-            .track_focus(&self.focus_handle)
-            .into_any_element()
+        self.render_generic_filterable_search_surface(
+            "search_ai_presets",
+            format!("{} presets", count),
+            list_element,
+            footer,
+        )
     }
 
     /// Render the create AI preset form.

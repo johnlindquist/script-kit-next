@@ -13,7 +13,6 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &source[start_index..end_index]
 }
 
-// doc-anchor-removed: [[removed-docs AI sizing]]
 #[test]
 fn inline_mini_ai_uses_mode_aware_resize_helper() {
     let body = source_between(
@@ -31,7 +30,6 @@ fn inline_mini_ai_uses_mode_aware_resize_helper() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs sizing]]
 #[test]
 fn mini_prompt_has_its_own_compact_view_type() {
     let calculate = source_between(
@@ -56,7 +54,6 @@ fn mini_prompt_has_its_own_compact_view_type() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs and ACP mode sizing]]
 #[test]
 fn chat_and_acp_sizing_branch_on_main_window_mode() {
     let calculate = source_between(
@@ -94,12 +91,8 @@ fn file_search_sizing_branches_on_presentation() {
     );
     assert!(
         file_search_arm.contains("FileSearchPresentation::Mini")
-            && file_search_arm.contains("ViewType::MiniMainWindow"),
-        "mini file search must size as MiniMainWindow"
-    );
-    assert!(
-        file_search_arm.contains("FileSearchPresentation::Full")
-            && file_search_arm.contains("ViewType::ExpandedMainWindow"),
-        "full file search must size as ExpandedMainWindow"
+            && file_search_arm.contains("FileSearchPresentation::Full")
+            && file_search_arm.matches("ViewType::MainWindow").count() >= 2,
+        "file search presentations must size through the unified MainWindow view type"
     );
 }

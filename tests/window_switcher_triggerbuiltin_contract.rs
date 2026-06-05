@@ -19,7 +19,6 @@ fn window_switcher_body() -> &'static str {
     &body[..end]
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn registry_accepts_window_switcher_aliases() {
     for alias in ["\"window-switcher\"", "\"windowswitcher\"", "\"windows\""] {
@@ -30,7 +29,6 @@ fn registry_accepts_window_switcher_aliases() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn planner_routes_window_switcher_to_filterable_view() {
     assert!(
@@ -39,7 +37,6 @@ fn planner_routes_window_switcher_to_filterable_view() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn dispatcher_loads_windows_before_opening_view() {
     let body = window_switcher_body();
@@ -56,7 +53,6 @@ fn dispatcher_loads_windows_before_opening_view() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn dispatcher_handles_window_listing_errors_without_panic() {
     let body = window_switcher_body();

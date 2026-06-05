@@ -93,8 +93,8 @@ fn test_render_emoji_picker_uses_shared_input_focus_and_scroll_handles() {
     let source = read_emoji_picker_source();
 
     assert!(
-        source.contains("Input::new(&self.gpui_input_state)"),
-        "emoji picker header should use shared gpui input state"
+        source.contains("self.render_search_input()"),
+        "emoji picker header should use the shared app search input renderer"
     );
     assert!(
         source.contains(".track_focus(&self.focus_handle)"),
@@ -128,9 +128,7 @@ fn test_render_emoji_picker_uses_row_height_and_lighter_cell_chrome() {
         "emoji cells should use shared tile constants"
     );
     assert!(
-        source.contains(
-            "let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2a);"
-        ),
+        source.contains("let selected_bg = rgba((self.theme.colors.text.primary << 8) | 0x2a);"),
         "emoji cells should have selected fill (only selected cell gets chrome)"
     );
     // No hover callbacks or tooltips — they cause render churn during passive scrolling

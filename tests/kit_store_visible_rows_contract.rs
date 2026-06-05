@@ -24,9 +24,8 @@ fn kit_store_defines_visible_row_helper_family() {
 fn kit_store_current_selection_paths_use_visible_helpers() {
     assert!(KIT_STORE
         .contains("Self::kit_store_browse_selected_visible_result(results, *selected_index)"));
-    assert!(
-        KIT_STORE.contains("Self::kit_store_installed_selected_visible_kit(kits, *selected_index)")
-    );
+    assert!(KIT_STORE
+        .contains("Self::kit_store_installed_selected_visible_kit(kits, filter, *selected_index)"));
     assert!(
         !KIT_STORE.contains("results.get(*selected_index)")
             && !KIT_STORE.contains("kits.get(*selected_index)"),
@@ -37,7 +36,7 @@ fn kit_store_current_selection_paths_use_visible_helpers() {
 #[test]
 fn kit_store_get_state_and_get_elements_use_visible_helpers() {
     assert!(PROMPT_HANDLER.contains("kit_store_browse_dataset_and_visible_counts"));
-    assert!(PROMPT_HANDLER.contains("kit_store_installed_dataset_and_visible_counts"));
+    assert!(PROMPT_HANDLER.contains("kit_store_installed_dataset_and_visible_counts(kits, filter)"));
     assert!(COLLECT_ELEMENTS.contains("kit_store_browse_visible_row_labels(results)"));
-    assert!(COLLECT_ELEMENTS.contains("kit_store_installed_visible_row_labels(kits)"));
+    assert!(COLLECT_ELEMENTS.contains("kit_store_installed_visible_row_labels(kits, filter)"));
 }

@@ -31,10 +31,13 @@ pub(crate) struct PixelAudit {
 impl PixelAudit {
     pub(crate) fn is_blank_like(&self) -> bool {
         let solid_like = self.unique_bucket_count <= 1;
-        let dark_empty_like = self.unique_bucket_count <= DARK_EMPTY_MAX_UNIQUE_BUCKETS
+        let sparse_dark_capture_like = self.mean_luma < DARK_EMPTY_MAX_MEAN_LUMA
+            && self.non_black_ratio < DARK_EMPTY_MAX_NON_BLACK_RATIO;
+        let dark_empty_like = (self.unique_bucket_count <= DARK_EMPTY_MAX_UNIQUE_BUCKETS
+            || sparse_dark_capture_like)
             && self.mean_luma < DARK_EMPTY_MAX_MEAN_LUMA
             && self.non_black_ratio < DARK_EMPTY_MAX_NON_BLACK_RATIO
-            && self.max_luma < DARK_EMPTY_MAX_LUMA;
+            && (self.max_luma < DARK_EMPTY_MAX_LUMA || sparse_dark_capture_like);
 
         self.sampled == 0
             || self.non_transparent == 0

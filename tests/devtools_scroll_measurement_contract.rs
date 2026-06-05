@@ -34,7 +34,8 @@ fn scroll_receipt_does_not_mark_selection_invisible_from_unmeasured_viewport() {
         "when ListState viewport is zero, scroll proof must use selected-row bounds or fail closed"
     );
     assert!(
-        source.contains("blocked-by-missing-primitive") || source.contains("measurement unavailable"),
+        source.contains("blocked-by-missing-primitive")
+            || source.contains("measurement unavailable"),
         "scroll proof must not turn missing row geometry into a false hidden-row proof"
     );
 }

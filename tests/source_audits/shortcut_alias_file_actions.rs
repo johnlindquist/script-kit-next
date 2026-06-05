@@ -99,7 +99,9 @@ fn shortcut_remove_shows_error_toast_on_failure() {
     let actions = super::read_all_handle_action_sources();
 
     assert!(
-        actions.contains("\"Failed to remove shortcut: {}\""),
+        actions.contains("remove_action.failure_message(e)")
+            && actions
+                .contains("Self::Shortcut => format!(\"Failed to remove shortcut: {error}\")"),
         "Expected remove_shortcut to show error toast when persistence fails"
     );
 }
@@ -236,7 +238,8 @@ fn alias_remove_shows_error_toast_on_failure() {
     let actions = super::read_all_handle_action_sources();
 
     assert!(
-        actions.contains("\"Failed to remove alias: {}\""),
+        actions.contains("remove_action.failure_message(e)")
+            && actions.contains("Self::Alias => format!(\"Failed to remove alias: {error}\")"),
         "Expected remove_alias to show error toast when persistence fails"
     );
 }
@@ -297,8 +300,9 @@ fn shortcut_and_alias_remove_use_consistent_error_handling_pattern() {
     // Both remove handlers should match Ok(()) => success, Err(e) => error
     // Verify both patterns exist
     assert!(
-        actions.contains("\"Failed to remove shortcut: {}\"")
-            && actions.contains("\"Failed to remove alias: {}\""),
+        actions.contains("Self::Shortcut => format!(\"Failed to remove shortcut: {error}\")")
+            && actions.contains("Self::Alias => format!(\"Failed to remove alias: {error}\")")
+            && count_occurrences(&actions, "remove_action.failure_message(e)") >= 2,
         "Expected both shortcut and alias remove to format error messages consistently"
     );
 }
@@ -389,7 +393,9 @@ fn file_search_open_file_hides_main_window() {
 
     // open_file and open_directory should hide the window
     assert!(
-        actions.contains("action_id == \"open_file\" || action_id == \"open_directory\""),
+        actions.contains("fn hides_main_after_success(self) -> bool")
+            && actions.contains("matches!(self, Self::Open)")
+            && actions.contains("file_action.hides_main_after_success()"),
         "Expected open_file/open_directory to check action_id for hide_main_and_reset"
     );
 }

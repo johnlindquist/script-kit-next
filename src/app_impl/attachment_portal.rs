@@ -151,10 +151,8 @@ impl ScriptListApp {
     ///
     /// Reads from the app-owned `acp_surface_state` machine rather
     /// than probing `attachment_portal_return_view.is_some()`. The
-    /// launcher-entry guards (`try_route_plain_tab_to_acp_context_capture`
-    /// and `try_route_global_cmd_enter_to_acp_context_capture`) call
-    /// this, so a single source of truth prevents the two guards from
-    /// drifting against the portal snapshot fields.
+    /// the Cmd+Enter launcher-entry guard calls this, so a single source of
+    /// truth prevents it from drifting against the portal snapshot fields.
     pub(crate) fn is_in_attachment_portal(&self) -> bool {
         self.acp_surface_state.is_attachment_portal()
     }
@@ -344,17 +342,7 @@ impl ScriptListApp {
                 );
             }
             PortalKind::ClipboardHistory => {
-                self.cached_clipboard_entries = crate::clipboard_history::get_cached_entries(100);
-                self.open_builtin_filterable_view_with_filter(
-                    AppView::ClipboardHistoryView {
-                        filter: portal_query.clone(),
-                        selected_index: 0,
-                    },
-                    &portal_query,
-                    "Search clipboard history...",
-                    true,
-                    cx,
-                );
+                self.open_clipboard_history_surface_with_filter(portal_query.clone(), cx);
             }
             PortalKind::DictationHistory => {
                 self.open_builtin_filterable_view_with_filter(
@@ -415,6 +403,9 @@ impl ScriptListApp {
                     true,
                     cx,
                 );
+            }
+            PortalKind::Terminal => {
+                self.open_quick_terminal(None, cx);
             }
         }
 

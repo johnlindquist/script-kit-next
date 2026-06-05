@@ -11,18 +11,16 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
 #[test]
 fn theme_chooser_customize_opacity_controls_are_single_select() {
     let source = read_source("src/render_builtins/theme_chooser.rs");
-    let customize_controls = read_source("src/render_builtins/theme_chooser_customize_controls.rs");
 
     assert!(!source.contains("OPACITY_MATCH_TOLERANCE"));
     assert!(source.contains("fn closest_float_preset_index("));
+    assert!(source.contains("ThemeChooserSliderBinding::SurfaceOpacity"));
     assert!(source.contains("ThemeChooserSliderBinding::SecondaryTextOpacity"));
     assert!(source.contains("Self::apply_text_opacity_preset("));
     assert!(source.contains("ThemeChooserSliderBinding::FocusedBackgroundOpacity"));
     assert!(source.contains("Self::apply_focused_background_opacity_preset("));
-    assert!(
-        customize_controls.contains("let current_opacity_index = Self::find_opacity_preset_index(")
-    );
-    assert!(customize_controls.contains("let is_current = i == current_opacity_index;"));
+    assert!(source.contains("fn new_theme_chooser_slider("));
+    assert!(source.contains("apply_theme_chooser_slider_change(binding, *value, cx)"));
 }
 
 #[test]

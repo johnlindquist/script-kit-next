@@ -111,7 +111,7 @@ fn launcher_handoff_builtins_use_submit_reset_not_focus_loss_preserve() {
         .expect("execute_notes_command_builtin must exist");
     let notes_command_tail = &content[notes_command_start..];
     let notes_command_end = notes_command_tail
-        .find("fn execute_kit_store_builtin")
+        .find("fn execute_utility_open_builtin")
         .expect("execute_notes_command_builtin boundary must exist");
     let notes_command_fn = &notes_command_tail[..notes_command_end];
 
@@ -1510,7 +1510,7 @@ fn utility_open_builtin_uses_named_action_states() {
 
     assert!(
         content.contains("enum UtilityOpenBuiltinAction")
-            && content.contains("MiniMainWindow")
+            && content.contains("MainWindow")
             && content.contains("ScratchPad")
             && content.contains("QuickTerminal")
             && content.contains("ClaudeCode")
@@ -1558,31 +1558,6 @@ fn browser_window_filterable_builtins_use_named_copy_states() {
             && content.contains("format!(\"Failed to list browser tabs: {error}\")")
             && content.contains("format!(\"Failed to list windows: {error}\")"),
         "filterable built-in state methods should preserve current user-facing copy"
-    );
-}
-
-#[test]
-fn kit_store_builtin_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("Failed to read builtin execution handler");
-
-    assert!(
-        content.contains("enum KitStoreBuiltinAction")
-            && content.contains("BrowseKits")
-            && content.contains("InstalledKits")
-            && content.contains("UpdateAllKits"),
-        "Kit Store built-ins should be routed through named action states"
-    );
-    assert!(
-        content.contains("KitStoreBuiltinAction::from_command(*cmd_type)")
-            && content.contains("fn execute_kit_store_builtin(")
-            && content.contains("action.success_detail()")
-            && content.contains("struct KitStoreUpdateAllResult")
-            && content.contains("result.message()")
-            && content.contains("result.is_failure()")
-            && content.contains("format!(\"Updated {updated} kit(s) successfully\")")
-            && content.contains("format!(\"Updated {updated} kit(s), {failed} failed\")"),
-        "Kit Store view routing and update-all feedback should derive from named states"
     );
 }
 
@@ -1730,41 +1705,6 @@ fn select_microphone_builtin_uses_named_action_states() {
 }
 
 #[test]
-fn ai_preset_view_builtin_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("Failed to read builtin execution handler");
-
-    assert!(
-        content.contains("enum AiPresetViewBuiltinAction")
-            && content.contains("Create")
-            && content.contains("Search"),
-        "AI preset view built-ins should be routed through named action states"
-    );
-    assert!(
-        content.contains("AiPresetViewBuiltinAction::from_command(command)")
-            && content.contains("fn execute_ai_preset_view_builtin(")
-            && content.contains("AiPresetViewBuiltinAction::Create")
-            && content.contains("AiPresetViewBuiltinAction::Search")
-            && content.contains("preset_action.log_action()")
-            && content.contains("preset_action.opening_message()"),
-        "AI preset view command routing and opening copy should delegate through the named state"
-    );
-    assert!(
-        content.contains("AppView::CreateAiPresetView")
-            && content.contains("AppView::SearchAiPresetsView")
-            && content.contains("Self::builtin_success(dctx, action.success_detail())"),
-        "AI preset view state should own the target views and success details"
-    );
-    assert!(
-        content.contains("\"create_ai_preset\"")
-            && content.contains("\"search_ai_presets\"")
-            && content.contains("\"Opening create AI preset form\"")
-            && content.contains("\"Opening AI presets search\""),
-        "AI preset view state should preserve current opening log action and message copy"
-    );
-}
-
-#[test]
 fn create_ai_preset_form_uses_named_submit_state() {
     let content = fs::read_to_string("src/render_builtins/ai_presets.rs")
         .expect("Failed to read AI presets renderer");
@@ -1852,60 +1792,6 @@ fn ai_generate_builtin_uses_named_action_states() {
             && content.contains("Self::NewScript => true")
             && content.contains("Self::CurrentAppScript => false"),
         "AI generation state should preserve current-app prompt copy and empty-request routing behavior"
-    );
-}
-
-#[test]
-fn ai_preset_file_builtin_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("Failed to read builtin execution handler");
-
-    assert!(
-        content.contains("enum AiPresetFileBuiltinAction")
-            && content.contains("Import")
-            && content.contains("Export"),
-        "AI preset file built-ins should be routed through named action states"
-    );
-    assert!(
-        content.contains("AiPresetFileBuiltinAction::from_command(command)")
-            && content.contains("fn execute_ai_preset_file_builtin(")
-            && content.contains("file_action.log_action()")
-            && content.contains("file_action.opening_message()")
-            && content.contains("action.success_detail()"),
-        "AI preset file commands should dispatch through named state logs and success details"
-    );
-    assert!(
-        content.contains("prompt_for_paths(gpui::PathPromptOptions")
-            && content.contains("action.import_prompt_title().into()")
-            && content.contains("action.export_default_filename()")
-            && content.contains("validate_presets_json(&contents)")
-            && content.contains("export_presets_to_file(&path)"),
-        "AI preset file states should preserve import validation and export file picker behavior"
-    );
-    assert!(
-        content.contains("action_for_task.read_failure_message(&e)")
-            && content.contains("action_for_task.invalid_file_message(&e)")
-            && content.contains("action_for_task.worker_failure_message(&e)")
-            && content.contains("action_for_task.success_log_action()")
-            && content.contains("action_for_task.success_log_message()")
-            && content.contains("action_for_task.success_hud(")
-            && content.contains("action_for_task.failure_log_action()")
-            && content.contains("action_for_task.failure_log_message()")
-            && content.contains("action_for_task.failure_toast(&e)")
-            && content.contains("action_for_task.cancelled_log_action()")
-            && content.contains("action_for_task.cancelled_log_message()")
-            && content.contains("action_for_task.picker_error_message()")
-            && content.contains("action_for_task.picker_channel_closed_message()"),
-        "AI preset file async feedback should derive read, validation, import/export, cancellation, and picker copy from named state"
-    );
-    assert!(
-        content.contains("\"Select AI presets JSON file\"")
-            && content.contains("\"ai-presets-export.json\"")
-            && content.contains("format!(\"Imported presets ({count} total)\")")
-            && content.contains("format!(\"Exported {count} presets\")")
-            && content.contains("format!(\"Failed to import presets: {error}\")")
-            && content.contains("format!(\"Failed to export presets: {error}\")"),
-        "AI preset file named state should preserve picker, success HUD, and failure toast copy"
     );
 }
 
@@ -2066,8 +1952,6 @@ fn utility_command_dispatch_uses_named_wrapper_state() {
         content.contains("enum UtilityCommandBuiltinAction")
             && content.contains("Open(UtilityOpenBuiltinAction)")
             && content.contains("Process(UtilityProcessBuiltinAction)")
-            && content.contains("Context(UtilityContextBuiltinAction)")
-            && content.contains("Trace(UtilityTraceBuiltinAction)")
             && content.contains("Recipe(UtilityRecipeBuiltinAction)")
             && content.contains("DoInCurrentApp(UtilityDoInCurrentAppBuiltinAction)")
             && content.contains("CurrentAppCommands(UtilityCurrentAppCommandsBuiltinAction)"),
@@ -2079,143 +1963,10 @@ fn utility_command_dispatch_uses_named_wrapper_state() {
             && content.contains("fn execute_utility_command_builtin(")
             && content.contains("self.execute_utility_open_builtin(open_action")
             && content.contains("self.execute_utility_process_builtin(process_action")
-            && content.contains("self.execute_utility_context_builtin(context_action")
-            && content.contains("self.execute_utility_trace_builtin(trace_action")
-            && content.contains("self.execute_utility_verify_recipe_builtin(recipe_action")
-            && content.contains("self.execute_utility_replay_recipe_builtin(recipe_action")
             && content.contains("execute_utility_turn_this_into_command_builtin")
             && content.contains(".execute_utility_do_in_current_app_builtin(do_in_action")
             && content.contains("self.execute_utility_current_app_commands_builtin("),
         "Utility command wrapper should route to every existing leaf executor"
-    );
-}
-
-#[test]
-fn utility_context_builtin_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("Failed to read builtin execution handler");
-
-    assert!(
-        content.contains("enum UtilityContextBuiltinAction")
-            && content.contains("InspectCurrentContext"),
-        "Utility context built-ins should be routed through named action states"
-    );
-    assert!(
-        content.contains("UtilityContextBuiltinAction::from_command(command)")
-            && content.contains("fn execute_utility_context_builtin(")
-            && content.contains("action.success_detail()")
-            && content.contains("action.copied_log_message()")
-            && content.contains("action.serialize_failure_message(&e)")
-            && content.contains("action.failure_detail()"),
-        "Utility context command routing should delegate through named state details"
-    );
-    assert!(
-        content.contains("capture_context_snapshot(")
-            && content.contains("build_inspection_hud_message(&receipt)")
-            && content.contains("cx.write_to_clipboard(gpui::ClipboardItem::new_string(json))")
-            && content.contains("inspect_current_context_failed"),
-        "Inspect Current Context should preserve snapshot capture, clipboard copy, HUD, and failure detail"
-    );
-    assert!(
-        content.contains("\"Copied current context snapshot to clipboard\"")
-            && content.contains("format!(\"Failed to serialize context snapshot: {error}\")"),
-        "Inspect Current Context state should preserve copied log and serialize-failure copy"
-    );
-}
-
-#[test]
-fn utility_trace_builtin_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("Failed to read builtin execution handler");
-
-    assert!(
-        content.contains("enum UtilityTraceBuiltinAction") && content.contains("CurrentAppIntent"),
-        "Utility trace built-ins should be routed through named action states"
-    );
-    assert!(
-        content.contains("UtilityTraceBuiltinAction::from_command(command)")
-            && content.contains("fn execute_utility_trace_builtin(")
-            && content.contains("action.success_detail()")
-            && content.contains("action.serialize_failure_detail()")
-            && content.contains("action.copied_hud(")
-            && content.contains("action.serialize_failure_message(&e)")
-            && content.contains("action.capture_failure_message(&e)")
-            && content.contains("action.capture_failure_detail()"),
-        "Utility trace command routing should delegate through named state details"
-    );
-    assert!(
-        content.contains("normalize_trace_current_app_intent_request")
-            && content.contains("build_current_app_intent_trace_receipt")
-            && content.contains("Copied app intent trace:")
-            && content.contains("trace_current_app_intent_capture_failed"),
-        "Trace Current App Intent should preserve query normalization, receipt copy, HUD, and capture failure copy"
-    );
-    assert!(
-        content.contains("Copied app intent trace: {action_name}")
-            && content
-                .contains("format!(\"Failed to serialize current app intent trace: {error}\")")
-            && content.contains(
-                "Failed to inspect current app intent: {error}. Check Accessibility permission"
-            ),
-        "Trace Current App Intent state should preserve copied HUD and failure copy"
-    );
-}
-
-#[test]
-fn utility_verify_recipe_builtin_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("Failed to read builtin execution handler");
-
-    assert!(
-        content.contains("enum UtilityRecipeBuiltinAction") && content.contains("VerifyCurrentApp"),
-        "Utility recipe built-ins should be routed through named action states"
-    );
-    assert!(
-        content.contains("UtilityRecipeBuiltinAction::from_command(command)")
-            && content.contains("fn execute_utility_verify_recipe_builtin(")
-            && content.contains("action.success_detail()")
-            && content.contains("action.clipboard_failure_detail()")
-            && content.contains("action.serialize_failure_detail()")
-            && content.contains("action.capture_failure_detail()"),
-        "Verify Current App Recipe routing should delegate through named state details"
-    );
-    assert!(
-        content.contains("load_current_app_command_recipe_from_clipboard")
-            && content.contains("verify_current_app_command_recipe")
-            && content.contains("build_current_app_command_verification_hud_message")
-            && content.contains("verify_current_app_recipe_capture_failed"),
-        "Verify Current App Recipe should preserve clipboard loading, live verification, HUD, and capture failure copy"
-    );
-}
-
-#[test]
-fn utility_replay_recipe_builtin_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("Failed to read builtin execution handler");
-
-    assert!(
-        content.contains("ReplayCurrentApp")
-            && content.contains("UtilityRecipeBuiltinAction::from_command(command)")
-            && content.contains("fn execute_utility_replay_recipe_builtin("),
-        "Replay Current App Recipe should share named utility recipe action routing"
-    );
-    assert!(
-        content.contains("action.clipboard_failure_detail()")
-            && content.contains("action.serialize_failure_detail()")
-            && content.contains("action.drift_failure_detail()")
-            && content.contains("action.missing_entry_failure_detail()")
-            && content.contains("action.open_palette_success_detail()")
-            && content.contains("action.generate_script_success_detail()")
-            && content.contains("action.unknown_action_failure_detail()")
-            && content.contains("action.capture_failure_detail()"),
-        "Replay Current App Recipe outcomes should use named state details"
-    );
-    assert!(
-        content.contains("build_replay_current_app_recipe_receipt")
-            && content.contains("present_current_app_commands_entries")
-            && content.contains("spawn_generate_script_from_recipe_after_hide")
-            && content.contains("execute_builtin_inner("),
-        "Replay Current App Recipe should preserve drift reporting, palette replay, script generation, and entry execution"
     );
 }
 
@@ -2630,8 +2381,8 @@ fn browser_tabs_builtin_uses_named_action_states() {
     assert!(
         content.contains("crate::browser_tabs::list_open_tabs()")
             && content.contains("self.cached_browser_tabs = tabs")
-            && content.contains("crate::browser_tabs::domains_needing_favicons")
-            && content.contains("crate::browser_tabs::fetch_favicons_blocking(&domains)")
+            && content.contains("crate::favicons::domains_needing_favicons")
+            && content.contains("crate::favicons::fetch_favicons_blocking(&domains)")
             && content.contains("AppView::BrowserTabsView"),
         "Browser Tabs should preserve tab loading, favicon fetch scheduling, and view opening"
     );
@@ -2716,20 +2467,14 @@ fn notes_builtin_uses_named_action_states() {
         "Notes should route through a named action state"
     );
     assert!(
-        content.contains("notes_handoff_preserving_launcher_context")
+        content.contains("notes_handoff_submit_reset")
             && content.contains("crate::confirm::route_key_to_confirm_popup(\"escape\", cx)")
             && content.contains("crate::actions::close_actions_window(cx)")
             && content.contains("self.mark_filter_resync_after_actions_if_needed()")
             && content.contains("self.pending_focus = None")
-            && content.contains("notes::open_notes_window_without_launcher_restore(cx)"),
-        "Notes should preserve launcher-context handoff, popup cleanup, and focus reset behavior"
-    );
-    assert!(
-        content.contains("script_kit_gpui::set_main_window_visible(false)")
-            && content.contains("platform::defer_hide_main_window(cx)")
-            && content.contains("script_kit_gpui::set_main_window_visible(true)")
-            && content.contains("platform::show_main_window_without_activation()"),
-        "Notes should preserve main-window hide and failure restore behavior"
+            && content.contains("notes::open_notes_window_without_launcher_restore(cx)")
+            && content.contains("self.close_and_reset_window(cx)"),
+        "Notes should preserve submit-reset handoff, popup cleanup, and focus reset behavior"
     );
     assert!(
         content.contains("action.success_detail()")
@@ -2741,7 +2486,7 @@ fn notes_builtin_uses_named_action_states() {
         "Notes copy, success detail, and failure detail should come from the named state"
     );
     assert!(
-        content.contains("\"Opening Notes window (preserving launcher context)\"")
+        content.contains("\"Opening Notes window\"")
             && content.contains("format!(\"Failed to open Notes: {error}\")"),
         "Notes named state should preserve handoff log and failure copy"
     );
@@ -2866,8 +2611,6 @@ fn ai_command_dispatch_uses_named_wrapper_state() {
             && content.contains("Generate(AiGenerateBuiltinAction)")
             && content.contains("Capture(AiCaptureBuiltinAction)")
             && content.contains("Unavailable(AiUnavailableBuiltinAction)")
-            && content.contains("PresetView(AiPresetViewBuiltinAction)")
-            && content.contains("PresetFile(AiPresetFileBuiltinAction)")
             && content.contains("LegacyHarness(AiLegacyHarnessBuiltinAction)"),
         "AI command dispatch should use a named wrapper state over the existing leaf actions"
     );
@@ -2877,17 +2620,8 @@ fn ai_command_dispatch_uses_named_wrapper_state() {
             && content.contains("self.execute_ai_generate_builtin(generate_action")
             && content.contains("self.execute_ai_capture_builtin(capture_action")
             && content.contains("self.execute_ai_unavailable_builtin(unavailable_action")
-            && content.contains("self.execute_ai_preset_view_builtin(preset_action")
-            && content.contains("self.execute_ai_preset_file_builtin(file_action")
             && content.contains("self.execute_ai_legacy_harness_builtin(legacy_action"),
         "AI command wrapper state should route to each existing leaf executor"
-    );
-    assert!(
-        content.contains("Opening create AI preset form")
-            && content.contains("Opening AI presets search")
-            && content.contains("Opening file picker for AI preset import")
-            && content.contains("Opening save dialog for AI preset export"),
-        "AI command wrapper state should preserve preset logging copy"
     );
 }
 
@@ -2926,47 +2660,6 @@ fn script_ranking_handler_uses_named_action_states() {
             && content.contains("Ranking reset for \\\"{script_name}\\\"")
             && content.contains("Item has no ranking to reset"),
         "reset ranking handler should derive success and no-ranking feedback from the named state"
-    );
-}
-
-#[test]
-fn acp_agent_selection_actions_use_named_plan_states() {
-    let content = fs::read_to_string("src/actions/builders/script_context.rs")
-        .expect("Failed to read script context builder");
-
-    assert!(
-        content.contains("enum AcpAgentSelectionActionPlan")
-            && content.contains("CurrentAgent")
-            && content.contains("AvailableAgent"),
-        "ACP agent current/use labels and descriptions should be driven by named selection plan states"
-    );
-    assert!(
-        content.contains("AcpAgentSelectionActionPlan::from_is_selected(is_selected)")
-            && content.contains("fn action_title")
-            && content.contains("fn picker_title")
-            && content.contains("fn description"),
-        "ACP agent action and picker rows should derive visible copy from the named selection plan"
-    );
-}
-
-#[test]
-fn acp_agent_switch_handler_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
-        .expect("Failed to read action handler");
-
-    assert!(
-        content.contains("enum AcpAgentSwitchHandlerAction") && content.contains("SwitchAgent"),
-        "ACP agent switch handler should be driven by named action states"
-    );
-    assert!(
-        content.contains("AcpAgentSwitchHandlerAction::from_action_id(action_id)")
-            && content.contains("agent_action.already_selected_message(&agent_display_name)")
-            && content.contains("agent_action.persist_failure_message(&agent_display_name, error)")
-            && content.contains("agent_action.relaunch_message(&agent_display_name)")
-            && content.contains("Already using {display_name}")
-            && content.contains("Failed to persist agent selection for {display_name}: {error}")
-            && content.contains("Switching agent to {display_name}"),
-        "ACP agent switch handler should derive current, persistence, and relaunch feedback from named state"
     );
 }
 
@@ -3043,13 +2736,14 @@ fn acp_root_change_actions_use_named_plan_states() {
         content.contains("enum AcpRootPickerActionPlan")
             && content.contains("CurrentSelection")
             && content.contains("NoCurrentSelection"),
-        "ACP root Change Agent/Model descriptions should be driven by named picker plan states"
+        "ACP root Change Profile/Model descriptions should be driven by named picker plan states"
     );
     assert!(
         content.contains("AcpRootPickerActionPlan::from_selected_display_name")
-            && content.contains("agent_picker_plan.description(ACP_CHANGE_AGENT_DESCRIPTION)")
+            && content
+                .contains("profile_picker_plan.description(AGENT_CHAT_CHANGE_PROFILE_DESCRIPTION)")
             && content.contains("model_picker_plan.description(ACP_CHANGE_MODEL_DESCRIPTION)"),
-        "ACP root Change Agent/Model actions should derive current/fallback copy from the named picker plan"
+        "ACP root Change Profile/Model actions should derive current/fallback copy from the named picker plan"
     );
 }
 
@@ -3282,8 +2976,8 @@ fn acp_panel_window_handlers_use_named_action_states() {
     );
     assert!(
         content.contains("AcpPanelWindowHandlerAction::from_action_id(action_id)")
-            && content.contains("panel_action.success_message()")
-            && content.contains("panel_action.history_search_placeholder()")
+            && content.contains("panel_action.success_message().map(String::from)")
+            && content.contains(".history_search_placeholder()")
             && content.contains("Opened conversation history")
             && content.contains("Search conversation history...")
             && content.contains("Chat kept open in window")

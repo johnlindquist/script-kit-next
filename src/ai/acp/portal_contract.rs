@@ -81,6 +81,7 @@ pub(crate) fn portal_kind_detail_label(kind: PortalKind) -> &'static str {
         PortalKind::SkillSearch => "skill portal",
         PortalKind::NotesBrowse => "notes portal",
         PortalKind::AcpHistory => "history portal",
+        PortalKind::Terminal => "terminal portal",
     }
 }
 
@@ -230,6 +231,7 @@ pub(crate) fn portal_target_from_inline_token(token: &str) -> Option<(PortalKind
         "@clipboard" => return Some((PortalKind::ClipboardHistory, String::new())),
         "@dictation" => return Some((PortalKind::DictationHistory, String::new())),
         "@recent-scripts" => return Some((PortalKind::ScriptSearch, String::new())),
+        "@terminal" => return Some((PortalKind::Terminal, String::new())),
         _ => {}
     }
 
@@ -245,6 +247,7 @@ pub(crate) fn portal_target_from_inline_token(token: &str) -> Option<(PortalKind
         "skill" => PortalKind::SkillSearch,
         "clipboard" => PortalKind::ClipboardHistory,
         "history" => PortalKind::AcpHistory,
+        "terminal" => PortalKind::Terminal,
         file_prefix if is_fileish_typed_prefix(file_prefix) => PortalKind::FileSearch,
         _ => return None,
     };
@@ -452,7 +455,6 @@ pub(crate) fn apply_portal_replacement(
 mod tests {
     use super::*;
 
-    // doc-anchor-removed: [[tests/acp-portal-contract#Exact replacement target#Replaces only the matching token]]
     #[test]
     fn replaces_only_when_the_current_text_matches_the_original_token() {
         let target = AcpPortalReplacementTarget::ExactToken {
@@ -469,7 +471,6 @@ mod tests {
         assert_eq!(next_cursor, "compare @file:bar.rs ".chars().count());
     }
 
-    // doc-anchor-removed: [[tests/acp-portal-contract#Exact replacement target#Falls back when the token changed]]
     #[test]
     fn falls_back_when_the_token_changed() {
         let target = AcpPortalReplacementTarget::ExactToken {
@@ -486,7 +487,6 @@ mod tests {
         assert_eq!(next_cursor, "compare @file:bar.rs ".chars().count());
     }
 
-    // doc-anchor-removed: [[tests/acp-portal-contract#Preview contract#Preview copy names the replacement target]]
     #[test]
     fn portal_preview_names_the_replacement_target() {
         let intent = intent_from_inline_token(
@@ -505,7 +505,6 @@ mod tests {
         );
     }
 
-    // doc-anchor-removed: [[tests/acp-portal-contract#Preview contract#Preview-only mentions stay explicit]]
     #[test]
     fn preview_only_mentions_stay_explicit() {
         let part = AiContextPart::TextBlock {

@@ -43,7 +43,6 @@
 const VIEW: &str = include_str!("../src/ai/acp/view.rs");
 const PASTED_TEXT: &str = include_str!("../src/pasted_text.rs");
 
-// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn paste_text_from_clipboard_uses_arboard_and_normalizes_line_endings() {
     // arboard is the single clipboard API the composer uses; swapping
@@ -85,7 +84,6 @@ fn paste_text_from_clipboard_uses_arboard_and_normalizes_line_endings() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn paste_text_from_clipboard_short_circuits_on_empty_text() {
     // An empty normalized string must return false without mutating
@@ -103,7 +101,6 @@ fn paste_text_from_clipboard_short_circuits_on_empty_text() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn paste_text_from_clipboard_routes_through_prepare_and_inserts_at_cursor() {
     // The `prepare_pasted_text` call is the single seam where small
@@ -142,7 +139,6 @@ fn paste_text_from_clipboard_routes_through_prepare_and_inserts_at_cursor() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn paste_text_from_clipboard_registers_token_as_text_block_context_part() {
     // When `prepare_pasted_text` returns a token (large paste),
@@ -207,7 +203,6 @@ fn paste_text_from_clipboard_registers_token_as_text_block_context_part() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn paste_text_thresholds_and_token_format_match_lat_md_documentation() {
     // removed-docs composer documents "Large clipboard text
@@ -256,7 +251,6 @@ fn paste_text_thresholds_and_token_format_match_lat_md_documentation() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn prepare_pasted_text_is_pure_and_respects_existing_tokens() {
     // `prepare_pasted_text` is the bridge between the paste handler

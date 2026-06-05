@@ -1,4 +1,3 @@
-// doc-anchor-removed: [[protocol#Protocol#Tool exposure]]
 #[test]
 fn computer_see_mcp_tool_does_not_reimplement_inspection() {
     let mcp_tools = std::fs::read_to_string("src/mcp_computer_use_tools.rs")

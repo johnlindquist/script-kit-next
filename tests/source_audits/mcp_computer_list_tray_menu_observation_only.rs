@@ -1,4 +1,3 @@
-// doc-anchor-removed: [[protocol#Protocol#Tool exposure]]
 #[test]
 fn computer_list_tray_menu_reads_script_kit_tray_model_only() {
     let mcp_tools = std::fs::read_to_string("src/mcp_computer_use_tools.rs")

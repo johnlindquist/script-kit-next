@@ -452,6 +452,7 @@ fn acp_state_result_round_trips() {
         message_count: 2,
         awaiting_first_assistant_text: false,
         picker: None,
+        spine: None,
         last_accepted_item: None,
         context_chip_count: 1,
         context_summary: None,

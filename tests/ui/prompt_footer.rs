@@ -2,9 +2,6 @@ use script_kit_gpui::components::prompt_footer::{
     footer_surface_rgba, PromptFooterColors, PromptFooterConfig,
     PROMPT_FOOTER_HELPER_TEXT_MAX_WIDTH_PX, PROMPT_FOOTER_INFO_TEXT_MAX_WIDTH_PX,
 };
-use script_kit_gpui::components::prompt_header::{
-    HeaderActionsDensity, HEADER_ACTIONS_MIN_WIDTH_COMPACT_PX, HEADER_PATH_PREFIX_MAX_WIDTH_PX,
-};
 use script_kit_gpui::designs::DesignColors;
 use script_kit_gpui::theme::Theme;
 
@@ -89,26 +86,4 @@ fn test_prompt_footer_text_max_width_contract() {
         helper_max_width > info_max_width,
         "Helper text should get more space than the info label"
     );
-}
-
-#[test]
-fn test_prompt_header_actions_density_compact_reduces_reserved_width() {
-    assert_eq!(HeaderActionsDensity::Compact.reserved_min_width_px(), 168.0);
-    assert!(
-        HeaderActionsDensity::Compact.reserved_min_width_px()
-            < HeaderActionsDensity::Normal.reserved_min_width_px()
-    );
-    assert!(
-        HeaderActionsDensity::Normal.reserved_min_width_px()
-            < HeaderActionsDensity::Expanded.reserved_min_width_px()
-    );
-    assert_eq!(
-        HeaderActionsDensity::Compact.reserved_min_width_px(),
-        HEADER_ACTIONS_MIN_WIDTH_COMPACT_PX
-    );
-}
-
-#[test]
-fn test_prompt_header_path_prefix_has_explicit_max_width_contract() {
-    assert_eq!(HEADER_PATH_PREFIX_MAX_WIDTH_PX, 320.0);
 }

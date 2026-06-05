@@ -13,7 +13,7 @@ use crate::ai::window::context_picker::types::{
 };
 use crate::components::inline_dropdown::{
     inline_dropdown_visible_range_from_start, InlineDropdown, InlineDropdownColors,
-    InlineDropdownEmptyState, MUTED_OP,
+    InlineDropdownEmptyState,
 };
 use crate::components::inline_picker::{
     InlinePickerHighlights, InlinePickerRow, InlinePickerRowKind,
@@ -212,11 +212,20 @@ pub(crate) fn batch_select_mention_item_by_semantic_id(
     Some(semantic_id.to_string())
 }
 
-const TRIGGER_POPUP_ROW_HEIGHT: f32 = 30.0;
+fn acp_mention_popup_main_menu_theme() -> crate::designs::MainMenuThemeVariant {
+    crate::designs::current_main_menu_theme()
+}
+
+fn acp_mention_popup_row_height_for_theme(theme: crate::designs::MainMenuThemeVariant) -> f32 {
+    crate::list_item::effective_list_item_height_for_theme(theme)
+}
 
 fn popup_height(snapshot: &AcpMentionPopupSnapshot) -> f32 {
     let row_count = snapshot.items.len().min(INLINE_POPUP_MAX_VISIBLE_ROWS);
-    inline_popup_height_for_row_height(row_count, TRIGGER_POPUP_ROW_HEIGHT)
+    inline_popup_height_for_row_height(
+        row_count,
+        acp_mention_popup_row_height_for_theme(acp_mention_popup_main_menu_theme()),
+    )
 }
 
 fn popup_visible_row_limit(item_count: usize, parent_height: f32) -> usize {
@@ -230,7 +239,10 @@ fn popup_visible_row_limit(item_count: usize, parent_height: f32) -> usize {
     (1..=hard_limit)
         .rev()
         .find(|rows| {
-            let height = inline_popup_height_for_row_height(*rows, TRIGGER_POPUP_ROW_HEIGHT);
+            let height = inline_popup_height_for_row_height(
+                *rows,
+                acp_mention_popup_row_height_for_theme(acp_mention_popup_main_menu_theme()),
+            );
             height <= max_height
         })
         .unwrap_or(1)
@@ -280,7 +292,10 @@ pub(crate) fn popup_layout_above(
 
     let visible_row_limit = popup_visible_row_limit(snapshot.items.len(), available_height);
     let row_count = snapshot.items.len().min(visible_row_limit);
-    let height = inline_popup_height_for_row_height(row_count, TRIGGER_POPUP_ROW_HEIGHT);
+    let height = inline_popup_height_for_row_height(
+        row_count,
+        acp_mention_popup_row_height_for_theme(acp_mention_popup_main_menu_theme()),
+    );
 
     let preferred_left = parent_bounds.origin.x.as_f32();
     let left = display_bounds
@@ -415,13 +430,14 @@ struct PopupScrollbarHandle {
     total_items: usize,
     visible_items: usize,
     scroll_offset: usize,
+    row_height: f32,
 }
 
 impl gpui_component::scroll::ScrollbarHandle for PopupScrollbarHandle {
     fn offset(&self) -> gpui::Point<gpui::Pixels> {
         gpui::point(
             gpui::px(0.0),
-            gpui::px(-(self.scroll_offset as f32 * TRIGGER_POPUP_ROW_HEIGHT)),
+            gpui::px(-(self.scroll_offset as f32 * self.row_height)),
         )
     }
 
@@ -430,8 +446,107 @@ impl gpui_component::scroll::ScrollbarHandle for PopupScrollbarHandle {
     fn content_size(&self) -> gpui::Size<gpui::Pixels> {
         gpui::size(
             gpui::px(0.0),
-            gpui::px(self.total_items as f32 * TRIGGER_POPUP_ROW_HEIGHT),
+            gpui::px(self.total_items as f32 * self.row_height),
         )
+    }
+}
+
+struct AcpMentionListRowSpec {
+    title: String,
+    description: Option<String>,
+    source_hint: Option<String>,
+    icon_kind: Option<crate::list_item::IconKind>,
+    type_accessory: crate::list_item::TypeAccessory,
+    title_highlights: Vec<usize>,
+    description_highlights: Vec<usize>,
+    enabled: bool,
+}
+
+fn non_empty_string(value: &SharedString) -> Option<String> {
+    let value = value.as_ref();
+    (!value.is_empty()).then(|| value.to_string())
+}
+
+fn acp_context_picker_item_to_list_row_spec(item: &ContextPickerItem) -> AcpMentionListRowSpec {
+    let mut title = item.label.to_string();
+    let mut description = non_empty_string(&item.description);
+    let mut source_hint = non_empty_string(&item.meta);
+    let mut icon_kind = None;
+    let mut type_accessory = crate::list_item::TypeAccessory {
+        label: "Context",
+        icon_name: "at-sign",
+    };
+    let mut title_highlights = item.label_highlight_indices.clone();
+    let description_highlights = Vec::new();
+    let enabled = !matches!(item.kind, ContextPickerItemKind::Inert);
+
+    match &item.kind {
+        ContextPickerItemKind::SlashCommand(payload) => {
+            title = format!("/{}", payload.slash_name());
+            source_hint = Some(payload.owner_label().to_string());
+            title_highlights = item
+                .label_highlight_indices
+                .iter()
+                .map(|ix| ix.saturating_add(1))
+                .collect();
+            type_accessory = crate::list_item::TypeAccessory {
+                label: "Command",
+                icon_name: "command",
+            };
+        }
+        ContextPickerItemKind::AgentChatProfile { icon_name, .. } => {
+            let icon_path = crate::components::footer_chrome::footer_icon_path_or_profile(
+                icon_name
+                    .as_deref()
+                    .unwrap_or(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN),
+            );
+            icon_kind = Some(crate::list_item::IconKind::Svg(icon_path));
+            type_accessory = crate::list_item::TypeAccessory {
+                label: "Profile",
+                icon_name: "bot",
+            };
+        }
+        ContextPickerItemKind::File(_) => {
+            type_accessory = crate::list_item::TypeAccessory {
+                label: "File",
+                icon_name: "file",
+            };
+        }
+        ContextPickerItemKind::Folder(_) => {
+            type_accessory = crate::list_item::TypeAccessory {
+                label: "Folder",
+                icon_name: "folder",
+            };
+        }
+        ContextPickerItemKind::Portal(_) | ContextPickerItemKind::PortalPrefix(_) => {
+            type_accessory = crate::list_item::TypeAccessory {
+                label: "Portal",
+                icon_name: "panel-top-open",
+            };
+        }
+        ContextPickerItemKind::PortalResult(_) => {
+            type_accessory = crate::list_item::TypeAccessory {
+                label: "Result",
+                icon_name: "search",
+            };
+        }
+        ContextPickerItemKind::BuiltIn(_) => {}
+        ContextPickerItemKind::Inert => {
+            if description.is_none() {
+                description = source_hint.clone();
+            }
+        }
+    }
+
+    AcpMentionListRowSpec {
+        title,
+        description,
+        source_hint,
+        icon_kind,
+        type_accessory,
+        title_highlights,
+        description_highlights,
+        enabled,
     }
 }
 
@@ -586,125 +701,45 @@ impl AcpMentionPopupWindow {
         idx: usize,
         item: &ContextPickerItem,
         is_selected: bool,
-        colors: InlineDropdownColors,
+        theme: &crate::theme::Theme,
+        main_menu_theme: crate::designs::MainMenuThemeVariant,
     ) -> gpui::Stateful<gpui::Div> {
-        let row = acp_context_picker_item_to_inline_picker_row(item);
-        let label = row.title.clone();
-        let meta = row.token.clone().or_else(|| row.subtitle.clone());
-        let label_hits: std::collections::HashSet<usize> =
-            row.highlights.title.iter().map(|r| r.start).collect();
-
-        let mut left_side = div().flex().items_center().gap(gpui::px(6.0));
-
-        if let ContextPickerItemKind::AgentChatProfile { icon_name, .. } = &item.kind {
-            let icon_path = crate::components::footer_chrome::footer_icon_path_or_profile(
-                icon_name
-                    .as_deref()
-                    .unwrap_or(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN),
-            );
-            left_side = left_side.child(
-                gpui::svg()
-                    .external_path(icon_path)
-                    .size(gpui::px(13.0))
-                    .text_color(if is_selected {
-                        colors.foreground
-                    } else {
-                        colors.foreground.opacity(MUTED_OP)
-                    }),
-            );
-        }
-
-        let label_spans = render_trigger_row_label(
-            &label,
-            &label_hits,
-            if is_selected {
-                colors.foreground
-            } else {
-                colors.foreground.opacity(MUTED_OP)
-            },
-            colors.accent,
-            is_selected,
-        );
-        left_side = left_side.child(label_spans);
-
-        let mut content = div()
-            .flex_1()
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_between()
-            .child(left_side);
-
-        if let Some(meta_val) = meta.filter(|val| !val.is_empty()) {
-            let meta_hits: std::collections::HashSet<usize> =
-                row.highlights.token.iter().map(|r| r.start).collect();
-            content = content.child(
-                div()
-                    .px(gpui::px(6.0))
-                    .py(gpui::px(2.0))
-                    .rounded(gpui::px(4.0))
-                    .bg(colors.foreground.opacity(0.06))
-                    .child(render_trigger_row_meta_text(
-                        &meta_val,
-                        &meta_hits,
-                        if is_selected {
-                            colors.foreground.opacity(MUTED_OP)
-                        } else {
-                            colors.muted_foreground.opacity(0.45)
-                        },
-                        colors.accent.opacity(0.45),
-                    )),
-            );
-        }
-
-        let selected_row_bg = colors.foreground.opacity(0.18);
-        let hover_row_bg = colors.foreground.opacity(0.06);
-
-        let inner_row = div()
-            .w_full()
-            .flex_1()
-            .flex()
-            .flex_row()
-            .items_center()
-            .px(gpui::px(8.0))
-            .rounded(gpui::px(6.0))
-            .border_l(gpui::px(2.0))
-            .border_color(if is_selected {
-                colors.accent
-            } else {
-                gpui::transparent_black()
-            })
-            .bg(if is_selected {
-                selected_row_bg
-            } else {
-                gpui::transparent_black()
-            })
-            .when(!is_selected, |row| {
-                row.hover(move |style| style.bg(hover_row_bg))
-            })
-            .child(content);
+        let spec = acp_context_picker_item_to_list_row_spec(item);
+        let colors = crate::list_item::ListItemColors::from_theme(theme);
+        let row_height = acp_mention_popup_row_height_for_theme(main_menu_theme);
+        let row = crate::list_item::ListItem::new(spec.title, colors)
+            .index(idx)
+            .selected(is_selected)
+            .hovered(false)
+            .main_menu_theme(main_menu_theme)
+            .semantic_id(format!("choice:{idx}:{}", item.id))
+            .description_opt(spec.description)
+            .source_hint_opt(spec.source_hint)
+            .icon_kind_opt(spec.icon_kind)
+            .type_accessory(spec.type_accessory)
+            .highlight_indices(spec.title_highlights)
+            .description_highlight_indices(spec.description_highlights);
 
         div()
             .id(SharedString::from(format!("acp-mention-popup-row-{idx}")))
-            .h(gpui::px(30.0))
+            .h(gpui::px(row_height))
             .w_full()
-            .px(gpui::px(4.0))
-            .py(gpui::px(2.0))
-            .flex()
-            .flex_col()
-            .justify_center()
-            .child(inner_row)
+            .when(!spec.enabled, |d| d.opacity(0.55))
+            .child(row)
     }
 
     fn render_picker(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let theme = crate::theme::get_cached_theme();
         let colors = InlineDropdownColors::popup_from_theme(&theme);
+        let main_menu_theme = acp_mention_popup_main_menu_theme();
+        let row_height = acp_mention_popup_row_height_for_theme(main_menu_theme);
         let visible = self.visible_range();
 
         let scrollbar_handle = PopupScrollbarHandle {
             total_items: self.snapshot.items.len(),
             visible_items: visible.len(),
             scroll_offset: visible.start,
+            row_height,
         };
 
         let scrollbar = Scrollbar::vertical(&scrollbar_handle).id("acp-mention-popup-scrollbar");
@@ -749,7 +784,7 @@ impl AcpMentionPopupWindow {
                         .map(|(idx, item)| {
                             let is_selected = idx == self.snapshot.selected_index;
                             let source_view = self.source_view.clone();
-                            self.render_picker_row(idx, item, is_selected, colors)
+                            self.render_picker_row(idx, item, is_selected, &theme, main_menu_theme)
                                 .cursor_pointer()
                                 .on_click(cx.listener(move |this, event, window, cx| {
                                     if source_view.upgrade().is_none() {
@@ -881,130 +916,12 @@ impl Render for AcpMentionPopupWindow {
     }
 }
 
-fn render_trigger_row_label(
-    text: &str,
-    hits: &std::collections::HashSet<usize>,
-    base: gpui::Hsla,
-    accent: gpui::Hsla,
-    is_selected: bool,
-) -> gpui::AnyElement {
-    let font_weight = if is_selected {
-        gpui::FontWeight::MEDIUM
-    } else {
-        gpui::FontWeight::NORMAL
-    };
-
-    if hits.is_empty() {
-        return div()
-            .text_sm()
-            .font_weight(font_weight)
-            .text_color(base)
-            .text_ellipsis()
-            .child(SharedString::from(text.to_string()))
-            .into_any_element();
-    }
-
-    let mut spans: Vec<gpui::AnyElement> = Vec::new();
-    let mut current = String::new();
-    let mut current_highlighted = false;
-
-    for (ix, ch) in text.chars().enumerate() {
-        let is_hit = hits.contains(&ix);
-        if ix > 0 && is_hit != current_highlighted {
-            spans.push(
-                div()
-                    .text_sm()
-                    .font_weight(font_weight)
-                    .text_color(if current_highlighted { accent } else { base })
-                    .child(SharedString::from(std::mem::take(&mut current)))
-                    .into_any_element(),
-            );
-        }
-        current_highlighted = is_hit;
-        current.push(ch);
-    }
-    if !current.is_empty() {
-        spans.push(
-            div()
-                .text_sm()
-                .font_weight(font_weight)
-                .text_color(if current_highlighted { accent } else { base })
-                .child(SharedString::from(current))
-                .into_any_element(),
-        );
-    }
-
-    div()
-        .flex()
-        .items_center()
-        .text_ellipsis()
-        .children(spans)
-        .into_any_element()
-}
-
-fn render_trigger_row_meta_text(
-    text: &str,
-    hits: &std::collections::HashSet<usize>,
-    base: gpui::Hsla,
-    accent: gpui::Hsla,
-) -> gpui::AnyElement {
-    if hits.is_empty() {
-        return div()
-            .text_size(gpui::px(10.5))
-            .line_height(gpui::px(14.0))
-            .font_family(crate::list_item::FONT_MONO)
-            .text_color(base)
-            .text_ellipsis()
-            .child(SharedString::from(text.to_string()))
-            .into_any_element();
-    }
-
-    let mut spans: Vec<gpui::AnyElement> = Vec::new();
-    let mut current = String::new();
-    let mut current_highlighted = false;
-
-    for (ix, ch) in text.chars().enumerate() {
-        let is_hit = hits.contains(&ix);
-        if ix > 0 && is_hit != current_highlighted {
-            spans.push(
-                div()
-                    .text_size(gpui::px(10.5))
-                    .line_height(gpui::px(14.0))
-                    .font_family(crate::list_item::FONT_MONO)
-                    .text_color(if current_highlighted { accent } else { base })
-                    .child(SharedString::from(std::mem::take(&mut current)))
-                    .into_any_element(),
-            );
-        }
-        current_highlighted = is_hit;
-        current.push(ch);
-    }
-    if !current.is_empty() {
-        spans.push(
-            div()
-                .text_size(gpui::px(10.5))
-                .line_height(gpui::px(14.0))
-                .font_family(crate::list_item::FONT_MONO)
-                .text_color(if current_highlighted { accent } else { base })
-                .child(SharedString::from(current))
-                .into_any_element(),
-        );
-    }
-
-    div()
-        .flex()
-        .items_center()
-        .text_ellipsis()
-        .children(spans)
-        .into_any_element()
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
+        acp_mention_popup_main_menu_theme, acp_mention_popup_row_height_for_theme,
         inline_popup_height_for_row_height, popup_bounds, popup_height, popup_layout_above,
         popup_visible_row_limit, should_submit_acp_picker_row_click, AcpMentionPopupSnapshot,
-        TRIGGER_POPUP_ROW_HEIGHT,
     };
     use crate::ai::window::context_picker::types::{
         ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger, SlashCommandPayload,
@@ -1070,7 +987,10 @@ mod tests {
             width: 320.0,
         };
 
-        let expected_height = inline_popup_height_for_row_height(12, TRIGGER_POPUP_ROW_HEIGHT);
+        let expected_height = inline_popup_height_for_row_height(
+            12,
+            acp_mention_popup_row_height_for_theme(acp_mention_popup_main_menu_theme()),
+        );
         assert_eq!(popup_height(&slash_snapshot), expected_height);
         assert_eq!(popup_height(&mention_snapshot), expected_height);
     }
@@ -1115,7 +1035,10 @@ mod tests {
         let layout = popup_layout_above(parent, None, &snapshot);
 
         assert_eq!(f32::from(layout.bounds.size.width), 700.0);
-        let expected_height = inline_popup_height_for_row_height(3, TRIGGER_POPUP_ROW_HEIGHT);
+        let expected_height = inline_popup_height_for_row_height(
+            3,
+            acp_mention_popup_row_height_for_theme(acp_mention_popup_main_menu_theme()),
+        );
         assert_eq!(f32::from(layout.bounds.size.height), expected_height);
         assert_eq!(f32::from(layout.bounds.origin.x), 100.0);
         assert_eq!(f32::from(layout.bounds.origin.y), 240.0 - expected_height);
@@ -1181,9 +1104,48 @@ mod tests {
         };
 
         let layout = popup_layout_above(parent, None, &snapshot);
-        let expected_height = inline_popup_height_for_row_height(3, TRIGGER_POPUP_ROW_HEIGHT);
+        let expected_height = inline_popup_height_for_row_height(
+            3,
+            acp_mention_popup_row_height_for_theme(acp_mention_popup_main_menu_theme()),
+        );
         assert_eq!(f32::from(layout.bounds.size.height), expected_height);
         assert_eq!(popup_visible_row_limit(snapshot.items.len(), 600.0), 3);
+    }
+
+    #[test]
+    fn mention_popup_rows_use_main_list_item_chrome() {
+        let source = include_str!("picker_popup.rs");
+        let row_body = source
+            .split("fn render_picker_row(")
+            .nth(1)
+            .and_then(|tail| tail.split("fn render_picker(").next())
+            .expect("render_picker_row should exist before render_picker");
+
+        for required in [
+            "crate::list_item::ListItem::new",
+            "crate::list_item::ListItemColors::from_theme",
+            ".selected(is_selected)",
+            ".main_menu_theme(",
+            ".semantic_id(format!(\"choice:{idx}:{}\", item.id))",
+        ] {
+            assert!(
+                row_body.contains(required),
+                "missing shared ListItem row contract: {required}"
+            );
+        }
+
+        for forbidden in [
+            "render_trigger_row_label",
+            "render_trigger_row_meta_text",
+            ".border_l(gpui::px(2.0))",
+            "selected_row_bg",
+            "hover_row_bg",
+        ] {
+            assert!(
+                !row_body.contains(forbidden),
+                "must not reintroduce bespoke popup row chrome: {forbidden}"
+            );
+        }
     }
 
     #[test]

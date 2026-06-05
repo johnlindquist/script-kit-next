@@ -13,7 +13,6 @@ impl ScriptListApp {
             ScriptListSpecialEntry::FileSearchMini { .. } => "file_search_mini",
             ScriptListSpecialEntry::QuickTerminal => "quick_terminal",
             ScriptListSpecialEntry::ActionsHelp => "actions_help",
-            ScriptListSpecialEntry::AcpMentionPicker => "acp_mention_picker",
         };
         let raw_filter_text_safe = logging::log_user_value(raw_filter_text);
 
@@ -47,10 +46,6 @@ impl ScriptListApp {
                 if self.has_actions() {
                     self.toggle_actions(cx, window);
                 }
-            }
-            ScriptListSpecialEntry::AcpMentionPicker => {
-                self.menu_syntax_trigger_popup_state = Default::default();
-                self.open_tab_ai_acp_with_mention_picker(window, cx);
             }
         }
 
@@ -437,7 +432,8 @@ impl ScriptListApp {
             } => {
                 self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
-                    self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+                    self.list_scroll_handle
+                        .scroll_to_item(0, ScrollStrategy::Top);
                     cx.notify();
                 }
                 return; // Don't run main menu filter logic

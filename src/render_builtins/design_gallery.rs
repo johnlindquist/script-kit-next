@@ -3,7 +3,6 @@
 // (`collect_state::AppView::DesignGalleryView` in `src/prompt_handler/mod.rs`)
 // so `stateResult.visibleChoiceCount` reflects the same filtered count the UI
 // actually renders. Pinned by `tests/design_gallery_state_choice_count_asymmetry_contract.rs`.
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[derive(Clone, Debug)]
 pub(crate) enum GalleryItem {
     GroupHeaderCategory(designs::group_header_variations::GroupHeaderCategory),
@@ -139,14 +138,6 @@ impl ScriptListApp {
             .collect()
     }
 
-    fn design_gallery_input_display(filter: &str) -> SharedString {
-        if filter.is_empty() {
-            SharedString::from("Search design variations...")
-        } else {
-            SharedString::from(filter.to_string())
-        }
-    }
-
     fn design_gallery_count_label(filtered_len: usize) -> String {
         let suffix = if filtered_len == 1 { "" } else { "s" };
         format!("{} item{}", filtered_len, suffix)
@@ -236,11 +227,7 @@ impl ScriptListApp {
 
                 logging::log("KEY", &format!("DesignGallery key: '{}'", key));
 
-                if let AppView::DesignGalleryView {
-                    filter,
-                    selected_index,
-                } = &mut this.current_view
-                {
+                if let AppView::DesignGalleryView { selected_index, .. } = &mut this.current_view {
                     // Use the filtered count captured at render time (not total count)
                     // so arrow keys respect the visible items after filtering
                     let current_filtered_len = filtered_len;
@@ -262,56 +249,32 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
-                        // Note: "escape" is handled by handle_global_shortcut_with_options above
-                        "backspace" => {
-                            if !filter.is_empty() {
-                                filter.pop();
-                                *selected_index = 0;
-                                this.design_gallery_scroll_handle
-                                    .scroll_to_item(0, ScrollStrategy::Top);
-                                cx.notify();
-                            }
-                        }
-                        _ => {
-                            if let Some(ref key_char) = event.keystroke.key_char {
-                                if let Some(ch) = key_char.chars().next() {
-                                    if !ch.is_control() {
-                                        filter.push(ch);
-                                        *selected_index = 0;
-                                        this.design_gallery_scroll_handle
-                                            .scroll_to_item(0, ScrollStrategy::Top);
-                                        cx.notify();
-                                    }
-                                }
-                            }
-                        }
+                        // Text editing is owned by the shared GPUI input and
+                        // routed through InputEvent::Change in startup.rs.
+                        _ => {}
                     }
                 }
             },
         );
 
-        let input_display = Self::design_gallery_input_display(&filter);
-        let input_is_empty = filter.is_empty();
-
         // Pre-compute colors - use theme for consistency with main menu
-        let list_colors = ListItemColors::from_theme(&self.theme);
         let text_primary = self.theme.colors.text.primary;
-        #[allow(unused_variables)]
-        let text_muted = self.theme.colors.text.muted;
         let text_dimmed = self.theme.colors.text.dimmed;
-        let ui_border = self.theme.colors.ui.border;
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
             let empty_state = DesignGalleryEmptyState::from_filter(&filter);
-            crate::list_item::EmptyState::new(empty_state.message(), empty_text_color, &empty_font_family)
-                .icon(crate::designs::icon_variations::IconName::StarFilled)
-                .into_element()
+            crate::list_item::EmptyState::new(
+                empty_state.message(),
+                empty_text_color,
+                &empty_font_family,
+            )
+            .icon(crate::designs::icon_variations::IconName::StarFilled)
+            .into_element()
         } else {
             // Clone data for the closure
             let items_for_closure = filtered_items.clone();
             let selected = selected_index;
-            let _list_colors_clone = list_colors; // Kept for future use
             let design_spacing_clone = design_spacing;
             let design_typography_clone = design_typography;
             let design_visual_clone = design_visual;
@@ -513,106 +476,41 @@ impl ScriptListApp {
             .into_any_element();
         let footer = self.main_window_footer_slot(footer);
 
-        // Build the full view
-        let surface = div()
-            .flex()
-            .flex_col()
-            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            // Removed: .shadow(box_shadows) - shadows on transparent elements block vibrancy
+        let header = div()
             .w_full()
-            .h_full()
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
-            .key_context("design_gallery")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            // Header with input
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_3()
+            .child(self.render_search_input())
             .child(
                 div()
-                    .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_3()
-                    // Gallery icon
-                    .child(div().text_xl().child("🎨"))
-                    // Search input with blinking cursor
-                    // ALIGNMENT FIX: Uses canonical cursor constants and negative margin for placeholder
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .text_lg()
-                            .text_color(if input_is_empty {
-                                rgb(text_muted)
-                            } else {
-                                rgb(text_primary)
-                            })
-                            .when(input_is_empty, |d| {
-                                d.child(
-                                    div()
-                                        .w(px(CURSOR_WIDTH))
-                                        .h(px(CURSOR_HEIGHT_LG))
-                                        .my(px(CURSOR_MARGIN_Y))
-                                        .mr(px(CURSOR_GAP_X))
-                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
-                                )
-                            })
-                            .when(input_is_empty, |d| {
-                                d.child(
-                                    div()
-                                        .ml(px(-(CURSOR_WIDTH + CURSOR_GAP_X)))
-                                        .child(input_display.clone()),
-                                )
-                            })
-                            .when(!input_is_empty, |d| d.child(input_display.clone()))
-                            .when(!input_is_empty, |d| {
-                                d.child(
-                                    div()
-                                        .w(px(CURSOR_WIDTH))
-                                        .h(px(CURSOR_HEIGHT_LG))
-                                        .my(px(CURSOR_MARGIN_Y))
-                                        .ml(px(CURSOR_GAP_X))
-                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
-                                )
-                            }),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child(Self::design_gallery_count_label(filtered_len)),
-                    ),
-            )
-            // Divider
-            .child(
-                div()
-                    .mx(px(design_spacing.padding_lg))
-                    .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60)),
-            )
-            // Main content area - just the list (no preview panel for gallery)
-            .child(
-                div()
-                    .flex_1()
-                    .w_full()
-                    .h_full()
-                    .min_h(px(0.))
-                    .overflow_hidden()
-                    .py(px(design_spacing.padding_xs))
-                    .child(list_element),
+                    .text_sm()
+                    .text_color(rgb(text_dimmed))
+                    .child(Self::design_gallery_count_label(filtered_len)),
             );
 
-        if let Some(footer) = footer {
-            surface.child(footer)
-        } else {
-            surface
-        }
+        let content = div()
+            .flex_1()
+            .w_full()
+            .h_full()
+            .min_h(px(0.))
+            .overflow_hidden()
+            .py(px(design_spacing.padding_xs))
+            .text_color(rgb(text_primary))
+            .font_family(design_typography.font_family)
+            .child(list_element);
+
+        crate::components::render_minimal_list_prompt_shell_with_footer(
+            design_visual.radius_lg,
+            None,
+            header,
+            content,
+            footer,
+        )
+        .key_context("design_gallery")
+        .track_focus(&self.focus_handle)
+        .on_key_down(handle_key)
         .into_any_element()
     }
 }

@@ -294,6 +294,7 @@ struct BuiltinPickerSeed {
     kind: ContextAttachmentKind,
     label: &'static str,
     label_lower: String,
+    search_alias_lowers: Vec<String>,
     mention_meta: &'static str,
     mention_meta_lower: String,
     slash_meta: &'static str,
@@ -315,10 +316,23 @@ fn builtin_picker_seeds() -> &'static [BuiltinPickerSeed] {
                     .slash_command
                     .or(spec.mention)
                     .unwrap_or(spec.action_title);
+                let mut search_alias_lowers = Vec::new();
+                search_alias_lowers.push(spec.action_title.to_lowercase());
+                for alias in spec.mention_aliases {
+                    search_alias_lowers.push(alias.trim_start_matches(['@', '/']).to_lowercase());
+                }
+                for alias in spec.slash_aliases {
+                    search_alias_lowers.push(alias.trim_start_matches(['@', '/']).to_lowercase());
+                }
+                if spec.kind == ContextAttachmentKind::Current {
+                    search_alias_lowers.push("current context".to_string());
+                    search_alias_lowers.push("context".to_string());
+                }
                 BuiltinPickerSeed {
                     kind: spec.kind,
                     label: spec.label,
                     label_lower: spec.label.to_lowercase(),
+                    search_alias_lowers,
                     mention_meta,
                     mention_meta_lower: mention_meta.to_lowercase(),
                     slash_meta,
@@ -356,6 +370,7 @@ fn portal_prefix_for_kind(kind: PortalKind) -> &'static str {
         PortalKind::SkillSearch => "skill",
         PortalKind::NotesBrowse => "note",
         PortalKind::AcpHistory => "history",
+        PortalKind::Terminal => "terminal",
     }
 }
 
@@ -371,6 +386,7 @@ fn portal_kind_from_prefix(prefix: &str) -> Option<PortalKind> {
         "skill" => Some(PortalKind::SkillSearch),
         "note" => Some(PortalKind::NotesBrowse),
         "history" => Some(PortalKind::AcpHistory),
+        "terminal" => Some(PortalKind::Terminal),
         _ => None,
     }
 }
@@ -389,8 +405,7 @@ fn inline_portal_query(trigger: ContextPickerTrigger, query: &str) -> Option<Inl
         None => (lower.as_str(), ""),
     };
     let kind = portal_kind_from_prefix(prefix)?;
-    let exact_prefix_opens_inline = kind == PortalKind::FileSearch && lower == prefix;
-    if exact_prefix_opens_inline || lower.starts_with(&format!("{prefix}:")) {
+    if lower.starts_with(&format!("{prefix}:")) {
         return Some(InlinePortalQuery {
             kind,
             prefix: portal_prefix_for_kind(kind),
@@ -485,10 +500,28 @@ fn score_builtin_seed(
         best_score = 400;
         (best_label_hits, best_meta_hits) = compute_hits(query);
     }
+    if best_score < 400
+        && seed
+            .search_alias_lowers
+            .iter()
+            .any(|alias| alias.starts_with(query))
+    {
+        best_score = 400;
+        (best_label_hits, best_meta_hits) = compute_hits(query);
+    }
     if best_score < 200 && seed.label_lower.contains(query) {
         best_score = 200;
         best_label_hits = match_query_chars(query, seed.label).unwrap_or_default();
         best_meta_hits = Vec::new();
+    }
+    if best_score < 200
+        && seed
+            .search_alias_lowers
+            .iter()
+            .any(|alias| alias.contains(query))
+    {
+        best_score = 200;
+        (best_label_hits, best_meta_hits) = compute_hits(query);
     }
     if best_score < 100
         && ((!primary.is_empty() && primary.contains(query))
@@ -576,7 +609,7 @@ impl AiApp {
         tracing::info!(
             target: "ai",
             ?trigger,
-            layout = "dense_monoline_shared",
+            layout = "main_list_item",
             item_count = items.len(),
             selected_index = 0,
             "ai_context_picker_opened"
@@ -997,6 +1030,14 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             meta: "Portal",
             match_terms: &["history", "conversation", "chat", "resume", "reuse"],
         },
+        PortalDef {
+            kind: PortalKind::Terminal,
+            id: "portal:terminal",
+            label: "@terminal",
+            description: "Run commands and attach the terminal output",
+            meta: "Portal",
+            match_terms: &["terminal", "term", "shell", "command", "commands", "output"],
+        },
     ];
 
     for def in portals {
@@ -1034,10 +1075,7 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             label: SharedString::from(*label),
             description: SharedString::from(*description),
             meta: SharedString::from(*meta),
-            kind: ContextPickerItemKind::PortalPrefix(PortalPrefixPayload {
-                portal_kind: *kind,
-                prefix: portal_prefix_for_kind(*kind),
-            }),
+            kind: ContextPickerItemKind::Portal(*kind),
             score,
             label_highlight_indices: label_hits,
             meta_highlight_indices: meta_hits,
@@ -1057,6 +1095,7 @@ fn portal_kind_detail_label(kind: PortalKind) -> &'static str {
         PortalKind::SkillSearch => "skill search",
         PortalKind::NotesBrowse => "notes",
         PortalKind::AcpHistory => "Agent Chat history",
+        PortalKind::Terminal => "terminal",
     }
 }
 
@@ -1102,6 +1141,44 @@ fn collect_inline_portal_items(
         }
         PortalKind::NotesBrowse => collect_notes_inline_items(&inline_query.query, items),
         PortalKind::AcpHistory => collect_acp_history_inline_items(&inline_query.query, items),
+        PortalKind::Terminal => collect_terminal_history_inline_items(&inline_query.query, items),
+    }
+}
+
+fn collect_terminal_history_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+    let query_lower = query.to_lowercase();
+    for entry in crate::terminal_history::recent(INLINE_PORTAL_RESULTS_LIMIT) {
+        let haystack = format!("{} {}", entry.label, entry.text).to_lowercase();
+        if !query_lower.is_empty() && !haystack.contains(&query_lower) {
+            continue;
+        }
+        let preview = entry
+            .text
+            .lines()
+            .find(|line| !line.trim().is_empty())
+            .unwrap_or("Terminal output")
+            .chars()
+            .take(96)
+            .collect::<String>();
+        items.push(ContextPickerItem {
+            id: SharedString::from(format!("terminal-history:{}", entry.source)),
+            label: SharedString::from(entry.label.clone()),
+            description: SharedString::from(preview),
+            meta: SharedString::from("Terminal"),
+            kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
+                portal_kind: PortalKind::Terminal,
+                attachment: InlinePortalAttachment::TextBlock {
+                    label: entry.label,
+                    source: entry.source,
+                    text: entry.text,
+                    mime_type: Some("text/x-terminal-transcript".to_string()),
+                },
+            }),
+            score: if query_lower.is_empty() { 80 } else { 120 },
+            label_highlight_indices: match_query_chars(&query_lower, "terminal")
+                .unwrap_or_default(),
+            meta_highlight_indices: Vec::new(),
+        });
     }
 }
 
@@ -1896,13 +1973,12 @@ fn collect_file_items(dir: &std::path::Path, raw_query: &str, items: &mut Vec<Co
 fn section_priority(kind: &ContextPickerItemKind) -> u8 {
     match kind {
         ContextPickerItemKind::BuiltIn(_) => 0,
-        ContextPickerItemKind::SlashCommand(_) => 1,
-        ContextPickerItemKind::AgentChatProfile { .. } => 1,
-        ContextPickerItemKind::File(_) => 2,
-        ContextPickerItemKind::Folder(_) => 3,
-        ContextPickerItemKind::Portal(_)
-        | ContextPickerItemKind::PortalPrefix(_)
-        | ContextPickerItemKind::PortalResult(_) => 0,
+        ContextPickerItemKind::Portal(_) => 0,
+        ContextPickerItemKind::PortalPrefix(_) | ContextPickerItemKind::PortalResult(_) => 1,
+        ContextPickerItemKind::SlashCommand(_) => 2,
+        ContextPickerItemKind::AgentChatProfile { .. } => 2,
+        ContextPickerItemKind::File(_) => 3,
+        ContextPickerItemKind::Folder(_) => 4,
         // Inert rows (loading / empty state) sort last so live results
         // always appear above them.
         ContextPickerItemKind::Inert => 255,

@@ -6,6 +6,10 @@
 
 const MATRIX: &str = include_str!("../scripts/agentic/filterable-surface-matrix.ts");
 
+fn compact(source: &str) -> String {
+    source.chars().filter(|ch| !ch.is_whitespace()).collect()
+}
+
 fn function_body<'a>(source: &'a str, name: &str, next_name: &str) -> &'a str {
     let start_pat = format!("function {name}(");
     let export_start_pat = format!("export function {name}(");
@@ -26,7 +30,6 @@ fn function_body<'a>(source: &'a str, name: &str, next_name: &str) -> &'a str {
     &source[start..start + end_rel]
 }
 
-// doc-anchor-removed: [[removed-docs Rules]]
 #[test]
 fn matrix_declares_current_app_commands_visible_row_case() {
     assert!(
@@ -69,7 +72,9 @@ fn matrix_declares_current_app_commands_visible_row_case() {
     );
     assert!(
         MATRIX.contains("target: MAIN_TARGET")
-            && MATRIX.contains("const MAIN_TARGET: MatrixAutomationTarget = { type: \"kind\", kind: \"main\", index: 0 };"),
+            && compact(MATRIX).contains(
+                "constMAIN_TARGET:MatrixAutomationTarget={type:\"kind\",kind:\"main\",index:0,};"
+            ),
         "Stable matrix surfaces must declare exact main-window automation targets."
     );
     assert!(
@@ -187,9 +192,8 @@ fn matrix_declares_generic_filterable_variant_cases() {
                 && MATRIX.contains(&format!("promptType: \"{prompt_type}\""))
                 && MATRIX.contains("surfaceKind: \"GenericFilterableList\"")
                 && MATRIX.contains(&format!("listSemanticId: \"{list_id}\""))
-                && MATRIX.contains(&format!(
-                    "entryCommand: {{ type: \"triggerBuiltin\", builtinId: \"{builtin_id}\" }}"
-                ))
+                && compact(MATRIX).contains("entryCommand:{type:\"triggerBuiltin\",")
+                && MATRIX.contains(&format!("builtinId: \"{builtin_id}\""))
                 && MATRIX.contains(&format!("filterText: \"{filter_text}\"")),
             "GenericFilterable case {id} must declare promptType, list id, triggerBuiltin entry, and stable filter text."
         );
@@ -214,16 +218,17 @@ fn matrix_runner_checks_state_and_elements_count_parity() {
         "The matrix must compare getElements list count against state visibleChoiceCount."
     );
     assert!(
-        body.contains("elementsTotalCount < visibleChoiceCount + entry.expectedElementChromeCount"),
+        compact(body)
+            .contains("elementsTotalCount<visibleChoiceCount+entry.expectedElementChromeCount"),
         "The matrix must verify totalCount contains at least visible rows plus required chrome."
     );
 }
 
 #[test]
-fn matrix_runner_uses_parse_receipts_and_typed_rpcs() {
+fn matrix_runner_uses_parse_receipts_state_accepted_filters_and_typed_rpcs() {
     assert!(
         MATRIX.contains("\"--await-parse\""),
-        "Fire-and-forget commands must wait for parse receipts."
+        "Surface-entry commands must still wait for parse receipts when the runtime emits them."
     );
     assert!(
         MATRIX.contains("export async function getStateAndElements("),
@@ -238,13 +243,18 @@ fn matrix_runner_uses_parse_receipts_and_typed_rpcs() {
         "Element proof must use typed elementsResult RPC."
     );
     assert!(
-        MATRIX
-            .contains("const setFilterCommand = { type: \"setFilter\", text: entry.filterText };"),
-        "Filtered proof must drive the real setFilter path."
+        MATRIX.contains("type: \"setFilter\",")
+            && MATRIX.contains("text,")
+            && MATRIX.contains("entry.filterText,")
+            && MATRIX.contains("`${entry.id}-set-filter`")
+            && MATRIX.contains("setFilterAndWaitForState("),
+        "Filtered proof must drive the real setFilter path and require the requested filter text to appear in getState."
     );
     assert!(
-        MATRIX.contains("await sendAndAwaitParse(session, { type: \"setFilter\", text: \"\" }, timeoutMs);"),
-        "Each case must reset the active filter after entry so multi-case runs do not inherit the prior case's filter."
+        MATRIX.contains("entry,\n      \"\",")
+            && MATRIX.contains("`${entry.id}-reset-filter`")
+            && MATRIX.contains("stateInputText(state) === text"),
+        "Each case must reset the active filter after entry and prove the reset through state so multi-case runs do not inherit the prior case's filter."
     );
 }
 
@@ -256,6 +266,8 @@ fn matrix_exports_reusable_surface_navigation_helpers() {
         "export async function getStateAndElements(",
         "export function observeCounts(",
         "export async function sendAndAwaitParse(",
+        "export async function sendCommand(",
+        "export async function setFilterAndWaitForState(",
         "export async function rpc(",
     ] {
         assert!(

@@ -89,7 +89,6 @@ fn footer_safe_scroll_offset_for_item(
     let current_scroll_top = script_list_pixel_top_for_offset(items, current_offset);
     let target_top = script_list_pixel_top_for_item(items, target_ix);
     let target_bottom = target_top + script_list_row_height(&items[target_ix], target_ix);
-    // doc-anchor-removed: [[design#Footer-safe list reveal]]
     let safe_bottom = current_scroll_top + safe_viewport_height;
 
     if target_bottom <= safe_bottom {
@@ -813,7 +812,6 @@ mod scroll_fade_tests {
 
     #[test]
     fn test_footer_safe_scroll_offset_allows_trailing_scroll_budget_for_last_row() {
-        // doc-anchor-removed: [[design#Footer-safe list reveal]]
         let rows = vec![
             GroupedListItem::Item(0),
             GroupedListItem::Item(1),

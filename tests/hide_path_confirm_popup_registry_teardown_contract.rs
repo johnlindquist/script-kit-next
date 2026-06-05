@@ -89,7 +89,6 @@ const HIDE_SITES: &[(&str, &str)] = &[
     ),
 ];
 
-// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn every_hide_site_removes_confirm_popup_registry_entry() {
     for (name, src) in HIDE_SITES {
@@ -109,7 +108,6 @@ fn every_hide_site_removes_confirm_popup_registry_entry() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn confirm_popup_teardown_follows_actions_dialog_teardown_in_every_site() {
     for (name, src) in HIDE_SITES {
@@ -161,7 +159,6 @@ fn confirm_popup_teardown_follows_actions_dialog_teardown_in_every_site() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn confirm_popup_teardown_is_adjacent_to_actions_dialog_teardown() {
     for (name, src) in HIDE_SITES {

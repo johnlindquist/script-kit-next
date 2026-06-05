@@ -5,7 +5,6 @@ const NOTES_WINDOW_OPS_SOURCE: &str = include_str!("../src/notes/window/window_o
 const NOTES_KEYBOARD_SOURCE: &str = include_str!("../src/notes/window/keyboard.rs");
 const NOTES_INIT_SOURCE: &str = include_str!("../src/notes/window/init.rs");
 
-// doc-anchor-removed: [[tests/notes-acp#Notes multi-display snap session#Notes bounds use the Notes window role]]
 #[test]
 fn notes_window_persistence_uses_notes_role_not_main_role() {
     for source in [
@@ -26,7 +25,6 @@ fn notes_window_persistence_uses_notes_role_not_main_role() {
     );
 }
 
-// doc-anchor-removed: [[tests/notes-acp#Notes multi-display snap session#Restored Notes bounds are clamped to live displays]]
 #[test]
 fn window_state_exposes_display_visibility_and_clamp_helpers_for_restored_bounds() {
     assert!(WINDOW_STATE_SOURCE.contains("pub fn is_bounds_visible("));

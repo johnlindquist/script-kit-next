@@ -10,7 +10,6 @@ fn compact(source: &str) -> String {
 
 #[test]
 fn scrollbar_metrics_prefer_pending_deferred_scroll_for_thumb_position() {
-    // doc-anchor-removed: [[removed-docs Expanded Browsers]]
     let source = include_str!("../src/components/scrollbar.rs");
     let compacted = compact(source);
     assert!(
@@ -25,7 +24,6 @@ fn scrollbar_metrics_prefer_pending_deferred_scroll_for_thumb_position() {
 
 #[test]
 fn current_app_commands_render_does_not_reanchor_selection_from_scroll() {
-    // doc-anchor-removed: [[removed-docs Expanded Browsers]]
     let source = include_str!("../src/render_builtins/current_app_commands.rs");
     let production_source = source
         .split("#[cfg(test)]")
@@ -39,7 +37,6 @@ fn current_app_commands_render_does_not_reanchor_selection_from_scroll() {
 
 #[test]
 fn uniform_list_wheel_handlers_do_not_immediately_reanchor_deferred_scroll() {
-    // doc-anchor-removed: [[removed-docs Expanded Browsers]]
     let sources = [
         (
             "current_app_commands",

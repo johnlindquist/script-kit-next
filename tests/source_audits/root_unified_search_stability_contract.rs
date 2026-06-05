@@ -77,7 +77,7 @@ fn main_window_preflight_exposes_selection_key_and_frame_fingerprint() {
         fs::read_to_string("src/prompt_handler/mod.rs").expect("read prompt handler");
 
     assert!(types.contains("pub selected_result_key: Option<String>"));
-    assert!(types.contains("pub selected_result_role: MainWindowPreflightResultRole"));
+    assert!(types.contains("pub selected_result_role: Option<MainWindowPreflightResultRole>"));
     assert!(types.contains("pub visible_results: Vec<MainWindowPreflightVisibleResult>"));
     assert!(types.contains("pub visible_result_key_fingerprint: String"));
     assert!(types.contains("pub visible_row_fingerprint: String"));

@@ -94,7 +94,11 @@ fn trigger_sdk_action_with_trace_forwards_trace_id_to_trigger_sdk_action() {
     let fn_start = content
         .find("fn trigger_sdk_action_with_trace(")
         .expect("Expected function");
-    let fn_body = &content[fn_start..content.len().min(fn_start + 800)];
+    let fn_end = content[fn_start + 10..]
+        .find("\n    ///")
+        .map(|p| fn_start + 10 + p)
+        .unwrap_or(content.len());
+    let fn_body = &content[fn_start..fn_end];
 
     // Must pass trace_id to trigger_sdk_action
     assert!(
@@ -110,7 +114,11 @@ fn trigger_sdk_action_with_trace_uses_from_sdk_with_trace() {
     let fn_start = content
         .find("fn trigger_sdk_action_with_trace(")
         .expect("Expected function");
-    let fn_body = &content[fn_start..content.len().min(fn_start + 800)];
+    let fn_end = content[fn_start + 10..]
+        .find("\n    ///")
+        .map(|p| fn_start + 10 + p)
+        .unwrap_or(content.len());
+    let fn_body = &content[fn_start..fn_end];
 
     assert!(
         fn_body.contains("from_sdk_with_trace("),

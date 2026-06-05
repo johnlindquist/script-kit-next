@@ -33,7 +33,6 @@ fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
     panic!("unterminated function body: {signature}");
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn shared_owner_derives_main_surface_from_current_view_contract() {
     assert!(
@@ -50,7 +49,6 @@ fn shared_owner_derives_main_surface_from_current_view_contract() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Transition Owner]]
 #[test]
 fn transition_owner_sets_view_then_rekeys_from_current_view_contract() {
     let body = function_body(
@@ -68,7 +66,6 @@ fn transition_owner_sets_view_then_rekeys_from_current_view_contract() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Transition Owner]]
 #[test]
 fn restore_owner_sets_view_and_focus_without_hidden_side_effects_contract() {
     let body = function_body(
@@ -90,7 +87,6 @@ fn restore_owner_sets_view_and_focus_without_hidden_side_effects_contract() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Transition Owner]]
 #[test]
 fn script_list_main_filter_owner_delegates_to_restore_owner_contract() {
     let body = function_body(
@@ -109,7 +105,6 @@ fn script_list_main_filter_owner_delegates_to_restore_owner_contract() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Transition Owner]]
 #[test]
 fn return_view_restore_paths_delegate_to_shared_owner() {
     for (name, source, signature) in [
@@ -137,7 +132,6 @@ fn return_view_restore_paths_delegate_to_shared_owner() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs Transition Owner]]
 #[test]
 fn script_list_entry_paths_delegate_to_main_filter_owner() {
     for (name, source, signature) in [
@@ -165,7 +159,6 @@ fn script_list_entry_paths_delegate_to_main_filter_owner() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn trigger_builtin_helper_delegates_to_shared_owner() {
     let body = function_body(
@@ -183,7 +176,6 @@ fn trigger_builtin_helper_delegates_to_shared_owner() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Contract Registry]]
 #[test]
 fn about_and_confirm_routes_rekey_from_current_view_contract() {
     assert_eq!(
@@ -205,7 +197,6 @@ fn about_and_confirm_routes_rekey_from_current_view_contract() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn embedded_acp_entry_and_return_paths_rekey_from_current_view_contract() {
     for (name, source) in [

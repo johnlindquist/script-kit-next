@@ -3,11 +3,19 @@
 //! These tests verify that migrated prompt surfaces use the correct shared
 //! layout contract:
 //! - Minimal-list surfaces: shared scaffold/shell with hint strip footer
-//! - Expanded-view surfaces: shared expanded scaffold with no dividers
+//! - Persistent main-window search surfaces: shared main-view chrome with stable
+//!   header, input, main, and footer slots
 //!
-//! Clipboard history and file search are expanded-view surfaces per
+//! Clipboard history and file search are split-preview surfaces per
 //! `.impeccable.md` (preview IS the decision — users can't pick without
-//! seeing the content).
+//! seeing the content), but their persistent Chrome belongs to MainViewChrome.
+
+fn production_source(source: &'static str) -> &'static str {
+    source
+        .split("#[cfg(test)]")
+        .next()
+        .expect("production source should exist")
+}
 
 #[test]
 fn arg_prompt_uses_shared_minimal_list_shell() {
@@ -28,9 +36,9 @@ fn arg_prompt_uses_shared_minimal_list_shell() {
 }
 
 #[test]
-fn clipboard_history_uses_shared_expanded_view_contract() {
-    let entry_source = include_str!("../src/render_builtins/clipboard.rs");
-    let layout_source = include_str!("../src/render_builtins/clipboard_history_layout.rs");
+fn clipboard_history_uses_shared_main_view_chrome_contract() {
+    let entry_source = production_source(include_str!("../src/render_builtins/clipboard.rs"));
+    let layout_source = entry_source;
 
     // Entry file must declare expanded layout mode
     assert!(
@@ -48,12 +56,30 @@ fn clipboard_history_uses_shared_expanded_view_contract() {
         "clipboard history layout should not use PromptFooter"
     );
 
-    // Layout must route through the shared expanded-view scaffold
     assert!(
-        layout_source.contains("render_expanded_view_scaffold_with_hints(")
-            || layout_source.contains("render_expanded_view_scaffold_with_footer(")
-            || layout_source.contains("render_expanded_view_scaffold("),
-        "clipboard history layout should route through the shared expanded-view scaffold"
+        layout_source.contains("render_main_view_chrome("),
+        "clipboard history layout should route through shared main-view chrome"
+    );
+    assert!(
+        layout_source.contains("render_main_view_input_shell("),
+        "clipboard history should use the shared MainMenuInput shell"
+    );
+    assert!(
+        layout_source.contains("render_clickable_main_view_context_zone("),
+        "clipboard history should keep the shared context zone"
+    );
+    assert!(
+        layout_source.contains("main_window_footer_slot("),
+        "clipboard history footer should route through the native footer slot"
+    );
+    assert!(
+        layout_source.contains("render_simple_hint_strip(hints, None)"),
+        "clipboard history should build the shared hint strip before native footer ownership"
+    );
+    let expanded_scaffold_with_hints = "render_expanded_view_scaffold".to_owned() + "_with_hints(";
+    assert!(
+        !layout_source.contains(&expanded_scaffold_with_hints),
+        "clipboard history should not use the stale expanded scaffold"
     );
 
     // No SectionDivider — expanded view uses spacing, not dividers
@@ -63,7 +89,7 @@ fn clipboard_history_uses_shared_expanded_view_contract() {
         "clipboard history layout should not use SectionDivider — expanded view uses spacing"
     );
 
-    eprintln!("{{\"audit\":\"expanded_contract\",\"surface\":\"clipboard_history\",\"layout_mode\":\"expanded\",\"divider_absent\":true,\"footer_shared\":true,\"status\":\"pass\"}}");
+    eprintln!("{{\"audit\":\"main_view_chrome_contract\",\"surface\":\"clipboard_history\",\"layout_mode\":\"main_view_chrome\",\"divider_absent\":true,\"footer_shared\":true,\"status\":\"pass\"}}");
 }
 
 #[test]
@@ -85,8 +111,8 @@ fn emoji_picker_no_longer_uses_prompt_footer() {
 }
 
 #[test]
-fn file_search_uses_shared_expanded_view_contract() {
-    let entry_source = include_str!("../src/render_builtins/file_search.rs");
+fn file_search_uses_shared_main_view_chrome_contract() {
+    let entry_source = production_source(include_str!("../src/render_builtins/file_search.rs"));
 
     // Entry file must declare expanded layout mode
     assert!(
@@ -98,12 +124,21 @@ fn file_search_uses_shared_expanded_view_contract() {
         "file search entry should not emit a minimal chrome audit"
     );
 
-    // Live source must route through the shared expanded-view scaffold
     assert!(
-        entry_source.contains("render_expanded_view_scaffold(")
-            || entry_source.contains("render_expanded_view_scaffold_with_hints(")
-            || entry_source.contains("render_expanded_view_scaffold_with_footer("),
-        "file search should route through the shared expanded-view scaffold"
+        entry_source.contains("render_main_view_chrome("),
+        "file search should use shared main-view chrome"
+    );
+    assert!(
+        entry_source.contains("render_clickable_main_view_context_zone("),
+        "file search should keep the shared context zone"
+    );
+    assert!(
+        entry_source.contains("render_main_view_input_shell("),
+        "file search should keep the shared input shell"
+    );
+    assert!(
+        entry_source.contains("main_window_footer_slot("),
+        "file search should route footer content through the native footer slot"
     );
 
     // Must use universal hints and emit hint audit
@@ -125,18 +160,7 @@ fn file_search_uses_shared_expanded_view_contract() {
         "file search should not use SectionDivider — expanded view uses spacing"
     );
 
-    // Legacy layout file must not contain chrome markers
-    let layout_source = include_str!("../src/render_builtins/file_search_layout.rs");
-    assert!(
-        !layout_source.contains("render_minimal_list_prompt_scaffold("),
-        "legacy file_search_layout.rs must not contain chrome markers"
-    );
-    assert!(
-        !layout_source.contains("render_expanded_view_scaffold("),
-        "legacy file_search_layout.rs must not contain expanded scaffold markers"
-    );
-
-    eprintln!("{{\"audit\":\"expanded_contract\",\"surface\":\"file_search\",\"scaffold_used\":true,\"layout_mode\":\"expanded\",\"divider_absent\":true,\"status\":\"pass\"}}");
+    eprintln!("{{\"audit\":\"main_view_chrome_contract\",\"surface\":\"file_search\",\"footer_slot\":true,\"divider_absent\":true,\"status\":\"pass\"}}");
 }
 
 #[test]
@@ -341,11 +365,56 @@ fn select_drop_layout_info_has_prompt_owned_branches() {
 }
 
 #[test]
+fn select_prompt_search_header_lets_shared_shell_own_padding() {
+    let source = production_source(include_str!("../src/prompts/select/render.rs"));
+    assert!(
+        source.contains("render_minimal_list_prompt_shell_with_footer("),
+        "select prompt should keep the footer-aware shared minimal-list shell"
+    );
+    assert!(
+        source.contains("render_select_search_header("),
+        "select prompt should render search through the prompt-owned shared-header helper"
+    );
+    assert!(
+        !source.contains("render_search_input(")
+            && !source.contains("gpui_input_state")
+            && !source.contains("TextInputState"),
+        "select prompt must not borrow launcher input ownership"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"select_prompt\",\"search_header\":\"prompt_owned_shared_shell\",\"status\":\"pass\"}}");
+}
+
+#[test]
+fn prompt_header_search_chrome_is_retired() {
+    let components_mod = include_str!("../src/components/mod.rs");
+    assert!(
+        !components_mod.contains("- [`PromptHeader`]"),
+        "components docs should not advertise retired PromptHeader search chrome"
+    );
+    assert!(
+        !components_mod.contains("pub mod prompt_header;"),
+        "components should not compile/export the retired PromptHeader module"
+    );
+    assert!(
+        !components_mod.contains("pub use prompt_header::{"),
+        "components should not publicly re-export retired PromptHeader types"
+    );
+    assert!(
+        !std::path::Path::new("src/components/prompt_header.rs").exists(),
+        "retired PromptHeader root module should be removed"
+    );
+    assert!(
+        !std::path::Path::new("src/components/prompt_header").exists(),
+        "retired PromptHeader implementation directory should be removed"
+    );
+}
+
+#[test]
 fn mini_layout_info_reports_single_column_without_preview() {
     let source = include_str!("../src/app_layout/build_layout_info.rs");
     assert!(
         source.contains("let uses_split_preview = matches!(")
-            && source.contains("crate::window_resize::ViewType::ExpandedMainWindow")
+            && source.contains("crate::window_resize::ViewType::MainWindow")
             && source.contains("crate::window_resize::ViewType::ScriptList"),
         "layout info must derive split-preview receipts from the view type"
     );
@@ -355,7 +424,7 @@ fn mini_layout_info_reports_single_column_without_preview() {
         "mini layout info must give ScriptList the full window width"
     );
     assert!(
-        source.contains("if uses_split_preview {\n            // Preview panel"),
+        source.contains("if uses_split_preview {") && source.contains("PreviewPanel"),
         "layout info must only emit PreviewPanel for split-preview receipts"
     );
     eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"mini_layout_info\",\"single_column\":true,\"status\":\"pass\"}}");
@@ -367,12 +436,11 @@ fn mini_component_bounds_do_not_emit_preview_panel() {
     assert!(
         source.contains(
             "let uses_split_preview = matches!(self.main_window_mode, MainWindowMode::Full);"
-        ) && source
-            .contains("let list_width = if uses_split_preview { width * 0.5 } else { width };"),
+        ) && source.contains("let list_width = if uses_split_preview"),
         "debug component bounds must keep mini ScriptList full-width"
     );
     assert!(
-        source.contains("if uses_split_preview {\n                    // Preview panel"),
+        source.contains("if uses_split_preview {") && source.contains("PreviewPanel"),
         "debug component bounds must gate preview panel bounds behind full-mode split preview"
     );
     eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"mini_component_bounds\",\"single_column\":true,\"status\":\"pass\"}}");
@@ -508,7 +576,7 @@ fn path_native_footer_submits_path_prompt_without_launcher_ai() {
     let run_start = ui_window
         .find("FooterAction::Run =>")
         .expect("footer Run branch exists");
-    let run_branch = &ui_window[run_start..run_start + 1400];
+    let run_branch = &ui_window[run_start..run_start + 2600];
     let footer_branch_start = ui_window
         .find("Resolved PathPrompt footer buttons")
         .expect("PathPrompt native footer branch exists");
@@ -628,7 +696,7 @@ fn drop_footer_submits_drop_prompt_without_launcher_ai() {
     let run_start = ui_window
         .find("FooterAction::Run =>")
         .expect("footer Run branch exists");
-    let run_branch = &ui_window[run_start..run_start + 1900];
+    let run_branch = &ui_window[run_start..run_start + 2600];
     let footer_branch_start = ui_window
         .find("Resolved DropPrompt footer buttons")
         .expect("DropPrompt native footer branch exists");
@@ -1046,7 +1114,7 @@ fn design_gallery_footer_run_does_not_execute_launcher_selection() {
     let run_start = ui_window
         .find("FooterAction::Run =>")
         .expect("footer Run branch exists");
-    let run_branch = &ui_window[run_start..run_start + 1800];
+    let run_branch = &ui_window[run_start..run_start + 2600];
     assert!(
         run_branch.contains("dispatch_design_gallery_select_footer_action(cx)")
             && run_branch.contains("execute_selected(cx)")
@@ -1091,6 +1159,50 @@ fn design_gallery_sizing_uses_render_projection() {
         !sizing.contains("separator_variations::SeparatorStyle::count()"),
         "Design Gallery sizing should not use stale separator/icon-only counts"
     );
+}
+
+#[test]
+fn footer_gallery_footer_uses_single_native_slot_owner_while_preserving_previews() {
+    let source = include_str!("../src/render_builtins/footer_gallery.rs");
+    let ui_window = include_str!("../src/app_impl/ui_window.rs");
+    let app_view_state = include_str!("../src/main_sections/app_view_state.rs");
+
+    let footer_hints_start = source
+        .find("let footer_hints")
+        .expect("Footer Gallery fallback footer hints should exist");
+    let preview_section = &source[..footer_hints_start];
+    let footer_section = &source[footer_hints_start..];
+
+    assert!(
+        preview_section.contains("PromptFooter::new(config, footer_colors)")
+            && preview_section.contains(".h(px(80.0))"),
+        "Footer Gallery must preserve its live 80px PromptFooter preview rows"
+    );
+    assert!(
+        !footer_section.contains("PromptFooter::new("),
+        "Footer Gallery should not render a second in-content PromptFooter after footer hints"
+    );
+    assert!(
+        footer_section.contains("main_window_footer_slot(")
+            && footer_section.contains("render_simple_hint_strip("),
+        "Footer Gallery should route fallback hints through the native footer slot"
+    );
+    assert!(
+        !source.contains("active_main_window_footer_surface()"),
+        "Footer Gallery renderer should delegate native-footer policy to main_window_footer_slot"
+    );
+    assert!(
+        app_view_state.contains("AppView::FooterGalleryView { .. } => Some(\"footer_gallery\")"),
+        "Footer Gallery should register a native footer surface"
+    );
+    assert!(
+        ui_window.contains("dispatch_footer_gallery_select_footer_action(cx)")
+            && ui_window.contains(
+                "Footer Gallery native footer Select preserves current no-op selection behavior"
+            ),
+        "Footer Gallery native footer Select should preserve current no-op selection behavior"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"footer_gallery\",\"single_footer_owner\":true,\"preview_rows_preserved\":true,\"status\":\"pass\"}}");
 }
 
 #[test]

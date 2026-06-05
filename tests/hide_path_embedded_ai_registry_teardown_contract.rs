@@ -19,17 +19,20 @@
 //! `close_acp_chat_to_script_list` teardown at
 //! `src/app_impl/tab_ai_mode/mod.rs:3151`.
 //!
+//! The hide path has since been split: the dispatcher tears down stale child
+//! automation entries before hiding, then schedules
+//! `defer_reset_to_script_list_after_main_window_hidden` so the ScriptList
+//! reset and main-surface re-key happen after the native hide turn. These tests
+//! pin the current owner split instead of requiring the old inline
+//! `reset_to_script_list` + `update_automation_semantic_surface` shape in
+//! every dispatcher.
+//!
 //! These tests pin, for each of the 4 hide dispatcher files:
 //! 1. The hide path calls `ensure_embedded_ai_window(false)` AT ALL.
-//! 2. That call is AFTER `reset_to_script_list` (teardown must follow
-//!    the view flip; ordering it before the flip would leak a stale
-//!    entry if a future contributor splits the flip across an
-//!    intermediate subview that re-asserts the `ai` registry write).
-//! 3. The teardown is ADJACENT to the `update_automation_semantic_surface("main", …)`
-//!    call — the Pass #20 anomaly identified that re-key as the sibling
-//!    registry write that SHOULD have triggered a same-location review
-//!    for the child entry. Keeping them adjacent in source makes any
-//!    future refactor that moves one and forgets the other loudly wrong.
+//! 2. The dispatcher schedules the hidden ScriptList reset after enqueueing
+//!    native hide.
+//! 3. The hidden reset helper owns the ScriptList reset, main-surface re-key,
+//!    and hidden visibility update.
 //!
 //! **Refactor threat**: a contributor refactoring one of the four hide
 //! dispatchers to centralize the "reset view + re-key automation" block
@@ -60,8 +63,8 @@ const HIDE_SITES: &[(&str, &str)] = &[
         include_str!("../src/main_entry/app_run_setup.rs"),
     ),
 ];
+const LIFECYCLE_RESET: &str = include_str!("../src/app_impl/lifecycle_reset.rs");
 
-// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn every_hide_site_calls_ensure_embedded_ai_window_false() {
     for (name, src) in HIDE_SITES {
@@ -80,14 +83,9 @@ fn every_hide_site_calls_ensure_embedded_ai_window_false() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
-fn teardown_follows_reset_to_script_list_in_every_site() {
+fn hide_sites_schedule_hidden_scriptlist_reset_after_native_hide() {
     for (name, src) in HIDE_SITES {
-        // Find EVERY `reset_to_script_list(ctx)` and `ensure_embedded_ai_window(false)`
-        // site; for each teardown, check that a preceding `reset_to_script_list(ctx)`
-        // exists. (A single file may contain multiple hide arms; this test requires
-        // teardown-follows-reset for every teardown call.)
         let teardown_positions: Vec<usize> = src
             .match_indices("ensure_embedded_ai_window(false)")
             .map(|(idx, _)| idx)
@@ -98,86 +96,34 @@ fn teardown_follows_reset_to_script_list_in_every_site() {
              by every_hide_site_calls_ensure_embedded_ai_window_false — \
              fix that first)."
         );
-        for teardown_idx in &teardown_positions {
-            let before = &src[..*teardown_idx];
-            let last_reset = before.rfind("view.reset_to_script_list(ctx);");
-            assert!(
-                last_reset.is_some(),
-                "In {name}, the `ensure_embedded_ai_window(false)` call at \
-                 offset {teardown_idx} is not preceded by any \
-                 `view.reset_to_script_list(ctx);`. Teardown must follow \
-                 the view flip."
-            );
-        }
+        let hide_idx = src
+            .find("defer_hide_main_window(")
+            .unwrap_or_else(|| panic!("{name} must enqueue native main-window hide"));
+        let reset_idx = src
+            .find("defer_reset_to_script_list_after_main_window_hidden(")
+            .unwrap_or_else(|| panic!("{name} must schedule hidden ScriptList reset"));
+        assert!(
+            hide_idx < reset_idx,
+            "{name} must schedule the hidden ScriptList reset after \
+             enqueueing native hide so the reset/re-key cannot render a \
+             visible ScriptList frame while AppKit is closing the panel."
+        );
     }
 }
 
-// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
-fn teardown_is_adjacent_to_semantic_surface_rekey_in_every_site() {
-    for (name, src) in HIDE_SITES {
-        // Pair each `update_automation_semantic_surface("main", Some("scriptList".to_string()))`
-        // (either single-line or the multi-line, hide-arm-specific form)
-        // with its following `ensure_embedded_ai_window(false)` and
-        // require the gap to be under ~800 bytes. We deliberately
-        // discriminate on the `Some("scriptList".to_string())` literal
-        // in the 2nd argument so the TriggerBuiltin post-dispatch rekey
-        // helper is NOT matched — only hide-path rekeys carry the
-        // hardcoded scriptList literal and only they need the paired
-        // teardown.
-        let mut rekey_positions: Vec<usize> = Vec::new();
-        let inline =
-            "update_automation_semantic_surface(\"main\", Some(\"scriptList\".to_string()))";
-        rekey_positions.extend(src.match_indices(inline).map(|(idx, _)| idx));
-        // Multi-line form: scan for every `update_automation_semantic_surface(`
-        // and keep it only if `Some("scriptList"` appears within the next
-        // 200 bytes (covers the 3-line `fn(\n    "main",\n    Some("scriptList"...))`
-        // shape used across all four hide dispatchers).
-        for (idx, _) in src.match_indices("update_automation_semantic_surface(") {
-            let window_end = (idx + 200).min(src.len());
-            let window = &src[idx..window_end];
-            if window.contains("Some(\"scriptList\"") && !rekey_positions.contains(&idx) {
-                rekey_positions.push(idx);
-            }
-        }
-        rekey_positions.sort();
-        assert!(
-            !rekey_positions.is_empty(),
-            "{name} does not contain any \
-             `update_automation_semantic_surface(\"main\", ...)` call; \
-             the hide path source shape has drifted from the contract \
-             this test defends."
-        );
-        for rekey_idx in &rekey_positions {
-            let after = &src[*rekey_idx..];
-            let teardown_rel = after.find("ensure_embedded_ai_window(false)");
-            assert!(
-                teardown_rel.is_some(),
-                "In {name}, the `update_automation_semantic_surface(\"main\", ...)` \
-                 at offset {rekey_idx} has NO following \
-                 `ensure_embedded_ai_window(false)` call. They must be \
-                 sibling registry writes within the same hide arm."
-            );
-            let gap = teardown_rel.unwrap();
-            assert!(
-                gap < 800,
-                "In {name}, the gap between \
-                 `update_automation_semantic_surface(\"main\", ...)` \
-                 (offset {rekey_idx}) and the following \
-                 `ensure_embedded_ai_window(false)` is {gap} bytes — \
-                 must stay under 800 so the two sibling registry writes \
-                 remain lexically co-located. A refactor that pushes \
-                 them apart breaks this invariant."
-            );
-            let between = &after[..gap];
-            assert!(
-                !between.contains("pub fn ") && !between.contains("\nfn "),
-                "In {name}, a function boundary appears between the \
-                 `update_automation_semantic_surface(\"main\", ...)` \
-                 re-key and the `ensure_embedded_ai_window(false)` \
-                 teardown. They must live in the same function body. \
-                 Intervening text:\n{between}"
-            );
-        }
-    }
+fn hidden_reset_helper_owns_scriptlist_rekey_and_hidden_visibility() {
+    let helper_start = LIFECYCLE_RESET
+        .find("pub(crate) fn reset_hidden_main_window_to_script_list(")
+        .expect("lifecycle_reset.rs must define hidden ScriptList reset helper");
+    let helper_body =
+        &LIFECYCLE_RESET[helper_start..(helper_start + 900).min(LIFECYCLE_RESET.len())];
+
+    assert!(
+        helper_body.contains("self.reset_to_script_list(cx);")
+            && helper_body.contains("self.rekey_main_automation_surface_from_current_view();")
+            && helper_body.contains("crate::windows::set_automation_visibility(\"main\", false);"),
+        "hidden reset helper must own the post-hide ScriptList reset, \
+         main automation surface re-key, and hidden visibility update"
+    );
 }

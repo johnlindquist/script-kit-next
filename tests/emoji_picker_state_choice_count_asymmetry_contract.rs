@@ -66,7 +66,6 @@ fn emoji_picker_state_arm() -> &'static str {
     &PROMPT_HANDLER[start..start + end_rel]
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn emoji_picker_state_arm_derives_dataset_count_from_unfiltered_emojis() {
     // The `choice_count` slot MUST be populated from a `dataset_count`
@@ -91,7 +90,6 @@ fn emoji_picker_state_arm_derives_dataset_count_from_unfiltered_emojis() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn emoji_picker_state_arm_derives_visible_count_from_search_emojis() {
     // The `visible_choice_count` slot MUST be populated from a
@@ -110,7 +108,6 @@ fn emoji_picker_state_arm_derives_visible_count_from_search_emojis() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn emoji_picker_state_arm_tuple_slots_are_dataset_then_visible() {
     // The state tuple slots for EmojiPicker are, in order:
@@ -134,7 +131,6 @@ fn emoji_picker_state_arm_tuple_slots_are_dataset_then_visible() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn emoji_picker_state_arm_forbids_single_count_tuple_shape() {
     // The pre-fix shape was a single `filtered_count` binding

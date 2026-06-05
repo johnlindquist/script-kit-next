@@ -19,6 +19,13 @@ pub struct TerminalContent {
     pub selected_cells: Vec<(usize, usize)>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalTextSnapshot {
+    pub text: String,
+    pub line_count: usize,
+    pub truncated: bool,
+}
+
 impl TerminalContent {
     /// Returns `true` if the terminal is empty (no content).
     pub fn is_empty(&self) -> bool {

@@ -121,21 +121,19 @@ fn semicolon_capture_composer_outer_shell_consumes_non_list_language_without_own
 #[test]
 fn form_mode_hides_ask_ai_hint_and_uses_accent_focus_style() {
     let render = read("src/render_script_list/mod.rs");
-    let ask_hint = render
-        .find("render_launcher_ask_ai_hint")
-        .expect("ScriptList header should still render the Ask AI hint outside form mode");
     let form_guard = render
         .find("handler_form_owns_input_for_render")
         .expect("render should compute handler form ownership for header chrome");
     let show_hint = render
         .find("show_launcher_ask_ai_hint")
         .expect("render should name the Ask AI hint visibility gate");
-    let guarded_child = render
-        .find(".when(show_launcher_ask_ai_hint")
-        .expect("Ask AI hint must render through the handler-form visibility gate");
     assert!(
-        form_guard < show_hint && show_hint < guarded_child && guarded_child < ask_hint,
-        "handler form mode must hide the top-right Ask/Tab affordance"
+        form_guard < show_hint && render.contains("let show_launcher_ask_ai_hint = false;"),
+        "the three-zone launcher must keep the old top-right Ask/Tab header affordance disabled"
+    );
+    assert!(
+        !render.contains("render_launcher_ask_ai_hint"),
+        "ScriptList header must not reintroduce the removed Ask AI hint renderer"
     );
 
     let field_start = render
@@ -239,7 +237,7 @@ fn handler_form_field_typography_is_theme_form_owned_and_focus_stable() {
         "handler form fields should not regress to duplicated literal layout values"
     );
     assert!(
-        field_renderer.contains(".with_size(gpui_component::Size::Size(px(")
+        field_renderer.contains(".with_size(gpui_component::Size::Size(")
             && field_renderer.contains("field_metrics.input_font_size")
             && field_renderer.contains("field_metrics.menu_syntax_input_rendered_font_size_px()")
             && field_renderer.contains(".text_size(px(input_rendered_font_size))"),
@@ -413,9 +411,10 @@ fn snippet_multiline_values_are_sanitized_before_plain_gpui_text_children() {
         "form fallback display must sanitize multiline values without mutating field state"
     );
     assert!(
-        render.contains("handler_form_owns_input_for_render\n                                            && menu_syntax_text_contains_line_break(\n                                                &filter_text_for_render,\n                                            )")
-            && render.contains("self.render_search_input().into_any_element()")
-            && render.contains("menu_syntax_single_line_text_for_gpui(\n                                                    &filter_text_for_render,\n                                                )"),
+        render.contains("let input_body = if handler_form_owns_input_for_render")
+            && render.contains("&& menu_syntax_text_contains_line_break(&filter_text_for_render)")
+            && render.contains("self.render_search_input_with_ghost(cx).into_any_element()")
+            && render.contains("menu_syntax_single_line_text_for_gpui(\n                    &filter_text_for_render,\n                )"),
         "newline-bearing capture filters must bypass the single-line header input renderer with display-only sanitized text"
     );
 }

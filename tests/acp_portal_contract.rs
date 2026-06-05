@@ -89,7 +89,6 @@ fn portal_contract_compacts_replacement_target_copy() {
     );
 }
 
-// doc-anchor-removed: [[tests/acp-portal-contract#Host transitions#Host hide keeps the staged session]]
 #[test]
 fn host_transitions_preserve_the_staged_portal_session() {
     let prepare_for_host_hide = ACP_VIEW_SOURCE
@@ -115,7 +114,6 @@ fn host_transitions_preserve_the_staged_portal_session() {
     );
 }
 
-// doc-anchor-removed: [[tests/acp-portal-contract#Host query seeding#History portals keep the staged query across hosts]]
 #[test]
 fn history_portal_hosts_seed_query_from_the_pending_contract() {
     assert!(

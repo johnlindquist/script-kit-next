@@ -32,6 +32,19 @@ fn set_filter_text_immediate_does_not_acp_only_special_case_sigil_routing() {
 }
 
 #[test]
+fn bare_at_stays_in_script_list_spine_route() {
+    assert!(
+        !FILTER_CORE.contains("AcpMentionPicker")
+            && !FILTER_CHANGE.contains("open_tab_ai_acp_with_mention_picker"),
+        "bare @ in ScriptList must stay in the shared Spine/main-list route, not open ACP"
+    );
+    assert!(
+        FILTER_CORE.contains("\"@\"") && FILTER_CORE.contains("None"),
+        "the bare @ special-entry test should pin @ as a non-handoff sigil"
+    );
+}
+
+#[test]
 fn bang_is_quick_terminal_sigil_and_greater_than_is_plain_filter() {
     assert!(
         FILTER_CORE.contains("\"!\" => Some(ScriptListSpecialEntry::QuickTerminal)")

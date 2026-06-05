@@ -10,7 +10,6 @@ fn block<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &rest[..end_idx]
 }
 
-// doc-anchor-removed: [[tests/notes-acp#Notes ACP Escape streaming cancellation#Escape cancels streaming before returning to editor]]
 #[test]
 fn notes_acp_escape_dismisses_popup_then_cancels_stream_then_returns_to_notes() {
     let acp_mode = block(
@@ -31,7 +30,6 @@ fn notes_acp_escape_dismisses_popup_then_cancels_stream_then_returns_to_notes() 
     );
 }
 
-// doc-anchor-removed: [[tests/notes-acp#Notes ACP CmdW window close cleanup#CmdW prepares ACP and closes dialogs before removing Notes]]
 #[test]
 fn notes_acp_cmd_w_prepares_acp_and_closes_dialogs_before_remove_window() {
     let cmd_w = block(

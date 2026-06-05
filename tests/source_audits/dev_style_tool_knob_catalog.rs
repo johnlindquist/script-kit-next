@@ -230,7 +230,10 @@ fn menu_syntax_main_hint_helper_chrome_is_list_tokenized() {
     assert!(!row_body.contains("| 0xCC"));
     assert!(!row_body.contains("| 0xE6"));
 
-    let fragment_body = function_body(&render_script_list, "render_menu_syntax_fragment_preview_row");
+    let fragment_body = function_body(
+        &render_script_list,
+        "render_menu_syntax_fragment_preview_row",
+    );
     assert!(fragment_body.contains("list_tokens.main_hint_fragment_row_gap"));
     assert!(fragment_body.contains("list_tokens.main_hint_fragment_role_width"));
     assert!(fragment_body.contains("list_tokens.main_hint_fragment_role_bg_alpha"));
@@ -340,11 +343,12 @@ fn menu_syntax_main_hint_form_field_chrome_is_list_tokenized() {
         .next()
         .expect("render_menu_syntax_form body should be present");
     let compact_form_body: String = form_body.split_whitespace().collect();
-    assert!(compact_form_body.contains(
-        "render_menu_syntax_form_field(theme,list_tokens,design_variant,field,input)"
-    ));
+    assert!(compact_form_body
+        .contains("render_menu_syntax_form_field(theme,list_tokens,design_variant,field,input)"));
     let main_hint_body = function_body(&render_script_list, "render_menu_syntax_main_hint");
-    assert!(main_hint_body.contains("render_menu_syntax_form(\n                theme,\n                list_tokens,"));
+    assert!(main_hint_body.contains(
+        "render_menu_syntax_form(\n                theme,\n                list_tokens,"
+    ));
 }
 
 #[test]
@@ -374,8 +378,10 @@ fn inline_calc_row_chrome_is_list_tokenized() {
     assert!(catalog.contains("LIST_INLINE_CALC_HINT_FONT_SIZE_KNOB_ID"));
     assert!(catalog.contains("\"list.inlineCalcHintFontSize\""));
 
-    let overlay_body =
-        function_body(&render_script_list, "inline_calc_list_item_selected_overlay_rgba");
+    let overlay_body = function_body(
+        &render_script_list,
+        "inline_calc_list_item_selected_overlay_rgba",
+    );
     assert!(overlay_body.contains("list_tokens.inline_calc_selected_overlay_min_alpha"));
     assert!(!overlay_body.contains(".max(0x2E)"));
 
@@ -429,7 +435,10 @@ fn main_menu_font_sizes_are_design_tool_controls() {
         "LIST_MAIN_HINT_FORM_INPUT_FONT_SIZE_KNOB_ID",
         "LIST_MAIN_HINT_FORM_VALUE_FONT_SIZE_KNOB_ID",
     ] {
-        assert!(catalog.contains(required), "missing font-size knob {required}");
+        assert!(
+            catalog.contains(required),
+            "missing font-size knob {required}"
+        );
     }
 
     for id in [
@@ -532,7 +541,10 @@ fn footer_keycap_and_slot_sizes_are_design_tool_controls() {
         "FOOTER_PASTE_RESPONSE_SLOT_WIDTH_KNOB_ID",
         "\"footer.pasteResponseSlotWidth\"",
     ] {
-        assert!(catalog.contains(required), "missing footer control {required}");
+        assert!(
+            catalog.contains(required),
+            "missing footer control {required}"
+        );
     }
 
     let slot_body = function_body(&footer, "footer_action_slot_width_for_metrics");
@@ -573,6 +585,7 @@ fn list_scrollbar_width_is_design_tool_controlled() {
     assert!(theme.contains("pub scrollbar_width: f32"));
     assert!(catalog.contains("LIST_SCROLLBAR_WIDTH_KNOB_ID"));
     assert!(catalog.contains("\"list.scrollbarWidth\""));
-    assert!(render_script_list.contains(".w(px(self.current_main_menu_theme.def().list.scrollbar_width))"));
+    assert!(render_script_list
+        .contains(".w(px(self.current_main_menu_theme.def().list.scrollbar_width))"));
     assert!(!render_script_list.contains(".w(px(16.0))"));
 }

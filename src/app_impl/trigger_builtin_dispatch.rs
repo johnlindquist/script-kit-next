@@ -379,6 +379,7 @@ impl ScriptListApp {
             },
             FilterableView::KitStoreInstalled => FilterableRoutePlan {
                 next_view: AppView::InstalledKitsView {
+                    filter: String::new(),
                     selected_index: 0,
                     kits: Self::kit_store_list_installed(),
                 },

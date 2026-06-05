@@ -513,6 +513,37 @@ fn actions_cli_reports_protocol_click_activate_proof() {
 }
 
 #[test]
+fn actions_cli_top_level_classification_aggregates_requested_proofs() {
+    let final_start = ACTIONS_DEVTOOLS
+        .find("const finalClassification = firstNonOkClassification([")
+        .expect("actions CLI must aggregate final classification through helper");
+    let final_block =
+        &ACTIONS_DEVTOOLS[final_start..(final_start + 700).min(ACTIONS_DEVTOOLS.len())];
+
+    for needle in [
+        "classification",
+        "hoverProof?.classification",
+        "clickSelectProof?.classification",
+        "clickActivateProof?.classification",
+        "semanticFreshnessProof?.classification",
+        "closeCleanupProof?.classification",
+        "shortcutOpenFreshnessProof?.classification",
+        "shortcutCloseCleanupProof?.classification",
+        "escapeCloseCleanupProof?.classification",
+    ] {
+        assert!(
+            final_block.contains(needle),
+            "actions CLI final classification must include requested proof classification: {needle}"
+        );
+    }
+
+    assert!(
+        ACTIONS_DEVTOOLS.contains("function firstNonOkClassification("),
+        "actions CLI must keep a fail-closed classification aggregator"
+    );
+}
+
+#[test]
 fn actions_dialog_coverage_mentions_second_click_activation_proof() {
     for needle in [
         "target-scoped ActionsDialog second-click activation lifecycle proof",

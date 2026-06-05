@@ -32,6 +32,7 @@ const SPINE_PROFILE_SOURCE: &str = include_str!("../src/spine/catalog_profile.rs
 const STARTUP_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
 const STARTUP_NEW_TAB_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
 const SIMULATE_KEY_DISPATCH_SOURCE: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
+const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
 
 fn fn_body<'a>(source: &'a str, signature: &str) -> &'a str {
     let start = source.find(signature).expect("signature must exist");
@@ -71,6 +72,43 @@ fn profile_picker_is_main_menu_spine_not_deprecated_popup() {
     assert!(!DETACHED_TRANSACTION_PROVIDER_SOURCE.contains("batch_select_profile_by_semantic_id"));
     assert!(!STDIN_COMMANDS_SOURCE.contains("OpenAcpProfilePicker"));
     assert!(!STDIN_COMMANDS_SOURCE.contains("\"openAcpProfilePicker\""));
+}
+
+#[test]
+fn acp_spine_context_attacher_uses_main_menu_list_chrome() {
+    let body = fn_body(ACP_VIEW_SOURCE, "fn render_acp_spine_projection_area(");
+
+    for required in [
+        "crate::list_item::render_section_header(",
+        "ListItemColors::from_theme(theme)",
+        "ListItem::new(title, list_colors)",
+        ".selected(selected)",
+        ".main_menu_theme(main_menu_theme)",
+        ".semantic_id(format!(\"acp-spine-row-{row_id}\"",
+        ".description_opt(subtitle)",
+        ".source_hint_opt(source_hint)",
+        ".type_accessory_opt(Some(TypeAccessory",
+        "crate::list_item::effective_list_item_height_for_theme(main_menu_theme)",
+    ] {
+        assert!(
+            body.contains(required),
+            "ACP context attacher must reuse main-menu list chrome: {required}"
+        );
+    }
+
+    for forbidden in [
+        "theme.colors.accent.selected << 8) | 0x22",
+        ".px(px(10.0))",
+        ".py(px(7.0))",
+        ".rounded(px(6.0))",
+        ".text_sm()",
+        ".justify_between()",
+    ] {
+        assert!(
+            !body.contains(forbidden),
+            "ACP context attacher must not keep bespoke item row styling: {forbidden}"
+        );
+    }
 }
 
 #[test]
@@ -222,11 +260,16 @@ fn profile_search_renderer_has_right_pane_preview() {
 fn profile_search_renderer_uses_shared_list_item_contract() {
     for needle in [
         "ListItem::new(result.profile.name.clone(), list_colors)",
-        ".description(profile_search_row_description(result))",
+        "let description = profile_search_row_description(result);",
+        ".description(description)",
+        ".highlight_indices_opt(",
+        ".description_highlight_indices_opt(",
         ".selected(is_selected)",
         ".hovered(is_hovered)",
+        "let main_menu_theme = self.current_main_menu_theme;",
+        ".main_menu_theme(main_menu_theme)",
         ".with_accent_bar(true)",
-        ".trailing_accessory(",
+        ".trailing_accessory_opt(",
         "profile_search_row_status_accessory(",
         "ListItemColors::from_theme(&self.theme)",
         "ListItem owns selected/hover/theme",
@@ -246,12 +289,64 @@ fn profile_search_renderer_uses_shared_list_item_contract() {
         ".px(px(14.0))",
         ".py(px(4.0))",
         ".rounded(px(8.0))",
+        "StyledText::new",
     ] {
         assert!(
             !RENDER_PROFILE_SEARCH_SOURCE.contains(forbidden),
             "ProfileSearch must not reintroduce one-off row styling: {forbidden}"
         );
     }
+}
+
+#[test]
+fn profile_search_renderer_removes_non_current_profile_tag_but_keeps_current() {
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("if !result.selected"));
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("return None;"));
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains(".child(\"Current\")"));
+    assert!(!RENDER_PROFILE_SEARCH_SOURCE.contains("\"Profile\""));
+    assert!(COLLECT_ELEMENTS_SOURCE.contains("result.selected.then(|| \"current\".to_string())"));
+}
+
+#[test]
+fn profile_search_footer_uses_switch_profile_label() {
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("↵ Switch Profile"));
+    assert!(!RENDER_PROFILE_SEARCH_SOURCE.contains("↵ Select Profile"));
+    let body = fn_body(
+        UI_WINDOW_SOURCE,
+        "pub(crate) fn main_window_primary_action_label(",
+    );
+    assert!(body.contains("AppView::ProfileSearchView { .. }"));
+    assert!(body.contains("\"Switch Profile\".to_string()"));
+}
+
+#[test]
+fn profile_search_filter_updates_bypass_coalescer_for_instant_search() {
+    let body = fn_body(
+        FILTER_INPUT_UPDATES_SOURCE,
+        "pub(crate) fn set_filter_text_immediate(",
+    );
+    assert!(body.contains("matches!(self.current_view, AppView::ProfileSearchView { .. })"));
+    assert!(body.contains("self.computed_filter_text = text.clone();"));
+    assert!(body.contains("self.filter_coalescer.reset();"));
+    assert!(body.contains("cx.notify();"));
+}
+
+#[test]
+fn profile_search_preview_explains_profiles_in_structured_sections() {
+    for needle in [
+        "profile-search-preview-explanation",
+        "profile-search-preview-overview",
+        "profile-search-preview-runtime",
+        "profile-search-preview-instructions",
+        "Working directory",
+        "Instructions",
+    ] {
+        assert!(
+            RENDER_PROFILE_SEARCH_SOURCE.contains(needle),
+            "ProfileSearch preview should include structured profile explanation: {needle}"
+        );
+    }
+    assert!(PROFILE_SEARCH_SOURCE.contains("Profiles define"));
 }
 
 #[test]
@@ -317,7 +412,7 @@ fn profile_search_devtools_rows_use_stable_profile_id_semantic_ids() {
         "selected: Some(index == selected_index)",
         "value: Some(result.profile.id.clone())",
         "selectable: Some(true)",
-        "if result.selected",
+        "result.selected.then(|| \"current\".to_string())",
     ] {
         assert!(
             COLLECT_ELEMENTS_SOURCE.contains(needle),
@@ -386,6 +481,34 @@ fn profile_search_selection_arms_enter_guard_before_reset_to_script_list() {
     assert!(
         guard_pos < reset_pos,
         "Enter transition guard must be armed before ScriptList is rendered"
+    );
+}
+
+#[test]
+fn profile_search_selection_refreshes_header_labels_after_reset() {
+    let body = fn_body(
+        APP_IMPL_PROFILE_SEARCH_SOURCE,
+        "pub(crate) fn select_profile_search_result(",
+    );
+    let persist_pos = body
+        .find("persist_profile_search_selection")
+        .expect("ProfileSearch must persist before refresh");
+    let reset_pos = body
+        .find("reset_to_script_list(cx)")
+        .expect("ProfileSearch selection must return to ScriptList");
+    let refresh_positions = body
+        .match_indices("refresh_agent_model_footer_labels")
+        .map(|(pos, _)| pos)
+        .collect::<Vec<_>>();
+    assert!(
+        refresh_positions
+            .iter()
+            .any(|pos| *pos > persist_pos && *pos < reset_pos),
+        "ProfileSearch must refresh active profile labels before returning to ScriptList"
+    );
+    assert!(
+        refresh_positions.iter().any(|pos| *pos > reset_pos),
+        "ProfileSearch should refresh labels after reset so shared header cannot render stale profile text"
     );
 }
 
@@ -462,13 +585,18 @@ fn pipe_trigger_selects_agent_chat_profiles_without_context_attachment() {
 }
 
 #[test]
-fn composer_profile_trigger_rows_use_shared_icon_and_selected_chrome() {
+fn composer_profile_trigger_rows_use_list_item_icon_and_selected_chrome() {
     let row_body = fn_body(ACP_PICKER_POPUP_SOURCE, "fn render_picker_row(");
-    assert!(row_body.contains("ContextPickerItemKind::AgentChatProfile"));
-    assert!(row_body.contains("footer_icon_path_or_profile"));
-    assert!(row_body.contains("FOOTER_PROFILE_ICON_TOKEN"));
-    assert!(row_body.contains("gpui::svg()"));
-    assert!(row_body.contains(".border_l(gpui::px(2.0))"));
+    assert!(row_body.contains("crate::list_item::ListItem::new"));
+    assert!(row_body.contains("crate::list_item::ListItemColors::from_theme"));
+    assert!(row_body.contains(".selected(is_selected)"));
+    assert!(row_body.contains(".main_menu_theme("));
+    assert!(row_body.contains(".semantic_id(format!(\"choice:{idx}:{}\", item.id))"));
+    assert!(ACP_PICKER_POPUP_SOURCE.contains("footer_icon_path_or_profile"));
+    assert!(ACP_PICKER_POPUP_SOURCE.contains("FOOTER_PROFILE_ICON_TOKEN"));
+    assert!(!row_body.contains(".border_l(gpui::px(2.0))"));
+    assert!(!row_body.contains("selected_row_bg"));
+    assert!(!row_body.contains("hover_row_bg"));
 }
 
 #[test]

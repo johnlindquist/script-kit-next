@@ -16,7 +16,6 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &source[start_ix..start_ix + end_rel]
 }
 
-// doc-anchor-removed: [[removed-docs and introspection#DropPrompt receipts]]
 #[test]
 fn drop_prompt_wires_gpui_external_paths_to_prompt_state() {
     assert!(
@@ -37,7 +36,6 @@ fn drop_prompt_wires_gpui_external_paths_to_prompt_state() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs and introspection#DropPrompt receipts]]
 #[test]
 fn drop_prompt_automation_state_is_redacted_and_sdk_submit_stays_full_fidelity() {
     let state_result_variant = source_between(
@@ -91,7 +89,6 @@ fn drop_prompt_automation_state_is_redacted_and_sdk_submit_stays_full_fidelity()
     );
 }
 
-// doc-anchor-removed: [[removed-docs and introspection#DropPrompt receipts]]
 #[test]
 fn drop_prompt_get_elements_redacts_paths_and_marks_file_rows() {
     let collector = source_between(
@@ -121,7 +118,6 @@ fn drop_prompt_get_elements_redacts_paths_and_marks_file_rows() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs and introspection#DropPrompt receipts]]
 #[test]
 fn sdk_get_state_surfaces_drop_prompt_receipts() {
     assert!(

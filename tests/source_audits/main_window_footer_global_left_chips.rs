@@ -1,16 +1,14 @@
-//! Source audit for the global main-window footer left chips (Spine cwd +
+//! Source audit for the shared main-window context chips (Spine cwd +
 //! Agent·Model).
 //!
-//! The reported bug was that the two bottom-left footer chips vanished / flashed
-//! a gap when switching between the main menu (ScriptList) and Agent Chat
-//! (AcpChatView), because each surface built its own footer button list and the
-//! ACP path only re-added cwd as a *visual-only* `left_info.cwd_chip`.
+//! The reported bug was that the two context chips vanished / flashed a gap
+//! when switching between the main menu (ScriptList) and Agent Chat
+//! (AcpChatView), because footer paths tried to own the same context state.
 //!
-//! The fix makes Cwd + Agent·Model real `FooterButtonConfig` entries prepended
-//! centrally for every surface that shows them, so they are a single source of
-//! truth and persist with no gap. This audit freezes that structure so a future
-//! edit cannot silently regress back to per-surface chip assembly or the
-//! visual-only cwd rail.
+//! The current fix keeps Cwd + Agent·Model in the shared main-view header
+//! context zone and keeps the native footer scoped to surface actions. This
+//! audit freezes that ownership so a future edit cannot silently regress back
+//! to per-surface footer chip assembly or the visual-only cwd rail.
 
 use std::fs;
 use std::path::Path;
@@ -51,24 +49,33 @@ fn fn_body<'a>(src: &'a str, header: &str) -> &'a str {
 }
 
 #[test]
-fn main_window_footer_config_prepends_global_left_chips_once() {
+fn main_view_header_owns_global_context_chips_once() {
     let src = read("src/app_impl/ui_window.rs");
     assert!(
-        src.contains("fn global_main_window_left_chip_buttons("),
-        "global left-chip builder helper must exist"
+        src.contains("pub(crate) fn global_footer_cwd_chip("),
+        "global cwd context helper must exist"
     );
     assert!(
-        src.contains("fn prepend_global_main_window_left_chips("),
-        "global left-chip prepend helper must exist"
+        src.contains("pub(crate) fn agent_model_footer_label("),
+        "global Agent·Model context helper must exist"
+    );
+    let context_body = fn_body(
+        &src,
+        "pub(crate) fn render_clickable_main_view_context_zone(",
+    );
+    assert!(
+        context_body.contains("render_main_view_context_zone_required"),
+        "shared main-view context zone must render cwd and Agent·Model together"
+    );
+    assert!(
+        context_body.contains("FooterAction::Cwd")
+            && context_body.contains("FooterAction::AgentModel"),
+        "shared main-view context zone must dispatch the cwd and Agent·Model actions"
     );
     let body = fn_body(&src, "fn main_window_footer_config_with_cx(");
     assert!(
-        body.contains("self.prepend_global_main_window_left_chips("),
-        "the central footer config must prepend the global left chips"
-    );
-    assert!(
-        body.contains("current_view_shows_global_left_chips()"),
-        "the prepend must be gated to surfaces that show the global chips"
+        !body.contains("FooterAction::Cwd") && !body.contains("FooterAction::AgentModel"),
+        "native footer config must not own the shared context chips"
     );
 }
 
@@ -111,12 +118,8 @@ fn acp_enrichment_suppresses_visual_cwd_when_real_chips_exist() {
     let src = read("src/app_impl/ui_window.rs");
     let body = fn_body(&src, "fn enrich_footer_config_with_acp_info(");
     assert!(
-        body.contains("has_real_global_left_chips"),
-        "enrichment must detect when real global chips are present"
-    );
-    assert!(
         body.contains("config.left_info = None"),
-        "enrichment must drop the left-info rail when real chips exist"
+        "enrichment must drop the left-info rail because shared context chips live in the header"
     );
     // The visual-only cwd_chip injection that caused the flash/overlap is gone.
     assert!(
@@ -130,41 +133,20 @@ fn acp_enrichment_suppresses_visual_cwd_when_real_chips_exist() {
 }
 
 #[test]
-fn acp_status_dot_threads_through_agent_model_chip_not_left_info() {
-    // The ACP streaming/status dot must ride as a reserved leading dot INSIDE
-    // the real Agent·Model footer button (only on Agent Chat), NOT via the old
-    // visual-only left_info rail — that rail must stay suppressed when real
-    // chips exist so the overlap/flash regression cannot return.
+fn acp_context_chips_do_not_use_footer_status_dot_lane() {
+    // Cwd + Agent·Model now live in the shared main-view header, not in native
+    // footer buttons. ACP enrichment must keep suppressing the old visual-only
+    // left_info rail and must not reintroduce a footer status-dot lane for them.
     let ui = read("src/app_impl/ui_window.rs");
-    let footer = read("src/footer_popup.rs");
-
-    let global = fn_body(&ui, "fn global_main_window_left_chip_buttons(");
-    assert!(
-        global.contains("AppView::AcpChatView"),
-        "only Agent Chat receives a status dot lane (ScriptList stays dot-free)"
-    );
-    assert!(
-        global.contains("acp_footer_dot_status"),
-        "Agent·Model chip must use the host-cached ACP footer dot status"
-    );
-    assert!(
-        global.contains(".leading_dot("),
-        "ACP status must be threaded as FooterButtonConfig::leading_dot"
-    );
 
     let enrich = fn_body(&ui, "fn enrich_footer_config_with_acp_info(");
     assert!(
         enrich.contains("config.left_info = None"),
-        "real global chips must still suppress the old left-info rail"
-    );
-
-    assert!(
-        footer.contains("leading_dot: Option<FooterDotStatus>"),
-        "FooterButtonConfig must carry a leading_dot field"
+        "shared context chips must still suppress the old left-info rail"
     );
     assert!(
-        footer.contains("fn make_footer_hint_leading_dot_view"),
-        "native footer must render the dot inside the button via a dedicated view"
+        !ui.contains("acp_footer_dot_status") && !ui.contains(".leading_dot("),
+        "ui_window.rs must not thread Agent Chat status through footer context chips"
     );
 }
 

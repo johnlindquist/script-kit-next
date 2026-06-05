@@ -21,6 +21,7 @@ fn parse_kind(kind: &str) -> Option<PortalKind> {
         "skill_search" => Some(PortalKind::SkillSearch),
         "notes_browse" => Some(PortalKind::NotesBrowse),
         "acp_history" => Some(PortalKind::AcpHistory),
+        "terminal" => Some(PortalKind::Terminal),
         _ => None,
     }
 }
@@ -37,6 +38,7 @@ fn format_kind(kind: PortalKind) -> String {
         PortalKind::SkillSearch => "skill_search",
         PortalKind::NotesBrowse => "notes_browse",
         PortalKind::AcpHistory => "acp_history",
+        PortalKind::Terminal => "terminal",
     }
     .to_string()
 }

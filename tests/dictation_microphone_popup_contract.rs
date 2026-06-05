@@ -76,9 +76,10 @@ fn overlay_mic_control_uses_select_label_and_icon_not_keycap_value() {
             && WINDOW.contains(
                 ".external_path(crate::components::footer_chrome::FOOTER_MIC_ICON_PATH)"
             )
-            && WINDOW.contains(
-                "FooterButtonConfig::new(FooterAction::Ai, MIC_KEYCAP, active_microphone_footer_label())"
-            )
+            && WINDOW.contains("FooterButtonConfig::new(")
+            && WINDOW.contains("FooterAction::Ai,")
+            && WINDOW.contains("MIC_KEYCAP,")
+            && WINDOW.contains("active_microphone_footer_label(),")
             && WINDOW.contains("crate::dictation::get_active_dictation_device()")
             && !WINDOW.contains("fn current_microphone_label()")
             && !WINDOW.contains("FooterHintKeyMode::TextValue")

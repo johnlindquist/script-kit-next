@@ -1639,7 +1639,6 @@ mod tests {
         TriggerPickerContext::default()
     }
 
-    // doc-anchor-removed: menu-syntax Parser Boundary
     #[test]
     fn legacy_triggers_return_no_snapshot() {
         let ctx = ctx_empty();

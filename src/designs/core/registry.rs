@@ -5,7 +5,6 @@
 //! [`DesignVariant`] enum stays in place as a migration shim; production
 //! code should consume designs by id via [`lookup`] and [`fallback`].
 //!
-// doc-anchor-removed: [[removed-docs invariants]]
 
 use std::hash::{Hash, Hasher};
 

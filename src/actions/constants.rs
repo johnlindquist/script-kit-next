@@ -11,9 +11,8 @@ pub const POPUP_MAX_HEIGHT: f32 = 400.0;
 /// Taller popup cap for the Notes Cmd+P recent-note switcher.
 pub const NOTES_RECENT_POPUP_MAX_HEIGHT: f32 = 560.0;
 
-/// Fixed height for action items (required for uniform_list virtualization)
-/// Comfortable Tahoe action row height.
-pub const ACTION_ITEM_HEIGHT: f32 = 36.0;
+/// Fixed height for action items; matches the shared main-search row rhythm.
+pub const ACTION_ITEM_HEIGHT: f32 = crate::list_item::LIST_ITEM_HEIGHT;
 
 /// Fixed height for the search input row
 pub const SEARCH_INPUT_HEIGHT: f32 = 40.0;
@@ -70,7 +69,7 @@ mod tests {
 
     #[test]
     fn test_action_item_height_constant() {
-        assert_eq!(ACTION_ITEM_HEIGHT, 36.0);
+        assert_eq!(ACTION_ITEM_HEIGHT, crate::list_item::LIST_ITEM_HEIGHT);
         const _: () = assert!(ACTION_ITEM_HEIGHT > 0.0);
         const _: () = assert!(ACTION_ITEM_HEIGHT < POPUP_MAX_HEIGHT);
     }

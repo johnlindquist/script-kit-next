@@ -285,7 +285,8 @@ impl NotesApp {
             | PortalKind::ScriptSearch
             | PortalKind::ScriptletSearch
             | PortalKind::SkillSearch
-            | PortalKind::NotesBrowse => {
+            | PortalKind::NotesBrowse
+            | PortalKind::Terminal => {
                 tracing::info!(
                     event = "notes_acp_portal_requested",
                     kind = ?kind,
@@ -545,7 +546,10 @@ impl NotesApp {
         }
 
         let Some(ref acp_view) = self.embedded_acp_chat else {
-            tracing::info!(event = "notes_acp_history_actions_requested", opened = false);
+            tracing::info!(
+                event = "notes_acp_history_actions_requested",
+                opened = false
+            );
             return false;
         };
 
@@ -743,7 +747,8 @@ fn dispatch_notes_acp_action(
         action_id = %action_id,
     );
 
-    if let Some(session_id) = action_id.strip_prefix(crate::actions::ACP_HISTORY_SELECT_ACTION_PREFIX)
+    if let Some(session_id) =
+        action_id.strip_prefix(crate::actions::ACP_HISTORY_SELECT_ACTION_PREFIX)
     {
         let selected = acp_entity.update(cx, |chat, cx| {
             chat.select_history_session_by_id(session_id, cx)

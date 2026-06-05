@@ -66,7 +66,9 @@ impl FavoritesEmptyState {
 
     pub(crate) fn message(self) -> &'static str {
         match self {
-            Self::NoFavoritesYet => "No favorites yet \u{00b7} Star scripts from the actions menu (Cmd+K)",
+            Self::NoFavoritesYet => {
+                "No favorites yet \u{00b7} Star scripts from the actions menu (Cmd+K)"
+            }
             Self::NoFilteredMatches => "No favorites match your filter",
         }
     }
@@ -173,21 +175,12 @@ impl ScriptListApp {
         selected_index: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let tokens = get_tokens(self.current_design);
-        let design_spacing = tokens.spacing();
-        let design_typography = tokens.typography();
-        let design_visual = tokens.visual();
         let color_resolver =
             crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
         let typography_resolver =
             crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design);
         let empty_text_color = color_resolver.empty_text_color();
         let empty_font_family = typography_resolver.primary_font().to_string();
-        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
-
-        let text_primary = self.theme.colors.text.primary;
-        let text_dimmed = self.theme.colors.text.dimmed;
-        let text_muted = self.theme.colors.text.muted;
 
         // Load favorites and resolve to script/scriptlet names
         let favorites = script_kit_gpui::favorites::load_favorites().unwrap_or_default();
@@ -280,8 +273,8 @@ impl ScriptListApp {
             .collect();
 
         let list_element: AnyElement = if count == 0 {
-            let state = FavoritesEmptyState::from_filter(&filter);
-            crate::list_item::EmptyState::new(state.message(), empty_text_color, &empty_font_family)
+            let message = FavoritesEmptyState::from_filter(&filter).message();
+            crate::list_item::EmptyState::new(message, empty_text_color, &empty_font_family)
                 .icon(crate::designs::icon_variations::IconName::Star)
                 .into_element()
         } else {
@@ -294,71 +287,23 @@ impl ScriptListApp {
                 .into_any_element()
         };
 
-        let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
+        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+            vec![
+                gpui::SharedString::from("↵ Run"),
+                gpui::SharedString::from("U Move Up"),
+                gpui::SharedString::from("J Move Down"),
+                gpui::SharedString::from("D Remove"),
+                gpui::SharedString::from("Esc Back"),
+            ],
+            None,
+        ));
 
-        div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .h_full()
-            .rounded(px(design_visual.radius_lg))
-            .bg(rgba(chrome.panel_surface_rgba))
-            .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
-            .child(
-                div()
-                    .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
-                    .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_3()
-                    .child(
-                        div().flex_1().child(
-                            Input::new(&self.gpui_input_state)
-                                .w_full()
-                                .h(px(input_height))
-                                .px(px(0.))
-                                .py(px(0.))
-                                .with_size(Size::Size(px(design_typography.font_size_xl)))
-                                .appearance(false)
-                                .bordered(false)
-                                .focus_bordered(false),
-                        ),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(design_typography.font_size_sm))
-                            .text_color(rgb(text_dimmed))
-                            .child(format!("{} favorites", count)),
-                    ),
-            )
-            .child(div().w_full().h(px(1.)).bg(rgb(self.theme.colors.ui.border)))
-            .child(div().flex_1().w_full().min_h(px(0.)).child(list_element))
-            .child(
-                div()
-                    .w_full()
-                    .h(px(1.))
-                    .bg(rgb(self.theme.colors.ui.border)),
-            )
-            .when_some(
-                self.main_window_footer_slot(
-                    div()
-                    .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_sm))
-                    .text_size(px(design_typography.font_size_xs))
-                    .text_color(rgb(text_muted))
-                    .child(
-                        "\u{21b5} Run \u{00b7} U Move Up \u{00b7} J Move Down \u{00b7} D Remove from Favorites \u{00b7} Esc Back",
-                    )
-                    .into_any_element(),
-                ),
-                |d, footer| d.child(footer),
-            )
-            .into_any_element()
+        self.render_generic_filterable_search_surface(
+            "favorites",
+            format!("{} favorites", count),
+            list_element,
+            footer,
+        )
     }
 
     /// Run a favorite script by its ID (script name).
@@ -455,7 +400,9 @@ impl ScriptListApp {
             return Err(action.missing_favorite_message(&id));
         };
         if original_index == 0 {
-            return Ok(action.boundary_message(&id).expect("MoveUp has a boundary message"));
+            return Ok(action
+                .boundary_message(&id)
+                .expect("MoveUp has a boundary message"));
         }
 
         tracing::info!(
@@ -463,8 +410,7 @@ impl ScriptListApp {
             action = "favorite_move_up",
             "Moving favorite up"
         );
-        script_kit_gpui::favorites::move_favorite_up(&id)
-            .map_err(|e| action.failure_message(e))?;
+        script_kit_gpui::favorites::move_favorite_up(&id).map_err(|e| action.failure_message(e))?;
         if let AppView::FavoritesBrowseView { selected_index, .. } = &mut self.current_view {
             *selected_index = selected_index.saturating_sub(1);
         }
@@ -485,7 +431,9 @@ impl ScriptListApp {
             return Err(action.missing_favorite_message(&id));
         };
         if original_index + 1 >= favorites.script_ids.len() {
-            return Ok(action.boundary_message(&id).expect("MoveDown has a boundary message"));
+            return Ok(action
+                .boundary_message(&id)
+                .expect("MoveDown has a boundary message"));
         }
 
         tracing::info!(

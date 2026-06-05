@@ -193,7 +193,7 @@ fn focused_text_mini_initial_state_is_input_only_without_native_footer() {
         "acp_footer_hidden",
         "visible: bool",
         "FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY",
-        "ViewType::FocusedTextMini, 0",
+        "crate::window_resize::ViewType::FocusedTextMini",
     ] {
         assert!(
             ACP_VIEW.contains(required)
@@ -214,6 +214,10 @@ fn focused_text_mini_has_four_sizing_phases() {
         "FocusedTextMiniPhase::Loading",
         "FocusedTextMiniPhase::Streaming",
         "FocusedTextMiniPhase::Result",
+        "FocusedTextMiniPhase::Error",
+        "FOCUSED_TEXT_MINI_SIZE_VARIATIONS",
+        "let has_variations = !self.focused_text_variations.is_empty();",
+        "FocusedTextMiniPhase::Loading if has_variations => Some(result_size + scope_extra)",
     ] {
         assert!(
             ACP_VIEW.contains(required),
@@ -221,13 +225,14 @@ fn focused_text_mini_has_four_sizing_phases() {
         );
     }
     assert!(
-        ACP_VIEW
-            .contains("FocusedTextMiniPhase::Loading => Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY)"),
-        "loading focused-text mini should keep the compact input-only size before assistant output"
+        ACP_VIEW.contains(
+            "FocusedTextMiniPhase::Loading => Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY + scope_extra)"
+        ),
+        "loading focused-text mini without variations should keep the compact input-only size before assistant output"
     );
     assert!(
-        ACP_VIEW.contains("FocusedTextMiniPhase::Streaming => Some(FOCUSED_TEXT_MINI_SIZE_RESULT)"),
-        "streaming focused-text mini should grow once assistant output is visible"
+        ACP_VIEW.contains("FocusedTextMiniPhase::Streaming => Some(result_size + scope_extra)"),
+        "streaming focused-text mini should grow once assistant output or variations are visible"
     );
     for required in [
         "FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT",
@@ -264,7 +269,7 @@ fn focused_text_mini_result_uses_shared_acp_transcript_component() {
     let mini_branch = source_between(
         ACP_VIEW,
         "if self.ui_variant == AcpChatUiVariant::FocusedTextMini {\n            let focused_phase",
-        "div()\n            .size_full()",
+        ".child(self.render_focused_text_mini(",
     );
 
     assert!(
@@ -324,9 +329,10 @@ fn focused_text_mini_window_animation_reveals_fixed_height_content() {
         "crate::window_resize::focused_text_mini_input_height()",
         "crate::window_resize::focused_text_mini_result_height()",
         "crate::window_resize::focused_text_mini_preview_height()",
+        "let content_height = if has_variation_cards {",
         "\"focused-text-mini-content\"",
-        ".h(px(mini_result_height))",
-        ".max_h(px(mini_result_height))",
+        ".h(px(content_height))",
+        ".max_h(px(content_height))",
         ".flex_none()",
         ".overflow_hidden()",
     ] {
@@ -349,7 +355,8 @@ fn focused_text_mini_window_animation_reveals_fixed_height_content() {
         !preview_block.contains(".min_h("),
         "focused-text preview viewport should use fixed height, not min-height fallback"
     );
-    assert!(render_fn.contains(".child(div().size_full().overflow_hidden().child(transcript))"));
+    assert!(render_fn.contains("content = content.child("));
+    assert!(render_fn.contains(".child(transcript)"));
 }
 
 #[test]
@@ -360,7 +367,7 @@ fn focused_text_mini_height_helpers_match_resize_contract() {
         "pub(crate) fn focused_text_mini_preview_height() -> f32",
         "FOCUSED_TEXT_MINI_RESULT_HEIGHT - FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT",
         "ViewType::FocusedTextMini => match item_count",
-        "_ => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT)",
+        "_ => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT + WINDOW_BORDER_Y)",
         "FOCUSED_TEXT_MINI_RESIZE_ANIMATE",
     ] {
         assert!(
@@ -514,24 +521,21 @@ fn focused_text_mini_escape_hides_instead_of_returning_to_main_menu() {
     assert!(
         ACP_VIEW.contains("pub(crate) fn is_focused_text_mini")
             && ACP_VIEW.contains("focused_text_originated_from_quick_prompt")
-            && ACP_VIEW.contains("focused_text_quick_prompt_escape_hide_requested")
+            && ACP_VIEW.contains("event = \"focused_text_escape_progressive\"")
             && ACP_VIEW.contains("self.trigger_close_window_requested(window, cx);"),
-        "focused-text quick-prompt Escape must request a state-first window close/hide"
+        "focused-text quick-prompt Escape must progressively unwind before requesting close/hide"
     );
     assert!(
         STARTUP.contains("acp_escape_focused_text_origin")
             && STARTUP.contains("focused_text_originated_from_quick_prompt")
-            && STARTUP.contains("this.close_acp_chat_main_window_state_first(cx);")
-            && STARTUP.contains("Interceptor: Escape -> hide focused-text quick prompt Agent Chat"),
-        "physical Escape from focused-text quick prompt origin must hide the main panel instead of restoring the launcher"
+            && STARTUP.contains("!acp_escape_focused_text_origin"),
+        "physical Escape from focused-text quick prompt origin must avoid generic streaming cancel before ACP handles the key"
     );
     assert!(
         STARTUP_NEW_ACTIONS.contains("acp_escape_focused_text_origin")
             && STARTUP_NEW_ACTIONS.contains("focused_text_originated_from_quick_prompt")
-            && STARTUP_NEW_ACTIONS.contains("this.close_acp_chat_main_window_state_first(cx);")
-            && STARTUP_NEW_ACTIONS
-                .contains("Interceptor: Escape -> hide focused-text quick prompt Agent Chat"),
-        "startup_new_actions Escape interceptor must preserve the same focused-text quick prompt hide path"
+            && STARTUP_NEW_ACTIONS.contains("!acp_escape_focused_text_origin"),
+        "startup_new_actions Escape interceptor must preserve focused-text quick prompt ACP key handling"
     );
     assert!(
         SIMULATE_KEY_DISPATCH.contains("chat.is_focused_text_mini()")

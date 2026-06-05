@@ -18,7 +18,6 @@
 
 const COLLECT_ELEMENTS: &str = include_str!("../src/app_layout/collect_elements.rs");
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn collect_visible_elements_has_browser_history_view_arm() {
     assert!(
@@ -33,7 +32,6 @@ fn collect_visible_elements_has_browser_history_view_arm() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn browser_history_arm_calls_collect_named_rows_with_browser_history_list_name() {
     assert!(
@@ -52,7 +50,6 @@ fn browser_history_arm_calls_collect_named_rows_with_browser_history_list_name()
     );
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn browser_history_arm_uses_fuzzy_search_not_raw_contains() {
     // BrowserHistoryView uses `fuzzy_search_browser_history` for its

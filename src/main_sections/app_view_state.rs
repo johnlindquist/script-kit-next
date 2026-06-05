@@ -238,6 +238,7 @@ enum AppView {
     },
     /// Managing locally installed kits (update/remove)
     InstalledKitsView {
+        filter: String,
         selected_index: usize,
         kits: Vec<script_kit_gpui::kit_store::InstalledKit>,
     },
@@ -832,6 +833,7 @@ impl AppView {
             self,
             AppView::ScriptList
                 | AppView::FileSearchView { .. }
+                | AppView::ClipboardHistoryView { .. }
                 | AppView::ProfileSearchView { .. }
                 | AppView::AcpChatView { .. }
         )

@@ -19,7 +19,6 @@ fn count_occurrences(haystack: &str, needle: &str) -> usize {
     haystack.match_indices(needle).count()
 }
 
-// doc-anchor-removed: [[removed-docs target capabilities]]
 #[test]
 fn prompt_handler_declares_batch_target_capability_owner() {
     for required in [

@@ -77,7 +77,6 @@ fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
     panic!("unterminated function body: {signature}");
 }
 
-// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn exactly_one_ensure_embedded_ai_window_true_call() {
     let count: usize = production_sources()
@@ -99,7 +98,6 @@ fn exactly_one_ensure_embedded_ai_window_true_call() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn exactly_two_ensure_embedded_ai_window_false_calls() {
     let count = SRC
@@ -114,7 +112,6 @@ fn exactly_two_ensure_embedded_ai_window_false_calls() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn shared_entry_owner_preserves_transition_order() {
     let body = function_body(
@@ -141,7 +138,6 @@ fn shared_entry_owner_preserves_transition_order() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn entry_paths_delegate_to_shared_owner() {
     let count: usize = production_sources()
@@ -179,7 +175,6 @@ fn entry_paths_delegate_to_shared_owner() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn false_calls_live_inside_both_acp_close_bodies() {
     for header in [

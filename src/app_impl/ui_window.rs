@@ -144,6 +144,9 @@ impl ScriptListApp {
             AppView::ThemeChooserView { .. } => {
                 return "Apply".to_string();
             }
+            AppView::ProfileSearchView { .. } => {
+                return "Switch Profile".to_string();
+            }
             AppView::ScriptList => {}
             _ => return "Run".to_string(),
         }
@@ -280,6 +283,9 @@ impl ScriptListApp {
                     entity.update(cx, |chat, cx| {
                         chat.open_profile_trigger_picker_in_window(window, cx);
                     });
+                } else if let AppView::QuickTerminalView { entity } = &self.current_view {
+                    let entity = entity.clone();
+                    self.open_agent_chat_with_quick_terminal_output(entity, cx);
                 } else if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |prompt, cx| prompt.next_input(cx));
@@ -611,17 +617,26 @@ impl ScriptListApp {
         self.tab_ai_harness_apply_back_route.is_some() && self.tab_ai_harness_return_view.is_some()
     }
 
+    pub(crate) fn quick_terminal_can_attach_to_agent_chat(&self) -> bool {
+        matches!(self.current_view, AppView::QuickTerminalView { .. })
+            && !self.quick_terminal_can_apply_back()
+    }
+
     fn quick_terminal_footer_buttons(&self) -> Vec<crate::footer_popup::FooterButtonConfig> {
         use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
         let footer_disabled = self.main_window_footer_buttons_blocked();
         let enabled = !footer_disabled;
         let can_apply = self.quick_terminal_can_apply_back();
+        let can_attach_to_agent = self.quick_terminal_can_attach_to_agent_chat();
 
-        let mut buttons = Vec::with_capacity(if can_apply { 2 } else { 1 });
+        let mut buttons = Vec::with_capacity(if can_apply || can_attach_to_agent { 2 } else { 1 });
         if can_apply {
             buttons
                 .push(FooterButtonConfig::new(FooterAction::Apply, "⌘↩", "Apply").enabled(enabled));
+        } else if can_attach_to_agent {
+            buttons
+                .push(FooterButtonConfig::new(FooterAction::Ai, "⌘↩", "Agent").enabled(enabled));
         }
         buttons.push(FooterButtonConfig::new(FooterAction::Close, "⌘W", "Close").enabled(enabled));
 
@@ -629,6 +644,7 @@ impl ScriptListApp {
             target: "script_kit::footer_popup",
             event = "quick_terminal_footer_buttons_resolved",
             can_apply,
+            can_attach_to_agent,
             footer_disabled,
             button_count = buttons.len(),
             "Resolved quick-terminal native footer buttons"
@@ -914,6 +930,7 @@ impl ScriptListApp {
         }
 
         if let AppView::InstalledKitsView {
+            filter,
             selected_index,
             kits,
             ..
@@ -922,10 +939,12 @@ impl ScriptListApp {
             use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
             let footer_disabled = self.main_window_footer_buttons_blocked();
-            let enabled = !footer_disabled && kits.get(*selected_index).is_some();
+            let enabled = !footer_disabled
+                && Self::kit_store_installed_selected_visible_kit(kits, filter, *selected_index)
+                    .is_some();
             let buttons = vec![
                 FooterButtonConfig::new(FooterAction::Run, "↵", "Update").enabled(enabled),
-                FooterButtonConfig::new(FooterAction::Apply, "⌫", "Remove").enabled(enabled),
+                FooterButtonConfig::new(FooterAction::Apply, "⌦", "Remove").enabled(enabled),
             ];
             tracing::info!(
                 target: "script_kit::footer_popup",
@@ -1524,7 +1543,10 @@ impl ScriptListApp {
             }
             AppView::NamingPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
             AppView::BrowseKitsView { results, .. } => Some((ViewType::MainWindow, results.len())),
-            AppView::InstalledKitsView { kits, .. } => Some((ViewType::MainWindow, kits.len())),
+            AppView::InstalledKitsView { filter, kits, .. } => Some((
+                ViewType::MainWindow,
+                Self::kit_store_installed_visible_rows(kits, filter).len(),
+            )),
             AppView::SearchAiPresetsView { .. } => {
                 // Presets list - defaults (5) + user presets
                 let count = crate::ai::presets::load_presets()

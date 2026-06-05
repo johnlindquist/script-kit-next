@@ -51,7 +51,7 @@ fn simulate_key_dispatchers_route_cmd_enter_in_scriptlist_to_acp_context_capture
 
     let arm_body: String = CANONICAL_SIMULATEKEY[anchor_idx..]
         .lines()
-        .take(60)
+        .take(90)
         .collect::<Vec<_>>()
         .join("\n");
 

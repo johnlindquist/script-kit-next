@@ -38,6 +38,7 @@ const EXPECTED_STATE_RESULT_FIELDS: &[&str] = &[
     "path_state",
     "notes_state",
     "dictation_state",
+    "ghost_prediction",
 ];
 
 fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a str {
@@ -88,7 +89,6 @@ fn forwarded_field_names(source: &str) -> Vec<String> {
         .collect()
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn state_result_constructor_signature_and_forwarding_match_variant_field_order() {
     let variant = source_between(

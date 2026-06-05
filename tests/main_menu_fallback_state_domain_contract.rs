@@ -22,7 +22,6 @@ fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a st
     &source[start..start + end_rel]
 }
 
-// doc-anchor-removed: [[removed-docs State Domains]]
 #[test]
 fn fallback_state_has_a_named_domain_owner() {
     let fallback_body = source_between(

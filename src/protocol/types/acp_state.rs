@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Schema version for the ACP state response envelope.
-pub const ACP_STATE_SCHEMA_VERSION: u32 = 2;
+pub const ACP_STATE_SCHEMA_VERSION: u32 = 3;
 
 /// Resolved automation target echoed back in ACP state/probe responses.
 ///
@@ -67,6 +67,10 @@ pub struct AcpStateSnapshot {
     /// Picker state (None when picker is closed).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub picker: Option<AcpPickerState>,
+
+    /// Redacted ACP Spine list state when the composer grammar owns rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spine: Option<AcpSpineSnapshot>,
 
     /// The most recently accepted picker item, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -133,6 +137,7 @@ impl Default for AcpStateSnapshot {
             message_count: 0,
             awaiting_first_assistant_text: false,
             picker: None,
+            spine: None,
             last_accepted_item: None,
             context_chip_count: 0,
             context_summary: None,
@@ -221,6 +226,24 @@ pub struct AcpPickerState {
     /// Label of the currently highlighted item (if any).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_label: Option<String>,
+}
+
+/// Redacted state of the ACP Spine rows that replace the legacy picker list.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpSpineSnapshot {
+    pub owns_list: bool,
+    pub active_segment_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subsearch_source: Option<String>,
+    pub row_count: usize,
+    pub selectable_row_count: usize,
+    pub selected_index: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub row_fingerprint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_row_fingerprint: Option<String>,
+    pub refresh_elapsed_ms: u64,
 }
 
 /// Metadata about the most recently accepted picker item.
@@ -581,6 +604,7 @@ mod tests {
         assert_eq!(json["cursorIndex"], 0);
         assert!(!json["hasSelection"].as_bool().unwrap_or(true));
         assert!(json["picker"].is_null());
+        assert!(json["spine"].is_null());
         assert!(json["lastAcceptedItem"].is_null());
 
         let back: AcpStateSnapshot =
@@ -609,6 +633,70 @@ mod tests {
 
         let back: AcpStateSnapshot = serde_json::from_value(json).expect("deserialize with picker");
         assert_eq!(back, snap);
+    }
+
+    #[test]
+    fn acp_spine_snapshot_round_trips() {
+        let state = AcpSpineSnapshot {
+            owns_list: true,
+            active_segment_kind: "contextMention".to_string(),
+            subsearch_source: Some("file".to_string()),
+            row_count: 10,
+            selectable_row_count: 9,
+            selected_index: 1,
+            row_fingerprint: Some("fnv1a64:0000000000000001".to_string()),
+            selected_row_fingerprint: Some("fnv1a64:0000000000000002".to_string()),
+            refresh_elapsed_ms: 7,
+        };
+        let json = serde_json::to_value(&state).expect("serialize spine state");
+        assert_eq!(json["ownsList"], true);
+        assert_eq!(json["activeSegmentKind"], "contextMention");
+        assert_eq!(json["subsearchSource"], "file");
+        assert_eq!(json["rowCount"], 10);
+        assert_eq!(json["selectableRowCount"], 9);
+        assert_eq!(json["selectedIndex"], 1);
+        assert_eq!(json["rowFingerprint"], "fnv1a64:0000000000000001");
+        assert_eq!(json["selectedRowFingerprint"], "fnv1a64:0000000000000002");
+        assert_eq!(json["refreshElapsedMs"], 7);
+
+        let back: AcpSpineSnapshot = serde_json::from_value(json).expect("deserialize spine state");
+        assert_eq!(back, state);
+    }
+
+    #[test]
+    fn acp_state_snapshot_with_spine_round_trips() {
+        let snap = AcpStateSnapshot {
+            spine: Some(AcpSpineSnapshot {
+                owns_list: true,
+                active_segment_kind: "contextMention".to_string(),
+                subsearch_source: Some("clipboard".to_string()),
+                row_count: 4,
+                selectable_row_count: 3,
+                selected_index: 0,
+                row_fingerprint: Some("fnv1a64:0000000000000003".to_string()),
+                selected_row_fingerprint: Some("fnv1a64:0000000000000004".to_string()),
+                refresh_elapsed_ms: 0,
+            }),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&snap).expect("serialize with spine");
+        assert!(json["spine"].is_object());
+        assert_eq!(json["spine"]["ownsList"], true);
+        assert_eq!(json["spine"]["subsearchSource"], "clipboard");
+        assert!(json["spine"]["rowFingerprint"].is_string());
+
+        let back: AcpStateSnapshot = serde_json::from_value(json).expect("deserialize with spine");
+        assert_eq!(back, snap);
+    }
+
+    #[test]
+    fn acp_state_snapshot_default_omits_spine() {
+        let snap = AcpStateSnapshot::default();
+        let json = serde_json::to_value(&snap).expect("serialize");
+        assert!(
+            json.get("spine").is_none(),
+            "spine should be omitted when None"
+        );
     }
 
     #[test]
@@ -867,6 +955,17 @@ mod tests {
             message_count: 3,
             awaiting_first_assistant_text: true,
             picker: None,
+            spine: Some(AcpSpineSnapshot {
+                owns_list: true,
+                active_segment_kind: "contextMention".to_string(),
+                subsearch_source: Some("file".to_string()),
+                row_count: 2,
+                selectable_row_count: 2,
+                selected_index: 0,
+                row_fingerprint: Some("fnv1a64:0000000000000005".to_string()),
+                selected_row_fingerprint: Some("fnv1a64:0000000000000006".to_string()),
+                refresh_elapsed_ms: 1,
+            }),
             last_accepted_item: Some(AcpAcceptedItem {
                 label: "context".to_string(),
                 id: "built_in:context".to_string(),
@@ -902,6 +1001,9 @@ mod tests {
         assert!(parsed["messageCount"].is_number());
         assert_eq!(parsed["awaitingFirstAssistantText"], true);
         assert!(parsed["lastAcceptedItem"].is_object());
+        assert!(parsed["spine"].is_object());
+        assert_eq!(parsed["spine"]["ownsList"], true);
+        assert!(parsed["spine"]["rowFingerprint"].is_string());
         assert!(parsed["contextChipCount"].is_number());
         assert_eq!(parsed["contextSummary"], "context");
         assert_eq!(parsed["dictationPhase"], "recording");

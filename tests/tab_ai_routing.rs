@@ -38,23 +38,17 @@ fn source_block_after<'a>(source: &'a str, needle: &str, len: usize) -> &'a str 
 // =========================================================================
 
 #[test]
-fn plain_tab_agent_chat_entry_is_deprecated_and_global_cmd_enter_bails_when_portal_open() {
+fn plain_tab_agent_chat_entry_is_removed_and_global_cmd_enter_bails_when_portal_open() {
     // Regression: when an attachment portal (e.g. `@` mention → file /
     // script / scriptlet / skill search) is open, the visible surface
     // reuses `AppView::ScriptList`. Plain Tab is no longer an Agent Chat
     // entry at all, and global Cmd+Enter must still refuse portal submits.
 
-    let plain_tab_fn = TAB_AI_MODE_SOURCE
-        .find("Deprecated plain-Tab Agent Chat entry shim")
-        .expect("plain tab helper docs must exist");
-    let plain_tab_body = &TAB_AI_MODE_SOURCE
-        [plain_tab_fn..plain_tab_fn + 1500.min(TAB_AI_MODE_SOURCE.len() - plain_tab_fn)];
     assert!(
-        plain_tab_body.contains("agent_chat_plain_tab_entry_deprecated")
-            && plain_tab_body.contains("false")
-            && !plain_tab_body.contains("AcpEntryOrigin::LauncherTab")
-            && !plain_tab_body.contains("tab_ai_plain_tab_routed_to_acp"),
-        "Plain Tab helper must be a deprecated no-op and must not launch Agent Chat"
+        !TAB_AI_MODE_SOURCE.contains("try_route_plain_tab_to_acp_context_capture")
+            && !TAB_AI_MODE_SOURCE.contains("agent_chat_plain_tab_entry_deprecated")
+            && !TAB_AI_MODE_SOURCE.contains("tab_ai_plain_tab_routed_to_acp"),
+        "Plain Tab must not keep an Agent Chat route, shim, or telemetry marker"
     );
 
     let cmd_enter_fn = TAB_AI_MODE_SOURCE
@@ -97,6 +91,55 @@ fn global_cmd_enter_spine_probe_falls_through_to_agent_chat_route() {
 }
 
 #[test]
+fn quick_terminal_output_routes_through_text_block_context_part() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("quick_terminal_context_part_from_entity")
+            && TAB_AI_MODE_SOURCE.contains("AiContextPart::TextBlock")
+            && TAB_AI_MODE_SOURCE.contains("text/x-terminal-transcript")
+            && TAB_AI_MODE_SOURCE
+                .contains("open_tab_ai_acp_with_context_part(part, \"quick_terminal_output\""),
+        "Quick Terminal output must attach to ACP as a TextBlock via the existing context-part handoff"
+    );
+}
+
+#[test]
+fn terminal_context_picker_portal_opens_quick_terminal() {
+    let picker_source = include_str!("../src/ai/window/context_picker/mod.rs");
+    let attachment_portal_source = include_str!("../src/app_impl/attachment_portal.rs");
+    assert!(
+        picker_source.contains("PortalKind::Terminal")
+            && picker_source.contains("label: \"@terminal\"")
+            && picker_source.contains("match_terms: &[\"terminal\""),
+        "@Terminal must be offered by the @ context picker as a portal option"
+    );
+    assert!(
+        attachment_portal_source.contains("PortalKind::Terminal =>")
+            && attachment_portal_source.contains("self.open_quick_terminal(None, cx);"),
+        "Terminal portal selection must open the Quick Terminal workflow"
+    );
+}
+
+#[test]
+fn quick_terminal_cmd_enter_does_not_add_new_acp_surface_mutation_path() {
+    let handoff = source_block_after(
+        TAB_AI_MODE_SOURCE,
+        "pub(crate) fn open_agent_chat_with_quick_terminal_output",
+        2200,
+    );
+    for forbidden in [
+        "self.current_view = AppView::AcpChatView",
+        "ensure_embedded_ai_window(",
+        "transition_acp_surface(",
+        "thread.add_context_part",
+    ] {
+        assert!(
+            !handoff.contains(forbidden),
+            "Quick Terminal handoff must not bypass ACP entry/context helpers: {forbidden}"
+        );
+    }
+}
+
+#[test]
 fn pi_warmup_branch_opens_visible_chat_instead_of_warming_setup() {
     let launch_body = source_block_after(
         TAB_AI_ACP_LAUNCH_SOURCE,
@@ -119,30 +162,6 @@ fn pi_warmup_branch_opens_visible_chat_instead_of_warming_setup() {
     assert!(
         !launch_body.contains("Starting Pi Agent Chat. Try again in a moment."),
         "Ordinary Empty/Preparing warm misses must not toast a retry-only waiting state"
-    );
-}
-
-#[test]
-fn deprecated_plain_tab_helper_never_opens_agent_chat() {
-    let plain_tab_fn = TAB_AI_MODE_SOURCE
-        .find("Deprecated plain-Tab Agent Chat entry shim")
-        .expect("plain tab helper docs must exist");
-    let plain_tab_body = &TAB_AI_MODE_SOURCE
-        [plain_tab_fn..plain_tab_fn + 1500.min(TAB_AI_MODE_SOURCE.len() - plain_tab_fn)];
-    assert!(
-        plain_tab_body.contains("Command+Enter is the canonical Agent Chat entry"),
-        "plain Tab helper must document the Command+Enter replacement"
-    );
-    assert!(
-        !plain_tab_body.contains("open_acp_chat_from_entry_request")
-            && !plain_tab_body.contains("submit_input(cx)")
-            && !plain_tab_body.contains("AutoSubmitFirstTurn"),
-        "plain Tab helper must not open or submit Agent Chat"
-    );
-
-    assert!(
-        plain_tab_body.contains("false"),
-        "plain Tab helper must return false so ScriptList can keep local Tab behavior"
     );
 }
 
@@ -1058,38 +1077,6 @@ fn prewarm_does_not_switch_view() {
 // =========================================================================
 
 #[test]
-fn open_path_reuses_fresh_prewarm_once() {
-    // First explicit Tab after a silent prewarm reuses the warm PTY once;
-    // subsequent opens force a fresh session via !reuse_fresh_prewarm.
-    let open_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_harness_terminal_from_request(")
-        .expect("open_tab_ai_harness_terminal_from_request must exist");
-    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
-    let next_fn = open_fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(open_fn_body.len());
-    let open_fn_body = &open_fn_body[..next_fn];
-
-    assert!(
-        open_fn_body.contains("is_fresh_prewarm"),
-        "open path must check for a fresh silently-prewarmed session"
-    );
-    assert!(
-        open_fn_body.contains("mark_consumed"),
-        "open path must consume a fresh prewarm exactly once"
-    );
-    assert!(
-        open_fn_body.contains("!reuse_fresh_prewarm"),
-        "open path must pass !reuse_fresh_prewarm to ensure_tab_ai_harness_terminal"
-    );
-    // FreshPrewarm is used by both the prewarm and open paths.
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("FreshPrewarm"),
-        "tab ai lifecycle must distinguish prewarmed sessions"
-    );
-}
-
-#[test]
 fn prewarm_tags_cold_start_as_fresh_prewarm() {
     // After a cold-start prewarm, the session must be tagged FreshPrewarm.
     // The logic lives in warm_tab_ai_harness_silently.
@@ -1110,33 +1097,6 @@ fn prewarm_tags_cold_start_as_fresh_prewarm() {
     assert!(
         warm_fn_body.contains("was_cold_start"),
         "prewarm must only tag FreshPrewarm when was_cold_start is true"
-    );
-}
-
-#[test]
-fn open_path_reuses_fresh_prewarm_once_then_forces_fresh() {
-    // First explicit Tab after a silent prewarm reuses the warm PTY once;
-    // subsequent opens force a fresh session.
-    let open_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_harness_terminal_from_request(")
-        .expect("open_tab_ai_harness_terminal_from_request must exist");
-    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
-    let next_fn = open_fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(open_fn_body.len());
-    let open_fn_body = &open_fn_body[..next_fn];
-
-    assert!(
-        open_fn_body.contains("is_fresh_prewarm"),
-        "open path must check for a fresh silently-prewarmed session"
-    );
-    assert!(
-        open_fn_body.contains("mark_consumed"),
-        "open path must consume a fresh prewarm exactly once"
-    );
-    assert!(
-        open_fn_body.contains("!reuse_fresh_prewarm"),
-        "open path must pass !reuse_fresh_prewarm to ensure_tab_ai_harness_terminal"
     );
 }
 
@@ -1724,18 +1684,24 @@ fn smoke_matrix_intent_appends_for_all_backends() {
 }
 
 // =========================================================================
-// Footer hint strip: QuickTerminalView shows only "⌘W Close"
+// Footer hint strip: QuickTerminalView distinguishes close-only and apply-back
 // =========================================================================
 
 #[test]
-fn quick_terminal_footer_shows_only_cmd_w_close() {
+fn quick_terminal_footer_distinguishes_close_only_and_apply_back_states() {
     assert!(
-        TERM_RENDER_SOURCE.contains("⌘W Close"),
-        "QuickTerminalView footer hint strip must show '⌘W Close'"
+        TERM_RENDER_SOURCE.contains("fn terminal_return_hint_label(return_view: Option<&AppView>)")
+            && TERM_RENDER_SOURCE.contains("None => \"⌘W Close\""),
+        "QuickTerminalView without a return target must advertise close-only footer copy"
     );
-    // Must use render_simple_hint_strip for minimal chrome
     assert!(
-        TERM_RENDER_SOURCE.contains("render_simple_hint_strip"),
+        TERM_RENDER_SOURCE
+            .contains("let can_apply_back = route.is_some() && return_view.is_some();")
+            && TERM_RENDER_SOURCE.contains("items.push(\"⌘↩ Apply\".to_string());"),
+        "QuickTerminalView with an apply-back route and return target must advertise Apply"
+    );
+    assert!(
+        TERM_RENDER_SOURCE.contains("render_simple_hint_strip(items.join(\" · \"), leading)"),
         "QuickTerminalView footer must use render_simple_hint_strip for minimal chrome"
     );
 }
@@ -1769,99 +1735,6 @@ fn close_harness_terminal_guards_current_view() {
 }
 
 // =========================================================================
-// Legacy-removal guard: TabAiChat must not reappear in changed surfaces
-// =========================================================================
-
-#[test]
-fn legacy_tab_ai_chat_not_in_primary_entry_path() {
-    // The primary Tab AI entry functions must not reference TabAiChat.
-    // If TabAiChat silently comes back in these surfaces, the harness terminal
-    // contract is broken.
-
-    // open_tab_ai_chat: the public entry point
-    let open_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_chat(")
-        .expect("open_tab_ai_chat must exist");
-    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
-    let next_fn = open_fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(open_fn_body.len());
-    let open_fn_body = &open_fn_body[..next_fn];
-    assert!(
-        !open_fn_body.contains("TabAiChat"),
-        "open_tab_ai_chat must not reference TabAiChat — harness terminal is primary"
-    );
-
-    // open_tab_ai_harness_terminal: the harness launcher
-    let harness_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_harness_terminal_from_request(")
-        .expect("open_tab_ai_harness_terminal_from_request must exist");
-    let harness_fn_body = &TAB_AI_MODE_SOURCE[harness_fn_start..];
-    let next_fn = harness_fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(harness_fn_body.len());
-    let harness_fn_body = &harness_fn_body[..next_fn];
-    assert!(
-        !harness_fn_body.contains("TabAiChat"),
-        "open_tab_ai_harness_terminal_from_request must not reference TabAiChat"
-    );
-
-    // close_tab_ai_harness_terminal: the close handler
-    let close_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn close_tab_ai_harness_terminal(")
-        .expect("close_tab_ai_harness_terminal must exist");
-    let close_fn_body = &TAB_AI_MODE_SOURCE[close_fn_start..];
-    let next_fn = close_fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(close_fn_body.len());
-    let close_fn_body = &close_fn_body[..next_fn];
-    assert!(
-        !close_fn_body.contains("TabAiChat"),
-        "close_tab_ai_harness_terminal must not reference TabAiChat"
-    );
-}
-
-#[test]
-fn legacy_tab_ai_chat_not_in_startup_tab_handler() {
-    // The Tab interceptor in startup.rs must not route to TabAiChat.
-    assert!(
-        !TAB_SOURCE.contains("TabAiChat"),
-        "startup.rs Tab handler must not reference TabAiChat — harness terminal is primary"
-    );
-}
-
-#[test]
-fn legacy_tab_ai_chat_not_in_script_list_tab_handler() {
-    // ScriptList Tab handler must not route to TabAiChat.
-    assert!(
-        !SCRIPT_LIST_SOURCE.contains("TabAiChat"),
-        "ScriptList Tab handler must not reference TabAiChat"
-    );
-}
-
-#[test]
-fn legacy_tab_ai_chat_not_in_term_render() {
-    // The QuickTerminalView renderer must not reference TabAiChat.
-    assert!(
-        !TERM_RENDER_SOURCE.contains("TabAiChat"),
-        "render_prompts/term.rs must not reference TabAiChat"
-    );
-}
-
-#[test]
-fn legacy_inline_chat_not_reexported_from_ai_mod() {
-    // TabAiChat should NOT be re-exported from the ai module's public surface.
-    // It may still exist internally but must not be discoverable via pub use.
-    let has_tab_ai_chat_reexport = AI_MOD_SOURCE
-        .lines()
-        .any(|line| line.contains("pub use") && line.contains("TabAiChat"));
-    assert!(
-        !has_tab_ai_chat_reexport,
-        "ai/mod.rs must not re-export TabAiChat in its public API"
-    );
-}
-
-// =========================================================================
 // Consolidated legacy inline-chat regression guard
 // =========================================================================
 //
@@ -1873,7 +1746,7 @@ fn legacy_inline_chat_not_reexported_from_ai_mod() {
 fn legacy_inline_chat_absent_from_all_changed_harness_surfaces() {
     // Every source constant that represents a harness-entry surface must be
     // free of legacy inline-chat references. This is the single authoritative
-    // guard — the per-file tests above are fine-grained; this one is the safety net.
+    // guard for the changed harness-entry surfaces.
     let surfaces: &[(&str, &str)] = &[
         ("startup.rs (Tab interceptor)", TAB_SOURCE),
         ("tab_ai_mode.rs (orchestration)", TAB_AI_MODE_SOURCE),
@@ -1887,11 +1760,12 @@ fn legacy_inline_chat_absent_from_all_changed_harness_surfaces() {
         ),
         ("app_view_state.rs (view enum)", APP_VIEW_STATE_SOURCE),
         ("app_state.rs (shared state)", APP_STATE_SOURCE),
+        ("ai/mod.rs (public AI module)", AI_MOD_SOURCE),
     ];
 
     let legacy_markers = &[
+        "TabAiChat",
         "open_tab_ai_full_view_chat",
-        "TabAiChat::new",
         "open_tab_ai_overlay",
         "render_tab_ai_overlay",
     ];
@@ -1905,29 +1779,6 @@ fn legacy_inline_chat_absent_from_all_changed_harness_surfaces() {
             );
         }
     }
-}
-
-#[test]
-fn legacy_tab_ai_chat_not_in_app_view_state() {
-    // AppView enum and related types must not route to TabAiChat.
-    // TabAiChat is an entity for the legacy inline chat — the harness terminal
-    // uses TermPrompt/QuickTerminalView instead.
-    assert!(
-        !APP_VIEW_STATE_SOURCE.contains("TabAiChat"),
-        "app_view_state.rs must not reference TabAiChat — \
-         QuickTerminalView is the Tab AI view variant"
-    );
-}
-
-#[test]
-fn legacy_tab_ai_chat_not_in_app_state() {
-    // Shared app state must not hold TabAiChat references.
-    // The harness uses TabAiHarnessSessionState instead.
-    assert!(
-        !APP_STATE_SOURCE.contains("TabAiChat"),
-        "app_state.rs must not reference TabAiChat — \
-         tab_ai_harness is the session state field"
-    );
 }
 
 // =========================================================================
@@ -2016,52 +1867,6 @@ fn legacy_ai_window_commands_route_to_harness() {
     assert!(
         !ai_block.contains("clear_all_chats"),
         "AI command block must not call legacy clear_all_chats"
-    );
-}
-
-#[test]
-fn legacy_ai_window_builtins_removed_from_registration() {
-    // OpenAi, MiniAi, NewConversation must not appear as registered builtins.
-    // Scope the search to the get_builtin_entries function body so we don't
-    // false-positive on the string appearing inside test assertions.
-    let fn_start = BUILTINS_SOURCE
-        .find("pub fn get_builtin_entries(")
-        .expect("get_builtin_entries must exist");
-    let fn_body = &BUILTINS_SOURCE[fn_start..];
-    let fn_end = fn_body.find("\n#[cfg(test)]").unwrap_or(fn_body.len());
-    let registration_section = &fn_body[..fn_end];
-
-    for legacy_id in [
-        "builtin/open-ai-chat",
-        "builtin/mini-ai-chat",
-        "builtin/new-conversation",
-        "builtin/clear-conversation",
-    ] {
-        assert!(
-            !registration_section.contains(legacy_id),
-            "{legacy_id} should be removed from get_builtin_entries registration"
-        );
-    }
-}
-
-#[test]
-fn generate_script_and_send_builtins_still_registered() {
-    // These builtins remain registered (but route to harness now).
-    assert!(
-        BUILTINS_SOURCE.contains("\"builtin/generate-script-with-ai\""),
-        "builtin/generate-script-with-ai should still be registered"
-    );
-    assert!(
-        BUILTINS_SOURCE.contains("\"builtin/generate-script-from-current-app\""),
-        "builtin/generate-script-from-current-app should still be registered"
-    );
-    assert!(
-        BUILTINS_SOURCE.contains("\"builtin/send-screen-to-ai\""),
-        "builtin/send-screen-to-ai should still be registered"
-    );
-    assert!(
-        BUILTINS_SOURCE.contains("\"builtin/send-selected-text-to-ai\""),
-        "builtin/send-selected-text-to-ai should still be registered"
     );
 }
 
@@ -2309,10 +2114,15 @@ fn tab_ai_harness_tracks_apply_back_route_state() {
 
 #[test]
 fn quick_terminal_cmd_enter_routes_to_apply_back() {
+    let dispatcher = source_block_after(
+        TAB_AI_MODE_SOURCE,
+        "pub(crate) fn dispatch_quick_terminal_cmd_enter",
+        900,
+    );
     assert!(
-        TERM_RENDER_SOURCE.contains("if !this.quick_terminal_can_apply_back()")
-            && TERM_RENDER_SOURCE
-                .contains("this.apply_tab_ai_result_from_terminal(entity.clone(), cx);"),
+        dispatcher.contains("if self.quick_terminal_can_apply_back()")
+            && dispatcher.contains("self.apply_tab_ai_result_from_terminal(entity, cx);")
+            && dispatcher.contains("self.open_agent_chat_with_quick_terminal_output(entity, cx)"),
         "QuickTerminalView must route Cmd+Enter into apply-back only when Apply is available"
     );
 }
@@ -2771,25 +2581,6 @@ fn search_result_helper_includes_script_metadata() {
     );
 }
 
-// =========================================================================
-// SendScreenAreaToAi: removed from registration, unavailable at execution
-// =========================================================================
-
-#[test]
-fn send_screen_area_not_registered_in_builtin_entries() {
-    let fn_start = BUILTINS_SOURCE
-        .find("pub fn get_builtin_entries(")
-        .expect("get_builtin_entries must exist");
-    let fn_body = &BUILTINS_SOURCE[fn_start..];
-    let fn_end = fn_body.find("\n#[cfg(test)]").unwrap_or(fn_body.len());
-    let registration_section = &fn_body[..fn_end];
-
-    assert!(
-        !registration_section.contains("\"builtin/send-screen-area-to-ai\""),
-        "builtin/send-screen-area-to-ai must not be registered until harness attachment exists",
-    );
-}
-
 #[test]
 fn script_generation_compat_shims_documented_as_harness_only() {
     assert!(
@@ -2937,38 +2728,6 @@ fn legacy_ai_window_entries_stay_removed_while_manual_paths_stay_present() {
             "{kept_id} should remain registered",
         );
     }
-}
-
-#[test]
-fn post_close_prewarm_feeds_the_next_explicit_tab_open() {
-    let source = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
-
-    // Close path must schedule a silent prewarm.
-    let close_start = source
-        .find("fn close_tab_ai_harness_terminal(")
-        .expect("close_tab_ai_harness_terminal must exist");
-    let close_body = &source[close_start..];
-    assert!(
-        close_body.contains("schedule_tab_ai_harness_prewarm"),
-        "close path must schedule a silent prewarm"
-    );
-
-    // Next explicit Tab must check for a fresh prewarm and consume it.
-    let open_start = source
-        .find("fn open_tab_ai_harness_terminal_from_request(")
-        .expect("open_tab_ai_harness_terminal_from_request must exist");
-    let open_body = &source[open_start..];
-    let next_fn = open_body[1..].find("\n    fn ").unwrap_or(open_body.len());
-    let open_body = &open_body[..next_fn];
-
-    assert!(
-        open_body.contains("is_fresh_prewarm"),
-        "next explicit Tab must check for a fresh prewarm"
-    );
-    assert!(
-        open_body.contains("mark_consumed"),
-        "next explicit Tab must consume the prewarm once"
-    );
 }
 
 // ---------------------------------------------------------------------------

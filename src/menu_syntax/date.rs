@@ -1179,7 +1179,6 @@ mod tests {
         assert!(resolved.body.contains("tomorrow 3pm"));
     }
 
-    // doc-anchor-removed: menu-syntax Date Resolution
     #[test]
     fn spring_forward_tomorrow_3pm_uses_post_dst_offset() {
         let clock = denver("2026-03-07T12:00:00");

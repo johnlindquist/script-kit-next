@@ -10,6 +10,7 @@ const FORM_PROMPT_PATH: &str = "src/form_prompt.rs";
 const PROMPT_HANDLER_PATH: &str = "src/prompt_handler/mod.rs";
 const COLLECT_ELEMENTS_PATH: &str = "src/app_layout/collect_elements.rs";
 const STDIN_SIMULATE_KEY_PATH: &str = "src/main_entry/runtime_stdin_match_simulate_key.rs";
+const SIMULATE_KEY_DISPATCH_PATH: &str = "src/app_impl/simulate_key_dispatch.rs";
 
 #[test]
 fn fields_protocol_routes_to_real_form_prompt_state() {
@@ -102,11 +103,17 @@ fn fields_prompt_is_visible_to_state_and_elements() {
 #[test]
 fn fields_prompt_has_simulate_key_submit_cancel_navigation() {
     let stdin = read(STDIN_SIMULATE_KEY_PATH);
-    let form_arm = stdin
+    assert!(
+        stdin.contains("view.dispatch_simulate_key("),
+        "stdin simulateKey entry point must delegate to shared dispatch_simulate_key helper"
+    );
+
+    let dispatch = read(SIMULATE_KEY_DISPATCH_PATH);
+    let form_arm = dispatch
         .split("AppView::FormPrompt")
         .nth(1)
         .and_then(|rest| rest.split("AppView::EditorPrompt").next())
-        .expect("simulateKey must have a FormPrompt arm before EditorPrompt");
+        .expect("simulateKey dispatch must have a FormPrompt arm before EditorPrompt");
 
     for required in [
         "submit_validation_message",

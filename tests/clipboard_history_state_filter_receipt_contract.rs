@@ -51,7 +51,6 @@
 
 const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn clipboard_history_state_arm_destructures_variant_filter_and_selected_index() {
     // The arm must bind `filter` AND `selected_index` from the variant,
@@ -80,7 +79,6 @@ fn clipboard_history_state_arm_destructures_variant_filter_and_selected_index() 
     );
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn clipboard_history_state_arm_computes_filtered_count_from_variant_filter_case_insensitively() {
     // The narrowing computation must live inside the arm and key on the
@@ -145,7 +143,6 @@ fn clipboard_history_state_arm_computes_filtered_count_from_variant_filter_case_
     );
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn clipboard_history_state_arm_returns_dataset_len_and_filtered_count_in_correct_tuple_slots() {
     // The 6-tuple returned by the arm is destructured at

@@ -1,6 +1,5 @@
 use std::fs;
 
-// doc-anchor-removed: [[tests/permission-assistant#Permission Assistant#Passive detection does not prompt]]
 #[test]
 fn permiso_no_prompt_contract_detection_and_overlay_are_passive() {
     let detect = fs::read_to_string("src/platform/permiso_detect.rs").expect("read permiso detect");

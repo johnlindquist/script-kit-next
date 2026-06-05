@@ -154,6 +154,46 @@ fn leading_content_from_icon_kind(icon_kind: IconKind) -> LeadingContent {
     }
 }
 
+fn render_select_search_header(
+    filter_text: &str,
+    placeholder: &str,
+    multiple: bool,
+    selected_count: usize,
+    chrome: &AppChromeColors,
+) -> impl IntoElement {
+    let input_display = if filter_text.is_empty() {
+        SharedString::from(placeholder.to_string())
+    } else {
+        SharedString::from(filter_text.to_string())
+    };
+
+    div()
+        .id(gpui::ElementId::Name("input:select-filter".into()))
+        .w_full()
+        .flex()
+        .flex_row()
+        .items_center()
+        .child(
+            div()
+                .flex_1()
+                .text_size(px(16.0))
+                .text_color(if filter_text.is_empty() {
+                    rgba(chrome.placeholder_text_rgba)
+                } else {
+                    rgb(chrome.text_primary_hex)
+                })
+                .child(input_display),
+        )
+        .when(multiple, |container| {
+            container.child(
+                div()
+                    .text_xs()
+                    .text_color(rgba(chrome.text_hint_rgba))
+                    .child(format!("{} selected", selected_count)),
+            )
+        })
+}
+
 impl Focusable for SelectPrompt {
     fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
         self.focus_handle.clone()
@@ -167,7 +207,6 @@ impl Render for SelectPrompt {
         let spacing = tokens.spacing();
 
         let text_color = rgb(chrome.text_primary_hex);
-        let placeholder_color = rgba(chrome.placeholder_text_rgba);
         let hint_color = rgba(chrome.text_hint_rgba);
 
         let placeholder = self
@@ -175,38 +214,13 @@ impl Render for SelectPrompt {
             .clone()
             .unwrap_or_else(|| "Search...".to_string());
 
-        let input_display = if self.filter_text.is_empty() {
-            SharedString::from(placeholder)
-        } else {
-            SharedString::from(self.filter_text.clone())
-        };
-
-        // Search input — minimal chrome: no bg, no border, scaffold owns padding
-        let header = div()
-            .id(gpui::ElementId::Name("input:select-filter".into()))
-            .w_full()
-            .flex()
-            .flex_row()
-            .items_center()
-            .child(
-                div()
-                    .flex_1()
-                    .text_size(px(16.0))
-                    .text_color(if self.filter_text.is_empty() {
-                        placeholder_color
-                    } else {
-                        text_color
-                    })
-                    .child(input_display),
-            )
-            .when(self.multiple, |container| {
-                container.child(
-                    div()
-                        .text_xs()
-                        .text_color(hint_color)
-                        .child(format!("{} selected", self.selected.len())),
-                )
-            });
+        let header = render_select_search_header(
+            &self.filter_text,
+            &placeholder,
+            self.multiple,
+            self.selected.len(),
+            &chrome,
+        );
 
         // Choices list
         let filtered_len = self.filtered_choices.len();
@@ -506,6 +520,31 @@ mod tests {
         assert!(
             !render_code.contains("active_main_window_footer_surface()"),
             "select prompt render code should not call the global native footer state directly"
+        );
+    }
+
+    #[test]
+    fn select_prompt_search_header_is_prompt_owned_shared_chrome() {
+        let source = include_str!("render.rs");
+        let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+        let render_code = &source[..render_fn_end];
+        assert!(
+            render_code.contains("fn render_select_search_header("),
+            "select prompt search header should live behind the prompt-owned shared-header helper"
+        );
+        assert!(
+            render_code.contains("render_select_search_header("),
+            "select prompt render path should call the prompt-owned shared-header helper"
+        );
+        assert!(
+            render_code.contains(".id(gpui::ElementId::Name(\"input:select-filter\".into()))"),
+            "select prompt search header must preserve the automation input semantic id"
+        );
+        assert!(
+            !render_code.contains("render_search_input(")
+                && !render_code.contains("gpui_input_state")
+                && !render_code.contains("TextInputState"),
+            "select prompt must not borrow launcher or text-field input ownership"
         );
     }
 

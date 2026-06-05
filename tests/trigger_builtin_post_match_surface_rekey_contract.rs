@@ -10,6 +10,7 @@ const RUNTIME_STDIN_MATCH_CORE: &str =
     include_str!("../src/main_entry/runtime_stdin_match_core.rs");
 const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
+const LIFECYCLE_RESET: &str = include_str!("../src/app_impl/lifecycle_reset.rs");
 
 const DISPATCHERS: &[(&str, &str)] = &[
     (
@@ -57,7 +58,6 @@ fn compact(source: &str) -> String {
     source.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn rekey_helper_reads_post_dispatch_view_and_updates_registry() {
     let body = body_of(
@@ -80,7 +80,6 @@ fn rekey_helper_reads_post_dispatch_view_and_updates_registry() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn every_dispatcher_calls_named_rekey_after_trigger_dispatch() {
     for (src, path) in DISPATCHERS {
@@ -106,11 +105,28 @@ fn every_dispatcher_calls_named_rekey_after_trigger_dispatch() {
 
 #[test]
 fn every_dispatcher_keeps_hide_path_script_list_rekey() {
-    let hide_rekey = "crate::windows::update_automation_semantic_surface(\n                                    \"main\",\n                                    Some(\"scriptList\".to_string()),\n                                );";
     for (src, path) in DISPATCHERS {
+        let hide_start = src
+            .find("ExternalCommand::Hide { ref request_id }")
+            .unwrap_or_else(|| panic!("{path}: missing Hide arm"));
+        let hide_tail = &src[hide_start..];
+        let hide_end = hide_tail
+            .find("ExternalCommand::SetFilter")
+            .unwrap_or(hide_tail.len());
+        let hide_arm = &hide_tail[..hide_end];
         assert!(
-            src.contains(hide_rekey),
-            "{path} must keep the hide-path semanticSurface reset to scriptList"
+            hide_arm.contains("view.defer_reset_to_script_list_after_main_window_hidden("),
+            "{path} must schedule the hide-path hidden ScriptList reset"
         );
     }
+
+    let helper_start = LIFECYCLE_RESET
+        .find("pub(crate) fn reset_hidden_main_window_to_script_list(")
+        .expect("lifecycle_reset.rs must define hidden ScriptList reset helper");
+    let helper = &LIFECYCLE_RESET[helper_start..(helper_start + 900).min(LIFECYCLE_RESET.len())];
+    assert!(
+        helper.contains("self.reset_to_script_list(cx);")
+            && helper.contains("self.rekey_main_automation_surface_from_current_view();"),
+        "hide-path hidden reset helper must reset to ScriptList and re-key semanticSurface from the post-reset current view"
+    );
 }

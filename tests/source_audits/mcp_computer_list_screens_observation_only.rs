@@ -1,4 +1,3 @@
-// doc-anchor-removed: [[protocol#Protocol#Tool exposure]]
 #[test]
 fn computer_list_screens_is_observation_only_and_background_safe() {
     let mcp_tools = std::fs::read_to_string("src/mcp_computer_use_tools.rs")

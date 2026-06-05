@@ -158,6 +158,7 @@ impl ScriptListApp {
             self.refresh_agent_model_footer_labels();
             self.arm_return_to_script_list_enter_guard_from_profile_search();
             self.reset_to_script_list(cx);
+            self.refresh_agent_model_footer_labels();
         }
         cx.notify();
         persisted

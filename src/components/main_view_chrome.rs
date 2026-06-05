@@ -1,13 +1,12 @@
 use gpui::{
-    div, px, rgb, rgba, AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement,
+    div, px, rgba, AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement,
     StatefulInteractiveElement, Styled,
 };
 
-use crate::designs::{MainMenuInputTextAlignment, MainMenuThemeDef};
+use crate::designs::MainMenuThemeDef;
 
 pub(crate) const MAIN_VIEW_SHELL_ID: &str = "main-view-shell";
 pub(crate) const MAIN_VIEW_INPUT_SHELL_ID: &str = "main-view-input-shell";
-pub(crate) const MAIN_VIEW_INPUT_STATE_ICON_ID: &str = "main-view-input-state-icon";
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_CONTEXT_ZONE_ID: &str = "main-view-context-zone";
 #[allow(dead_code)]
@@ -50,7 +49,6 @@ impl MainViewContextLabels {
 
 pub(crate) struct MainViewInputChrome {
     pub(crate) body: AnyElement,
-    pub(crate) leading: Option<AnyElement>,
     pub(crate) trailing: Vec<AnyElement>,
 }
 
@@ -428,23 +426,8 @@ pub(crate) fn render_main_view_main_slot(def: MainMenuThemeDef, main: AnyElement
         .into_any_element()
 }
 
-pub(crate) fn main_view_input_text_inset_left(def: MainMenuThemeDef, has_leading: bool) -> f32 {
-    let text_column_x =
-        main_view_row_leading_x(def) + main_view_state_icon_slot_size(def) + def.row.icon_text_gap;
-    if has_leading {
-        return (text_column_x - def.shell.header_padding_x).max(def.search.text_inset_x);
-    }
-
-    match def.header_info_bar.input_text_alignment {
-        MainMenuInputTextAlignment::RowTextColumn => {
-            (main_view_row_leading_x(def) - def.shell.header_padding_x).max(def.search.text_inset_x)
-        }
-        MainMenuInputTextAlignment::SearchInset => def.search.text_inset_x,
-        MainMenuInputTextAlignment::SoftCenter => (text_column_x - def.shell.header_padding_x
-            + 28.0)
-            .max(def.search.text_inset_x)
-            .min(72.0),
-    }
+pub(crate) fn main_view_input_text_inset_left(def: MainMenuThemeDef) -> f32 {
+    def.search.text_inset_x
 }
 
 pub(crate) fn main_view_row_leading_x(def: MainMenuThemeDef) -> f32 {
@@ -468,86 +451,13 @@ pub(crate) fn main_view_content_columns(def: MainMenuThemeDef) -> MainViewColumn
     }
 }
 
-pub(crate) fn main_view_state_icon_left(def: MainMenuThemeDef) -> f32 {
-    (main_view_row_leading_x(def) - def.shell.header_padding_x).max(0.0)
-}
-
-fn main_view_state_icon_slot_size(def: MainMenuThemeDef) -> f32 {
-    def.icon.container_size.min(def.search.height).max(16.0)
-}
-
-fn main_view_state_icon_path(icon_name: &str) -> &'static str {
-    if main_view_state_icon_uses_script_kit_logo(icon_name) {
-        return concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg");
-    }
-
-    crate::designs::icon_variations::icon_name_from_str(icon_name)
-        .unwrap_or(crate::designs::icon_variations::IconName::MagnifyingGlass)
-        .external_path()
-}
-
-pub(crate) fn main_view_state_icon_uses_script_kit_logo(icon_name: &str) -> bool {
-    matches!(
-        icon_name
-            .to_lowercase()
-            .replace(['-', '_', ' '], "")
-            .as_str(),
-        "search" | "find" | "magnifyingglass"
-    )
-}
-
-#[allow(dead_code)]
-pub(crate) fn main_view_should_show_state_icon(def: MainMenuThemeDef, icon_name: &str) -> bool {
-    let _ = def;
-    !main_view_state_icon_uses_script_kit_logo(icon_name)
-}
-
-pub(crate) fn render_main_view_state_icon(
-    theme: &crate::theme::Theme,
-    def: MainMenuThemeDef,
-    icon_name: &str,
-) -> AnyElement {
-    let container_size = main_view_state_icon_slot_size(def);
-    let uses_script_kit_logo = main_view_state_icon_uses_script_kit_logo(icon_name);
-    let svg_size = if uses_script_kit_logo {
-        ((container_size - 2.0).max(18.0) * 1.1).min(container_size)
-    } else {
-        def.icon.svg_size.min(container_size - 4.0).max(12.0)
-    };
-    let icon_color = if uses_script_kit_logo {
-        theme.colors.accent.selected
-    } else {
-        theme.colors.text.muted
-    };
-    let left = main_view_state_icon_left(def);
-    let top = ((def.search.height - container_size) * 0.5).max(0.0);
-
-    div()
-        .id(MAIN_VIEW_INPUT_STATE_ICON_ID)
-        .absolute()
-        .left(px(left))
-        .top(px(top))
-        .size(px(container_size))
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(
-            gpui::svg()
-                .external_path(main_view_state_icon_path(icon_name))
-                .size(px(svg_size))
-                .text_color(rgb(icon_color)),
-        )
-        .into_any_element()
-}
-
 pub(crate) fn render_main_view_input_shell(
     theme: &crate::theme::Theme,
     def: MainMenuThemeDef,
     chrome: MainViewInputChrome,
 ) -> AnyElement {
     let search = def.search;
-    let has_leading = chrome.leading.is_some();
-    let text_inset_left = main_view_input_text_inset_left(def, has_leading);
+    let text_inset_left = main_view_input_text_inset_left(def);
 
     let mut input = div()
         .id(MAIN_VIEW_INPUT_SHELL_ID)
@@ -563,10 +473,6 @@ pub(crate) fn render_main_view_input_shell(
         .relative()
         .flex()
         .items_center();
-
-    if let Some(leading) = chrome.leading {
-        input = input.child(leading);
-    }
 
     input = input.child(
         div()

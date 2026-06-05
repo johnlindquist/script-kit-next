@@ -12,6 +12,24 @@ impl ScriptListApp {
         self.menu_syntax_object_selector_state.selected_row_id = Some(row_id);
     }
 
+    pub(crate) fn selected_menu_syntax_object_selector_row_id_from_main_list(
+        &mut self,
+    ) -> Option<String> {
+        let (grouped, flat) = self.get_grouped_results_cached();
+        let crate::list_item::GroupedListItem::Item(flat_index) =
+            grouped.get(self.selected_index)?
+        else {
+            return None;
+        };
+        let Some(crate::scripts::SearchResult::SpineProjection(row)) = flat.get(*flat_index) else {
+            return None;
+        };
+        row.id
+            .as_ref()
+            .strip_prefix("menu-syntax-object:")
+            .map(str::to_string)
+    }
+
     pub(crate) fn accept_menu_syntax_object_selector_row(
         &mut self,
         row_id: &str,
@@ -219,9 +237,14 @@ impl ScriptListApp {
         else {
             return false;
         };
-        let selected_index = self
-            .menu_syntax_object_selector_state
-            .selected_row_id
+        let selected_row_id = self
+            .selected_menu_syntax_object_selector_row_id_from_main_list()
+            .or_else(|| {
+                self.menu_syntax_object_selector_state
+                    .selected_row_id
+                    .clone()
+            });
+        let selected_index = selected_row_id
             .as_deref()
             .and_then(|id| snapshot.rows.iter().position(|row| row.id == id));
         let raw_filter_text = self.filter_text.clone();

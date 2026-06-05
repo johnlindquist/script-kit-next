@@ -1,5 +1,3 @@
-// doc-anchor-removed: [[tests#ACP Chat#Live subscription runtime]]
-
 fn read(path: &str) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
 }

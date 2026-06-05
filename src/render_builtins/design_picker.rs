@@ -20,8 +20,8 @@ impl ScriptListApp {
             .designs
             .as_ref()
             .and_then(|designs| designs.active_id.as_deref());
-        let persisted_active_id: Option<&'static str> = raw_persisted
-            .and_then(crate::designs::legacy_migration::resolve_possibly_legacy_id);
+        let persisted_active_id: Option<&'static str> =
+            raw_persisted.and_then(crate::designs::legacy_migration::resolve_possibly_legacy_id);
         let fallback_applied = match raw_persisted {
             Some(raw) => {
                 crate::designs::legacy_migration::resolve_possibly_legacy_id(raw).is_none()
@@ -169,8 +169,7 @@ impl ScriptListApp {
         } = &self.current_view
         {
             let filtered = Self::design_picker_filtered_indices(filter);
-            if let Some(id) =
-                Self::design_picker_id_for_filtered_index(&filtered, *selected_index)
+            if let Some(id) = Self::design_picker_id_for_filtered_index(&filtered, *selected_index)
             {
                 self.persist_design_picker_selection(id, "design_picker_done", cx);
             }
@@ -179,7 +178,6 @@ impl ScriptListApp {
         self.go_back_or_close(window, cx);
     }
 
-    // doc-anchor-removed: [[removed-docs Picker key handling]]
     fn render_design_picker(
         &mut self,
         filter: &str,

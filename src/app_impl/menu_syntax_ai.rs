@@ -1,4 +1,3 @@
-// doc-anchor-removed: [[removed-docs Syntax#Cmd+Enter Inline AI Proposal]]
 //
 // Pure adapter that flattens [[src/menu_syntax/ai.rs#MenuSyntaxAiResponse]]
 // into the snapshot the inline-AI hint surface renders. Cmd+Enter in

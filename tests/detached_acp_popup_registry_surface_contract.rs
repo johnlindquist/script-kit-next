@@ -96,7 +96,6 @@ fn count_occurrences(haystack: &str, needle: &str) -> usize {
     n
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn chat_window_registers_detached_popup_with_acp_chat_surface_parity() {
     let body = upsert_block_body(CHAT_WINDOW_RS);
@@ -127,7 +126,6 @@ fn chat_window_registers_detached_popup_with_acp_chat_surface_parity() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn chat_window_has_single_detached_upsert_site() {
     let src = CHAT_WINDOW_RS;

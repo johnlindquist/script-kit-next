@@ -109,10 +109,7 @@ fn executor_image_write_sets_real_image_not_text() {
     let write_branch = write_match
         .split("Some(protocol::ClipboardFormat::Image) =>")
         .nth(1)
-        .and_then(|rest| {
-            rest.split("Some(protocol::ClipboardFormat::Text) | None")
-                .next()
-        })
+        .and_then(|rest| rest.split("Some(protocol::ClipboardFormat::Text)").next())
         .expect("clipboard image write branch must exist");
 
     for required in [

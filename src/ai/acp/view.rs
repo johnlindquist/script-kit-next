@@ -50,6 +50,7 @@ use crate::ai::window::context_picker::{
     build_picker_items, build_slash_picker_items_with_payloads, slash_picker_empty_row,
     slash_picker_loading_row, slash_picker_no_match_row,
 };
+use crate::list_item::{IconKind, ListItem, ListItemColors, TypeAccessory};
 use crate::spine::list::{SpineListAction, SpineListRow, SpineListRowKind, SpineListSection};
 
 use super::components::setup_card::{AcpSetupAgentPickerState, AcpSetupCard, AcpSetupCardEvent};
@@ -856,6 +857,7 @@ impl AcpChatView {
             PortalKind::ScriptletSearch,
             PortalKind::SkillSearch,
             PortalKind::NotesBrowse,
+            PortalKind::Terminal,
         ]
     }
 
@@ -4848,6 +4850,7 @@ impl AcpChatView {
             message_count: thread.messages.len(),
             awaiting_first_assistant_text: thread.awaiting_first_assistant_text(),
             picker: self.build_acp_picker_state_snapshot(),
+            spine: self.build_acp_spine_state_snapshot(),
             last_accepted_item: self.last_accepted_item.clone(),
             context_chip_count: pending_parts.len(),
             context_summary: Self::build_acp_context_summary(pending_parts),
@@ -4880,6 +4883,153 @@ impl AcpChatView {
                 selected_label,
             }
         })
+    }
+
+    fn build_acp_spine_state_snapshot(&self) -> Option<crate::protocol::AcpSpineSnapshot> {
+        let _projection = self.composer_spine.input.projection.as_ref()?;
+        let owns_list = self.acp_spine_owns_list();
+        let started = std::time::Instant::now();
+        let rows = if owns_list {
+            self.acp_spine_rows()
+        } else {
+            Vec::new()
+        };
+        let refresh_elapsed_ms = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
+        let selectable_rows = rows
+            .iter()
+            .filter(|row| row.is_selectable)
+            .collect::<Vec<_>>();
+        let selected_index = if selectable_rows.is_empty() {
+            0
+        } else {
+            self.composer_spine
+                .selected_index
+                .min(selectable_rows.len().saturating_sub(1))
+        };
+        let selected_row_fingerprint = selectable_rows
+            .get(selected_index)
+            .map(|row| Self::acp_spine_single_row_fingerprint(row));
+
+        Some(crate::protocol::AcpSpineSnapshot {
+            owns_list,
+            active_segment_kind: self
+                .acp_spine_active_segment_kind_id()
+                .unwrap_or("none")
+                .to_string(),
+            subsearch_source: self
+                .acp_spine_subsearch_source_id()
+                .map(|source| source.to_string()),
+            row_count: rows.len(),
+            selectable_row_count: selectable_rows.len(),
+            selected_index,
+            row_fingerprint: Self::acp_spine_row_fingerprint(&rows),
+            selected_row_fingerprint,
+            refresh_elapsed_ms,
+        })
+    }
+
+    fn acp_spine_active_segment_kind_id(&self) -> Option<&'static str> {
+        let projection = self.composer_spine.input.projection.as_ref()?;
+        Some(match &projection.active_segment_kind {
+            crate::spine::SpineSegmentKind::FreeText => "freeText",
+            crate::spine::SpineSegmentKind::ContextMention { .. } => "contextMention",
+            crate::spine::SpineSegmentKind::SlashCommand { .. } => "slashCommand",
+            crate::spine::SpineSegmentKind::Profile { .. } => "profile",
+            crate::spine::SpineSegmentKind::Style { .. } => "style",
+            crate::spine::SpineSegmentKind::Capture { .. } => "capture",
+            crate::spine::SpineSegmentKind::ListFilter { .. } => "listFilter",
+            crate::spine::SpineSegmentKind::ProjectCwd { .. } => "projectCwd",
+            crate::spine::SpineSegmentKind::ModeExit { .. } => "modeExit",
+        })
+    }
+
+    fn acp_spine_subsearch_source_id(&self) -> Option<&'static str> {
+        let projection = self.composer_spine.input.projection.as_ref()?;
+        let crate::spine::SpineSegmentKind::ContextMention {
+            context_type,
+            sub_query,
+        } = &projection.active_segment_kind
+        else {
+            return None;
+        };
+        let (source, _) = crate::spine::catalog_subsearch::parse_context_subsearch(
+            context_type,
+            sub_query.as_deref(),
+        )?;
+        Some(match source {
+            crate::spine::catalog_subsearch::ContextSubsearchSource::File => "file",
+            crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard => "clipboard",
+            crate::spine::catalog_subsearch::ContextSubsearchSource::Notes => "notes",
+            crate::spine::catalog_subsearch::ContextSubsearchSource::BrowserHistory => {
+                "browserHistory"
+            }
+            crate::spine::catalog_subsearch::ContextSubsearchSource::Dictation => "dictation",
+            crate::spine::catalog_subsearch::ContextSubsearchSource::Scripts => "scripts",
+            crate::spine::catalog_subsearch::ContextSubsearchSource::Scriptlets => "scriptlets",
+            crate::spine::catalog_subsearch::ContextSubsearchSource::Skills => "skills",
+            crate::spine::catalog_subsearch::ContextSubsearchSource::History => "history",
+            crate::spine::catalog_subsearch::ContextSubsearchSource::Calendar => "calendar",
+            crate::spine::catalog_subsearch::ContextSubsearchSource::Notifications => {
+                "notifications"
+            }
+        })
+    }
+
+    fn acp_spine_row_fingerprint(rows: &[SpineListRow]) -> Option<String> {
+        if rows.is_empty() {
+            return None;
+        }
+        let parts = rows
+            .iter()
+            .enumerate()
+            .map(|(index, row)| format!("{index}:{}", Self::acp_spine_single_row_fingerprint(row)))
+            .collect::<Vec<_>>();
+        Some(Self::acp_spine_hash_parts(&parts))
+    }
+
+    fn acp_spine_single_row_fingerprint(row: &SpineListRow) -> String {
+        let kind = match &row.kind {
+            SpineListRowKind::ContextBuiltin { .. } => "contextBuiltin",
+            SpineListRowKind::ContextSubSearch { .. } => "contextSubSearch",
+            SpineListRowKind::ContextResult { .. } => "contextResult",
+            SpineListRowKind::SlashCommand { .. } => "slashCommand",
+            SpineListRowKind::Profile { .. } => "profile",
+            SpineListRowKind::Style { .. } => "style",
+            SpineListRowKind::CaptureTarget { .. } => "captureTarget",
+            SpineListRowKind::RecentPrompt { .. } => "recentPrompt",
+            SpineListRowKind::Conversation { .. } => "conversation",
+            SpineListRowKind::Hint => "hint",
+            SpineListRowKind::Empty => "empty",
+        };
+        let action = match &row.action {
+            SpineListAction::InsertSegmentText { .. } => "insertSegmentText",
+            SpineListAction::ResolveSegment {
+                resolution_source, ..
+            } => resolution_source.as_ref(),
+            SpineListAction::OpenModeExit { .. } => "openModeExit",
+            SpineListAction::OpenConversation { .. } => "openConversation",
+            SpineListAction::AwaitContextSubsearchInput { .. } => "awaitContextSubsearchInput",
+            SpineListAction::Noop => "noop",
+        };
+        Self::acp_spine_hash_parts(&[
+            row.id.to_string(),
+            kind.to_string(),
+            row.is_selectable.to_string(),
+            action.to_string(),
+        ])
+    }
+
+    fn acp_spine_hash_parts(parts: &[String]) -> String {
+        let mut hash = 0xcbf29ce484222325_u64;
+        for part in parts {
+            for byte in part.as_bytes() {
+                hash ^= u64::from(*byte);
+                hash = hash.wrapping_mul(0x100000001b3);
+            }
+            hash ^= 0xff;
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        format!("fnv1a64:{hash:016x}")
     }
 
     fn build_acp_input_layout_metrics(
@@ -7535,24 +7685,24 @@ impl AcpChatView {
         };
         let sections = self.acp_spine_sections();
         let selected_index = self.composer_spine.selected_index;
+        let list_colors = ListItemColors::from_theme(theme);
+        let main_menu_theme = crate::designs::MainMenuThemeVariant::default();
+        let row_height = crate::list_item::effective_list_item_height_for_theme(main_menu_theme);
         let mut selectable_index = 0usize;
         let mut children = Vec::new();
+        let mut is_first_section = true;
 
         for section in sections {
             children.push(
-                div()
-                    .id(SharedString::from(format!(
-                        "acp-spine-section-{}",
-                        section.id
-                    )))
-                    .px(px(8.0))
-                    .py(px(5.0))
-                    .text_xs()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(theme.colors.text.muted))
-                    .child(section.title.to_string())
-                    .into_any_element(),
+                crate::list_item::render_section_header(
+                    section.title.as_ref(),
+                    section.icon.as_ref().map(|icon| icon.as_ref()),
+                    list_colors,
+                    is_first_section,
+                )
+                .into_any_element(),
             );
+            is_first_section = false;
             for row in section.rows {
                 let row_selectable_index = selectable_index;
                 let selected = row.is_selectable && row_selectable_index == selected_index;
@@ -7562,19 +7712,33 @@ impl AcpChatView {
                 let row_id = row.id.to_string();
                 let title = row.title.to_string();
                 let subtitle = row.subtitle.as_ref().map(|s| s.to_string());
-                let action_label = row.action_label.as_ref().map(|s| s.to_string());
+                let source_hint = row.meta.as_ref().map(|s| s.to_string());
+                let shortcut = row.action_label.as_ref().map(|s| s.to_string());
+                let icon_kind = row
+                    .icon
+                    .as_ref()
+                    .and_then(|icon| IconKind::from_icon_hint(icon.as_ref()));
+                let (type_label, type_icon) = row.kind.type_accessory_info();
                 let action = row.action.clone();
                 let click_view = weak_view.clone();
+                let list_row = ListItem::new(title, list_colors)
+                    .selected(selected)
+                    .main_menu_theme(main_menu_theme)
+                    .semantic_id(format!("acp-spine-row-{row_id}"))
+                    .description_opt(subtitle)
+                    .source_hint_opt(source_hint)
+                    .shortcut_opt(shortcut)
+                    .icon_kind_opt(icon_kind)
+                    .type_accessory_opt(Some(TypeAccessory {
+                        label: type_label,
+                        icon_name: type_icon,
+                    }));
+
                 children.push(
                     div()
                         .id(SharedString::from(format!("acp-spine-row-{row_id}")))
                         .w_full()
-                        .px(px(10.0))
-                        .py(px(7.0))
-                        .rounded(px(6.0))
-                        .when(selected, |d| {
-                            d.bg(rgba((theme.colors.accent.selected << 8) | 0x22))
-                        })
+                        .h(px(row_height))
                         .when(row.is_selectable, |d| {
                             d.cursor_pointer().on_click(move |_event, window, cx| {
                                 if let Some(entity) = click_view.upgrade() {
@@ -7585,36 +7749,7 @@ impl AcpChatView {
                                 }
                             })
                         })
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .gap(px(8.0))
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(rgb(theme.colors.text.primary))
-                                        .child(title),
-                                )
-                                .when_some(action_label, |d, label| {
-                                    d.child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(rgb(theme.colors.text.muted))
-                                            .child(label),
-                                    )
-                                }),
-                        )
-                        .when_some(subtitle, |d, subtitle| {
-                            d.child(
-                                div()
-                                    .pt(px(2.0))
-                                    .text_xs()
-                                    .text_color(rgb(theme.colors.text.muted))
-                                    .child(subtitle),
-                            )
-                        })
+                        .child(list_row)
                         .into_any_element(),
                 );
             }
@@ -7625,8 +7760,7 @@ impl AcpChatView {
             .flex_1()
             .min_h(px(0.0))
             .overflow_y_scrollbar()
-            .px(px(8.0))
-            .py(px(6.0))
+            .py(px(4.0))
             .children(children)
             .into_any_element()
     }
@@ -7973,7 +8107,6 @@ impl AcpChatView {
             menu_def,
             crate::components::main_view_chrome::MainViewInputChrome {
                 body: input_body,
-                leading: None,
                 trailing: Vec::new(),
             },
         )
@@ -10547,6 +10680,17 @@ impl AcpChatView {
                         owner_label: owner_label.clone(),
                         slash_name: slash_name.clone(),
                     },
+                    crate::ai::window::context_picker::types::InlinePortalAttachment::TextBlock {
+                        label,
+                        source,
+                        text,
+                        mime_type,
+                    } => AiContextPart::TextBlock {
+                        label: label.clone(),
+                        source: source.clone(),
+                        text: text.clone(),
+                        mime_type: mime_type.clone(),
+                    },
                     crate::ai::window::context_picker::types::InlinePortalAttachment::FocusedTarget {
                         source,
                         kind,
@@ -10583,6 +10727,7 @@ impl AcpChatView {
                     crate::ai::window::context_picker::types::PortalKind::SkillSearch => "skill",
                     crate::ai::window::context_picker::types::PortalKind::NotesBrowse => "note",
                     crate::ai::window::context_picker::types::PortalKind::AcpHistory => "history",
+                    crate::ai::window::context_picker::types::PortalKind::Terminal => "terminal",
                 };
                 let inline_text = part_to_inline_token(&part).unwrap_or_else(|| {
                     crate::ai::context_mentions::format_typed_label_mention_token(

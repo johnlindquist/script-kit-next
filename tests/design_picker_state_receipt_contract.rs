@@ -8,7 +8,6 @@
 use std::fs;
 
 #[test]
-// doc-anchor-removed: [[verification#Design Picker persistence]]
 fn state_receipt_exposes_design_persistence_fields() {
     let variants = fs::read_to_string("src/protocol/message/variants/query_ops.rs")
         .expect("query_ops variants module must be readable");
@@ -44,7 +43,6 @@ fn state_receipt_exposes_design_persistence_fields() {
 }
 
 #[test]
-// doc-anchor-removed: [[verification#Design Picker persistence]]
 fn state_result_constructor_carries_design_arg() {
     let constructors = fs::read_to_string("src/protocol/message/constructors/query_ops.rs")
         .expect("query_ops constructors must be readable");

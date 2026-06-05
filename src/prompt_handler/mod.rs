@@ -464,7 +464,13 @@ impl BatchTargetCapabilities {
             AutomationBatchTargetKind::Notes => Self {
                 display_name: "Notes",
                 unsupported_target_name: "Notes",
-                supported_commands: &["setInput", "openActions", "togglePreview", "openNotesAcp", "waitFor"],
+                supported_commands: &[
+                    "setInput",
+                    "openActions",
+                    "togglePreview",
+                    "openNotesAcp",
+                    "waitFor",
+                ],
                 concise_unsupported_message: true,
             },
             AutomationBatchTargetKind::ActionsDialog => Self {
@@ -728,9 +734,9 @@ fn resolve_automation_read_target(
                 )))
             }
         }
-        crate::protocol::AutomationWindowKind::DevStyleTool => Ok(AutomationReadTarget::DevStyleTool {
-            info: resolved,
-        }),
+        crate::protocol::AutomationWindowKind::DevStyleTool => {
+            Ok(AutomationReadTarget::DevStyleTool { info: resolved })
+        }
         other_kind => {
             tracing::warn!(
                 target: "script_kit::automation",
@@ -1434,16 +1440,17 @@ fn next_inspect_generations(
     data_fingerprint: String,
 ) -> (u64, u64, u64) {
     let mut generations = INSPECT_GENERATIONS.lock();
-    let record = generations
-        .entry(window_id.to_string())
-        .or_insert_with(|| InspectGenerationRecord {
-            target_fingerprint: target_fingerprint.clone(),
-            surface_fingerprint: surface_fingerprint.clone(),
-            data_fingerprint: data_fingerprint.clone(),
-            target_generation: 1,
-            surface_generation: 1,
-            data_generation: 1,
-        });
+    let record =
+        generations
+            .entry(window_id.to_string())
+            .or_insert_with(|| InspectGenerationRecord {
+                target_fingerprint: target_fingerprint.clone(),
+                surface_fingerprint: surface_fingerprint.clone(),
+                data_fingerprint: data_fingerprint.clone(),
+                target_generation: 1,
+                surface_generation: 1,
+                data_generation: 1,
+            });
 
     if record.target_fingerprint != target_fingerprint {
         record.target_fingerprint = target_fingerprint;
@@ -1656,10 +1663,7 @@ impl ScriptListApp {
         );
         let surface_fingerprint = format!(
             "{:?}|{:?}|{:?}|{:?}",
-            surface_kind,
-            app_view_variant,
-            native_footer_surface,
-            resolved.semantic_surface
+            surface_kind, app_view_variant, native_footer_surface, resolved.semantic_surface
         );
         let data_fingerprint = format!(
             "{:?}|{:?}|{}|{:?}|{:?}|{:?}",
@@ -1670,13 +1674,12 @@ impl ScriptListApp {
             selected_semantic_id,
             semantic_quality
         );
-        let (target_generation, surface_generation, data_generation) =
-            next_inspect_generations(
-                &resolved.id,
-                target_fingerprint,
-                surface_fingerprint,
-                data_fingerprint,
-            );
+        let (target_generation, surface_generation, data_generation) = next_inspect_generations(
+            &resolved.id,
+            target_fingerprint,
+            surface_fingerprint,
+            data_fingerprint,
+        );
 
         let snapshot = protocol::AutomationInspectSnapshot {
             schema_version: protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
@@ -2506,8 +2509,8 @@ impl ScriptListApp {
                 container_classes,
                 actions,
                 placeholder: _placeholder, // KNOWN: Not rendered; wiring requires DivPrompt render-surface changes.
-                hint: _hint,               // KNOWN: Not rendered; wiring requires DivPrompt render-surface changes.
-                footer: _footer,           // KNOWN: Not rendered; wiring requires DivPrompt render-surface changes.
+                hint: _hint, // KNOWN: Not rendered; wiring requires DivPrompt render-surface changes.
+                footer: _footer, // KNOWN: Not rendered; wiring requires DivPrompt render-surface changes.
                 container_bg,
                 container_padding,
                 opacity,
@@ -3401,9 +3404,10 @@ impl ScriptListApp {
                                 .as_deref()
                                 .and_then(|id| snapshot.rows.iter().position(|row| row.id == id));
                             let selected_value = selected_row_index.and_then(|index| {
-                                snapshot.rows.get(index).map(|row| {
-                                    row.token.clone().unwrap_or_else(|| row.id.clone())
-                                })
+                                snapshot
+                                    .rows
+                                    .get(index)
+                                    .map(|row| row.token.clone().unwrap_or_else(|| row.id.clone()))
                             });
                             (
                                 "none".to_string(),
@@ -3427,9 +3431,10 @@ impl ScriptListApp {
                                 .as_deref()
                                 .and_then(|id| snapshot.rows.iter().position(|row| row.id == id));
                             let selected_value = selected_row_index.and_then(|index| {
-                                snapshot.rows.get(index).map(|row| {
-                                    row.token.clone().unwrap_or_else(|| row.id.clone())
-                                })
+                                snapshot
+                                    .rows
+                                    .get(index)
+                                    .map(|row| row.token.clone().unwrap_or_else(|| row.id.clone()))
                             });
                             (
                                 "none".to_string(),
@@ -3850,8 +3855,8 @@ impl ScriptListApp {
                         filter,
                         selected_index,
                     } => {
-                        let (dataset_count, visible_count) =
-                            Self::design_gallery_dataset_and_visible_counts(filter);
+                        let dataset_count = crate::design_gallery_total_items();
+                        let visible_count = crate::design_gallery_filtered_len(filter);
                         let selected_value =
                             Self::design_gallery_selected_visible_row(filter, *selected_index)
                                 .map(|item| crate::design_gallery_item_label(&item));
@@ -4087,19 +4092,23 @@ impl ScriptListApp {
                         )
                     }
                     AppView::InstalledKitsView {
+                        filter,
                         selected_index,
                         kits,
                     } => {
                         let (total, visible_count) =
-                            Self::kit_store_installed_dataset_and_visible_counts(kits);
-                        let selected_value =
-                            Self::kit_store_installed_selected_visible_kit(kits, *selected_index)
-                                .map(|kit| kit.name);
+                            Self::kit_store_installed_dataset_and_visible_counts(kits, filter);
+                        let selected_value = Self::kit_store_installed_selected_visible_kit(
+                            kits,
+                            filter,
+                            *selected_index,
+                        )
+                        .map(|kit| kit.name);
                         (
                             "installedKits".to_string(),
                             None,
                             None,
-                            String::new(),
+                            filter.clone(),
                             total,
                             visible_count,
                             *selected_index as i32,
@@ -5164,7 +5173,7 @@ impl ScriptListApp {
                                     let _ = sender.try_send(response);
                                 }
                             } else {
-                                let layout_info = crate::ai::acp::view::AcpChatView::placeholder_automation_layout_info(&resolved);
+                                let layout_info = crate::ai::agent_chat::ui::AgentChatView::placeholder_automation_layout_info(&resolved);
                                 let response =
                                     Message::layout_info_result(request_id.clone(), layout_info);
                                 if let Some(ref sender) = self.response_sender {
@@ -5194,7 +5203,8 @@ impl ScriptListApp {
                             return;
                         }
                         Ok(resolved)
-                            if resolved.kind == crate::protocol::AutomationWindowKind::Dictation =>
+                            if resolved.kind
+                                == crate::protocol::AutomationWindowKind::Dictation =>
                         {
                             let layout_info = crate::dictation::automation_layout_info(&resolved);
                             let response =
@@ -5389,12 +5399,13 @@ impl ScriptListApp {
                 };
 
                 // Extract the detached ACP entity for backward-compatible condition checking.
-                let detached_entity: Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> =
-                    if let AutomationReadTarget::AcpDetached { ref entity, .. } = resolved_target {
-                        Some(entity.clone())
-                    } else {
-                        None
-                    };
+                let detached_entity: Option<
+                    gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
+                > = if let AutomationReadTarget::AcpDetached { ref entity, .. } = resolved_target {
+                    Some(entity.clone())
+                } else {
+                    None
+                };
 
                 tracing::info!(
                     category = "AUTOMATION",
@@ -5863,12 +5874,13 @@ impl ScriptListApp {
                 };
                 let batch_target_kind = batch_target_kind_for_resolved_target(&batch_target);
 
-                let detached_batch_entity: Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> =
-                    if let AutomationReadTarget::AcpDetached { ref entity, .. } = batch_target {
-                        Some(entity.clone())
-                    } else {
-                        None
-                    };
+                let detached_batch_entity: Option<
+                    gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
+                > = if let AutomationReadTarget::AcpDetached { ref entity, .. } = batch_target {
+                    Some(entity.clone())
+                } else {
+                    None
+                };
 
                 let notes_batch_target: Option<(
                     gpui::Entity<crate::notes::NotesApp>,
@@ -9652,8 +9664,7 @@ impl ScriptListApp {
     ) -> crate::protocol::ActiveFooterSnapshot {
         let expected_surface = self.current_view.native_footer_surface();
         let host = crate::footer_popup::main_window_footer_host_snapshot();
-        let popup_open = self.show_actions_popup
-            || self.actions_dialog.is_some();
+        let popup_open = self.show_actions_popup || self.actions_dialog.is_some();
         let mut config = self.main_window_footer_config_with_cx(Some(cx));
         if let Some(ref mut cfg) = config {
             self.enrich_footer_config_with_acp_info(cfg);
@@ -10030,6 +10041,20 @@ impl ScriptListApp {
                 entity.update(cx, |prompt, cx| prompt.set_input(text.to_string(), cx));
                 cx.notify();
             }
+            AppView::QuickTerminalView { entity } => {
+                let entity = entity.clone();
+                let payload = text.to_string();
+                entity.update(cx, |term, cx| {
+                    if let Err(error) = term.send_raw_input(&payload) {
+                        tracing::warn!(
+                            category = "BATCH",
+                            %error,
+                            "setInput failed for QuickTerminalView"
+                        );
+                    }
+                    cx.notify();
+                });
+            }
             _ => {
                 tracing::warn!(
                     category = "BATCH",
@@ -10071,6 +10096,18 @@ impl ScriptListApp {
         {
             if submit {
                 self.close_quick_terminal_main_window_state_first(cx);
+            }
+            return Ok(semantic_id.to_string());
+        }
+
+        if semantic_id == "footer:quick_terminal:ai" || semantic_id == "footer:prompt:ai" {
+            let AppView::QuickTerminalView { entity } = &self.current_view else {
+                anyhow::bail!(
+                    "Quick Terminal Agent footer is only available in QuickTerminalView"
+                );
+            };
+            if submit {
+                self.open_agent_chat_with_quick_terminal_output(entity.clone(), cx);
             }
             return Ok(semantic_id.to_string());
         }

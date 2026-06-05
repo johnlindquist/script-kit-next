@@ -398,8 +398,8 @@ fn favorites_builtin_opens_browse_view() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let favorites_branch = content
-        .find("builtins::BuiltInFeature::Favorites => {")
-        .expect("Expected BuiltInFeature::Favorites branch in builtin_execution.rs");
+        .find("SurfaceOpenBuiltinAction::Favorites => {")
+        .expect("Expected SurfaceOpenBuiltinAction::Favorites branch in builtin_execution.rs");
     let block = &content[favorites_branch..content.len().min(favorites_branch + 4200)];
 
     // Must transition to FavoritesBrowseView
@@ -414,8 +414,8 @@ fn favorites_builtin_uses_shared_filterable_view_helper() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let favorites_branch = content
-        .find("builtins::BuiltInFeature::Favorites => {")
-        .expect("Expected BuiltInFeature::Favorites branch");
+        .find("SurfaceOpenBuiltinAction::Favorites => {")
+        .expect("Expected SurfaceOpenBuiltinAction::Favorites branch");
     let block = &content[favorites_branch..content.len().min(favorites_branch + 4200)];
 
     // Must use the shared helper which handles filter clearing and cx.notify()

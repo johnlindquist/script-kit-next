@@ -16,7 +16,6 @@ fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a st
     &source[start..start + end_rel]
 }
 
-// doc-anchor-removed: [[removed-docs Key Intent Routing]]
 #[test]
 fn cmd_enter_to_acp_is_classified_as_a_named_global_key_intent() {
     assert!(

@@ -26,6 +26,22 @@ fn compact_app_view_match_arm<'a>(compacted: &'a str, view: &str) -> &'a str {
     &tail[..end]
 }
 
+fn compact_surface_kind_match_arm<'a>(compacted: &'a str, kind: &str) -> &'a str {
+    let start = compacted
+        .find(kind)
+        .unwrap_or_else(|| panic!("surface contract missing {kind}"));
+    let tail = &compacted[start..];
+    let end = tail[kind.len()..]
+        .find("SurfaceKind::")
+        .map(|offset| kind.len() + offset)
+        .unwrap_or(tail.len());
+    assert!(
+        tail[..end].contains("=>"),
+        "surface contract arm for {kind} has no =>"
+    );
+    &tail[..end]
+}
+
 fn source_between<'a>(source: &'a str, start_marker: &str, end_marker: &str) -> &'a str {
     let start = source
         .find(start_marker)
@@ -238,9 +254,8 @@ fn open_builtin_filterable_view_sets_shared_focus_contract() {
         "self.opened_from_main_menu = true;",
         "MainWindowMode::Full",
         "\"open_builtin_filterable_view\"",
-        "resize_to_view_sync(ViewType::ExpandedMainWindow, 0);",
+        "resize_to_view_sync(ViewType::MainWindow, 0);",
         "MainWindowMode::Mini",
-        "resize_to_view_sync(ViewType::MiniMainWindow, 0);",
         "self.pending_focus = Some(FocusTarget::MainFilter);",
         "self.focused_input = FocusedInput::MainFilter;",
         "cx.notify();",
@@ -280,8 +295,8 @@ fn deferred_sizing_keeps_mini_filterable_builtins_narrow() {
     ] {
         let arm = compact_app_view_match_arm(&compacted, view);
         assert!(
-            arm.contains("ViewType::MiniMainWindow"),
-            "calculate_window_size_params must keep single-column builtin {view} on MiniMainWindow"
+            arm.contains("ViewType::MainWindow"),
+            "calculate_window_size_params must keep single-column builtin {view} on MainWindow"
         );
         assert!(
             !arm.contains("ViewType::ScriptList"),
@@ -314,12 +329,12 @@ fn deferred_sizing_keeps_preview_builtins_wide() {
     ] {
         let arm = compact_app_view_match_arm(&compacted, view);
         assert!(
-            arm.contains("ViewType::ExpandedMainWindow"),
-            "calculate_window_size_params must keep preview/detail builtin {view} on ExpandedMainWindow"
+            arm.contains("ViewType::MainWindow"),
+            "calculate_window_size_params must keep preview/detail builtin {view} on MainWindow"
         );
         assert!(
-            !arm.contains("ViewType::MiniMainWindow"),
-            "calculate_window_size_params must not narrow preview/detail builtin {view} to MiniMainWindow"
+            !arm.contains("ViewType::ScriptList"),
+            "calculate_window_size_params must not size preview/detail builtin {view} as ScriptList"
         );
     }
 }
@@ -335,15 +350,19 @@ fn file_search_sizing_tracks_presentation_contract() {
     let compacted = compact_source(body);
     let arm = compact_app_view_match_arm(&compacted, "AppView::FileSearchView{");
     assert!(
-        arm.contains("FileSearchPresentation::Mini=>ViewType::MiniMainWindow")
-            && arm.contains("FileSearchPresentation::Full=>ViewType::ExpandedMainWindow"),
-        "FileSearchView must size Mini and Full presentations from their surface contract"
+        arm.contains("FileSearchPresentation::Mini=>ViewType::MainWindow")
+            && arm.contains("FileSearchPresentation::Full=>ViewType::MainWindow"),
+        "FileSearchView must size Mini and Full presentations through MainWindow"
     );
 }
 
 #[test]
 fn surface_contracts_match_main_window_sizing_shape() {
-    let app_view_state = compact_source(&read("src/main_sections/app_view_state.rs"));
+    let app_view_state_source = read("src/main_sections/app_view_state.rs");
+    let contract_start = app_view_state_source
+        .find("impl SurfaceKind")
+        .expect("app_view_state.rs must define SurfaceKind contracts");
+    let app_view_state = compact_source(&app_view_state_source[contract_start..]);
     let layout_info = compact_source(&read("src/app_layout/build_layout_info.rs"));
 
     for (kind, preview, visual, view_type) in [
@@ -363,16 +382,16 @@ fn surface_contracts_match_main_window_sizing_shape() {
             "SurfaceKind::FileSearchMini",
             "NoPersistentPreview",
             "CompactLauncherVisual",
-            "FileSearchPresentation::Mini=>crate::window_resize::ViewType::MiniMainWindow",
+            "FileSearchPresentation::Mini=>crate::window_resize::ViewType::MainWindow",
         ),
         (
             "SurfaceKind::FileSearchFull",
             "RequiredSplitPreview",
             "SplitPreviewVisual",
-            "FileSearchPresentation::Full=>crate::window_resize::ViewType::ExpandedMainWindow",
+            "FileSearchPresentation::Full=>crate::window_resize::ViewType::MainWindow",
         ),
     ] {
-        let contract = compact_app_view_match_arm(&app_view_state, kind);
+        let contract = compact_surface_kind_match_arm(&app_view_state, kind);
         assert!(
             contract.contains(preview) && contract.contains(visual),
             "{kind} contract must declare {preview} and {visual}"

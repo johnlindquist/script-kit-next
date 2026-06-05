@@ -257,22 +257,16 @@ fn plain_tab_in_script_list_no_longer_routes_to_agent_chat_in_standard_startup()
 }
 
 #[test]
-fn plain_tab_agent_chat_helper_is_deprecated_noop() {
+fn plain_tab_agent_chat_helper_is_removed() {
     let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
         .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
 
     assert!(
-        source.contains("agent_chat_plain_tab_entry_deprecated"),
-        "Plain Tab Agent Chat helper must emit the deprecated-entry marker"
-    );
-    assert!(
-        !source.contains("tab_ai_plain_tab_routed_to_acp")
+        !source.contains("try_route_plain_tab_to_acp_context_capture")
+            && !source.contains("agent_chat_plain_tab_entry_deprecated")
+            && !source.contains("tab_ai_plain_tab_routed_to_acp")
             && !source.contains("tab_ai_plain_tab_submitted_to_detached_acp"),
-        "Plain Tab helper must not keep old Agent Chat submit telemetry"
-    );
-    assert!(
-        source.contains("Command+Enter is the canonical Agent Chat entry"),
-        "Plain Tab helper must document the replacement entry path"
+        "Plain Tab must not keep an Agent Chat route, shim, or telemetry marker"
     );
 }
 

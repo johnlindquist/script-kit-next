@@ -126,7 +126,6 @@ fn extract_function_body(source: &str) -> &str {
     panic!("no matching closing brace found for close_actions_window body");
 }
 
-// doc-anchor-removed: [[removed-docs window behavior]]
 #[test]
 fn close_actions_window_exists_with_exact_signature() {
     let hits: Vec<_> = SOURCE.match_indices(FN_SIGNATURE).collect();
@@ -145,7 +144,6 @@ fn close_actions_window_exists_with_exact_signature() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs window behavior]]
 #[test]
 fn close_actions_window_first_statement_clears_automation_registry() {
     let body = extract_function_body(SOURCE);
@@ -195,7 +193,6 @@ fn close_actions_window_first_statement_clears_automation_registry() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs window behavior]]
 #[test]
 fn close_actions_window_also_clears_actions_window_static() {
     let body = extract_function_body(SOURCE);
@@ -220,7 +217,6 @@ fn close_actions_window_also_clears_actions_window_static() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs window behavior]]
 #[test]
 fn close_actions_window_anchor_comment_above_registry_clear() {
     let body = extract_function_body(SOURCE);

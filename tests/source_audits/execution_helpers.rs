@@ -285,7 +285,8 @@ fn agent_chat_setup_copy_points_to_catalog_and_config_ts_not_direct_provider_key
     );
     assert!(
         agent_config_section.contains("Agent Catalog")
-            && agent_config_section.contains("selectedAcpAgentId")
+            && agent_config_section.contains("selectedProfileId")
+            && agent_config_section.contains("selectedModelId")
             && agent_config_section.contains("profiles"),
         "README Agent Chat config section must document catalog-backed ai preferences"
     );
@@ -392,7 +393,7 @@ fn reset_window_positions_returns_to_default_menu_without_hud() {
     let content = builtin_execution_content();
 
     let reset_section_start = content
-        .find("SettingsCommandType::ResetWindowPositions")
+        .find("SettingsCommandBuiltinAction::ResetWindowPositions")
         .expect("Expected ResetWindowPositions match arm");
     let block = &content[reset_section_start..reset_section_start + 800];
 

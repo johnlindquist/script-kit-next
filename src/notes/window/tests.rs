@@ -642,7 +642,7 @@ fn test_notes_keyboard_stops_propagation_at_start_of_global_escape_chain() {
 fn test_notes_acp_escape_dismisses_local_popup_before_leaving_surface() {
     const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
     let acp_escape_branch = KEYBOARD_SOURCE
-        .find("if self.surface_mode == NotesSurfaceMode::Acp {")
+        .find("// In ACP mode, intercept host-owned shortcuts before propagating to ACP.")
         .and_then(|start| {
             KEYBOARD_SOURCE[start..]
                 .find("if modifiers.platform {")
@@ -944,19 +944,16 @@ fn test_notes_acp_uses_shared_external_footer_renderer() {
         "Notes ACP surface should render the shared ACP footer below the embedded chat view"
     );
     let footer_hints = &ACP_VIEW_SOURCE[ACP_VIEW_SOURCE
-        .find("render_selectable_hint_icons(")
-        .expect("ACP footer should render selectable hints")..];
+        .find("fn footer_hint_label(")
+        .expect("ACP footer should define shared hint labels")..];
     let run_pos = footer_hints
-        .find("\"↵ Run\"")
-        .expect("ACP footer should render the Run hint");
-    let ai_pos = footer_hints
-        .find("\"⌘↵ AI\"")
-        .expect("ACP footer should render the AI hint");
+        .find("\"↵ Send\"")
+        .expect("ACP footer should render the Send hint");
     let actions_pos = footer_hints
         .find("\"⌘K Actions\"")
         .expect("ACP footer should render the Actions hint");
     assert!(
-        run_pos < ai_pos && ai_pos < actions_pos,
+        run_pos < actions_pos,
         "Notes-hosted ACP should mirror the main-window ACP footer labels and order"
     );
 }

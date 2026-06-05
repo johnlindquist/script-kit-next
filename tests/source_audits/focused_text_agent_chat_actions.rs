@@ -97,16 +97,13 @@ fn focused_text_expanded_uses_standard_agent_chat_footer_not_focused_mini_footer
     );
 
     assert!(
-        footer_fn.contains(
-            "self.focused_text.is_some() && self.ui_variant == AcpChatUiVariant::FocusedTextMini"
-        ),
-        "focused-text footer override must only apply while FocusedTextMini is active"
+        footer_fn.contains("if self.focused_text.is_some()")
+            && footer_fn.contains("return self.focused_text_visible_footer_buttons(thread);"),
+        "focused-text footer override should route through the focused-text footer helper"
     );
     assert!(
-        !footer_fn.contains(
-            "if self.focused_text.is_some() {\n            return self.focused_text_visible_footer_buttons(thread);"
-        ),
-        "expanded focused-text Agent Chat must fall through to standard Run/Actions footer"
+        ACP_VIEW.contains("let expanded = self.ui_variant != AcpChatUiVariant::FocusedTextMini"),
+        "expanded focused-text Agent Chat must use the focused-text expanded footer branch"
     );
 }
 

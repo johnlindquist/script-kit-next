@@ -47,7 +47,41 @@ impl WebcamOpenUtilityAction {
     }
 }
 
+fn quick_terminal_cwd_sync_hook() -> String {
+    format!(
+        "__skgpui_cwd_sync() {{ printf '\\033]0;{}%s\\007' \"$PWD\"; }}\r\
+if [ -n \"$ZSH_VERSION\" ]; then autoload -Uz add-zsh-hook 2>/dev/null; add-zsh-hook precmd __skgpui_cwd_sync 2>/dev/null; elif [ -n \"$BASH_VERSION\" ]; then PROMPT_COMMAND=\"__skgpui_cwd_sync${{PROMPT_COMMAND:+;$PROMPT_COMMAND}}\"; fi\r\
+__skgpui_cwd_sync\r",
+        crate::term_prompt::SCRIPT_KIT_CWD_TITLE_PREFIX
+    )
+}
+
 impl ScriptListApp {
+    pub(crate) fn sync_spine_cwd_from_quick_terminal(
+        &mut self,
+        cwd: std::path::PathBuf,
+        cx: &mut Context<Self>,
+    ) {
+        if !cwd.is_dir() || self.spine_cwd.as_ref() == Some(&cwd) {
+            return;
+        }
+
+        let label = crate::file_search::shorten_path(&cwd.to_string_lossy());
+        self.spine_cwd = Some(cwd.clone());
+        self.spine_cwd_label = Some(label.clone());
+        self.spine_cwd_revision = self.spine_cwd_revision.wrapping_add(1);
+        self.persist_spine_cwd();
+        self.prewarm_acp_for_spine_cwd(cx);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "quick_terminal_cwd_synced_to_agent_chat",
+            cwd = %cwd.display(),
+            label = %label,
+            revision = self.spine_cwd_revision,
+        );
+        cx.notify();
+    }
+
     pub(crate) fn recent_file_results_from_frecency(
         &self,
         limit: usize,
@@ -711,10 +745,24 @@ impl ScriptListApp {
         match term_prompt_result {
             Ok(term_prompt) => {
                 let entity = cx.new(|_| term_prompt);
-                if cwd.is_some() || startup_command.is_some() {
-                    let mut initial_input = String::new();
+                cx.observe(&entity, |this, term, cx| {
+                    if !matches!(this.current_view, AppView::QuickTerminalView { .. }) {
+                        return;
+                    }
+                    let Some(cwd) = term.read(cx).synced_cwd_path() else {
+                        return;
+                    };
+                    this.sync_spine_cwd_from_quick_terminal(cwd, cx);
+                })
+                .detach();
+
+                {
+                    let mut initial_input = quick_terminal_cwd_sync_hook();
                     if let Some(cwd) = cwd.as_ref() {
-                        initial_input.push_str(&format!("cd {}\r", Self::shell_quote_path_for_cd(cwd)));
+                        initial_input.push_str(&format!(
+                            "cd {}\r",
+                            Self::shell_quote_path_for_cd(cwd)
+                        ));
                     }
                     if let Some(command) = startup_command.as_ref() {
                         initial_input.push_str(command.trim_end_matches(&['\r', '\n'][..]));

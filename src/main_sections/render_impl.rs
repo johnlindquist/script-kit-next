@@ -291,13 +291,17 @@ impl Render for ScriptListApp {
                 | AppView::WindowSwitcherView { .. }
                 | AppView::BrowserTabsView { .. }
                 | AppView::DesignGalleryView { .. }
+                | AppView::FooterGalleryView { .. }
                 | AppView::FileSearchView { .. }
+                | AppView::ProfileSearchView { .. }
                 | AppView::ThemeChooserView { .. }
                 | AppView::ProcessManagerView { .. }
                 | AppView::SettingsView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
+                | AppView::FavoritesBrowseView { .. }
                 | AppView::AcpHistoryView { .. }
+                | AppView::BrowserHistoryView { .. }
                 | AppView::DictationHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
                 | AppView::MiniPrompt { .. }
@@ -588,10 +592,11 @@ impl Render for ScriptListApp {
                 .render_browse_kits(query, selected_index, results, cx)
                 .into_any_element(),
             AppView::InstalledKitsView {
+                ref filter,
                 selected_index,
                 kits,
             } => self
-                .render_installed_kits(selected_index, kits, cx)
+                .render_installed_kits(filter, selected_index, kits, cx)
                 .into_any_element(),
             AppView::ProcessManagerView {
                 filter,

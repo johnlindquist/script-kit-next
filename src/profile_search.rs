@@ -7,6 +7,8 @@ use crate::config::{AgentChatBackend, AiPreferences};
 pub(crate) struct ProfileSearchResult {
     pub profile: ResolvedAgentChatProfile,
     pub selected: bool,
+    pub name_highlight_indices: Option<Vec<usize>>,
+    pub description_highlight_indices: Option<Vec<usize>>,
 }
 
 pub(crate) fn profile_search_results(
@@ -16,7 +18,8 @@ pub(crate) fn profile_search_results(
 ) -> Vec<ProfileSearchResult> {
     let selected_id =
         crate::ai::agent_chat::profiles::selected_agent_chat_profile_picker_id(ai, ctx);
-    let query_lower = query.trim().to_ascii_lowercase();
+    let query = query.trim();
+    let query_lower = query.to_ascii_lowercase();
     crate::ai::agent_chat::profiles::resolved_agent_chat_profile_picker_profiles(ai, ctx)
         .into_iter()
         .filter(|profile| {
@@ -40,9 +43,35 @@ pub(crate) fn profile_search_results(
         })
         .map(|profile| {
             let selected = profile.id == selected_id;
-            ProfileSearchResult { profile, selected }
+            let description = profile_search_result_description(&profile);
+            let (_, name_indices) =
+                crate::scripts::search::highlight_indices_for(query, &profile.name);
+            let (_, description_indices) =
+                crate::scripts::search::highlight_indices_for(query, &description);
+            ProfileSearchResult {
+                profile,
+                selected,
+                name_highlight_indices: non_empty_indices(name_indices),
+                description_highlight_indices: non_empty_indices(description_indices),
+            }
         })
         .collect()
+}
+
+fn non_empty_indices(indices: Vec<usize>) -> Option<Vec<usize>> {
+    if indices.is_empty() {
+        None
+    } else {
+        Some(indices)
+    }
+}
+
+pub(crate) fn profile_search_result_description(profile: &ResolvedAgentChatProfile) -> String {
+    format!(
+        "{} · {}",
+        source_label(profile.source),
+        profile_model_label(profile)
+    )
 }
 
 pub(crate) fn persist_profile_search_selection(profile_id: &str) -> bool {
@@ -111,6 +140,10 @@ pub(crate) fn profile_prompt_summary(profile: &ResolvedAgentChatProfile) -> Stri
     }
 }
 
+pub(crate) fn profile_preview_explanation() -> &'static str {
+    "Profiles define the instructions, model/provider, tools, and working directory used by Agent Chat when starting new conversations."
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,5 +174,29 @@ mod tests {
         assert!(profile_model_label(&result.profile).contains("openai-codex"));
         assert!(profile_tools_label(&result.profile).contains("web_search"));
         assert!(!profile_prompt_summary(&result.profile).is_empty());
+    }
+
+    #[test]
+    fn profile_search_highlight_indices_match_name_and_description() {
+        let prefs = AiPreferences::default();
+        let ctx = AgentChatProfileContext::from_setup();
+
+        let text = profile_search_results(&prefs, &ctx, "tex")
+            .into_iter()
+            .find(|result| result.profile.id == "text")
+            .expect("text profile should match by name");
+        assert_eq!(text.name_highlight_indices, Some(vec![0, 1, 2]));
+
+        let codex = profile_search_results(&prefs, &ctx, "codex")
+            .into_iter()
+            .find(|result| result.profile.id == "general")
+            .expect("general profile should match by model description");
+        assert!(codex.description_highlight_indices.is_some());
+    }
+
+    #[test]
+    fn profile_search_preview_explanation_is_structured_copy() {
+        assert!(profile_preview_explanation().contains("Profiles define"));
+        assert!(profile_preview_explanation().contains("working directory"));
     }
 }

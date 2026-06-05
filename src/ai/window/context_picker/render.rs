@@ -1,10 +1,104 @@
 use super::super::*;
-use super::types::{ContextPickerItemKind, ContextPickerTrigger};
-use crate::ai::context_picker_row::{render_soft_compact_picker_row, GHOST, HINT};
+use super::types::{ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger};
 use crate::components::inline_dropdown::{
-    InlineDropdown, InlineDropdownColors, InlineDropdownEmptyState, InlineDropdownSynopsis,
+    InlineDropdown, InlineDropdownColors, InlineDropdownEmptyState, InlineDropdownSynopsis, GHOST,
+    HINT,
 };
-use crate::list_item::FONT_MONO;
+use crate::list_item::{IconKind, ListItem, ListItemColors, TypeAccessory, FONT_MONO};
+
+fn non_empty_string(value: &SharedString) -> Option<String> {
+    let value = value.as_ref();
+    (!value.is_empty()).then(|| value.to_string())
+}
+
+fn render_context_picker_list_item_row(
+    item: &ContextPickerItem,
+    ix: usize,
+    trigger: ContextPickerTrigger,
+    is_selected: bool,
+    colors: ListItemColors,
+    main_menu_theme: crate::designs::MainMenuThemeVariant,
+) -> gpui::Stateful<gpui::Div> {
+    let mut title = item.label.to_string();
+    let description = non_empty_string(&item.description);
+    let mut source_hint = non_empty_string(&item.meta);
+    let mut icon_kind = None;
+    let mut type_accessory = Some(TypeAccessory {
+        label: "Context",
+        icon_name: "at-sign",
+    });
+    let mut title_highlights = item.label_highlight_indices.clone();
+
+    match &item.kind {
+        ContextPickerItemKind::SlashCommand(payload) => {
+            title = format!("/{}", payload.slash_name());
+            source_hint = Some(payload.owner_label().to_string());
+            title_highlights = item
+                .label_highlight_indices
+                .iter()
+                .map(|ix| ix.saturating_add(1))
+                .collect();
+            type_accessory = Some(TypeAccessory {
+                label: "Slash command",
+                icon_name: "terminal",
+            });
+        }
+        ContextPickerItemKind::File(_) => {
+            type_accessory = Some(TypeAccessory {
+                label: "File",
+                icon_name: "file",
+            });
+        }
+        ContextPickerItemKind::Folder(_) => {
+            type_accessory = Some(TypeAccessory {
+                label: "Folder",
+                icon_name: "folder",
+            });
+        }
+        ContextPickerItemKind::Portal(_)
+        | ContextPickerItemKind::PortalPrefix(_)
+        | ContextPickerItemKind::PortalResult(_) => {
+            type_accessory = Some(TypeAccessory {
+                label: "Context",
+                icon_name: "search",
+            });
+        }
+        ContextPickerItemKind::AgentChatProfile { icon_name, .. } => {
+            icon_kind = icon_name.as_deref().and_then(IconKind::from_icon_hint);
+            type_accessory = Some(TypeAccessory {
+                label: "Profile",
+                icon_name: "user",
+            });
+        }
+        ContextPickerItemKind::BuiltIn(_) => {
+            if trigger == ContextPickerTrigger::Slash {
+                source_hint = None;
+            }
+        }
+        ContextPickerItemKind::Inert => {
+            type_accessory = None;
+        }
+    }
+
+    let row = ListItem::new(title, colors)
+        .index(ix)
+        .selected(is_selected)
+        .main_menu_theme(main_menu_theme)
+        .semantic_id(format!("ctx-picker-{ix}"))
+        .description_opt(description)
+        .source_hint_opt(source_hint)
+        .icon_kind_opt(icon_kind)
+        .type_accessory_opt(type_accessory)
+        .highlight_indices(title_highlights);
+
+    div()
+        .id(SharedString::from(format!("ctx-picker-{ix}")))
+        .w_full()
+        .h(px(crate::list_item::effective_list_item_height_for_theme(
+            main_menu_theme,
+        )))
+        .child(row)
+}
 
 impl AiApp {
     /// Render the inline context picker overlay.
@@ -22,6 +116,8 @@ impl AiApp {
 
         let theme = crate::theme::get_cached_theme();
         let colors = InlineDropdownColors::popup_from_theme(&theme);
+        let list_item_colors = ListItemColors::from_theme(&theme);
+        let main_menu_theme = crate::designs::MainMenuThemeVariant::default();
         let fg = colors.foreground;
         let muted_fg = colors.muted_foreground;
 
@@ -95,49 +191,17 @@ impl AiApp {
                     None => return div().into_any_element(),
                 };
                 let is_selected = ix == selected_index;
-                let label: SharedString = item.label.clone();
-                let meta: SharedString = item.meta.clone();
 
                 let entity_click = entity.clone();
 
-                let row = if trigger == ContextPickerTrigger::Slash {
-                    if let ContextPickerItemKind::SlashCommand(payload) = &item.kind {
-                        let shifted_label_hits = item
-                            .label_highlight_indices
-                            .iter()
-                            .map(|ix| ix + 1)
-                            .collect::<Vec<_>>();
-                        render_soft_compact_picker_row(
-                            SharedString::from(format!("ctx-picker-{}", ix)),
-                            SharedString::from(format!("/{}", payload.slash_name())),
-                            Some(SharedString::from(payload.owner_label())),
-                            &shifted_label_hits,
-                            &[],
-                            is_selected,
-                            colors,
-                        )
-                    } else {
-                        render_soft_compact_picker_row(
-                            SharedString::from(format!("ctx-picker-{}", ix)),
-                            label,
-                            None,
-                            &item.label_highlight_indices,
-                            &[],
-                            is_selected,
-                            colors,
-                        )
-                    }
-                } else {
-                    render_soft_compact_picker_row(
-                        SharedString::from(format!("ctx-picker-{}", ix)),
-                        label,
-                        Some(meta),
-                        &item.label_highlight_indices,
-                        &item.meta_highlight_indices,
-                        is_selected,
-                        colors,
-                    )
-                };
+                let row = render_context_picker_list_item_row(
+                    item,
+                    ix,
+                    trigger,
+                    is_selected,
+                    list_item_colors,
+                    main_menu_theme,
+                );
 
                 row.cursor_pointer()
                     .on_click(move |_, window, cx| {

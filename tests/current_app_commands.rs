@@ -108,7 +108,6 @@ fn root_launcher_renames_current_app_commands_row_from_frontmost_app_snapshot() 
 
 #[test]
 fn do_in_current_app_current_command_alias_clears_palette_filter_without_clearing_plain_text() {
-    // doc-anchor-removed: [[removed-docs and introspection]]
     assert_eq!(
         normalize_do_in_current_app_request(Some("Do in Current Command")),
         None
@@ -134,7 +133,6 @@ fn do_in_current_app_current_command_alias_clears_palette_filter_without_clearin
 
 #[test]
 fn do_in_current_app_submission_clears_any_plain_launcher_filter_when_switching_lists() {
-    // doc-anchor-removed: [[removed-docs and introspection]]
     for launcher_filter in ["do", "do in", "do in current", "automation", "close tab"] {
         assert_eq!(
             effective_do_in_current_app_query_for_submission(launcher_filter, None),
@@ -192,7 +190,6 @@ fn current_app_commands_scroll_does_not_render_reanchor_selection() {
 
 #[test]
 fn do_in_current_app_execution_uses_effective_query_for_list_switching() {
-    // doc-anchor-removed: [[removed-docs and introspection]]
     let source = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("must read builtin execution source");
     let helper_start = source
@@ -232,7 +229,6 @@ fn do_in_current_app_execution_uses_effective_query_for_list_switching() {
 
 #[test]
 fn current_app_commands_presentation_resets_scroll_to_top() {
-    // doc-anchor-removed: [[removed-docs Expanded Browsers]]
     let source = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("must read builtin execution source");
     let fn_start = source
@@ -255,7 +251,6 @@ fn current_app_commands_presentation_resets_scroll_to_top() {
 
 #[test]
 fn current_app_commands_presentation_opens_mini_filterable_view() {
-    // doc-anchor-removed: [[removed-docs Window Sizing Modes]]
     let source = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("must read builtin execution source");
     let fn_start = source

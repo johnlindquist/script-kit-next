@@ -31,7 +31,6 @@ fn hide_body<'a>(name: &str, source: &'a str) -> &'a str {
     &source[hide_start..hide_start + next_arm]
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn hide_rpc_dispatchers_schedule_hidden_script_list_reset() {
     for (name, source) in [
@@ -52,7 +51,6 @@ fn hide_rpc_dispatchers_schedule_hidden_script_list_reset() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn hide_rpc_dispatchers_do_not_reset_or_rekey_before_native_hide() {
     for (name, source) in [
@@ -76,7 +74,6 @@ fn hide_rpc_dispatchers_do_not_reset_or_rekey_before_native_hide() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn hide_rpc_dispatchers_sequence_native_hide_then_hidden_reset() {
     for (name, source) in [
@@ -103,7 +100,6 @@ fn hide_rpc_dispatchers_sequence_native_hide_then_hidden_reset() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn hide_main_window_helper_defers_reset_after_native_hide() {
     // The non-RPC hide helper owns the visible hotkey/menu close path.

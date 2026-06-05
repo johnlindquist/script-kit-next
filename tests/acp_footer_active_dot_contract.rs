@@ -27,7 +27,6 @@ fn fn_body<'a>(source: &'a str, signature: &str) -> &'a str {
     panic!("function body must close");
 }
 
-// doc-anchor-removed: [[acp-chat#Footer activity indicator]]
 #[test]
 fn acp_view_exposes_one_footer_dot_status_mapper_for_active_states() {
     let body = fn_body(ACP_VIEW_SOURCE, "pub(crate) fn footer_dot_status(");

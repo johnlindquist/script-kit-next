@@ -98,8 +98,9 @@ impl ScriptListApp {
             }
 
             AppView::AcpChatView { entity } => {
-                let focused_text_elements =
-                    entity.read(cx).collect_focused_text_mini_elements(limit, cx);
+                let focused_text_elements = entity
+                    .read(cx)
+                    .collect_focused_text_mini_elements(limit, cx);
                 if !focused_text_elements.is_empty() {
                     ElementCollectionOutcome::new(
                         focused_text_elements.clone(),
@@ -268,7 +269,14 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
-                let rows = Self::design_gallery_visible_row_labels(filter);
+                let filter_lower = filter.to_lowercase();
+                let rows: Vec<String> = crate::build_gallery_items()
+                    .into_iter()
+                    .filter(|item| {
+                        filter.is_empty() || crate::gallery_item_matches(item, &filter_lower)
+                    })
+                    .map(|item| crate::design_gallery_item_label(&item))
+                    .collect();
                 self.collect_named_rows(
                     "design-gallery-filter",
                     filter.clone(),
@@ -588,13 +596,14 @@ impl ScriptListApp {
             }
 
             AppView::InstalledKitsView {
+                filter,
                 selected_index,
                 kits,
             } => {
-                let rows = Self::kit_store_installed_visible_row_labels(kits);
+                let rows = Self::kit_store_installed_visible_row_labels(kits, filter);
                 self.collect_named_rows(
                     "installed-kits-filter",
-                    String::new(),
+                    filter.clone(),
                     "installed-kits",
                     &rows,
                     *selected_index,
@@ -1453,7 +1462,7 @@ impl ScriptListApp {
                     .find(|result| result.selected)
             });
 
-        let preview_count = if selected_result.is_some() { 6 } else { 1 };
+        let preview_count = if selected_result.is_some() { 10 } else { 1 };
         let current_count = usize::from(current_result.is_some());
         let total_count = 2 + results.len() + current_count + preview_count;
         let mut elements = Vec::with_capacity(limit.min(total_count));
@@ -1539,9 +1548,11 @@ impl ScriptListApp {
                     role: Some("option".to_string()),
                     kind: Some("profileSearchRow".to_string()),
                     source: Some("profileSearch".to_string()),
-                    source_name: Some(crate::profile_search::source_label(result.profile.source).to_string()),
+                    source_name: Some(
+                        crate::profile_search::source_label(result.profile.source).to_string(),
+                    ),
                     selectable: Some(true),
-                    status_kind: Some(if result.selected { "current" } else { "profile" }.to_string()),
+                    status_kind: result.selected.then(|| "current".to_string()),
                     action_disabled: None,
                 },
             );
@@ -1571,6 +1582,38 @@ impl ScriptListApp {
                     Some(profile.id.clone()),
                     Some("heading".to_string()),
                     Some("profileSearchPreviewTitle".to_string()),
+                    None,
+                ),
+                (
+                    "profile-search-preview-explanation",
+                    protocol::ElementType::Panel,
+                    Some("What profiles do".to_string()),
+                    Some(crate::profile_search::profile_preview_explanation().to_string()),
+                    Some("document".to_string()),
+                    Some("profileSearchPreviewExplanation".to_string()),
+                    None,
+                ),
+                (
+                    "profile-search-preview-overview",
+                    protocol::ElementType::Panel,
+                    Some("Overview".to_string()),
+                    Some(format!(
+                        "{} · {} · {}",
+                        crate::profile_search::source_label(profile.source),
+                        profile.id,
+                        crate::profile_search::backend_label(profile.backend)
+                    )),
+                    Some("group".to_string()),
+                    Some("profileSearchPreviewOverview".to_string()),
+                    None,
+                ),
+                (
+                    "profile-search-preview-runtime",
+                    protocol::ElementType::Panel,
+                    Some("Runtime Setup".to_string()),
+                    Some("Model, tools, and working directory".to_string()),
+                    Some("group".to_string()),
+                    Some("profileSearchPreviewRuntime".to_string()),
                     None,
                 ),
                 (
@@ -1605,6 +1648,15 @@ impl ScriptListApp {
                     None,
                 ),
                 (
+                    "profile-search-preview-instructions",
+                    protocol::ElementType::Panel,
+                    Some("Instructions".to_string()),
+                    Some(crate::profile_search::profile_prompt_summary(profile)),
+                    Some("group".to_string()),
+                    Some("profileSearchPreviewInstructions".to_string()),
+                    None,
+                ),
+                (
                     "profile-search-preview-prompt",
                     protocol::ElementType::Panel,
                     Some("Prompt".to_string()),
@@ -1615,7 +1667,8 @@ impl ScriptListApp {
                 ),
             ];
 
-            for (semantic_id, element_type, text, value, role, kind, status_kind) in preview_fields {
+            for (semantic_id, element_type, text, value, role, kind, status_kind) in preview_fields
+            {
                 truncated |= !Self::push_limited_element(
                     &mut elements,
                     limit,
@@ -2457,12 +2510,9 @@ impl ScriptListApp {
         match result {
             scripts::SearchResult::Script(m) => m.script.name.clone(),
             scripts::SearchResult::Scriptlet(m) => {
-                {
-                    let vars =
-                        crate::context_templates::ContextTemplateVars::from_frontmost_tracker();
-                    crate::context_templates::substitute_context_vars(&m.scriptlet.name, &vars)
-                        .into_owned()
-                }
+                let vars = crate::context_templates::ContextTemplateVars::from_frontmost_tracker();
+                crate::context_templates::substitute_context_vars(&m.scriptlet.name, &vars)
+                    .into_owned()
             }
             scripts::SearchResult::BuiltIn(m) => m.entry.name.clone(),
             scripts::SearchResult::App(m) => m.app.name.clone(),
@@ -2557,6 +2607,16 @@ impl ScriptListApp {
                 list.source = Some("ScriptList".to_string());
             }
 
+            let selected_row_id = self
+                .selected_index
+                .checked_sub(1)
+                .and_then(|index| snapshot.rows.get(index))
+                .map(|row| row.id.as_str())
+                .or(self
+                    .menu_syntax_object_selector_state
+                    .selected_row_id
+                    .as_deref());
+
             for (index, row) in snapshot.rows.iter().enumerate() {
                 if elements.len() >= limit {
                     break;
@@ -2566,12 +2626,7 @@ impl ScriptListApp {
                     element_type: protocol::ElementType::Choice,
                     text: Some(row.title.clone()),
                     value: Some(row.token.clone().unwrap_or_else(|| row.id.clone())),
-                    selected: Some(
-                        self.menu_syntax_object_selector_state
-                            .selected_row_id
-                            .as_deref()
-                            == Some(row.id.as_str()),
-                    ),
+                    selected: Some(selected_row_id == Some(row.id.as_str())),
                     focused: None,
                     index: Some(index),
                     role: Some("menu-syntax-object-selector-row".to_string()),
@@ -2614,7 +2669,9 @@ impl ScriptListApp {
                     text: Some(row.title.clone()),
                     value: Some(row.token.clone().unwrap_or_else(|| row.id.clone())),
                     selected: Some(
-                        self.menu_syntax_trigger_popup_state.selected_row_id.as_deref()
+                        self.menu_syntax_trigger_popup_state
+                            .selected_row_id
+                            .as_deref()
                             == Some(row.id.as_str()),
                     ),
                     focused: None,

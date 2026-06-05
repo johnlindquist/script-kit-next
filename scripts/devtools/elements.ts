@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+export {};
+
 type JsonObject = Record<string, unknown>;
 
 type Args = {
@@ -24,6 +26,11 @@ function usage() {
 }
 
 function parseArgs(argv: string[]): Args {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(usage());
+    process.exit(0);
+  }
+
   if (argv[0] !== "snapshot") {
     console.error(usage());
     process.exit(2);
@@ -81,9 +88,6 @@ function parseArgs(argv: string[]): Args {
       args.start = true;
     } else if (arg === "--show") {
       args.show = true;
-    } else if (arg === "--help" || arg === "-h") {
-      console.log(usage());
-      process.exit(0);
     }
   }
 

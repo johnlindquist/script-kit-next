@@ -30,13 +30,18 @@ fn kit_store_installed_empty_copy_is_modeled() {
         "installed kits empty copy should be modeled as a named state"
     );
     assert!(
-        KIT_STORE.contains("let empty_state = KitStoreInstalledEmptyState::Empty;"),
-        "installed renderer should use the modeled empty state"
+        KIT_STORE.contains("Self::kit_store_installed_empty_state_from_filter(&filter_owned)"),
+        "installed renderer should derive search-empty copy from filter state"
     );
     assert!(
         KIT_STORE.contains("Self::Empty => \"No installed kits\"")
             && KIT_STORE.contains("Self::Empty => \"Use \\\"Browse Kit Store\\\" to install one\""),
         "installed empty state should retain accurate browse handoff copy"
+    );
+    assert!(
+        KIT_STORE.contains("Self::NoSearchResults => \"No installed kits match your search\"")
+            && KIT_STORE.contains("Self::NoSearchResults => \"Try a different search query\""),
+        "installed filtered empty state should keep search-specific empty copy"
     );
 }
 
@@ -69,12 +74,8 @@ fn kit_store_row_detail_copy_is_modeled() {
 #[test]
 fn kit_store_input_and_count_copy_are_modeled() {
     assert!(
-        KIT_STORE.contains("fn kit_store_browse_input_display("),
-        "browse input placeholder/value copy should live in a named helper"
-    );
-    assert!(
-        KIT_STORE.contains("Self::kit_store_browse_input_display(&query_owned)"),
-        "browse renderer should use the input display helper"
+        KIT_STORE.contains("self.render_search_input()"),
+        "Kit Store search surfaces should use the shared GPUI search input"
     );
     assert!(
         KIT_STORE.contains("fn kit_store_browse_count_label(")
@@ -91,7 +92,7 @@ fn kit_store_input_and_count_copy_are_modeled() {
         "installed count helper should avoid ambiguous or unpluralized installed counts"
     );
     assert!(
-        KIT_STORE.contains("Self::kit_store_installed_count_label(total_kits)"),
+        KIT_STORE.contains("Self::kit_store_installed_count_label(dataset_kits)"),
         "installed renderer should use the installed count label helper"
     );
 }

@@ -78,18 +78,32 @@ fn kit_store_installed_layout_receipt_uses_custom_surface_nodes() {
 
     for needle in [
         "KitStoreInstalledHeader",
+        "KitStoreInstalledSearch",
         "KitStoreInstalledCount",
         "KitStoreInstalledList",
         "KitStoreInstalledRow",
-        "UpdateButton",
-        "RemoveButton",
         "KitStoreInstalledFooter",
-        "KIT_STORE_ROW_HEIGHT: f32 = 72.0",
+        "crate::list_item::LIST_ITEM_HEIGHT",
+        "shared MainViewInput search lane",
+        "shared ListItem chrome",
         "instead of the generic launcher split shell",
     ] {
         assert!(
             LAYOUT_SOURCE.contains(needle),
             "KitStoreInstalled layout receipt is missing `{needle}`"
+        );
+    }
+
+    for forbidden in [
+        "KitStoreInstalledTitle",
+        "KitStoreInstalledUpdateButton",
+        "KitStoreInstalledRemoveButton",
+        "kitStoreInstalled.actionButton",
+        "Installed kit rows are 72px tall",
+    ] {
+        assert!(
+            !LAYOUT_SOURCE.contains(forbidden),
+            "KitStoreInstalled layout receipt must not keep stale custom row chrome: {forbidden}"
         );
     }
 }

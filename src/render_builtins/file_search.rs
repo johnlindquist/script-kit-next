@@ -1253,16 +1253,8 @@ impl ScriptListApp {
                 )
         };
 
-        // Compute mini-mode context for mode-aware chrome
         let is_directory_query = crate::file_search::parse_directory_path(query).is_some();
         let is_advanced_query = crate::file_search::looks_like_advanced_mdquery(query);
-        let mode_label = if is_directory_query {
-            "Browse"
-        } else if is_advanced_query {
-            "Spotlight+"
-        } else {
-            "Search"
-        };
 
         let empty_state = FileSearchEmptyState::from_query(query);
         let (empty_title, empty_subtitle) = if is_directory_query && query.ends_with('/') {
@@ -1353,8 +1345,8 @@ impl ScriptListApp {
             vec![primary.into(), ai_hint.into(), "\u{2318}F Focus".into()]
         };
 
-        // Header: shared main-view input shell with File Search's local count
-        // metadata in the trailing lane.
+        // Header: shared main-view input shell. Search metadata stays out of
+        // the input row so main-window chrome keeps identical geometry.
         let menu_def = self.current_main_menu_theme.def();
         let shell = menu_def.shell;
         let header_gap = if is_default_design {
@@ -1418,37 +1410,12 @@ impl ScriptListApp {
                 div().flex_1().flex().flex_row().items_center().child(
                     self.render_search_input(),
                 ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .justify_end()
-                    .w(px(120.))
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child(if is_mini {
-                                format!("{} \u{00b7} {}", mode_label, filtered_len)
-                            } else {
-                                format!("{} files", filtered_len)
-                            }),
-                    ),
             );
         let input = crate::components::main_view_chrome::render_main_view_input_shell(
             &self.theme,
             menu_def,
             crate::components::main_view_chrome::MainViewInputChrome {
                 body: input_body.into_any_element(),
-                leading: Some(
-                    crate::components::main_view_chrome::render_main_view_state_icon(
-                        &self.theme,
-                        menu_def,
-                        "folder-open",
-                    ),
-                ),
                 trailing: Vec::new(),
             },
         );
@@ -1745,29 +1712,41 @@ mod file_search_chrome_audit {
     }
 
     #[test]
-    fn file_search_emits_checkpoint_log() {
+    fn file_search_input_chrome_stays_unadorned() {
         let source = production_source();
+        let input_start = source
+            .find("let input = crate::components::main_view_chrome::render_main_view_input_shell(")
+            .expect("file_search should build shared main-view input");
+        let input_tail = &source[input_start..];
+        let input_end = input_tail
+            .find("let header = crate::components::main_view_chrome::MainViewHeaderChrome")
+            .expect("file_search should build header after input");
+        let input_block = &input_tail[..input_end];
+
         assert!(
-            source.contains("file_search_chrome_checkpoint"),
-            "file_search must emit a structured checkpoint log for migration verification"
+            input_block.contains("body: self.render_search_input().into_any_element()"),
+            "file_search input body should be only the shared search input"
+        );
+        assert!(
+            input_block.contains("trailing: Vec::new()"),
+            "file_search should not add trailing feature-local input chrome"
+        );
+        assert!(
+            !input_block.contains(&("leading".to_owned() + ":"))
+                && !input_block.contains(&("render_main_view_state".to_owned() + "_icon")),
+            "file_search should not add leading input chrome"
         );
     }
 
     #[test]
-    fn file_search_header_count_does_not_add_vertical_padding() {
+    fn file_search_header_has_no_feature_local_count_adornment() {
         let source = production_source();
-        let count_start = source
-            .find(".justify_end()")
-            .expect("file_search count block should justify to the end");
-        let count_tail = &source[count_start..];
-        let count_end = count_tail
-            .find(".child(if is_mini")
-            .expect("file_search count block should render mini/full labels");
-        let count_block = &count_tail[..count_end];
 
         assert!(
-            !count_block.contains(".py("),
-            "file_search header count must not add vertical padding that changes the shared input baseline"
+            !source.contains("filtered_len.to_string()")
+                && !source.contains("files_label")
+                && !source.contains(".child(if is_mini"),
+            "file_search header should not add feature-local count/adornment text beside MainMenuInput"
         );
     }
 

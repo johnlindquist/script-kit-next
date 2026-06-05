@@ -146,7 +146,6 @@ fn extract_function_body(source: &str) -> &str {
     panic!("no matching closing brace found for close_notes_window body");
 }
 
-// doc-anchor-removed: [[removed-docs Contract]]
 #[test]
 fn close_notes_window_exists_with_exact_signature() {
     let hits: Vec<_> = SOURCE.match_indices(FN_SIGNATURE).collect();
@@ -168,7 +167,6 @@ fn close_notes_window_exists_with_exact_signature() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Contract]]
 #[test]
 fn close_notes_window_takes_handle_via_scoped_lock_block() {
     let body = extract_function_body(SOURCE);
@@ -209,7 +207,6 @@ fn close_notes_window_takes_handle_via_scoped_lock_block() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Contract]]
 #[test]
 fn close_notes_window_clears_both_registry_shards() {
     let body = extract_function_body(SOURCE);
@@ -256,7 +253,6 @@ fn close_notes_window_clears_both_registry_shards() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Contract]]
 #[test]
 fn close_notes_window_safety_comment_carries_deadlock_rationale() {
     // Look at the bytes immediately preceding the function body — the

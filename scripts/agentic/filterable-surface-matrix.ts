@@ -71,14 +71,17 @@ export interface CountObservation {
   selectedValue: string | null;
 }
 
-const MAIN_TARGET: MatrixAutomationTarget = { type: "kind", kind: "main", index: 0 };
+const MAIN_TARGET: MatrixAutomationTarget = {
+  type: "kind",
+  kind: "main",
+  index: 0,
+};
 const SAFE_NON_SUBMITTING_INTERACTIONS: SafeSurfaceInteractions = {
   filter: true,
   selectFirstVisibleChoice: false,
   submit: false,
 };
 
-// doc-anchor-removed: [[removed-docs Rules]]
 export const FILTERABLE_SURFACE_MATRIX: FilterableSurfaceMatrixEntry[] = [
   {
     id: "current-app-commands-visible-rows",
@@ -214,7 +217,10 @@ export const FILTERABLE_SURFACE_MATRIX: FilterableSurfaceMatrixEntry[] = [
     promptType: "browseKits",
     surfaceKind: "KitStoreBrowse",
     listSemanticId: "list:kit-results",
-    entryCommand: { type: "triggerBuiltin", builtinId: "builtin/browse-kit-store" },
+    entryCommand: {
+      type: "triggerBuiltin",
+      builtinId: "builtin/browse-kit-store",
+    },
     filterText: "script",
     expectedElementChromeCount: 2,
     target: MAIN_TARGET,
@@ -228,7 +234,10 @@ export const FILTERABLE_SURFACE_MATRIX: FilterableSurfaceMatrixEntry[] = [
     promptType: "installedKits",
     surfaceKind: "KitStoreInstalled",
     listSemanticId: "list:installed-kits",
-    entryCommand: { type: "triggerBuiltin", builtinId: "builtin/manage-installed-kits" },
+    entryCommand: {
+      type: "triggerBuiltin",
+      builtinId: "builtin/manage-installed-kits",
+    },
     filterText: "",
     expectedElementChromeCount: 2,
     target: MAIN_TARGET,
@@ -256,7 +265,10 @@ export const FILTERABLE_SURFACE_MATRIX: FilterableSurfaceMatrixEntry[] = [
     promptType: "searchAiPresets",
     surfaceKind: "GenericFilterableList",
     listSemanticId: "list:ai-presets",
-    entryCommand: { type: "triggerBuiltin", builtinId: "builtin/search-ai-presets" },
+    entryCommand: {
+      type: "triggerBuiltin",
+      builtinId: "builtin/search-ai-presets",
+    },
     filterText: "coder",
     expectedElementChromeCount: 3,
     target: MAIN_TARGET,
@@ -280,14 +292,19 @@ export function selectedCases(caseId: string): FilterableSurfaceMatrixEntry[] {
   if (caseId === "all") {
     return FILTERABLE_SURFACE_MATRIX;
   }
-  const entry = FILTERABLE_SURFACE_MATRIX.find((candidate) => candidate.id === caseId);
+  const entry = FILTERABLE_SURFACE_MATRIX.find(
+    (candidate) => candidate.id === caseId,
+  );
   if (!entry) {
     throw new Error(`Unknown filterable surface matrix case: ${caseId}`);
   }
   return [entry];
 }
 
-export async function runTool(cmd: string[], label: string): Promise<JsonObject> {
+export async function runTool(
+  cmd: string[],
+  label: string,
+): Promise<JsonObject> {
   const proc = Bun.spawn(cmd, {
     cwd: PROJECT_ROOT,
     stdout: "pipe",
@@ -297,7 +314,9 @@ export async function runTool(cmd: string[], label: string): Promise<JsonObject>
   const stderr = (await new Response(proc.stderr).text()).trim();
   const exitCode = await proc.exited;
   if (exitCode !== 0) {
-    throw new Error(`${label} failed: ${stdout || stderr || `exit ${exitCode}`}`);
+    throw new Error(
+      `${label} failed: ${stdout || stderr || `exit ${exitCode}`}`,
+    );
   }
   try {
     return JSON.parse(stdout);
@@ -307,11 +326,17 @@ export async function runTool(cmd: string[], label: string): Promise<JsonObject>
 }
 
 export async function sessionStart(session: string): Promise<JsonObject> {
-  return runTool(["bash", "scripts/agentic/session.sh", "start", session], "session.start");
+  return runTool(
+    ["bash", "scripts/agentic/session.sh", "start", session],
+    "session.start",
+  );
 }
 
 export async function sessionStop(session: string): Promise<JsonObject> {
-  return runTool(["bash", "scripts/agentic/session.sh", "stop", session], "session.stop");
+  return runTool(
+    ["bash", "scripts/agentic/session.sh", "stop", session],
+    "session.stop",
+  );
 }
 
 export async function sendAndAwaitParse(
@@ -340,6 +365,22 @@ export async function sendAndAwaitParse(
   return receipt;
 }
 
+export async function sendCommand(
+  session: string,
+  command: JsonObject,
+): Promise<JsonObject> {
+  return runTool(
+    [
+      "bash",
+      "scripts/agentic/session.sh",
+      "send",
+      session,
+      JSON.stringify(command),
+    ],
+    `send.${String(command.type)}`,
+  );
+}
+
 export async function rpc(
   session: string,
   command: JsonObject,
@@ -361,7 +402,9 @@ export async function rpc(
     `rpc.${String(command.type)}`,
   )) as RpcEnvelope;
   if (envelope.status !== "ok" || !envelope.response) {
-    throw new Error(`RPC ${String(command.type)} failed: ${JSON.stringify(envelope)}`);
+    throw new Error(
+      `RPC ${String(command.type)} failed: ${JSON.stringify(envelope)}`,
+    );
   }
   return envelope.response;
 }
@@ -398,7 +441,10 @@ export function elementsFrom(response: JsonObject): JsonObject[] {
   return elements as JsonObject[];
 }
 
-function listCountFromElements(response: JsonObject, listSemanticId: string): number {
+function listCountFromElements(
+  response: JsonObject,
+  listSemanticId: string,
+): number {
   const list = elementsFrom(response).find(
     (element) => element.semanticId === listSemanticId,
   );
@@ -408,7 +454,9 @@ function listCountFromElements(response: JsonObject, listSemanticId: string): nu
   const text = stringField(list, "text");
   const match = text.match(/^(\d+) items?$/);
   if (!match) {
-    throw new Error(`List ${listSemanticId} text is not an item count: ${text}`);
+    throw new Error(
+      `List ${listSemanticId} text is not an item count: ${text}`,
+    );
   }
   return Number(match[1]);
 }
@@ -456,7 +504,10 @@ export function observeCounts(
       `${entry.id}: list count ${listCount} differs from visibleChoiceCount ${visibleChoiceCount}`,
     );
   }
-  if (elementsTotalCount < visibleChoiceCount + entry.expectedElementChromeCount) {
+  if (
+    elementsTotalCount <
+    visibleChoiceCount + entry.expectedElementChromeCount
+  ) {
     throw new Error(
       `${entry.id}: elements totalCount ${elementsTotalCount} is smaller than visible rows plus required chrome`,
     );
@@ -511,7 +562,12 @@ export async function waitForPromptType(
       type: "getState",
       requestId: `${entry.id}-wait-state-${Date.now()}`,
     };
-    const state = await rpc(session, command, "stateResult", Math.min(timeoutMs, 1000));
+    const state = await rpc(
+      session,
+      command,
+      "stateResult",
+      Math.min(timeoutMs, 1000),
+    );
     lastState = state;
     if (state.promptType === entry.promptType) {
       return state;
@@ -523,13 +579,71 @@ export async function waitForPromptType(
   );
 }
 
+function stateInputText(state: JsonObject): string {
+  if (typeof state.inputValue === "string") {
+    return state.inputValue;
+  }
+  const decorations = state.filterInputDecorations;
+  if (
+    decorations &&
+    typeof decorations === "object" &&
+    !Array.isArray(decorations) &&
+    typeof (decorations as JsonObject).text === "string"
+  ) {
+    return (decorations as JsonObject).text as string;
+  }
+  return "";
+}
+
+export async function setFilterAndWaitForState(
+  session: string,
+  entry: FilterableSurfaceMatrixEntry,
+  text: string,
+  requestId: string,
+  timeoutMs: number,
+): Promise<JsonObject> {
+  const command = {
+    type: "setFilter",
+    text,
+    requestId,
+  };
+  await sendCommand(session, command);
+
+  const deadline = Date.now() + timeoutMs;
+  let lastState: JsonObject | null = null;
+  while (Date.now() < deadline) {
+    const state = await rpc(
+      session,
+      {
+        type: "getState",
+        requestId: `${requestId}-state-${Date.now()}`,
+        target: entry.target,
+      },
+      "stateResult",
+      Math.min(timeoutMs, 1000),
+    );
+    lastState = state;
+    if (stateInputText(state) === text) {
+      return state;
+    }
+    await Bun.sleep(50);
+  }
+  throw new Error(
+    `${entry.id}: setFilter ${JSON.stringify(text)} was not reflected in state, last state ${JSON.stringify(lastState)}`,
+  );
+}
+
 export async function getStateAndElements(
   session: string,
   entry: FilterableSurfaceMatrixEntry,
   timeoutMs: number,
   requestLabel = "snapshot",
   targetOverride: MatrixAutomationTarget = entry.target,
-): Promise<{ state: JsonObject; elements: JsonObject; observation: CountObservation }> {
+): Promise<{
+  state: JsonObject;
+  elements: JsonObject;
+  observation: CountObservation;
+}> {
   const stateCommand = {
     type: "getState",
     requestId: `${entry.id}-${requestLabel}-state`,
@@ -542,7 +656,12 @@ export async function getStateAndElements(
     limit: 500,
   };
   const state = await rpc(session, stateCommand, "stateResult", timeoutMs);
-  const elements = await rpc(session, elementsCommand, "elementsResult", timeoutMs);
+  const elements = await rpc(
+    session,
+    elementsCommand,
+    "elementsResult",
+    timeoutMs,
+  );
   return {
     state,
     elements,
@@ -559,7 +678,13 @@ export async function runEntry(
 
   await enterFilterableSurface(session, entry, timeoutMs);
   if (entry.filterText !== "") {
-    await sendAndAwaitParse(session, { type: "setFilter", text: "" }, timeoutMs);
+    await setFilterAndWaitForState(
+      session,
+      entry,
+      "",
+      `${entry.id}-reset-filter`,
+      timeoutMs,
+    );
   }
 
   const emptyStateCommand = {
@@ -573,19 +698,33 @@ export async function runEntry(
     target: entry.target,
     limit: 500,
   };
-  const emptySnapshot = await getStateAndElements(session, entry, timeoutMs, "empty");
+  const emptySnapshot = await getStateAndElements(
+    session,
+    entry,
+    timeoutMs,
+    "empty",
+  );
   const emptyState = emptySnapshot.state;
   const emptyElements = emptySnapshot.elements;
-  steps.push({ name: "empty.getState", command: emptyStateCommand, response: emptyState });
+  steps.push({
+    name: "empty.getState",
+    command: emptyStateCommand,
+    response: emptyState,
+  });
   steps.push({
     name: "empty.getElements",
     command: emptyElementsCommand,
     response: emptyElements,
   });
 
-  const setFilterCommand = { type: "setFilter", text: entry.filterText };
   if (entry.filterText !== "") {
-    await sendAndAwaitParse(session, setFilterCommand, timeoutMs);
+    await setFilterAndWaitForState(
+      session,
+      entry,
+      entry.filterText,
+      `${entry.id}-set-filter`,
+      timeoutMs,
+    );
   }
 
   const filteredStateCommand = {
@@ -599,7 +738,12 @@ export async function runEntry(
     target: entry.target,
     limit: 500,
   };
-  const filteredSnapshot = await getStateAndElements(session, entry, timeoutMs, "filtered");
+  const filteredSnapshot = await getStateAndElements(
+    session,
+    entry,
+    timeoutMs,
+    "filtered",
+  );
   const filteredState = filteredSnapshot.state;
   const filteredElements = filteredSnapshot.elements;
   steps.push({

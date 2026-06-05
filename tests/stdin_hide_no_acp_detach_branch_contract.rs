@@ -21,7 +21,7 @@
 //!
 //! The two paths therefore diverge deliberately:
 //!   - hotkey toggle + AcpChatView active → detach + keep main visible on ScriptList
-//!   - stdin hide + AcpChatView active    → reset main to ScriptList + hide
+//!   - stdin hide + AcpChatView active    → hide main + schedule hidden ScriptList reset
 //!
 //! Live-verified on dev-watch pid 89365 (Pass #44 probe + Pass #45 verify):
 //! `triggerBuiltin tab-ai` + `show` → `listAutomationWindows` reports
@@ -35,7 +35,7 @@
 //! a shared `dismiss_main()` function that both paths call — would silently
 //! break this intentional asymmetry. This contract pins it: the stdin Hide arm
 //! in each of the three dispatcher source files must contain the
-//! `reset_to_script_list` reset AND must NOT contain any of the
+//! hidden ScriptList reset scheduling AND must NOT contain any of the
 //! hotkey-detach-specific identifiers (`open_chat_window_with_thread`,
 //! `hotkey_detach_acp_requested`, `matches!(... AcpChatView ...)`).
 //!
@@ -48,6 +48,7 @@ const RUNTIME_STDIN_MATCH_CORE: &str =
     include_str!("../src/main_entry/runtime_stdin_match_core.rs");
 const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
+const LIFECYCLE_RESET: &str = include_str!("../src/app_impl/lifecycle_reset.rs");
 
 /// Extract the textual body of the `ExternalCommand::Hide` match arm from a
 /// dispatcher source file. We slice from the `ExternalCommand::Hide {` header
@@ -56,7 +57,7 @@ const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 /// the two markers, so any detach-related identifier living anywhere inside
 /// the Hide arm will be caught, not just ones near the top.
 fn hide_arm_body<'a>(src: &'a str, path: &str) -> &'a str {
-    let start_marker = "ExternalCommand::Hide {";
+    let start_marker = "ExternalCommand::Hide { ref request_id }";
     let start = src.find(start_marker).unwrap_or_else(|| {
         panic!(
             "{path}: could not locate `ExternalCommand::Hide {{` — the stdin \
@@ -102,25 +103,20 @@ fn assert_stdin_hide_arm_is_detach_free(src: &str, path: &str) {
     let body = hide_arm_body(src, path);
 
     assert!(
-        body.contains("view.reset_to_script_list(ctx)"),
-        "{path} `ExternalCommand::Hide` arm must call \
-         `view.reset_to_script_list(ctx)` so a hide issued while in a subview \
-         (e.g. `FileSearchView` / `AcpChatView`) resets the view BEFORE the \
-         automation surface re-key, preventing a stale subview tag from \
-         leaking across the next show. This is the positive half of the \
-         contract — the asymmetry documented in this file only holds if the \
-         reset itself is present."
+        body.contains("platform::defer_hide_main_window(ctx);")
+            && body.contains("view.defer_reset_to_script_list_after_main_window_hidden("),
+        "{path} `ExternalCommand::Hide` arm must enqueue the native hide and \
+         then schedule a hidden ScriptList reset. A hide issued while in a \
+         subview (e.g. `FileSearchView` / `AcpChatView`) must not leak a \
+         stale subview tag across the next show, but it also must not render \
+         a visible ScriptList frame while the panel is closing."
     );
 
     assert!(
-        body.contains("update_automation_semantic_surface") && body.contains("\"scriptList\""),
-        "{path} `ExternalCommand::Hide` arm must re-key the automation \
-         `semanticSurface` to `\"scriptList\"` via \
-         `update_automation_semantic_surface(\"main\", Some(\"scriptList\".to_string()))` \
-         (or equivalent) after the view reset. Without this, \
-         `listAutomationWindows.windows[0].semanticSurface` could stay pinned \
-         to the prior subview tag even though the view is already back to \
-         ScriptList."
+        body.find("platform::defer_hide_main_window(ctx);")
+            < body.find("view.defer_reset_to_script_list_after_main_window_hidden("),
+        "{path} `ExternalCommand::Hide` arm must schedule its hidden reset \
+         after native hide is enqueued."
     );
 
     for sentinel in DETACH_SENTINELS {
@@ -143,7 +139,23 @@ fn assert_stdin_hide_arm_is_detach_free(src: &str, path: &str) {
     }
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
+#[test]
+fn hidden_hide_reset_helper_resets_view_and_rekeys_surface() {
+    let helper_start = LIFECYCLE_RESET
+        .find("pub(crate) fn reset_hidden_main_window_to_script_list(")
+        .expect("lifecycle_reset.rs must define the hidden reset helper");
+    let helper_body =
+        &LIFECYCLE_RESET[helper_start..(helper_start + 900).min(LIFECYCLE_RESET.len())];
+
+    assert!(
+        helper_body.contains("self.reset_to_script_list(cx);")
+            && helper_body.contains("self.rekey_main_automation_surface_from_current_view();")
+            && helper_body.contains("crate::windows::set_automation_visibility(\"main\", false);"),
+        "hidden reset helper must own the post-hide ScriptList reset, \
+         automation surface re-key, and hidden visibility update"
+    );
+}
+
 #[test]
 fn runtime_stdin_match_core_hide_arm_has_no_detach_branch() {
     assert_stdin_hide_arm_is_detach_free(
@@ -152,13 +164,11 @@ fn runtime_stdin_match_core_hide_arm_has_no_detach_branch() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn runtime_stdin_hide_arm_has_no_detach_branch() {
     assert_stdin_hide_arm_is_detach_free(RUNTIME_STDIN, "src/main_entry/runtime_stdin.rs");
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn app_run_setup_hide_arm_has_no_detach_branch() {
     assert_stdin_hide_arm_is_detach_free(APP_RUN_SETUP, "src/main_entry/app_run_setup.rs");

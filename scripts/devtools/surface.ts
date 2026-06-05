@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+export {};
+
 type JsonObject = Record<string, unknown>;
 
 type SurfaceContract = {
@@ -38,6 +40,11 @@ function usage() {
 }
 
 function parseArgs(argv: string[]) {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(usage());
+    process.exit(0);
+  }
+
   const command = argv[0] === "inspect" ? "inspect" : "";
   const args = {
     command,
@@ -56,9 +63,6 @@ function parseArgs(argv: string[]) {
     if (arg === "--surface") {
       args.surfaceKind = argv[++index] ?? "";
       args.forwarded.push("--surface", args.surfaceKind);
-    } else if (arg === "--help" || arg === "-h") {
-      console.log(usage());
-      process.exit(0);
     } else {
       args.forwarded.push(arg);
       if (

@@ -163,14 +163,6 @@ impl ScriptListApp {
             .collect()
     }
 
-    fn footer_gallery_input_display(filter: &str) -> SharedString {
-        if filter.is_empty() {
-            SharedString::from("Search footer variations...")
-        } else {
-            SharedString::from(filter.to_string())
-        }
-    }
-
     fn footer_gallery_count_label(filtered_len: usize) -> String {
         let suffix = if filtered_len == 1 { "" } else { "s" };
         format!("{} variation{}", filtered_len, suffix)
@@ -198,9 +190,7 @@ impl ScriptListApp {
         let empty_font_family = typography_resolver.primary_font().to_string();
 
         let text_primary = self.theme.colors.text.primary;
-        let text_muted = self.theme.colors.text.muted;
         let text_dimmed = self.theme.colors.text.dimmed;
-        let ui_border = self.theme.colors.ui.border;
 
         // Build list of filtered variations
         let filtered_items = Self::footer_gallery_visible_rows(&filter);
@@ -234,11 +224,7 @@ impl ScriptListApp {
                     return;
                 }
 
-                if let AppView::FooterGalleryView {
-                    filter,
-                    selected_index,
-                } = &mut this.current_view
-                {
+                if let AppView::FooterGalleryView { selected_index, .. } = &mut this.current_view {
                     let current_filtered_len = filtered_len;
 
                     match key {
@@ -258,35 +244,13 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
-                        "backspace" => {
-                            if !filter.is_empty() {
-                                filter.pop();
-                                *selected_index = 0;
-                                this.footer_gallery_scroll_handle
-                                    .scroll_to_item(0, ScrollStrategy::Top);
-                                cx.notify();
-                            }
-                        }
-                        _ => {
-                            if let Some(ref key_char) = event.keystroke.key_char {
-                                if let Some(ch) = key_char.chars().next() {
-                                    if !ch.is_control() {
-                                        filter.push(ch);
-                                        *selected_index = 0;
-                                        this.footer_gallery_scroll_handle
-                                            .scroll_to_item(0, ScrollStrategy::Top);
-                                        cx.notify();
-                                    }
-                                }
-                            }
-                        }
+                        // Text editing is owned by the shared GPUI input and
+                        // routed through InputEvent::Change in startup.rs.
+                        _ => {}
                     }
                 }
             },
         );
-
-        let input_display = Self::footer_gallery_input_display(&filter);
-        let input_is_empty = filter.is_empty();
 
         let list_element: AnyElement = if filtered_len == 0 {
             crate::list_item::EmptyState::new(
@@ -404,102 +368,41 @@ impl ScriptListApp {
             .into_any_element();
         let footer = self.main_window_footer_slot(footer);
 
-        let surface = div()
-            .flex()
-            .flex_col()
+        let header = div()
             .w_full()
-            .h_full()
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
-            .key_context("footer_gallery")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            // Header with search input
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_3()
+            .child(self.render_search_input())
             .child(
                 div()
-                    .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_3()
-                    // Search icon
-                    .child(div().text_xl().child("🎹"))
-                    // Input with blinking cursor
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .text_lg()
-                            .text_color(if input_is_empty {
-                                rgb(text_muted)
-                            } else {
-                                rgb(text_primary)
-                            })
-                            .when(input_is_empty, |d| {
-                                d.child(
-                                    div()
-                                        .w(px(CURSOR_WIDTH))
-                                        .h(px(CURSOR_HEIGHT_LG))
-                                        .my(px(CURSOR_MARGIN_Y))
-                                        .mr(px(CURSOR_GAP_X))
-                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
-                                )
-                            })
-                            .when(input_is_empty, |d| {
-                                d.child(
-                                    div()
-                                        .ml(px(-(CURSOR_WIDTH + CURSOR_GAP_X)))
-                                        .child(input_display.clone()),
-                                )
-                            })
-                            .when(!input_is_empty, |d| d.child(input_display.clone()))
-                            .when(!input_is_empty, |d| {
-                                d.child(
-                                    div()
-                                        .w(px(CURSOR_WIDTH))
-                                        .h(px(CURSOR_HEIGHT_LG))
-                                        .my(px(CURSOR_MARGIN_Y))
-                                        .ml(px(CURSOR_GAP_X))
-                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
-                                )
-                            }),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child(Self::footer_gallery_count_label(filtered_len)),
-                    ),
-            )
-            // Divider
-            .child(
-                div()
-                    .mx(px(design_spacing.padding_lg))
-                    .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60)),
-            )
-            // List content area
-            .child(
-                div()
-                    .flex_1()
-                    .w_full()
-                    .h_full()
-                    .min_h(px(0.))
-                    .overflow_hidden()
-                    .py(px(design_spacing.padding_xs))
-                    .child(list_element),
+                    .text_sm()
+                    .text_color(rgb(text_dimmed))
+                    .child(Self::footer_gallery_count_label(filtered_len)),
             );
 
-        if let Some(footer) = footer {
-            surface.child(footer)
-        } else {
-            surface
-        }
+        let content = div()
+            .flex_1()
+            .w_full()
+            .h_full()
+            .min_h(px(0.))
+            .overflow_hidden()
+            .py(px(design_spacing.padding_xs))
+            .text_color(rgb(text_primary))
+            .font_family(design_typography.font_family)
+            .child(list_element);
+
+        crate::components::render_minimal_list_prompt_shell_with_footer(
+            design_visual.radius_lg,
+            None,
+            header,
+            content,
+            footer,
+        )
+        .key_context("footer_gallery")
+        .track_focus(&self.focus_handle)
+        .on_key_down(handle_key)
         .into_any_element()
     }
 }

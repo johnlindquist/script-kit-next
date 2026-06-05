@@ -19,8 +19,6 @@ const MAIN_RENDER_SOURCE: &str = include_str!("../src/main_sections/render_impl.
 const LIST_ITEM_SOURCE: &str = include_str!("../src/list_item/mod.rs");
 const FILE_SEARCH_SOURCE: &str = include_str!("../src/render_builtins/file_search.rs");
 const THEME_CHOOSER_SOURCE: &str = include_str!("../src/render_builtins/theme_chooser.rs");
-const THEME_CHOOSER_HEADER_SOURCE: &str =
-    include_str!("../src/render_builtins/theme_chooser_list_header.rs");
 const KIT_STORE_SOURCE: &str = include_str!("../src/render_builtins/kit_store.rs");
 const SELECT_PROMPT_SOURCE: &str = include_str!("../src/prompts/select/prompt.rs");
 const SELECT_RENDER_SOURCE: &str = include_str!("../src/prompts/select/render.rs");
@@ -234,36 +232,21 @@ fn file_search_rows_keep_drag_safe_explicit_hover_state() {
 #[test]
 fn theme_chooser_rows_use_direct_gpui_hover() {
     assert!(
-        THEME_CHOOSER_SOURCE.contains("d.hover(move |s| s.bg(theme_row_hover_bg))"),
-        "theme chooser rows should use direct GPUI hover styling"
+        THEME_CHOOSER_SOURCE
+            .contains("crate::list_item::ListItem::new(name.to_string(), list_colors)")
+            && THEME_CHOOSER_SOURCE.contains(".selected(is_selected)")
+            && THEME_CHOOSER_SOURCE.contains(".with_accent_bar(true)"),
+        "theme chooser rows should use shared ListItem styling instead of manual hover bookkeeping"
     );
     for needle in [
         "current_input_mode == InputMode::Mouse",
         "let hover_entity_handle = entity_handle.clone();",
+        "this.hovered_index = Some(ix);",
         ".on_hover(hover_handler)",
     ] {
         assert!(
             !THEME_CHOOSER_SOURCE.contains(needle),
             "unexpected legacy theme-chooser hover pattern still present: {needle}"
-        );
-    }
-}
-
-#[test]
-fn theme_chooser_header_rows_use_direct_gpui_hover() {
-    assert!(
-        THEME_CHOOSER_HEADER_SOURCE.contains("d.hover(move |s| s.bg(hover_bg))"),
-        "theme chooser header rows should use direct GPUI hover styling"
-    );
-    for needle in [
-        "current_input_mode == InputMode::Mouse",
-        "this.input_mode = InputMode::Mouse;",
-        "this.hovered_index = Some(ix);",
-        ".on_hover(hover_handler)",
-    ] {
-        assert!(
-            !THEME_CHOOSER_HEADER_SOURCE.contains(needle),
-            "unexpected legacy theme-chooser-header hover pattern still present: {needle}"
         );
     }
 }
@@ -470,6 +453,36 @@ fn select_prompt_uses_shared_semantic_ids_and_chrome_contract() {
             && SELECT_RENDER_SOURCE.contains("active_main_window_footer_surface()")
             && SELECT_RENDER_SOURCE.contains("render_native_main_window_footer_spacer()"),
         "SelectPrompt should use the footer-aware shell so native and GPUI footers cannot stack"
+    );
+}
+
+#[test]
+fn select_prompt_search_header_is_prompt_owned_and_shared_chrome() {
+    let production = SELECT_RENDER_SOURCE
+        .split("#[cfg(test)]")
+        .next()
+        .expect("select render production source should exist");
+    assert!(
+        production.contains("fn render_select_search_header("),
+        "SelectPrompt should isolate its prompt-owned search header behind one helper"
+    );
+    assert!(
+        production.contains("render_select_search_header("),
+        "SelectPrompt render should use the shared prompt-owned search header helper"
+    );
+    assert!(
+        production.contains("input:select-filter"),
+        "SelectPrompt must preserve the automation-visible search input identity"
+    );
+    assert!(
+        production.contains("render_minimal_list_prompt_shell_with_footer("),
+        "SelectPrompt should keep shared minimal-list shell ownership for padding and footer layout"
+    );
+    assert!(
+        !production.contains("render_search_input(")
+            && !production.contains("gpui_input_state")
+            && !production.contains("TextInputState"),
+        "SelectPrompt must not borrow launcher or form text-input ownership"
     );
 }
 

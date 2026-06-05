@@ -36,7 +36,6 @@ fn compact(source: &str) -> String {
     source.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
-// doc-anchor-removed: [[removed-docs Transition Owner]]
 #[test]
 fn show_filterable_view_delegates_to_state_machine() {
     let body = body_of(DISPATCH, "fn show_filterable_view(");
@@ -55,7 +54,6 @@ fn show_filterable_view_delegates_to_state_machine() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Transition Owner]]
 #[test]
 fn route_state_machine_has_explicit_terminal_states() {
     for required in [
@@ -88,7 +86,6 @@ fn route_state_machine_has_explicit_terminal_states() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs Transition Owner]]
 #[test]
 fn filterable_view_preparation_preserves_route_specific_side_effects() {
     let prepare = body_of(DISPATCH, "fn prepare_filterable_route(");
@@ -133,7 +130,6 @@ fn filterable_view_preparation_preserves_route_specific_side_effects() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Transition Owner]]
 #[test]
 fn apply_filterable_route_plan_is_the_single_assignment_step() {
     let apply = body_of(DISPATCH, "fn apply_filterable_route_plan(");

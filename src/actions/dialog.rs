@@ -6,7 +6,7 @@
 // The main ActionsDialog struct and its implementation, providing a searchable
 // action menu as a compact overlay popup.
 
-use crate::components::scrollbar::{Scrollbar, ScrollbarColors};
+use crate::components::scrollbar::{Scrollbar, ScrollbarColors, ScrollbarMetrics};
 use crate::designs::{get_tokens, DesignColors, DesignVariant};
 use crate::logging;
 use crate::menu_syntax_actions::{
@@ -17,7 +17,7 @@ use crate::theme;
 use crate::theme::types::BackgroundOpacity;
 use crate::theme::AppChromeColors;
 use gpui::{
-    div, list, prelude::*, px, rgb, rgba, svg, App, BoxShadow, Context, ElementId, FocusHandle,
+    div, list, prelude::*, px, rgb, rgba, App, BoxShadow, Context, ElementId, FocusHandle,
     Focusable, ListAlignment, ListState, Render, SharedString, Window,
 };
 use std::collections::{HashMap, HashSet};
@@ -430,6 +430,24 @@ pub(super) fn actions_dialog_scrollbar_viewport_height(
     total_content_height.min(available_viewport_height)
 }
 
+pub(super) fn actions_dialog_revealed_scroll_top(
+    current_top: f32,
+    viewport_height: f32,
+    content_height: f32,
+    selected_top: f32,
+    selected_bottom: f32,
+) -> f32 {
+    let current_bottom = current_top + viewport_height;
+    let next_top = if selected_top < current_top {
+        selected_top
+    } else if selected_bottom > current_bottom {
+        selected_bottom - viewport_height
+    } else {
+        current_top
+    };
+    next_top.clamp(0.0, (content_height - viewport_height).max(0.0))
+}
+
 /// Resolve empty-state copy based on whether a search query is active.
 pub(super) fn actions_dialog_empty_state_message(search_text: &str) -> &'static str {
     if search_text.trim().is_empty() {
@@ -597,6 +615,8 @@ pub struct ActionsDialog {
     scrollbar_fade_gen: u64,
     /// Last scroll activity time used by the idle fade timer.
     last_scroll_time: Option<Instant>,
+    /// Pixel scroll position expected from pending keyboard reveal work.
+    pending_scrollbar_scroll_top_y: Option<f32>,
 }
 
 #[inline]
@@ -637,6 +657,112 @@ const ACTIONS_DIALOG_LIST_OVERDRAW_PX: f32 = 100.0;
 impl ActionsDialog {
     fn shows_context_header(&self) -> bool {
         self.config.show_context_header && self.context_title.is_some()
+    }
+
+    fn row_height_for_scroll(item: &GroupedActionItem, row_height: f32) -> f32 {
+        match item {
+            GroupedActionItem::SectionHeader(_) => SECTION_HEADER_HEIGHT,
+            GroupedActionItem::Item(_) => row_height,
+        }
+    }
+
+    fn scroll_content_height_for_items(items: &[GroupedActionItem], row_height: f32) -> f32 {
+        items
+            .iter()
+            .map(|item| Self::row_height_for_scroll(item, row_height))
+            .sum()
+    }
+
+    fn min_scroll_content_height(&self, row_height: f32) -> f32 {
+        let has_action = self
+            .grouped_items
+            .iter()
+            .any(|item| matches!(item, GroupedActionItem::Item(_)));
+        if has_action {
+            0.0
+        } else {
+            row_height
+        }
+    }
+
+    fn actions_scroll_content_height(&self, row_height: f32) -> f32 {
+        Self::scroll_content_height_for_items(&self.grouped_items, row_height)
+            .max(self.min_scroll_content_height(row_height))
+    }
+
+    fn actions_scroll_viewport_height(&self, row_height: f32) -> f32 {
+        let show_search =
+            !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
+        actions_dialog_scrollbar_viewport_height(
+            self.actions_scroll_content_height(row_height),
+            show_search,
+            self.shows_context_header() && actions_dialog_default_style().show_header,
+            self.config.show_footer,
+            self.config.max_height,
+        )
+    }
+
+    fn scroll_top_y_for_item_index(&self, item_index: usize, row_height: f32) -> f32 {
+        self.grouped_items
+            .iter()
+            .take(item_index)
+            .map(|item| Self::row_height_for_scroll(item, row_height))
+            .sum()
+    }
+
+    fn live_scroll_top_y(&self, row_height: f32) -> f32 {
+        self.scroll_top_y_for_item_index(self.list_state.logical_scroll_top().item_ix, row_height)
+    }
+
+    fn effective_scroll_top_y(&self, row_height: f32) -> f32 {
+        let content_height = self.actions_scroll_content_height(row_height);
+        let viewport_height = self.actions_scroll_viewport_height(row_height);
+        let max_scroll_top = (content_height - viewport_height).max(0.0);
+        self.pending_scrollbar_scroll_top_y
+            .unwrap_or_else(|| self.live_scroll_top_y(row_height))
+            .clamp(0.0, max_scroll_top)
+    }
+
+    fn selected_row_content_range(&self, row_height: f32) -> Option<(f32, f32)> {
+        let item = self.grouped_items.get(self.selected_index)?;
+        let top = self.scroll_top_y_for_item_index(self.selected_index, row_height);
+        Some((top, top + Self::row_height_for_scroll(item, row_height)))
+    }
+
+    fn scrollbar_metrics(&self, row_height: f32) -> ScrollbarMetrics {
+        ScrollbarMetrics::from_pixels(
+            self.actions_scroll_content_height(row_height),
+            self.actions_scroll_viewport_height(row_height),
+            self.effective_scroll_top_y(row_height),
+        )
+    }
+
+    fn update_pending_scrollbar_reveal_offset(&mut self, row_height: f32) {
+        if first_selectable_index(&self.grouped_items) == Some(self.selected_index) {
+            self.pending_scrollbar_scroll_top_y = Some(0.0);
+            return;
+        }
+
+        let Some((selected_top, selected_bottom)) = self.selected_row_content_range(row_height)
+        else {
+            self.pending_scrollbar_scroll_top_y = None;
+            return;
+        };
+
+        let content_height = self.actions_scroll_content_height(row_height);
+        let viewport_height = self.actions_scroll_viewport_height(row_height);
+        let current_top = self.effective_scroll_top_y(row_height);
+        self.pending_scrollbar_scroll_top_y = Some(actions_dialog_revealed_scroll_top(
+            current_top,
+            viewport_height,
+            content_height,
+            selected_top,
+            selected_bottom,
+        ));
+    }
+
+    fn clear_pending_scrollbar_offset(&mut self) {
+        self.pending_scrollbar_scroll_top_y = None;
     }
 
     fn search_placeholder_text(&self) -> SharedString {
@@ -809,6 +935,7 @@ impl ActionsDialog {
             scrollbar_visibility: crate::transitions::Opacity::INVISIBLE,
             scrollbar_fade_gen: 0,
             last_scroll_time: None,
+            pending_scrollbar_scroll_top_y: None,
         }
     }
 
@@ -1676,44 +1803,29 @@ impl ActionsDialog {
         };
         let list_top = if search_at_top { search_height } else { 0.0 } + header_height;
 
-        let mut content_height = 0.0;
+        let mut raw_content_height = 0.0;
         let mut action_count = 0_usize;
         let mut section_count = 0_usize;
         for item in &self.grouped_items {
             match item {
                 GroupedActionItem::SectionHeader(_) => {
                     section_count += 1;
-                    content_height += SECTION_HEADER_HEIGHT;
+                    raw_content_height += SECTION_HEADER_HEIGHT;
                 }
                 GroupedActionItem::Item(_) => {
                     action_count += 1;
-                    content_height += style.row_height;
+                    raw_content_height += style.row_height;
                 }
             }
         }
 
-        let min_content_height = if action_count == 0 {
-            style.row_height
-        } else {
-            0.0
-        };
-        let viewport_height = actions_dialog_scrollbar_viewport_height(
-            content_height.max(min_content_height),
-            show_search,
-            self.shows_context_header() && style.show_header,
-            self.config.show_footer,
-            self.config.max_height,
-        );
+        let content_height =
+            raw_content_height.max(self.min_scroll_content_height(style.row_height));
+        let metrics = self.scrollbar_metrics(style.row_height);
+        let viewport_height = metrics.viewport_height;
         let scroll_top_item_index = self.list_state.logical_scroll_top().item_ix;
-        let scroll_top_content_y: f32 = self
-            .grouped_items
-            .iter()
-            .take(scroll_top_item_index)
-            .map(|item| match item {
-                GroupedActionItem::SectionHeader(_) => SECTION_HEADER_HEIGHT,
-                GroupedActionItem::Item(_) => style.row_height,
-            })
-            .sum();
+        let live_scroll_top_content_y = self.live_scroll_top_y(style.row_height);
+        let scroll_top_content_y = metrics.scroll_top_y;
 
         let viewport_bottom = list_top + viewport_height;
         let mut content_y = 0.0;
@@ -1910,13 +2022,25 @@ impl ActionsDialog {
                 },
                 "scroll": {
                     "topGroupedIndex": scroll_top_item_index,
-                    "pixelOffsetAvailable": false,
-                    "pixelOffset": null,
+                    "pixelOffsetAvailable": true,
+                    "pixelOffset": scroll_top_content_y,
+                    "livePixelOffset": live_scroll_top_content_y,
+                    "pendingPixelOffset": self.pending_scrollbar_scroll_top_y,
                 },
             },
-            "contentHeight": content_height.max(min_content_height),
+            "contentHeight": content_height,
             "scrollTopItemIndex": scroll_top_item_index,
             "scrollTopContentY": scroll_top_content_y,
+            "scrollbar": {
+                "contentHeight": metrics.content_height,
+                "viewportHeight": metrics.viewport_height,
+                "scrollTopY": metrics.scroll_top_y,
+                "maxScrollTopY": metrics.max_scroll_top_y,
+                "thumbHeightPx": metrics.thumb_height_px,
+                "thumbTopPx": metrics.thumb_top_px,
+                "thumbPositionRatio": metrics.thumb_position_ratio,
+                "visible": metrics.should_show(),
+            },
             "sectionBoundsAvailable": true,
             "rowBoundsAvailable": true,
             "selectedRowBoundsAvailable": selected_row.is_some(),
@@ -1983,16 +2107,7 @@ impl ActionsDialog {
             return;
         }
 
-        let scroll_top_item_index = self.list_state.logical_scroll_top().item_ix;
-        let scroll_top_content_y: f32 = self
-            .grouped_items
-            .iter()
-            .take(scroll_top_item_index)
-            .map(|item| match item {
-                GroupedActionItem::SectionHeader(_) => SECTION_HEADER_HEIGHT,
-                GroupedActionItem::Item(_) => style.row_height,
-            })
-            .sum();
+        let scroll_top_content_y = self.effective_scroll_top_y(style.row_height);
         content_y += scroll_top_content_y;
 
         let mut cursor_y = 0.0;
@@ -2634,6 +2749,7 @@ impl ActionsDialog {
     /// - Results are sorted by score (descending)
     fn refilter(&mut self) {
         self.clear_mouse_submit_arm();
+        self.clear_pending_scrollbar_offset();
         // Preserve selection if possible (track which action was selected)
         // NOTE: selected_index is an index into grouped_items, not filtered_actions.
         // We must extract the filter_idx from the GroupedActionItem first.
@@ -2709,6 +2825,7 @@ impl ActionsDialog {
 
         // Only scroll if we have results
         if !self.grouped_items.is_empty() {
+            self.update_pending_scrollbar_reveal_offset(actions_dialog_default_style().row_height);
             self.list_state.scroll_to_reveal_item(self.selected_index);
         }
 
@@ -2746,6 +2863,7 @@ impl ActionsDialog {
         } else {
             self.list_state.splice(0..old_count, new_count);
         }
+        self.clear_pending_scrollbar_offset();
     }
 
     fn selected_action_index(&self) -> Option<usize> {
@@ -2872,6 +2990,8 @@ impl ActionsDialog {
 
         self.selected_index = grouped_idx;
         self.clear_mouse_submit_arm();
+        self.update_pending_scrollbar_reveal_offset(actions_dialog_default_style().row_height);
+        self.list_state.scroll_to_reveal_item(self.selected_index);
         cx.notify();
         Some(action_id.to_string())
     }
@@ -2980,7 +3100,6 @@ impl ActionsDialog {
         self.mouse_armed_row = None;
     }
 
-    // doc-anchor-removed: [[automation#Actions dialog scrollbar visibility]]
     fn trigger_scrollbar_activity(&mut self, cx: &mut Context<Self>) {
         let now = Instant::now();
         self.last_scroll_time = Some(now);
@@ -3053,6 +3172,7 @@ impl ActionsDialog {
 
     pub(crate) fn reveal_selection_after_navigation(&mut self, cx: &mut Context<Self>) {
         self.clear_mouse_submit_arm();
+        self.update_pending_scrollbar_reveal_offset(actions_dialog_default_style().row_height);
         self.list_state.scroll_to_reveal_item(self.selected_index);
         self.trigger_scrollbar_activity(cx);
         cx.notify();
@@ -3151,6 +3271,7 @@ impl ActionsDialog {
         }
         self.selected_index = ix;
         self.clear_mouse_submit_arm();
+        self.update_pending_scrollbar_reveal_offset(actions_dialog_default_style().row_height);
         self.list_state.scroll_to_reveal_item(self.selected_index);
         let action_id = self
             .get_selected_action()
@@ -3575,64 +3696,13 @@ impl Render for ActionsDialog {
             let design_variant = self.design_variant;
             let is_empty = self.grouped_items.is_empty();
 
-            // Count section headers and items for accurate height calculation
-            let mut header_count = 0_usize;
-            let mut item_count = 0_usize;
-            for item in &self.grouped_items {
-                match item {
-                    GroupedActionItem::SectionHeader(_) => header_count += 1,
-                    GroupedActionItem::Item(_) => item_count += 1,
-                }
-            }
-            let total_content_height = (header_count as f32 * SECTION_HEADER_HEIGHT)
-                + (item_count as f32 * style.row_height);
-
-            // Keep scrollbar viewport aligned with actual list viewport by
-            // excluding non-list chrome (search/header/footer) from max height.
-            let show_search =
-                !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
-            let container_height = actions_dialog_scrollbar_viewport_height(
-                if is_empty {
-                    style.row_height
-                } else {
-                    total_content_height
-                },
-                show_search,
-                self.shows_context_header() && style.show_header,
-                self.config.show_footer,
-                self.config.max_height,
-            );
-
-            // Estimate visible items based on average item height
-            let avg_item_height = if is_empty {
-                style.row_height
-            } else {
-                total_content_height / self.grouped_items.len() as f32
-            };
-            let visible_items = if is_empty {
-                0
-            } else {
-                (container_height / avg_item_height)
-                    .ceil()
-                    .max(1.0)
-                    .min(self.grouped_items.len() as f32) as usize
-            };
-
-            // Get scroll offset from list state
-            let scroll_offset = self.list_state.logical_scroll_top().item_ix;
-
             // Get scrollbar colors from theme for consistent styling
             let scrollbar_colors = ScrollbarColors::from_theme(&self.theme);
+            let scrollbar_metrics = self.scrollbar_metrics(style.row_height);
 
             // Create scrollbar (only visible if content overflows)
-            let scrollbar = Scrollbar::new(
-                self.grouped_items.len(),
-                visible_items,
-                scroll_offset,
-                scrollbar_colors,
-            )
-            .container_height(container_height)
-            .visibility_opacity(self.scrollbar_visibility.value());
+            let scrollbar = Scrollbar::from_pixel_metrics(scrollbar_metrics, scrollbar_colors)
+                .visibility_opacity(self.scrollbar_visibility.value());
 
             // Capture entity handle for use in the render closure
             let entity = cx.entity();
@@ -3679,131 +3749,11 @@ impl Render for ActionsDialog {
                                     .into_any_element()
                             }
                             GroupedActionItem::Item(filter_idx) => {
-                                // Action item at 36px height
+                                // Action rows reuse the shared main-search ListItem chrome.
                                 if let Some(&action_idx) = this.filtered_actions.get(*filter_idx) {
                                     if let Some(action) = this.actions.get(action_idx) {
                                         let is_selected = ix == current_selected;
                                         let is_destructive = is_destructive_action(action);
-
-                                        // Get tokens for styling
-                                        let item_tokens = get_tokens(design_variant);
-                                        let item_colors = item_tokens.colors();
-                                        let item_spacing = item_tokens.spacing();
-
-                                        // Extract colors for list items - theme-aware selection
-                                        // Light mode: Use light gray (like POC: 0xE8E8E8 at 80%)
-                                        // Dark mode: Use white at low opacity for subtle brightening
-                                        let is_dark_mode = this.theme.should_use_dark_vibrancy();
-
-                                        let (
-                                            selected_bg,
-                                            hover_bg,
-                                            primary_text,
-                                            strong_text,
-                                            muted_text,
-                                            hint_text,
-                                        ) = if design_variant == DesignVariant::Default {
-                                            let chrome =
-                                                theme::AppChromeColors::from_theme(&this.theme);
-                                            let theme_opacity = this.theme.get_opacity();
-                                            (
-                                                rgba(chrome.selection_rgba),
-                                                rgba(chrome.hover_rgba),
-                                                rgb(chrome.text_primary_hex),
-                                                semantic_text_rgba(
-                                                    chrome.text_primary_hex,
-                                                    theme_opacity.text_strong,
-                                                ),
-                                                semantic_text_rgba(
-                                                    chrome.text_primary_hex,
-                                                    theme_opacity.text_muted_alpha,
-                                                ),
-                                                semantic_text_rgba(
-                                                    chrome.text_primary_hex,
-                                                    theme_opacity.text_hint,
-                                                ),
-                                            )
-                                        } else {
-                                            // Luminance ladder (design variant):
-                                            // Both use text_primary at different opacities
-                                            let theme_opacity = this.theme.get_opacity();
-                                            let selected_alpha = ((theme_opacity.selected
-                                                * style.selection_opacity)
-                                                .clamp(0.0, 1.0)
-                                                * 255.0)
-                                                as u32;
-                                            let hover_alpha = ((theme_opacity.hover
-                                                * style.hover_opacity)
-                                                .clamp(0.0, 1.0)
-                                                * 255.0)
-                                                as u32;
-                                            (
-                                                rgba(
-                                                    (item_colors.text_primary << 8)
-                                                        | selected_alpha,
-                                                ),
-                                                rgba(
-                                                    (item_colors.text_primary << 8)
-                                                        | hover_alpha,
-                                                ),
-                                                rgb(item_colors.text_primary),
-                                                semantic_text_rgba(
-                                                    item_colors.text_primary,
-                                                    theme_opacity.text_strong,
-                                                ),
-                                                semantic_text_rgba(
-                                                    item_colors.text_primary,
-                                                    theme_opacity.text_muted_alpha,
-                                                ),
-                                                semantic_text_rgba(
-                                                    item_colors.text_primary,
-                                                    theme_opacity.text_hint,
-                                                ),
-                                            )
-                                        };
-
-                                        let destructive_text =
-                                            if design_variant == DesignVariant::Default {
-                                                rgb(this.theme.colors.ui.error)
-                                            } else {
-                                                rgb(item_colors.error)
-                                            };
-                                        let destructive_selected_bg =
-                                            if design_variant == DesignVariant::Default {
-                                                rgba(hex_with_alpha(
-                                                    this.theme.colors.ui.error,
-                                                    if is_dark_mode { 0x45 } else { 0x2A },
-                                                ))
-                                            } else {
-                                                rgba(hex_with_alpha(
-                                                    item_colors.error,
-                                                    if is_dark_mode { 0x45 } else { 0x2A },
-                                                ))
-                                            };
-                                        let destructive_hover_bg =
-                                            if design_variant == DesignVariant::Default {
-                                                rgba(hex_with_alpha(
-                                                    this.theme.colors.ui.error,
-                                                    if is_dark_mode { 0x2E } else { 0x1F },
-                                                ))
-                                            } else {
-                                                rgba(hex_with_alpha(
-                                                    item_colors.error,
-                                                    if is_dark_mode { 0x2E } else { 0x1F },
-                                                ))
-                                            };
-
-                                        // Title color: bright when selected, secondary when not
-                                        let title_color = if is_selected {
-                                            primary_text
-                                        } else {
-                                            strong_text
-                                        };
-                                        let title_color = if is_destructive {
-                                            destructive_text
-                                        } else {
-                                            title_color
-                                        };
 
                                         if is_destructive && style.shortcut_visible && action.shortcut.is_some() {
                                             crate::components::hint_strip::emit_shortcut_chrome_audit(
@@ -3812,169 +3762,66 @@ impl Render for ActionsDialog {
                                             );
                                         }
 
-                                        let selection_dot_color =
-                                            if design_variant == DesignVariant::Default {
-                                                let chrome =
-                                                    theme::AppChromeColors::from_theme(&this.theme);
-                                                rgb(chrome.accent_hex)
-                                            } else {
-                                                rgb(item_colors.accent)
-                                            };
-
-                                        // Inner row with pill-style selection
-
-                                        let hover_row_bg = if is_destructive {
-                                            destructive_hover_bg
+                                        let list_colors =
+                                            crate::list_item::ListItemColors::from_theme(
+                                                this.theme.as_ref(),
+                                            );
+                                        let main_menu_theme =
+                                            crate::designs::current_main_menu_theme();
+                                        let shortcut = if style.shortcut_visible {
+                                            action.shortcut.clone()
                                         } else {
-                                            hover_bg
+                                            None
                                         };
-                                        let selected_row_bg = if is_destructive {
-                                            destructive_selected_bg
-                                        } else {
-                                            selected_bg
-                                        };
+                                        let mut list_item = crate::list_item::ListItem::new(
+                                            action.title.clone(),
+                                            list_colors,
+                                        )
+                                        .index(ix)
+                                        .selected(is_selected)
+                                        .hovered(this.hovered_row == Some(ix))
+                                        .main_menu_theme(main_menu_theme)
+                                        .semantic_id(format!("choice:{ix}:{}", action.id))
+                                        .description_opt(
+                                            action_subtitle_for_display(action)
+                                                .map(str::to_string),
+                                        )
+                                        .shortcut_opt(shortcut)
+                                        .shortcut_visibility_policy(
+                                            crate::list_item::RowShortcutVisibilityPolicy::AllRows,
+                                        );
 
-                                        let pl_val = item_spacing.item_padding_x - ACCENT_BAR_WIDTH;
-                                        let inner_row = div()
-                                            .id(ElementId::NamedInteger(
-                                                "action-inner-row".into(),
-                                                ix as u64,
-                                            ))
-                                            .w_full()
-                                            .flex_1()
-                                            .flex()
-                                            .flex_row()
-                                            .items_center()
-                                            .pl(px(pl_val))
-                                            .pr(px(item_spacing.item_padding_x))
-                                            .rounded(px(style.row_radius))
-                                            .border_l(px(ACCENT_BAR_WIDTH))
-                                            .border_color(if is_selected {
-                                                if is_destructive {
-                                                    destructive_text
+                                        if is_destructive {
+                                            let destructive_text =
+                                                if design_variant == DesignVariant::Default {
+                                                    this.theme.colors.ui.error
                                                 } else {
-                                                    selection_dot_color
-                                                }
-                                            } else {
-                                                gpui::transparent_black().into()
-                                            })
-                                            .bg(if is_selected {
-                                                selected_row_bg
-                                            } else {
-                                                gpui::transparent_black().into()
-                                            })
-                                            .cursor_pointer()
-                                            .when(!is_selected, |row| {
-                                                row.hover(move |style| style.bg(hover_row_bg))
-                                            });
-
-                                        // Content: optional icon + title + shortcuts
-                                        let show_icons = this.config.show_icons && style.show_icons;
-                                        let action_icon = action.icon;
-
-                                        let left_gap = if style.prefix_marker.is_some() {
-                                            8.0
-                                        } else if show_icons {
-                                            12.0
-                                        } else {
-                                            8.0
-                                        };
-                                        let mut left_side = div()
-                                            .flex()
-                                            .flex_row()
-                                            .items_center()
-                                            .gap(px(left_gap));
+                                                    get_tokens(design_variant).colors().error
+                                                };
+                                            list_item =
+                                                list_item.destructive_text_color(destructive_text);
+                                        }
 
                                         if let Some(prefix_marker) = style.prefix_marker {
-                                            left_side = left_side.child(
+                                            let prefix_marker = prefix_marker.to_string();
+                                            list_item = list_item.leading_accessory(
                                                 div()
-                                                    .text_color(if is_selected {
-                                                        primary_text
-                                                    } else {
-                                                        hint_text
-                                                    })
+                                                    .text_color(rgba(
+                                                        (this.theme.colors.text.primary << 8)
+                                                            | crate::theme::types::opacity_to_alpha(
+                                                                this.theme.get_opacity().text_hint,
+                                                            ),
+                                                    ))
                                                     .font_family(crate::list_item::FONT_MONO)
                                                     .child(prefix_marker),
                                             );
                                         }
 
-                                        // Add icon if enabled and present
-                                        if show_icons {
-                                            if let Some(icon) = action_icon {
-                                                left_side = left_side.child(
-                                                    svg()
-                                                        .external_path(icon.external_path())
-                                                        .size(px(16.0))
-                                                        .text_color(if is_destructive {
-                                                            destructive_text
-                                                        } else if is_selected {
-                                                            primary_text
-                                                        } else {
-                                                            hint_text
-                                                        }),
-                                                );
-                                            }
-                                        }
-
-                                        // Add title + optional description stack
-                                        let mut text_stack =
-                                            div().flex().flex_col().justify_center().gap(px(1.0));
-                                        let mut title = div()
-                                            .text_color(title_color)
-                                            .text_sm()
-                                            .font_weight(if is_selected {
-                                                gpui::FontWeight::MEDIUM
-                                            } else {
-                                                gpui::FontWeight::NORMAL
-                                            });
-                                        if style.mono_font {
-                                            title = title.font_family(crate::list_item::FONT_MONO);
-                                        }
-                                        text_stack =
-                                            text_stack.child(title.child(action.title.clone()));
-
-                                        if let Some(description) =
-                                            action_subtitle_for_display(action)
-                                        {
-                                            let mut subtitle = div()
-                                                .text_xs()
-                                                .text_color(if is_selected {
-                                                    muted_text
-                                                } else {
-                                                    hint_text
-                                                })
-                                                .text_ellipsis();
-                                            if style.mono_font {
-                                                subtitle = subtitle
-                                                    .font_family(crate::list_item::FONT_MONO);
-                                            }
-                                            text_stack = text_stack
-                                                .child(subtitle.child(description.to_string()));
-                                        }
-
-                                        left_side = left_side.child(text_stack);
-
-                                        let mut content = div()
-                                            .flex_1()
-                                            .flex()
-                                            .flex_row()
-                                            .items_center()
-                                            .justify_between()
-                                            .child(left_side);
-
-                                        // Action menus intentionally keep shortcuts visible on all rows.
-                                        // Dense launcher rows use SelectedOnly; this dialog opts into AllRows explicitly.
-                                        let show_shortcut = crate::list_item::should_show_row_shortcut(
-                                            crate::list_item::RowShortcutVisibilityPolicy::AllRows,
-                                            is_selected,
-                                            false,
-                                        );
-                                        if style.shortcut_visible && show_shortcut {
-                                            if let Some(shortcut_tokens) = action_shortcut_tokens_for_render(action) {
-                                                content = content.child(
-                                                    crate::components::footer_chrome::render_footer_row_shortcut_keycaps_from_tokens(
-                                                        shortcut_tokens.iter().map(String::as_str),
-                                                        this.theme.as_ref(),
+                                        if this.config.show_icons && style.show_icons {
+                                            if let Some(icon) = action.icon {
+                                                list_item = list_item.icon_kind(
+                                                    crate::list_item::IconKind::Svg(
+                                                        icon.external_path().to_string(),
                                                     ),
                                                 );
                                             }
@@ -3988,7 +3835,6 @@ impl Render for ActionsDialog {
                                             .h(px(style.row_height))
                                             .w_full()
                                             .px(px(ACTION_ROW_INSET))
-                                            .py(px(2.0))
                                             .flex()
                                             .flex_col()
                                             .justify_center()
@@ -4040,9 +3886,7 @@ impl Render for ActionsDialog {
                                                 }
                                             });
 
-                                        action_row
-                                            .child(inner_row.child(content))
-                                            .into_any_element()
+                                        action_row.child(list_item).into_any_element()
                                     } else {
                                         // Fallback for missing action
                                         div().h(px(style.row_height)).into_any_element()
@@ -4075,6 +3919,7 @@ impl Render for ActionsDialog {
                 .w_full()
                 .overflow_hidden()
                 .on_scroll_wheel(cx.listener(|this, _event, _window, cx| {
+                    this.clear_pending_scrollbar_offset();
                     this.trigger_scrollbar_activity(cx);
                     cx.propagate();
                 }))
@@ -4631,13 +4476,14 @@ fn emit_actions_dialog_runtime_audit(audit: &ActionsDialogRuntimeAudit) {
 #[cfg(test)]
 mod tests {
     use super::{
-        action_subtitle_for_display, actions_dialog_scrollbar_fade_duration,
-        actions_dialog_scrollbar_fade_opacity, actions_dialog_scrollbar_viewport_height,
-        clear_duplicate_action_shortcuts, first_selectable_index, is_destructive_action,
-        last_selectable_index, matching_action_id_for_keystroke,
-        matching_filtered_action_id_for_keystroke, selectable_index_at_or_after,
-        selectable_index_at_or_before, should_render_section_separator, ActionsDialog,
-        ActionsDialogChromeAudit, ActionsDialogRuntimeAudit, GroupedActionItem,
+        action_subtitle_for_display, actions_dialog_revealed_scroll_top,
+        actions_dialog_scrollbar_fade_duration, actions_dialog_scrollbar_fade_opacity,
+        actions_dialog_scrollbar_viewport_height, clear_duplicate_action_shortcuts,
+        first_selectable_index, is_destructive_action, last_selectable_index,
+        matching_action_id_for_keystroke, matching_filtered_action_id_for_keystroke,
+        selectable_index_at_or_after, selectable_index_at_or_before,
+        should_render_section_separator, ActionsDialog, ActionsDialogChromeAudit,
+        ActionsDialogRuntimeAudit, GroupedActionItem,
     };
     use crate::actions::types::{Action, ActionCategory, ScriptInfo, SectionStyle};
     use crate::menu_syntax::{MenuSyntaxAction, MenuSyntaxActionKind};
@@ -4838,6 +4684,34 @@ mod tests {
         );
 
         assert_eq!(viewport_height, 120.0);
+    }
+
+    #[test]
+    fn test_scrollbar_reveal_offset_moves_down_when_selection_leaves_viewport() {
+        let offset = actions_dialog_revealed_scroll_top(0.0, 120.0, 400.0, 144.0, 180.0);
+
+        assert_eq!(offset, 60.0);
+    }
+
+    #[test]
+    fn test_scrollbar_reveal_offset_moves_up_when_selection_is_above_viewport() {
+        let offset = actions_dialog_revealed_scroll_top(160.0, 120.0, 400.0, 72.0, 108.0);
+
+        assert_eq!(offset, 72.0);
+    }
+
+    #[test]
+    fn test_scrollbar_reveal_offset_keeps_current_top_when_selection_is_visible() {
+        let offset = actions_dialog_revealed_scroll_top(72.0, 120.0, 400.0, 96.0, 132.0);
+
+        assert_eq!(offset, 72.0);
+    }
+
+    #[test]
+    fn test_scrollbar_reveal_offset_clamps_to_max_scroll() {
+        let offset = actions_dialog_revealed_scroll_top(240.0, 120.0, 300.0, 288.0, 324.0);
+
+        assert_eq!(offset, 180.0);
     }
 
     #[test]

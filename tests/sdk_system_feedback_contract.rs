@@ -9,7 +9,6 @@ fn function_body(source: &str, marker: &str) -> String {
     rest[..end].to_string()
 }
 
-// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn feedback_dispatch_helpers_do_not_claim_unsupported() {
     for marker in [
@@ -29,7 +28,6 @@ fn feedback_dispatch_helpers_do_not_claim_unsupported() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn setstatus_and_menu_reject_before_send() {
     for (marker, feature) in [
@@ -54,7 +52,6 @@ fn setstatus_and_menu_reject_before_send() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs and control messages]]
 #[test]
 fn feedback_runtime_dispatch_paths_are_source_audited() {
     for needle in [
@@ -73,7 +70,6 @@ fn feedback_runtime_dispatch_paths_are_source_audited() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn unsupported_sdk_inventory_matches_feedback_contract() {
     assert!(

@@ -34,7 +34,6 @@ fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
     panic!("unterminated function body: {signature}");
 }
 
-// doc-anchor-removed: [[removed-docs contract]]
 #[test]
 fn app_view_owns_native_footer_surface_map() {
     let body = function_body(APP_VIEW_STATE_SOURCE, "pub(crate) fn native_footer_surface");
@@ -184,7 +183,6 @@ fn native_vibrancy_config_skips_redundant_same_window_reapply() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs contract]]
 #[test]
 fn ui_window_delegates_footer_surface_to_app_view_contract() {
     let body = function_body(UI_WINDOW_SOURCE, "fn main_window_footer_surface");

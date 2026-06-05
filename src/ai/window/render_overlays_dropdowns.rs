@@ -1,17 +1,16 @@
 use super::*;
 use crate::components::inline_dropdown::{
-    inline_dropdown_clamp_selected_index, inline_dropdown_visible_range,
-    render_dense_monoline_picker_row_with_leading_visual, InlineDropdown, InlineDropdownColors,
-    InlineDropdownEmptyState, InlineDropdownSynopsis, HINT,
+    inline_dropdown_clamp_selected_index, inline_dropdown_visible_range, InlineDropdown,
+    InlineDropdownColors, InlineDropdownEmptyState, InlineDropdownSynopsis,
 };
 
 impl AiApp {
     pub(super) fn render_presets_dropdown(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
         let colors = InlineDropdownColors::from_theme(&theme);
-        let fg = colors.foreground;
-        let muted_fg = colors.muted_foreground;
-        let accent = colors.accent;
+        let list_item_colors = crate::list_item::ListItemColors::from_theme(&theme);
+        let main_menu_theme = crate::designs::current_main_menu_theme();
+        let row_height = crate::list_item::effective_list_item_height_for_theme(main_menu_theme);
 
         let selected_index =
             inline_dropdown_clamp_selected_index(self.presets_selected_index, self.presets.len());
@@ -58,43 +57,43 @@ impl AiApp {
                     .map(|(idx, preset)| {
                         let is_selected = idx == selected_index;
                         let model_meta = preset.preferred_model.clone().unwrap_or_default();
+                        let source_hint = (!model_meta.is_empty()).then_some(model_meta);
+                        let description = if preset.description.is_empty() {
+                            Some("Create a new chat from this preset".to_string())
+                        } else {
+                            Some(preset.description.to_string())
+                        };
 
-                        let leading_visual = div()
-                            .w(px(14.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(
-                                svg()
-                                    .external_path(preset.icon.external_path())
-                                    .size(px(14.0))
-                                    .text_color(if is_selected {
-                                        accent
-                                    } else {
-                                        muted_fg.opacity(HINT)
-                                    }),
-                            )
-                            .into_any_element();
-
-                        render_dense_monoline_picker_row_with_leading_visual(
-                            SharedString::from(format!("preset-{idx}")),
+                        let row = crate::list_item::ListItem::new(
                             SharedString::from(preset.name.to_string()),
-                            SharedString::from(model_meta),
-                            &[],
-                            &[],
-                            is_selected,
-                            fg,
-                            muted_fg,
-                            accent,
-                            leading_visual,
+                            list_item_colors.clone(),
                         )
-                        .cursor_pointer()
-                        .on_click(cx.listener(
-                            move |this, _, window, cx| {
+                        .index(idx)
+                        .selected(is_selected)
+                        .main_menu_theme(main_menu_theme)
+                        .semantic_id(format!("preset-{idx}"))
+                        .description_opt(description)
+                        .source_hint_opt(source_hint)
+                        .icon_kind_opt(Some(crate::list_item::IconKind::Svg(
+                            preset.icon.external_path().to_string(),
+                        )))
+                        .type_accessory_opt(Some(
+                            crate::list_item::TypeAccessory {
+                                label: "Preset",
+                                icon_name: "sparkles",
+                            },
+                        ));
+
+                        div()
+                            .id(SharedString::from(format!("preset-{idx}")))
+                            .w_full()
+                            .h(px(row_height))
+                            .cursor_pointer()
+                            .on_click(cx.listener(move |this, _, window, cx| {
                                 this.presets_selected_index = idx;
                                 this.confirm_presets_selection(window, cx);
-                            },
-                        ))
+                            }))
+                            .child(row)
                     }),
             )
             .into_any_element();

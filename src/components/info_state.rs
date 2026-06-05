@@ -610,6 +610,7 @@ fn render_info_content(
         let shortcut_slot_width_px = info_guidance_shortcut_slot_width_px(&guidance_items);
         stack = stack.child(render_info_shortcut_note(
             note,
+            metrics,
             theme,
             palette,
             shortcut_slot_width_px,
@@ -632,6 +633,7 @@ fn render_info_plain_footer_note(note: SharedString, palette: InfoPalette) -> An
 
 fn render_info_shortcut_note(
     note: InfoShortcutNote,
+    metrics: InfoMetrics,
     theme: &theme::Theme,
     palette: InfoPalette,
     shortcut_slot_width_px: f32,
@@ -653,14 +655,13 @@ fn render_info_shortcut_note(
         div().flex().items_center().child(keycaps)
     };
     div()
+        .w_full()
+        .min_h(px(metrics.row_min_h))
         .flex()
         .items_center()
         .gap(px(INFO_SPACING.sm))
-        .text_size(px(INFO_TYPE_SCALE.caption.size))
-        .line_height(px(INFO_TYPE_SCALE.caption.line))
-        .text_color(palette.hint)
         .child(keycap_slot)
-        .child(note.text)
+        .child(render_info_guidance_text(note.text, None, palette))
         .into_any_element()
 }
 
@@ -769,6 +770,18 @@ fn render_guidance_row(
         );
     }
 
+    row.child(render_info_guidance_text(
+        item.label.clone(),
+        item.detail.clone(),
+        palette,
+    ))
+}
+
+fn render_info_guidance_text(
+    label: SharedString,
+    detail: Option<SharedString>,
+    palette: InfoPalette,
+) -> Div {
     let mut text = div()
         .flex_1()
         .min_w(px(0.0))
@@ -780,10 +793,10 @@ fn render_guidance_row(
                 .text_size(px(INFO_TYPE_SCALE.caption.size))
                 .line_height(px(INFO_TYPE_SCALE.caption.line))
                 .text_color(palette.body)
-                .child(item.label.clone()),
+                .child(label),
         );
 
-    if let Some(detail) = item.detail.clone() {
+    if let Some(detail) = detail {
         text = text.child(
             div()
                 .text_size(px(INFO_TYPE_SCALE.micro.size))
@@ -793,7 +806,7 @@ fn render_guidance_row(
         );
     }
 
-    row.child(text)
+    text
 }
 
 #[cfg(test)]

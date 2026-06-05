@@ -48,7 +48,6 @@ fn rust_sources_under(dir: &std::path::Path) -> Vec<(String, String)> {
     out
 }
 
-// doc-anchor-removed: [[removed-docs Actions Contract]]
 #[test]
 fn actions_popup_state_mutators_own_open_and_close_field_writes() {
     let opening_body = source_between(

@@ -1,6 +1,6 @@
 //! Source audit tests verifying that `getAcpState {target:{kind:"ai"}}`
-//! is routed to the main window's ACP collector rather than rejected as
-//! an unsupported target.
+//! routes through the live Agent Chat entity when available, and only falls
+//! back to the main window collector when no entity is active.
 //!
 //! Background: Pass #7 of Run 4 added an `AutomationWindowKind::Ai` entry
 //! to the automation registry whenever the embedded ACP chat is the active
@@ -10,15 +10,15 @@
 //! even though the embedded surface is a real addressable subview of main
 //! (see `audits/afk/stories.md` → `tool-get-acp-state-target-selector`).
 //!
-//! This pass adds an explicit `AutomationWindowKind::Ai` arm that routes
-//! to `AcpReadTarget::Main { info: Some(resolved) }` — the embedded AI
-//! IS a subview of main, so reading its state IS reading main's ACP state.
+//! The current model treats the AI automation window as an ACP-capable target:
+//! when there is a live Agent Chat entity, reads use the entity-backed target;
+//! otherwise the main collector remains the fallback for embedded main state.
 //!
 //! These tests pin:
 //! 1. The `Ai` match arm exists in `resolve_acp_read_target`.
-//! 2. It routes to `AcpReadTarget::Main` (not `Detached`, not `Err`).
-//! 3. It emits the `embedded_ai_routed_to_main` trace line so ops can tell
-//!    from the log that a `{kind:"ai"}` request was served from main.
+//! 2. It routes to the entity-backed target when present and keeps the main
+//!    fallback when absent.
+//! 3. It emits distinct trace lines for the entity and fallback paths.
 
 use super::read_source as read;
 
@@ -49,7 +49,7 @@ fn resolve_acp_read_target_has_ai_arm() {
 }
 
 #[test]
-fn ai_arm_routes_to_main_read_target() {
+fn ai_arm_routes_to_entity_with_main_fallback() {
     let content = read(HANDLER_PATH);
     let body = resolve_fn_body(&content);
 
@@ -61,32 +61,30 @@ fn ai_arm_routes_to_main_read_target() {
     let ai_arm_body = &after_ai[..other_start];
 
     assert!(
-        ai_arm_body.contains("Ok(AcpReadTarget::Main {"),
-        "The Ai arm must route to AcpReadTarget::Main (the embedded AI is a \
-         subview of main, so its ACP state IS main's ACP state). Found arm body:\n{ai_arm_body}",
+        ai_arm_body.contains("Ok(AcpReadTarget::Detached {"),
+        "The Ai arm must route to the live Agent Chat entity when available. \
+         Found arm body:\n{ai_arm_body}",
     );
     assert!(
-        ai_arm_body.contains("info: Some(resolved)"),
-        "The Ai arm must pass `info: Some(resolved)` so telemetry carries the \
-         ai window id — the Main arm uses the same shape.",
+        ai_arm_body.contains("Ok(AcpReadTarget::Main {")
+            && ai_arm_body.contains("info: Some(resolved)"),
+        "The Ai arm must keep a main collector fallback that preserves resolved \
+         target telemetry.",
     );
     assert!(
-        !ai_arm_body.contains("AcpReadTarget::Detached"),
-        "The Ai arm MUST NOT route to Detached — embedded AI has no separate \
-         entity; reusing Detached would call `get_detached_acp_view_entity()` \
-         and hit the no-entity branch in normal operation.",
+        ai_arm_body.contains("active_acp_chat_entity(embedded_acp)"),
+        "The Ai arm must check for the active Agent Chat entity before falling back.",
     );
 }
 
 #[test]
-fn ai_arm_emits_embedded_ai_routed_trace() {
+fn ai_arm_emits_distinct_entity_and_fallback_traces() {
     let content = read(HANDLER_PATH);
     let body = resolve_fn_body(&content);
     assert!(
-        body.contains("automation.acp_target.embedded_ai_routed_to_main"),
-        "The Ai arm must emit a distinct trace line \
-         `automation.acp_target.embedded_ai_routed_to_main` so ops can see in \
-         the log that a `{{kind:\"ai\"}}` request was served via main. The \
-         generic Main trace would mis-attribute the target.",
+        body.contains("automation.acp_target.ai_resolved_to_entity")
+            && body.contains("automation.acp_target.ai_fallback_main_collector"),
+        "The Ai arm must emit distinct trace lines for entity-backed reads and \
+         main-collector fallback reads.",
     );
 }

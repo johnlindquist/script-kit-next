@@ -127,9 +127,10 @@ pub use mode::{
 #[allow(unused_imports)]
 pub use object_selector::{
     apply_object_selector_intent, build_object_selector_snapshot,
-    object_selector_candidate_matches, object_selector_visible_start_for_selection,
-    plan_object_selector_transition, MenuSyntaxObjectSelectorState, ObjectSelectorCandidate,
-    ObjectSelectorContext, ObjectSelectorIntentOutcome, ObjectSelectorRow, ObjectSelectorSnapshot,
+    object_selector_candidate_matches, object_selector_row_to_main_list_row,
+    object_selector_visible_start_for_selection, plan_object_selector_transition,
+    MenuSyntaxObjectSelectorState, ObjectSelectorCandidate, ObjectSelectorContext,
+    ObjectSelectorIntentOutcome, ObjectSelectorRow, ObjectSelectorSnapshot,
     ObjectSelectorTransition,
 };
 #[allow(unused_imports)]

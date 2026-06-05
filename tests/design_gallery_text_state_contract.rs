@@ -23,12 +23,13 @@ fn design_gallery_empty_copy_is_modeled_by_filter_state() {
 #[test]
 fn design_gallery_input_and_count_copy_are_modeled() {
     assert!(
-        DESIGN_GALLERY.contains("fn design_gallery_input_display("),
-        "Design Gallery placeholder/input copy should live in a named helper"
+        DESIGN_GALLERY.contains("self.render_search_input()"),
+        "Design Gallery placeholder/input copy should be owned by the shared GPUI input"
     );
     assert!(
-        DESIGN_GALLERY.contains("Self::design_gallery_input_display(&filter)"),
-        "renderer should use the input display helper"
+        !DESIGN_GALLERY.contains("fn design_gallery_input_display(")
+            && !DESIGN_GALLERY.contains("Self::design_gallery_input_display(&filter)"),
+        "Design Gallery should not keep the old bespoke input display helper"
     );
     assert!(
         DESIGN_GALLERY.contains("fn design_gallery_count_label("),

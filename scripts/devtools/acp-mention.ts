@@ -42,6 +42,8 @@ type BenchStep = {
   effectiveElapsedMs: number | null;
   inputTextAfter: string;
   visibleCountAfter: number | null;
+  spine: AcpSpineReceipt | null;
+  spineProof: SpineProof;
   target: JsonObject | null;
   error?: unknown;
 };
@@ -63,7 +65,27 @@ type BenchSummary = {
   over32Count: number;
   missingTimingCount: number;
   missingTraceTimingCount: number;
+  missingSpineCount: number;
+  failedSpineProofCount: number;
   failedStepCount: number;
+};
+
+type AcpSpineReceipt = {
+  ownsList: boolean;
+  activeSegmentKind: string;
+  subsearchSource?: string;
+  rowCount: number;
+  selectableRowCount: number;
+  selectedIndex: number;
+  rowFingerprint?: string;
+  selectedRowFingerprint?: string;
+  refreshElapsedMs: number;
+};
+
+type SpineProof = {
+  required: boolean;
+  ok: boolean;
+  reason?: string;
 };
 
 const ACCEPTANCE = {
@@ -172,6 +194,69 @@ function stringOrEmpty(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+function spineOf(state: JsonObject): AcpSpineReceipt | null {
+  const spine = asObject(state.spine);
+  if (Object.keys(spine).length === 0) return null;
+  return {
+    ownsList: spine.ownsList === true,
+    activeSegmentKind: stringOrEmpty(spine.activeSegmentKind),
+    subsearchSource: typeof spine.subsearchSource === "string" ? spine.subsearchSource : undefined,
+    rowCount: Number(spine.rowCount),
+    selectableRowCount: Number(spine.selectableRowCount),
+    selectedIndex: Number(spine.selectedIndex),
+    rowFingerprint: typeof spine.rowFingerprint === "string" ? spine.rowFingerprint : undefined,
+    selectedRowFingerprint: typeof spine.selectedRowFingerprint === "string" ? spine.selectedRowFingerprint : undefined,
+    refreshElapsedMs: Number(spine.refreshElapsedMs),
+  };
+}
+
+function acpSpineRequiredForStep(scenario: BenchScenario, input: string) {
+  return scenario.targetKind === "acp" && input.length > 0 && input.startsWith("@");
+}
+
+function finiteNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function proveAcpSpineStep(
+  scenario: BenchScenario,
+  input: string,
+  spine: AcpSpineReceipt | null,
+): SpineProof {
+  const required = acpSpineRequiredForStep(scenario, input);
+  if (!required) return { required, ok: true };
+  if (!spine) return { required, ok: false, reason: "missing-spine" };
+  if (!spine.ownsList) return { required, ok: false, reason: "spine-does-not-own-list" };
+  if (!finiteNumber(spine.rowCount) || spine.rowCount < 1) {
+    return { required, ok: false, reason: "invalid-row-count" };
+  }
+  if (!finiteNumber(spine.selectableRowCount) || spine.selectableRowCount < 0) {
+    return { required, ok: false, reason: "invalid-selectable-row-count" };
+  }
+  if (!finiteNumber(spine.selectedIndex) || spine.selectedIndex < 0) {
+    return { required, ok: false, reason: "invalid-selected-index" };
+  }
+  if (spine.selectableRowCount > 0 && spine.selectedIndex >= spine.selectableRowCount) {
+    return { required, ok: false, reason: "selected-index-out-of-range" };
+  }
+  if (!spine.rowFingerprint) {
+    return { required, ok: false, reason: "missing-row-fingerprint" };
+  }
+  if (!finiteNumber(spine.refreshElapsedMs) || spine.refreshElapsedMs < 0) {
+    return { required, ok: false, reason: "invalid-refresh-elapsed" };
+  }
+  if (scenario.name === "acp-file-subsearch" && spine.subsearchSource !== "file") {
+    return { required, ok: false, reason: "missing-file-subsearch-source" };
+  }
+  if (scenario.name === "acp-clipboard-subsearch" && spine.subsearchSource !== "clipboard") {
+    return { required, ok: false, reason: "missing-clipboard-subsearch-source" };
+  }
+  if (scenario.name === "acp-context-root" && spine.activeSegmentKind !== "contextMention") {
+    return { required, ok: false, reason: "unexpected-context-root-kind" };
+  }
+  return { required, ok: true };
+}
+
 function assertFileToken(inputText: string, fileLabel: string) {
   const bad = inputText.match(/@(md|ts|rs|js|py):/);
   const good = inputText.includes(`@file:${fileLabel}`) || inputText.includes(`@file:"${fileLabel}"`);
@@ -272,6 +357,8 @@ export function summarizeBenchSteps(steps: BenchStep[], discardWarmup = 0): Benc
     over32Count: timings.filter((value) => value > 32).length,
     missingTimingCount: sampled.length - timings.length,
     missingTraceTimingCount: sampled.filter((step) => step.traceTotalElapsedMs == null && step.commandElapsedMs == null).length,
+    missingSpineCount: sampled.filter((step) => step.spineProof.required && !step.spine).length,
+    failedSpineProofCount: sampled.filter((step) => step.spineProof.required && !step.spineProof.ok).length,
     failedStepCount: sampled.filter((step) => !step.success).length,
   };
 }
@@ -285,6 +372,9 @@ export function classifyBenchReceipt(scenarios: BenchScenarioResult[]) {
     return "blocked-by-target-ambiguity";
   }
   if (scenarios.some((scenario) => scenario.summary.missingTimingCount > 0)) {
+    return "blocked-by-missing-primitive";
+  }
+  if (scenarios.some((scenario) => scenario.summary.failedSpineProofCount > 0)) {
     return "blocked-by-missing-primitive";
   }
   if (scenarios.some((scenario) => scenario.summary.failedStepCount > 0)) {
@@ -426,21 +516,27 @@ async function runSetInputStep(
   const inputTextAfter = scenario.targetKind === "acp"
     ? stringOrEmpty(state.inputText)
     : stringOrEmpty(state.inputValue);
+  const spine = scenario.targetKind === "acp" ? spineOf(state) : null;
+  const spineProof = proveAcpSpineStep(scenario, value, spine);
   const visibleCountAfter = scenario.targetKind === "acp"
-    ? numberOrNull(asObject(state.picker).itemCount) ?? numberOrNull(asObject(state.picker).rowCount)
+    ? numberOrNull(spine?.rowCount) ?? numberOrNull(asObject(state.picker).itemCount) ?? numberOrNull(asObject(state.picker).rowCount)
     : numberOrNull(state.choiceCount) ?? numberOrNull(state.visibleCount);
   return {
     label: value.length === 0 ? "clear" : `set ${value}`,
     input: value,
-    success: batch.success === true && inputTextAfter === value,
+    success: batch.success === true && inputTextAfter === value && spineProof.ok,
     traceTotalElapsedMs,
     commandElapsedMs,
     wallMs,
     effectiveElapsedMs,
     inputTextAfter,
     visibleCountAfter,
+    spine,
+    spineProof,
     target,
-    error: batch.success === true ? undefined : batch.failure ?? batch.error ?? batchEnvelope,
+    error: batch.success === true
+      ? spineProof.ok ? undefined : { reason: spineProof.reason, spine }
+      : batch.failure ?? batch.error ?? batchEnvelope,
   } satisfies BenchStep;
 }
 

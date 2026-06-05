@@ -71,6 +71,60 @@ pub struct ScrollbarColors {
     pub thumb_hover_opacity: f32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ScrollbarMetrics {
+    pub content_height: f32,
+    pub viewport_height: f32,
+    pub scroll_top_y: f32,
+    pub max_scroll_top_y: f32,
+    pub thumb_height_px: f32,
+    pub thumb_top_px: f32,
+    pub thumb_position_ratio: f32,
+}
+
+impl ScrollbarMetrics {
+    pub(crate) fn from_pixels(
+        content_height: f32,
+        viewport_height: f32,
+        scroll_top_y: f32,
+    ) -> Self {
+        let content_height = content_height.max(0.0);
+        let viewport_height = viewport_height.max(0.0);
+        let max_scroll_top_y = (content_height - viewport_height).max(0.0);
+        let scroll_top_y = scroll_top_y.clamp(0.0, max_scroll_top_y);
+        let thumb_position_ratio = if max_scroll_top_y > 0.0 {
+            (scroll_top_y / max_scroll_top_y).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let available_height = (viewport_height - (SCROLLBAR_PADDING * 2.0)).max(0.0);
+        let thumb_height_ratio = if content_height > 0.0 {
+            (viewport_height / content_height).clamp(0.05, 1.0)
+        } else {
+            1.0
+        };
+        let thumb_height_px = (available_height * thumb_height_ratio)
+            .max(MIN_THUMB_HEIGHT)
+            .min(available_height.max(MIN_THUMB_HEIGHT));
+        let scrollable_range = (available_height - thumb_height_px).max(0.0);
+        let thumb_top_px = SCROLLBAR_PADDING + (scrollable_range * thumb_position_ratio);
+
+        Self {
+            content_height,
+            viewport_height,
+            scroll_top_y,
+            max_scroll_top_y,
+            thumb_height_px,
+            thumb_top_px,
+            thumb_position_ratio,
+        }
+    }
+
+    pub(crate) fn should_show(&self) -> bool {
+        self.content_height > self.viewport_height && self.viewport_height > 0.0
+    }
+}
+
 impl ScrollbarColors {
     /// Create ScrollbarColors from theme reference
     ///
@@ -162,6 +216,8 @@ pub struct Scrollbar {
     /// When Some(v), base opacities are multiplied by v (clamped 0.0..1.0)
     /// When None, the scrollbar uses base opacities unchanged
     visibility: Option<f32>,
+    /// Pixel-precise metrics for variable-height scrollable content.
+    pixel_metrics: Option<ScrollbarMetrics>,
 }
 
 impl Scrollbar {
@@ -185,6 +241,19 @@ impl Scrollbar {
             colors,
             container_height: None,
             visibility: None,
+            pixel_metrics: None,
+        }
+    }
+
+    pub(crate) fn from_pixel_metrics(metrics: ScrollbarMetrics, colors: ScrollbarColors) -> Self {
+        Self {
+            total_items: 0,
+            visible_items: 0,
+            scroll_offset: 0,
+            colors,
+            container_height: Some(metrics.viewport_height),
+            visibility: None,
+            pixel_metrics: Some(metrics),
         }
     }
 
@@ -207,6 +276,9 @@ impl Scrollbar {
 
     /// Check if scrollbar should be visible (content overflows)
     fn should_show(&self) -> bool {
+        if let Some(metrics) = self.pixel_metrics {
+            return metrics.should_show();
+        }
         self.total_items > self.visible_items && self.total_items > 0
     }
 
@@ -256,19 +328,41 @@ impl RenderOnce for Scrollbar {
         let thumb_hover_opacity = self.colors.thumb_hover_opacity * visibility;
 
         let colors = self.colors;
-        let thumb_height_ratio = self.thumb_height_ratio();
-        let thumb_position_ratio = self.thumb_position_ratio();
 
         // Calculate actual pixel values if container height is known
-        let (thumb_height_px, thumb_top_px) = if let Some(container_h) = self.container_height {
-            let available_height = container_h - (SCROLLBAR_PADDING * 2.0);
-            let thumb_h = (available_height * thumb_height_ratio).max(MIN_THUMB_HEIGHT);
-            let scrollable_range = available_height - thumb_h;
-            let thumb_top = SCROLLBAR_PADDING + (scrollable_range * thumb_position_ratio);
-            (Some(thumb_h), Some(thumb_top))
-        } else {
-            (None, None)
-        };
+        let (thumb_height_px, thumb_top_px, thumb_height_ratio, thumb_position_ratio) =
+            if let Some(metrics) = self.pixel_metrics {
+                (
+                    Some(metrics.thumb_height_px),
+                    Some(metrics.thumb_top_px),
+                    if metrics.viewport_height > 0.0 {
+                        (metrics.thumb_height_px / metrics.viewport_height).clamp(0.0, 1.0)
+                    } else {
+                        1.0
+                    },
+                    metrics.thumb_position_ratio,
+                )
+            } else if let Some(container_h) = self.container_height {
+                let thumb_height_ratio = self.thumb_height_ratio();
+                let thumb_position_ratio = self.thumb_position_ratio();
+                let available_height = container_h - (SCROLLBAR_PADDING * 2.0);
+                let thumb_h = (available_height * thumb_height_ratio).max(MIN_THUMB_HEIGHT);
+                let scrollable_range = available_height - thumb_h;
+                let thumb_top = SCROLLBAR_PADDING + (scrollable_range * thumb_position_ratio);
+                (
+                    Some(thumb_h),
+                    Some(thumb_top),
+                    thumb_height_ratio,
+                    thumb_position_ratio,
+                )
+            } else {
+                (
+                    None,
+                    None,
+                    self.thumb_height_ratio(),
+                    self.thumb_position_ratio(),
+                )
+            };
 
         // Build the scrollbar container (absolute positioned on right edge)
         let mut scrollbar = div()
@@ -355,9 +449,6 @@ impl RenderOnce for Scrollbar {
     }
 }
 
-// Note: Tests omitted for this module due to GPUI macro recursion limit issues.
-// The Scrollbar component is integration-tested via the main application's
-// list rendering.
 //
 // Verified traits:
 // - ScrollbarColors: Copy, Clone, Debug, Default
@@ -370,7 +461,44 @@ impl RenderOnce for Scrollbar {
 
 #[cfg(test)]
 mod tests {
-    use super::{preferred_scroll_offset, Scrollbar, ScrollbarColors};
+    use super::{
+        preferred_scroll_offset, Scrollbar, ScrollbarColors, ScrollbarMetrics, MIN_THUMB_HEIGHT,
+        SCROLLBAR_PADDING,
+    };
+
+    #[test]
+    fn pixel_metrics_size_thumb_against_viewport_over_content() {
+        let metrics = ScrollbarMetrics::from_pixels(600.0, 300.0, 0.0);
+        let track_height = 300.0 - (SCROLLBAR_PADDING * 2.0);
+
+        assert_eq!(metrics.thumb_height_px, track_height * 0.5);
+        assert_eq!(metrics.thumb_top_px, SCROLLBAR_PADDING);
+        assert!(metrics.should_show());
+    }
+
+    #[test]
+    fn pixel_metrics_move_thumb_with_scroll_top() {
+        let metrics = ScrollbarMetrics::from_pixels(600.0, 300.0, 150.0);
+
+        assert_eq!(metrics.max_scroll_top_y, 300.0);
+        assert_eq!(metrics.thumb_position_ratio, 0.5);
+        assert!(metrics.thumb_top_px > SCROLLBAR_PADDING);
+    }
+
+    #[test]
+    fn pixel_metrics_clamp_scroll_top_to_max() {
+        let metrics = ScrollbarMetrics::from_pixels(600.0, 300.0, 999.0);
+
+        assert_eq!(metrics.scroll_top_y, 300.0);
+        assert_eq!(metrics.thumb_position_ratio, 1.0);
+    }
+
+    #[test]
+    fn pixel_metrics_apply_min_thumb_height() {
+        let metrics = ScrollbarMetrics::from_pixels(10_000.0, 300.0, 0.0);
+
+        assert_eq!(metrics.thumb_height_px, MIN_THUMB_HEIGHT);
+    }
 
     #[test]
     fn test_scrollbar_colors_default_uses_cached_theme_tokens() {

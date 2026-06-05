@@ -32,7 +32,6 @@ fn script_list_app_has_separate_hidden_acp_prewarm_slot() {
         fs::read_to_string("src/main_sections/app_state.rs").expect("read app state source");
     let startup = fs::read_to_string("src/app_impl/startup.rs").expect("read startup source");
 
-    // doc-anchor-removed: [[removed-docs Chat#Model selection#Hot prewarm before first submit]]
     assert!(
         app_state
             .contains("prewarmed_acp_chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,"),

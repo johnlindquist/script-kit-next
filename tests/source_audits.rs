@@ -206,6 +206,9 @@ mod root_unified_acp_history_contract;
 #[path = "source_audits/root_unified_clipboard_history_contract.rs"]
 mod root_unified_clipboard_history_contract;
 
+#[path = "source_audits/context_selector_portal_builtin_parity_contract.rs"]
+mod context_selector_portal_builtin_parity_contract;
+
 #[path = "source_audits/dev_style_tool_knob_catalog.rs"]
 mod dev_style_tool_knob_catalog;
 

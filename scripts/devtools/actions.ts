@@ -441,6 +441,15 @@ function classify(targetReceipt: JsonObject, stateEnvelope: JsonObject, missing:
   return "ok";
 }
 
+function firstNonOkClassification(classifications: Array<unknown>): string {
+  for (const classification of classifications) {
+    if (typeof classification === "string" && classification !== "ok") {
+      return classification;
+    }
+  }
+  return "ok";
+}
+
 function hoveredRowOf(rowGeometry: JsonObject | null) {
   return ((rowGeometry?.hoveredRow as JsonObject | undefined) ?? null);
 }
@@ -538,7 +547,7 @@ function closeCleanupProofBlocked(reason: string, extras: JsonObject = {}) {
 }
 
 function shortcutOpenFreshnessProofBlocked(
-  classification: "blocked-by-missing-primitive" | "blocked-by-stale-view",
+  classification: "blocked-by-missing-primitive" | "blocked-by-stale-view" | "blocked-by-target-ambiguity",
   reason: string,
   extras: JsonObject = {},
 ) {
@@ -558,7 +567,7 @@ function shortcutOpenFreshnessProofBlocked(
 }
 
 function shortcutCloseCleanupProofBlocked(
-  classification: "blocked-by-missing-primitive" | "blocked-by-stale-view",
+  classification: "blocked-by-missing-primitive" | "blocked-by-stale-view" | "blocked-by-target-ambiguity",
   reason: string,
   extras: JsonObject = {},
 ) {
@@ -578,7 +587,7 @@ function shortcutCloseCleanupProofBlocked(
 }
 
 function escapeCloseCleanupProofBlocked(
-  classification: "blocked-by-missing-primitive" | "blocked-by-stale-view",
+  classification: "blocked-by-missing-primitive" | "blocked-by-stale-view" | "blocked-by-target-ambiguity",
   reason: string,
   extras: JsonObject = {},
 ) {
@@ -1775,7 +1784,7 @@ async function main() {
     ["bun", "scripts/devtools/targets.ts", "list", "--session", args.session, "--timeout", String(args.timeoutMs)],
     "targets.list",
   );
-  const selector = (targetReceipt.requestedTarget as JsonObject | undefined)?.selector ?? args.target ?? { type: "kind", kind: "actionsDialog" };
+  const selector: JsonObject = ((targetReceipt.requestedTarget as JsonObject | undefined)?.selector as JsonObject | undefined) ?? args.target ?? { type: "kind", kind: "actionsDialog" };
   const stateEnvelope = await rpc(
     args.session,
     { type: "getState", requestId: requestId("state"), target: selector, summaryOnly: true },
@@ -1798,7 +1807,7 @@ async function main() {
     : runtimeAudit
       ? runtimeAuditViolations.length === 0 ? "ok" : "violation"
       : "unavailable";
-  const target = (targetReceipt.resolvedTarget as JsonObject | undefined) ?? {};
+  const target: JsonObject = (targetReceipt.resolvedTarget as JsonObject | undefined) ?? {};
   const windows = asArray(targetsList.targets ?? targetsList.windows);
   const parent = findParentTarget(target, windows);
   const popupRect = rectFrom(attachedGeometry.popupRect) ?? rectFrom(target.bounds);
@@ -1841,8 +1850,9 @@ async function main() {
   const clickActivateProof = args.proveClickActivate
     ? await runClickActivateProof(args, selector, target, rowGeometry)
     : null;
-  const semanticExpectedSelectedId = typeof ((clickSelectProof?.after as JsonObject | undefined)?.selectedSemanticId) === "string"
-    ? ((clickSelectProof?.after as JsonObject | undefined)?.selectedSemanticId as string)
+  const clickSelectProofAfter = ((clickSelectProof as JsonObject | null)?.after as JsonObject | undefined) ?? null;
+  const semanticExpectedSelectedId = typeof clickSelectProofAfter?.selectedSemanticId === "string"
+    ? clickSelectProofAfter.selectedSemanticId
     : selectedRowSemanticId(rowGeometry);
   const semanticFreshnessProof = args.proveSemanticFreshness
     ? await runSemanticFreshnessProof(args, forwarded, semanticExpectedSelectedId)
@@ -1859,13 +1869,17 @@ async function main() {
   const escapeCloseCleanupProof = args.proveEscapeCloseCleanup
     ? await runEscapeCloseCleanupProof(args)
     : null;
-  const finalClassification = escapeCloseCleanupProof?.classification
-    ? escapeCloseCleanupProof.classification
-    : shortcutCloseCleanupProof?.classification
-      ? shortcutCloseCleanupProof.classification
-    : shortcutOpenFreshnessProof?.classification
-      ? shortcutOpenFreshnessProof.classification
-      : classification;
+  const finalClassification = firstNonOkClassification([
+    classification,
+    hoverProof?.classification,
+    clickSelectProof?.classification,
+    clickActivateProof?.classification,
+    semanticFreshnessProof?.classification,
+    closeCleanupProof?.classification,
+    shortcutOpenFreshnessProof?.classification,
+    shortcutCloseCleanupProof?.classification,
+    escapeCloseCleanupProof?.classification,
+  ]);
 
   console.log(JSON.stringify({
     schemaVersion: 1,

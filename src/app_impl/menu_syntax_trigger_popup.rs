@@ -187,7 +187,7 @@ pub(crate) fn plan_trigger_popup_transition(
 /// target / qualifier name.
 ///
 /// Policy:
-/// - Only kicks in for `;` and `:` heads (legacy triggers are handled
+/// - Only kicks in for `;`, legacy `+`, and `:` heads (legacy triggers are handled
 ///   earlier in `plan_trigger_popup_transition`).
 /// - Only kicks in when the text AFTER the trigger is non-empty and
 ///   contains no whitespace. As soon as the user types a space, it's
@@ -209,6 +209,7 @@ fn partial_trigger_snapshot(
     let trigger_char = raw_filter.chars().next()?;
     let bare = match trigger_char {
         ';' => ";",
+        '+' => "+",
         ':' => ":",
         _ => return None,
     };
@@ -218,6 +219,7 @@ fn partial_trigger_snapshot(
     }
 
     let mut snapshot = build_trigger_picker_snapshot(bare, ctx)?;
+    let canonical_token_trigger = canonical_capture_trigger(trigger_char);
     let needle = after_trigger.to_lowercase();
     snapshot.rows.retain(|row| {
         if matches!(
@@ -233,7 +235,7 @@ fn partial_trigger_snapshot(
         // start of a target name expect slug-prefix semantics.
         row.token
             .as_deref()
-            .and_then(|t| t.strip_prefix(trigger_char).or(Some(t)))
+            .and_then(|t| t.strip_prefix(canonical_token_trigger).or(Some(t)))
             .map(|slug| slug.to_lowercase().starts_with(&needle))
             .unwrap_or(false)
     });
@@ -338,6 +340,54 @@ pub(crate) fn adapt_trigger_picker_row(row: &TriggerPickerRow) -> InlinePickerRo
     }
 }
 
+#[allow(dead_code)]
+pub(crate) fn trigger_picker_row_to_main_list_row(
+    row: &TriggerPickerRow,
+) -> crate::spine::SpineListRow {
+    let subtitle = row
+        .subtitle
+        .as_ref()
+        .or(row.detail.as_ref())
+        .map(|text| SharedString::from(text.clone()));
+    let meta = row
+        .token
+        .as_ref()
+        .map(|token| SharedString::from(token.clone()));
+    let action_label = match row.action {
+        TriggerPickerAction::InsertToken { .. } => Some("Insert"),
+        TriggerPickerAction::ReplaceInput { .. } => Some("Use"),
+        TriggerPickerAction::FixQualifier { .. } => Some("Fix"),
+        TriggerPickerAction::ExecuteCaptureHandler { .. } => Some("Run"),
+        TriggerPickerAction::OpenCaptures { .. } => Some("Open"),
+        TriggerPickerAction::CreateHandler { .. } => Some("Create"),
+        TriggerPickerAction::OpenHelp => Some("Help"),
+    };
+
+    crate::spine::SpineListRow {
+        id: SharedString::from(format!("menu-syntax-trigger:{}", row.id)),
+        kind: crate::spine::list::SpineListRowKind::CaptureTarget {
+            target: SharedString::from(row.id.clone()),
+        },
+        title: SharedString::from(row.title.clone()),
+        subtitle,
+        meta,
+        icon: Some(SharedString::from(match row.mode {
+            TriggerPickerMode::Capture => "inbox",
+            TriggerPickerMode::Command => "terminal",
+            TriggerPickerMode::AdvancedQuery => "search",
+        })),
+        badges: row
+            .badges
+            .iter()
+            .map(|badge| SharedString::from(badge.clone()))
+            .collect(),
+        score: row.enabled.then_some(0).unwrap_or(i32::MIN),
+        is_selectable: trigger_popup_row_is_default_selectable(row),
+        action_label: action_label.map(SharedString::from),
+        action: crate::spine::SpineListAction::Noop,
+    }
+}
+
 /// Compute compact-row highlights for the menu-syntax popup from the current
 /// raw filter text.
 ///
@@ -377,7 +427,7 @@ pub(crate) fn trigger_popup_row_highlight_indices(
 fn trigger_popup_highlight_query(raw_filter: &str) -> Option<(char, String)> {
     let trimmed = raw_filter.trim_start();
     let trigger = trimmed.chars().next()?;
-    if trigger != ';' && trigger != ':' {
+    if trigger != ';' && trigger != '+' && trigger != ':' {
         return None;
     }
 
@@ -406,14 +456,18 @@ fn best_trigger_popup_hits(
         }
     }
 
+    let canonical_token_trigger = canonical_capture_trigger(trigger);
     for query in query_candidates {
         let hits = if skip_trigger_prefix {
-            match_query_chars_after_trigger_prefix(&query, candidate, trigger)
+            match_query_chars_after_trigger_prefix(&query, candidate, canonical_token_trigger)
         } else {
             match_query_chars(&query, candidate)
         };
         if let Some(mut hits) = hits {
-            if skip_trigger_prefix && candidate.starts_with(trigger) && !hits.is_empty() {
+            if skip_trigger_prefix
+                && candidate.starts_with(canonical_token_trigger)
+                && !hits.is_empty()
+            {
                 hits.insert(0, 0);
             }
             return hits;
@@ -421,6 +475,14 @@ fn best_trigger_popup_hits(
     }
 
     Vec::new()
+}
+
+fn canonical_capture_trigger(trigger: char) -> char {
+    if trigger == '+' {
+        ';'
+    } else {
+        trigger
+    }
 }
 
 fn colon_qualifier_head(query: &str) -> Option<&str> {
@@ -1032,21 +1094,17 @@ mod tests {
         let source = std::fs::read_to_string("src/app_impl/filter_input_change.rs")
             .expect("Failed to read src/app_impl/filter_input_change.rs");
         let branch = source
-            .split("} else if needs_popup_sync {")
+            .split("} else if trigger_state_changed {")
             .nth(1)
             .and_then(|tail| tail.split("} else if matches!(").next())
-            .expect("filter_input_change.rs should have a needs_popup_sync branch");
+            .expect("filter_input_change.rs should have a trigger_state_changed branch");
 
         assert!(
-            branch.contains("menu_syntax_main_hint_snapshot"),
+            branch.contains("self.invalidate_grouped_cache();"),
             "trigger snapshots should be documented as feeding the main search area"
         );
         assert!(
-            branch.contains("close_menu_syntax_trigger_popup_window(cx)"),
-            "stale trigger popup windows should close when trigger rows move to the main area"
-        );
-        assert!(
-            !branch.contains("sync_menu_syntax_trigger_popup_window_for_filter"),
+            !source.contains("sync_menu_syntax_trigger_popup_window_for_filter"),
             "filter input changes must not sync trigger snapshots into the detached popup window"
         );
     }
@@ -1064,10 +1122,6 @@ mod tests {
             })
             .expect("run_menu_syntax_trigger_popup_state_machine should exist");
 
-        assert!(
-            body.contains("close_menu_syntax_trigger_popup_window(cx)"),
-            "trigger state changes should keep any detached trigger popup closed"
-        );
         assert!(
             !body.contains("sync_menu_syntax_trigger_popup_window_for_filter"),
             "trigger state machine must preserve snapshots for the main area without opening the popup"

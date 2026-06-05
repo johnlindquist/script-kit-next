@@ -122,7 +122,6 @@ fn body_filters_for_selectable_rows(body: &str) -> bool {
 
 #[test]
 fn move_up_skips_section_headers() {
-    // doc-anchor-removed: [[removed-docs navigation skips section headers]]
     let body = extract_fn_body(DIALOG_SOURCE, "pub fn move_up(");
     assert!(
         body_filters_for_selectable_rows(body),
@@ -146,7 +145,6 @@ fn move_up_skips_section_headers() {
 
 #[test]
 fn move_down_skips_section_headers() {
-    // doc-anchor-removed: [[removed-docs navigation skips section headers]]
     let body = extract_fn_body(DIALOG_SOURCE, "pub fn move_down(");
     assert!(
         body_filters_for_selectable_rows(body),

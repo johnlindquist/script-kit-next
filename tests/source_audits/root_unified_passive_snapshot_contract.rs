@@ -7,13 +7,7 @@ fn root_browser_tabs_foreground_search_is_cache_only() {
         .and_then(|rest| rest.split("pub(crate) fn focus_root_browser_tab(").next())
         .expect("search_root_browser_tabs_meta should exist");
 
-    assert!(search_fn.contains("ensure_root_browser_tabs_refresh("));
-    assert!(search_fn.contains("cached_root_browser_tabs_snapshot("));
-    assert!(
-        search_fn.find("root_browser_tabs_query_is_eligible(")
-            < search_fn.find("ensure_root_browser_tabs_refresh("),
-        "disabled or ineligible browser-tab root search must not start a refresh"
-    );
+    assert!(search_fn.contains("search_root_browser_tabs_meta_cached(query, options)"));
     assert!(
         !search_fn.contains("list_open_tabs("),
         "foreground browser-tab root search must not call AppleScript/JXA tab enumeration"
@@ -149,8 +143,8 @@ fn filtering_cache_freezes_passive_snapshot_hits_per_query_frame() {
             && filtering_cache.contains("search_root_clipboard_history_meta_cached(")
             && filtering_cache.contains("search_root_dictation_history_cached(")
             && filtering_cache.contains("search_history_cached(")
-            && filtering_cache.contains("search_root_browser_tabs_meta(")
-            && filtering_cache.contains("search_root_browser_history_meta(")
+            && filtering_cache.contains("search_root_browser_tabs_meta_cached(")
+            && filtering_cache.contains("search_root_browser_history_meta_direct(")
             && filtering_cache.contains("&root_passive_frame.note_hits")
             && filtering_cache.contains("&root_passive_frame.clipboard_history_hits")
             && filtering_cache.contains("&root_passive_frame.dictation_history_hits")

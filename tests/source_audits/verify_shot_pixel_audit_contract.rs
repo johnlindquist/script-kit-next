@@ -30,10 +30,11 @@ fn rust_and_bun_pixel_audits_expose_same_fields() {
 fn rust_and_bun_use_the_same_blank_rejection_thresholds() {
     for literal in [
         "unique_bucket_count <= 1",
-        "unique_bucket_count <= 2",
-        "mean_luma < 5.0",
-        "non_black_ratio < 0.001",
-        "max_luma < 16.0",
+        "unique_bucket_count <= DARK_EMPTY_MAX_UNIQUE_BUCKETS",
+        "mean_luma < DARK_EMPTY_MAX_MEAN_LUMA",
+        "non_black_ratio < DARK_EMPTY_MAX_NON_BLACK_RATIO",
+        "max_luma < DARK_EMPTY_MAX_LUMA",
+        "sparse_dark_capture_like",
     ] {
         assert!(
             RUST_CAPTURE.contains(literal),

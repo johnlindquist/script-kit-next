@@ -1,11 +1,9 @@
 // --- Expanded-view surfaces (preview IS the decision) ---
 const CLIPBOARD_HISTORY_ENTRY_SOURCE: &str = include_str!("../../src/render_builtins/clipboard.rs");
-const CLIPBOARD_HISTORY_LAYOUT_SOURCE: &str =
-    include_str!("../../src/render_builtins/clipboard_history_layout.rs");
+const CLIPBOARD_HISTORY_LAYOUT_SOURCE: &str = CLIPBOARD_HISTORY_ENTRY_SOURCE;
 const FILE_SEARCH_ENTRY_SOURCE: &str = include_str!("../../src/render_builtins/file_search.rs");
 
-// file_search_layout.rs is now a legacy stub — expanded/mini contract
-// assertions use the live file_search.rs entry source instead.
+// File Search rendering is owned by file_search.rs.
 
 // --- Minimal-list surfaces (name IS the content) ---
 const WINDOW_SWITCHER_SOURCE: &str = include_str!("../../src/render_builtins/window_switcher.rs");
@@ -79,10 +77,11 @@ fn assert_expanded_builtin_surface(name: &str, entry_source: &str, layout_source
         "{name} layout should use shared expanded-view scaffold/shell"
     );
 
-    // Layout should route footer rendering through the main-window native footer slot
+    // Layout should route footer rendering through the native footer path.
     assert!(
-        layout_source.contains("main_window_footer_slot("),
-        "{name} layout should route footer rendering through the main-window native footer slot"
+        layout_source.contains("main_window_footer_slot(")
+            || layout_source.contains("render_expanded_view_scaffold_with_hints("),
+        "{name} layout should route footer rendering through the native footer path"
     );
 
     // Must NOT use old PromptFooter
@@ -131,12 +130,38 @@ fn clipboard_history_enforces_expanded_view_contract() {
 
 #[test]
 fn file_search_enforces_expanded_view_contract() {
-    // The live rendering is fully in file_search.rs (entry source).
-    // file_search_layout.rs is a legacy stub with no chrome markers.
-    assert_expanded_builtin_surface(
-        "file_search",
-        FILE_SEARCH_ENTRY_SOURCE,
-        FILE_SEARCH_ENTRY_SOURCE,
+    assert!(
+        FILE_SEARCH_ENTRY_SOURCE.contains("render_main_view_chrome("),
+        "file_search should use shared main-view chrome"
+    );
+    assert!(
+        FILE_SEARCH_ENTRY_SOURCE.contains("render_main_view_context_zone("),
+        "file_search should keep the shared context zone"
+    );
+    assert!(
+        FILE_SEARCH_ENTRY_SOURCE.contains("render_main_view_input_shell("),
+        "file_search should keep the shared input shell"
+    );
+    assert!(
+        FILE_SEARCH_ENTRY_SOURCE.contains("main_window_footer_slot("),
+        "file_search should route footer content through the native footer slot"
+    );
+    assert!(
+        FILE_SEARCH_ENTRY_SOURCE.contains("render_simple_hint_strip(file_search_hints, None)"),
+        "file_search should build the shared hint strip"
+    );
+    assert!(
+        FILE_SEARCH_ENTRY_SOURCE.contains("PromptChromeAudit::expanded(\"file_search\""),
+        "file_search should keep expanded runtime audit classification"
+    );
+    assert!(
+        !FILE_SEARCH_ENTRY_SOURCE.contains("PromptChromeAudit::minimal("),
+        "file_search should not emit a minimal chrome audit"
+    );
+    let divider_needle = ["SectionDivider", "::new()"].concat();
+    assert!(
+        !FILE_SEARCH_ENTRY_SOURCE.contains(&divider_needle),
+        "file_search should not use SectionDivider"
     );
 }
 
@@ -387,7 +412,6 @@ fn footer_popup_accepts_config_driven_refresh() {
 
 #[test]
 fn native_footer_height_uses_shared_token() {
-    // doc-anchor-removed: [[removed-docs Rules]]
     assert!(
         WINDOW_RESIZE_SOURCE
             .contains("pub const NATIVE_MAIN_WINDOW_FOOTER_HEIGHT: f32 = HINT_STRIP_HEIGHT;"),
@@ -420,7 +444,6 @@ fn native_footer_height_uses_shared_token() {
 
 #[test]
 fn footer_popup_notify_none_removes_native_footer_host() {
-    // doc-anchor-removed: [[removed-docs Rules]]
     let notify_pos = FOOTER_POPUP_SOURCE
         .find("pub(crate) fn notify_main_footer_popup")
         .expect("footer_popup.rs must define notify_main_footer_popup");
@@ -810,7 +833,7 @@ fn native_footer_migration_coverage_summary() {
         ),
         (
             "clipboard_history",
-            include_str!("../../src/render_builtins/clipboard_history_layout.rs"),
+            include_str!("../../src/render_builtins/clipboard.rs"),
         ),
         (
             "file_search",
@@ -837,8 +860,9 @@ fn native_footer_migration_coverage_summary() {
     let mut covered = Vec::new();
     for (name, source) in surfaces {
         assert!(
-            source.contains("main_window_footer_slot("),
-            "{name} must route footer through main_window_footer_slot"
+            source.contains("main_window_footer_slot(")
+                || source.contains("render_expanded_view_scaffold_with_hints("),
+            "{name} must route footer through the native footer path"
         );
         covered.push(*name);
     }

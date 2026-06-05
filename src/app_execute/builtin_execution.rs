@@ -3487,6 +3487,29 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    pub(crate) fn open_clipboard_history_surface_with_filter(
+        &mut self,
+        filter: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
+        self.focused_clipboard_entry_id = self
+            .cached_clipboard_entries
+            .first()
+            .map(|entry| entry.id.clone());
+
+        self.open_builtin_filterable_view_with_filter(
+            AppView::ClipboardHistoryView {
+                filter: filter.clone(),
+                selected_index: 0,
+            },
+            &filter,
+            "Search clipboard history...",
+            true,
+            cx,
+        );
+    }
+
     pub(crate) fn present_current_app_commands_entries(
         &mut self,
         entries: Vec<crate::builtins::BuiltInEntry>,
@@ -3994,7 +4017,6 @@ impl ScriptListApp {
         match action {
             SettingsCommandBuiltinAction::ResetWindowPositions => {
                 self.reset_window_positions_to_default_main_menu(cx);
-                self.show_hud("Window positions reset".to_string(), Some(HUD_SHORT_MS), cx);
                 Self::builtin_success(dctx, action.success_detail())
             }
             SettingsCommandBuiltinAction::ChooseTheme => {
@@ -4028,26 +4050,12 @@ impl ScriptListApp {
                     "{}",
                     action.log_message()
                 );
-                self.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
-                self.focused_clipboard_entry_id = self
-                    .cached_clipboard_entries
-                    .first()
-                    .map(|entry| entry.id.clone());
+                self.open_clipboard_history_surface_with_filter(String::new(), cx);
                 tracing::info!(
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
                     count = self.cached_clipboard_entries.len(),
                     "Loaded clipboard entries"
-                );
-
-                self.open_builtin_filterable_view(
-                    AppView::ClipboardHistoryView {
-                        filter: String::new(),
-                        selected_index: 0,
-                    },
-                    "Search clipboard history...",
-                    true,
-                    cx,
                 );
             }
             SurfaceOpenBuiltinAction::Favorites => {

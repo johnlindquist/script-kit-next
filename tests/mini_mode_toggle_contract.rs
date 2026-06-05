@@ -15,7 +15,6 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &source[start_index..end_index]
 }
 
-// doc-anchor-removed: [[removed-docs mode toggles]]
 #[test]
 fn main_window_mode_helper_updates_prompt_footer_popup_and_size() {
     let helper = source_between(
@@ -39,7 +38,6 @@ fn main_window_mode_helper_updates_prompt_footer_popup_and_size() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs mode caller routing]]
 #[test]
 fn mode_callers_route_through_helpers_not_direct_assignment() {
     for (name, source) in [
@@ -60,7 +58,6 @@ fn mode_callers_route_through_helpers_not_direct_assignment() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs resize width clamp]]
 #[test]
 fn resize_current_view_to_width_clamps_mini_width() {
     let body = source_between(
@@ -70,7 +67,7 @@ fn resize_current_view_to_width_clamps_mini_width() {
     );
     assert!(
         body.contains("self.main_window_mode == MainWindowMode::Mini")
-            && body.contains("width_for_view(ViewType::MiniMainWindow)"),
-        "resize_current_view_to_width must clamp width to MiniMainWindow in mini mode"
+            && body.contains("width_for_view(ViewType::MainWindow)"),
+        "resize_current_view_to_width must clamp width to MainWindow in mini mode"
     );
 }

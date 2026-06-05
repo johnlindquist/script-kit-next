@@ -103,6 +103,7 @@
         "PathPrompt",
         "DropPrompt",
         "TemplatePrompt",
+        "HotkeyPrompt",
         "ChatPrompt",
         "MiniPrompt",
         "MicroPrompt"
@@ -135,6 +136,10 @@
         {
           "variant": "TemplatePrompt",
           "nativeFooterSurface": "template_prompt"
+        },
+        {
+          "variant": "HotkeyPrompt",
+          "nativeFooterSurface": "hotkey_prompt"
         },
         {
           "variant": "ChatPrompt",
@@ -592,13 +597,13 @@
       "vocabulary": {
         "family": "UtilityWorkspace",
         "inputOwnership": "LauncherFilter",
-        "previewRole": "RequiredSplitPreview"
+        "previewRole": "NoPersistentPreview"
       },
       "focusPolicy": "LauncherFilterFocus",
       "keyboardPolicy": "LauncherListKeyboard",
       "actionsPolicy": "HostRowActions",
       "proofPolicy": "StateAndElementsProof",
-      "visualPolicy": "SplitPreviewVisual",
+      "visualPolicy": "CompactLauncherVisual",
       "dismissPolicy": {
         "policy": "standard",
         "windowBlur": "CloseMainWindow",
@@ -607,6 +612,66 @@
         "cmdW": "CloseMainWindow"
       },
       "automationSemanticSurface": "designGallery"
+    },
+    {
+      "surfaceKind": "FooterGallery",
+      "appViewVariants": [
+        "FooterGalleryView"
+      ],
+      "appViewFooters": [
+        {
+          "variant": "FooterGalleryView",
+          "nativeFooterSurface": "footer_gallery"
+        }
+      ],
+      "vocabulary": {
+        "family": "UtilityWorkspace",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "footerGallery"
+    },
+    {
+      "surfaceKind": "NonListStates",
+      "appViewVariants": [
+        "NonListStatesView"
+      ],
+      "appViewFooters": [
+        {
+          "variant": "NonListStatesView",
+          "nativeFooterSurface": "non_list_states"
+        }
+      ],
+      "vocabulary": {
+        "family": "UtilityWorkspace",
+        "inputOwnership": "ChildView",
+        "previewRole": "ContentPane"
+      },
+      "focusPolicy": "ChildViewFocus",
+      "keyboardPolicy": "ChildViewKeyboard",
+      "actionsPolicy": "ChildViewActions",
+      "proofPolicy": "ChildViewStateProof",
+      "visualPolicy": "ContentPaneVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "nonListStates"
     },
     {
       "surfaceKind": "DesignExplorer",
@@ -734,6 +799,36 @@
       "automationSemanticSurface": "fileSearch"
     },
     {
+      "surfaceKind": "ProfileSearch",
+      "appViewVariants": [
+        "ProfileSearchView"
+      ],
+      "appViewFooters": [
+        {
+          "variant": "ProfileSearchView",
+          "nativeFooterSurface": "profile_search"
+        }
+      ],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "RequiredSplitPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "SplitPreviewVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "profileSearch"
+    },
+    {
       "surfaceKind": "ThemeChooser",
       "appViewVariants": [
         "ThemeChooserView"
@@ -747,13 +842,13 @@
       "vocabulary": {
         "family": "UtilityWorkspace",
         "inputOwnership": "LauncherFilter",
-        "previewRole": "NoPersistentPreview"
+        "previewRole": "RequiredSplitPreview"
       },
       "focusPolicy": "LauncherFilterFocus",
       "keyboardPolicy": "LauncherListKeyboard",
       "actionsPolicy": "HostRowActions",
       "proofPolicy": "StateAndElementsProof",
-      "visualPolicy": "CompactLauncherVisual",
+      "visualPolicy": "SplitPreviewVisual",
       "dismissPolicy": {
         "policy": "explicit",
         "windowBlur": "Ignore",
@@ -806,7 +901,7 @@
         },
         {
           "variant": "ScriptIssuesView",
-          "nativeFooterSurface": null
+          "nativeFooterSurface": "script_issues"
         }
       ],
       "vocabulary": {

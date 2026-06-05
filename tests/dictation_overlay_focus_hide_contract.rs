@@ -21,7 +21,6 @@ fn compact(s: &str) -> String {
     s.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
-// doc-anchor-removed: [[acp-chat#ACP Chat#Detached window behavior#Dictation delivery to the composer]]
 #[test]
 fn dictation_overlay_opens_without_revealing_hidden_main_panel() {
     let section = section_between(
@@ -72,7 +71,6 @@ fn dictation_overlay_opens_without_revealing_hidden_main_panel() {
     );
 }
 
-// doc-anchor-removed: [[dictation-overlay-shortcuts#Dictation Overlay Shortcuts#Visible shortcut rail]]
 #[test]
 fn dictation_overlay_renders_visible_shortcut_rail() {
     assert!(

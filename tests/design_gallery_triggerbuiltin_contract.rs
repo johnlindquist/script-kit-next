@@ -57,7 +57,6 @@ fn body_of<'a>(source: &'a str, signature: &str) -> &'a str {
     panic!("missing function body close: {signature}");
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn triggerbuiltin_dispatchers_do_not_route_pruned_design_gallery_alias() {
     for (name, source) in [
@@ -88,7 +87,6 @@ fn triggerbuiltin_dispatchers_do_not_route_pruned_design_gallery_alias() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn triggerbuiltin_dispatchers_prune_design_gallery_aliases() {
     let alias_arm = body_of(TRIGGER_REGISTRY_SOURCE, "pub const fn legacy_aliases(");
@@ -106,7 +104,6 @@ fn triggerbuiltin_dispatchers_prune_design_gallery_aliases() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn design_gallery_appview_variant_maps_to_semantic_surface() {
     // Pass #19's re-key path looks up `semantic_surface_for_main_view`

@@ -1,8 +1,32 @@
+use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line, Point as AlacPoint};
 use alacritty_terminal::term::cell::Flags as AlacrittyFlags;
 use tracing::instrument;
 
 use super::*;
+
+fn terminal_line_text(
+    row: &alacritty_terminal::grid::Row<alacritty_terminal::term::cell::Cell>,
+    columns: usize,
+) -> String {
+    let mut line = String::with_capacity(columns);
+    for col_idx in 0..columns {
+        line.push(row[Column(col_idx)].c);
+    }
+    line.trim_end().to_string()
+}
+
+fn truncate_to_char_boundary(value: &mut String, max_bytes: usize) {
+    if value.len() <= max_bytes {
+        return;
+    }
+
+    let mut end = max_bytes;
+    while end > 0 && !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    value.truncate(end);
+}
 
 impl TerminalHandle {
     /// Gets the current terminal content for rendering.
@@ -80,5 +104,67 @@ impl TerminalHandle {
             cursor_col: cursor.column.0,
             selected_cells,
         }
+    }
+
+    /// Captures bounded plain terminal text from scrollback plus the visible grid.
+    #[instrument(level = "trace", skip(self))]
+    pub fn text_snapshot(&self, max_lines: usize, max_bytes: usize) -> TerminalTextSnapshot {
+        if max_lines == 0 || max_bytes == 0 {
+            return TerminalTextSnapshot {
+                text: String::new(),
+                line_count: 0,
+                truncated: true,
+            };
+        }
+
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let grid = state.term.grid();
+        let columns = state.term.columns();
+        let history_size = grid.history_size();
+        let screen_lines = state.term.screen_lines();
+        let total_available_lines = history_size + screen_lines;
+        let captured_lines = total_available_lines.min(max_lines);
+        let end_line = screen_lines as i32 - 1;
+        let start_line = end_line - captured_lines as i32 + 1;
+
+        let mut lines = Vec::with_capacity(captured_lines);
+        for line_idx in start_line..=end_line {
+            let row = &grid[Line(line_idx)];
+            lines.push(terminal_line_text(row, columns));
+        }
+
+        let leading_empty = lines
+            .iter()
+            .position(|line| !line.is_empty())
+            .unwrap_or(lines.len());
+        if leading_empty > 0 {
+            lines.drain(0..leading_empty);
+        }
+
+        let line_count_before_byte_cap = lines.len();
+        let mut text = lines.join("\n").trim_end().to_string();
+        let mut truncated = total_available_lines > max_lines;
+        if text.len() > max_bytes {
+            truncate_to_char_boundary(&mut text, max_bytes);
+            truncated = true;
+        }
+
+        TerminalTextSnapshot {
+            line_count: text.lines().count().min(line_count_before_byte_cap),
+            text,
+            truncated,
+        }
+    }
+}
+
+#[cfg(test)]
+mod text_snapshot_tests {
+    use super::*;
+
+    #[test]
+    fn truncate_to_char_boundary_preserves_utf8() {
+        let mut value = "abc😀def".to_string();
+        truncate_to_char_boundary(&mut value, 5);
+        assert_eq!(value, "abc");
     }
 }

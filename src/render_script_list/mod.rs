@@ -738,98 +738,6 @@ fn render_spine_projection_row(
 }
 
 impl ScriptListApp {
-    fn render_menu_syntax_object_selector_main_list(
-        &self,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let Some(snapshot) = self.menu_syntax_object_selector_state.snapshot.as_ref() else {
-            return div().w_full().h_full().into_any_element();
-        };
-        let colors = ListItemColors::from_theme(&self.theme);
-        let selected_id = self
-            .menu_syntax_object_selector_state
-            .selected_row_id
-            .as_deref();
-        let main_menu_theme = self.current_main_menu_theme;
-
-        div()
-            .w_full()
-            .h_full()
-            .flex()
-            .flex_col()
-            .children(snapshot.rows.iter().enumerate().map(|(ix, row)| {
-                let row_id = row.id.clone();
-                let is_selected = selected_id == Some(row.id.as_str());
-                let click_handler = cx.listener(
-                    move |this: &mut ScriptListApp, _event: &gpui::ClickEvent, window, cx| {
-                        this.set_menu_syntax_object_selector_selection(row_id.clone());
-                        if this
-                            .menu_syntax_object_selector_state
-                            .snapshot
-                            .as_ref()
-                            .and_then(|snapshot| {
-                                snapshot.rows.iter().find(|row| row.id == row_id)
-                            })
-                            .is_some_and(|row| row.enabled)
-                        {
-                            this.accept_menu_syntax_object_selector_row(&row_id, Some(window), cx);
-                        } else {
-                            cx.notify();
-                        }
-                    },
-                );
-
-                let item = crate::list_item::ListItem::new(row.title.clone(), colors)
-                    .index(ix)
-                    .selected(is_selected)
-                    .main_menu_theme(main_menu_theme)
-                    .semantic_id(row.id.clone())
-                    .description_opt(row.subtitle.clone())
-                    .source_hint_opt((!row.badges.is_empty()).then(|| row.badges.join(" ")));
-
-                div()
-                    .id(ElementId::NamedInteger(
-                        "menu-syntax-object-selector-row".into(),
-                        ix as u64,
-                    ))
-                    .when(row.enabled, |d| d.on_click(click_handler))
-                    .when(!row.enabled, |d| d.opacity(0.55))
-                    .child(item)
-                    .into_any_element()
-            }))
-            .into_any_element()
-    }
-
-    fn main_view_state_icon_name_for_script_list(&self, filter_text: &str) -> &'static str {
-        let trimmed = filter_text.trim_start();
-        if trimmed.starts_with('~') {
-            return "folder-open";
-        }
-
-        let source_filter = self
-            .menu_syntax_mode
-            .advanced_query_for(filter_text)
-            .and_then(|query| query.source_filters.positive_includes().next());
-
-        match source_filter {
-            Some(crate::menu_syntax::RootUnifiedSourceFilter::Files) => "folder-open",
-            Some(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory) => "clipboard",
-            Some(crate::menu_syntax::RootUnifiedSourceFilter::Conversations) => "message-circle",
-            Some(crate::menu_syntax::RootUnifiedSourceFilter::Notes) => "file-code",
-            Some(crate::menu_syntax::RootUnifiedSourceFilter::Todo) => "check",
-            Some(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs)
-            | Some(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory) => "sidebar",
-            Some(crate::menu_syntax::RootUnifiedSourceFilter::Apps) => "play",
-            Some(crate::menu_syntax::RootUnifiedSourceFilter::Scripts)
-            | Some(crate::menu_syntax::RootUnifiedSourceFilter::Commands) => "code",
-            Some(crate::menu_syntax::RootUnifiedSourceFilter::AiVault) => "bolt",
-            Some(crate::menu_syntax::RootUnifiedSourceFilter::Dictation) => "message-circle",
-            Some(crate::menu_syntax::RootUnifiedSourceFilter::Windows)
-            | Some(crate::menu_syntax::RootUnifiedSourceFilter::Processes)
-            | None => "search",
-        }
-    }
-
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let render_list_start = std::time::Instant::now();
         let filter_for_log = self.filter_text.clone();
@@ -976,6 +884,10 @@ impl ScriptListApp {
         let popup_owns_main_list = !handler_form_owns_input_for_render
             && (self.menu_syntax_object_selector_state.owns_main_list()
                 || self.menu_syntax_trigger_popup_state.owns_main_list());
+        let trigger_picker_owns_main_list_for_render = !handler_form_owns_input_for_render
+            && self.menu_syntax_trigger_popup_state.owns_main_list();
+        let object_selector_owns_main_list_for_render = !handler_form_owns_input_for_render
+            && self.menu_syntax_object_selector_state.owns_main_list();
         let spine_owns_main_list_for_render = self.spine_projection_owns_main_list()
             && self.spine_parse.input == filter_text_for_render;
         let menu_syntax_owns_main_list = !spine_owns_main_list_for_render
@@ -995,15 +907,14 @@ impl ScriptListApp {
                     hint.kind,
                     crate::menu_syntax::MenuSyntaxMainHintKind::AdvancedQueryGuide
                 )
-            });
+        });
 
         let main_hint_list_tokens = self.current_main_menu_theme.def().list;
         let active_filter_empty_copy = "There are no search results with this filter applied.";
-        let list_element: AnyElement = if self.menu_syntax_object_selector_state.owns_main_list()
-            && !handler_form_owns_input_for_render
+        let list_element: AnyElement = if menu_syntax_owns_main_list
+            && !trigger_picker_owns_main_list_for_render
+            && !object_selector_owns_main_list_for_render
         {
-            self.render_menu_syntax_object_selector_main_list(cx)
-        } else if menu_syntax_owns_main_list {
             self.menu_syntax_main_hint_snapshot(&filter_text_for_render, false)
                 .map(|hint| {
                     render_menu_syntax_main_hint(
@@ -1196,6 +1107,30 @@ impl ScriptListApp {
                                             ) {
                                                 if this.spine_projection_owns_main_list() {
                                                     this.accept_spine_projection_row(window, cx);
+                                                } else if this
+                                                    .menu_syntax_object_selector_owns_main_keyboard()
+                                                {
+                                                    if let Some(row_id) = this
+                                                        .selected_menu_syntax_object_selector_row_id_from_main_list()
+                                                    {
+                                                        this.accept_menu_syntax_object_selector_row(
+                                                            &row_id,
+                                                            Some(window),
+                                                            cx,
+                                                        );
+                                                    }
+                                                } else if this
+                                                    .menu_syntax_trigger_picker_owns_main_keyboard()
+                                                {
+                                                    if let Some(row_id) = this
+                                                        .selected_menu_syntax_trigger_row_id_from_main_list()
+                                                    {
+                                                        this.accept_menu_syntax_trigger_popup_row(
+                                                            &row_id,
+                                                            Some(window),
+                                                            cx,
+                                                        );
+                                                    }
                                                 } else {
                                                     logging::log(
                                                         "UI",
@@ -1502,10 +1437,9 @@ impl ScriptListApp {
                 }
 
                 let key_str = event.keystroke.key.as_str();
-                if this.consume_return_to_script_list_enter_guard(
-                    key_str,
-                    &event.keystroke.modifiers,
-                ) {
+                if this
+                    .consume_return_to_script_list_enter_guard(key_str, &event.keystroke.modifiers)
+                {
                     cx.stop_propagation();
                     return;
                 }
@@ -1614,7 +1548,10 @@ impl ScriptListApp {
 
                     match key_str {
                         "v" if this.route_large_script_list_paste_to_acp(cx) => {
-                            logging::log("KEY", "Shortcut Cmd+V -> route_large_script_list_paste_to_acp");
+                            logging::log(
+                                "KEY",
+                                "Shortcut Cmd+V -> route_large_script_list_paste_to_acp",
+                            );
                             cx.stop_propagation();
                             return;
                         }
@@ -1949,11 +1886,7 @@ impl ScriptListApp {
 
         let header_padding_x = shell.header_padding_x;
         let header_padding_y = if is_default_design {
-            if is_mini {
-                crate::window_resize::main_layout::HEADER_PADDING_Y
-            } else {
-                shell.header_padding_y
-            }
+            shell.header_padding_y
         } else {
             design_spacing.padding_sm
         };
@@ -1985,26 +1918,11 @@ impl ScriptListApp {
             self.render_search_input_with_ghost(cx).into_any_element()
         };
 
-        let state_icon_name =
-            self.main_view_state_icon_name_for_script_list(&filter_text_for_render);
-        let leading = crate::components::main_view_chrome::main_view_should_show_state_icon(
-            menu_def,
-            state_icon_name,
-        )
-        .then(|| {
-            crate::components::main_view_chrome::render_main_view_state_icon(
-                &self.theme,
-                menu_def,
-                state_icon_name,
-            )
-        });
-
         let input = crate::components::main_view_chrome::render_main_view_input_shell(
             &self.theme,
             menu_def,
             crate::components::main_view_chrome::MainViewInputChrome {
                 body: input_body,
-                leading,
                 trailing: Vec::new(),
             },
         );

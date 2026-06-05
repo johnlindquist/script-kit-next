@@ -52,7 +52,7 @@ mod tests;
 
 pub use colors::{resolve_color, resolve_fg_color_with_bold};
 #[allow(unused_imports)]
-pub use content_types::{CursorPosition, TerminalContent};
+pub use content_types::{CursorPosition, TerminalContent, TerminalTextSnapshot};
 
 /// Default scrollback buffer size in lines.
 const DEFAULT_SCROLLBACK_LINES: usize = 10_000;

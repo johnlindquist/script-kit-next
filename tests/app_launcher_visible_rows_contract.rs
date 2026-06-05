@@ -18,7 +18,6 @@ fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a st
     &source[start..start + end_rel]
 }
 
-// doc-anchor-removed: [[removed-docs Surface Matrix]]
 #[test]
 fn app_launcher_declares_visible_row_helper_family() {
     for required in [

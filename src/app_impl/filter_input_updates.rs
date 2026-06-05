@@ -6,7 +6,8 @@ impl ScriptListApp {
         // Non-ScriptList views may also size from filtered item counts.
         // Full ScriptList uses the normal fixed launcher size, so typing
         // should not recalculate/defer resize every keystroke.
-        !matches!(self.current_view, AppView::ScriptList) || self.main_window_mode == MainWindowMode::Mini
+        !matches!(self.current_view, AppView::ScriptList)
+            || self.main_window_mode == MainWindowMode::Mini
     }
 
     pub(crate) fn cancel_history_filter_render_pending_if_obsolete(&mut self, next_filter: &str) {
@@ -209,6 +210,15 @@ impl ScriptListApp {
         // would never reflect the narrowed dataset. Sub-gap (2) of the
         // `empty-clipboard-state` story.
         let handled_by_subview = self.write_filter_to_current_subview(&text);
+        if handled_by_subview && matches!(self.current_view, AppView::ProfileSearchView { .. }) {
+            self.computed_filter_text = text.clone();
+            self.filter_coalescer.reset();
+            if self.filter_change_can_affect_window_size() {
+                self.update_window_size_deferred(window, cx);
+            }
+            cx.notify();
+            return;
+        }
 
         // Menu bar items are now pre-fetched by frontmost_app_tracker
         // No lazy loading needed - items are already in cache when we open
@@ -218,21 +228,14 @@ impl ScriptListApp {
         // `handle_filter_input_change` line ~511 is suppressed here). Open
         // the view at the new query so directory navigation works under
         // protocol automation.
-        if !handled_by_subview
-            && matches!(self.current_view, AppView::FileSearchView { .. })
-        {
-            let presentation = if let AppView::FileSearchView { presentation, .. } =
-                &self.current_view
-            {
-                *presentation
-            } else {
-                FileSearchPresentation::Full
-            };
-            self.open_file_search_view_preserving_current_results(
-                text.clone(),
-                presentation,
-                cx,
-            );
+        if !handled_by_subview && matches!(self.current_view, AppView::FileSearchView { .. }) {
+            let presentation =
+                if let AppView::FileSearchView { presentation, .. } = &self.current_view {
+                    *presentation
+                } else {
+                    FileSearchPresentation::Full
+                };
+            self.open_file_search_view_preserving_current_results(text.clone(), presentation, cx);
             return;
         }
 
@@ -552,9 +555,7 @@ impl ScriptListApp {
         self.apply_spine_list_action(action, window, cx)
     }
 
-    fn selected_spine_rich_subsearch_action(
-        &mut self,
-    ) -> Option<crate::spine::SpineListAction> {
+    fn selected_spine_rich_subsearch_action(&mut self) -> Option<crate::spine::SpineListAction> {
         let projection = self.spine_projection.as_ref()?;
         let crate::spine::SpineSegmentKind::ContextMention {
             context_type,
@@ -607,9 +608,7 @@ impl ScriptListApp {
             ) => {
                 let replacement = format!(
                     "@clipboard:{}",
-                    crate::spine::catalog_subsearch::escape_ref_component(
-                        &clip_match.entry.id,
-                    ),
+                    crate::spine::catalog_subsearch::escape_ref_component(&clip_match.entry.id,),
                 );
                 Some(crate::spine::SpineListAction::ResolveSegment {
                     segment_index,

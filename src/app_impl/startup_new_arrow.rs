@@ -171,10 +171,11 @@
                                 }
                                 AppView::AppLauncherView {
                                     selected_index,
-                                    filter: _,
+                                    filter,
                                 } => {
-                                    // Filter apps to get correct count
-                                    let filtered_len = this.apps.len();
+                                    let filtered_len =
+                                        Self::app_launcher_filtered_entries(&this.apps, filter)
+                                            .len();
                                     let old_index = *selected_index;
 
                                     if is_up && *selected_index > 0 {
@@ -195,6 +196,98 @@
                                         );
 
                                         this.list_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        this.input_mode = InputMode::Keyboard;
+                                        this.hovered_index = None;
+                                        cx.notify();
+                                    }
+
+                                    cx.stop_propagation();
+                                }
+                                AppView::DesignGalleryView {
+                                    selected_index,
+                                    filter,
+                                } => {
+                                    let filtered_len =
+                                        Self::design_gallery_visible_rows(filter).len();
+                                    let old_index = *selected_index;
+
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                    } else if is_down && *selected_index + 1 < filtered_len {
+                                        *selected_index += 1;
+                                    }
+
+                                    if *selected_index != old_index {
+                                        tracing::debug!(
+                                            target: "script_kit::scroll",
+                                            event = "builtin_selection_nav",
+                                            view = "design_gallery",
+                                            old_index,
+                                            new_index = *selected_index,
+                                            total_items = filtered_len,
+                                            strategy = "nearest",
+                                        );
+
+                                        this.design_gallery_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        this.input_mode = InputMode::Keyboard;
+                                        this.hovered_index = None;
+                                        cx.notify();
+                                    }
+
+                                    cx.stop_propagation();
+                                }
+                                AppView::FooterGalleryView {
+                                    selected_index,
+                                    filter,
+                                } => {
+                                    let filtered_len =
+                                        Self::footer_gallery_visible_rows(filter).len();
+                                    let old_index = *selected_index;
+
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                    } else if is_down && *selected_index + 1 < filtered_len {
+                                        *selected_index += 1;
+                                    }
+
+                                    if *selected_index != old_index {
+                                        tracing::debug!(
+                                            target: "script_kit::scroll",
+                                            event = "builtin_selection_nav",
+                                            view = "footer_gallery",
+                                            old_index,
+                                            new_index = *selected_index,
+                                            total_items = filtered_len,
+                                            strategy = "nearest",
+                                        );
+
+                                        this.footer_gallery_scroll_handle.scroll_to_item(
                                             *selected_index,
                                             gpui::ScrollStrategy::Nearest,
                                         );
@@ -587,11 +680,8 @@
                                     }
 
                                     let menu_syntax_owns_main_list =
-                                        this.menu_syntax_object_selector_state.owns_main_list()
-                                            || this.menu_syntax_trigger_popup_state.owns_main_list()
-                                            || this
-                                                .menu_syntax_mode
-                                                .capture_composer_owns_input_for(&this.filter_text)
+                                        this.menu_syntax_mode
+                                            .capture_composer_owns_input_for(&this.filter_text)
                                             || this
                                                 .menu_syntax_mode
                                                 .command_owns_input_for(&this.filter_text);

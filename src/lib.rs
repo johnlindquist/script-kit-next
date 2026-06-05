@@ -64,6 +64,7 @@ pub mod sync;
 pub mod syntax;
 pub mod term_prompt;
 pub mod terminal;
+pub mod terminal_history;
 #[doc(hidden)]
 pub mod test_support;
 pub mod theme;

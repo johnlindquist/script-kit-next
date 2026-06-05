@@ -1,33 +1,30 @@
 use script_kit_gpui::designs::MainMenuThemeVariant;
 use script_kit_gpui::dev_style_tool::{
-    export, runtime_overrides, StyleValue, FOOTER_SIDE_INSET_KNOB_ID,
-    FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID, FOOTER_AI_SLOT_WIDTH_KNOB_ID,
-    FOOTER_KEY_GLYPH_NUDGE_Y_KNOB_ID, FOOTER_KEYCAP_HEIGHT_KNOB_ID,
+    export, runtime_overrides, StyleValue, FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID,
+    FOOTER_AI_SLOT_WIDTH_KNOB_ID, FOOTER_KEYCAP_HEIGHT_KNOB_ID, FOOTER_KEY_GLYPH_NUDGE_Y_KNOB_ID,
     FOOTER_PASTE_RESPONSE_SLOT_WIDTH_KNOB_ID, FOOTER_RETURN_GLYPH_NUDGE_Y_KNOB_ID,
     FOOTER_RUN_SLOT_MAX_WIDTH_KNOB_ID, FOOTER_RUN_SLOT_MIN_WIDTH_KNOB_ID,
-    FOOTER_SEMICOLON_GLYPH_NUDGE_Y_KNOB_ID,
+    FOOTER_SEMICOLON_GLYPH_NUDGE_Y_KNOB_ID, FOOTER_SIDE_INSET_KNOB_ID,
     HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID, HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
-    LIST_ITEM_HEIGHT_KNOB_ID, LIST_SCROLLBAR_WIDTH_KNOB_ID, LIST_SECTION_GAP_KNOB_ID,
-    LIST_SECTION_PADDING_X_KNOB_ID,
     LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID, LIST_INLINE_CALC_HINT_FONT_SIZE_KNOB_ID,
     LIST_INLINE_CALC_RESULT_FONT_SIZE_KNOB_ID, LIST_INLINE_CALC_SELECTED_HINT_ALPHA_KNOB_ID,
-    LIST_INLINE_CALC_SELECTED_OVERLAY_MIN_ALPHA_KNOB_ID,
-    LIST_SOURCE_STATUS_ROW_HEIGHT_KNOB_ID, LIST_MAIN_HINT_CHIP_BORDER_ALPHA_KNOB_ID,
+    LIST_INLINE_CALC_SELECTED_OVERLAY_MIN_ALPHA_KNOB_ID, LIST_ITEM_HEIGHT_KNOB_ID,
+    LIST_MAIN_HINT_BODY_FONT_SIZE_KNOB_ID, LIST_MAIN_HINT_CHIP_BORDER_ALPHA_KNOB_ID,
     LIST_MAIN_HINT_CHIP_PADDING_X_KNOB_ID, LIST_MAIN_HINT_DIVIDER_HEIGHT_KNOB_ID,
-    LIST_MAIN_HINT_EXAMPLE_ROW_GAP_KNOB_ID, LIST_MAIN_HINT_EXAMPLES_GROUP_GAP_KNOB_ID,
-    LIST_MAIN_HINT_FORM_BG_ALPHA_KNOB_ID, LIST_MAIN_HINT_FORM_BORDER_ALPHA_KNOB_ID,
-    LIST_MAIN_HINT_FORM_FOCUSED_BG_ALPHA_KNOB_ID,
-    LIST_MAIN_HINT_FORM_FOCUSED_BORDER_ALPHA_KNOB_ID, LIST_MAIN_HINT_FORM_LABEL_ALPHA_KNOB_ID,
-    LIST_MAIN_HINT_FORM_INPUT_FONT_SIZE_KNOB_ID, LIST_MAIN_HINT_FORM_LABEL_FONT_SIZE_KNOB_ID,
+    LIST_MAIN_HINT_EXAMPLES_GROUP_GAP_KNOB_ID, LIST_MAIN_HINT_EXAMPLE_LABEL_FONT_SIZE_KNOB_ID,
+    LIST_MAIN_HINT_EXAMPLE_ROW_GAP_KNOB_ID, LIST_MAIN_HINT_FORM_BG_ALPHA_KNOB_ID,
+    LIST_MAIN_HINT_FORM_BORDER_ALPHA_KNOB_ID, LIST_MAIN_HINT_FORM_FOCUSED_BG_ALPHA_KNOB_ID,
+    LIST_MAIN_HINT_FORM_FOCUSED_BORDER_ALPHA_KNOB_ID, LIST_MAIN_HINT_FORM_INPUT_FONT_SIZE_KNOB_ID,
+    LIST_MAIN_HINT_FORM_LABEL_ALPHA_KNOB_ID, LIST_MAIN_HINT_FORM_LABEL_FONT_SIZE_KNOB_ID,
     LIST_MAIN_HINT_FORM_VALUE_ALPHA_KNOB_ID, LIST_MAIN_HINT_FORM_VALUE_FONT_SIZE_KNOB_ID,
-    LIST_MAIN_HINT_BODY_FONT_SIZE_KNOB_ID, LIST_MAIN_HINT_EXAMPLE_LABEL_FONT_SIZE_KNOB_ID,
-    LIST_MAIN_HINT_TITLE_FONT_SIZE_KNOB_ID,
-    LIST_MAIN_HINT_FRAGMENT_ROLE_BG_ALPHA_KNOB_ID,
-    LIST_MAIN_HINT_FRAGMENT_ROLE_WIDTH_KNOB_ID, LIST_MAIN_HINT_ROW_LABEL_WIDTH_KNOB_ID,
-    LIST_MAIN_HINT_ROWS_GAP_KNOB_ID, LIST_MAIN_HINT_STATUS_CHIP_GAP_KNOB_ID,
-    LIST_MAIN_HINT_WARNING_BG_ALPHA_KNOB_ID, LIST_MAIN_HINT_WARNING_BORDER_ALPHA_KNOB_ID,
-    LIST_MAIN_HINT_FRAGMENT_ROWS_GAP_KNOB_ID,
-    METADATA_ALPHA_KNOB_ID, METADATA_BADGE_PADDING_X_KNOB_ID, METADATA_BADGE_PADDING_Y_KNOB_ID,
+    LIST_MAIN_HINT_FRAGMENT_ROLE_BG_ALPHA_KNOB_ID, LIST_MAIN_HINT_FRAGMENT_ROLE_WIDTH_KNOB_ID,
+    LIST_MAIN_HINT_FRAGMENT_ROWS_GAP_KNOB_ID, LIST_MAIN_HINT_ROWS_GAP_KNOB_ID,
+    LIST_MAIN_HINT_ROW_LABEL_WIDTH_KNOB_ID, LIST_MAIN_HINT_STATUS_CHIP_GAP_KNOB_ID,
+    LIST_MAIN_HINT_TITLE_FONT_SIZE_KNOB_ID, LIST_MAIN_HINT_WARNING_BG_ALPHA_KNOB_ID,
+    LIST_MAIN_HINT_WARNING_BORDER_ALPHA_KNOB_ID, LIST_SCROLLBAR_WIDTH_KNOB_ID,
+    LIST_SECTION_GAP_KNOB_ID, LIST_SECTION_PADDING_X_KNOB_ID,
+    LIST_SOURCE_STATUS_ROW_HEIGHT_KNOB_ID, METADATA_ALPHA_KNOB_ID,
+    METADATA_BADGE_PADDING_X_KNOB_ID, METADATA_BADGE_PADDING_Y_KNOB_ID,
     METADATA_BADGE_RADIUS_KNOB_ID, ROW_HOVER_FILL_ALPHA_KNOB_ID, ROW_INNER_PADDING_X_KNOB_ID,
     ROW_SELECTED_NAME_UNDERLINE_PADDING_BOTTOM_KNOB_ID, ROW_SELECTED_NAME_UNDERLINE_WIDTH_KNOB_ID,
     SEARCH_FONT_SIZE_KNOB_ID, SEARCH_HEIGHT_KNOB_ID, STYLE_KNOBS,
@@ -114,11 +111,8 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
         .expect("footer keycap height knob should exist");
     runtime_overrides::set_value(FOOTER_KEY_GLYPH_NUDGE_Y_KNOB_ID, StyleValue::Number(1.5))
         .expect("footer key glyph nudge knob should exist");
-    runtime_overrides::set_value(
-        FOOTER_RETURN_GLYPH_NUDGE_Y_KNOB_ID,
-        StyleValue::Number(2.0),
-    )
-    .expect("footer return glyph nudge knob should exist");
+    runtime_overrides::set_value(FOOTER_RETURN_GLYPH_NUDGE_Y_KNOB_ID, StyleValue::Number(2.0))
+        .expect("footer return glyph nudge knob should exist");
     runtime_overrides::set_value(
         FOOTER_SEMICOLON_GLYPH_NUDGE_Y_KNOB_ID,
         StyleValue::Number(-1.5),
@@ -166,8 +160,11 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
         StyleValue::Number(2.0),
     )
     .expect("selected name underline padding bottom knob should exist");
-    runtime_overrides::set_value(LIST_MAIN_HINT_CHIP_PADDING_X_KNOB_ID, StyleValue::Number(13.0))
-        .expect("main hint chip padding x knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_CHIP_PADDING_X_KNOB_ID,
+        StyleValue::Number(13.0),
+    )
+    .expect("main hint chip padding x knob should exist");
     runtime_overrides::set_value(
         LIST_MAIN_HINT_ROW_LABEL_WIDTH_KNOB_ID,
         StyleValue::Number(96.0),
@@ -240,8 +237,11 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
         StyleValue::Number(74.0),
     )
     .expect("main hint form focused bg alpha knob should exist");
-    runtime_overrides::set_value(LIST_MAIN_HINT_FORM_BG_ALPHA_KNOB_ID, StyleValue::Number(37.0))
-        .expect("main hint form bg alpha knob should exist");
+    runtime_overrides::set_value(
+        LIST_MAIN_HINT_FORM_BG_ALPHA_KNOB_ID,
+        StyleValue::Number(37.0),
+    )
+    .expect("main hint form bg alpha knob should exist");
     runtime_overrides::set_value(
         LIST_MAIN_HINT_FORM_LABEL_ALPHA_KNOB_ID,
         StyleValue::Number(143.0),
@@ -262,8 +262,11 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
         StyleValue::Number(201.0),
     )
     .expect("inline calc selected hint alpha knob should exist");
-    runtime_overrides::set_value(LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID, StyleValue::Number(122.0))
-        .expect("inline calc hint alpha knob should exist");
+    runtime_overrides::set_value(
+        LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID,
+        StyleValue::Number(122.0),
+    )
+    .expect("inline calc hint alpha knob should exist");
     runtime_overrides::set_value(
         LIST_INLINE_CALC_RESULT_FONT_SIZE_KNOB_ID,
         StyleValue::Number(18.0),

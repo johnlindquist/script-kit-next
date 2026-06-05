@@ -43,6 +43,9 @@ const CELL_WIDTH: f32 = BASE_CELL_WIDTH;
 const CELL_HEIGHT: f32 = BASE_CELL_HEIGHT;
 /// Terminal refresh interval (ms) - 30fps is plenty for terminal output
 const REFRESH_INTERVAL_MS: u64 = 16; // ~60fps, matches modern GPU-accelerated terminals
+const QUICK_TERMINAL_CONTEXT_MAX_LINES: usize = 2_000;
+const QUICK_TERMINAL_CONTEXT_MAX_BYTES: usize = 120_000;
+pub const SCRIPT_KIT_CWD_TITLE_PREFIX: &str = "script-kit-cwd:";
 
 /// Minimum terminal size
 const MIN_COLS: u16 = 20;
@@ -118,6 +121,15 @@ pub struct TermPrompt {
     /// 0.0 keeps the original "cells touch the panel border" behavior.
     /// QuickTerminalView sets this to a small value so cells get a tiny gutter.
     pub edge_to_edge_inset_px: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalContextCapture {
+    pub label: String,
+    pub source: String,
+    pub text: String,
+    pub line_count: usize,
+    pub truncated: bool,
 }
 
 // --- merged from part_001.rs ---
@@ -231,6 +243,15 @@ impl TermPrompt {
         }
     }
 
+    pub fn synced_cwd_path(&self) -> Option<std::path::PathBuf> {
+        let raw = self
+            .title
+            .as_deref()?
+            .strip_prefix(SCRIPT_KIT_CWD_TITLE_PREFIX)?;
+        let path = std::path::PathBuf::from(raw);
+        path.is_absolute().then_some(path)
+    }
+
     /// Shared terminal padding contract for rendering, resize math, and mouse
     /// hit-testing. Tuple order is `(top, left, right)`. Render, cols/rows
     /// resize, and pixel→cell hit-test ALL call this same helper, so the
@@ -305,6 +326,73 @@ impl TermPrompt {
             .input(b"\r")
             .map_err(|e| anyhow::anyhow!("term_prompt_input_failed: {e}"))?;
         Ok(())
+    }
+
+    /// Send raw bytes into the PTY. Automation uses this for terminal keystroke
+    /// proof where control bytes such as `\r` must not be bracketed as paste.
+    pub fn send_raw_input(&mut self, text: &str) -> anyhow::Result<()> {
+        if !self.is_alive() {
+            anyhow::bail!("term_prompt_not_running");
+        }
+        self.terminal
+            .input(text.as_bytes())
+            .map_err(|e| anyhow::anyhow!("term_prompt_input_failed: {e}"))?;
+        Ok(())
+    }
+
+    pub fn terminal_context_capture(&mut self) -> Option<TerminalContextCapture> {
+        let (had_output, events) = self.terminal.process();
+        if had_output {
+            self.has_received_output = true;
+        }
+        for event in events {
+            match event {
+                TerminalEvent::Title(title) => self.title = Some(title),
+                TerminalEvent::Exit(code) => {
+                    self.exited = true;
+                    self.exit_code = Some(code);
+                }
+                TerminalEvent::Bell | TerminalEvent::Output(_) | TerminalEvent::PtyWrite(_) => {}
+            }
+        }
+
+        let selected_text = self
+            .terminal
+            .selection_to_string()
+            .map(|text| text.trim_end().to_string())
+            .filter(|text| !text.trim().is_empty());
+
+        let (terminal_text, line_count, truncated) = if let Some(text) = selected_text {
+            let line_count = text.lines().count().max(1);
+            (text, line_count, false)
+        } else {
+            let snapshot = self.terminal.text_snapshot(
+                QUICK_TERMINAL_CONTEXT_MAX_LINES,
+                QUICK_TERMINAL_CONTEXT_MAX_BYTES,
+            );
+            (
+                snapshot.text.trim_end().to_string(),
+                snapshot.line_count,
+                snapshot.truncated,
+            )
+        };
+
+        if terminal_text.trim().is_empty() {
+            return None;
+        }
+
+        let captured_at = chrono::Utc::now().to_rfc3339();
+        let text = format!(
+            "Terminal session\nCaptured at: {captured_at}\nTruncated: {truncated}\nLines: {line_count}\n--- output ---\n{terminal_text}"
+        );
+
+        Some(TerminalContextCapture {
+            label: "Terminal Output".to_string(),
+            source: format!("terminal://quick-terminal/{}", uuid::Uuid::new_v4()),
+            text,
+            line_count,
+            truncated,
+        })
     }
 
     /// Execute a terminal action.

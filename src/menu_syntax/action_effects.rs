@@ -1,4 +1,3 @@
-// doc-anchor-removed: [[removed-docs Syntax#Cmd+K Safe Action Effects]]
 //
 // Pure decision module: given the live menu-syntax state and a Cmd+K action
 // kind, return the side-effect the launcher should perform. Implements the

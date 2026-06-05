@@ -57,11 +57,10 @@ pub enum AcpSurfaceState {
 
 /// Events that move the placement machine.
 ///
-/// These are the *minimum* events needed to replace the two launcher
-/// guards (`try_route_plain_tab_to_acp_context_capture` and
-/// `try_route_global_cmd_enter_to_acp_context_capture`) with one
-/// predicate. Every additional event is a future invariant we would
-/// have to maintain — keep this set small.
+/// These are the *minimum* events needed by launcher-entry guards that
+/// need to know whether ACP is embedded or in an attachment portal.
+/// Every additional event is a future invariant we would have to
+/// maintain — keep this set small.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AcpSurfaceEvent {
     /// ACP is now the main-panel subview (fresh launch, reuse, setup

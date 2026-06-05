@@ -266,6 +266,23 @@ impl ScriptListApp {
             .is_some_and(|target| target.starts_with("form:"))
     }
 
+    pub(crate) fn selected_menu_syntax_trigger_row_id_from_main_list(
+        &mut self,
+    ) -> Option<String> {
+        let (grouped, flat) = self.get_grouped_results_cached();
+        let crate::list_item::GroupedListItem::Item(flat_index) = grouped.get(self.selected_index)?
+        else {
+            return None;
+        };
+        let Some(crate::scripts::SearchResult::SpineProjection(row)) = flat.get(*flat_index) else {
+            return None;
+        };
+        row.id
+            .as_ref()
+            .strip_prefix("menu-syntax-trigger:")
+            .map(str::to_string)
+    }
+
     fn sync_menu_syntax_form_selection_from_trigger_row(&mut self, row_id: Option<&str>) {
         if let Some((field_id, suggestion_index)) =
             row_id.and_then(Self::parse_trigger_popup_form_suggestion_row_id)
@@ -447,9 +464,10 @@ impl ScriptListApp {
             return false;
         };
 
-        let selected_index = self
-            .menu_syntax_trigger_popup_state
-            .selected_row_id
+        let selected_row_id = self
+            .selected_menu_syntax_trigger_row_id_from_main_list()
+            .or_else(|| self.menu_syntax_trigger_popup_state.selected_row_id.clone());
+        let selected_index = selected_row_id
             .as_deref()
             .and_then(|id| snapshot.rows.iter().position(|row| row.id == id));
 

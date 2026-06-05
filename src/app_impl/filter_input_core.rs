@@ -5,7 +5,6 @@ pub(crate) enum ScriptListSpecialEntry {
     FileSearchMini { query: String },
     QuickTerminal,
     ActionsHelp,
-    AcpMentionPicker,
 }
 
 impl ScriptListApp {
@@ -123,7 +122,6 @@ impl ScriptListApp {
             "!" => Some(ScriptListSpecialEntry::QuickTerminal),
             ">" => None,
             "?" => Some(ScriptListSpecialEntry::ActionsHelp),
-            "@" => Some(ScriptListSpecialEntry::AcpMentionPicker),
             _ => None,
         }
     }
@@ -574,9 +572,12 @@ mod tests {
         );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter("@"),
-            Some(ScriptListSpecialEntry::AcpMentionPicker),
+            None,
         );
-        assert_eq!(ScriptListApp::special_entry_from_script_list_filter("|"), None);
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter("|"),
+            None
+        );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter("!"),
             Some(ScriptListSpecialEntry::QuickTerminal)

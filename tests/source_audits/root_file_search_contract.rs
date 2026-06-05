@@ -29,13 +29,11 @@ mod tests {
 
     #[test]
     fn dedicated_file_search_still_owns_file_search_view_navigation() {
-        let list_source = fs::read_to_string("src/render_builtins/file_search_list.rs")
-            .expect("read src/render_builtins/file_search_list.rs");
         let view_source = fs::read_to_string("src/render_builtins/file_search.rs")
             .expect("read src/render_builtins/file_search.rs");
 
         assert!(
-            list_source.contains("AppView::FileSearchView"),
+            view_source.contains("AppView::FileSearchView"),
             "dedicated File Search view should remain a distinct browser surface"
         );
         assert!(
@@ -388,7 +386,7 @@ mod tests {
         let file_arm = source
             .split("SearchResult::File(fm) =>")
             .nth(1)
-            .and_then(|section| section.split("SearchResult::Skill").next())
+            .and_then(|section| section.split("SearchResult::Note").next())
             .expect("SearchResult::File arm should be present");
 
         assert!(
@@ -1100,18 +1098,19 @@ mod tests {
             "root file direct shortcuts should route selected file rows through the shared root-file action executor"
         );
 
-        for path in [
-            "src/app_impl/startup.rs",
-            "src/app_impl/startup_new_tab.rs",
-            "src/main_entry/runtime_stdin_match_simulate_key.rs",
-            "src/main_entry/app_run_setup.rs",
-        ] {
-            let source = fs::read_to_string(path).unwrap_or_else(|_| panic!("read {path}"));
-            assert!(
-                source.contains("try_execute_root_file_action_shortcut"),
-                "{path} should offer direct root-file shortcuts on the same ScriptList key path as root directory navigation"
-            );
-        }
+        let simulate_key_source = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
+            .expect("read src/app_impl/simulate_key_dispatch.rs");
+        let runtime_stdin =
+            fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
+                .expect("read src/main_entry/runtime_stdin_match_simulate_key.rs");
+        assert!(
+            simulate_key_source.contains("try_execute_root_file_action_shortcut"),
+            "central simulateKey dispatcher should offer direct root-file shortcuts"
+        );
+        assert!(
+            runtime_stdin.contains("dispatch_simulate_key"),
+            "stdin runtime entry point should delegate simulateKey to the shared dispatcher"
+        );
     }
 
     #[test]
@@ -1184,26 +1183,21 @@ mod tests {
     }
 
     #[test]
-    fn root_directory_tab_navigation_precedes_plain_tab_acp_routing() {
-        for path in [
-            "src/app_impl/startup.rs",
-            "src/app_impl/startup_new_tab.rs",
-            "src/main_entry/runtime_stdin_match_simulate_key.rs",
-            "src/main_entry/app_run_setup.rs",
-        ] {
-            let source = fs::read_to_string(path).unwrap_or_else(|_| panic!("read {path}"));
-            let nav_offset = source
-                .find("try_navigate_root_file_directory_with_tab")
-                .unwrap_or_else(|| panic!("{path} should route root file directory Tab"));
-            let acp_offset = source
-                .find("try_route_plain_tab_to_acp_context_capture")
-                .unwrap_or_else(|| panic!("{path} should still preserve ACP Tab routing"));
-
-            assert!(
-                nav_offset < acp_offset,
-                "{path} should try root directory navigation before plain Tab ACP routing"
-            );
-        }
+    fn root_directory_tab_navigation_has_no_plain_tab_acp_routing() {
+        let simulate_key_source = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
+            .expect("read src/app_impl/simulate_key_dispatch.rs");
+        let runtime_stdin =
+            fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
+                .expect("read src/main_entry/runtime_stdin_match_simulate_key.rs");
+        assert!(
+            simulate_key_source.contains("try_navigate_root_file_directory_with_tab"),
+            "central simulateKey dispatcher should route root file directory Tab"
+        );
+        assert!(
+            !simulate_key_source.contains("try_route_plain_tab_to_acp_context_capture")
+                && !runtime_stdin.contains("try_route_plain_tab_to_acp_context_capture"),
+            "ScriptList Tab simulateKey should not route plain Tab to Agent Chat"
+        );
 
         let selection_source = fs::read_to_string("src/app_impl/selection_fallback.rs")
             .expect("read src/app_impl/selection_fallback.rs");
@@ -1258,9 +1252,9 @@ mod tests {
             body.contains("self.selected_main_list_search_result_owned()")
                 && body.contains("scripts::SearchResult::Fallback(fallback_match)")
                 && body.contains("self.execute_fallback_item(&fallback_match.fallback, cx);")
-                && body.find("selected_main_list_search_result_owned()")
-                    < body.find("main_menu_fallback_state.selected_item()"),
-            "fallback-mode Enter should execute the visible grouped fallback row before consulting the legacy fallback cursor"
+                && body.contains("execute_selected_fallback.no_live_grouped_fallback")
+                && !body.contains("main_menu_fallback_state.selected_item()"),
+            "fallback-mode Enter should execute only the visible grouped fallback row"
         );
     }
 
@@ -1268,9 +1262,8 @@ mod tests {
     fn root_file_actions_are_main_list_only() {
         let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
             .expect("read src/app_impl/actions_dialog.rs");
-        let simulate_key_source =
-            fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
-                .expect("read src/main_entry/runtime_stdin_match_simulate_key.rs");
+        let simulate_key_source = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
+            .expect("read src/app_impl/simulate_key_dispatch.rs");
         let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
         let simulate_key_normalized = simulate_key_source
             .split_whitespace()
@@ -1285,8 +1278,8 @@ mod tests {
             "MainList actions should branch to root-file actions for selected root file rows"
         );
         assert!(
-            simulate_key_normalized
-                .contains("if has_cmd && key_lower == \"k\" { logging::log( \"STDIN\", \"SimulateKey: Cmd+K - dispatch actions toggle\", ); view.handle_cmd_k_actions_toggle(window, ctx);"),
+            simulate_key_normalized.contains("view.simulate_key_requests_generic_actions_toggle")
+                && simulate_key_normalized.contains("view.toggle_actions(ctx, window);"),
             "stdin simulateKey Cmd+K on ScriptList should use the shared dispatcher so root-file rows get their actions"
         );
         assert!(
@@ -1300,9 +1293,6 @@ mod tests {
     fn root_file_actions_do_not_expand_dedicated_file_search_browser() {
         let view_source = fs::read_to_string("src/render_builtins/file_search.rs")
             .expect("read src/render_builtins/file_search.rs");
-        let list_source = fs::read_to_string("src/render_builtins/file_search_list.rs")
-            .expect("read src/render_builtins/file_search_list.rs");
-        let dedicated_file_search = format!("{view_source}\n{list_source}");
 
         for forbidden in [
             "root_file_open",
@@ -1314,7 +1304,7 @@ mod tests {
             "root_file_browse_parent_folder",
         ] {
             assert!(
-                !dedicated_file_search.contains(forbidden),
+                !view_source.contains(forbidden),
                 "root file action id should not be introduced into dedicated File Search render/navigation code: {forbidden}"
             );
         }
@@ -1430,8 +1420,8 @@ mod tests {
             .expect("read src/main_sections/app_view_state.rs");
         let render_script_list = fs::read_to_string("src/render_script_list/mod.rs")
             .expect("read src/render_script_list/mod.rs");
-        let stdin_route = fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
-            .expect("read src/main_entry/runtime_stdin_match_simulate_key.rs");
+        let stdin_route = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
+            .expect("read src/app_impl/simulate_key_dispatch.rs");
         let normalized_actions = actions_dialog
             .split_whitespace()
             .collect::<Vec<_>>()
@@ -1463,9 +1453,8 @@ mod tests {
             "MainList physical Enter should execute root-file actions through the activation route"
         );
         assert!(
-            normalized_stdin.contains(
-                "crate::ActionsRoute::Execute { action_id, should_close, } =>"
-            ) && normalized_stdin.contains(
+            normalized_stdin.contains("crate::ActionsRoute::Execute { action_id, should_close, }")
+                && normalized_stdin.contains(
                 "view.execute_actions_route_action( host, action_id, should_close, window, ctx,"
             ),
             "simulated Enter should use the same activation route as physical Enter"
@@ -1478,10 +1467,17 @@ mod tests {
             .expect("read src/app_impl/actions_toggle.rs");
         let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
 
+        let mark_closed = normalized
+            .find("app.mark_actions_popup_closed();")
+            .expect("detached actions-window on_close should mark popup closed");
+        let clear_context = normalized
+            .find("app.clear_actions_context_for_host(host);")
+            .expect("detached actions-window on_close should clear host context");
+        let mark_resync = normalized
+            .find("app.mark_filter_resync_after_actions_if_needed();")
+            .expect("detached actions-window on_close should mark filter resync");
         assert!(
-            normalized.contains(
-                "app.mark_actions_popup_closed(); app.clear_actions_context_for_host(host); app.mark_filter_resync_after_actions_if_needed();"
-            ),
+            mark_closed < clear_context && clear_context < mark_resync,
             "detached actions-window on_close should clear any captured MainList root-file context"
         );
     }
@@ -1757,9 +1753,15 @@ mod tests {
             fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
         let root_source = fs::read_to_string("src/app_impl/root_file_search.rs")
             .expect("read src/app_impl/root_file_search.rs");
+        let utility_source = fs::read_to_string("src/app_execute/utility_views.rs")
+            .expect("read src/app_execute/utility_views.rs");
         let filtering_source = fs::read_to_string("src/app_impl/filtering_cache.rs")
             .expect("read src/app_impl/filtering_cache.rs");
         let root_normalized = root_source.split_whitespace().collect::<Vec<_>>().join(" ");
+        let utility_normalized = utility_source
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
         let filtering_normalized = filtering_source
             .split_whitespace()
             .collect::<Vec<_>>()
@@ -1772,10 +1774,10 @@ mod tests {
             "root recent files should separate visible render cap from searchable seed pool"
         );
         assert!(
-            root_normalized
-                .contains("top_file_paths(crate::file_search::ROOT_FILE_RECENT_HYDRATE_LIMIT)")
-                && root_normalized.contains("file_result_from_existing_path(&path)")
-                && root_normalized.contains("take(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT)")
+            utility_normalized.contains("top_file_paths(limit.saturating_mul(3).max(limit))")
+                && utility_normalized.contains("file_result_from_existing_path(&path)")
+                && utility_normalized.contains("take(limit)")
+                && root_normalized.contains("recent_file_results_from_frecency(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT)")
                 && root_normalized.contains("self.root_recent_file_results = next_results"),
             "recent root files should hydrate known frecency paths into a deeper seed pool in the app layer"
         );

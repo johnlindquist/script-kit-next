@@ -845,6 +845,114 @@ impl ScriptListApp {
         self.open_tab_ai_acp_view_from_request_impl(request, rx, Some(part), false, None, true, cx);
     }
 
+    fn quick_terminal_context_part_from_entity(
+        &mut self,
+        entity: gpui::Entity<crate::term_prompt::TermPrompt>,
+        cx: &mut Context<Self>,
+    ) -> Option<crate::ai::message_parts::AiContextPart> {
+        let capture = entity.update(cx, |term, _cx| term.terminal_context_capture())?;
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "quick_terminal_context_part_captured",
+            source = %capture.source,
+            bytes = capture.text.len(),
+            line_count = capture.line_count,
+            truncated = capture.truncated,
+        );
+        crate::terminal_history::record(crate::terminal_history::TerminalHistoryEntry {
+            label: capture.label.clone(),
+            source: capture.source.clone(),
+            text: capture.text.clone(),
+            line_count: capture.line_count,
+            truncated: capture.truncated,
+            captured_at: chrono::Utc::now().to_rfc3339(),
+        });
+        Some(crate::ai::message_parts::AiContextPart::TextBlock {
+            label: capture.label,
+            source: capture.source,
+            text: capture.text,
+            mime_type: Some("text/x-terminal-transcript".to_string()),
+        })
+    }
+
+    pub(crate) fn open_agent_chat_with_quick_terminal_output(
+        &mut self,
+        entity: gpui::Entity<crate::term_prompt::TermPrompt>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(part) = self.quick_terminal_context_part_from_entity(entity, cx) else {
+            self.show_hud(
+                "No terminal output to attach".to_string(),
+                Some(HUD_SHORT_MS),
+                cx,
+            );
+            return false;
+        };
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "quick_terminal_output_agent_chat_open",
+            source = %part.source(),
+            label = %part.label(),
+        );
+        self.open_tab_ai_acp_with_context_part(part, "quick_terminal_output", cx);
+        true
+    }
+
+    pub(crate) fn attach_quick_terminal_output_to_portal_origin(
+        &mut self,
+        entity: gpui::Entity<crate::term_prompt::TermPrompt>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.active_attachment_portal_kind()
+            != Some(crate::ai::window::context_picker::types::PortalKind::Terminal)
+        {
+            return false;
+        }
+
+        let Some(part) = self.quick_terminal_context_part_from_entity(entity.clone(), cx) else {
+            self.show_hud(
+                "No terminal output to attach".to_string(),
+                Some(HUD_SHORT_MS),
+                cx,
+            );
+            return true;
+        };
+
+        let _ = entity.update(cx, |term, _cx| {
+            let _ = term.terminate_session();
+        });
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "quick_terminal_portal_output_attached",
+            source = %part.source(),
+            label = %part.label(),
+        );
+        self.close_attachment_portal_with_part(part, cx);
+        true
+    }
+
+    pub(crate) fn dispatch_quick_terminal_cmd_enter(
+        &mut self,
+        entity: gpui::Entity<crate::term_prompt::TermPrompt>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+            return false;
+        }
+
+        if self.attach_quick_terminal_output_to_portal_origin(entity.clone(), cx) {
+            return true;
+        }
+
+        if self.quick_terminal_can_apply_back() {
+            self.apply_tab_ai_result_from_terminal(entity, cx);
+            return true;
+        }
+
+        self.open_agent_chat_with_quick_terminal_output(entity, cx)
+    }
+
     pub(crate) fn route_large_script_list_paste_to_acp(&mut self, cx: &mut Context<Self>) -> bool {
         if !matches!(self.current_view, AppView::ScriptList) {
             return false;
@@ -1643,23 +1751,6 @@ impl ScriptListApp {
         )
         .emit_with_phase(phase);
         (focused_target, visible_targets)
-    }
-
-    /// Deprecated plain-Tab Agent Chat entry shim.
-    ///
-    /// Command+Enter is the canonical Agent Chat entry. Plain Tab remains
-    /// available to local focus/navigation handlers and must not open Agent
-    /// Chat from the launcher.
-    pub(crate) fn try_route_plain_tab_to_acp_context_capture(
-        &mut self,
-        _cx: &mut Context<Self>,
-    ) -> bool {
-        tracing::debug!(
-            target: "script_kit::tab_ai",
-            event = "agent_chat_plain_tab_entry_deprecated",
-            source_view = %self.app_view_name(),
-        );
-        false
     }
 
     /// Returns `true` when the current view should treat global `Cmd+Enter`

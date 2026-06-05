@@ -77,6 +77,53 @@ fn prepend_inline_calculator_group(
     (merged_grouped_items, flat_results)
 }
 
+fn build_menu_syntax_trigger_picker_main_list_results(
+    snapshot: &crate::menu_syntax::TriggerPickerSnapshot,
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    let section = match snapshot.mode {
+        crate::menu_syntax::TriggerPickerMode::Capture => ("Capture", Some("inbox")),
+        crate::menu_syntax::TriggerPickerMode::Command => ("Command", Some("terminal")),
+        crate::menu_syntax::TriggerPickerMode::AdvancedQuery => ("Refine", Some("search")),
+    };
+    let mut grouped_items = Vec::with_capacity(snapshot.rows.len() + 1);
+    let mut flat_results = Vec::with_capacity(snapshot.rows.len());
+    grouped_items.push(GroupedListItem::SectionHeader(
+        section.0.to_string(),
+        section.1.map(str::to_string),
+    ));
+
+    for row in &snapshot.rows {
+        let flat_index = flat_results.len();
+        flat_results.push(scripts::SearchResult::SpineProjection(
+            crate::menu_syntax_trigger_popup::trigger_picker_row_to_main_list_row(row),
+        ));
+        grouped_items.push(GroupedListItem::Item(flat_index));
+    }
+
+    (grouped_items, flat_results)
+}
+
+fn build_menu_syntax_object_selector_main_list_results(
+    snapshot: &crate::menu_syntax::ObjectSelectorSnapshot,
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    let mut grouped_items = Vec::with_capacity(snapshot.rows.len() + 1);
+    let mut flat_results = Vec::with_capacity(snapshot.rows.len());
+    grouped_items.push(GroupedListItem::SectionHeader(
+        "Objects".to_string(),
+        Some("at-sign".to_string()),
+    ));
+
+    for row in &snapshot.rows {
+        let flat_index = flat_results.len();
+        flat_results.push(scripts::SearchResult::SpineProjection(
+            crate::menu_syntax::object_selector_row_to_main_list_row(row),
+        ));
+        grouped_items.push(GroupedListItem::Item(flat_index));
+    }
+
+    (grouped_items, flat_results)
+}
+
 fn root_window_duplicate_key(window: &crate::window_control::WindowInfo) -> (String, String) {
     (
         window
@@ -1449,25 +1496,37 @@ impl ScriptListApp {
                     .menu_syntax_mode
                     .command_owns_input_for(&raw_filter_text));
 
-        let (grouped_items, flat_results) = if menu_syntax_owns_main_list {
+        let (grouped_items, flat_results) = if self
+            .menu_syntax_object_selector_state
+            .owns_main_list()
+        {
+            if let Some(snapshot) = self.menu_syntax_object_selector_state.snapshot.as_ref() {
+                build_menu_syntax_object_selector_main_list_results(snapshot)
+            } else {
+                (Vec::new(), Vec::new())
+            }
+        } else if self.menu_syntax_trigger_popup_state.owns_main_list()
+        {
+            if let Some(snapshot) = self.menu_syntax_trigger_popup_state.snapshot.as_ref() {
+                build_menu_syntax_trigger_picker_main_list_results(snapshot)
+            } else {
+                (Vec::new(), Vec::new())
+            }
+        } else if menu_syntax_owns_main_list {
             // A composer-style menu-syntax surface owns the input. Suppress
             // the main launcher list so fuzzy search, capture-handler rows,
             // and the "Use X with…" fallback section do not leak through the
-            // transparent popup (e.g. typing `;todo` should not also render
-            // capture-mode rows behind the picker). Refine (`:`) remains
-            // structured launcher search and is handled below.
+            // active composer/form surface. Refine (`:`) remains structured
+            // launcher search and is handled below.
             (Vec::new(), Vec::new())
         } else if let Some(invocation) = self.menu_syntax_mode.capture_for(&raw_filter_text) {
             // Capture mode replaces the normal launcher grouping entirely.
             // Do not mix with Suggested/Favorites/Recent/menu-bar/fallback.
             crate::scripts::build_capture_mode_results(&self.scripts, invocation)
         } else if let Some(hint) = self.menu_syntax_mode.incomplete_hint_for(&raw_filter_text) {
-            // Menu-syntax trigger picker rows are now owned by the detached
-            // popup window at
-            // `crate::menu_syntax_trigger_popup_window::MenuSyntaxTriggerPopupWindow`
-            // (Oracle iter 015 D2b). The main launcher list shows only the
-            // terse hint line so the two surfaces do not collide — the
-            // rich qualifier / capture target rows live in the popup.
+            // Menu-syntax trigger picker rows are now owned by the main ScriptList surface.
+            // The main launcher result list stays suppressed while trigger rows render
+            // through menu_syntax_main_hint_snapshot.
             crate::scripts::build_menu_syntax_hint_results(hint)
         } else {
             let search_text_owned =
@@ -1702,16 +1761,8 @@ impl ScriptListApp {
             };
         let elapsed = start.elapsed();
 
-        let mut first_selectable_index = None;
-        let mut last_selectable_index = None;
-        for (index, grouped_item) in grouped_items.iter().enumerate() {
-            if matches!(grouped_item, GroupedListItem::Item(_)) {
-                if first_selectable_index.is_none() {
-                    first_selectable_index = Some(index);
-                }
-                last_selectable_index = Some(index);
-            }
-        }
+        let (first_selectable_index, last_selectable_index) =
+            grouped_selectable_bounds(&grouped_items, &flat_results);
 
         self.main_menu_result_caches.store_grouped_results(
             grouped_cache_key,

@@ -10,7 +10,7 @@ fn clipboard_share_handles_text_and_image_content_types() {
     let content = super::read_all_handle_action_sources();
 
     let share_pos = content
-        .find("\"clipboard_share\"")
+        .find("\"clipboard_share\" => {")
         .expect("Expected clipboard_share action handler");
     let block = &content[share_pos..content.len().min(share_pos + 3000)];
 
@@ -44,12 +44,12 @@ fn clipboard_share_shows_error_when_no_entry_selected() {
     let content = super::read_all_handle_action_sources();
 
     let share_pos = content
-        .find("\"clipboard_share\"")
+        .find("\"clipboard_share\" => {")
         .expect("Expected clipboard_share action handler");
     let block = &content[share_pos..content.len().min(share_pos + 3000)];
 
     assert!(
-        block.contains("No clipboard entry selected"),
+        block.contains("ClipboardShareHandlerAction::selection_required_message()"),
         "clipboard_share should show error when no entry is selected"
     );
 }
@@ -59,12 +59,12 @@ fn clipboard_share_shows_error_when_content_unavailable() {
     let content = super::read_all_handle_action_sources();
 
     let share_pos = content
-        .find("\"clipboard_share\"")
+        .find("\"clipboard_share\" => {")
         .expect("Expected clipboard_share action handler");
     let block = &content[share_pos..content.len().min(share_pos + 3000)];
 
     assert!(
-        block.contains("Clipboard entry content unavailable"),
+        block.contains("ClipboardShareHandlerAction::content_unavailable_message()"),
         "clipboard_share should show error when entry content cannot be loaded"
     );
 }
@@ -222,7 +222,7 @@ fn clipboard_paste_copies_entry_and_hides_window() {
     let content = super::read_all_handle_action_sources();
 
     let paste_pos = content
-        .find("\"clipboard_paste\" | \"clipboard_copy\" | \"clipboard_paste_keep_open\"")
+        .find("\"clipboard_paste\" | \"clipboard_copy\" | \"clipboard_paste_keep_open\" => {")
         .expect("Expected clipboard_paste action handler");
     let block = &content[paste_pos..content.len().min(paste_pos + 3000)];
 
@@ -246,12 +246,12 @@ fn clipboard_paste_shows_error_when_no_entry_selected() {
     let content = super::read_all_handle_action_sources();
 
     let paste_pos = content
-        .find("\"clipboard_paste\" | \"clipboard_copy\" | \"clipboard_paste_keep_open\"")
+        .find("\"clipboard_paste\" | \"clipboard_copy\" | \"clipboard_paste_keep_open\" => {")
         .expect("Expected clipboard_paste action handler");
     let block = &content[paste_pos..content.len().min(paste_pos + 3000)];
 
     assert!(
-        block.contains("No clipboard entry selected"),
+        block.contains("copy_paste_action.selection_required_message()"),
         "clipboard_paste should show error when no entry is selected"
     );
 }

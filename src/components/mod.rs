@@ -11,7 +11,6 @@
 //! - [`FormTextField`] - Text input for text/password/email/number types
 //! - [`FormTextArea`] - Multi-line text input
 //! - [`FormCheckbox`] - Checkbox with label
-//! - [`PromptHeader`] - Header component with search input, buttons, and logo
 //! - [`PromptFooter`] - Footer component with logo, primary/secondary action buttons
 //! - [`PromptContainer`] - Container component for consistent prompt window layout
 //! - [`ShortcutRecorder`] - Modal for recording keyboard shortcuts with visual feedback
@@ -48,7 +47,6 @@ pub(crate) mod non_list_state;
 pub(crate) mod overlay_modal;
 pub mod prompt_container;
 pub mod prompt_footer;
-pub mod prompt_header;
 pub mod prompt_layout_shell;
 pub mod scrollbar;
 pub mod section_divider;
@@ -111,8 +109,6 @@ pub use scrollbar::{
 pub use prompt_container::{PromptContainer, PromptContainerColors, PromptContainerConfig};
 #[allow(unused_imports)]
 pub use prompt_footer::{PromptFooter, PromptFooterColors, PromptFooterConfig};
-#[allow(unused_imports)]
-pub use prompt_header::{PromptHeader, PromptHeaderColors, PromptHeaderConfig};
 #[allow(unused_imports)]
 pub(crate) use prompt_layout_shell::{
     emit_prompt_chrome_audit, emit_prompt_hint_audit, emit_surface_prompt_hint_audit,

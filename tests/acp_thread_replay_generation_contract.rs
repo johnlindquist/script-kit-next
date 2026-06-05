@@ -9,7 +9,6 @@ fn fn_body(source: &str, signature: &str, next_signature: &str) -> String {
     rest[..end].to_string()
 }
 
-// doc-anchor-removed: [[tests/notes-acp#ACP transcript replay generation#Replay resets transient stream state]]
 #[test]
 fn acp_thread_has_transcript_generation_guard() {
     assert!(
@@ -27,7 +26,6 @@ fn acp_thread_has_transcript_generation_guard() {
     );
 }
 
-// doc-anchor-removed: [[tests/notes-acp#ACP transcript replay generation#Stale stream events are discarded]]
 #[test]
 fn bind_stream_captures_and_checks_generation_before_apply_event() {
     let body = fn_body(
@@ -50,7 +48,6 @@ fn bind_stream_captures_and_checks_generation_before_apply_event() {
     );
 }
 
-// doc-anchor-removed: [[tests/notes-acp#ACP transcript replay generation#Replay resets transient stream state]]
 #[test]
 fn load_saved_messages_bumps_generation_and_clears_transient_state() {
     let body = fn_body(

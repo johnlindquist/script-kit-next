@@ -21,7 +21,6 @@ fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a st
     &source[start..start + end_rel]
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn state_result_declares_surface_contract_snapshot_field() {
     assert!(
@@ -52,7 +51,6 @@ fn state_result_declares_surface_contract_snapshot_field() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Contract Registry]]
 #[test]
 fn surface_contract_snapshot_schema_contains_contract_matrix_fields() {
     for field in [
@@ -76,7 +74,6 @@ fn surface_contract_snapshot_schema_contains_contract_matrix_fields() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs Contract Registry]]
 #[test]
 fn prompt_handler_builds_snapshot_from_active_app_view_contract() {
     let snapshot = source_between(
@@ -102,7 +99,6 @@ fn prompt_handler_builds_snapshot_from_active_app_view_contract() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Contract Registry]]
 #[test]
 fn prompt_handler_exposes_actions_popup_overlay_contract() {
     assert!(
@@ -117,7 +113,6 @@ fn prompt_handler_exposes_actions_popup_overlay_contract() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn main_get_state_includes_surface_contract_but_target_diagnostics_do_not() {
     let get_state = source_between(
@@ -139,7 +134,6 @@ fn main_get_state_includes_surface_contract_but_target_diagnostics_do_not() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn kit_sdk_prompt_state_exposes_surface_contract_snapshot() {
     assert!(

@@ -91,8 +91,8 @@ fn root_unified_dictation_history_result_is_stable_and_non_bindable() {
     assert!(types.contains("SearchResult::DictationHistory(_) => None"));
     assert!(types.contains("\"dictation-history/{}\""));
     assert!(types.contains("SearchResult::DictationHistory(_) => \"Paste Dictation\""));
-    assert!(types.contains("SearchResult::DictationHistory(_) => (\"Dictation\", 0xFB7185)"));
-    assert!(unified.contains("SearchResult::DictationHistory(_) => 10"));
+    assert!(types.contains("SearchResult::DictationHistory(_) => (\"Dictation\", \"mic\")"));
+    assert!(unified.contains("SearchResult::DictationHistory(_) => 11"));
 }
 
 #[test]

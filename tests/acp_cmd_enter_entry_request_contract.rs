@@ -17,7 +17,6 @@ fn rust_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
 }
 
 #[test]
-// doc-anchor-removed: [[removed-docs origin parity#Canonical entry request]]
 fn acp_entry_request_is_the_cmd_enter_handoff_choke_point() {
     let source = read("src/app_impl/tab_ai_mode/acp_entry.rs");
     for needle in [
@@ -52,10 +51,6 @@ fn acp_entry_request_is_the_cmd_enter_handoff_choke_point() {
 }
 
 #[test]
-// doc-anchor-removed: [[removed-docs origin parity#Origin matrix]]
-// doc-anchor-removed: [[removed-docs origin parity#Return-origin restore]]
-// doc-anchor-removed: [[removed-docs origin parity#Detached reuse]]
-// doc-anchor-removed: [[removed-docs origin parity#Notes host isolation]]
 fn cmd_enter_origins_have_real_source_callers() {
     let tab_ai = read("src/app_impl/tab_ai_mode/mod.rs");
     let notes = read("src/notes/window/keyboard.rs");
@@ -75,8 +70,6 @@ fn cmd_enter_origins_have_real_source_callers() {
 }
 
 #[test]
-// doc-anchor-removed: [[removed-docs origin parity#File Search context staging]]
-// doc-anchor-removed: [[removed-docs origin parity#Actions dialog restore focus]]
 fn file_search_and_actions_do_not_stage_context_parts_directly() {
     for dir in ["src/file_search", "src/actions"] {
         let mut files = Vec::new();

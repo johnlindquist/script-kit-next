@@ -7,10 +7,9 @@
 //!   - `attachment_portal_return_view.is_some()`
 //!   - `active_attachment_portal_kind.is_some()`
 //!
-//! Any launcher-entry guard (`try_route_plain_tab_to_acp_context_capture`
-//! and `try_route_global_cmd_enter_to_acp_context_capture`) inferred its
-//! answer from a different subset of these fields and drifted under
-//! refactor. PR1 collapses the cross-product into one explicit enum —
+//! Launcher-entry guards inferred their answer from different subsets
+//! of these fields and drifted under refactor. PR1 collapses the
+//! cross-product into one explicit enum —
 //! `AcpSurfaceState { Hidden, Embedded, AttachmentPortal { kind } }` —
 //! reduced by a tiny event machine in `src/ai/acp/surface_state.rs` and
 //! mutated through the single `transition_acp_surface` entry point in

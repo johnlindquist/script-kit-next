@@ -8,13 +8,13 @@ use super::{find_ignore_ascii_case, fuzzy_match_with_indices_ascii, is_ascii_pai
 
 /// Reusable highlight matcher that keeps ASCII fast-path behavior and
 /// falls back to Unicode-safe nucleo indices when needed.
-struct SearchHighlightMatchCtx {
+pub(crate) struct SearchHighlightMatchCtx {
     query_lower: String,
     unicode_ctx: Option<UnicodeHighlightCtx>,
 }
 
 impl SearchHighlightMatchCtx {
-    fn new(query: &str) -> Self {
+    pub(crate) fn new(query: &str) -> Self {
         Self {
             query_lower: query.trim().to_lowercase(),
             unicode_ctx: None,
@@ -22,7 +22,7 @@ impl SearchHighlightMatchCtx {
     }
 
     #[inline]
-    fn indices_for(&mut self, haystack: &str) -> (bool, Vec<usize>) {
+    pub(crate) fn indices_for(&mut self, haystack: &str) -> (bool, Vec<usize>) {
         if self.query_lower.is_empty() {
             return (false, Vec::new());
         }

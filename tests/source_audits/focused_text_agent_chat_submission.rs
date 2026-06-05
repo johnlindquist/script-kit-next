@@ -22,7 +22,7 @@ fn focused_text_turns_use_focused_prompt_blocks_not_generic_submit_input() {
         "build_focused_text_prompt",
         "FocusedTextPromptRequest",
         "FocusedTextEditSemantics::Replace",
-        "thread.submit_blocks(blocks, instruction, cx)",
+        "thread.submit_blocks(balanced_blocks, instruction.clone(), cx)",
         "focused_text_prompt_built",
     ] {
         assert!(
@@ -58,7 +58,7 @@ fn focused_text_turns_use_focused_prompt_blocks_not_generic_submit_input() {
 fn focused_text_view_keeps_snapshot_in_memory_for_multiturn_prompting() {
     for required in [
         "snapshot: crate::platform::accessibility::FocusedTextSnapshot",
-        "let snapshot = state.snapshot.clone();",
+        "let mut snapshot = state.snapshot.clone();",
         "focused_text_previous_turns",
         "assistant_output",
     ] {
@@ -157,15 +157,17 @@ fn focused_text_mini_result_phase_requires_assistant_output() {
         "fn focused_text_mini_footer_visible_for_thread",
     );
 
-    assert!(phase_fn
-        .contains("let has_output = Self::latest_assistant_response_text(thread).is_some();"));
+    assert!(phase_fn.contains(
+        "let has_output = Self::latest_assistant_response_after_latest_user(thread).is_some();"
+    ));
+    assert!(phase_fn.contains("let has_variations = !self.focused_text_variations.is_empty();"));
     assert!(phase_fn.contains("let active = matches!("));
     assert!(
-        phase_fn.contains("(true, false, _) => Some(FocusedTextMiniPhase::Loading)"),
+        phase_fn.contains("(true, false) => Some(FocusedTextMiniPhase::Loading)"),
         "active turn without assistant text should show loading rather than a result"
     );
     assert!(
-        phase_fn.contains("(false, true, _) => Some(FocusedTextMiniPhase::Result)"),
-        "result phase must require assistant output"
+        phase_fn.contains("(false, true) => Some(FocusedTextMiniPhase::Result)"),
+        "result phase must require assistant output or completed focused-text variations"
     );
 }

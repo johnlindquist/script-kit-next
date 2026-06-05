@@ -88,7 +88,6 @@ fn prepare_for_host_hide_slice() -> &'static str {
     &tail[..end]
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Reattach preserves embedded view identity]]
 #[test]
 fn notes_and_script_list_have_distinct_embedded_acp_chat_fields() {
     assert!(
@@ -148,7 +147,6 @@ fn notes_embedded_acp_lifecycle_syncs_child_identity() {
     assert!(prepare.contains("self.sync_notes_embedded_acp_automation_window(false)"));
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Reattach preserves embedded view identity]]
 #[test]
 fn spawn_hosted_view_always_constructs_a_fresh_view() {
     assert!(
@@ -165,7 +163,6 @@ fn spawn_hosted_view_always_constructs_a_fresh_view() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Reattach preserves embedded view identity]]
 #[test]
 fn freshly_constructed_acp_chat_view_has_no_pending_portal_session() {
     let occurrences = VIEW_SOURCE.matches("pending_portal_session: None,").count();
@@ -179,7 +176,6 @@ fn freshly_constructed_acp_chat_view_has_no_pending_portal_session() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Reattach preserves embedded view identity]]
 #[test]
 fn open_or_focus_embedded_acp_emits_host_swap_tracing_event() {
     assert!(
@@ -198,7 +194,6 @@ fn open_or_focus_embedded_acp_emits_host_swap_tracing_event() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Reattach preserves embedded view identity]]
 #[test]
 fn prepare_for_host_hide_clears_popups_but_not_pending_portal_session() {
     let slice = prepare_for_host_hide_slice();

@@ -150,19 +150,19 @@ impl ScriptListApp {
     /// 1. Cancels any running script
     /// 2. Resets state to the default script list
     /// 3. Hides the window
-    /// Force-close every detached "floating popup" window owned by the main
-    /// launcher (ACP `@` mention picker, ACP history, and the menu-syntax
-    /// trigger popup). These windows cache a
-    /// `WeakEntity` of the owner view but rely on the owner to explicitly
-    /// close them on lifecycle / surface transitions. Whenever we hide the
-    /// main window, return to ScriptList, or otherwise abandon the owner
-    /// surface, call this to guarantee they cannot survive past their owner.
+    /// Clear owner-bound popup state and force-close detached popup windows owned
+    /// by the main launcher (ACP `@` mention picker and ACP history).
+    /// Detached windows cache a `WeakEntity` of the owner view but
+    /// rely on the owner to explicitly close them on lifecycle / surface
+    /// transitions. Whenever we hide the main window, return to ScriptList, or
+    /// otherwise abandon the owner surface, call this to guarantee they cannot
+    /// survive past their owner.
     pub(crate) fn close_floating_popups_for_owner_loss(
         &mut self,
         reason: &'static str,
         cx: &mut Context<Self>,
     ) {
-        crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+        self.menu_syntax_trigger_popup_state = Default::default();
         crate::ai::acp::picker_popup::close_mention_popup_window(cx);
         crate::ai::acp::history_popup::close_history_popup_window(cx);
         tracing::info!(

@@ -9,12 +9,12 @@ const ROUTES: &str = include_str!("../src/app_impl/routes.rs");
 const DISPATCH: &str = include_str!("../src/app_impl/trigger_builtin_dispatch.rs");
 const APP_VIEW_STATE: &str = include_str!("../src/main_sections/app_view_state.rs");
 const UI_WINDOW: &str = include_str!("../src/app_impl/ui_window.rs");
+const BUILTIN_EXECUTION: &str = include_str!("../src/app_execute/builtin_execution.rs");
 
 fn compact(source: &str) -> String {
     source.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
-// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn registry_accepts_current_app_commands_aliases() {
     for alias in [
@@ -31,7 +31,6 @@ fn registry_accepts_current_app_commands_aliases() {
     }
 }
 
-// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn current_app_commands_routes_through_named_planner_branch() {
     assert!(
@@ -44,7 +43,6 @@ fn current_app_commands_routes_through_named_planner_branch() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn current_app_commands_dispatch_uses_tray_capture_helper() {
     assert!(
@@ -57,7 +55,6 @@ fn current_app_commands_dispatch_uses_tray_capture_helper() {
     );
 }
 
-// doc-anchor-removed: [[removed-docs Window Sizing Modes]]
 #[test]
 fn current_app_commands_trigger_builtin_deferred_resize_stays_mini() {
     let dispatch_compact = compact(DISPATCH);
@@ -95,13 +92,23 @@ fn current_app_commands_trigger_builtin_deferred_resize_stays_mini() {
         .expect("CurrentAppCommandsView sizing arm must return a Some tuple");
     let current_view_arm = &current_view_tail[..current_view_end];
     assert!(
-        current_view_arm.contains("Some((ViewType::MiniMainWindow,filtered_count))")
+        current_view_arm.contains("Some((ViewType::MainWindow,filtered_count))")
             && !current_view_arm.contains("ViewType::ScriptList"),
-        "the deferred resize used by triggerBuiltin current-app-commands must resolve CurrentAppCommandsView to MiniMainWindow, not ScriptList"
+        "the deferred resize used by triggerBuiltin current-app-commands must resolve CurrentAppCommandsView through the consolidated MainWindow sizing, not ScriptList"
+    );
+
+    let opener_start = BUILTIN_EXECUTION
+        .find("fn open_builtin_filterable_view_with_filter(")
+        .expect("open_builtin_filterable_view_with_filter must exist");
+    let opener = compact(&BUILTIN_EXECUTION[opener_start..]);
+    assert!(
+        opener.contains("ifexpanded{self.set_main_window_mode_state_only(MainWindowMode::Full")
+            && opener.contains("}else{self.set_main_window_mode_state_only(MainWindowMode::Mini")
+            && opener.contains("resize_to_view_sync(ViewType::MainWindow,0);"),
+        "the shared filterable opener must keep mini/full mode ownership separate from the consolidated MainWindow view type"
     );
 }
 
-// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn semantic_surface_map_has_current_app_commands() {
     assert!(

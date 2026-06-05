@@ -72,27 +72,55 @@ const args = parseArgs(Bun.argv.slice(2));
 const jsonlPath = path.join(path.resolve(args.outDir), "submissions.jsonl");
 const startedAt = Date.now();
 
+function remainingTimeoutMs(): number {
+  if (args.timeoutMs === 0) return 60_000;
+  return Math.max(0, args.timeoutMs - (Date.now() - startedAt));
+}
+
 async function waitThroughHttp(): Promise<void> {
   if (!args.url || !args.token || !args.jobId) return;
-  const endpoint = new URL(`/api/jobs/${encodeURIComponent(args.jobId)}/submissions/wait`, args.url);
-  endpoint.searchParams.set("token", args.token);
-  endpoint.searchParams.set("sinceLine", String(args.sinceLine));
-  endpoint.searchParams.set("timeoutMs", String(args.timeoutMs || 60_000));
 
-  const response = await fetch(endpoint, {
-    headers: { "x-hitl-token": args.token },
-  });
-  const payload = await response.json();
-  if (!response.ok) {
-    console.error(JSON.stringify(payload, null, 2));
-    process.exit(1);
+  while (true) {
+    const requestTimeoutMs = Math.min(60_000, remainingTimeoutMs());
+    if (requestTimeoutMs === 0) {
+      console.error(JSON.stringify({
+        error: "timeout",
+        jobId: args.jobId,
+        url: args.url,
+        sinceLine: args.sinceLine,
+        elapsedMs: Date.now() - startedAt,
+      }, null, 2));
+      process.exit(1);
+    }
+
+    const endpoint = new URL(`/api/jobs/${encodeURIComponent(args.jobId)}/submissions/wait`, args.url);
+    endpoint.searchParams.set("token", args.token);
+    endpoint.searchParams.set("sinceLine", String(args.sinceLine));
+    endpoint.searchParams.set("timeoutMs", String(requestTimeoutMs));
+
+    const response = await fetch(endpoint, {
+      headers: { "x-hitl-token": args.token },
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      console.error(JSON.stringify(payload, null, 2));
+      process.exit(1);
+    }
+    if (payload.submission) {
+      console.log(JSON.stringify(payload.submission, null, 2));
+      process.exit(0);
+    }
+    if (!payload.timedOut) {
+      console.error(JSON.stringify(payload, null, 2));
+      process.exit(1);
+    }
+    args.sinceLine = Number(payload.submissionCount ?? args.sinceLine);
+
+    if (args.timeoutMs > 0 && Date.now() - startedAt >= args.timeoutMs) {
+      console.error(JSON.stringify(payload, null, 2));
+      process.exit(1);
+    }
   }
-  if (payload.submission) {
-    console.log(JSON.stringify(payload.submission, null, 2));
-    process.exit(0);
-  }
-  console.error(JSON.stringify(payload, null, 2));
-  process.exit(1);
 }
 
 if (args.url) await waitThroughHttp();

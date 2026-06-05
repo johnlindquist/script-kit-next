@@ -46,7 +46,6 @@ fn push_dictation_result_is_wired_into_request_id_and_command_type() {
     );
 }
 
-// doc-anchor-removed: [[acp-chat#ACP Chat#Detached window behavior#Dictation delivery to the composer#pushDictationResult stdin RPC]]
 #[test]
 fn push_dictation_result_routes_through_real_delivery_helper() {
     for (name, source) in [
