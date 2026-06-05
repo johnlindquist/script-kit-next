@@ -43,7 +43,16 @@ fn info_state_keeps_context_first_acp_copy() {
     assert!(source.contains("Ask with context"));
     assert!(source.contains("Use / for skills or @ to attach context"));
     assert!(source.contains("Attach files, scripts, clipboard, or history"));
-    assert!(source.contains(".footer_shortcut_note(\"⌘K\", \"shows every chat action.\")"));
+    assert!(source.contains("InfoGuidanceItem::new(Some(\"⌘K\"), \"Show every chat action\")"));
+    let acp_spec = section_between(
+        &source,
+        "pub(crate) fn acp_empty_guidance_spec",
+        "pub(crate) fn render_acp_empty_guidance",
+    );
+    assert!(
+        !acp_spec.contains(".footer_shortcut_note("),
+        "ACP empty guidance must keep Cmd+K in the normal row list so spacing stays consistent"
+    );
     assert!(!source.contains("⌘N new"));
     assert!(!source.contains("⌘W close"));
 }
@@ -137,8 +146,7 @@ fn info_footer_shortcut_notes_use_footer_keycaps_not_raw_text() {
     );
 
     assert!(
-        info.contains("InfoShortcutNote")
-            && info.contains(".footer_shortcut_note(\"⌘K\", \"shows every chat action.\")"),
+        info.contains("InfoShortcutNote") && info.contains("pub(crate) fn footer_shortcut_note("),
         "shortcut-bearing help notes should be modeled as shortcut plus text, not one raw string"
     );
     assert!(

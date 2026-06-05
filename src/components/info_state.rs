@@ -330,8 +330,8 @@ pub(crate) fn acp_empty_guidance_spec() -> InfoStateSpec {
             InfoGuidanceItem::new(Some("@"), "Attach files, scripts, clipboard, or history"),
             InfoGuidanceItem::new(Some("⇧↵"), "Add a newline"),
             InfoGuidanceItem::new(Some("⌘P"), "Open previous chats"),
+            InfoGuidanceItem::new(Some("⌘K"), "Show every chat action"),
         ]))
-        .footer_shortcut_note("⌘K", "shows every chat action.")
 }
 
 pub(crate) fn render_acp_empty_guidance(theme: &theme::Theme) -> AnyElement {
@@ -874,6 +874,8 @@ mod tests {
         assert!(copy.contains("Attach files, scripts, clipboard, or history"));
         assert!(copy.contains("Add a newline"));
         assert!(copy.contains("Open previous chats"));
+        assert!(copy.contains("Show every chat action"));
+        assert!(spec.footer_shortcut_note.is_none());
         assert!(!copy.contains("Type / for skills"));
         assert!(!copy.contains(&format!("{} new", "⌘N")));
         assert!(!copy.contains(&format!("{} close", "⌘W")));
@@ -896,25 +898,24 @@ mod tests {
     }
 
     #[test]
-    fn footer_shortcut_note_shares_guidance_keycap_slot_width() {
-        // Regression: the acp empty-state footer note (⌘K) must align its
-        // trailing text with the guidance labels above it. That requires the
-        // note to render its keycap into the same fixed-width slot the guidance
-        // rows compute from the section items.
+    fn acp_empty_guidance_keeps_actions_shortcut_in_guidance_rows() {
+        // Regression: keeping ⌘K as a separate footer note made the actions row
+        // sit lower than the rest of the guidance list. It belongs in the same
+        // guidance item stack so every row shares one spacing contract.
         let spec = acp_empty_guidance_spec();
         assert!(
-            spec.footer_shortcut_note.is_some(),
-            "acp guidance should carry a footer shortcut note"
+            spec.footer_shortcut_note.is_none(),
+            "acp guidance should not render a separate footer shortcut note"
         );
         let guidance_items: Vec<InfoGuidanceItem> = spec
             .sections
             .iter()
             .flat_map(|section| section.items.iter().cloned())
             .collect();
-        let slot = info_guidance_shortcut_slot_width_px(&guidance_items);
         assert!(
-            slot > 0.0,
-            "footer note must align into a real (positive) keycap slot, got {slot}"
+            guidance_items.iter().any(|item| item.shortcut == Some("⌘K")
+                && item.label.as_ref() == "Show every chat action"),
+            "⌘K actions guidance must be a normal guidance row"
         );
     }
 
