@@ -166,7 +166,7 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
             && FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX")
             && FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX")
             && FOOTER_CHROME
-                .contains("FOOTER_KEY_GLYPH_NUDGE_Y_PX + FOOTER_RETURN_GLYPH_NUDGE_Y_PX"),
+                .contains("metrics.key_glyph_nudge_y + metrics.return_glyph_nudge_y"),
         "shared footer chrome tokens must pin native font, keycap, rail, and button chrome contracts"
     );
     assert!(
@@ -177,10 +177,10 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
             && !FOOTER_CHROME.contains(".bg(footer_keycap_bg_color(theme))")
             && !FOOTER_CHROME.contains("FOOTER_KEYCAP_BG_ALPHA")
             && FOOTER_CHROME.contains(".flex_none()")
-            && FOOTER_CHROME.contains(".min_h(px(FOOTER_KEYCAP_HEIGHT_PX))")
-            && FOOTER_CHROME.contains(".line_height(px(FOOTER_KEYCAP_HEIGHT_PX))")
+            && FOOTER_CHROME.contains(".min_h(px(metrics.keycap_height))")
+            && FOOTER_CHROME.contains(".line_height(px(metrics.keycap_height))")
             && FOOTER_CHROME.contains(".group_hover(\"footer-action-button\""),
-        "shared footer keycaps must use the escape glyph, fixed native-footer sizing, labelcap balance, hover foreground, and no steady-state fill"
+        "shared footer keycaps must use the escape glyph, runtime footer metrics, labelcap balance, hover foreground, and no steady-state fill"
     );
     assert!(
         DICTATION_WINDOW.contains("FooterButtonConfig::new(FooterAction::Stop")

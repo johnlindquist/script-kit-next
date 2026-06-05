@@ -73,6 +73,14 @@ fn saved_main_window_style_values_are_project_defaults() {
     assert_eq!(base.search.text_inset_x, 16.0);
     assert_eq!(base.list.item_height, 44.0);
     assert_eq!(base.footer.metrics.height_px, 32.0);
+    assert_eq!(base.footer.metrics.keycap_padding_x, 0.0);
+    assert_eq!(base.footer.metrics.keycap_padding_y, 0.0);
+    assert_eq!(base.footer.metrics.label_font_size, 13.0);
+    assert_eq!(base.footer.metrics.font_weight, FontWeight(400.0));
+    assert_eq!(base.footer.metrics.keycap_font_size, 11.0);
+    assert_eq!(base.footer.metrics.keycap_height, 20.0);
+    assert_eq!(base.footer.divider_alpha, 20);
+    assert_eq!(base.footer.button.border_alpha, 50);
     assert_eq!(base.row.outer_padding_y, 2.0);
     assert_eq!(base.typography.name_font_size, 14.0);
     assert_eq!(base.typography.name_line_height, 16.0);

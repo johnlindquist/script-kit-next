@@ -16,12 +16,15 @@ pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.14;
 // for ordinary control labels and reserves Semibold for emphasis; Medium keeps the
 // hints legible over the translucent Liquid Glass footer without the bold look.
 // Roughly matches the non-bold AppKit weight trait (0.14) used by the native footer.
+#[allow(dead_code)]
 pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight(500.0);
 pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 22.0;
 pub(crate) const FOOTER_KEYCAP_PADDING_X_PX: f32 = 5.0;
 pub(crate) const FOOTER_KEYCAP_RADIUS_PX: f32 = 6.0;
 pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;
+#[allow(dead_code)]
+pub(crate) const FOOTER_SEMICOLON_GLYPH_NUDGE_Y_PX: f32 = -1.0;
 pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;
 // Inter-item gap for footer hint chips. Kept compact now that only actual
 // keycaps carry borders; label text no longer needs the wider bordered-chip
