@@ -221,11 +221,6 @@ core-foundation = "0.10"
 foreign-types = "0.5"
 # macOS launch-at-login via SMAppService
 smappservice-rs = "0.1"
-# Vendored reference crate (oracle/) for native macOS screenshot capture.
-# Scaffolded in; internal swap of capture_screen_screenshot / capture_focused_window_screenshot
-# is deferred because VisibleWindows crop semantics differ from the active-display crop
-# Tab AI currently relies on.
-macos-screenshot-kit = { path = "oracle/macos-screenshot-kit" }
 
 [patch."https://github.com/zed-industries/zed"]
 gpui = { path = "vendor/gpui" }

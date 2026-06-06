@@ -1,1 +1,0 @@
-{"schemaVersion":1,"status":"error","session":"liquid-dictation","requestId":"lg-dictation-capture-protocol","error":{"code":"response_timeout","message":"No response matching requestId 'lg-dictation-capture-protocol' and type 'screenshotResult' within 10000ms"}}

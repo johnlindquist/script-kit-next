@@ -26,6 +26,12 @@ node_modules/
 .mocks/
 session*.md
 oracle-questions.md
+artifacts/
+.goals/
+oracle/
+.antigravitycli/
+testing-skill/
+learn/
 
 # AI-generated bundles (ephemeral)
 *-bundle.md
@@ -87,6 +93,10 @@ TODOS.md
 # Personal Claude Code hook scripts + scheduler lockfile
 .claude/hooks/
 .claude/scheduled_tasks.lock
+.claude/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/**/*
+!.claude/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/**/
+!.claude/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/**/slice.manifest.json
+!.claude/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/**/scenario.receipt.json
 
 # Vendored build caches
 vendor/**/.cache/

@@ -146,6 +146,12 @@ impl AcpTranscript {
         let code_border = rgba(
             (colors.quote_border << 8) | style_def.markdown.code_block_border_alpha.round() as u32,
         );
+        let blockquote_bg = rgba(
+            (colors.quote_border << 8) | style_def.markdown.blockquote_bg_alpha.round() as u32,
+        );
+        let blockquote_border = rgba(
+            (colors.quote_border << 8) | style_def.markdown.blockquote_border_alpha.round() as u32,
+        );
         let heading_1_font_size = style_def.markdown.heading_1_font_size;
         let heading_2_font_size = style_def.markdown.heading_2_font_size;
         let heading_3_font_size = style_def.markdown.heading_3_font_size;
@@ -167,6 +173,14 @@ impl AcpTranscript {
                     .px(px(style_def.markdown.code_block_padding_x))
                     .py(px(style_def.markdown.code_block_padding_y))
                     .text_size(px(style_def.markdown.code_block_font_size)),
+            )
+            .blockquote(
+                StyleRefinement::default()
+                    .bg(blockquote_bg)
+                    .border_color(blockquote_border)
+                    .rounded(px(style_def.markdown.blockquote_radius))
+                    .px(px(style_def.markdown.blockquote_padding_x))
+                    .py(px(style_def.markdown.blockquote_padding_y)),
             );
 
         style.highlight_theme = Arc::new(

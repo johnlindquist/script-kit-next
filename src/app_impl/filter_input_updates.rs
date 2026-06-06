@@ -964,9 +964,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.pending_placeholder = Some(
-            crate::dev_style_tool::runtime_overrides::effective_copy_value(
-                crate::dev_style_tool::MAIN_INPUT_PLACEHOLDER_COPY_ID,
-            ),
+            crate::dev_style_tool::runtime_overrides::effective_main_input_placeholder(),
         );
         self.sync_filter_input_if_needed(window, cx);
         cx.notify();

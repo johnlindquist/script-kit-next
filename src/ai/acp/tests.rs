@@ -2996,18 +2996,19 @@ fn acp_transcript_keeps_selectable_markdown_with_chat_scaled_typography() {
     assert!(
         ACP_TRANSCRIPT_SOURCE.contains("fn selectable_markdown_view(")
             && ACP_TRANSCRIPT_SOURCE.contains(".selectable(true)")
-            && ACP_TRANSCRIPT_SOURCE.contains(".text_sm()"),
+            && ACP_TRANSCRIPT_SOURCE.contains(".text_size(px(style_def.markdown.body_font_size))"),
         "ACP transcript messages must stay selectable without reverting to oversized document typography"
     );
 
     assert!(
         ACP_TRANSCRIPT_SOURCE.contains("fn transcript_text_style(")
-            && ACP_TRANSCRIPT_SOURCE.contains(".paragraph_gap(rems(0.28))")
-            && ACP_TRANSCRIPT_SOURCE.contains("1 => px(16.0)")
+            && ACP_TRANSCRIPT_SOURCE.contains(".paragraph_gap(rems(style_def.markdown.paragraph_gap))")
+            && ACP_TRANSCRIPT_SOURCE.contains("1 => px(heading_1_font_size)")
             && ACP_TRANSCRIPT_SOURCE.contains("StyleRefinement::default()")
             && ACP_TRANSCRIPT_SOURCE.contains(".code_block(")
+            && ACP_TRANSCRIPT_SOURCE.contains(".blockquote(")
             && ACP_TRANSCRIPT_SOURCE.contains("build_markdown_highlight_theme"),
-        "ACP transcript must apply compact assistant-chat markdown styling for headings and code blocks"
+        "ACP transcript must apply compact assistant-chat markdown styling for headings, code blocks, and blockquotes"
     );
 
     assert!(

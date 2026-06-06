@@ -1,9 +1,0 @@
-{
-  "schemaVersion": 2,
-  "status": "error",
-  "command": "capture",
-  "error": {
-    "code": "CAPTURE_FAILED",
-    "message": "Targeted window capture failed for exact window ID 84132 after 2 attempts"
-  }
-}

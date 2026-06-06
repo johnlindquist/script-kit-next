@@ -1,1 +1,0 @@
-{"schemaVersion":1,"tool":"build-isolated-binary","status":"ok","phase":"stage","agentId":"dt-agent-build","pool":"agent-debug","targetDir":"target-agent/pools/agent-debug","binaryPath":"target-agent/runtime/liquid-feedback/script-kit-gpui","manifest":"target-agent/runtime/liquid-feedback/manifest.json","elapsedSec":45,"log":"/tmp/sk-isolated-build-dt-agent-build.log"}

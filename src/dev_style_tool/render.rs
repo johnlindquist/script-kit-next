@@ -704,6 +704,15 @@ impl DevStyleToolApp {
         }
     }
 
+    fn open_agent_chat_kitchen_sink(&mut self, cx: &mut gpui::Context<Self>) {
+        self.main_app.update(cx, |view, cx| {
+            view.open_agent_chat_kitchen_sink_fixture(cx);
+        });
+        self.active_tab = DevStyleToolTab::AgentChatStyling;
+        self.save_status = Some("Opened Agent Chat Kitchen Sink".to_string());
+        cx.notify();
+    }
+
     fn render_group_tabs(
         &self,
         chrome: theme::AppChromeColors,
@@ -715,20 +724,40 @@ impl DevStyleToolApp {
             .unwrap_or(0);
         div()
             .id("tabs:dev-style-tool-groups")
+            .flex()
+            .items_center()
+            .gap(px(8.0))
             .child(
-                TabBar::new("tabbar:dev-style-tool-groups")
-                    .segmented()
-                    .small()
-                    .selected_index(selected_index)
-                    .children(STYLE_KNOB_GROUPS.iter().map(|group| {
-                        let group = *group;
-                        Tab::new().label(group.label()).on_click(cx.listener(
-                            move |this, _event, _window, cx| {
-                                this.active_group = group;
-                                cx.notify();
-                            },
-                        ))
-                    })),
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(chrome.text_secondary_hex))
+                    .child("Main"),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .p(px(3.0))
+                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+                    .border(px(1.0))
+                    .border_color(rgba(chrome.border_rgba))
+                    .bg(rgba(chrome.input_surface_rgba))
+                    .child(
+                        TabBar::new("tabbar:dev-style-tool-groups")
+                            .segmented()
+                            .small()
+                            .selected_index(selected_index)
+                            .children(STYLE_KNOB_GROUPS.iter().map(|group| {
+                                let group = *group;
+                                Tab::new().label(group.label()).on_click(cx.listener(
+                                    move |this, _event, _window, cx| {
+                                        this.active_group = group;
+                                        cx.notify();
+                                    },
+                                ))
+                            })),
+                    ),
             )
             .text_color(rgb(chrome.text_primary_hex))
     }
@@ -744,20 +773,50 @@ impl DevStyleToolApp {
             .unwrap_or(0);
         div()
             .id("tabs:dev-style-tool-primary")
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .p(px(4.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(rgba(chrome.border_rgba))
+            .bg(rgba(chrome.input_surface_rgba))
             .child(
-                TabBar::new("tabbar:dev-style-tool-primary")
-                    .segmented()
-                    .small()
-                    .selected_index(selected_index)
-                    .children(DevStyleToolTab::ALL.iter().map(|tab| {
-                        let tab = *tab;
-                        Tab::new().label(tab.label()).on_click(cx.listener(
-                            move |this, _event, _window, cx| {
-                                this.active_tab = tab;
-                                cx.notify();
-                            },
-                        ))
-                    })),
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(rgb(chrome.text_secondary_hex))
+                            .child("Surface"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(chrome.text_dimmed_hex))
+                            .child(self.active_tab.label()),
+                    ),
+            )
+            .child(
+                div().min_w_0().child(
+                    TabBar::new("tabbar:dev-style-tool-primary")
+                        .segmented()
+                        .small()
+                        .selected_index(selected_index)
+                        .children(DevStyleToolTab::ALL.iter().map(|tab| {
+                            let tab = *tab;
+                            Tab::new().label(tab.label()).on_click(cx.listener(
+                                move |this, _event, _window, cx| {
+                                    this.active_tab = tab;
+                                    cx.notify();
+                                },
+                            ))
+                        })),
+                ),
             )
             .child(
                 div()
@@ -1437,6 +1496,7 @@ impl Render for DevStyleToolApp {
                     .flex()
                     .items_center()
                     .justify_between()
+                    .flex_wrap()
                     .gap(px(12.0))
                     .child(
                         div()
@@ -1448,6 +1508,7 @@ impl Render for DevStyleToolApp {
                         div()
                             .flex()
                             .items_center()
+                            .flex_wrap()
                             .gap(px(8.0))
                             .child(
                                 div()
@@ -1461,6 +1522,19 @@ impl Render for DevStyleToolApp {
                                             .saturating_add(ACTIONS_POPUP_KNOBS.len())
                                             .saturating_add(AGENT_CHAT_KNOBS.len())
                                     )),
+                            )
+                            .child(
+                                self.render_toolbar_button(
+                                    "button:dev-style-tool-open-agent-chat-kitchen-sink",
+                                    "Open Agent Chat Kitchen Sink",
+                                    true,
+                                    chrome,
+                                )
+                                .on_click(cx.listener(
+                                    |this, _event, _window, cx| {
+                                        this.open_agent_chat_kitchen_sink(cx);
+                                    },
+                                )),
                             )
                             .child(
                                 self.render_toolbar_button(

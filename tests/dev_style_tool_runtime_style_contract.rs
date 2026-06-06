@@ -1,8 +1,8 @@
 use gpui::FontWeight;
 use script_kit_gpui::designs::MainMenuThemeVariant;
 use script_kit_gpui::dev_style_tool::{
-    export, runtime_overrides, StyleValue, ACTIONS_POPUP_KNOBS, COPY_CONTROLS,
-    FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID, FOOTER_AI_SLOT_WIDTH_KNOB_ID,
+    base_agent_chat_style, export, runtime_overrides, StyleValue, ACTIONS_POPUP_KNOBS,
+    COPY_CONTROLS, FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID, FOOTER_AI_SLOT_WIDTH_KNOB_ID,
     FOOTER_BUTTON_HOVER_BG_ALPHA_KNOB_ID, FOOTER_BUTTON_HOVER_BORDER_ALPHA_KNOB_ID,
     FOOTER_BUTTON_HOVER_GLYPH_ALPHA_KNOB_ID, FOOTER_BUTTON_HOVER_TEXT_ALPHA_KNOB_ID,
     FOOTER_FONT_WEIGHT_KNOB_ID, FOOTER_HEIGHT_KNOB_ID, FOOTER_KEYCAP_HEIGHT_KNOB_ID,
@@ -111,6 +111,29 @@ fn saved_main_window_style_values_are_project_defaults() {
     assert_eq!(base.header_info_bar.pill_hover_key_alpha, 0xff);
     assert_eq!(base.header_info_bar.context_edge_outset_x, 8.0);
     assert_eq!(base.icon.container_size, 20.0);
+}
+
+#[test]
+fn saved_agent_chat_style_values_are_project_defaults() {
+    let _guard = runtime_test_guard();
+    runtime_overrides::reset_all();
+    let base = base_agent_chat_style();
+
+    assert_eq!(base.transcript.row_padding_x, 16.0);
+    assert_eq!(base.collapsible.thought_header_opacity, 0.75);
+    assert_eq!(base.collapsible.tool_header_opacity, 0.75);
+    assert_eq!(base.collapsible.status_opacity, 0.50);
+    assert_eq!(base.collapsible.thought_border_alpha, 127.0);
+    assert_eq!(base.collapsible.tool_border_alpha, 127.0);
+    assert_eq!(base.error.bg_alpha, 50.0);
+
+    assert_eq!(base.markdown.code_block_bg_alpha, 160.0);
+    assert_eq!(base.markdown.code_block_border_alpha, 64.0);
+    assert_eq!(base.markdown.blockquote_padding_x, 12.0);
+    assert_eq!(base.markdown.blockquote_padding_y, 6.0);
+    assert_eq!(base.markdown.blockquote_radius, 5.0);
+    assert_eq!(base.markdown.blockquote_bg_alpha, 16.0);
+    assert_eq!(base.markdown.blockquote_border_alpha, 64.0);
 }
 
 #[test]
@@ -726,6 +749,77 @@ fn devtools_numeric_setter_accepts_catalog_control_ids() {
         runtime_overrides::current_value(FOOTER_AI_SLOT_WIDTH_KNOB_ID),
         Some(StyleValue::Number(64.0))
     );
+
+    runtime_overrides::reset_all();
+}
+
+#[test]
+fn devtools_copy_setter_updates_effective_main_input_placeholder() {
+    let _guard = runtime_test_guard();
+    runtime_overrides::reset_all();
+
+    let applied =
+        runtime_overrides::set_copy_from_devtools("main.input.placeholder", "Tune live copy")
+            .expect("main input placeholder should be settable through devtools");
+
+    assert_eq!(applied, "main.input.placeholder=Tune live copy");
+    assert_eq!(
+        runtime_overrides::effective_main_input_placeholder(),
+        "Tune live copy"
+    );
+
+    runtime_overrides::reset_all();
+}
+
+#[test]
+fn devtools_actions_setter_updates_current_actions_popup_theme() {
+    let _guard = runtime_test_guard();
+    runtime_overrides::reset_all();
+    let base = script_kit_gpui::designs::base_actions_popup_theme();
+
+    let applied =
+        runtime_overrides::set_actions_number_from_devtools("actions.list.rowHeight", "64px")
+            .expect("actions row height should be settable through devtools");
+
+    assert_eq!(applied, "actions.list.rowHeight=64");
+    assert_eq!(
+        script_kit_gpui::designs::current_actions_popup_theme()
+            .list
+            .row_height,
+        64.0
+    );
+    assert_eq!(
+        script_kit_gpui::designs::base_actions_popup_theme()
+            .list
+            .row_height,
+        base.list.row_height
+    );
+
+    runtime_overrides::reset_all();
+}
+
+#[test]
+fn devtools_agent_chat_setter_updates_markdown_code_and_blockquote_styles() {
+    let _guard = runtime_test_guard();
+    runtime_overrides::reset_all();
+
+    let applied = runtime_overrides::set_agent_chat_number_from_devtools(
+        "agentChat.markdown.codeBlockBgAlpha",
+        "190",
+    )
+    .expect("code block background alpha should be settable through devtools");
+    assert_eq!(applied, "agentChat.markdown.codeBlockBgAlpha=190");
+
+    let applied = runtime_overrides::set_agent_chat_number_from_devtools(
+        "agentChat.markdown.blockquoteBgAlpha",
+        "42",
+    )
+    .expect("blockquote background alpha should be settable through devtools");
+    assert_eq!(applied, "agentChat.markdown.blockquoteBgAlpha=42");
+
+    let effective = runtime_overrides::effective_agent_chat_style();
+    assert_eq!(effective.markdown.code_block_bg_alpha, 190.0);
+    assert_eq!(effective.markdown.blockquote_bg_alpha, 42.0);
 
     runtime_overrides::reset_all();
 }

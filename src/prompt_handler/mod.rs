@@ -490,6 +490,7 @@ impl BatchTargetCapabilities {
                 unsupported_target_name: "DevStyleTool",
                 supported_commands: &[
                     "setThemeControl",
+                    "selectBySemanticId",
                     "undoStyleChange",
                     "redoStyleChange",
                     "resetStyleControls",
@@ -7357,6 +7358,7 @@ impl ScriptListApp {
                                     | protocol::BatchCommand::RedoStyleChange
                                     | protocol::BatchCommand::ResetStyleControls
                                     | protocol::BatchCommand::SaveCurrentStyleSettings
+                                    | protocol::BatchCommand::SelectBySemanticId { .. }
                             )
                         {
                             let command = batch_command_name(cmd);
@@ -7459,6 +7461,77 @@ impl ScriptListApp {
                             protocol::BatchCommand::SelectBySemanticId { semantic_id, submit } => {
                                 let submit = *submit;
                                 let semantic_id = semantic_id.clone();
+                                if batch_target_kind == AutomationBatchTargetKind::DevStyleTool {
+                                    match this.update(cx, |this, cx| -> anyhow::Result<String> {
+                                        if semantic_id
+                                            != "button:dev-style-tool-open-agent-chat-kitchen-sink"
+                                        {
+                                            anyhow::bail!(
+                                                "unknown dev style semantic id '{semantic_id}'"
+                                            );
+                                        }
+                                        if submit {
+                                            this.open_agent_chat_kitchen_sink_fixture(cx);
+                                        }
+                                        Ok("openAgentChatKitchenSink".to_string())
+                                    }) {
+                                        Ok(Ok(v)) => {
+                                            tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "selectBySemanticId", value = %v, "batch.step.ok");
+                                            results.push(protocol::BatchResultEntry {
+                                                index,
+                                                success: true,
+                                                command: "selectBySemanticId".to_string(),
+                                                elapsed: Some(
+                                                    cmd_start.elapsed().as_millis() as u64,
+                                                ),
+                                                value: Some(v),
+                                                error: None,
+                                            });
+                                        }
+                                        Ok(Err(e)) => {
+                                            tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "selectBySemanticId", error = %e, "batch.step.error");
+                                            results.push(protocol::BatchResultEntry {
+                                                index,
+                                                success: false,
+                                                command: "selectBySemanticId".to_string(),
+                                                elapsed: Some(
+                                                    cmd_start.elapsed().as_millis() as u64,
+                                                ),
+                                                value: None,
+                                                error: Some(
+                                                    protocol::TransactionError::selection_not_found(
+                                                        format!("{e}"),
+                                                    ),
+                                                ),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error {
+                                                break;
+                                            }
+                                        }
+                                        Err(e) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index,
+                                                success: false,
+                                                command: "selectBySemanticId".to_string(),
+                                                elapsed: Some(
+                                                    cmd_start.elapsed().as_millis() as u64,
+                                                ),
+                                                value: None,
+                                                error: Some(
+                                                    protocol::TransactionError::action_failed(
+                                                        format!("{e}"),
+                                                    ),
+                                                ),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    continue;
+                                }
                                 match this.update(cx, |this, cx| {
                                     this.select_choice_by_semantic_id(&semantic_id, submit, cx)
                                 }) {

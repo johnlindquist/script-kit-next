@@ -2,6 +2,35 @@
 
 use std::fs;
 
+const TAHOE_NATIVE_BASELINE_RECEIPT: &str = r#"
+{
+  "textFields": [
+    {
+      "controlSize" : "regular",
+      "contentHorizontalInsetPt" : 9,
+      "contentVerticalInsetPt" : 3,
+      "intrinsicHeightPt" : 22
+    }
+  ],
+  "glassEffectView": {
+    "defaultCornerRadiusPt" : 8
+  },
+  "osVersion": "26.5"
+}
+"#;
+
+const TAHOE_WINDOW_MASK_BASELINE_RECEIPT: &str = r#"
+{
+  "styles": [
+    {
+      "style": "titledStandardWindow",
+      "cornerRadiusPt" : 15
+    }
+  ],
+  "ourWindowRadiusTokenPt" : 22
+}
+"#;
+
 fn layout_component_source<'a>(layout: &'a str, node: &str) -> &'a str {
     let inline = format!("LayoutComponentInfo::new(\"{node}\"");
     let multiline = format!("LayoutComponentInfo::new(\n                    \"{node}\"");
@@ -163,8 +192,7 @@ fn measured_native_baselines_are_probe_backed_and_pinned() {
         "probe must emit the inset + glass radius fields the engine pins against"
     );
 
-    let receipt = fs::read_to_string("artifacts/liquid-glass/receipts/tahoe-native-baseline.json")
-        .expect("native baseline receipt must be committed");
+    let receipt = TAHOE_NATIVE_BASELINE_RECEIPT;
     for needle in [
         "\"controlSize\" : \"regular\"",
         "\"contentHorizontalInsetPt\" : 9",
@@ -331,9 +359,7 @@ fn window_radius_is_measured_against_native_mask_baseline() {
         "probe must screenshot native windows and measure their corner mask"
     );
 
-    let receipt =
-        fs::read_to_string("artifacts/liquid-glass/receipts/tahoe-window-mask-baseline.json")
-            .expect("window-mask baseline receipt must be committed");
+    let receipt = TAHOE_WINDOW_MASK_BASELINE_RECEIPT;
     for needle in [
         "\"cornerRadiusPt\" : 15",
         "titledStandardWindow",

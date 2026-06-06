@@ -1,1 +1,0 @@
-{"schemaVersion":1,"status":"error","session":"liquid-kit-store-browse-proof","requestId":"kit-store-browse-wait","error":{"code":"parse_error","message":"data did not match any variant of untagged enum WaitCondition"}}

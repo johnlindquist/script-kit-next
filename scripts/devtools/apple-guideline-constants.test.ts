@@ -17,8 +17,38 @@ import {
   windowRadiusDeviations,
   type NodeLike,
 } from "./apple-guideline-constants";
-import nativeBaseline from "../../artifacts/liquid-glass/receipts/tahoe-native-baseline.json";
-import windowMaskBaseline from "../../artifacts/liquid-glass/receipts/tahoe-window-mask-baseline.json";
+
+const nativeBaseline = {
+  textFields: [
+    {
+      controlSize: "regular",
+      contentHorizontalInsetPt: 9,
+      contentVerticalInsetPt: 3,
+      intrinsicHeightPt: 22,
+    },
+  ],
+  glassEffectView: {
+    defaultCornerRadiusPt: 8,
+  },
+  fontMetrics: {
+    regularControlContentFont: {
+      pointSizePt: 13,
+      defaultLineHeightPt: 16,
+      weightTrait: 0,
+    },
+    systemFontSizePt: 13,
+  },
+} as const;
+
+const windowMaskBaseline = {
+  styles: [
+    {
+      style: "titledStandardWindow",
+      cornerRadiusPt: 15,
+    },
+  ],
+  ourWindowRadiusTokenPt: 22,
+} as const;
 
 const CONCENTRIC_FIXTURE: NodeLike[] = [
   {

@@ -20,6 +20,8 @@ pub struct TextViewStyle {
     pub highlight_theme: Arc<HighlightTheme>,
     /// The style refinement for code blocks.
     pub code_block: StyleRefinement,
+    /// The style refinement for blockquotes.
+    pub blockquote: StyleRefinement,
     pub is_dark: bool,
 }
 
@@ -28,6 +30,9 @@ impl PartialEq for TextViewStyle {
         self.paragraph_gap == other.paragraph_gap
             && self.heading_base_font_size == other.heading_base_font_size
             && self.highlight_theme == other.highlight_theme
+            && self.code_block == other.code_block
+            && self.blockquote == other.blockquote
+            && self.is_dark == other.is_dark
     }
 }
 
@@ -39,6 +44,7 @@ impl Default for TextViewStyle {
             heading_font_size: None,
             highlight_theme: HighlightTheme::default_light().clone(),
             code_block: StyleRefinement::default(),
+            blockquote: StyleRefinement::default(),
             is_dark: false,
         }
     }
@@ -62,6 +68,12 @@ impl TextViewStyle {
     /// Set style for code blocks.
     pub fn code_block(mut self, style: StyleRefinement) -> Self {
         self.code_block = style;
+        self
+    }
+
+    /// Set style for blockquotes.
+    pub fn blockquote(mut self, style: StyleRefinement) -> Self {
+        self.blockquote = style;
         self
     }
 }

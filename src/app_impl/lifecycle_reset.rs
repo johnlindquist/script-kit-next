@@ -659,7 +659,11 @@ impl ScriptListApp {
             self.gpui_input_state.update(cx, |state, cx| {
                 state.set_value("", window, cx);
                 state.set_selection(0, 0, window, cx);
-                state.set_placeholder(crate::ROOT_LAUNCHER_PLACEHOLDER, window, cx);
+                state.set_placeholder(
+                    crate::dev_style_tool::runtime_overrides::effective_main_input_placeholder(),
+                    window,
+                    cx,
+                );
             });
 
             // Clear actions popup state (prevents stale overlay on return to menu)

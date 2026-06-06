@@ -1278,6 +1278,7 @@ impl BlockNode {
                         .border_l_3()
                         .border_color(cx.theme().secondary_active)
                         .px_4()
+                        .refine_style(&node_cx.style.blockquote)
                         .children({
                             let children_len = children.len();
                             children.into_iter().enumerate().map(move |(index, c)| {

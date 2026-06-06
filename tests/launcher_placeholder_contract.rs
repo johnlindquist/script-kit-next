@@ -37,8 +37,8 @@ fn root_launcher_placeholder_replaces_theme_identifier_resets() {
         ("src/app_impl/theme_focus.rs", theme_focus.as_str()),
     ] {
         assert!(
-            source.contains("ROOT_LAUNCHER_PLACEHOLDER"),
-            "{path} should reset the root launcher placeholder through the shared constant"
+            source.contains("effective_main_input_placeholder()"),
+            "{path} should reset the root launcher placeholder through the live copy override helper"
         );
     }
 

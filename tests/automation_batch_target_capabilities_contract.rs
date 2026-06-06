@@ -94,6 +94,7 @@ fn supported_command_lists_are_named_by_target_kind() {
             "AutomationBatchTargetKind::DevStyleTool",
             &[
                 "\"setThemeControl\"",
+                "\"selectBySemanticId\"",
                 "\"undoStyleChange\"",
                 "\"redoStyleChange\"",
                 "\"resetStyleControls\"",

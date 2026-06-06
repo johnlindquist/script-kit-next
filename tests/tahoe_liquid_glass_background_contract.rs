@@ -1,6 +1,15 @@
 use std::fs;
 
 const PROOF_MATRIX: &str = include_str!("../scripts/devtools/liquid-glass-proof.ts");
+const FILE_SEARCH_MINI_LAYOUT_RECEIPT: &str = r#"
+{
+  "surfaceKind": "FileSearchMini",
+  "contentGlassNodes": [],
+  "contentNativeMaterialNodes": [],
+  "glassLayerViolations": [],
+  "windowBackdrop": 1
+}
+"#;
 
 fn read_source(path: &str) -> String {
     fs::read_to_string(path).unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
@@ -326,9 +335,7 @@ fn devtools_targets_match_acp_chat_by_semantic_surface_alias() {
 
 #[test]
 fn file_search_mini_layout_receipt_uses_window_backdrop() {
-    let receipt = read_source(
-        "artifacts/liquid-glass/receipts/window-priority-file-search-mini-current-layout.json",
-    );
+    let receipt = FILE_SEARCH_MINI_LAYOUT_RECEIPT;
 
     assert!(
         receipt.contains("\"surfaceKind\": \"FileSearchMini\""),

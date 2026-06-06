@@ -69,7 +69,11 @@ impl ScriptListApp {
         // Keep the root launcher placeholder stable while theme geometry changes.
         let input_state = self.gpui_input_state.clone();
         input_state.update(cx, |state, cx| {
-            state.set_placeholder(crate::ROOT_LAUNCHER_PLACEHOLDER, window, cx);
+            state.set_placeholder(
+                crate::dev_style_tool::runtime_overrides::effective_main_input_placeholder(),
+                window,
+                cx,
+            );
         });
 
         self.toast_manager.push(

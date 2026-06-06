@@ -37,6 +37,11 @@ pub struct AgentChatMarkdownStyle {
     pub code_block_radius: f32,
     pub code_block_bg_alpha: f32,
     pub code_block_border_alpha: f32,
+    pub blockquote_padding_x: f32,
+    pub blockquote_padding_y: f32,
+    pub blockquote_radius: f32,
+    pub blockquote_bg_alpha: f32,
+    pub blockquote_border_alpha: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -84,7 +89,7 @@ pub struct AgentChatSystemStyle {
 pub fn base_agent_chat_style() -> AgentChatStyleDef {
     AgentChatStyleDef {
         transcript: AgentChatTranscriptStyle {
-            row_padding_x: 8.0,
+            row_padding_x: 16.0,
             row_padding_bottom: 4.0,
             dense_row_padding_bottom: 1.0,
             response_start_margin_top: 4.0,
@@ -106,6 +111,11 @@ pub fn base_agent_chat_style() -> AgentChatStyleDef {
             code_block_radius: 5.0,
             code_block_bg_alpha: 0xA0 as f32,
             code_block_border_alpha: 0x40 as f32,
+            blockquote_padding_x: 12.0,
+            blockquote_padding_y: 6.0,
+            blockquote_radius: 5.0,
+            blockquote_bg_alpha: 0x10 as f32,
+            blockquote_border_alpha: 0x40 as f32,
         },
         user_message: AgentChatMessageStyle {
             padding_x: 12.0,
@@ -128,17 +138,17 @@ pub fn base_agent_chat_style() -> AgentChatStyleDef {
             padding_y: 2.0,
             body_padding_top: 4.0,
             max_body_height: 200.0,
-            thought_header_opacity: 0.50,
-            tool_header_opacity: 0.55,
-            status_opacity: 0.35,
-            thought_border_alpha: 0x18 as f32,
-            tool_border_alpha: 0x30 as f32,
+            thought_header_opacity: 0.75,
+            tool_header_opacity: 0.75,
+            status_opacity: 0.50,
+            thought_border_alpha: 0x7f as f32,
+            tool_border_alpha: 0x7f as f32,
         },
         error: AgentChatErrorStyle {
             padding_x: 12.0,
             padding_y: 8.0,
             radius: 8.0,
-            bg_alpha: 0x10 as f32,
+            bg_alpha: 50.0,
             border_alpha: 0x80 as f32,
             label_opacity: 0.75,
             hint_opacity: 0.40,
@@ -361,6 +371,41 @@ f32_knob!(
     apply_markdown_code_block_border_alpha,
     "agentChat.markdown.codeBlockBorderAlpha",
     markdown.code_block_border_alpha
+);
+f32_knob!(
+    AGENT_CHAT_MARKDOWN_BLOCKQUOTE_PADDING_X,
+    get_markdown_blockquote_padding_x,
+    apply_markdown_blockquote_padding_x,
+    "agentChat.markdown.blockquotePaddingX",
+    markdown.blockquote_padding_x
+);
+f32_knob!(
+    AGENT_CHAT_MARKDOWN_BLOCKQUOTE_PADDING_Y,
+    get_markdown_blockquote_padding_y,
+    apply_markdown_blockquote_padding_y,
+    "agentChat.markdown.blockquotePaddingY",
+    markdown.blockquote_padding_y
+);
+f32_knob!(
+    AGENT_CHAT_MARKDOWN_BLOCKQUOTE_RADIUS,
+    get_markdown_blockquote_radius,
+    apply_markdown_blockquote_radius,
+    "agentChat.markdown.blockquoteRadius",
+    markdown.blockquote_radius
+);
+f32_knob!(
+    AGENT_CHAT_MARKDOWN_BLOCKQUOTE_BG_ALPHA,
+    get_markdown_blockquote_bg_alpha,
+    apply_markdown_blockquote_bg_alpha,
+    "agentChat.markdown.blockquoteBgAlpha",
+    markdown.blockquote_bg_alpha
+);
+f32_knob!(
+    AGENT_CHAT_MARKDOWN_BLOCKQUOTE_BORDER_ALPHA,
+    get_markdown_blockquote_border_alpha,
+    apply_markdown_blockquote_border_alpha,
+    "agentChat.markdown.blockquoteBorderAlpha",
+    markdown.blockquote_border_alpha
 );
 f32_knob!(
     AGENT_CHAT_USER_PADDING_X,
@@ -807,6 +852,61 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         1.0,
         get_markdown_code_block_border_alpha,
         apply_markdown_code_block_border_alpha,
+    ),
+    knob(
+        AGENT_CHAT_MARKDOWN_BLOCKQUOTE_PADDING_X,
+        "Blockquote padding X",
+        AgentChatKnobGroup::Markdown,
+        StyleUnit::Px,
+        0.0,
+        32.0,
+        1.0,
+        get_markdown_blockquote_padding_x,
+        apply_markdown_blockquote_padding_x,
+    ),
+    knob(
+        AGENT_CHAT_MARKDOWN_BLOCKQUOTE_PADDING_Y,
+        "Blockquote padding Y",
+        AgentChatKnobGroup::Markdown,
+        StyleUnit::Px,
+        0.0,
+        24.0,
+        1.0,
+        get_markdown_blockquote_padding_y,
+        apply_markdown_blockquote_padding_y,
+    ),
+    knob(
+        AGENT_CHAT_MARKDOWN_BLOCKQUOTE_RADIUS,
+        "Blockquote radius",
+        AgentChatKnobGroup::Markdown,
+        StyleUnit::Px,
+        0.0,
+        18.0,
+        1.0,
+        get_markdown_blockquote_radius,
+        apply_markdown_blockquote_radius,
+    ),
+    knob(
+        AGENT_CHAT_MARKDOWN_BLOCKQUOTE_BG_ALPHA,
+        "Blockquote background alpha",
+        AgentChatKnobGroup::Markdown,
+        StyleUnit::Alpha,
+        0.0,
+        255.0,
+        1.0,
+        get_markdown_blockquote_bg_alpha,
+        apply_markdown_blockquote_bg_alpha,
+    ),
+    knob(
+        AGENT_CHAT_MARKDOWN_BLOCKQUOTE_BORDER_ALPHA,
+        "Blockquote border alpha",
+        AgentChatKnobGroup::Markdown,
+        StyleUnit::Alpha,
+        0.0,
+        255.0,
+        1.0,
+        get_markdown_blockquote_border_alpha,
+        apply_markdown_blockquote_border_alpha,
     ),
     knob(
         AGENT_CHAT_USER_PADDING_X,

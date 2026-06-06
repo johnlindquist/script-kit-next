@@ -5294,13 +5294,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "macos-screenshot-kit"
-version = "0.1.0"
-dependencies = [
- "screencapturekit 1.5.4",
-]
-
-[[package]]
 name = "malloc_buf"
 version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8090,12 +8083,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "screencapturekit"
-version = "1.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99b732b2db50b25cfbcb171e1b7abda06e77873aeef493e635eb209482fdd149"
-
-[[package]]
 name = "screencapturekit-sys"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8164,7 +8151,6 @@ dependencies = [
  "libc",
  "lru",
  "macos-accessibility-client",
- "macos-screenshot-kit",
  "meval",
  "notify 8.2.0",
  "notify-rust",
@@ -12313,7 +12299,7 @@ dependencies = [
  "log",
  "objc",
  "rand 0.8.5",
- "screencapturekit 0.2.8",
+ "screencapturekit",
  "screencapturekit-sys",
  "sysinfo 0.31.4",
  "tao-core-video-sys",

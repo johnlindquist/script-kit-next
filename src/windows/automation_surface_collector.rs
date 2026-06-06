@@ -389,17 +389,26 @@ fn collect_dev_style_tool_snapshot() -> SurfaceElementSnapshot {
         Some(4),
     ));
     elements.push(element(
+        "button:dev-style-tool-open-agent-chat-kitchen-sink",
+        ElementType::Button,
+        Some("Open Agent Chat Kitchen Sink".to_string()),
+        Some("openAgentChatKitchenSink".to_string()),
+        None,
+        None,
+        Some(5),
+    ));
+    elements.push(element(
         "input:dev-style-tool-saved-markdown",
         ElementType::Input,
         Some("Saved style markdown".to_string()),
         Some("savedStyleMarkdown".to_string()),
         None,
         None,
-        Some(5),
+        Some(6),
     ));
     let mut seen_groups = Vec::new();
     let mut seen_sections = Vec::new();
-    let mut next_index = 6usize;
+    let mut next_index = 7usize;
     for knob in crate::dev_style_tool::STYLE_KNOBS {
         if !seen_groups.contains(&knob.group) {
             seen_groups.push(knob.group);

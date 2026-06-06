@@ -6,6 +6,10 @@ const EXPORT_SOURCE: &str = include_str!("../src/dev_style_tool/export.rs");
 const TRANSCRIPT_SOURCE: &str = include_str!("../src/ai/acp/components/transcript.rs");
 const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
 const COLLECTOR_SOURCE: &str = include_str!("../src/windows/automation_surface_collector.rs");
+const TEXT_VIEW_STYLE_SOURCE: &str =
+    include_str!("../vendor/gpui-component/crates/ui/src/text/style.rs");
+const TEXT_VIEW_NODE_SOURCE: &str =
+    include_str!("../vendor/gpui-component/crates/ui/src/text/node.rs");
 
 #[test]
 fn agent_chat_style_catalog_is_registered_and_exported() {
@@ -14,6 +18,9 @@ fn agent_chat_style_catalog_is_registered_and_exported() {
     assert!(CATALOG_SOURCE.contains("pub struct AgentChatStyleDef"));
     assert!(CATALOG_SOURCE.contains("pub const AGENT_CHAT_KNOBS"));
     assert!(CATALOG_SOURCE.contains("agentChat.markdown.bodyFontSize"));
+    assert!(CATALOG_SOURCE.contains("agentChat.markdown.blockquotePaddingX"));
+    assert!(CATALOG_SOURCE.contains("agentChat.markdown.blockquoteBgAlpha"));
+    assert!(CATALOG_SOURCE.contains("agentChat.markdown.blockquoteBorderAlpha"));
     assert!(CATALOG_SOURCE.contains("agentChat.user.paddingX"));
     assert!(CATALOG_SOURCE.contains("agentChat.collapsible.maxBodyHeight"));
     assert!(CATALOG_SOURCE.contains("agent_chat_knob_id_from_str"));
@@ -41,12 +48,33 @@ fn dev_style_tool_has_agent_chat_tab_and_controls() {
     assert!(RENDER_SOURCE.contains("render_agent_chat_controls"));
     assert!(RENDER_SOURCE.contains("control:dev-style-tool-agent-chat"));
     assert!(RENDER_SOURCE.contains("refresh_agent_chat"));
+    assert!(RENDER_SOURCE.contains("open_agent_chat_kitchen_sink"));
+    assert!(RENDER_SOURCE.contains("open_agent_chat_kitchen_sink_fixture"));
+    assert!(RENDER_SOURCE.contains("button:dev-style-tool-open-agent-chat-kitchen-sink"));
+    assert!(RENDER_SOURCE.contains("Open Agent Chat Kitchen Sink"));
     assert!(PROMPT_HANDLER_SOURCE.contains("set_agent_chat_number_from_devtools"));
     assert!(PROMPT_HANDLER_SOURCE.contains("agentChat."));
+    assert!(PROMPT_HANDLER_SOURCE.contains("\"selectBySemanticId\""));
+    assert!(PROMPT_HANDLER_SOURCE.contains("button:dev-style-tool-open-agent-chat-kitchen-sink"));
+    assert!(PROMPT_HANDLER_SOURCE.contains("open_agent_chat_kitchen_sink_fixture(cx)"));
     assert!(COLLECTOR_SOURCE.contains("crate::dev_style_tool::AGENT_CHAT_KNOBS"));
+    assert!(COLLECTOR_SOURCE.contains("button:dev-style-tool-open-agent-chat-kitchen-sink"));
     assert!(COLLECTOR_SOURCE.contains("slider:dev-style-tool-agent-chat:{}"));
     assert!(COLLECTOR_SOURCE.contains("input:dev-style-tool-agent-chat:{}"));
     assert!(COLLECTOR_SOURCE.contains("button:dev-style-tool-agent-chat-reset:{}"));
+}
+
+#[test]
+fn dev_style_tool_navigation_tabs_have_cleaner_chrome() {
+    assert!(RENDER_SOURCE.contains("tabs:dev-style-tool-primary"));
+    assert!(RENDER_SOURCE.contains("tabs:dev-style-tool-groups"));
+    assert!(RENDER_SOURCE.contains("tabbar:dev-style-tool-primary"));
+    assert!(RENDER_SOURCE.contains("tabbar:dev-style-tool-groups"));
+    assert!(RENDER_SOURCE.contains("chrome.input_surface_rgba"));
+    assert!(RENDER_SOURCE.contains("chrome.border_rgba"));
+    assert!(RENDER_SOURCE.contains(".flex_wrap()"));
+    assert!(RENDER_SOURCE.contains("\"Surface\""));
+    assert!(RENDER_SOURCE.contains("\"Main\""));
 }
 
 #[test]
@@ -59,4 +87,13 @@ fn acp_transcript_uses_live_agent_chat_style() {
     assert!(TRANSCRIPT_SOURCE.contains("style_def.collapsible"));
     assert!(TRANSCRIPT_SOURCE.contains("style_def.error"));
     assert!(TRANSCRIPT_SOURCE.contains("style_def.system"));
+    assert!(TRANSCRIPT_SOURCE.contains(".blockquote("));
+    assert!(TRANSCRIPT_SOURCE.contains("style_def.markdown.blockquote_bg_alpha"));
+    assert!(TRANSCRIPT_SOURCE.contains("style_def.markdown.blockquote_border_alpha"));
+    assert!(TRANSCRIPT_SOURCE.contains("style_def.markdown.blockquote_padding_x"));
+    assert!(TEXT_VIEW_STYLE_SOURCE.contains("pub blockquote: StyleRefinement"));
+    assert!(TEXT_VIEW_STYLE_SOURCE.contains("pub fn blockquote"));
+    assert!(TEXT_VIEW_STYLE_SOURCE.contains("self.code_block == other.code_block"));
+    assert!(TEXT_VIEW_STYLE_SOURCE.contains("self.blockquote == other.blockquote"));
+    assert!(TEXT_VIEW_NODE_SOURCE.contains(".refine_style(&node_cx.style.blockquote)"));
 }

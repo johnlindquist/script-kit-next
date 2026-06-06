@@ -51,8 +51,13 @@ fn dev_style_tool_render_is_catalog_driven_and_narrow() {
     assert!(render_source.contains("button:dev-style-tool-reset-all"));
     assert!(render_source.contains("button:dev-style-tool-copy-markdown"));
     assert!(render_source.contains("tabs:dev-style-tool-groups"));
+    assert!(render_source.contains("tabs:dev-style-tool-primary"));
     assert!(render_source.contains("TabBar::new"));
     assert!(render_source.contains("Tab::new"));
+    assert!(render_source.contains("Text / Copy"));
+    assert!(render_source.contains("tab:dev-style-tool:text-copy"));
+    assert!(render_source.contains("Actions Popup Styling"));
+    assert!(render_source.contains("tab:dev-style-tool:actions-popup-styling"));
     assert!(render_source.contains("active_group"));
     assert!(render_source.contains("input:dev-style-tool-saved-markdown"));
     assert!(render_source.contains("save_current_settings_markdown_with_contents"));
@@ -65,6 +70,8 @@ fn dev_style_tool_render_is_catalog_driven_and_narrow() {
     assert!(render_source.contains(".overflow_y_scroll()"));
     assert!(render_source.contains("export::save_current_settings_markdown"));
     assert!(render_source.contains("runtime_overrides::set_value"));
+    assert!(render_source.contains("runtime_overrides::set_copy_value"));
+    assert!(render_source.contains("runtime_overrides::set_actions_popup_value"));
     assert!(render_source.contains("runtime_overrides::reset_value"));
     assert!(render_source.contains("main_app.update"));
     assert!(render_source.contains("update_theme"));
@@ -72,6 +79,17 @@ fn dev_style_tool_render_is_catalog_driven_and_narrow() {
     assert!(!render_source.contains("build_layout_info"));
     assert!(!render_source.contains("build_component_bounds"));
     assert!(!render_source.contains("render_script_list"));
+}
+
+#[test]
+fn dev_style_tool_initializes_slider_max_before_min() {
+    let render_source =
+        fs::read_to_string("src/dev_style_tool/render.rs").expect("read dev style render source");
+
+    assert!(
+        render_source.matches("SliderState::new()\n                        .max(knob.max)\n                        .min(knob.min)").count() >= 2,
+        "dev style sliders must set max before min because some controls have min values above the slider default max"
+    );
 }
 
 #[test]
