@@ -7,8 +7,10 @@ if [[ -n "${PI_AGENT_RUST_DIR:-}" ]]; then
   PI_REPO="${PI_AGENT_RUST_DIR}"
 elif [[ -f "${DEFAULT_LOCAL_PI_REPO}/Cargo.toml" ]]; then
   PI_REPO="${DEFAULT_LOCAL_PI_REPO}"
+elif [[ -n "${RUNNER_TEMP:-}" ]]; then
+  PI_REPO="${RUNNER_TEMP}/pi_agent_rust-src"
 else
-  PI_REPO="${REPO_ROOT}/target/pi_agent_rust-src"
+  PI_REPO="${REPO_ROOT}/../pi_agent_rust-src"
 fi
 PI_AGENT_RUST_URL="${PI_AGENT_RUST_URL:-https://github.com/Dicklesworthstone/pi_agent_rust.git}"
 PI_AGENT_RUST_REF="${PI_AGENT_RUST_REF:-3d1a3950c16ffdb10cd81780b26921c75c180770}"
