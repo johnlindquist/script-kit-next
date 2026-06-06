@@ -2133,6 +2133,61 @@ impl AcpThread {
         Ok(())
     }
 
+    pub(crate) fn load_kitchen_sink_fixture(&mut self, cx: &mut Context<Self>) {
+        use crate::ai::acp::kitchen_sink_fixture::{
+            agent_chat_kitchen_sink_fixture, AcpKitchenSinkFixtureRole,
+        };
+
+        let fixture = agent_chat_kitchen_sink_fixture();
+        self.stream_task = None;
+        self.pending_permission = None;
+        self.messages.clear();
+        self.active_plan_entries.clear();
+        self.active_tool_calls.clear();
+        self.tool_call_lookup.clear();
+        self.active_mode_id = None;
+        self.available_commands.clear();
+        self.usage_tokens = None;
+        self.usage_cost_usd = None;
+        self.input.clear();
+        self.next_message_id = 1;
+        self.clear_all_pending_context("load_kitchen_sink_fixture");
+        self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+        self.context_bootstrap_note = None;
+        self.queued_submit_while_bootstrapping = false;
+
+        for message in fixture.messages {
+            let role = match message.role {
+                AcpKitchenSinkFixtureRole::User => AcpThreadMessageRole::User,
+                AcpKitchenSinkFixtureRole::Assistant => AcpThreadMessageRole::Assistant,
+                AcpKitchenSinkFixtureRole::Thought => AcpThreadMessageRole::Thought,
+                AcpKitchenSinkFixtureRole::Tool => AcpThreadMessageRole::Tool,
+                AcpKitchenSinkFixtureRole::System => AcpThreadMessageRole::System,
+                AcpKitchenSinkFixtureRole::Error => AcpThreadMessageRole::Error,
+            };
+            let id = self.alloc_id();
+            let body = message.body.to_string();
+            if let Some(tool_call_id) = message.tool_call_id {
+                self.messages.push(AcpThreadMessage::with_tool_call_id(
+                    id,
+                    role,
+                    body,
+                    tool_call_id.to_string(),
+                ));
+            } else {
+                self.messages.push(AcpThreadMessage::new(id, role, body));
+            }
+        }
+        self.set_status(AcpThreadStatus::Idle);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_kitchen_sink_fixture_loaded",
+            fixture_id = fixture.id,
+            message_count = self.messages.len(),
+        );
+        cx.notify();
+    }
+
     /// Clear composer-attached context state before a fresh external entry
     /// intent reuses this thread.
     ///

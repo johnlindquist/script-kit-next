@@ -85,6 +85,56 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Open the deterministic Agent Chat kitchen sink transcript without
+    /// starting a provider session.
+    pub(crate) fn open_agent_chat_kitchen_sink_fixture(&mut self, cx: &mut Context<Self>) {
+        let source_view = self.current_view.clone();
+        self.seed_acp_return_origin_for_view(&source_view);
+
+        let (_broker, permission_rx) = crate::ai::agent_chat::ui::AgentChatPermissionBroker::new();
+        let fixture = crate::ai::acp::kitchen_sink_fixture::agent_chat_kitchen_sink_fixture();
+        let thread = cx.new(|cx| {
+            crate::ai::agent_chat::ui::AgentChatThread::new(
+                std::sync::Arc::new(StandardAgentChatMockFixtureConnection),
+                permission_rx,
+                crate::ai::agent_chat::ui::AgentChatThreadInit {
+                    ui_thread_id: fixture.id.to_string(),
+                    cwd: std::env::temp_dir().join("script-kit-agent-chat-kitchen-sink-fixture"),
+                    initial_input: Some("Tweak this kitchen sink transcript.".to_string()),
+                    initial_context_parts: Vec::new(),
+                    display_name: fixture.title.into(),
+                    profile_display_name: Some("Agent Chat Kitchen Sink".into()),
+                    profile_icon_name: None,
+                    selected_agent: None,
+                    available_agents: Vec::new(),
+                    launch_requirements:
+                        crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
+                    available_models: Vec::new(),
+                    selected_model_id: None,
+                },
+                cx,
+            )
+        });
+        thread.update(cx, |thread, cx| {
+            thread.mark_context_bootstrap_ready(cx);
+            thread.load_kitchen_sink_fixture(cx);
+        });
+
+        let view_entity = cx.new(|cx| {
+            crate::ai::agent_chat::ui::AgentChatView::new(thread, cx)
+                .with_ui_variant(crate::ai::acp::ui_variant::AcpChatUiVariant::Standard)
+        });
+        self.wire_embedded_acp_footer_callbacks(&view_entity, cx);
+        self.embedded_acp_chat = Some(view_entity.clone());
+        self.tab_ai_harness_return_view = Some(source_view);
+        self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
+        self.enter_embedded_acp_chat_surface(view_entity, cx);
+        self.request_focus(FocusTarget::ChatPrompt, cx);
+        script_kit_gpui::set_main_window_visible(true);
+        script_kit_gpui::mark_window_shown();
+        cx.notify();
+    }
+
     /// **Contract:** `AppView::AcpChatView` and `cx.notify()` happen
     /// *before* any deferred-capture await. The user sees the chat surface
     /// within one frame.

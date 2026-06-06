@@ -3,7 +3,7 @@
 type JsonObject = Record<string, unknown>;
 
 type Args = {
-  command: "open-detached-placeholder";
+  command: "open-detached-placeholder" | "open-kitchen-sink";
   session: string;
   start: boolean;
   show: boolean;
@@ -14,6 +14,7 @@ function usage() {
   return [
     "Usage:",
     "  bun scripts/devtools/acp.ts open-detached-placeholder [--session <name>] [--start] [--show] [--timeout <ms>]",
+    "  bun scripts/devtools/acp.ts open-kitchen-sink [--session <name>] [--start] [--show] [--timeout <ms>]",
   ].join("\n");
 }
 
@@ -22,12 +23,12 @@ function parseArgs(argv: string[]): Args {
     console.log(usage());
     process.exit(0);
   }
-  if (argv[0] !== "open-detached-placeholder") {
+  if (argv[0] !== "open-detached-placeholder" && argv[0] !== "open-kitchen-sink") {
     console.error(usage());
     process.exit(2);
   }
   const args: Args = {
-    command: "open-detached-placeholder",
+    command: argv[0],
     session: "default",
     start: false,
     show: false,
@@ -46,6 +47,31 @@ function parseArgs(argv: string[]): Args {
     }
   }
   return args;
+}
+
+async function inspectEmbeddedAcpTarget(args: Args) {
+  let targetReceipt: JsonObject | null = null;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    targetReceipt = await run([
+      "bun",
+      "scripts/devtools/targets.ts",
+      "inspect",
+      "--session",
+      args.session,
+      "--target-kind",
+      "main",
+      "--surface",
+      "AcpChat",
+      "--strict",
+      "--timeout",
+      String(args.timeoutMs),
+    ], "targets.inspect.embeddedAcp");
+    if (targetReceipt.classification === "ok") {
+      break;
+    }
+    await Bun.sleep(150);
+  }
+  return targetReceipt;
 }
 
 async function run(command: string[], label: string): Promise<JsonObject> {
@@ -154,5 +180,52 @@ async function openDetachedPlaceholder(args: Args) {
   }, null, 2));
 }
 
+async function openKitchenSink(args: Args) {
+  await maybeStartAndShow(args);
+  const requestId = `devtools-acp-kitchen-sink-${Date.now()}`;
+  const openReceipt = await run([
+    "bash",
+    "scripts/agentic/session.sh",
+    "rpc",
+    args.session,
+    JSON.stringify({
+      type: "openAgentChatKitchenSinkFixture",
+      requestId,
+    }),
+    "--timeout",
+    String(args.timeoutMs),
+  ], "openAgentChatKitchenSinkFixture");
+  const targetReceipt = await inspectEmbeddedAcpTarget(args);
+  const resolvedTarget = targetReceipt?.resolvedTarget as JsonObject | undefined;
+  const classification = openReceipt.status === "error"
+    ? "blocked-by-timeout"
+    : targetReceipt?.classification === "ok"
+      ? "ok"
+      : "blocked-by-target-ambiguity";
+
+  console.log(JSON.stringify({
+    schemaVersion: 1,
+    tool: "script-kit-devtools.acp",
+    command: "acp.openKitchenSink",
+    classification,
+    session: args.session,
+    requestId,
+    safety: {
+      providerRequired: false,
+      liveThreadRequired: false,
+      fixtureOnly: true,
+    },
+    target: resolvedTarget ?? null,
+    resolvedTarget: resolvedTarget ?? null,
+    openReceipt,
+    targetReceipt,
+    errors: [openReceipt, targetReceipt].filter((receipt) => receipt?.status === "error"),
+  }, null, 2));
+}
+
 const args = parseArgs(Bun.argv.slice(2));
-await openDetachedPlaceholder(args);
+if (args.command === "open-kitchen-sink") {
+  await openKitchenSink(args);
+} else {
+  await openDetachedPlaceholder(args);
+}

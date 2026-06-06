@@ -501,6 +501,31 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 logging::log("STDIN", "Opening standard Agent Chat mock fixture");
                                 view.open_standard_agent_chat_mock_fixture(ctx);
                             }
+                            ExternalCommand::OpenAgentChatKitchenSinkFixture { ref request_id } => {
+                                logging::log("STDIN", "Opening Agent Chat kitchen sink fixture");
+                                let rid = request_id.as_ref().map(|id| id.as_str());
+                                view.open_agent_chat_kitchen_sink_fixture(ctx);
+                                platform::show_main_window_without_activation();
+                                sync_main_automation_window(None, true, true);
+                                if let (Some(request_id), Some(sender)) =
+                                    (request_id.as_ref(), view.response_sender.as_ref())
+                                {
+                                    let _ = sender.try_send(crate::protocol::Message::external_command_result(
+                                        request_id.to_string(),
+                                        "openAgentChatKitchenSinkFixture".to_string(),
+                                        true,
+                                        None,
+                                        None,
+                                    ));
+                                }
+                                tracing::info!(
+                                    category = "STDIN",
+                                    event = "agent_chat_kitchen_sink_fixture_opened",
+                                    command = "openAgentChatKitchenSinkFixture",
+                                    request_id = ?rid,
+                                    "Agent Chat kitchen sink fixture open result"
+                                );
+                            }
                             ExternalCommand::OpenMiniAiWithMockData => {
                                 logging::log(
                                     "STDIN",
