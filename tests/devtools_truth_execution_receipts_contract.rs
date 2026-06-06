@@ -1697,6 +1697,25 @@ fn direct_devtools_non_destructive_launcher_submit_uses_named_allowlist() {
 }
 
 #[test]
+fn direct_devtools_dev_style_kitchen_sink_submit_uses_named_allowlist() {
+    let source = include_str!("../scripts/devtools/act.ts");
+    for expected in [
+        "devStyleKitchenSinkSubmitIds",
+        "\"button:dev-style-tool-open-main-window-kitchen-sink\"",
+        "\"button:dev-style-tool-open-actions-popup-kitchen-sink\"",
+        "\"button:dev-style-tool-open-agent-chat-kitchen-sink\"",
+        "isDevStyleToolTargetReceipt",
+        "submitIntent:style-fixture",
+        "args.submitIntent === \"style-fixture\"",
+    ] {
+        assert!(
+            source.contains(expected),
+            "direct DevTools submit safety should expose dev style fixture allowlist state {expected}"
+        );
+    }
+}
+
+#[test]
 fn direct_actions_nondestructive_builtins_copy_slice_has_exact_scenarios_and_no_runner() {
     let manifest = parse(NONDESTRUCTIVE_BUILTINS_COPY_MANIFEST);
     assert_eq!(manifest["schemaVersion"], 1);

@@ -35,6 +35,74 @@ fn set_main_window_input_text_for_batch(
     Ok(())
 }
 
+fn run_dev_style_tool_semantic_action_for_batch(
+    this: &gpui::WeakEntity<ScriptListApp>,
+    main_window_handle: Option<gpui::AnyWindowHandle>,
+    semantic_id: &str,
+    submit: bool,
+    cx: &mut gpui::AsyncApp,
+) -> anyhow::Result<String> {
+    use crate::dev_style_tool::{
+        OPEN_ACTIONS_POPUP_KITCHEN_SINK_BUTTON, OPEN_ACTIONS_POPUP_NO_MATCH_KITCHEN_SINK_BUTTON,
+        OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON, OPEN_MAIN_WINDOW_KITCHEN_SINK_BUTTON,
+        OPEN_MAIN_WINDOW_NO_MATCH_KITCHEN_SINK_BUTTON,
+    };
+
+    let action_value = match semantic_id {
+        value if value == OPEN_MAIN_WINDOW_KITCHEN_SINK_BUTTON => "openMainWindowKitchenSink",
+        value if value == OPEN_MAIN_WINDOW_NO_MATCH_KITCHEN_SINK_BUTTON => {
+            "openMainWindowNoMatchKitchenSink"
+        }
+        value if value == OPEN_ACTIONS_POPUP_KITCHEN_SINK_BUTTON => "openActionsPopupKitchenSink",
+        value if value == OPEN_ACTIONS_POPUP_NO_MATCH_KITCHEN_SINK_BUTTON => {
+            "openActionsPopupNoMatchKitchenSink"
+        }
+        value if value == OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON => "openAgentChatKitchenSink",
+        _ => anyhow::bail!("unknown dev style semantic id '{semantic_id}'"),
+    };
+
+    if !submit {
+        return Ok(action_value.to_string());
+    }
+
+    match semantic_id {
+        value if value == OPEN_MAIN_WINDOW_KITCHEN_SINK_BUTTON => {
+            this.update(cx, |app, cx| app.open_main_window_kitchen_sink_fixture(cx))?;
+        }
+        value if value == OPEN_MAIN_WINDOW_NO_MATCH_KITCHEN_SINK_BUTTON => {
+            this.update(cx, |app, cx| {
+                app.open_main_window_no_match_kitchen_sink_fixture(cx)
+            })?;
+        }
+        value if value == OPEN_ACTIONS_POPUP_KITCHEN_SINK_BUTTON => {
+            let Some(handle) = main_window_handle else {
+                anyhow::bail!("main window handle unavailable for actions popup kitchen sink");
+            };
+            handle.update(cx, |_root, window, cx| {
+                this.update(cx, |app, cx| {
+                    app.open_actions_popup_kitchen_sink_fixture(window, cx);
+                })
+            })??;
+        }
+        value if value == OPEN_ACTIONS_POPUP_NO_MATCH_KITCHEN_SINK_BUTTON => {
+            let Some(handle) = main_window_handle else {
+                anyhow::bail!("main window handle unavailable for actions popup no-match kitchen sink");
+            };
+            handle.update(cx, |_root, window, cx| {
+                this.update(cx, |app, cx| {
+                    app.open_actions_popup_no_match_kitchen_sink_fixture(window, cx);
+                })
+            })??;
+        }
+        value if value == OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON => {
+            this.update(cx, |app, cx| app.open_agent_chat_kitchen_sink_fixture(cx))?;
+        }
+        _ => unreachable!("semantic id was validated above"),
+    }
+
+    Ok(action_value.to_string())
+}
+
 fn should_restore_main_window_after_script_exit(
     script_hid_window: bool,
     keep_tab_ai_save_offer_open: bool,
@@ -7462,20 +7530,14 @@ impl ScriptListApp {
                                 let submit = *submit;
                                 let semantic_id = semantic_id.clone();
                                 if batch_target_kind == AutomationBatchTargetKind::DevStyleTool {
-                                    match this.update(cx, |this, cx| -> anyhow::Result<String> {
-                                        if semantic_id
-                                            != "button:dev-style-tool-open-agent-chat-kitchen-sink"
-                                        {
-                                            anyhow::bail!(
-                                                "unknown dev style semantic id '{semantic_id}'"
-                                            );
-                                        }
-                                        if submit {
-                                            this.open_agent_chat_kitchen_sink_fixture(cx);
-                                        }
-                                        Ok("openAgentChatKitchenSink".to_string())
-                                    }) {
-                                        Ok(Ok(v)) => {
+                                    match run_dev_style_tool_semantic_action_for_batch(
+                                        &this,
+                                        main_batch_window_handle,
+                                        &semantic_id,
+                                        submit,
+                                        cx,
+                                    ) {
+                                        Ok(v) => {
                                             tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "selectBySemanticId", value = %v, "batch.step.ok");
                                             results.push(protocol::BatchResultEntry {
                                                 index,
@@ -7488,7 +7550,7 @@ impl ScriptListApp {
                                                 error: None,
                                             });
                                         }
-                                        Ok(Err(e)) => {
+                                        Err(e) => {
                                             tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "selectBySemanticId", error = %e, "batch.step.error");
                                             results.push(protocol::BatchResultEntry {
                                                 index,
@@ -7500,26 +7562,6 @@ impl ScriptListApp {
                                                 value: None,
                                                 error: Some(
                                                     protocol::TransactionError::selection_not_found(
-                                                        format!("{e}"),
-                                                    ),
-                                                ),
-                                            });
-                                            failed = true;
-                                            if opts.stop_on_error {
-                                                break;
-                                            }
-                                        }
-                                        Err(e) => {
-                                            results.push(protocol::BatchResultEntry {
-                                                index,
-                                                success: false,
-                                                command: "selectBySemanticId".to_string(),
-                                                elapsed: Some(
-                                                    cmd_start.elapsed().as_millis() as u64,
-                                                ),
-                                                value: None,
-                                                error: Some(
-                                                    protocol::TransactionError::action_failed(
                                                         format!("{e}"),
                                                     ),
                                                 ),

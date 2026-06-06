@@ -18,6 +18,7 @@ mod builders;
 mod command_bar;
 pub(crate) mod constants;
 mod dialog;
+pub(crate) mod kitchen_sink_fixture;
 mod types;
 mod window;
 
@@ -56,6 +57,12 @@ pub(crate) use dialog::GroupedActionItem;
 pub(crate) use dialog::{is_destructive_action, matching_action_id_for_keystroke};
 pub use dialog::{
     ActionsDialog, ActionsDialogActivation, ActionsDialogEscapeOutcome, ActionsDialogRoute,
+};
+#[allow(unused_imports)]
+pub(crate) use kitchen_sink_fixture::{
+    actions_popup_kitchen_sink_actions, actions_popup_kitchen_sink_config,
+    actions_popup_kitchen_sink_feature_manifest, ActionsPopupKitchenSinkMode,
+    ACTIONS_POPUP_KITCHEN_SINK_FIXTURE_ID, ACTIONS_POPUP_KITCHEN_SINK_NO_MATCH_QUERY,
 };
 pub use types::{
     Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,

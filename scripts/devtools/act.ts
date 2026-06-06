@@ -554,6 +554,14 @@ const nonDestructiveLauncherSubmitIds = new Set([
   "search-files",
 ]);
 
+const devStyleKitchenSinkSubmitIds = new Set([
+  "button:dev-style-tool-open-main-window-kitchen-sink",
+  "button:dev-style-tool-open-main-window-no-match-kitchen-sink",
+  "button:dev-style-tool-open-actions-popup-kitchen-sink",
+  "button:dev-style-tool-open-actions-popup-no-match-kitchen-sink",
+  "button:dev-style-tool-open-agent-chat-kitchen-sink",
+]);
+
 const nonDestructiveActionsDialogSubmitPairs = [
   { parentText: "Launchpad", actionId: "copy_deeplink" },
   { parentText: "Emoji Picker", actionId: "copy_deeplink" },
@@ -653,6 +661,15 @@ function isScriptListTargetReceipt(receipt: JsonObject) {
     || resolved?.appViewVariant === "ScriptList";
 }
 
+function isDevStyleToolTargetReceipt(receipt: JsonObject) {
+  const resolved = targetInfo(receipt);
+  return resolved?.automationId === "dev-style-tool"
+    && (
+      resolved?.targetKind === "DevStyleTool"
+      || resolved?.semanticSurface === "devStyleTool"
+    );
+}
+
 function isProfileSearchTargetReceipt(receipt: JsonObject) {
   const resolved = targetInfo(receipt);
   return resolved?.automationId === "main"
@@ -678,6 +695,20 @@ function isPromptPopupTargetReceipt(receipt: JsonObject) {
 
 function isNonDestructiveLauncherSubmit(actionId: string | null) {
   return actionId !== null && nonDestructiveLauncherSubmitIds.has(actionId);
+}
+
+function isNonDestructiveDevStyleKitchenSinkSubmit(
+  args: Args,
+  targetReceipt: JsonObject,
+  selectedSemanticId: string | null,
+) {
+  return args.actionKind === "select"
+    && args.allowSubmit
+    && args.submitIntent === "style-fixture"
+    && args.allowSubmitReason.trim().length > 0
+    && isDevStyleToolTargetReceipt(targetReceipt)
+    && selectedSemanticId !== null
+    && devStyleKitchenSinkSubmitIds.has(selectedSemanticId);
 }
 
 function isNonDestructiveProfileSwitchSubmit(args: Args, before: JsonObject) {
@@ -970,6 +1001,14 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
     };
   }
   if (!isActionsDialogTargetReceipt(targetReceipt)) {
+    if (isNonDestructiveDevStyleKitchenSinkSubmit(args, targetReceipt, selectedSemanticId)) {
+      return {
+        state: "dispatched",
+        actionId: selectedSemanticId,
+        allowedBy: "submitIntent:style-fixture",
+        proofIntent: args.submitIntent,
+      };
+    }
     if (
       isPromptPopupTargetReceipt(targetReceipt)
       && isNonDestructivePromptPopupProfileActivation(selectedSemanticId)

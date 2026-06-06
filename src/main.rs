@@ -59,6 +59,7 @@ mod dev_style_tool {
     pub mod catalog;
     pub mod copy_catalog;
     pub(crate) mod export;
+    pub mod kitchen_sink_targets;
     pub(crate) mod render;
     pub mod runtime_overrides;
     pub mod window;
@@ -71,6 +72,8 @@ mod dev_style_tool {
     pub use catalog::*;
     #[allow(unused_imports)]
     pub use copy_catalog::*;
+    #[allow(unused_imports)]
+    pub(crate) use kitchen_sink_targets::*;
 }
 mod dictation;
 mod editor;
@@ -337,6 +340,7 @@ include!("main_sections/fonts.rs");
 include!("main_sections/app_view_state.rs");
 include!("main_sections/prompt_messages.rs");
 include!("main_sections/app_state.rs");
+include!("main_sections/kitchen_sink_fixture.rs");
 // Core ScriptListApp implementation extracted to app_impl/mod.rs
 include!("app_impl/mod.rs");
 

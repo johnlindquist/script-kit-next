@@ -26,7 +26,9 @@ use crate::dev_style_tool::{
         StyleValue, STYLE_KNOBS,
     },
     copy_catalog::{copy_control_by_id, CopyControlId, COPY_CONTROLS},
-    export, runtime_overrides,
+    export,
+    kitchen_sink_targets::{DevStyleKitchenSinkTarget, OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON},
+    runtime_overrides,
 };
 use crate::{theme, ScriptListApp};
 
@@ -715,6 +717,98 @@ impl DevStyleToolApp {
         self.active_tab = DevStyleToolTab::AgentChatStyling;
         self.save_status = Some("Opened Agent Chat Kitchen Sink".to_string());
         cx.notify();
+    }
+
+    fn open_main_window_kitchen_sink(&mut self, cx: &mut gpui::Context<Self>) {
+        self.main_app.update(cx, |view, cx| {
+            view.open_main_window_kitchen_sink_fixture(cx);
+        });
+        self.active_tab = DevStyleToolTab::MainWindowStyling;
+        self.save_status = Some("Opened Main Window Kitchen Sink".to_string());
+        cx.notify();
+    }
+
+    fn open_main_window_no_match_kitchen_sink(&mut self, cx: &mut gpui::Context<Self>) {
+        self.main_app.update(cx, |view, cx| {
+            view.open_main_window_no_match_kitchen_sink_fixture(cx);
+        });
+        self.active_tab = DevStyleToolTab::MainWindowStyling;
+        self.save_status = Some("Opened Main Window No-Match Kitchen Sink".to_string());
+        cx.notify();
+    }
+
+    fn open_actions_popup_kitchen_sink(&mut self, cx: &mut gpui::Context<Self>) {
+        let _ = self.main_window.update(cx, |_root, window, cx| {
+            self.main_app.update(cx, |view, cx| {
+                view.open_actions_popup_kitchen_sink_fixture(window, cx);
+            });
+        });
+        self.active_tab = DevStyleToolTab::ActionsPopupStyling;
+        self.save_status = Some("Opened Actions Popup Kitchen Sink".to_string());
+        cx.notify();
+    }
+
+    fn open_actions_popup_no_match_kitchen_sink(&mut self, cx: &mut gpui::Context<Self>) {
+        let _ = self.main_window.update(cx, |_root, window, cx| {
+            self.main_app.update(cx, |view, cx| {
+                view.open_actions_popup_no_match_kitchen_sink_fixture(window, cx);
+            });
+        });
+        self.active_tab = DevStyleToolTab::ActionsPopupStyling;
+        self.save_status = Some("Opened Actions Popup No-Match Kitchen Sink".to_string());
+        cx.notify();
+    }
+
+    fn render_kitchen_sink_controls(
+        &self,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        let controls: &[DevStyleKitchenSinkTarget] = match self.active_tab {
+            DevStyleToolTab::MainWindowStyling => &[
+                DevStyleKitchenSinkTarget::MainWindowPopulated,
+                DevStyleKitchenSinkTarget::MainWindowNoMatch,
+            ],
+            DevStyleToolTab::ActionsPopupStyling => &[
+                DevStyleKitchenSinkTarget::ActionsPopupPopulated,
+                DevStyleKitchenSinkTarget::ActionsPopupNoMatch,
+            ],
+            DevStyleToolTab::AgentChatStyling => &[DevStyleKitchenSinkTarget::AgentChat],
+            DevStyleToolTab::TextCopy => &[],
+        };
+
+        let mut panel = div()
+            .id("panel:dev-style-tool-kitchen-sinks")
+            .flex()
+            .items_center()
+            .flex_wrap()
+            .gap(px(8.0));
+
+        for target in controls {
+            let target = *target;
+            panel = panel.child(
+                self.render_toolbar_button(target.semantic_id(), target.label(), true, chrome)
+                    .on_click(cx.listener(move |this, _event, _window, cx| match target {
+                        DevStyleKitchenSinkTarget::MainWindowPopulated => {
+                            this.open_main_window_kitchen_sink(cx);
+                        }
+                        DevStyleKitchenSinkTarget::MainWindowNoMatch => {
+                            this.open_main_window_no_match_kitchen_sink(cx);
+                        }
+                        DevStyleKitchenSinkTarget::ActionsPopupPopulated => {
+                            this.open_actions_popup_kitchen_sink(cx);
+                        }
+                        DevStyleKitchenSinkTarget::ActionsPopupNoMatch => {
+                            this.open_actions_popup_no_match_kitchen_sink(cx);
+                        }
+                        DevStyleKitchenSinkTarget::AgentChat => {
+                            this.open_agent_chat_kitchen_sink(cx);
+                        }
+                    })),
+            );
+        }
+
+        panel
     }
 
     fn render_group_tabs(
@@ -1722,7 +1816,7 @@ impl Render for DevStyleToolApp {
                             )
                             .child(
                                 self.render_toolbar_button(
-                                    "button:dev-style-tool-open-agent-chat-kitchen-sink",
+                                    OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON,
                                     "Open Agent Chat Kitchen Sink",
                                     true,
                                     chrome,
@@ -1800,6 +1894,7 @@ impl Render for DevStyleToolApp {
                 view.child(self.render_saved_markdown(chrome, cx))
             })
             .child(self.render_primary_tabs(chrome, cx))
+            .child(self.render_kitchen_sink_controls(chrome, cx))
             .when(
                 self.active_tab == DevStyleToolTab::MainWindowStyling,
                 |view| view.child(self.render_group_tabs(chrome, cx)),

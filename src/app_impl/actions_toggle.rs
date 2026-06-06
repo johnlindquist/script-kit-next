@@ -411,11 +411,34 @@ impl ScriptListApp {
         opened_log: &'static str,
         failed_prefix: &'static str,
     ) {
+        Self::spawn_open_actions_window_with_parent_id(
+            cx,
+            parent_window_handle,
+            main_bounds,
+            display_id,
+            dialog,
+            position,
+            opened_log,
+            failed_prefix,
+            crate::windows::focused_automation_window_id(),
+        );
+    }
+
+    pub(crate) fn spawn_open_actions_window_with_parent_id(
+        cx: &mut Context<Self>,
+        parent_window_handle: gpui::AnyWindowHandle,
+        main_bounds: gpui::Bounds<gpui::Pixels>,
+        display_id: Option<gpui::DisplayId>,
+        dialog: Entity<ActionsDialog>,
+        position: crate::actions::WindowPosition,
+        opened_log: &'static str,
+        failed_prefix: &'static str,
+        parent_automation_id: Option<String>,
+    ) {
         dialog.update(cx, |dialog, _cx| {
             dialog.set_skip_track_focus(true);
         });
 
-        let parent_automation_id = crate::windows::focused_automation_window_id();
         cx.spawn(async move |this, cx| {
             cx.update(|cx| {
                 match open_actions_window(
@@ -465,14 +488,18 @@ impl ScriptListApp {
     /// Mini mode uses `TopCenter` to keep the popup integrated within the compact
     /// 480px launcher panel.  Full mode uses the default `BottomRight` above the
     /// footer, matching the existing Raycast-style layout.
-    fn main_list_actions_window_position(&self) -> crate::actions::WindowPosition {
+    pub(crate) fn main_list_actions_window_position(&self) -> crate::actions::WindowPosition {
         match self.main_window_mode {
             MainWindowMode::Mini => crate::actions::WindowPosition::TopCenter,
             MainWindowMode::Full => crate::actions::WindowPosition::BottomRight,
         }
     }
 
-    fn begin_actions_popup_window_open(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+    pub(crate) fn begin_actions_popup_window_open(
+        &mut self,
+        cx: &mut Context<Self>,
+        window: &mut Window,
+    ) {
         self.mark_actions_popup_opening();
         self.hovered_index = None;
         self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);

@@ -388,15 +388,20 @@ fn collect_dev_style_tool_snapshot() -> SurfaceElementSnapshot {
         None,
         Some(4),
     ));
-    elements.push(element(
-        "button:dev-style-tool-open-agent-chat-kitchen-sink",
-        ElementType::Button,
-        Some("Open Agent Chat Kitchen Sink".to_string()),
-        Some("openAgentChatKitchenSink".to_string()),
-        None,
-        None,
-        Some(5),
-    ));
+    for (offset, target) in crate::dev_style_tool::DevStyleKitchenSinkTarget::ALL
+        .iter()
+        .enumerate()
+    {
+        elements.push(element(
+            target.semantic_id(),
+            ElementType::Button,
+            Some(target.label().to_string()),
+            Some(target.action_value().to_string()),
+            None,
+            None,
+            Some(5 + offset),
+        ));
+    }
     elements.push(element(
         "input:dev-style-tool-saved-markdown",
         ElementType::Input,
@@ -404,11 +409,11 @@ fn collect_dev_style_tool_snapshot() -> SurfaceElementSnapshot {
         Some("savedStyleMarkdown".to_string()),
         None,
         None,
-        Some(6),
+        Some(10),
     ));
     let mut seen_groups = Vec::new();
     let mut seen_sections = Vec::new();
-    let mut next_index = 7usize;
+    let mut next_index = 11usize;
     for (semantic_id, label) in [
         (
             "tab:dev-style-tool:main-window-styling",
