@@ -460,7 +460,9 @@ fn validate_mcp_note_content_len(content: &str) -> Result<(), NotesMutationError
     if content.len() > NOTE_BODY_MAX_BYTES {
         return Err(NotesMutationError::new(
             NotesMutationErrorCode::InvalidParams,
-            format!("notes content exceeds max byte length of {NOTE_BODY_MAX_BYTES} after metadata merge"),
+            format!(
+                "notes content exceeds max byte length of {NOTE_BODY_MAX_BYTES} after metadata merge"
+            ),
         ));
     }
     Ok(())

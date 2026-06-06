@@ -21,9 +21,8 @@ use gpui::{
 // Root intentionally NOT used — its opaque bg blocks NSVisualEffectView vibrancy
 use std::sync::{Mutex, OnceLock};
 
-use super::constants::{
-    ACTION_ITEM_HEIGHT, HEADER_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT,
-};
+#[cfg(test)]
+use super::constants::POPUP_WIDTH;
 use super::dialog::{
     first_selectable_index, last_selectable_index, selectable_index_at_or_after,
     selectable_index_at_or_before, ActionsDialog,
@@ -203,7 +202,15 @@ fn should_auto_close_actions_window(
     {
         return false;
     }
+    if should_preserve_actions_window_for_dev_style_tool() {
+        return false;
+    }
     !parent_window_focused && !actions_window_active
+}
+
+#[inline]
+fn should_preserve_actions_window_for_dev_style_tool() -> bool {
+    crate::dev_style_tool::window::is_dev_style_tool_open()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -292,14 +299,22 @@ fn clear_actions_window_handle(reason: &str) {
 }
 
 /// Actions window width (height is calculated dynamically based on content)
+#[cfg(test)]
 const ACTIONS_WINDOW_WIDTH: f32 = POPUP_WIDTH;
 /// Horizontal margin from main window right edge
+#[cfg(test)]
 const ACTIONS_MARGIN_X: f32 = 8.0;
 /// Vertical margin from header/footer
+#[cfg(test)]
 const ACTIONS_MARGIN_Y: f32 = 8.0;
 /// Titlebar height (for top-anchored positioning)
-#[allow(dead_code)] // Reserved for future TopRight positioning
+#[cfg(test)]
 const TITLEBAR_HEIGHT: f32 = 36.0;
+
+#[inline]
+fn current_actions_window_width() -> f32 {
+    crate::designs::current_actions_popup_theme().shell.width
+}
 
 /// Window position relative to the parent window
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -355,7 +370,12 @@ impl ActionsWindow {
                 "ACTIONS",
                 &format!("ACTIONS_WINDOW_LIFECYCLE defer_close_executing: reason={reason}"),
             );
-            unregister_actions_dialog_automation_surfaces();
+            clear_actions_popup_automation_snapshot();
+            crate::windows::automation_surface_collector::remove_actions_dialog_snapshot(
+                "actions-dialog",
+            );
+            crate::windows::remove_runtime_window_handle("actions-dialog");
+            crate::windows::remove_automation_window("actions-dialog");
             clear_actions_window_handle(reason);
             window.remove_window();
         });
@@ -976,29 +996,34 @@ fn actions_window_dynamic_height(
     show_footer: bool,
     max_height: f32,
 ) -> f32 {
-    const POPUP_BORDER_HEIGHT: f32 = 2.0;
     const POPUP_FOOTER_HEIGHT: f32 = 32.0;
+    let tokens = crate::designs::current_actions_popup_theme();
     let search_box_height = if hide_search {
         0.0
     } else {
-        SEARCH_INPUT_HEIGHT
+        tokens.search.height
     };
-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+    let header_height = if has_header {
+        tokens.context_header.height
+    } else {
+        0.0
+    };
     let footer_height = if show_footer {
         POPUP_FOOTER_HEIGHT
     } else {
         0.0
     };
-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+    let section_headers_height = section_header_count as f32 * tokens.list.section_header_height;
     let min_items_height = if num_actions == 0 {
-        ACTION_ITEM_HEIGHT
+        tokens.list.empty_row_height
     } else {
         0.0
     };
-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+    let max_height = max_height.min(tokens.shell.max_height);
+    let items_height = (num_actions as f32 * tokens.list.row_height + section_headers_height)
         .max(min_items_height)
         .min(max_height - search_box_height - header_height - footer_height);
-    let border_height = POPUP_BORDER_HEIGHT;
+    let border_height = tokens.shell.border_height;
     items_height + search_box_height + header_height + footer_height + border_height
 }
 
@@ -1035,19 +1060,22 @@ fn actions_popup_origin(
     window_height: Pixels,
     position: WindowPosition,
 ) -> Point<Pixels> {
+    let tokens = crate::designs::current_actions_popup_theme();
     let right_aligned_x = main_window_bounds.origin.x + main_window_bounds.size.width
         - window_width
-        - px(ACTIONS_MARGIN_X);
+        - px(tokens.shell.margin_x);
 
     let y = match position {
         WindowPosition::BottomRight => {
             main_window_bounds.origin.y + main_window_bounds.size.height
                 - window_height
                 - px(FOOTER_HEIGHT)
-                - px(ACTIONS_MARGIN_Y)
+                - px(tokens.shell.margin_y)
         }
         WindowPosition::TopRight | WindowPosition::TopCenter => {
-            main_window_bounds.origin.y + px(TITLEBAR_HEIGHT) + px(ACTIONS_MARGIN_Y)
+            main_window_bounds.origin.y
+                + px(tokens.shell.titlebar_offset_y)
+                + px(tokens.shell.margin_y)
         }
     };
 
@@ -1102,25 +1130,30 @@ fn actions_popup_placement_receipt(
     position: WindowPosition,
     display_id: Option<DisplayId>,
 ) -> ActionsPopupPlacementReceipt {
+    let tokens = crate::designs::current_actions_popup_theme();
     let popup_bounds =
         actions_popup_bounds(main_window_bounds, window_width, window_height, position);
 
     let (anchor_x, anchor_y, pinned_edge) = match position {
         WindowPosition::BottomRight => (
-            main_window_bounds.origin.x + main_window_bounds.size.width - px(ACTIONS_MARGIN_X),
+            main_window_bounds.origin.x + main_window_bounds.size.width - px(tokens.shell.margin_x),
             main_window_bounds.origin.y + main_window_bounds.size.height
                 - px(FOOTER_HEIGHT)
-                - px(ACTIONS_MARGIN_Y),
+                - px(tokens.shell.margin_y),
             "bottom",
         ),
         WindowPosition::TopRight => (
-            main_window_bounds.origin.x + main_window_bounds.size.width - px(ACTIONS_MARGIN_X),
-            main_window_bounds.origin.y + px(TITLEBAR_HEIGHT) + px(ACTIONS_MARGIN_Y),
+            main_window_bounds.origin.x + main_window_bounds.size.width - px(tokens.shell.margin_x),
+            main_window_bounds.origin.y
+                + px(tokens.shell.titlebar_offset_y)
+                + px(tokens.shell.margin_y),
             "top",
         ),
         WindowPosition::TopCenter => (
             main_window_bounds.origin.x + (main_window_bounds.size.width / 2.0),
-            main_window_bounds.origin.y + px(TITLEBAR_HEIGHT) + px(ACTIONS_MARGIN_Y),
+            main_window_bounds.origin.y
+                + px(tokens.shell.titlebar_offset_y)
+                + px(tokens.shell.margin_y),
             "top",
         ),
     };
@@ -1207,6 +1240,7 @@ fn resized_actions_window_origin_y(
 fn resized_actions_window_gpui_bounds(
     current_bounds: Bounds<Pixels>,
     new_height_px: f32,
+    new_width_px: f32,
     position: WindowPosition,
 ) -> Bounds<Pixels> {
     let current_origin_y: f32 = current_bounds.origin.y.into();
@@ -1218,7 +1252,7 @@ fn resized_actions_window_gpui_bounds(
     Bounds {
         origin: gpui::Point::new(current_bounds.origin.x, px(new_origin_y)),
         size: Size {
-            width: current_bounds.size.width,
+            width: px(new_width_px),
             height: px(new_height_px),
         },
     }
@@ -1364,6 +1398,7 @@ pub(crate) fn actions_popup_automation_snapshot() -> Option<serde_json::Value> {
 fn resized_actions_window_frame(
     frame: cocoa::foundation::NSRect,
     new_height_f32: f32,
+    new_width_f32: f32,
     position: WindowPosition,
 ) -> cocoa::foundation::NSRect {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
@@ -1377,7 +1412,7 @@ fn resized_actions_window_frame(
 
     NSRect::new(
         NSPoint::new(frame.origin.x, new_origin_y),
-        NSSize::new(frame.size.width, new_height_f32 as f64),
+        NSSize::new(new_width_f32 as f64, new_height_f32 as f64),
     )
 }
 
@@ -1629,7 +1664,7 @@ pub fn open_actions_window(
     // window.bounds(). These are top-left origin, relative to the window's current screen.
     // When we pass display_id to WindowOptions, GPUI will position this window on the
     // same screen as the main window, using these screen-relative coordinates.
-    let window_width = px(ACTIONS_WINDOW_WIDTH);
+    let window_width = px(current_actions_window_width());
     let window_height = px(dynamic_height);
 
     let receipt = actions_popup_placement_receipt(
@@ -1937,6 +1972,7 @@ pub fn resize_actions_window_direct(
     );
 
     let new_height_f32 = compute_popup_height(dialog);
+    let new_width_f32 = current_actions_window_width();
 
     let current_bounds = window.bounds();
     let current_height_f32: f32 = current_bounds.size.height.into();
@@ -1951,7 +1987,9 @@ pub fn resize_actions_window_direct(
     );
 
     // Skip if height hasn't changed
-    if (current_height_f32 - new_height_f32).abs() < 1.0 {
+    if (current_height_f32 - new_height_f32).abs() < 1.0
+        && (current_width_f32 - new_width_f32).abs() < 1.0
+    {
         tracing::debug!(
             target: "ACTIONS_POPUP",
             stage = "resize_direct_skipped",
@@ -1997,7 +2035,12 @@ pub fn resize_actions_window_direct(
                         let _primary: cocoa::base::id = msg_send![screens, objectAtIndex: 0u64];
                     }
 
-                    let new_frame = resized_actions_window_frame(frame, new_height_f32, position);
+                    let new_frame = resized_actions_window_frame(
+                        frame,
+                        new_height_f32,
+                        new_width_f32,
+                        position,
+                    );
 
                     let _: () = msg_send![
                         ns_window,
@@ -2028,7 +2071,7 @@ pub fn resize_actions_window_direct(
 
     // Also tell GPUI about the new size
     window.resize(gpui::Size {
-        width: current_bounds.size.width,
+        width: px(new_width_f32),
         height: px(new_height_f32),
     });
 
@@ -2036,7 +2079,7 @@ pub fn resize_actions_window_direct(
     // `inspectAutomationWindow` report the live popup frame after resize.
     // See Pass #1 tool-gap note in `audits/afk/log.md`.
     let post_resize_bounds =
-        resized_actions_window_gpui_bounds(current_bounds, new_height_f32, position);
+        resized_actions_window_gpui_bounds(current_bounds, new_height_f32, new_width_f32, position);
     publish_actions_popup_bounds_to_registry(post_resize_bounds);
     update_actions_popup_automation_snapshot_for_resize(post_resize_bounds, position);
 
@@ -2090,6 +2133,7 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
         );
 
         let new_height_f32 = compute_popup_height(dialog);
+        let new_width_f32 = current_actions_window_width();
 
         let update_result = handle.update(cx, |_this, window, cx| {
             let current_bounds = window.bounds();
@@ -2100,7 +2144,9 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
             log_actions_popup_resize("resize_requested", position, current_bounds, new_height_f32);
 
             // Skip if height hasn't changed
-            if (current_height_f32 - new_height_f32).abs() < 1.0 {
+            if (current_height_f32 - new_height_f32).abs() < 1.0
+                && (current_width_f32 - new_width_f32).abs() < 1.0
+            {
                 tracing::debug!(
                     target: "ACTIONS_POPUP",
                     stage = "resize_skipped",
@@ -2146,8 +2192,12 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
                                     msg_send![screens, objectAtIndex: 0u64];
                             }
 
-                            let new_frame =
-                                resized_actions_window_frame(frame, new_height_f32, position);
+                            let new_frame = resized_actions_window_frame(
+                                frame,
+                                new_height_f32,
+                                new_width_f32,
+                                position,
+                            );
 
                             let _: () = msg_send![
                                 ns_window,
@@ -2178,15 +2228,19 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
 
             // Also tell GPUI about the new size
             window.resize(Size {
-                width: current_bounds.size.width,
+                width: px(new_width_f32),
                 height: px(new_height_f32),
             });
 
             // Refresh automation registry bounds so `listAutomationWindows` /
             // `inspectAutomationWindow` report the live popup frame after resize.
             // See Pass #1 tool-gap note in `audits/afk/log.md`.
-            let post_resize_bounds =
-                resized_actions_window_gpui_bounds(current_bounds, new_height_f32, position);
+            let post_resize_bounds = resized_actions_window_gpui_bounds(
+                current_bounds,
+                new_height_f32,
+                new_width_f32,
+                position,
+            );
             publish_actions_popup_bounds_to_registry(post_resize_bounds);
             update_actions_popup_automation_snapshot_for_resize(post_resize_bounds, position);
 

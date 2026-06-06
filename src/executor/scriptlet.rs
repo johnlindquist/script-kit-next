@@ -565,9 +565,7 @@ pub fn shell_not_found_suggestions(shell: &str) -> String {
                 "zsh can be installed through WSL or Git Bash on Windows"
             }
         }
-        "sh" => {
-            "sh (POSIX shell) should be available on all Unix systems. Check your PATH."
-        }
+        "sh" => "sh (POSIX shell) should be available on all Unix systems. Check your PATH.",
         "fish" => {
             if cfg!(target_os = "macos") {
                 "Install with: brew install fish"
@@ -596,9 +594,7 @@ pub fn shell_not_found_suggestions(shell: &str) -> String {
              macOS: brew install powershell\n\
              Linux: See https://docs.microsoft.com/powershell/scripting/install/installing-powershell-on-linux"
         }
-        _ => {
-            "Shell not recognized. Make sure it is installed and in your PATH."
-        }
+        _ => "Shell not recognized. Make sure it is installed and in your PATH.",
     };
 
     format!(

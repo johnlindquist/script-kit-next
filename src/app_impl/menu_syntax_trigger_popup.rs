@@ -381,7 +381,7 @@ pub(crate) fn trigger_picker_row_to_main_list_row(
             .iter()
             .map(|badge| SharedString::from(badge.clone()))
             .collect(),
-        score: row.enabled.then_some(0).unwrap_or(i32::MIN),
+        score: if row.enabled { 0 } else { i32::MIN },
         is_selectable: trigger_popup_row_is_default_selectable(row),
         action_label: action_label.map(SharedString::from),
         action: crate::spine::SpineListAction::Noop,

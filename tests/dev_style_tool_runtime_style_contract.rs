@@ -1,15 +1,20 @@
 use gpui::FontWeight;
 use script_kit_gpui::designs::MainMenuThemeVariant;
 use script_kit_gpui::dev_style_tool::{
-    export, runtime_overrides, StyleValue, FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID,
-    FOOTER_AI_SLOT_WIDTH_KNOB_ID, FOOTER_FONT_WEIGHT_KNOB_ID, FOOTER_HEIGHT_KNOB_ID,
-    FOOTER_KEYCAP_HEIGHT_KNOB_ID, FOOTER_KEY_GLYPH_NUDGE_Y_KNOB_ID,
-    FOOTER_PASTE_RESPONSE_SLOT_WIDTH_KNOB_ID, FOOTER_RETURN_GLYPH_NUDGE_Y_KNOB_ID,
-    FOOTER_RUN_SLOT_MAX_WIDTH_KNOB_ID, FOOTER_RUN_SLOT_MIN_WIDTH_KNOB_ID,
-    FOOTER_SEMICOLON_GLYPH_NUDGE_Y_KNOB_ID, FOOTER_SIDE_INSET_KNOB_ID,
-    HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID, HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
-    LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID, LIST_INLINE_CALC_HINT_FONT_SIZE_KNOB_ID,
-    LIST_INLINE_CALC_RESULT_FONT_SIZE_KNOB_ID, LIST_INLINE_CALC_SELECTED_HINT_ALPHA_KNOB_ID,
+    export, runtime_overrides, StyleValue, ACTIONS_POPUP_KNOBS, COPY_CONTROLS,
+    FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID, FOOTER_AI_SLOT_WIDTH_KNOB_ID,
+    FOOTER_BUTTON_HOVER_BG_ALPHA_KNOB_ID, FOOTER_BUTTON_HOVER_BORDER_ALPHA_KNOB_ID,
+    FOOTER_BUTTON_HOVER_GLYPH_ALPHA_KNOB_ID, FOOTER_BUTTON_HOVER_TEXT_ALPHA_KNOB_ID,
+    FOOTER_FONT_WEIGHT_KNOB_ID, FOOTER_HEIGHT_KNOB_ID, FOOTER_KEYCAP_HEIGHT_KNOB_ID,
+    FOOTER_KEY_GLYPH_NUDGE_Y_KNOB_ID, FOOTER_PASTE_RESPONSE_SLOT_WIDTH_KNOB_ID,
+    FOOTER_RETURN_GLYPH_NUDGE_Y_KNOB_ID, FOOTER_RUN_SLOT_MAX_WIDTH_KNOB_ID,
+    FOOTER_RUN_SLOT_MIN_WIDTH_KNOB_ID, FOOTER_SEMICOLON_GLYPH_NUDGE_Y_KNOB_ID,
+    FOOTER_SIDE_INSET_KNOB_ID, HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID,
+    HEADER_INFO_PILL_HOVER_BG_ALPHA_KNOB_ID, HEADER_INFO_PILL_HOVER_BORDER_ALPHA_KNOB_ID,
+    HEADER_INFO_PILL_HOVER_KEY_ALPHA_KNOB_ID, HEADER_INFO_PILL_HOVER_TEXT_ALPHA_KNOB_ID,
+    HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID, LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID,
+    LIST_INLINE_CALC_HINT_FONT_SIZE_KNOB_ID, LIST_INLINE_CALC_RESULT_FONT_SIZE_KNOB_ID,
+    LIST_INLINE_CALC_SELECTED_HINT_ALPHA_KNOB_ID,
     LIST_INLINE_CALC_SELECTED_OVERLAY_MIN_ALPHA_KNOB_ID, LIST_ITEM_HEIGHT_KNOB_ID,
     LIST_ITEM_INNER_PADDING_Y_KNOB_ID, LIST_ITEM_OUTER_PADDING_Y_KNOB_ID,
     LIST_MAIN_HINT_BODY_FONT_SIZE_KNOB_ID, LIST_MAIN_HINT_CHIP_BORDER_ALPHA_KNOB_ID,
@@ -72,7 +77,14 @@ fn saved_main_window_style_values_are_project_defaults() {
     assert_eq!(base.search.height, 26.0);
     assert_eq!(base.search.text_inset_x, 16.0);
     assert_eq!(base.list.item_height, 44.0);
+    assert_eq!(base.list.section_header_height, 28.0);
+    assert_eq!(base.list.first_section_header_height, 28.0);
+    assert_eq!(base.list.footer_reveal_clearance_height, 8.0);
     assert_eq!(base.footer.metrics.height_px, 32.0);
+    assert_eq!(base.footer.metrics.item_gap_px, 2.0);
+    assert_eq!(base.footer.metrics.content_gap, 4.0);
+    assert_eq!(base.footer.metrics.run_button_padding_x, 12.0);
+    assert_eq!(base.footer.metrics.button_radius, 14.0);
     assert_eq!(base.footer.metrics.keycap_padding_x, 0.0);
     assert_eq!(base.footer.metrics.keycap_padding_y, 0.0);
     assert_eq!(base.footer.metrics.label_font_size, 13.0);
@@ -81,10 +93,22 @@ fn saved_main_window_style_values_are_project_defaults() {
     assert_eq!(base.footer.metrics.keycap_height, 20.0);
     assert_eq!(base.footer.divider_alpha, 20);
     assert_eq!(base.footer.button.border_alpha, 50);
-    assert_eq!(base.row.outer_padding_y, 2.0);
+    assert_eq!(base.footer.button.hover, 0x10);
+    assert_eq!(base.footer.button.hover_border_alpha, 0x57);
+    assert_eq!(base.footer.button.hover_text_alpha, 0xff);
+    assert_eq!(base.footer.button.hover_glyph_alpha, 0xff);
+    assert_eq!(base.row.outer_padding_y, 0.0);
+    assert_eq!(base.row.radius, 14.0);
     assert_eq!(base.typography.name_font_size, 14.0);
     assert_eq!(base.typography.name_line_height, 16.0);
     assert_eq!(base.header_info_bar.key_opacity, 0.5);
+    assert_eq!(base.header_info_bar.pill_padding_x, 6.0);
+    assert_eq!(base.header_info_bar.pill_padding_y, 0.0);
+    assert_eq!(base.header_info_bar.pill_radius, 14.0);
+    assert_eq!(base.header_info_bar.pill_hover_bg_alpha, 0x10);
+    assert_eq!(base.header_info_bar.pill_hover_border_alpha, 0x34);
+    assert_eq!(base.header_info_bar.pill_hover_text_alpha, 0xff);
+    assert_eq!(base.header_info_bar.pill_hover_key_alpha, 0xff);
     assert_eq!(base.header_info_bar.context_edge_outset_x, 8.0);
     assert_eq!(base.icon.container_size, 20.0);
 }
@@ -145,6 +169,26 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
         .expect("footer side inset knob should exist");
     runtime_overrides::set_value(FOOTER_HEIGHT_KNOB_ID, StyleValue::Number(40.0))
         .expect("footer height knob should exist");
+    runtime_overrides::set_value(
+        FOOTER_BUTTON_HOVER_BG_ALPHA_KNOB_ID,
+        StyleValue::Number(35.0),
+    )
+    .expect("footer hover bg alpha knob should exist");
+    runtime_overrides::set_value(
+        FOOTER_BUTTON_HOVER_BORDER_ALPHA_KNOB_ID,
+        StyleValue::Number(99.0),
+    )
+    .expect("footer hover border alpha knob should exist");
+    runtime_overrides::set_value(
+        FOOTER_BUTTON_HOVER_TEXT_ALPHA_KNOB_ID,
+        StyleValue::Number(188.0),
+    )
+    .expect("footer hover text alpha knob should exist");
+    runtime_overrides::set_value(
+        FOOTER_BUTTON_HOVER_GLYPH_ALPHA_KNOB_ID,
+        StyleValue::Number(177.0),
+    )
+    .expect("footer hover glyph alpha knob should exist");
     runtime_overrides::set_value(FOOTER_FONT_WEIGHT_KNOB_ID, StyleValue::Number(475.0))
         .expect("footer font weight knob should exist");
     runtime_overrides::set_value(FOOTER_KEYCAP_HEIGHT_KNOB_ID, StyleValue::Number(24.0))
@@ -181,6 +225,26 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
         StyleValue::Number(12.0),
     )
     .expect("header context edge outset knob should exist");
+    runtime_overrides::set_value(
+        HEADER_INFO_PILL_HOVER_BG_ALPHA_KNOB_ID,
+        StyleValue::Number(42.0),
+    )
+    .expect("header hover bg alpha knob should exist");
+    runtime_overrides::set_value(
+        HEADER_INFO_PILL_HOVER_BORDER_ALPHA_KNOB_ID,
+        StyleValue::Number(77.0),
+    )
+    .expect("header hover border alpha knob should exist");
+    runtime_overrides::set_value(
+        HEADER_INFO_PILL_HOVER_TEXT_ALPHA_KNOB_ID,
+        StyleValue::Number(202.0),
+    )
+    .expect("header hover text alpha knob should exist");
+    runtime_overrides::set_value(
+        HEADER_INFO_PILL_HOVER_KEY_ALPHA_KNOB_ID,
+        StyleValue::Number(166.0),
+    )
+    .expect("header hover key alpha knob should exist");
     runtime_overrides::set_value(LIST_SECTION_PADDING_X_KNOB_ID, StyleValue::Number(28.0))
         .expect("list section padding x knob should exist");
     runtime_overrides::set_value(LIST_SECTION_GAP_KNOB_ID, StyleValue::Number(10.0))
@@ -363,6 +427,10 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     assert_eq!(def.metadata.badge_radius, 11.0);
     assert_eq!(def.footer.metrics.side_inset_px, 12.0);
     assert_eq!(def.footer.metrics.height_px, 40.0);
+    assert_eq!(def.footer.button.hover, 35);
+    assert_eq!(def.footer.button.hover_border_alpha, 99);
+    assert_eq!(def.footer.button.hover_text_alpha, 188);
+    assert_eq!(def.footer.button.hover_glyph_alpha, 177);
     assert_eq!(def.footer.metrics.font_weight, FontWeight(475.0));
     assert_eq!(def.footer.metrics.keycap_height, 24.0);
     assert_eq!(def.footer.metrics.key_glyph_nudge_y, 1.5);
@@ -375,6 +443,10 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     assert_eq!(def.footer.metrics.paste_response_slot_width, 156.0);
     assert_eq!(def.header_info_bar.variation_badge_width_px, 72.0);
     assert_eq!(def.header_info_bar.context_edge_outset_x, 12.0);
+    assert_eq!(def.header_info_bar.pill_hover_bg_alpha, 42);
+    assert_eq!(def.header_info_bar.pill_hover_border_alpha, 77);
+    assert_eq!(def.header_info_bar.pill_hover_text_alpha, 202);
+    assert_eq!(def.header_info_bar.pill_hover_key_alpha, 166);
     assert_eq!(def.list.section_padding_x, 28.0);
     assert_eq!(def.list.section_gap, 10.0);
     assert_eq!(def.list.source_status_row_height, 44.0);
@@ -666,124 +738,150 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         .expect("list item height knob should exist");
 
     let json = export::current_settings_json();
-    assert_eq!(json["schema"], "script-kit-main-window-style/v1");
+    assert_eq!(json["schema"], "script-kit-dev-style/v2");
     assert_eq!(json["overrideCount"], 1);
-    assert_eq!(json["controls"], STYLE_KNOBS.len());
+    assert_eq!(json["controls"]["mainWindowStyle"], STYLE_KNOBS.len());
+    assert_eq!(json["controls"]["mainWindowCopy"], COPY_CONTROLS.len());
+    assert_eq!(
+        json["controls"]["actionsPopupStyle"],
+        ACTIONS_POPUP_KNOBS.len()
+    );
     assert!(json["agentPrompt"]
         .as_str()
         .expect("agent prompt should be a string")
         .contains("src/dev_style_tool/catalog.rs"));
-    assert!(json["overrides"]
+    assert!(json["agentPrompt"]
+        .as_str()
+        .expect("agent prompt should be a string")
+        .contains("src/dev_style_tool/actions_popup_catalog.rs"));
+    assert!(json["agentPrompt"]
+        .as_str()
+        .expect("agent prompt should be a string")
+        .contains("src/dev_style_tool/copy_catalog.rs"));
+    let main_window_style = &json["surfaces"]["mainWindow"]["style"];
+    let main_window_copy = &json["surfaces"]["mainWindow"]["copy"];
+    let actions_popup_style = &json["surfaces"]["actionsPopup"]["style"];
+    assert!(main_window_style["overrides"]
         .as_array()
         .expect("overrides should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.itemHeight" && entry["value"] == 57.0));
-    assert!(json["effective"]
+    assert!(main_window_copy["effective"]
+        .as_array()
+        .expect("copy effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "main.input.placeholder"));
+    assert!(actions_popup_style["effective"]
+        .as_array()
+        .expect("actions popup effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "actions.list.rowHeight"));
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "metadata.badgePaddingX"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.sourceStatusRowHeight"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "row.selectedNameUnderlineWidth"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "row.selectedNameUnderlinePaddingBottom"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.mainHintChipPaddingX"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.mainHintDividerHeight"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "footer.height"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "footer.fontWeight"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.mainHintWarningBgAlpha"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.mainHintExampleRowGap"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.mainHintFormFocusedBorderAlpha"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.mainHintFormBgAlpha"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.inlineCalcSelectedOverlayMinAlpha"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.mainHintTitleFontSize"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.mainHintFormInputFontSize"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.inlineCalcResultFontSize"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "list.inlineCalcHintFontSize"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "footer.keycapHeight"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "footer.runSlotMinWidth"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "footer.aiSlotWidth"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "search.fontSize"));
-    assert!(json["effective"]
+    assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
         .iter()

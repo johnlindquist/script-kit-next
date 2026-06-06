@@ -855,10 +855,7 @@ fn configure_hud_window_by_size(expected_width: f32, expected_height: f32, click
                     "HUD",
                     &format!(
                         "Configured HUD NSWindow ({}x{}): level={}, {}, canHide=false, orderFrontRegardless",
-                        expected_width,
-                        expected_height,
-                        hud_level,
-                        click_status
+                        expected_width, expected_height, hud_level, click_status
                     ),
                 );
                 return;

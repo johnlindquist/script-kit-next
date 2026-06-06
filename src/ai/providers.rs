@@ -3259,7 +3259,9 @@ mod tests {
         };
 
         let messages = vec![
-            ProviderMessage::system("You are a helpful assistant. Reply with exactly 'Hello from Claude Code!' and nothing else."),
+            ProviderMessage::system(
+                "You are a helpful assistant. Reply with exactly 'Hello from Claude Code!' and nothing else.",
+            ),
             ProviderMessage::user("Say hello"),
         ];
 

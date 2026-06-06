@@ -771,8 +771,7 @@ fn test_code_preview_only_comments() {
 
 #[test]
 fn test_code_preview_truncates_long_lines() {
-    let long_code =
-            "const result = await fetchDataFromRemoteServerWithComplexAuthenticationAndRetryLogic(url, options)";
+    let long_code = "const result = await fetchDataFromRemoteServerWithComplexAuthenticationAndRetryLogic(url, options)";
     let sl = make_test_scriptlet("Long", long_code, "ts");
     let preview = code_preview_for_scriptlet(&sl).unwrap();
     assert!(preview.ends_with("..."));
@@ -1107,10 +1106,10 @@ fn test_code_preview_short_first_only_line() {
 #[test]
 fn test_code_preview_multi_line_truncates_combined() {
     let sl = make_test_scriptlet(
-            "Deploy",
-            "cd ~/projects\nexport NODE_ENV=production && npm run build && npm run deploy --target staging",
-            "bash",
-        );
+        "Deploy",
+        "cd ~/projects\nexport NODE_ENV=production && npm run build && npm run deploy --target staging",
+        "bash",
+    );
     let preview = code_preview_for_scriptlet(&sl).unwrap();
     // Combined is long, should truncate
     assert!(preview.contains("\u{2192}"));

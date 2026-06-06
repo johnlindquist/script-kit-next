@@ -7505,11 +7505,53 @@ impl ScriptListApp {
                                 let value = value.clone();
                                 match this.update(cx, |this, cx| {
                                     if batch_target_kind == AutomationBatchTargetKind::DevStyleTool {
-                                        let applied =
+                                        let applied = if control
+                                            .strip_prefix("control:dev-style-tool-copy:")
+                                            .or_else(|| {
+                                                control
+                                                    .strip_prefix("input:dev-style-tool-copy:")
+                                            })
+                                            .or_else(|| {
+                                                control.strip_prefix(
+                                                    "button:dev-style-tool-copy-reset:",
+                                                )
+                                            })
+                                            .is_some()
+                                            || control.starts_with("main.input.")
+                                        {
+                                            crate::dev_style_tool::runtime_overrides::set_copy_from_devtools(
+                                                &control,
+                                                &value,
+                                            )?
+                                        } else if control
+                                            .strip_prefix("control:dev-style-tool-actions:")
+                                            .or_else(|| {
+                                                control
+                                                    .strip_prefix("input:dev-style-tool-actions:")
+                                            })
+                                            .or_else(|| {
+                                                control
+                                                    .strip_prefix("slider:dev-style-tool-actions:")
+                                            })
+                                            .or_else(|| {
+                                                control.strip_prefix(
+                                                    "button:dev-style-tool-actions-reset:",
+                                                )
+                                            })
+                                            .is_some()
+                                            || control.starts_with("actions.")
+                                        {
+                                            crate::dev_style_tool::runtime_overrides::set_actions_number_from_devtools(
+                                                &control,
+                                                &value,
+                                            )?
+                                        } else {
                                             crate::dev_style_tool::runtime_overrides::set_number_from_devtools(
                                                 &control,
                                                 &value,
-                                            )?;
+                                            )?
+                                        };
+                                        this.update_theme(cx);
                                         this.refresh_runtime_style_controls(cx);
                                         return Ok(applied);
                                     }

@@ -105,7 +105,7 @@ fn args_for_target(
     if options.delay.as_millis() > 0 {
         args.push(OsString::from("-T"));
         let millis = options.delay.as_millis();
-        let seconds = ((millis + 999) / 1000).max(1);
+        let seconds = millis.div_ceil(1000).max(1);
         args.push(OsString::from(seconds.to_string()));
     }
     if !clipboard {

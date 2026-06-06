@@ -97,8 +97,7 @@ pub const TEXT_PI_TOOLS: [&str; 1] = ["web_search"];
 
 pub const GENERAL_BLOCKED_ACTION_MESSAGE: &str =
     "This action is blocked in the General profile. Please switch profiles to modify Script Kit.";
-pub const TEXT_BLOCKED_ACTION_MESSAGE: &str =
-    "The Text profile can only transform captured focused text or search the web for public current information.";
+pub const TEXT_BLOCKED_ACTION_MESSAGE: &str = "The Text profile can only transform captured focused text or search the web for public current information.";
 
 const GENERAL_APPEND_SYSTEM_PROMPT: &str = "You are the General Agent Chat profile for Script Kit. Answer everyday questions directly and helpfully. You may search the web, search the desktop, read files, create new files inside the General workspace, and inspect local context. Do not load skills, modify Script Kit, run shell commands, edit existing files, or write outside the General workspace. If a tool or requested action is blocked, say: \"This action is blocked in the General profile. Please switch profiles to modify Script Kit.\"";
 const SCRIPT_KIT_APPEND_SYSTEM_PROMPT: &str = "You are the Script Kit Agent Chat profile. Help manage ~/.scriptkit, including config.ts, scripts, scriptlets, plugins, and package.json. Make focused minimal edits. Explain risks before destructive file operations. Do not install packages or run long commands unless the user asks.";

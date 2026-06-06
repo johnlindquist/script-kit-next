@@ -141,7 +141,9 @@ pub fn show_permission_dialog() -> Result<bool> {
 pub fn get_selected_text() -> Result<String> {
     // Check permissions first
     if !has_accessibility_permission() {
-        bail!("Accessibility permission required. Enable in System Preferences > Privacy & Security > Accessibility");
+        bail!(
+            "Accessibility permission required. Enable in System Preferences > Privacy & Security > Accessibility"
+        );
     }
 
     debug!("Attempting to get selected text");
@@ -242,7 +244,9 @@ fn set_via_clipboard_fallback(text: &str) -> Result<()> {
         Ok(current_change_count) if current_change_count == temporary_change_count => {
             snapshot.restore()
         }
-        Ok(_) => Err(anyhow!("Clipboard changed during selected-text replacement; skipped restore to avoid overwriting external clipboard update")),
+        Ok(_) => Err(anyhow!(
+            "Clipboard changed during selected-text replacement; skipped restore to avoid overwriting external clipboard update"
+        )),
         Err(e) => Err(e).context("Failed to read clipboard change count before restore"),
     };
     if let Err(e) = &restore_result {

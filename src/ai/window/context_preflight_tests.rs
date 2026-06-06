@@ -508,8 +508,7 @@ fn test_recommendation_determinism_same_input_same_output() {
     let second = recommend_context_parts(draft, &snapshot, &[]);
 
     assert_eq!(
-        first.recommendations,
-        second.recommendations,
+        first.recommendations, second.recommendations,
         "Recommendations must be exactly deterministic for the same draft, live snapshot, and attached parts"
     );
 

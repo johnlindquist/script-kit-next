@@ -327,7 +327,9 @@ fn test_copy_as_markdown_notifies_after_feedback_state_update() {
 fn test_notes_editor_disables_dynamic_code_editor_bottom_margin() {
     const INIT_SOURCE: &str = include_str!("init.rs");
     assert!(
-        INIT_SOURCE.contains(".code_editor(\"markdown\")\n                .code_editor_dynamic_bottom_margin(false)"),
+        INIT_SOURCE.contains(
+            ".code_editor(\"markdown\")\n                .code_editor_dynamic_bottom_margin(false)"
+        ),
         "Notes editor should not reserve a large code-editor bottom scroll margin after trailing lines are deleted"
     );
 }

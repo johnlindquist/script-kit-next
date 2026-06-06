@@ -455,7 +455,8 @@ fn native_footer_agent_model_preserves_acp_chat_view() {
     assert!(
         arm.contains("return;")
             && arm.find("return;")
-                < arm.find("self.current_view = AppView::ScriptList")
+                < arm
+                    .find("self.current_view = AppView::ScriptList")
                     .or_else(|| arm.find("self.open_profile_switcher_window(window, cx);")),
         "AgentModel footer clicks in Agent Chat must return before the ScriptList/global picker fallback"
     );
@@ -2928,13 +2929,11 @@ fn at_inline_portal_window_cannot_outlive_owner() {
     // 3. Lifecycle reset paths centralize the close so it cannot be
     //    skipped by individual surface transitions.
     assert!(
-        LIFECYCLE_RESET_SOURCE.contains(
-            "pub(crate) fn close_floating_popups_for_owner_loss",
-        ) && LIFECYCLE_RESET_SOURCE
-            .contains("crate::ai::acp::picker_popup::close_mention_popup_window(cx);")
-            && LIFECYCLE_RESET_SOURCE.contains(
-                "self.menu_syntax_trigger_popup_state = Default::default();",
-            ),
+        LIFECYCLE_RESET_SOURCE.contains("pub(crate) fn close_floating_popups_for_owner_loss",)
+            && LIFECYCLE_RESET_SOURCE
+                .contains("crate::ai::acp::picker_popup::close_mention_popup_window(cx);")
+            && LIFECYCLE_RESET_SOURCE
+                .contains("self.menu_syntax_trigger_popup_state = Default::default();",),
         "lifecycle_reset must expose `close_floating_popups_for_owner_loss` that closes the ACP @ picker and clears the main-owned menu-syntax trigger picker"
     );
     for caller in [

@@ -215,7 +215,7 @@ impl HelperClient {
                 Ok(response) => {
                     return response.into_result().and_then(|response| {
                         response.raw_completion.context("missing helper completion")
-                    })
+                    });
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     if cancel.load(Ordering::Relaxed) && !cancel_sent {
@@ -338,7 +338,9 @@ fn resolve_helper_path() -> Result<PathBuf> {
 
     anyhow::bail!(
         "ghost llm helper not found; set {HELPER_ENV}, install it at {}, or place {HELPER_NAME} next to the app binary",
-        stable_helper_path().map(|p| p.display().to_string()).unwrap_or_else(|| "~/.scriptkit/bin".to_string())
+        stable_helper_path()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "~/.scriptkit/bin".to_string())
     )
 }
 

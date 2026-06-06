@@ -59,7 +59,7 @@ pub const DEPRECATED_FIELDS: &[DeprecatedField] = &[DeprecatedField {
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ProtocolDeprecationError {
     #[error(
-        "message `{kind}` carried removed field `{field}` at protocolVersion {current} (removed in v{removed_in}){replacement_hint}",
+        "message `{kind}` carried removed field `{field}` at protocolVersion {current} (removed in v{removed_in}){replacement_hint}"
     )]
     FieldRemoved {
         kind: &'static str,

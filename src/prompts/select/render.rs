@@ -678,7 +678,8 @@ mod tests {
             "select rows should only use pointer chrome when they handle mouse activation"
         );
         assert!(
-            render_code.contains("this.toggle_selection(cx)") && render_code.contains("this.submit()"),
+            render_code.contains("this.toggle_selection(cx)")
+                && render_code.contains("this.submit()"),
             "select row mouse activation should toggle multi-select rows and submit single-select rows"
         );
     }

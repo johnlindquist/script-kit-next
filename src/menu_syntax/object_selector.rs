@@ -269,7 +269,7 @@ pub fn object_selector_row_to_main_list_row(row: &ObjectSelectorRow) -> crate::s
             .iter()
             .map(|badge| gpui::SharedString::from(badge.clone()))
             .collect(),
-        score: row.enabled.then_some(0).unwrap_or(i32::MIN),
+        score: if row.enabled { 0 } else { i32::MIN },
         is_selectable: row.enabled,
         action_label: Some(gpui::SharedString::from("Insert")),
         action: crate::spine::SpineListAction::Noop,

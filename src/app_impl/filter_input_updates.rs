@@ -957,4 +957,18 @@ impl ScriptListApp {
         self.suppress_filter_events = false;
         self.pending_filter_sync = false;
     }
+
+    pub(crate) fn refresh_runtime_copy_controls(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.pending_placeholder = Some(
+            crate::dev_style_tool::runtime_overrides::effective_copy_value(
+                crate::dev_style_tool::MAIN_INPUT_PLACEHOLDER_COPY_ID,
+            ),
+        );
+        self.sync_filter_input_if_needed(window, cx);
+        cx.notify();
+    }
 }

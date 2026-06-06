@@ -31,8 +31,8 @@ use super::builders::{
     get_scriptlet_context_actions_with_custom, ChatPromptInfo, ClipboardEntryInfo, EmojiActionInfo,
 };
 use super::constants::{
-    ACTIONS_POPUP_RADIUS, ACTIONS_ROW_RADIUS, ACTION_ITEM_HEIGHT, ACTION_ROW_INSET, HEADER_HEIGHT,
-    POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT,
+    ACTIONS_POPUP_RADIUS, ACTIONS_ROW_RADIUS, ACTION_ROW_INSET, HEADER_HEIGHT, POPUP_WIDTH,
+    SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT,
 };
 use crate::file_search::FileInfo;
 use crate::scriptlets::Scriptlet;
@@ -75,15 +75,16 @@ pub(super) struct ActionsDialogStyleFallback {
 
 #[cfg(not(feature = "storybook"))]
 fn actions_dialog_default_style() -> ActionsDialogStyleFallback {
+    let tokens = crate::designs::current_actions_popup_theme();
     ActionsDialogStyleFallback {
         show_container_border: false,
         show_header: true,
         show_search_divider: false,
         show_icons: false,
-        selection_opacity: 0.72,
-        hover_opacity: 0.56,
-        row_height: ACTION_ITEM_HEIGHT,
-        row_radius: ACTIONS_ROW_RADIUS,
+        selection_opacity: tokens.row.selection_opacity,
+        hover_opacity: tokens.row.hover_opacity,
+        row_height: tokens.list.row_height,
+        row_radius: tokens.row.radius,
         shortcut_visible: true,
         mono_font: false,
         prefix_marker: None,
@@ -413,12 +414,17 @@ pub(super) fn actions_dialog_scrollbar_viewport_height(
     show_footer: bool,
     max_height: f32,
 ) -> f32 {
+    let tokens = crate::designs::current_actions_popup_theme();
     let search_height = if show_search {
-        SEARCH_INPUT_HEIGHT
+        tokens.search.height
     } else {
         0.0
     };
-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+    let header_height = if has_header {
+        tokens.context_header.height
+    } else {
+        0.0
+    };
     let footer_height = if show_footer {
         ACTIONS_DIALOG_FOOTER_HEIGHT
     } else {
@@ -661,7 +667,11 @@ impl ActionsDialog {
 
     fn row_height_for_scroll(item: &GroupedActionItem, row_height: f32) -> f32 {
         match item {
-            GroupedActionItem::SectionHeader(_) => SECTION_HEADER_HEIGHT,
+            GroupedActionItem::SectionHeader(_) => {
+                crate::designs::current_actions_popup_theme()
+                    .list
+                    .section_header_height
+            }
             GroupedActionItem::Item(_) => row_height,
         }
     }
@@ -1213,13 +1223,16 @@ impl ActionsDialog {
         );
 
         // Log theme color configuration for debugging
-        logging::log("ACTIONS_THEME", &format!(
-            "Theme colors applied: bg_main=#{:06x}, bg_search=#{:06x}, text_primary=#{:06x}, accent_selected=#{:06x}",
-            theme.colors.background.main,
-            theme.colors.background.search_box,
-            theme.colors.text.primary,
-            theme.colors.accent.selected
-        ));
+        logging::log(
+            "ACTIONS_THEME",
+            &format!(
+                "Theme colors applied: bg_main=#{:06x}, bg_search=#{:06x}, text_primary=#{:06x}, accent_selected=#{:06x}",
+                theme.colors.background.main,
+                theme.colors.background.search_box,
+                theme.colors.text.primary,
+                theme.colors.accent.selected
+            ),
+        );
 
         // Extract context title from focused script if available
         let context_title = focused_script.as_ref().map(|s| s.name.clone());
@@ -3541,6 +3554,7 @@ impl Focusable for ActionsDialog {
 impl Render for ActionsDialog {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let style = actions_dialog_default_style();
+        let popup_theme = crate::designs::current_actions_popup_theme();
         crate::components::hint_strip::emit_shortcut_chrome_audit(
             "actions_dialog",
             "compact-inline-focused-only",
@@ -3597,15 +3611,17 @@ impl Render for ActionsDialog {
         let input_text_color = primary_text;
 
         let mut input_container = div()
-            .w(px(POPUP_WIDTH)) // Match parent width exactly
-            .min_w(px(POPUP_WIDTH))
-            .max_w(px(POPUP_WIDTH))
-            .h(px(SEARCH_INPUT_HEIGHT)) // Fixed height for the input row
-            .min_h(px(SEARCH_INPUT_HEIGHT))
-            .max_h(px(SEARCH_INPUT_HEIGHT))
+            .w(px(popup_theme.shell.width)) // Match parent width exactly
+            .min_w(px(popup_theme.shell.width))
+            .max_w(px(popup_theme.shell.width))
+            .h(px(popup_theme.search.height)) // Fixed height for the input row
+            .min_h(px(popup_theme.search.height))
+            .max_h(px(popup_theme.search.height))
             .overflow_hidden() // Prevent any content from causing shifts
-            .px(px(spacing.item_padding_x))
-            .py(px(spacing.item_padding_y + 2.0)) // Slightly more vertical padding
+            .px(px(popup_theme.search.padding_x))
+            .py(px(
+                spacing.item_padding_y + popup_theme.search.padding_y_extra
+            ))
             .flex()
             .flex_row()
             .items_center()
@@ -3613,7 +3629,7 @@ impl Render for ActionsDialog {
                 // Full-width search input - no box styling, just text
                 div()
                     .flex_1() // Take full width
-                    .h(px(28.0))
+                    .h(px(popup_theme.search.inner_height))
                     .flex()
                     .flex_row()
                     .items_center()
@@ -3630,7 +3646,7 @@ impl Render for ActionsDialog {
                         if let Some(prefix_marker) = style.prefix_marker {
                             content = content.child(
                                 div()
-                                    .mr(px(6.))
+                                    .mr(px(popup_theme.search.prefix_gap))
                                     .text_color(hint_text_color)
                                     .font_family(if style.mono_font {
                                         crate::list_item::FONT_MONO
@@ -3643,8 +3659,8 @@ impl Render for ActionsDialog {
 
                         content.child(
                             div()
-                                .w(px(2.))
-                                .h(px(16.))
+                                .w(px(popup_theme.search.cursor_width))
+                                .h(px(popup_theme.search.cursor_height))
                                 .mr(px(2.))
                                 .rounded(px(1.))
                                 .when(self.cursor_visible, |d| d.bg(accent_color)),
@@ -3657,7 +3673,7 @@ impl Render for ActionsDialog {
                         if let Some(prefix_marker) = style.prefix_marker {
                             content = content.child(
                                 div()
-                                    .mr(px(6.))
+                                    .mr(px(popup_theme.search.prefix_gap))
                                     .text_color(hint_text_color)
                                     .font_family(if style.mono_font {
                                         crate::list_item::FONT_MONO
@@ -3670,8 +3686,8 @@ impl Render for ActionsDialog {
 
                         content.child(
                             div()
-                                .w(px(2.))
-                                .h(px(16.))
+                                .w(px(popup_theme.search.cursor_width))
+                                .h(px(popup_theme.search.cursor_height))
                                 .ml(px(2.))
                                 .rounded(px(1.))
                                 .when(self.cursor_visible, |d| d.bg(accent_color)),
@@ -3732,17 +3748,17 @@ impl Render for ActionsDialog {
                                     };
                                 let section_header = div()
                                     .id(ElementId::NamedInteger("section-header".into(), ix as u64))
-                                    .h(px(SECTION_HEADER_HEIGHT))
+                                    .h(px(popup_theme.list.section_header_height))
                                     .w_full()
-                                    .px(px(crate::actions::constants::ACTION_PADDING_X))
+                                    .px(px(popup_theme.section.padding_x))
                                     .flex()
                                     .items_center();
 
                                 section_header
                                     .child(
                                         div()
-                                            .text_xs()
-                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_size(px(popup_theme.section.font_size))
+                                            .font_weight(popup_theme.section.font_weight)
                                             .text_color(header_text)
                                             .child(label.clone()),
                                     )
@@ -3834,7 +3850,7 @@ impl Render for ActionsDialog {
                                             ))
                                             .h(px(style.row_height))
                                             .w_full()
-                                            .px(px(ACTION_ROW_INSET))
+                                            .px(px(popup_theme.row.inset_x))
                                             .flex()
                                             .flex_col()
                                             .justify_center()
@@ -3955,12 +3971,12 @@ impl Render for ActionsDialog {
         let show_search =
             !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
         let search_box_height = if show_search {
-            SEARCH_INPUT_HEIGHT
+            popup_theme.search.height
         } else {
             0.0
         };
         let header_height = if self.shows_context_header() && style.show_header {
-            HEADER_HEIGHT
+            popup_theme.context_header.height
         } else {
             0.0
         };
@@ -3986,7 +4002,7 @@ impl Render for ActionsDialog {
 
         // Calculate content height including both items and section headers
         let content_height = (action_item_count as f32 * style.row_height)
-            + (section_header_count as f32 * SECTION_HEADER_HEIGHT);
+            + (section_header_count as f32 * popup_theme.list.section_header_height);
         let items_height = content_height
             .max(min_items_height)
             .min(self.config.max_height - search_box_height - header_height - footer_height);
@@ -4014,18 +4030,18 @@ impl Render for ActionsDialog {
 
                 let header = div()
                     .w_full()
-                    .h(px(HEADER_HEIGHT))
-                    .px(px(crate::actions::constants::ACTION_PADDING_X))
-                    .pt(px(crate::actions::constants::ACTION_PADDING_TOP))
-                    .pb(px(4.0))
+                    .h(px(popup_theme.context_header.height))
+                    .px(px(popup_theme.context_header.padding_x))
+                    .pt(px(popup_theme.context_header.padding_top))
+                    .pb(px(popup_theme.context_header.padding_bottom))
                     .flex()
                     .flex_col()
                     .justify_center();
 
                 header.child(
                     div()
-                        .text_xs() // Smaller font like section headers
-                        .font_weight(gpui::FontWeight::SEMIBOLD) // Semibold like section headers
+                        .text_size(px(popup_theme.context_header.font_size))
+                        .font_weight(popup_theme.context_header.font_weight)
                         .text_color(header_text)
                         .child(title.clone()),
                 )
@@ -4049,15 +4065,17 @@ impl Render for ActionsDialog {
         let input_container_top = if search_at_top && show_search {
             Some({
                 let mut top_input = div()
-                    .w(px(POPUP_WIDTH)) // Match parent width exactly
-                    .min_w(px(POPUP_WIDTH))
-                    .max_w(px(POPUP_WIDTH))
-                    .h(px(SEARCH_INPUT_HEIGHT)) // Fixed height for the input row
-                    .min_h(px(SEARCH_INPUT_HEIGHT))
-                    .max_h(px(SEARCH_INPUT_HEIGHT))
+                    .w(px(popup_theme.shell.width)) // Match parent width exactly
+                    .min_w(px(popup_theme.shell.width))
+                    .max_w(px(popup_theme.shell.width))
+                    .h(px(popup_theme.search.height)) // Fixed height for the input row
+                    .min_h(px(popup_theme.search.height))
+                    .max_h(px(popup_theme.search.height))
                     .overflow_hidden() // Prevent any content from causing shifts
-                    .px(px(spacing.item_padding_x))
-                    .py(px(spacing.item_padding_y + 2.0)) // Slightly more vertical padding
+                    .px(px(popup_theme.search.padding_x))
+                    .py(px(
+                        spacing.item_padding_y + popup_theme.search.padding_y_extra
+                    ))
                     .flex()
                     .flex_row()
                     .items_center()
@@ -4065,7 +4083,7 @@ impl Render for ActionsDialog {
                         // Full-width search input - no box styling, just text
                         div()
                             .flex_1() // Take full width
-                            .h(px(28.0))
+                            .h(px(popup_theme.search.inner_height))
                             .flex()
                             .flex_row()
                             .items_center()
@@ -4082,7 +4100,7 @@ impl Render for ActionsDialog {
                                 if let Some(prefix_marker) = style.prefix_marker {
                                     content = content.child(
                                         div()
-                                            .mr(px(6.))
+                                            .mr(px(popup_theme.search.prefix_gap))
                                             .text_color(hint_text_color)
                                             .font_family(if style.mono_font {
                                                 crate::list_item::FONT_MONO
@@ -4095,8 +4113,8 @@ impl Render for ActionsDialog {
 
                                 content.child(
                                     div()
-                                        .w(px(2.))
-                                        .h(px(16.))
+                                        .w(px(popup_theme.search.cursor_width))
+                                        .h(px(popup_theme.search.cursor_height))
                                         .mr(px(2.))
                                         .rounded(px(1.))
                                         .when(self.cursor_visible, |d| d.bg(accent_color)),
@@ -4109,7 +4127,7 @@ impl Render for ActionsDialog {
                                 if let Some(prefix_marker) = style.prefix_marker {
                                     content = content.child(
                                         div()
-                                            .mr(px(6.))
+                                            .mr(px(popup_theme.search.prefix_gap))
                                             .text_color(hint_text_color)
                                             .font_family(if style.mono_font {
                                                 crate::list_item::FONT_MONO
@@ -4122,8 +4140,8 @@ impl Render for ActionsDialog {
 
                                 content.child(
                                     div()
-                                        .w(px(2.))
-                                        .h(px(16.))
+                                        .w(px(popup_theme.search.cursor_width))
+                                        .h(px(popup_theme.search.cursor_height))
                                         .ml(px(2.))
                                         .rounded(px(1.))
                                         .when(self.cursor_visible, |d| d.bg(accent_color)),
@@ -4142,10 +4160,10 @@ impl Render for ActionsDialog {
         let mut container = div()
             .flex()
             .flex_col()
-            .w(px(POPUP_WIDTH))
+            .w(px(popup_theme.shell.width))
             .h(px(total_height)) // Use calculated height including footer
             .when(!use_vibrancy, |d| d.bg(main_bg))
-            .rounded(px(ACTIONS_POPUP_RADIUS))
+            .rounded(px(popup_theme.shell.radius))
             .overflow_hidden()
             .text_color(container_text)
             .text_color(container_text)

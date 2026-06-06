@@ -123,12 +123,17 @@ pub enum CaptureBackend {
 }
 
 /// File/byte output format.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum ImageFormat {
+    #[default]
     Png,
-    Jpeg { quality: f32 },
+    Jpeg {
+        quality: f32,
+    },
     Tiff,
-    Heic { quality: f32 },
+    Heic {
+        quality: f32,
+    },
     Pdf,
     Bmp,
 }
@@ -161,12 +166,6 @@ impl ImageFormat {
             Self::Jpeg { quality } | Self::Heic { quality } => Some(quality.clamp(0.0, 1.0)),
             _ => None,
         }
-    }
-}
-
-impl Default for ImageFormat {
-    fn default() -> Self {
-        Self::Png
     }
 }
 

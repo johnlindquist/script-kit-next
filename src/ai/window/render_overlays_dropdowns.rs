@@ -66,7 +66,7 @@ impl AiApp {
 
                         let row = crate::list_item::ListItem::new(
                             SharedString::from(preset.name.to_string()),
-                            list_item_colors.clone(),
+                            list_item_colors,
                         )
                         .index(idx)
                         .selected(is_selected)

@@ -18,7 +18,7 @@ pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.14;
 // Roughly matches the non-bold AppKit weight trait (0.14) used by the native footer.
 #[allow(dead_code)]
 pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight(500.0);
-pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 22.0;
+pub(crate) const FOOTER_KEYCAP_HEIGHT_PX: f32 = 20.0;
 pub(crate) const FOOTER_KEYCAP_PADDING_X_PX: f32 = 5.0;
 pub(crate) const FOOTER_KEYCAP_RADIUS_PX: f32 = 6.0;
 pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;
@@ -29,12 +29,11 @@ pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;
 // Inter-item gap for footer hint chips. Kept compact now that only actual
 // keycaps carry borders; label text no longer needs the wider bordered-chip
 // spacing rhythm.
-pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 6.0;
+pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 2.0;
 pub(crate) const FOOTER_ACTION_CONTENT_GAP_PX: f32 = 4.0;
 pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX: f32 = 4.0;
 pub(crate) const FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX: f32 = 6.0;
-pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 =
-    crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX;
+pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 14.0;
 pub(crate) const FOOTER_RUN_SLOT_MIN_WIDTH_PX: f32 = 92.0;
 pub(crate) const FOOTER_RUN_SLOT_MAX_WIDTH_PX: f32 = 242.0;
 pub(crate) const FOOTER_ACTIONS_SLOT_WIDTH_PX: f32 = 92.0;
@@ -102,6 +101,9 @@ pub(crate) struct FooterHintButtonSpec {
     pub(crate) label_font_size_px: Option<f32>,
     pub(crate) keycap_font_size_px: Option<f32>,
     pub(crate) keycap_height_px: Option<f32>,
+    pub(crate) hover_text_alpha: Option<u32>,
+    pub(crate) hover_glyph_alpha: Option<u32>,
+    pub(crate) hover_keycap_border_alpha: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -232,10 +234,17 @@ pub(crate) fn footer_keycap_border_alpha(theme: &Theme, selected: bool) -> f32 {
 }
 
 pub(crate) fn footer_keycap_border_hover_alpha(theme: &Theme) -> f32 {
+    let design_alpha = crate::designs::current_main_menu_theme()
+        .def()
+        .footer
+        .button
+        .hover_border_alpha as f32
+        / 255.0;
     theme
         .get_opacity()
         .hover
         .max(FOOTER_CHIP_BORDER_HOVER_ALPHA)
+        .max(design_alpha)
 }
 
 pub(crate) fn footer_hint_text_color(theme: &Theme) -> gpui::Rgba {
@@ -254,13 +263,6 @@ pub(crate) fn footer_keycap_border_color_for_state(theme: &Theme, selected: bool
 
 pub(crate) fn footer_keycap_border_color(theme: &Theme) -> gpui::Hsla {
     footer_keycap_border_color_for_state(theme, false)
-}
-
-pub(crate) fn footer_keycap_border_hover_color(theme: &Theme) -> gpui::Hsla {
-    theme.colors.text.primary.with_opacity(
-        footer_keycap_border_hover_alpha(theme)
-            .max(themed_footer_button_border_alpha(theme, false)),
-    )
 }
 
 pub(crate) fn split_footer_shortcut(shortcut: &str) -> Vec<String> {
@@ -367,6 +369,9 @@ pub(crate) fn render_footer_hint_content(
         None,
         None,
         None,
+        None,
+        None,
+        None,
     )
 }
 
@@ -390,6 +395,9 @@ pub(crate) fn render_footer_hint_content_constrained(
         None,
         None,
         None,
+        None,
+        None,
+        None,
     )
 }
 
@@ -408,9 +416,50 @@ pub(crate) fn render_footer_hint_button_like(
         spec.label_font_size_px,
         spec.keycap_font_size_px,
         spec.keycap_height_px,
+        spec.hover_text_alpha,
+        spec.hover_glyph_alpha,
+        spec.hover_keycap_border_alpha,
     )
 }
 
+fn footer_hover_text_color(theme: &Theme, alpha: Option<u32>) -> gpui::Hsla {
+    let alpha = alpha.unwrap_or_else(|| {
+        crate::designs::current_main_menu_theme()
+            .def()
+            .footer
+            .button
+            .hover_text_alpha
+    });
+    theme
+        .colors
+        .text
+        .primary
+        .with_opacity((alpha as f32 / 255.0).clamp(0.0, 1.0))
+}
+
+fn footer_hover_glyph_color(theme: &Theme, alpha: Option<u32>) -> gpui::Hsla {
+    let alpha = alpha.unwrap_or_else(|| {
+        crate::designs::current_main_menu_theme()
+            .def()
+            .footer
+            .button
+            .hover_glyph_alpha
+    });
+    theme
+        .colors
+        .text
+        .primary
+        .with_opacity((alpha as f32 / 255.0).clamp(0.0, 1.0))
+}
+
+fn footer_keycap_border_hover_color_with_alpha(theme: &Theme, alpha: Option<u32>) -> gpui::Hsla {
+    let alpha = alpha
+        .map(|alpha| (alpha as f32 / 255.0).clamp(0.0, 1.0))
+        .unwrap_or_else(|| footer_keycap_border_hover_alpha(theme));
+    theme.colors.text.primary.with_opacity(alpha)
+}
+
+#[allow(clippy::too_many_arguments)]
 fn render_footer_hint_content_impl(
     label: SharedString,
     key: SharedString,
@@ -422,9 +471,13 @@ fn render_footer_hint_content_impl(
     label_font_size_px: Option<f32>,
     keycap_font_size_px: Option<f32>,
     keycap_height_px: Option<f32>,
+    hover_text_alpha: Option<u32>,
+    hover_glyph_alpha: Option<u32>,
+    hover_keycap_border_alpha: Option<u32>,
 ) -> AnyElement {
     let footer_text = footer_hint_text_color(theme);
-    let full_text = theme.colors.text.primary.to_rgb();
+    let hover_text = footer_hover_text_color(theme, hover_text_alpha);
+    let hover_glyph = footer_hover_glyph_color(theme, hover_glyph_alpha);
     let key_width_px = match mode {
         FooterHintKeyMode::Shortcut => footer_shortcut_keycaps_width_px(key.as_ref()),
     };
@@ -446,13 +499,13 @@ fn render_footer_hint_content_impl(
             label,
             theme,
             footer_text,
-            full_text,
+            hover_text,
             Some(max_width_px),
             matches!(justify, FooterHintContentJustify::KeyAnchored),
             label_font_size_px,
         )
     } else {
-        render_footer_labelcap(label, theme, footer_text, full_text, label_font_size_px)
+        render_footer_labelcap(label, theme, footer_text, hover_text, label_font_size_px)
     };
     let keycaps = match mode {
         FooterHintKeyMode::Shortcut => render_footer_shortcut_keycaps_with_metrics(
@@ -460,6 +513,11 @@ fn render_footer_hint_content_impl(
             theme,
             keycap_font_size_px,
             keycap_height_px,
+            Some(FooterKeycapHoverStyle {
+                text: hover_text,
+                glyph: hover_glyph,
+                border_alpha: hover_keycap_border_alpha,
+            }),
         ),
     };
 
@@ -729,8 +787,15 @@ fn render_footer_labelcap_constrained(
     .into_any_element()
 }
 
+#[derive(Clone, Copy)]
+struct FooterKeycapHoverStyle {
+    text: gpui::Hsla,
+    glyph: gpui::Hsla,
+    border_alpha: Option<u32>,
+}
+
 pub(crate) fn render_footer_shortcut_keycaps(shortcut: String, theme: &Theme) -> AnyElement {
-    render_footer_shortcut_keycaps_with_metrics(shortcut, theme, None, None)
+    render_footer_shortcut_keycaps_with_metrics(shortcut, theme, None, None, None)
 }
 
 fn render_footer_shortcut_keycaps_with_metrics(
@@ -738,6 +803,7 @@ fn render_footer_shortcut_keycaps_with_metrics(
     theme: &Theme,
     keycap_font_size_px: Option<f32>,
     keycap_height_px: Option<f32>,
+    hover_style: Option<FooterKeycapHoverStyle>,
 ) -> AnyElement {
     let tokens = split_footer_shortcut(&shortcut);
     render_footer_shortcut_keycaps_from_tokens_with_metrics(
@@ -745,6 +811,7 @@ fn render_footer_shortcut_keycaps_with_metrics(
         theme,
         keycap_font_size_px,
         keycap_height_px,
+        hover_style,
     )
 }
 
@@ -765,7 +832,7 @@ pub(crate) fn render_footer_shortcut_keycaps_from_tokens<'a>(
     tokens: impl IntoIterator<Item = &'a str>,
     theme: &Theme,
 ) -> AnyElement {
-    render_footer_shortcut_keycaps_from_tokens_with_metrics(tokens, theme, None, None)
+    render_footer_shortcut_keycaps_from_tokens_with_metrics(tokens, theme, None, None, None)
 }
 
 fn render_footer_shortcut_keycaps_from_tokens_with_metrics<'a>(
@@ -773,6 +840,7 @@ fn render_footer_shortcut_keycaps_from_tokens_with_metrics<'a>(
     theme: &Theme,
     keycap_font_size_px: Option<f32>,
     keycap_height_px: Option<f32>,
+    hover_style: Option<FooterKeycapHoverStyle>,
 ) -> AnyElement {
     div()
         .flex()
@@ -787,6 +855,7 @@ fn render_footer_shortcut_keycaps_from_tokens_with_metrics<'a>(
                 theme,
                 keycap_font_size_px,
                 keycap_height_px,
+                hover_style,
             )
         }))
         .into_any_element()
@@ -858,7 +927,7 @@ pub(crate) fn render_footer_keycap(
     max_width_px: Option<f32>,
     theme: &Theme,
 ) -> AnyElement {
-    render_footer_keycap_with_metrics(token, max_width_px, theme, None, None)
+    render_footer_keycap_with_metrics(token, max_width_px, theme, None, None, None)
 }
 
 fn render_footer_keycap_with_metrics(
@@ -867,10 +936,19 @@ fn render_footer_keycap_with_metrics(
     theme: &Theme,
     keycap_font_size_px: Option<f32>,
     keycap_height_px: Option<f32>,
+    hover_style: Option<FooterKeycapHoverStyle>,
 ) -> AnyElement {
     let footer_text = footer_hint_text_color(theme);
-    let full_text = theme.colors.text.primary.to_rgb();
-    let hover_border = footer_keycap_border_hover_color(theme);
+    let hover_text = hover_style
+        .map(|style| style.text)
+        .unwrap_or_else(|| footer_hover_text_color(theme, None));
+    let hover_glyph = hover_style
+        .map(|style| style.glyph)
+        .unwrap_or_else(|| footer_hover_glyph_color(theme, None));
+    let hover_border = footer_keycap_border_hover_color_with_alpha(
+        theme,
+        hover_style.and_then(|style| style.border_alpha),
+    );
     let metrics = current_main_menu_footer_metrics();
     let keycap_height = keycap_height_px.unwrap_or(metrics.keycap_height);
     let keycap_font_size = keycap_font_size_px.unwrap_or(metrics.keycap_font_size);
@@ -880,7 +958,7 @@ fn render_footer_keycap_with_metrics(
             .size(px((keycap_font_size + 1.0).max(10.0)))
             .flex_shrink_0()
             .text_color(footer_text)
-            .group_hover("footer-action-button", move |s| s.text_color(full_text))
+            .group_hover("footer-action-button", move |s| s.text_color(hover_glyph))
             .into_any_element()
     } else {
         div()
@@ -910,7 +988,7 @@ fn render_footer_keycap_with_metrics(
         .text_size(px(keycap_font_size))
         .text_color(footer_text)
         .group_hover("footer-action-button", move |s| {
-            s.text_color(full_text).border_color(hover_border)
+            s.text_color(hover_text).border_color(hover_border)
         })
         .child(token_child);
 
@@ -1015,10 +1093,10 @@ mod tests {
 
     #[test]
     fn footer_horizontal_run_width_uses_gap_only_between_items() {
-        // 40 + 20 + 20 + 2 gaps * 12px = 104
+        // 40 + 20 + 20 + 2 gaps * 2px = 84
         assert_eq!(
             footer_horizontal_run_width_px(&[40.0, 20.0, 20.0], FOOTER_ACTION_ITEM_GAP_PX),
-            104.0
+            84.0
         );
         assert_eq!(
             footer_horizontal_run_width_px(&[], FOOTER_ACTION_ITEM_GAP_PX),
@@ -1035,12 +1113,12 @@ mod tests {
     fn footer_horizontal_run_origins_use_constant_gap() {
         assert_eq!(
             footer_horizontal_run_origins_px(&[40.0, 20.0, 20.0], FOOTER_ACTION_ITEM_GAP_PX, 0.0),
-            vec![0.0, 52.0, 84.0]
+            vec![0.0, 42.0, 64.0]
         );
         // The same run anchored at a non-zero origin just shifts every item.
         assert_eq!(
             footer_horizontal_run_origins_px(&[40.0, 20.0], FOOTER_ACTION_ITEM_GAP_PX, 10.0),
-            vec![10.0, 62.0]
+            vec![10.0, 52.0]
         );
     }
 
@@ -1058,10 +1136,10 @@ mod tests {
 
     #[test]
     fn footer_action_chrome_tokens_match_native_footer_contract() {
-        assert_eq!(FOOTER_ACTION_ITEM_GAP_PX, 6.0);
+        assert_eq!(FOOTER_ACTION_ITEM_GAP_PX, 2.0);
         assert_eq!(FOOTER_ACTION_CONTENT_GAP_PX, 4.0);
         assert_eq!(FOOTER_ACTION_CONTENT_PADDING_X_PX, 4.0);
-        assert_eq!(FOOTER_ACTION_BUTTON_RADIUS_PX, 10.0);
+        assert_eq!(FOOTER_ACTION_BUTTON_RADIUS_PX, 14.0);
         assert_eq!(FOOTER_RUN_SLOT_MIN_WIDTH_PX, 92.0);
         assert_eq!(FOOTER_RUN_SLOT_MAX_WIDTH_PX, 242.0);
         assert_eq!(footer_action_slot_width(FooterActionSlot::Actions), 92.0);
@@ -1110,13 +1188,14 @@ mod tests {
             footer_keycap_border_alpha(&theme, true),
             FOOTER_CHIP_BORDER_SELECTED_ALPHA
         );
-        assert_eq!(
-            footer_keycap_border_hover_alpha(&theme),
-            FOOTER_CHIP_BORDER_HOVER_ALPHA
+        assert!(
+            (footer_keycap_border_hover_alpha(&theme) - FOOTER_CHIP_BORDER_HOVER_ALPHA).abs()
+                <= 0.01
         );
         assert!(footer_keycap_border_color(&theme).a >= FOOTER_CHIP_BORDER_ALPHA - 0.01);
         assert!(
-            footer_keycap_border_hover_color(&theme).a >= FOOTER_CHIP_BORDER_HOVER_ALPHA - 0.01
+            footer_keycap_border_hover_color_with_alpha(&theme, None).a
+                >= FOOTER_CHIP_BORDER_HOVER_ALPHA - 0.01
         );
         assert!(
             footer_keycap_border_color_for_state(&theme, true).a

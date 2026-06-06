@@ -3145,7 +3145,8 @@ fn overlay_key_handler_writes_through_to_runtime_phase() {
     let handler_end = handler_start + 3000.min(window_src.len() - handler_start);
     let handler_src = &window_src[handler_start..handler_end];
     assert!(
-        handler_src.contains("close_dictation_overlay") || handler_src.contains("abort_overlay_session"),
+        handler_src.contains("close_dictation_overlay")
+            || handler_src.contains("abort_overlay_session"),
         "overlay key handler must call close_dictation_overlay or abort_overlay_session on CloseOverlay"
     );
 }

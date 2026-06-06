@@ -331,6 +331,7 @@ pub fn collect_surface_snapshot(
     Some(snapshot)
 }
 
+#[allow(clippy::vec_init_then_push)]
 fn collect_dev_style_tool_snapshot() -> SurfaceElementSnapshot {
     let mut elements = Vec::new();
     elements.push(element(

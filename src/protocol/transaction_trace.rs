@@ -101,7 +101,7 @@ pub fn compact_transaction_trace_log_if_needed(path: &Path) -> Result<()> {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(error) => {
-            return Err(error).with_context(|| format!("failed to stat {}", path.display()))
+            return Err(error).with_context(|| format!("failed to stat {}", path.display()));
         }
     };
     if metadata.len() <= TRANSACTION_TRACE_MAX_BYTES {
@@ -197,6 +197,7 @@ pub fn should_include_trace(mode: TransactionTraceMode, success: bool) -> bool {
         || (!success && matches!(mode, TransactionTraceMode::OnFailure))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_batch_trace_from_results(
     request_id: String,
     command_fingerprint: String,
@@ -246,6 +247,7 @@ pub fn build_batch_trace_from_results(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn maybe_persist_batch_trace_from_results(
     mode: TransactionTraceMode,
     request_id: String,

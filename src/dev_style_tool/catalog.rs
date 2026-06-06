@@ -93,6 +93,9 @@ impl StyleKnobSection {
             StyleKnobGroup::Footer if id.contains("Slot") => {
                 Self::new("Footer action slots", "footer-action-slots")
             }
+            StyleKnobGroup::Footer if id.contains("hover") || id.contains("Hover") => {
+                Self::new("Footer hover states", "footer-hover-states")
+            }
             StyleKnobGroup::Footer if id.contains("Glyph") => {
                 Self::new("Footer glyph alignment", "footer-glyph-alignment")
             }
@@ -104,6 +107,9 @@ impl StyleKnobSection {
             }
             StyleKnobGroup::Footer => Self::new("Footer layout", "footer-layout"),
             StyleKnobGroup::HeaderInfoBar if id.contains("pill") || id.contains("key") => {
+                if id.contains("Hover") || id.contains("hover") {
+                    return Self::new("Header hover states", "header-hover-states");
+                }
                 Self::new("Header pills and keys", "header-pills-keys")
             }
             StyleKnobGroup::HeaderInfoBar => Self::new("Header layout", "header-layout"),
@@ -1247,6 +1253,34 @@ alpha_nested_knob!(
     "footer.buttonBorderAlpha",
     footer.button.border_alpha
 );
+alpha_nested_knob!(
+    FOOTER_BUTTON_HOVER_BG_ALPHA_KNOB_ID,
+    get_footer_button_hover_bg_alpha,
+    apply_footer_button_hover_bg_alpha,
+    "footer.buttonHoverBgAlpha",
+    footer.button.hover
+);
+alpha_nested_knob!(
+    FOOTER_BUTTON_HOVER_BORDER_ALPHA_KNOB_ID,
+    get_footer_button_hover_border_alpha,
+    apply_footer_button_hover_border_alpha,
+    "footer.buttonHoverBorderAlpha",
+    footer.button.hover_border_alpha
+);
+alpha_nested_knob!(
+    FOOTER_BUTTON_HOVER_TEXT_ALPHA_KNOB_ID,
+    get_footer_button_hover_text_alpha,
+    apply_footer_button_hover_text_alpha,
+    "footer.buttonHoverTextAlpha",
+    footer.button.hover_text_alpha
+);
+alpha_nested_knob!(
+    FOOTER_BUTTON_HOVER_GLYPH_ALPHA_KNOB_ID,
+    get_footer_button_hover_glyph_alpha,
+    apply_footer_button_hover_glyph_alpha,
+    "footer.buttonHoverGlyphAlpha",
+    footer.button.hover_glyph_alpha
+);
 
 f32_knob!(
     HEADER_INFO_FONT_SIZE_KNOB_ID,
@@ -1317,6 +1351,34 @@ alpha_knob!(
     apply_header_info_pill_border_alpha,
     "headerInfo.pillBorderAlpha",
     header_info_bar.pill_border_alpha
+);
+alpha_knob!(
+    HEADER_INFO_PILL_HOVER_BG_ALPHA_KNOB_ID,
+    get_header_info_pill_hover_bg_alpha,
+    apply_header_info_pill_hover_bg_alpha,
+    "headerInfo.pillHoverBgAlpha",
+    header_info_bar.pill_hover_bg_alpha
+);
+alpha_knob!(
+    HEADER_INFO_PILL_HOVER_BORDER_ALPHA_KNOB_ID,
+    get_header_info_pill_hover_border_alpha,
+    apply_header_info_pill_hover_border_alpha,
+    "headerInfo.pillHoverBorderAlpha",
+    header_info_bar.pill_hover_border_alpha
+);
+alpha_knob!(
+    HEADER_INFO_PILL_HOVER_TEXT_ALPHA_KNOB_ID,
+    get_header_info_pill_hover_text_alpha,
+    apply_header_info_pill_hover_text_alpha,
+    "headerInfo.pillHoverTextAlpha",
+    header_info_bar.pill_hover_text_alpha
+);
+alpha_knob!(
+    HEADER_INFO_PILL_HOVER_KEY_ALPHA_KNOB_ID,
+    get_header_info_pill_hover_key_alpha,
+    apply_header_info_pill_hover_key_alpha,
+    "headerInfo.pillHoverKeyAlpha",
+    header_info_bar.pill_hover_key_alpha
 );
 f32_knob!(
     HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID,
@@ -2963,6 +3025,50 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         apply: apply_footer_button_border_alpha,
     },
     StyleKnob {
+        id: FOOTER_BUTTON_HOVER_BG_ALPHA_KNOB_ID,
+        label: "Footer hover button bg alpha",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_footer_button_hover_bg_alpha,
+        apply: apply_footer_button_hover_bg_alpha,
+    },
+    StyleKnob {
+        id: FOOTER_BUTTON_HOVER_BORDER_ALPHA_KNOB_ID,
+        label: "Footer hover keycap border alpha",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_footer_button_hover_border_alpha,
+        apply: apply_footer_button_hover_border_alpha,
+    },
+    StyleKnob {
+        id: FOOTER_BUTTON_HOVER_TEXT_ALPHA_KNOB_ID,
+        label: "Footer hover text alpha",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_footer_button_hover_text_alpha,
+        apply: apply_footer_button_hover_text_alpha,
+    },
+    StyleKnob {
+        id: FOOTER_BUTTON_HOVER_GLYPH_ALPHA_KNOB_ID,
+        label: "Footer hover icon glyph alpha",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_footer_button_hover_glyph_alpha,
+        apply: apply_footer_button_hover_glyph_alpha,
+    },
+    StyleKnob {
         id: HEADER_INFO_FONT_SIZE_KNOB_ID,
         label: "Header info font size",
         group: StyleKnobGroup::HeaderInfoBar,
@@ -3071,6 +3177,50 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_header_info_pill_border_alpha,
         apply: apply_header_info_pill_border_alpha,
+    },
+    StyleKnob {
+        id: HEADER_INFO_PILL_HOVER_BG_ALPHA_KNOB_ID,
+        label: "Header hover pill bg alpha",
+        group: StyleKnobGroup::HeaderInfoBar,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_header_info_pill_hover_bg_alpha,
+        apply: apply_header_info_pill_hover_bg_alpha,
+    },
+    StyleKnob {
+        id: HEADER_INFO_PILL_HOVER_BORDER_ALPHA_KNOB_ID,
+        label: "Header hover pill border alpha",
+        group: StyleKnobGroup::HeaderInfoBar,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_header_info_pill_hover_border_alpha,
+        apply: apply_header_info_pill_hover_border_alpha,
+    },
+    StyleKnob {
+        id: HEADER_INFO_PILL_HOVER_TEXT_ALPHA_KNOB_ID,
+        label: "Header hover text alpha",
+        group: StyleKnobGroup::HeaderInfoBar,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_header_info_pill_hover_text_alpha,
+        apply: apply_header_info_pill_hover_text_alpha,
+    },
+    StyleKnob {
+        id: HEADER_INFO_PILL_HOVER_KEY_ALPHA_KNOB_ID,
+        label: "Header hover key glyph alpha",
+        group: StyleKnobGroup::HeaderInfoBar,
+        unit: StyleUnit::Alpha,
+        min: 0.0,
+        max: 255.0,
+        step: 1.0,
+        get: get_header_info_pill_hover_key_alpha,
+        apply: apply_header_info_pill_hover_key_alpha,
     },
     StyleKnob {
         id: HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID,

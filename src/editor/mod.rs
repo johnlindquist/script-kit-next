@@ -575,7 +575,12 @@ impl EditorPrompt {
             "EDITOR",
             &format!(
                 "Snippet capture: tabstop_idx={}, tabstop_start={:?}, cursor={}, selection=[{},{}), text='{}'",
-                current_idx, tabstop_start_char, cursor_pos_char, selection_start_char, selection_end_char, full_text
+                current_idx,
+                tabstop_start_char,
+                cursor_pos_char,
+                selection_start_char,
+                selection_end_char,
+                full_text
             ),
         );
 

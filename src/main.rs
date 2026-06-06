@@ -54,14 +54,20 @@ mod confirm;
 mod context_snapshot;
 mod designs;
 mod dev_style_tool {
+    pub mod actions_popup_catalog;
     pub mod catalog;
+    pub mod copy_catalog;
     pub(crate) mod export;
     pub(crate) mod render;
     pub mod runtime_overrides;
-    pub(crate) mod window;
+    pub mod window;
 
     #[allow(unused_imports)]
+    pub use actions_popup_catalog::*;
+    #[allow(unused_imports)]
     pub use catalog::*;
+    #[allow(unused_imports)]
+    pub use copy_catalog::*;
 }
 mod dictation;
 mod editor;

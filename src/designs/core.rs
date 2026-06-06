@@ -2,6 +2,7 @@
 use super::*;
 
 mod accent_variation;
+mod actions_popup_theme;
 mod main_menu_theme;
 mod metadata;
 pub mod registry;
@@ -36,6 +37,13 @@ pub use main_menu_theme::{
 // callers that name the type even though the footer consumes it field-by-field.
 #[allow(unused_imports)]
 pub use accent_variation::FooterButtonFill;
+#[allow(unused_imports)]
+pub use actions_popup_theme::{
+    base_actions_popup_theme, current_actions_popup_theme, ActionsPopupContextHeaderTokens,
+    ActionsPopupListTokens, ActionsPopupRowTokens, ActionsPopupSearchTokens,
+    ActionsPopupSectionTokens, ActionsPopupShellTokens, ActionsPopupShortcutTokens,
+    ActionsPopupThemeDef,
+};
 pub use render::render_design_item;
 pub use tokens::*;
 pub use variant::*;

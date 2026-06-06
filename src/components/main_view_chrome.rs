@@ -204,9 +204,11 @@ pub(crate) fn render_main_view_context_zone_required(
     let info = def.header_info_bar;
     let text_alpha = (info.opacity.clamp(0.0, 1.0) * 255.0).round() as u32;
     let border = rgba((theme.colors.ui.border << 8) | info.pill_border_alpha);
+    let hover_border = rgba((theme.colors.ui.border << 8) | info.pill_hover_border_alpha);
     let rest_bg = rgba((theme.colors.background.search_box << 8) | info.pill_bg_alpha);
-    let hover_bg = rgba((theme.colors.text.primary << 8) | def.footer.button.hover);
+    let hover_bg = rgba((theme.colors.text.primary << 8) | info.pill_hover_bg_alpha);
     let text_color = rgba((theme.colors.text.primary << 8) | text_alpha);
+    let hover_text_color = rgba((theme.colors.text.primary << 8) | info.pill_hover_text_alpha);
     let show_pills = info.pill_padding_x > 0.0 || info.pill_border_alpha > 0;
     let header_keycap_font_size = (info.font_size * 0.88).max(8.0);
     let header_keycap_height = (info.font_size + 7.0).max(16.0);
@@ -228,6 +230,9 @@ pub(crate) fn render_main_view_context_zone_required(
                         label_font_size_px: Some(info.font_size),
                         keycap_font_size_px: Some(header_keycap_font_size),
                         keycap_height_px: Some(header_keycap_height),
+                        hover_text_alpha: Some(info.pill_hover_text_alpha),
+                        hover_glyph_alpha: Some(info.pill_hover_key_alpha),
+                        hover_keycap_border_alpha: Some(info.pill_hover_border_alpha),
                     },
                     theme,
                 ),
@@ -256,6 +261,9 @@ pub(crate) fn render_main_view_context_zone_required(
                         label_font_size_px: Some(info.font_size),
                         keycap_font_size_px: Some(header_keycap_font_size),
                         keycap_height_px: Some(header_keycap_height),
+                        hover_text_alpha: Some(info.pill_hover_text_alpha),
+                        hover_glyph_alpha: Some(info.pill_hover_key_alpha),
+                        hover_keycap_border_alpha: Some(info.pill_hover_border_alpha),
                     },
                     theme,
                 ),
@@ -284,7 +292,11 @@ pub(crate) fn render_main_view_context_zone_required(
         .text_size(px(info.font_size))
         .text_color(text_color)
         .cursor_pointer()
-        .hover(move |s| s.bg(hover_bg))
+        .hover(move |s| {
+            s.bg(hover_bg)
+                .text_color(hover_text_color)
+                .border_color(hover_border)
+        })
         .on_click(on_cwd_click)
         .child(cwd_key);
     if show_pills {
@@ -305,7 +317,11 @@ pub(crate) fn render_main_view_context_zone_required(
         .text_size(px(info.font_size))
         .text_color(text_color)
         .cursor_pointer()
-        .hover(move |s| s.bg(hover_bg))
+        .hover(move |s| {
+            s.bg(hover_bg)
+                .text_color(hover_text_color)
+                .border_color(hover_border)
+        })
         .on_click(on_agent_model_click)
         .child(model_key);
     if show_pills {

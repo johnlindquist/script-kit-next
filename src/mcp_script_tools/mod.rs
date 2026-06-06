@@ -164,7 +164,7 @@ pub fn handle_script_tool_call(
                     text: format!("Script tool not found: {}", tool_name),
                 }],
                 is_error: Some(true),
-            }
+            };
         }
     };
 

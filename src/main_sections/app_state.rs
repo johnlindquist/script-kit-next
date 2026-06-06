@@ -594,7 +594,7 @@ pub(crate) struct ReturnToScriptListKeyGuard {
     pub(crate) consumed_count: u8,
 }
 
-struct ScriptListApp {
+pub(crate) struct ScriptListApp {
     /// H1 Optimization: Arc-wrapped scripts for cheap cloning during filter operations
     scripts: Vec<std::sync::Arc<scripts::Script>>,
     /// H1 Optimization: Arc-wrapped scriptlets for cheap cloning during filter operations

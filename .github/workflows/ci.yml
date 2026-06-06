@@ -110,7 +110,7 @@ jobs:
           shared-key: "macos-debug"
           cache-targets: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo clippy --lib -- -D warnings
+      - run: cargo clippy --locked --lib --no-deps -- -D warnings
 
   test:
     name: Test

@@ -1008,8 +1008,7 @@ const SDK_NOT_YET_IMPLEMENTED_IN_GPUI: &[&str] = &[
 /// a function can point the user at a working alternative — this
 /// constant is exposed for tests that want to pin the generic wording.
 #[allow(dead_code)]
-const SDK_UNSUPPORTED_IN_GPUI_NOTE: &str =
-    "Defined in scripts/kit-sdk.ts, but GPUI does not handle this behavior yet; the SDK fails explicitly instead of sending a misleading fire-and-forget message.";
+const SDK_UNSUPPORTED_IN_GPUI_NOTE: &str = "Defined in scripts/kit-sdk.ts, but GPUI does not handle this behavior yet; the SDK fails explicitly instead of sending a misleading fire-and-forget message.";
 
 /// Needles for scanning starter-template bodies for references to
 /// unsupported SDK APIs. A template that contains any of these

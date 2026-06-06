@@ -1184,16 +1184,14 @@ pub fn capture_render_window_on_gpui_thread(
         capture: None,
         error: Some(ComputerUseCaptureNativeWindowError {
             code: "unsupported_platform",
-            message: "computer/capture_render_window is not supported on this platform"
-                .to_string(),
+            message: "computer/capture_render_window is not supported on this platform".to_string(),
             reason: Some("unsupported_platform".to_string()),
             pixel_audit: None,
         }),
         warnings: vec![
             "No pixels were captured; do not count this as app-render visual proof.".to_string(),
         ],
-        limitation:
-            "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor/native blur output.",
+        limitation: "App-rendered GPUI pixels only; does not prove macOS WindowServer compositor/native blur output.",
     })
 }
 

@@ -323,8 +323,9 @@ fn rank_history_entries(
         let display_timestamp = normalize_search_text(&format_history_timestamp(&entry.timestamp));
         let display_duration =
             normalize_search_text(&format_history_duration_ms(entry.audio_duration_ms));
-        let combined =
-            format!("{transcript}\n{preview}\n{target}\n{timestamp}\n{display_timestamp}\n{display_duration}");
+        let combined = format!(
+            "{transcript}\n{preview}\n{target}\n{timestamp}\n{display_timestamp}\n{display_duration}"
+        );
 
         if !tokens.iter().all(|token| combined.contains(token)) {
             continue;

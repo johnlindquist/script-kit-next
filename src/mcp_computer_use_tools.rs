@@ -1623,12 +1623,12 @@ fn handle_capture_render_window(
 
     let Some(runtime) = runtime else {
         let snapshot = ComputerUseCaptureRenderWindowSnapshot {
-                schema_version: 1,
-                source: "gpuiRenderReadback",
-                scope: "liveAutomationWindowRenderReadback",
-                status: ComputerUseCaptureRenderWindowStatus::Unsupported,
-                correlation_id,
-                target,
+            schema_version: 1,
+            source: "gpuiRenderReadback",
+            scope: "liveAutomationWindowRenderReadback",
+            status: ComputerUseCaptureRenderWindowStatus::Unsupported,
+            correlation_id,
+            target,
             capture: None,
             error: Some(ComputerUseCaptureNativeWindowError {
                 code: "runtime_unavailable",

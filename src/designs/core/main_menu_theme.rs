@@ -69,6 +69,9 @@ pub struct FooterButtonTheme {
     pub hover: u32,
     pub active: u32,
     pub border_alpha: u32,
+    pub hover_border_alpha: u32,
+    pub hover_text_alpha: u32,
+    pub hover_glyph_alpha: u32,
     pub uses_accent: bool,
 }
 
@@ -301,6 +304,10 @@ pub struct HeaderInfoBarTokens {
     pub pill_radius: f32,
     pub pill_border_alpha: u32,
     pub pill_bg_alpha: u32,
+    pub pill_hover_bg_alpha: u32,
+    pub pill_hover_border_alpha: u32,
+    pub pill_hover_text_alpha: u32,
+    pub pill_hover_key_alpha: u32,
     pub context_edge_outset_x: f32,
     pub variation_badge_width_px: f32,
     pub show_cwd: bool,
@@ -363,6 +370,10 @@ pub struct HeaderInfoBarSignature {
     pub pill_radius: u32,
     pub pill_border_alpha: u32,
     pub pill_bg_alpha: u32,
+    pub pill_hover_bg_alpha: u32,
+    pub pill_hover_border_alpha: u32,
+    pub pill_hover_text_alpha: u32,
+    pub pill_hover_key_alpha: u32,
     pub context_edge_outset_x: u32,
     pub variation_badge_width_px: u32,
     pub show_cwd: bool,
@@ -491,49 +502,64 @@ impl MainMenuThemeVariant {
         use HeaderInfoBarLayout::*;
         match self {
             MainMenuThemeVariant::InfoBarBase => header_info_bar_tokens(
-                Split, 0.50, 22.0, 7.0, 0.0, 0.0, 0.0, 0x00, 0x00, true, true, true, "·",
+                Split, 0.50, 22.0, 7.0, 6.0, 0.0, 14.0, 0x00, 0x00, 0x10, 0x34, 0xff, 0xff, true,
+                true, true, "·",
             ),
             MainMenuThemeVariant::InfoBarBreadcrumb => header_info_bar_tokens(
-                Split, 0.52, 14.0, 8.0, 4.0, 1.0, 4.0, 0x14, 0x00, true, true, false, "›",
+                Split, 0.52, 14.0, 8.0, 4.0, 1.0, 4.0, 0x14, 0x00, 0x10, 0x34, 0xff, 0xff, true,
+                true, false, "›",
             ),
             MainMenuThemeVariant::InfoBarCompact => header_info_bar_tokens(
-                Split, 0.48, 13.0, 6.0, 0.0, 0.0, 0.0, 0x00, 0x00, true, true, false, "·",
+                Split, 0.48, 13.0, 6.0, 0.0, 0.0, 0.0, 0x00, 0x00, 0x10, 0x34, 0xff, 0xff, true,
+                true, false, "·",
             ),
             MainMenuThemeVariant::InfoBarSplit => header_info_bar_tokens(
-                Split, 0.54, 15.0, 10.0, 5.0, 1.0, 5.0, 0x18, 0x08, true, true, false, "·",
+                Split, 0.54, 15.0, 10.0, 5.0, 1.0, 5.0, 0x18, 0x08, 0x10, 0x34, 0xff, 0xff, true,
+                true, false, "·",
             ),
             MainMenuThemeVariant::InfoBarCwdFocus => header_info_bar_tokens(
-                Split, 0.46, 14.0, 7.0, 5.0, 1.0, 5.0, 0x1A, 0x00, true, true, false, "cwd",
+                Split, 0.46, 14.0, 7.0, 5.0, 1.0, 5.0, 0x1A, 0x00, 0x10, 0x34, 0xff, 0xff, true,
+                true, false, "cwd",
             ),
             MainMenuThemeVariant::InfoBarModelFocus => header_info_bar_tokens(
-                Split, 0.56, 15.0, 9.0, 4.0, 1.0, 5.0, 0x22, 0x0A, true, true, false, "model",
+                Split, 0.56, 15.0, 9.0, 4.0, 1.0, 5.0, 0x22, 0x0A, 0x10, 0x34, 0xff, 0xff, true,
+                true, false, "model",
             ),
             MainMenuThemeVariant::InfoBarSlashPath => header_info_bar_tokens(
-                Split, 0.50, 14.0, 6.0, 3.0, 0.0, 3.0, 0x00, 0x00, true, true, false, "/",
+                Split, 0.50, 14.0, 6.0, 3.0, 0.0, 3.0, 0x00, 0x00, 0x10, 0x34, 0xff, 0xff, true,
+                true, false, "/",
             ),
             MainMenuThemeVariant::InfoBarMutedPills => header_info_bar_tokens(
-                Split, 0.44, 15.0, 8.0, 6.0, 1.0, 6.0, 0x10, 0x06, true, true, false, "·",
+                Split, 0.44, 15.0, 8.0, 6.0, 1.0, 6.0, 0x10, 0x06, 0x10, 0x34, 0xff, 0xff, true,
+                true, false, "·",
             ),
             MainMenuThemeVariant::InfoBarPlainText => header_info_bar_tokens(
-                Split, 0.42, 13.0, 8.0, 0.0, 0.0, 0.0, 0x00, 0x00, true, true, false, "·",
+                Split, 0.42, 13.0, 8.0, 0.0, 0.0, 0.0, 0x00, 0x00, 0x10, 0x34, 0xff, 0xff, true,
+                true, false, "·",
             ),
             MainMenuThemeVariant::InfoBarLowContrastKeys => header_info_bar_tokens(
-                Split, 0.38, 22.0, 9.0, 3.0, 1.0, 4.0, 0x12, 0x04, true, true, true, "·",
+                Split, 0.38, 22.0, 9.0, 3.0, 1.0, 4.0, 0x12, 0x04, 0x10, 0x34, 0xff, 0xff, true,
+                true, true, "·",
             ),
             MainMenuThemeVariant::InfoBarStrongKeys => header_info_bar_tokens(
-                Split, 0.62, 22.0, 9.0, 4.0, 1.0, 5.0, 0x18, 0x08, true, true, true, "·",
+                Split, 0.62, 22.0, 9.0, 4.0, 1.0, 5.0, 0x18, 0x08, 0x10, 0x34, 0xff, 0xff, true,
+                true, true, "·",
             ),
             MainMenuThemeVariant::InfoBarCentered => header_info_bar_tokens(
-                Split, 0.50, 14.0, 12.0, 2.0, 0.0, 2.0, 0x00, 0x00, true, true, false, "·",
+                Split, 0.50, 14.0, 12.0, 2.0, 0.0, 2.0, 0x00, 0x00, 0x10, 0x34, 0xff, 0xff, true,
+                true, false, "·",
             ),
             MainMenuThemeVariant::InfoBarLeftDense => header_info_bar_tokens(
-                Split, 0.46, 13.0, 5.0, 3.0, 0.0, 3.0, 0x00, 0x00, true, true, false, "›",
+                Split, 0.46, 13.0, 5.0, 3.0, 0.0, 3.0, 0x00, 0x00, 0x10, 0x34, 0xff, 0xff, true,
+                true, false, "›",
             ),
             MainMenuThemeVariant::InfoBarRightUtility => header_info_bar_tokens(
-                Split, 0.52, 16.0, 10.0, 6.0, 1.0, 6.0, 0x1C, 0x06, true, true, false, "·",
+                Split, 0.52, 16.0, 10.0, 6.0, 1.0, 6.0, 0x1C, 0x06, 0x10, 0x34, 0xff, 0xff, true,
+                true, false, "·",
             ),
             MainMenuThemeVariant::InfoBarUltraQuiet => header_info_bar_tokens(
-                Split, 0.34, 13.0, 7.0, 0.0, 0.0, 0.0, 0x00, 0x00, true, true, false, "·",
+                Split, 0.34, 13.0, 7.0, 0.0, 0.0, 0.0, 0x00, 0x00, 0x10, 0x34, 0xff, 0xff, true,
+                true, false, "·",
             ),
         }
     }
@@ -555,6 +581,10 @@ impl MainMenuThemeVariant {
             pill_radius: q(tokens.pill_radius),
             pill_border_alpha: tokens.pill_border_alpha,
             pill_bg_alpha: tokens.pill_bg_alpha,
+            pill_hover_bg_alpha: tokens.pill_hover_bg_alpha,
+            pill_hover_border_alpha: tokens.pill_hover_border_alpha,
+            pill_hover_text_alpha: tokens.pill_hover_text_alpha,
+            pill_hover_key_alpha: tokens.pill_hover_key_alpha,
             context_edge_outset_x: q(tokens.context_edge_outset_x),
             variation_badge_width_px: q(tokens.variation_badge_width_px),
             show_cwd: tokens.show_cwd,
@@ -587,6 +617,7 @@ impl MainMenuThemeVariant {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn header_info_bar_tokens(
     layout: HeaderInfoBarLayout,
     key_opacity: f32,
@@ -597,6 +628,10 @@ fn header_info_bar_tokens(
     pill_radius: f32,
     pill_border_alpha: u32,
     pill_bg_alpha: u32,
+    pill_hover_bg_alpha: u32,
+    pill_hover_border_alpha: u32,
+    pill_hover_text_alpha: u32,
+    pill_hover_key_alpha: u32,
     show_cwd: bool,
     show_agent_model: bool,
     show_keys: bool,
@@ -615,6 +650,10 @@ fn header_info_bar_tokens(
         pill_radius,
         pill_border_alpha,
         pill_bg_alpha,
+        pill_hover_bg_alpha,
+        pill_hover_border_alpha,
+        pill_hover_text_alpha,
+        pill_hover_key_alpha,
         context_edge_outset_x: MAIN_MENU_HEADER_CONTEXT_EDGE_OUTSET_X,
         variation_badge_width_px: MAIN_MENU_HEADER_VARIATION_BADGE_WIDTH_PX,
         show_cwd,
@@ -630,10 +669,10 @@ fn header_info_bar_tokens(
 fn main_menu_row_tokens(row_kind: MainMenuRowKind) -> MainMenuRowTokens {
     let mut row = MainMenuRowTokens {
         outer_padding_x: 4.0,
-        outer_padding_y: 2.0,
+        outer_padding_y: 0.0,
         inner_padding_x: 14.0,
         inner_padding_y: 4.0,
-        radius: 8.0,
+        radius: 14.0,
         name_desc_gap: (40.0_f32 / 18.0).clamp(1.5, 3.5),
         icon_text_gap: (20.0_f32 * 0.42).clamp(7.0, 12.0),
         accessory_gap: (14.0_f32 * 0.45).clamp(5.0, 9.0),
@@ -668,17 +707,20 @@ fn base_main_menu_theme_def(
             hover: 0x10,
             active: 0x24,
             border_alpha: 50,
+            hover_border_alpha: 0x57,
+            hover_text_alpha: 0xff,
+            hover_glyph_alpha: 0xff,
             uses_accent: false,
         },
         metrics: FooterMetricsTokens {
             height_px: 32.0,
             side_inset_px: 14.0,
-            item_gap_px: 6.0,
+            item_gap_px: 2.0,
             content_gap: 4.0,
             button_padding_x: 4.0,
             button_padding_y: 2.0,
-            run_button_padding_x: 6.0,
-            button_radius: 6.0,
+            run_button_padding_x: 12.0,
+            button_radius: 14.0,
             label_font_size: 13.0,
             font_weight: FontWeight(400.0),
             keycap_padding_x: 0.0,
@@ -728,10 +770,10 @@ fn base_main_menu_theme_def(
         },
         list: MainMenuListTokens {
             item_height: 44.0,
-            section_header_height: 32.0,
-            first_section_header_height: 4.0 + 16.0 + 4.0,
+            section_header_height: 28.0,
+            first_section_header_height: 28.0,
             source_status_row_height: 32.0,
-            average_scroll_height: ((44.0 * 3.0) + 32.0) / 4.0,
+            average_scroll_height: ((44.0 * 3.0) + 28.0) / 4.0,
             footer_reveal_clearance_height: 8.0,
             scrollbar_width: 16.0,
             section_padding_x: MAIN_MENU_SECTION_PADDING_X,

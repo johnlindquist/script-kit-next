@@ -21,9 +21,13 @@ pub enum ShortcutParseError {
     Empty,
     #[error("Shortcut is missing a key. Add one key after modifiers, for example 'cmd+k'.")]
     MissingKey,
-    #[error("Unexpected token '{0}' in shortcut. Use optional modifiers plus one key, for example 'cmd+shift+k'.")]
+    #[error(
+        "Unexpected token '{0}' in shortcut. Use optional modifiers plus one key, for example 'cmd+shift+k'."
+    )]
     UnknownToken(String),
-    #[error("Unknown key '{0}'. Use a letter, number, function key (f1-f12), or named key like 'enter' or 'escape'.")]
+    #[error(
+        "Unknown key '{0}'. Use a letter, number, function key (f1-f12), or named key like 'enter' or 'escape'."
+    )]
     UnknownKey(String),
 }
 

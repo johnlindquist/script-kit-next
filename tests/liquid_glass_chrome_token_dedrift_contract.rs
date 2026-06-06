@@ -4,9 +4,8 @@
 //! values (28pt min hit, 10px compact radius, 18px popup radius) as bare
 //! literals. This contract pins them to reference the canonical tokens in
 //! `src/ui/chrome/tokens.rs` so a future token change propagates instead of
-//! silently drifting. The change is value-preserving (no visual change): the
-//! existing `assert_eq!(FOOTER_ACTION_BUTTON_RADIUS_PX, 10.0)` unit test in
-//! `footer_chrome.rs` still guards the resolved value.
+//! silently drifting. Footer action button radius is intentionally design-tool
+//! tuned separately from the shared compact radius and is pinned locally.
 
 const TOKENS: &str = include_str!("../src/ui/chrome/tokens.rs");
 const BUTTON_TYPES: &str = include_str!("../src/components/button/types.rs");
@@ -56,10 +55,10 @@ fn actions_radii_reference_shared_liquid_glass_tokens() {
 }
 
 #[test]
-fn footer_action_button_radius_references_shared_compact_token() {
+fn footer_action_button_radius_stays_pinned_literal() {
     assert!(
-        FOOTER_CHROME.contains("crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX"),
-        "FOOTER_ACTION_BUTTON_RADIUS_PX must reference the shared Liquid Glass compact radius token"
+        FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 14.0;"),
+        "FOOTER_ACTION_BUTTON_RADIUS_PX must remain its design-tool pinned 14.0 literal"
     );
 }
 
@@ -67,10 +66,10 @@ fn footer_action_button_radius_references_shared_compact_token() {
 fn footer_action_item_gap_stays_pinned_literal() {
     // FOOTER_ACTION_ITEM_GAP_PX is a standalone, separately test-pinned gap with
     // no shared-token meaning; the pin guards against ACCIDENTAL drift. Labels
-    // are no longer bordered chips, so the footer returns to the compact 6pt
-    // rhythm while actual keycaps keep their borders.
+    // are no longer bordered chips, so the footer uses the compact 2pt rhythm
+    // while actual keycaps keep their borders.
     assert!(
-        FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 6.0;"),
-        "FOOTER_ACTION_ITEM_GAP_PX must remain its pinned 6.0 literal"
+        FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 2.0;"),
+        "FOOTER_ACTION_ITEM_GAP_PX must remain its pinned 2.0 literal"
     );
 }

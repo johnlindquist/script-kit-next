@@ -516,9 +516,7 @@ mod tests {
         ));
         assert!(
             remove_branch.contains("let weak_entity = cx.entity().downgrade();")
-                && remove_branch.contains(
-                    "crate::confirm::open_parent_confirm_dialog_for_entity("
-                )
+                && remove_branch.contains("crate::confirm::open_parent_confirm_dialog_for_entity(")
                 && remove_branch.contains("this.refresh_scripts(cx);")
                 && !remove_branch.contains("crate::confirm::open_parent_confirm_dialog("),
             "script removal should use the entity-owned parent confirm helper and keep refreshing the list after confirmation"
@@ -531,9 +529,7 @@ mod tests {
         ));
         assert!(
             quit_branch.contains("let owner = cx.entity().downgrade();")
-                && quit_branch.contains(
-                    "crate::confirm::open_parent_confirm_dialog_for_entity("
-                )
+                && quit_branch.contains("crate::confirm::open_parent_confirm_dialog_for_entity(")
                 && quit_branch.contains("Self::quit_script_kit_confirm_options()")
                 && quit_branch.contains("Self::prepare_script_kit_shutdown();")
                 && !quit_branch.contains("crate::confirm::open_parent_confirm_dialog("),

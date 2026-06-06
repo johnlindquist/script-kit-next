@@ -93,7 +93,11 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     assert!(shared.contains(".w(px(info.variation_badge_width_px))"));
     assert!(!shared.contains(".w(px(32.0))"));
     assert!(!shared.contains("MAIN_VIEW_CONTEXT_EDGE_OUTSET_X: f32 = 8.0"));
-    assert!(shared.contains("def.footer.button.hover"));
+    assert!(shared.contains("info.pill_hover_bg_alpha"));
+    assert!(shared.contains("info.pill_hover_text_alpha"));
+    assert!(shared.contains("info.pill_hover_key_alpha"));
+    assert!(shared.contains("info.pill_hover_border_alpha"));
+    assert!(!shared.contains("def.footer.button.hover"));
     assert!(!shared.contains("theme.colors.accent.selected << 8"));
     assert!(
         !shared.contains(
@@ -109,6 +113,9 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     assert!(!shared.contains("slot_width_px: Some(280.0)"));
     assert!(!shared.contains("slot_width_px: Some(310.0)"));
     assert!(shared.contains("keycap_font_size_px: Some(header_keycap_font_size)"));
+    assert!(shared.contains("hover_text_alpha: Some(info.pill_hover_text_alpha)"));
+    assert!(shared.contains("hover_glyph_alpha: Some(info.pill_hover_key_alpha)"));
+    assert!(shared.contains("hover_keycap_border_alpha: Some(info.pill_hover_border_alpha)"));
     assert!(shared.contains("keycap_height_px: Some(header_keycap_height)"));
     assert!(ui_window.contains("pub(crate) fn main_view_context_labels"));
     assert!(ui_window.contains("render_clickable_main_view_context_zone"));

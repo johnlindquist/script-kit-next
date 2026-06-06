@@ -701,7 +701,9 @@ mod tests {
         assert!(
             (score - expected).abs() < 0.01,
             "Expected ~{} (50% of {}), got {} - half-life formula should give 50% decay at half-life",
-            expected, count, score
+            expected,
+            count,
+            score
         );
     }
     #[test]

@@ -113,7 +113,9 @@ fn debounced_log_state() -> &'static DebouncedLogState {
 #[derive(Error, Debug)]
 #[allow(dead_code)]
 pub enum KeyboardMonitorError {
-    #[error("Accessibility permissions not granted. Please enable in System Preferences > Privacy & Security > Accessibility")]
+    #[error(
+        "Accessibility permissions not granted. Please enable in System Preferences > Privacy & Security > Accessibility"
+    )]
     AccessibilityNotGranted,
 
     #[error("Failed to create event tap - this may indicate accessibility permissions issue")]

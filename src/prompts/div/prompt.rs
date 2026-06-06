@@ -86,7 +86,10 @@ impl DivPrompt {
             "PROMPTS",
             &format!(
                 "DivPrompt::new with theme colors: bg={:#x}, text={:#x}, design: {:?}, container_opts: {:?}",
-                theme.colors.background.main, theme.colors.text.primary, design_variant, container_options
+                theme.colors.background.main,
+                theme.colors.text.primary,
+                design_variant,
+                container_options
             ),
         );
         DivPrompt {
