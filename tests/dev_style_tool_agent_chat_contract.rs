@@ -46,6 +46,12 @@ fn dev_style_tool_has_agent_chat_tab_and_controls() {
     assert!(RENDER_SOURCE.contains("tab:dev-style-tool:agent-chat-styling"));
     assert!(RENDER_SOURCE.contains("AgentChatControlState"));
     assert!(RENDER_SOURCE.contains("render_agent_chat_controls"));
+    assert!(RENDER_SOURCE.contains("render_agent_chat_group_tabs"));
+    assert!(RENDER_SOURCE.contains("tabs:dev-style-tool-agent-chat-groups"));
+    assert!(RENDER_SOURCE.contains("tabbar:dev-style-tool-agent-chat-groups"));
+    assert!(RENDER_SOURCE.contains("active_agent_chat_group"));
+    assert!(RENDER_SOURCE.contains("agent_chat_group_slug"));
+    assert!(RENDER_SOURCE.contains("agent-chat-style-section:{}"));
     assert!(RENDER_SOURCE.contains("control:dev-style-tool-agent-chat"));
     assert!(RENDER_SOURCE.contains("refresh_agent_chat"));
     assert!(RENDER_SOURCE.contains("open_agent_chat_kitchen_sink"));
@@ -59,6 +65,8 @@ fn dev_style_tool_has_agent_chat_tab_and_controls() {
     assert!(PROMPT_HANDLER_SOURCE.contains("open_agent_chat_kitchen_sink_fixture(cx)"));
     assert!(COLLECTOR_SOURCE.contains("crate::dev_style_tool::AGENT_CHAT_KNOBS"));
     assert!(COLLECTOR_SOURCE.contains("button:dev-style-tool-open-agent-chat-kitchen-sink"));
+    assert!(COLLECTOR_SOURCE.contains("tab:dev-style-tool-agent-chat:{}"));
+    assert!(COLLECTOR_SOURCE.contains("agent-chat-style-section:{}"));
     assert!(COLLECTOR_SOURCE.contains("slider:dev-style-tool-agent-chat:{}"));
     assert!(COLLECTOR_SOURCE.contains("input:dev-style-tool-agent-chat:{}"));
     assert!(COLLECTOR_SOURCE.contains("button:dev-style-tool-agent-chat-reset:{}"));
@@ -68,8 +76,13 @@ fn dev_style_tool_has_agent_chat_tab_and_controls() {
 fn dev_style_tool_navigation_tabs_have_cleaner_chrome() {
     assert!(RENDER_SOURCE.contains("tabs:dev-style-tool-primary"));
     assert!(RENDER_SOURCE.contains("tabs:dev-style-tool-groups"));
+    assert!(RENDER_SOURCE.contains("tabs:dev-style-tool-actions-groups"));
+    assert!(RENDER_SOURCE.contains("tabs:dev-style-tool-agent-chat-groups"));
+    assert!(RENDER_SOURCE.contains("summary:dev-style-tool-active-scope"));
     assert!(RENDER_SOURCE.contains("tabbar:dev-style-tool-primary"));
     assert!(RENDER_SOURCE.contains("tabbar:dev-style-tool-groups"));
+    assert!(RENDER_SOURCE.contains("tabbar:dev-style-tool-actions-groups"));
+    assert!(RENDER_SOURCE.contains("tabbar:dev-style-tool-agent-chat-groups"));
     assert!(RENDER_SOURCE.contains("chrome.input_surface_rgba"));
     assert!(RENDER_SOURCE.contains("chrome.border_rgba"));
     assert!(RENDER_SOURCE.contains(".flex_wrap()"));

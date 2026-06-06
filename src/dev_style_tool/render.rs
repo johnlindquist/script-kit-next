@@ -100,6 +100,8 @@ pub(crate) struct DevStyleToolApp {
     saved_markdown: Entity<InputState>,
     active_tab: DevStyleToolTab,
     active_group: StyleKnobGroup,
+    active_actions_group: ActionsPopupKnobGroup,
+    active_agent_chat_group: AgentChatKnobGroup,
     subscriptions: Vec<Subscription>,
 }
 
@@ -290,6 +292,8 @@ impl DevStyleToolApp {
             saved_markdown,
             active_tab: DevStyleToolTab::MainWindowStyling,
             active_group: StyleKnobGroup::Search,
+            active_actions_group: ActionsPopupKnobGroup::Shell,
+            active_agent_chat_group: AgentChatKnobGroup::Transcript,
             subscriptions,
         }
     }
@@ -762,6 +766,104 @@ impl DevStyleToolApp {
             .text_color(rgb(chrome.text_primary_hex))
     }
 
+    fn render_actions_group_tabs(
+        &self,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        let selected_index = ACTIONS_POPUP_KNOB_GROUPS
+            .iter()
+            .position(|group| *group == self.active_actions_group)
+            .unwrap_or(0);
+        div()
+            .id("tabs:dev-style-tool-actions-groups")
+            .flex()
+            .items_center()
+            .gap(px(8.0))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(chrome.text_secondary_hex))
+                    .child("Actions"),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .p(px(3.0))
+                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+                    .border(px(1.0))
+                    .border_color(rgba(chrome.border_rgba))
+                    .bg(rgba(chrome.input_surface_rgba))
+                    .child(
+                        TabBar::new("tabbar:dev-style-tool-actions-groups")
+                            .segmented()
+                            .small()
+                            .selected_index(selected_index)
+                            .children(ACTIONS_POPUP_KNOB_GROUPS.iter().map(|group| {
+                                let group = *group;
+                                Tab::new().label(group.label()).on_click(cx.listener(
+                                    move |this, _event, _window, cx| {
+                                        this.active_actions_group = group;
+                                        cx.notify();
+                                    },
+                                ))
+                            })),
+                    ),
+            )
+            .text_color(rgb(chrome.text_primary_hex))
+    }
+
+    fn render_agent_chat_group_tabs(
+        &self,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        let selected_index = AGENT_CHAT_KNOB_GROUPS
+            .iter()
+            .position(|group| *group == self.active_agent_chat_group)
+            .unwrap_or(0);
+        div()
+            .id("tabs:dev-style-tool-agent-chat-groups")
+            .flex()
+            .items_center()
+            .gap(px(8.0))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(chrome.text_secondary_hex))
+                    .child("Agent Chat"),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .p(px(3.0))
+                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+                    .border(px(1.0))
+                    .border_color(rgba(chrome.border_rgba))
+                    .bg(rgba(chrome.input_surface_rgba))
+                    .child(
+                        TabBar::new("tabbar:dev-style-tool-agent-chat-groups")
+                            .segmented()
+                            .small()
+                            .selected_index(selected_index)
+                            .children(AGENT_CHAT_KNOB_GROUPS.iter().map(|group| {
+                                let group = *group;
+                                Tab::new().label(group.label()).on_click(cx.listener(
+                                    move |this, _event, _window, cx| {
+                                        this.active_agent_chat_group = group;
+                                        cx.notify();
+                                    },
+                                ))
+                            })),
+                    ),
+            )
+            .text_color(rgb(chrome.text_primary_hex))
+    }
+
     fn render_primary_tabs(
         &self,
         chrome: theme::AppChromeColors,
@@ -825,6 +927,61 @@ impl DevStyleToolApp {
                     .overflow_hidden(),
             )
             .text_color(rgb(chrome.text_primary_hex))
+    }
+
+    fn active_scope_label(&self) -> String {
+        match self.active_tab {
+            DevStyleToolTab::MainWindowStyling => format!(
+                "{} / {}",
+                self.active_tab.label(),
+                self.active_group.label()
+            ),
+            DevStyleToolTab::TextCopy => {
+                format!(
+                    "{} / {} controls",
+                    self.active_tab.label(),
+                    COPY_CONTROLS.len()
+                )
+            }
+            DevStyleToolTab::ActionsPopupStyling => format!(
+                "{} / {}",
+                self.active_tab.label(),
+                self.active_actions_group.label()
+            ),
+            DevStyleToolTab::AgentChatStyling => format!(
+                "{} / {}",
+                self.active_tab.label(),
+                self.active_agent_chat_group.label()
+            ),
+        }
+    }
+
+    fn render_active_scope_summary(&self, chrome: theme::AppChromeColors) -> impl IntoElement {
+        div()
+            .id("summary:dev-style-tool-active-scope")
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap(px(8.0))
+            .px(px(10.0))
+            .py(px(6.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(rgba(chrome.border_rgba))
+            .bg(rgba(chrome.input_surface_rgba))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(chrome.text_secondary_hex))
+                    .child("Editing"),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(chrome.text_primary_hex))
+                    .child(self.active_scope_label()),
+            )
     }
 
     fn render_saved_markdown(
@@ -912,7 +1069,12 @@ impl DevStyleToolApp {
             ))
             .flex()
             .flex_col()
-            .gap(px(5.0))
+            .gap(px(6.0))
+            .p(px(8.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(rgba(chrome.border_rgba))
+            .bg(rgba(chrome.input_surface_rgba))
             .child(
                 div()
                     .text_xs()
@@ -963,7 +1125,7 @@ impl DevStyleToolApp {
             ))
             .flex()
             .flex_col()
-            .gap(px(4.0))
+            .gap(px(5.0))
             .child(
                 div()
                     .text_xs()
@@ -994,7 +1156,12 @@ impl DevStyleToolApp {
             ))
             .flex()
             .flex_col()
-            .gap(px(3.0))
+            .gap(px(4.0))
+            .p(px(7.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(rgba(chrome.border_rgba))
+            .bg(rgba(chrome.window_surface_rgba))
             .child(
                 div()
                     .flex()
@@ -1086,6 +1253,11 @@ impl DevStyleToolApp {
                     .flex()
                     .flex_col()
                     .gap(px(5.0))
+                    .p(px(8.0))
+                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+                    .border(px(1.0))
+                    .border_color(rgba(chrome.border_rgba))
+                    .bg(rgba(chrome.input_surface_rgba))
                     .child(
                         div()
                             .flex()
@@ -1169,19 +1341,21 @@ impl DevStyleToolApp {
         cx: &mut gpui::Context<Self>,
     ) -> Div {
         let mut column = div().flex().flex_col().gap(px(10.0)).flex_1();
-        for group in ACTIONS_POPUP_KNOB_GROUPS {
-            let controls: Vec<&ActionsPopupControlState> = self
-                .actions_popup_controls
-                .iter()
-                .filter(|control| {
-                    actions_popup_knob_by_id(control.knob_id)
-                        .is_some_and(|knob| knob.group == *group)
-                })
-                .collect();
-            if controls.is_empty() {
-                continue;
-            }
-            column = column.child(self.render_actions_popup_group(*group, controls, chrome, cx));
+        let controls: Vec<&ActionsPopupControlState> = self
+            .actions_popup_controls
+            .iter()
+            .filter(|control| {
+                actions_popup_knob_by_id(control.knob_id)
+                    .is_some_and(|knob| knob.group == self.active_actions_group)
+            })
+            .collect();
+        if !controls.is_empty() {
+            column = column.child(self.render_actions_popup_group(
+                self.active_actions_group,
+                controls,
+                chrome,
+                cx,
+            ));
         }
         column
     }
@@ -1199,7 +1373,12 @@ impl DevStyleToolApp {
             ))
             .flex()
             .flex_col()
-            .gap(px(5.0))
+            .gap(px(6.0))
+            .p(px(8.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(rgba(chrome.border_rgba))
+            .bg(rgba(chrome.input_surface_rgba))
             .child(
                 div()
                     .text_xs()
@@ -1232,7 +1411,12 @@ impl DevStyleToolApp {
             ))
             .flex()
             .flex_col()
-            .gap(px(3.0))
+            .gap(px(4.0))
+            .p(px(7.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(rgba(chrome.border_rgba))
+            .bg(rgba(chrome.window_surface_rgba))
             .child(
                 div()
                     .flex()
@@ -1311,18 +1495,21 @@ impl DevStyleToolApp {
         cx: &mut gpui::Context<Self>,
     ) -> Div {
         let mut column = div().flex().flex_col().gap(px(10.0)).flex_1();
-        for group in AGENT_CHAT_KNOB_GROUPS {
-            let controls: Vec<&AgentChatControlState> = self
-                .agent_chat_controls
-                .iter()
-                .filter(|control| {
-                    agent_chat_knob_by_id(control.knob_id).is_some_and(|knob| knob.group == *group)
-                })
-                .collect();
-            if controls.is_empty() {
-                continue;
-            }
-            column = column.child(self.render_agent_chat_group(*group, controls, chrome, cx));
+        let controls: Vec<&AgentChatControlState> = self
+            .agent_chat_controls
+            .iter()
+            .filter(|control| {
+                agent_chat_knob_by_id(control.knob_id)
+                    .is_some_and(|knob| knob.group == self.active_agent_chat_group)
+            })
+            .collect();
+        if !controls.is_empty() {
+            column = column.child(self.render_agent_chat_group(
+                self.active_agent_chat_group,
+                controls,
+                chrome,
+                cx,
+            ));
         }
         column
     }
@@ -1340,7 +1527,12 @@ impl DevStyleToolApp {
             ))
             .flex()
             .flex_col()
-            .gap(px(5.0))
+            .gap(px(6.0))
+            .p(px(8.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(rgba(chrome.border_rgba))
+            .bg(rgba(chrome.input_surface_rgba))
             .child(
                 div()
                     .text_xs()
@@ -1373,7 +1565,12 @@ impl DevStyleToolApp {
             ))
             .flex()
             .flex_col()
-            .gap(px(3.0))
+            .gap(px(4.0))
+            .p(px(7.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(rgba(chrome.border_rgba))
+            .bg(rgba(chrome.window_surface_rgba))
             .child(
                 div()
                     .flex()
@@ -1607,6 +1804,15 @@ impl Render for DevStyleToolApp {
                 self.active_tab == DevStyleToolTab::MainWindowStyling,
                 |view| view.child(self.render_group_tabs(chrome, cx)),
             )
+            .when(
+                self.active_tab == DevStyleToolTab::ActionsPopupStyling,
+                |view| view.child(self.render_actions_group_tabs(chrome, cx)),
+            )
+            .when(
+                self.active_tab == DevStyleToolTab::AgentChatStyling,
+                |view| view.child(self.render_agent_chat_group_tabs(chrome, cx)),
+            )
+            .child(self.render_active_scope_summary(chrome))
             .child(
                 div()
                     .id("body:dev-style-tool-scroll")

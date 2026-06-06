@@ -52,6 +52,12 @@ fn dev_style_tool_render_is_catalog_driven_and_narrow() {
     assert!(render_source.contains("button:dev-style-tool-copy-markdown"));
     assert!(render_source.contains("tabs:dev-style-tool-groups"));
     assert!(render_source.contains("tabs:dev-style-tool-primary"));
+    assert!(render_source.contains("tabs:dev-style-tool-actions-groups"));
+    assert!(render_source.contains("tabs:dev-style-tool-agent-chat-groups"));
+    assert!(render_source.contains("summary:dev-style-tool-active-scope"));
+    assert!(render_source.contains("render_active_scope_summary"));
+    assert!(render_source.contains("active_actions_group"));
+    assert!(render_source.contains("active_agent_chat_group"));
     assert!(render_source.contains("TabBar::new"));
     assert!(render_source.contains("Tab::new"));
     assert!(render_source.contains("Text / Copy"));
@@ -116,6 +122,11 @@ fn dev_style_tool_registers_minimal_automation_target() {
     assert!(collector_source.contains("button:dev-style-tool-reset-all"));
     assert!(collector_source.contains("button:dev-style-tool-copy-markdown"));
     assert!(collector_source.contains("input:dev-style-tool-saved-markdown"));
+    assert!(collector_source.contains("tab:dev-style-tool:main-window-styling"));
+    assert!(collector_source.contains("tab:dev-style-tool:text-copy"));
+    assert!(collector_source.contains("tab:dev-style-tool:actions-popup-styling"));
+    assert!(collector_source.contains("tab:dev-style-tool:agent-chat-styling"));
+    assert!(collector_source.contains("summary:dev-style-tool-active-scope"));
     assert!(collector_source.contains("undoStyleChange"));
     assert!(collector_source.contains("redoStyleChange"));
     assert!(collector_source.contains("resetStyleControls"));
@@ -129,6 +140,15 @@ fn dev_style_tool_registers_minimal_automation_target() {
     assert!(collector_source.contains("slider:dev-style-tool:{}"));
     assert!(collector_source.contains("input:dev-style-tool:{}"));
     assert!(collector_source.contains("button:dev-style-tool-reset:{}"));
+    assert!(collector_source.contains("crate::dev_style_tool::COPY_CONTROLS"));
+    assert!(collector_source.contains("input:dev-style-tool-copy:{}"));
+    assert!(collector_source.contains("button:dev-style-tool-copy-reset:{}"));
+    assert!(collector_source.contains("crate::dev_style_tool::ACTIONS_POPUP_KNOBS"));
+    assert!(collector_source.contains("tab:dev-style-tool-actions:{}"));
+    assert!(collector_source.contains("actions-style-section:{}"));
+    assert!(collector_source.contains("slider:dev-style-tool-actions:{}"));
+    assert!(collector_source.contains("input:dev-style-tool-actions:{}"));
+    assert!(collector_source.contains("button:dev-style-tool-actions-reset:{}"));
 }
 
 #[test]

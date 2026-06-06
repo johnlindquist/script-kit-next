@@ -409,6 +409,201 @@ fn collect_dev_style_tool_snapshot() -> SurfaceElementSnapshot {
     let mut seen_groups = Vec::new();
     let mut seen_sections = Vec::new();
     let mut next_index = 7usize;
+    for (semantic_id, label) in [
+        (
+            "tab:dev-style-tool:main-window-styling",
+            "Main Window Styling",
+        ),
+        ("tab:dev-style-tool:text-copy", "Text / Copy"),
+        (
+            "tab:dev-style-tool:actions-popup-styling",
+            "Actions Popup Styling",
+        ),
+        (
+            "tab:dev-style-tool:agent-chat-styling",
+            "Agent Chat Styling",
+        ),
+    ] {
+        elements.push(element(
+            semantic_id,
+            ElementType::Button,
+            Some(label.to_string()),
+            Some(label.to_string()),
+            None,
+            None,
+            Some(next_index),
+        ));
+        next_index += 1;
+    }
+    elements.push(element(
+        "summary:dev-style-tool-active-scope",
+        ElementType::Panel,
+        Some("Active style scope".to_string()),
+        Some("activeStyleScope".to_string()),
+        None,
+        None,
+        Some(next_index),
+    ));
+    next_index += 1;
+    for control in crate::dev_style_tool::COPY_CONTROLS {
+        let control_index = next_index;
+        next_index += 3;
+        elements.push(element(
+            &format!("control:dev-style-tool-copy:{}", control.id.as_str()),
+            ElementType::Panel,
+            Some(control.label.to_string()),
+            Some(control.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index),
+        ));
+        elements.push(element(
+            &format!("input:dev-style-tool-copy:{}", control.id.as_str()),
+            ElementType::Input,
+            Some(control.label.to_string()),
+            Some(control.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index + 1),
+        ));
+        elements.push(element(
+            &format!("button:dev-style-tool-copy-reset:{}", control.id.as_str()),
+            ElementType::Button,
+            Some(format!("Reset {}", control.label)),
+            Some(control.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index + 2),
+        ));
+    }
+
+    let mut seen_actions_groups = Vec::new();
+    for knob in crate::dev_style_tool::ACTIONS_POPUP_KNOBS {
+        if !seen_actions_groups.contains(&knob.group) {
+            seen_actions_groups.push(knob.group);
+            elements.push(element(
+                &format!(
+                    "tab:dev-style-tool-actions:{}",
+                    actions_popup_group_slug(knob.group)
+                ),
+                ElementType::Button,
+                Some(knob.group.label().to_string()),
+                Some(actions_popup_group_slug(knob.group).to_string()),
+                None,
+                None,
+                Some(next_index),
+            ));
+            next_index += 1;
+            elements.push(element(
+                &format!(
+                    "actions-style-section:{}",
+                    actions_popup_group_slug(knob.group)
+                ),
+                ElementType::Panel,
+                Some(knob.group.label().to_string()),
+                Some(actions_popup_group_slug(knob.group).to_string()),
+                None,
+                None,
+                Some(next_index),
+            ));
+            next_index += 1;
+        }
+        let control_index = next_index;
+        next_index += 3;
+        elements.push(element(
+            &format!("slider:dev-style-tool-actions:{}", knob.id.as_str()),
+            ElementType::Slider,
+            Some(knob.label.to_string()),
+            Some(knob.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index),
+        ));
+        elements.push(element(
+            &format!("input:dev-style-tool-actions:{}", knob.id.as_str()),
+            ElementType::Input,
+            Some(knob.label.to_string()),
+            Some(knob.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index + 1),
+        ));
+        elements.push(element(
+            &format!("button:dev-style-tool-actions-reset:{}", knob.id.as_str()),
+            ElementType::Button,
+            Some(format!("Reset {}", knob.label)),
+            Some(knob.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index + 2),
+        ));
+    }
+
+    let mut seen_agent_chat_groups = Vec::new();
+    for knob in crate::dev_style_tool::AGENT_CHAT_KNOBS {
+        if !seen_agent_chat_groups.contains(&knob.group) {
+            seen_agent_chat_groups.push(knob.group);
+            elements.push(element(
+                &format!(
+                    "tab:dev-style-tool-agent-chat:{}",
+                    agent_chat_group_slug(knob.group)
+                ),
+                ElementType::Button,
+                Some(knob.group.label().to_string()),
+                Some(agent_chat_group_slug(knob.group).to_string()),
+                None,
+                None,
+                Some(next_index),
+            ));
+            next_index += 1;
+            elements.push(element(
+                &format!(
+                    "agent-chat-style-section:{}",
+                    agent_chat_group_slug(knob.group)
+                ),
+                ElementType::Panel,
+                Some(knob.group.label().to_string()),
+                Some(agent_chat_group_slug(knob.group).to_string()),
+                None,
+                None,
+                Some(next_index),
+            ));
+            next_index += 1;
+        }
+        let control_index = next_index;
+        next_index += 3;
+        elements.push(element(
+            &format!("slider:dev-style-tool-agent-chat:{}", knob.id.as_str()),
+            ElementType::Slider,
+            Some(knob.label.to_string()),
+            Some(knob.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index),
+        ));
+        elements.push(element(
+            &format!("input:dev-style-tool-agent-chat:{}", knob.id.as_str()),
+            ElementType::Input,
+            Some(knob.label.to_string()),
+            Some(knob.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index + 1),
+        ));
+        elements.push(element(
+            &format!(
+                "button:dev-style-tool-agent-chat-reset:{}",
+                knob.id.as_str()
+            ),
+            ElementType::Button,
+            Some(format!("Reset {}", knob.label)),
+            Some(knob.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index + 2),
+        ));
+    }
+
     for knob in crate::dev_style_tool::STYLE_KNOBS {
         if !seen_groups.contains(&knob.group) {
             seen_groups.push(knob.group);
@@ -482,58 +677,6 @@ fn collect_dev_style_tool_snapshot() -> SurfaceElementSnapshot {
         ));
     }
 
-    let mut seen_agent_chat_groups = Vec::new();
-    for knob in crate::dev_style_tool::AGENT_CHAT_KNOBS {
-        if !seen_agent_chat_groups.contains(&knob.group) {
-            seen_agent_chat_groups.push(knob.group);
-            elements.push(element(
-                &format!(
-                    "style-section:agent-chat:{}",
-                    agent_chat_group_slug(knob.group)
-                ),
-                ElementType::Panel,
-                Some(knob.group.label().to_string()),
-                Some(agent_chat_group_slug(knob.group).to_string()),
-                None,
-                None,
-                Some(next_index),
-            ));
-            next_index += 1;
-        }
-        let control_index = next_index;
-        next_index += 3;
-        elements.push(element(
-            &format!("slider:dev-style-tool-agent-chat:{}", knob.id.as_str()),
-            ElementType::Slider,
-            Some(knob.label.to_string()),
-            Some(knob.id.as_str().to_string()),
-            None,
-            None,
-            Some(control_index),
-        ));
-        elements.push(element(
-            &format!("input:dev-style-tool-agent-chat:{}", knob.id.as_str()),
-            ElementType::Input,
-            Some(knob.label.to_string()),
-            Some(knob.id.as_str().to_string()),
-            None,
-            None,
-            Some(control_index + 1),
-        ));
-        elements.push(element(
-            &format!(
-                "button:dev-style-tool-agent-chat-reset:{}",
-                knob.id.as_str()
-            ),
-            ElementType::Button,
-            Some(format!("Reset {}", knob.label)),
-            Some(knob.id.as_str().to_string()),
-            None,
-            None,
-            Some(control_index + 2),
-        ));
-    }
-
     SurfaceElementSnapshot {
         total_count: elements.len(),
         elements,
@@ -565,7 +708,19 @@ fn agent_chat_group_slug(group: crate::dev_style_tool::AgentChatKnobGroup) -> &'
         crate::dev_style_tool::AgentChatKnobGroup::UserMessage => "user-message",
         crate::dev_style_tool::AgentChatKnobGroup::AssistantMessage => "assistant-message",
         crate::dev_style_tool::AgentChatKnobGroup::CollapsibleBlocks => "collapsible-blocks",
-        crate::dev_style_tool::AgentChatKnobGroup::ErrorAndSystem => "error-and-system",
+        crate::dev_style_tool::AgentChatKnobGroup::ErrorAndSystem => "error-system",
+    }
+}
+
+fn actions_popup_group_slug(group: crate::dev_style_tool::ActionsPopupKnobGroup) -> &'static str {
+    match group {
+        crate::dev_style_tool::ActionsPopupKnobGroup::Shell => "shell",
+        crate::dev_style_tool::ActionsPopupKnobGroup::Search => "search",
+        crate::dev_style_tool::ActionsPopupKnobGroup::List => "list",
+        crate::dev_style_tool::ActionsPopupKnobGroup::Row => "row",
+        crate::dev_style_tool::ActionsPopupKnobGroup::Section => "section",
+        crate::dev_style_tool::ActionsPopupKnobGroup::ContextHeader => "context-header",
+        crate::dev_style_tool::ActionsPopupKnobGroup::Shortcut => "shortcut",
     }
 }
 
