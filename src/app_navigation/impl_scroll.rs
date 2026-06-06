@@ -5,7 +5,7 @@ fn main_list_footer_overlay_height() -> gpui::Pixels {
 
 #[inline]
 fn main_list_footer_reveal_clearance_height() -> gpui::Pixels {
-    gpui::px(8.0)
+    gpui::px(crate::list_item::effective_footer_reveal_clearance_height())
 }
 
 pub(crate) fn main_list_footer_overlay_total_padding() -> gpui::Pixels {
@@ -13,26 +13,55 @@ pub(crate) fn main_list_footer_overlay_total_padding() -> gpui::Pixels {
 }
 
 #[inline]
-fn script_list_row_height(item: &GroupedListItem, ix: usize) -> f32 {
+fn script_list_row_height_for_theme(
+    item: &GroupedListItem,
+    ix: usize,
+    theme: crate::designs::MainMenuThemeVariant,
+) -> f32 {
     match item {
         GroupedListItem::SectionHeader(..) => {
             if ix == 0 {
-                crate::list_item::effective_first_section_header_height()
+                crate::list_item::effective_first_section_header_height_for_theme(theme)
             } else {
-                crate::list_item::effective_section_header_height()
+                crate::list_item::effective_section_header_height_for_theme(theme)
             }
         }
-        GroupedListItem::Status(..) => crate::list_item::effective_source_status_row_height(),
-        GroupedListItem::Item(..) => crate::list_item::effective_list_item_height(),
+        GroupedListItem::Status(..) => {
+            crate::list_item::effective_source_status_row_height_for_theme(theme)
+        }
+        GroupedListItem::Item(..) => crate::list_item::effective_list_item_height_for_theme(theme),
     }
 }
 
+#[inline]
+fn script_list_row_height(item: &GroupedListItem, ix: usize) -> f32 {
+    script_list_row_height_for_theme(item, ix, crate::designs::current_main_menu_theme())
+}
+
 pub(crate) fn script_list_content_height(items: &[GroupedListItem]) -> f32 {
-    items.iter().enumerate().map(|(ix, item)| script_list_row_height(item, ix)).sum()
+    let theme = crate::designs::current_main_menu_theme();
+    script_list_content_height_for_theme(items, theme)
+}
+
+fn script_list_content_height_for_theme(
+    items: &[GroupedListItem],
+    theme: crate::designs::MainMenuThemeVariant,
+) -> f32 {
+    items
+        .iter()
+        .enumerate()
+        .map(|(ix, item)| script_list_row_height_for_theme(item, ix, theme))
+        .sum()
 }
 
 fn script_list_pixel_top_for_item(items: &[GroupedListItem], ix: usize) -> f32 {
-    items.iter().take(ix).enumerate().map(|(item_ix, item)| script_list_row_height(item, item_ix)).sum()
+    let theme = crate::designs::current_main_menu_theme();
+    items
+        .iter()
+        .take(ix)
+        .enumerate()
+        .map(|(item_ix, item)| script_list_row_height_for_theme(item, item_ix, theme))
+        .sum()
 }
 
 fn script_list_pixel_top_for_offset(items: &[GroupedListItem], offset: gpui::ListOffset) -> f32 {
@@ -157,6 +186,9 @@ impl ScriptListApp {
             "contentHeight": content_height,
             "viewportHeight": viewport_height_px,
             "footerHeight": footer_height_px,
+            "footerOverlayHeight": main_list_footer_overlay_height().as_f32().max(0.0),
+            "footerRevealClearanceHeight": main_list_footer_reveal_clearance_height().as_f32().max(0.0),
+            "footerOverlayTotalPadding": footer_height_px,
             "safeViewportHeight": safe_viewport_height,
             "maxScrollTop": max_scroll_top,
             "selectedIndex": self.selected_index,
@@ -608,7 +640,11 @@ impl ScriptListApp {
         self.main_list_state = ListState::new(
             item_count,
             ListAlignment::Top,
-            px(crate::list_item::effective_average_item_height_for_scroll()),
+            px(
+                crate::list_item::effective_average_item_height_for_scroll_for_theme(
+                    crate::designs::current_main_menu_theme(),
+                ),
+            ),
         );
 
         if crate::logging::filter_perf_trace_enabled() {

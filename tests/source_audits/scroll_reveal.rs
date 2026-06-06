@@ -131,6 +131,9 @@ fn main_list_scroll_receipt_exposes_footer_safe_selected_row_geometry() {
         "\"contentHeight\"",
         "\"viewportHeight\"",
         "\"footerHeight\"",
+        "\"footerOverlayHeight\"",
+        "\"footerRevealClearanceHeight\"",
+        "\"footerOverlayTotalPadding\"",
         "\"maxScrollTop\"",
         "\"selectedRowVisible\"",
         "\"selectedRowAboveFooter\"",
@@ -142,6 +145,63 @@ fn main_list_scroll_receipt_exposes_footer_safe_selected_row_geometry() {
             "main_list_scroll_receipt should expose `{required}`"
         );
     }
+}
+
+#[test]
+fn main_list_footer_reveal_clearance_comes_from_theme_tokens() {
+    let content = read("src/app_navigation/impl_scroll.rs");
+    let list_item = read("src/list_item/mod.rs");
+    let theme = read("src/designs/core/main_menu_theme.rs");
+
+    let fn_start = content
+        .find("fn main_list_footer_reveal_clearance_height()")
+        .expect("main_list_footer_reveal_clearance_height function not found");
+    let fn_body = &content[fn_start..content.len().min(fn_start + 260)];
+
+    assert!(
+        fn_body.contains("effective_footer_reveal_clearance_height()"),
+        "footer reveal clearance must come from the active theme, not a local literal"
+    );
+    assert!(
+        !fn_body.contains("px(8.0)") && !fn_body.contains("gpui::px(8.0)"),
+        "footer reveal clearance must not hardcode the old 8px value in scroll logic"
+    );
+    assert!(
+        list_item.contains("effective_footer_reveal_clearance_height_for_theme")
+            && list_item.contains("theme.def().list.footer_reveal_clearance_height"),
+        "list_item should expose theme-driven footer reveal clearance helpers"
+    );
+    assert!(
+        theme.contains("pub footer_reveal_clearance_height: f32")
+            && theme.contains("footer_reveal_clearance_height: 8.0"),
+        "MainMenuListTokens should own the default footer reveal clearance value"
+    );
+}
+
+#[test]
+fn main_list_scroll_row_math_uses_current_theme_variant() {
+    let content = read("src/app_navigation/impl_scroll.rs");
+    let selection_owned = read("src/scrolling/selection_owned.rs");
+
+    assert!(
+        content.contains("fn script_list_row_height_for_theme(")
+            && content.contains("effective_first_section_header_height_for_theme(theme)")
+            && content.contains("effective_section_header_height_for_theme(theme)")
+            && content.contains("effective_source_status_row_height_for_theme(theme)")
+            && content.contains("effective_list_item_height_for_theme(theme)"),
+        "impl_scroll row math should use the same theme-specific heights as the renderer"
+    );
+    assert!(
+        content.contains("script_list_content_height_for_theme(items, theme)")
+            && content.contains("let theme = crate::designs::current_main_menu_theme();"),
+        "content-height calculations should capture the current theme once and pass it through"
+    );
+    assert!(
+        selection_owned.contains("fn row_height_for_theme(")
+            && selection_owned.contains("effective_first_section_header_height_for_theme(theme)")
+            && selection_owned.contains("effective_list_item_height_for_theme(theme)"),
+        "selection-owned reanchor logic should use theme-specific row heights too"
+    );
 }
 
 #[test]

@@ -330,6 +330,18 @@ pub fn effective_average_item_height_for_scroll_for_theme(
 ) -> f32 {
     ListItemMetricsOverride::from_main_menu_theme(theme).average_scroll_height
 }
+
+#[inline]
+pub fn effective_footer_reveal_clearance_height() -> f32 {
+    effective_footer_reveal_clearance_height_for_theme(crate::designs::current_main_menu_theme())
+}
+
+#[inline]
+pub fn effective_footer_reveal_clearance_height_for_theme(
+    theme: crate::designs::MainMenuThemeVariant,
+) -> f32 {
+    theme.def().list.footer_reveal_clearance_height
+}
 // =============================================================================
 // Layout & Spacing Constants (8px grid with 4px micro-steps)
 // =============================================================================
