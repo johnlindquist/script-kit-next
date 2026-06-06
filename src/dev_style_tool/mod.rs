@@ -1,4 +1,5 @@
 pub mod actions_popup_catalog;
+pub mod agent_chat_catalog;
 pub mod catalog;
 pub mod copy_catalog;
 pub mod export;
@@ -12,6 +13,8 @@ pub(crate) mod window {
 
 #[allow(unused_imports)]
 pub use actions_popup_catalog::*;
+#[allow(unused_imports)]
+pub use agent_chat_catalog::*;
 #[allow(unused_imports)]
 pub use catalog::*;
 #[allow(unused_imports)]

@@ -473,6 +473,58 @@ fn collect_dev_style_tool_snapshot() -> SurfaceElementSnapshot {
         ));
     }
 
+    let mut seen_agent_chat_groups = Vec::new();
+    for knob in crate::dev_style_tool::AGENT_CHAT_KNOBS {
+        if !seen_agent_chat_groups.contains(&knob.group) {
+            seen_agent_chat_groups.push(knob.group);
+            elements.push(element(
+                &format!(
+                    "style-section:agent-chat:{}",
+                    agent_chat_group_slug(knob.group)
+                ),
+                ElementType::Panel,
+                Some(knob.group.label().to_string()),
+                Some(agent_chat_group_slug(knob.group).to_string()),
+                None,
+                None,
+                Some(next_index),
+            ));
+            next_index += 1;
+        }
+        let control_index = next_index;
+        next_index += 3;
+        elements.push(element(
+            &format!("slider:dev-style-tool-agent-chat:{}", knob.id.as_str()),
+            ElementType::Slider,
+            Some(knob.label.to_string()),
+            Some(knob.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index),
+        ));
+        elements.push(element(
+            &format!("input:dev-style-tool-agent-chat:{}", knob.id.as_str()),
+            ElementType::Input,
+            Some(knob.label.to_string()),
+            Some(knob.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index + 1),
+        ));
+        elements.push(element(
+            &format!(
+                "button:dev-style-tool-agent-chat-reset:{}",
+                knob.id.as_str()
+            ),
+            ElementType::Button,
+            Some(format!("Reset {}", knob.label)),
+            Some(knob.id.as_str().to_string()),
+            None,
+            None,
+            Some(control_index + 2),
+        ));
+    }
+
     SurfaceElementSnapshot {
         total_count: elements.len(),
         elements,
@@ -494,6 +546,17 @@ fn dev_style_group_slug(group: crate::dev_style_tool::StyleKnobGroup) -> &'stati
         crate::dev_style_tool::StyleKnobGroup::Typography => "typography",
         crate::dev_style_tool::StyleKnobGroup::Footer => "footer",
         crate::dev_style_tool::StyleKnobGroup::HeaderInfoBar => "header-info-bar",
+    }
+}
+
+fn agent_chat_group_slug(group: crate::dev_style_tool::AgentChatKnobGroup) -> &'static str {
+    match group {
+        crate::dev_style_tool::AgentChatKnobGroup::Transcript => "transcript",
+        crate::dev_style_tool::AgentChatKnobGroup::Markdown => "markdown",
+        crate::dev_style_tool::AgentChatKnobGroup::UserMessage => "user-message",
+        crate::dev_style_tool::AgentChatKnobGroup::AssistantMessage => "assistant-message",
+        crate::dev_style_tool::AgentChatKnobGroup::CollapsibleBlocks => "collapsible-blocks",
+        crate::dev_style_tool::AgentChatKnobGroup::ErrorAndSystem => "error-and-system",
     }
 }
 

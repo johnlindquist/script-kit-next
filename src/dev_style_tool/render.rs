@@ -18,6 +18,9 @@ use crate::dev_style_tool::{
         actions_popup_knob_by_id, ActionsPopupKnob, ActionsPopupKnobGroup, ActionsPopupKnobId,
         ACTIONS_POPUP_KNOBS,
     },
+    agent_chat_catalog::{
+        agent_chat_knob_by_id, AgentChatKnob, AgentChatKnobGroup, AgentChatKnobId, AGENT_CHAT_KNOBS,
+    },
     catalog::{
         knob_by_id, StyleKnob, StyleKnobGroup, StyleKnobId, StyleKnobSection, StyleUnit,
         StyleValue, STYLE_KNOBS,
@@ -44,11 +47,18 @@ struct ActionsPopupControlState {
     slider: Entity<SliderState>,
 }
 
+struct AgentChatControlState {
+    knob_id: AgentChatKnobId,
+    input: Entity<InputState>,
+    slider: Entity<SliderState>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DevStyleToolTab {
     MainWindowStyling,
     TextCopy,
     ActionsPopupStyling,
+    AgentChatStyling,
 }
 
 impl DevStyleToolTab {
@@ -56,13 +66,15 @@ impl DevStyleToolTab {
         Self::MainWindowStyling,
         Self::TextCopy,
         Self::ActionsPopupStyling,
+        Self::AgentChatStyling,
     ];
 
     const fn label(self) -> &'static str {
         match self {
             Self::MainWindowStyling => "Main Window Styling",
-            Self::TextCopy => "Text",
+            Self::TextCopy => "Text / Copy",
             Self::ActionsPopupStyling => "Actions Popup Styling",
+            Self::AgentChatStyling => "Agent Chat Styling",
         }
     }
 
@@ -71,6 +83,7 @@ impl DevStyleToolTab {
             Self::MainWindowStyling => "tab:dev-style-tool:main-window-styling",
             Self::TextCopy => "tab:dev-style-tool:text-copy",
             Self::ActionsPopupStyling => "tab:dev-style-tool:actions-popup-styling",
+            Self::AgentChatStyling => "tab:dev-style-tool:agent-chat-styling",
         }
     }
 }
@@ -81,6 +94,7 @@ pub(crate) struct DevStyleToolApp {
     controls: Vec<StyleControlState>,
     copy_controls: Vec<CopyControlState>,
     actions_popup_controls: Vec<ActionsPopupControlState>,
+    agent_chat_controls: Vec<AgentChatControlState>,
     save_status: Option<String>,
     save_path: Option<PathBuf>,
     saved_markdown: Entity<InputState>,
@@ -108,8 +122,8 @@ impl DevStyleToolApp {
                 });
                 let slider = cx.new(|_| {
                     SliderState::new()
-                        .min(knob.min)
                         .max(knob.max)
+                        .min(knob.min)
                         .step(knob.step)
                         .default_value(initial)
                 });
@@ -176,8 +190,8 @@ impl DevStyleToolApp {
                 });
                 let slider = cx.new(|_| {
                     SliderState::new()
-                        .min(knob.min)
                         .max(knob.max)
+                        .min(knob.min)
                         .step(knob.step)
                         .default_value(initial)
                 });
@@ -211,6 +225,52 @@ impl DevStyleToolApp {
                 }
             })
             .collect();
+        let agent_chat_controls = AGENT_CHAT_KNOBS
+            .iter()
+            .map(|knob| {
+                let initial = current_agent_chat_knob_value(knob.id);
+                let input = cx.new(|cx| {
+                    InputState::new(window, cx)
+                        .tab_navigation(true)
+                        .default_value(format_style_value(initial, knob.unit))
+                });
+                let slider = cx.new(|_| {
+                    SliderState::new()
+                        .max(knob.max)
+                        .min(knob.min)
+                        .step(knob.step)
+                        .default_value(initial)
+                });
+
+                let knob_id = knob.id;
+                subscriptions.push(cx.subscribe_in(
+                    &slider,
+                    window,
+                    move |this, _, event: &SliderEvent, window, cx| match event {
+                        SliderEvent::Change(value) | SliderEvent::Release(value) => {
+                            this.apply_agent_chat_knob_value(knob_id, value.end(), window, cx);
+                        }
+                    },
+                ));
+                subscriptions.push(cx.subscribe_in(
+                    &input,
+                    window,
+                    move |this, input, event: &InputEvent, window, cx| match event {
+                        InputEvent::PressEnter { .. } | InputEvent::Blur => {
+                            let value = input.read(cx).value().to_string();
+                            this.commit_agent_chat_knob_text(knob_id, &value, window, cx);
+                        }
+                        _ => {}
+                    },
+                ));
+
+                AgentChatControlState {
+                    knob_id,
+                    input,
+                    slider,
+                }
+            })
+            .collect();
         let saved_markdown = cx.new(|cx| {
             InputState::new(window, cx)
                 .multi_line(true)
@@ -224,6 +284,7 @@ impl DevStyleToolApp {
             controls,
             copy_controls,
             actions_popup_controls,
+            agent_chat_controls,
             save_status: None,
             save_path: None,
             saved_markdown,
@@ -352,11 +413,66 @@ impl DevStyleToolApp {
         self.refresh_actions_popup(cx);
     }
 
+    fn apply_agent_chat_knob_value(
+        &mut self,
+        knob_id: AgentChatKnobId,
+        value: f32,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if let Some(change) =
+            runtime_overrides::set_agent_chat_value(knob_id, StyleValue::Number(value))
+        {
+            let StyleValue::Number(applied) = change.applied;
+            self.sync_agent_chat_control_to_value(knob_id, applied, window, cx);
+            self.refresh_agent_chat(cx);
+        }
+    }
+
+    fn commit_agent_chat_knob_text(
+        &mut self,
+        knob_id: AgentChatKnobId,
+        value: &str,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let Some(knob) = agent_chat_knob_by_id(knob_id) else {
+            return;
+        };
+        let Ok(number) = parse_style_value(value, knob.unit) else {
+            self.sync_agent_chat_control_to_value(
+                knob_id,
+                current_agent_chat_knob_value(knob_id),
+                window,
+                cx,
+            );
+            return;
+        };
+        self.apply_agent_chat_knob_value(knob_id, number, window, cx);
+    }
+
+    fn reset_agent_chat_knob(
+        &mut self,
+        knob_id: AgentChatKnobId,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let _ = runtime_overrides::reset_agent_chat_value(knob_id);
+        self.sync_agent_chat_control_to_value(
+            knob_id,
+            current_agent_chat_knob_value(knob_id),
+            window,
+            cx,
+        );
+        self.refresh_agent_chat(cx);
+    }
+
     fn undo_style_change(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
         if runtime_overrides::undo_last().is_some() {
             self.sync_all_controls(window, cx);
             self.refresh_main_window(cx);
             self.refresh_actions_popup(cx);
+            self.refresh_agent_chat(cx);
         }
     }
 
@@ -365,6 +481,7 @@ impl DevStyleToolApp {
             self.sync_all_controls(window, cx);
             self.refresh_main_window(cx);
             self.refresh_actions_popup(cx);
+            self.refresh_agent_chat(cx);
         }
     }
 
@@ -373,6 +490,7 @@ impl DevStyleToolApp {
         self.sync_all_controls(window, cx);
         self.refresh_main_window(cx);
         self.refresh_actions_popup(cx);
+        self.refresh_agent_chat(cx);
     }
 
     fn sync_all_controls(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
@@ -401,6 +519,19 @@ impl DevStyleToolApp {
             self.sync_actions_popup_control_to_value(
                 knob_id,
                 current_actions_popup_knob_value(knob_id),
+                window,
+                cx,
+            );
+        }
+        let agent_chat_knob_ids: Vec<AgentChatKnobId> = self
+            .agent_chat_controls
+            .iter()
+            .map(|control| control.knob_id)
+            .collect();
+        for knob_id in agent_chat_knob_ids {
+            self.sync_agent_chat_control_to_value(
+                knob_id,
+                current_agent_chat_knob_value(knob_id),
                 window,
                 cx,
             );
@@ -491,6 +622,37 @@ impl DevStyleToolApp {
         cx.notify();
     }
 
+    fn sync_agent_chat_control_to_value(
+        &mut self,
+        knob_id: AgentChatKnobId,
+        value: f32,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let Some(knob) = agent_chat_knob_by_id(knob_id) else {
+            return;
+        };
+        let Some(control) = self
+            .agent_chat_controls
+            .iter()
+            .find(|control| control.knob_id == knob_id)
+        else {
+            return;
+        };
+        control.slider.update(cx, |slider, cx| {
+            if (slider.value().end() - value).abs() > f32::EPSILON {
+                slider.set_value(SliderValue::Single(value), window, cx);
+            }
+        });
+        let label = format_style_value(value, knob.unit);
+        control.input.update(cx, |input, cx| {
+            if input.value().as_ref() != label {
+                input.set_value(label, window, cx);
+            }
+        });
+        cx.notify();
+    }
+
     fn refresh_main_window(&self, cx: &mut gpui::Context<Self>) {
         self.main_app.update(cx, |view, cx| {
             view.update_theme(cx);
@@ -511,6 +673,12 @@ impl DevStyleToolApp {
             crate::actions::resize_actions_window(cx, &dialog);
             crate::actions::notify_actions_window(cx);
         }
+    }
+
+    fn refresh_agent_chat(&self, cx: &mut gpui::Context<Self>) {
+        self.main_app.update(cx, |_view, cx| {
+            cx.notify();
+        });
     }
 
     fn save_current_settings(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
@@ -1078,6 +1246,151 @@ impl DevStyleToolApp {
             )
     }
 
+    fn render_agent_chat_controls(
+        &self,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> Div {
+        let mut column = div().flex().flex_col().gap(px(10.0)).flex_1();
+        for group in AGENT_CHAT_KNOB_GROUPS {
+            let controls: Vec<&AgentChatControlState> = self
+                .agent_chat_controls
+                .iter()
+                .filter(|control| {
+                    agent_chat_knob_by_id(control.knob_id).is_some_and(|knob| knob.group == *group)
+                })
+                .collect();
+            if controls.is_empty() {
+                continue;
+            }
+            column = column.child(self.render_agent_chat_group(*group, controls, chrome, cx));
+        }
+        column
+    }
+
+    fn render_agent_chat_group(
+        &self,
+        group: AgentChatKnobGroup,
+        controls: Vec<&AgentChatControlState>,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        div()
+            .id(ElementId::Name(
+                format!("agent-chat-style-section:{}", agent_chat_group_slug(group)).into(),
+            ))
+            .flex()
+            .flex_col()
+            .gap(px(5.0))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(rgb(chrome.text_secondary_hex))
+                    .child(group.label()),
+            )
+            .children(
+                controls
+                    .into_iter()
+                    .map(|control| self.render_agent_chat_control(control, chrome, cx)),
+            )
+    }
+
+    fn render_agent_chat_control(
+        &self,
+        control: &AgentChatControlState,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        let knob =
+            agent_chat_knob_by_id(control.knob_id).expect("agent chat control must reference knob");
+        let base = agent_chat_knob_base_value(knob);
+        let effective = current_agent_chat_knob_value(knob.id);
+        let knob_id = knob.id;
+
+        div()
+            .id(ElementId::Name(
+                format!("control:dev-style-tool-agent-chat:{}", knob.id.as_str()).into(),
+            ))
+            .flex()
+            .flex_col()
+            .gap(px(3.0))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.0))
+                    .child(div().text_xs().child(knob.label))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(chrome.text_secondary_hex))
+                            .child(format!(
+                                "{} | base {}",
+                                format_style_value(effective, knob.unit),
+                                format_style_value(base, knob.unit)
+                            )),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .child(
+                        div()
+                            .id(ElementId::Name(
+                                format!("slider:dev-style-tool-agent-chat:{}", knob.id.as_str())
+                                    .into(),
+                            ))
+                            .h(px(22.0))
+                            .flex_1()
+                            .flex()
+                            .items_center()
+                            .child(Slider::new(&control.slider).horizontal()),
+                    )
+                    .child(
+                        div()
+                            .id(ElementId::Name(
+                                format!("input:dev-style-tool-agent-chat:{}", knob.id.as_str())
+                                    .into(),
+                            ))
+                            .w(px(64.0))
+                            .child(Input::new(&control.input).small()),
+                    )
+                    .child(
+                        div()
+                            .w(px(42.0))
+                            .text_xs()
+                            .text_color(rgb(chrome.text_secondary_hex))
+                            .child(knob.unit.label()),
+                    )
+                    .child(
+                        div()
+                            .id(ElementId::Name(
+                                format!(
+                                    "button:dev-style-tool-agent-chat-reset:{}",
+                                    knob.id.as_str()
+                                )
+                                .into(),
+                            ))
+                            .px(px(6.0))
+                            .py(px(3.0))
+                            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+                            .border(px(1.0))
+                            .border_color(rgba(chrome.border_rgba))
+                            .text_xs()
+                            .cursor_pointer()
+                            .hover(|style| style.bg(rgba(chrome.hover_rgba)))
+                            .on_click(cx.listener(move |this, _event, window, cx| {
+                                this.reset_agent_chat_knob(knob_id, window, cx);
+                            }))
+                            .child("Reset"),
+                    ),
+            )
+    }
+
     fn render_toolbar_button(
         &self,
         semantic_id: &'static str,
@@ -1146,6 +1459,7 @@ impl Render for DevStyleToolApp {
                                             .len()
                                             .saturating_add(COPY_CONTROLS.len())
                                             .saturating_add(ACTIONS_POPUP_KNOBS.len())
+                                            .saturating_add(AGENT_CHAT_KNOBS.len())
                                     )),
                             )
                             .child(
@@ -1237,6 +1551,9 @@ impl Render for DevStyleToolApp {
                         DevStyleToolTab::ActionsPopupStyling => {
                             self.render_actions_popup_controls(chrome, cx)
                         }
+                        DevStyleToolTab::AgentChatStyling => {
+                            self.render_agent_chat_controls(chrome, cx)
+                        }
                     }),
             )
     }
@@ -1254,6 +1571,15 @@ const STYLE_KNOB_GROUPS: &[StyleKnobGroup] = &[
     StyleKnobGroup::HeaderInfoBar,
 ];
 
+const AGENT_CHAT_KNOB_GROUPS: &[AgentChatKnobGroup] = &[
+    AgentChatKnobGroup::Transcript,
+    AgentChatKnobGroup::Markdown,
+    AgentChatKnobGroup::UserMessage,
+    AgentChatKnobGroup::AssistantMessage,
+    AgentChatKnobGroup::CollapsibleBlocks,
+    AgentChatKnobGroup::ErrorAndSystem,
+];
+
 fn current_knob_value(knob_id: StyleKnobId) -> f32 {
     match runtime_overrides::current_value(knob_id).unwrap_or_else(|| {
         let knob = knob_by_id(knob_id).expect("style knob must exist");
@@ -1265,6 +1591,21 @@ fn current_knob_value(knob_id: StyleKnobId) -> f32 {
 
 fn knob_base_value(knob: &StyleKnob) -> f32 {
     match (knob.get)(&crate::designs::current_main_menu_theme().base_def()) {
+        StyleValue::Number(value) => value,
+    }
+}
+
+fn current_agent_chat_knob_value(knob_id: AgentChatKnobId) -> f32 {
+    match runtime_overrides::current_agent_chat_value(knob_id).unwrap_or_else(|| {
+        let knob = agent_chat_knob_by_id(knob_id).expect("agent chat style knob must exist");
+        (knob.get)(&crate::dev_style_tool::agent_chat_catalog::base_agent_chat_style())
+    }) {
+        StyleValue::Number(value) => value,
+    }
+}
+
+fn agent_chat_knob_base_value(knob: &AgentChatKnob) -> f32 {
+    match (knob.get)(&crate::dev_style_tool::agent_chat_catalog::base_agent_chat_style()) {
         StyleValue::Number(value) => value,
     }
 }
@@ -1345,5 +1686,16 @@ fn actions_popup_group_slug(group: ActionsPopupKnobGroup) -> &'static str {
         ActionsPopupKnobGroup::Section => "section",
         ActionsPopupKnobGroup::ContextHeader => "context-header",
         ActionsPopupKnobGroup::Shortcut => "shortcut",
+    }
+}
+
+fn agent_chat_group_slug(group: AgentChatKnobGroup) -> &'static str {
+    match group {
+        AgentChatKnobGroup::Transcript => "transcript",
+        AgentChatKnobGroup::Markdown => "markdown",
+        AgentChatKnobGroup::UserMessage => "user-message",
+        AgentChatKnobGroup::AssistantMessage => "assistant-message",
+        AgentChatKnobGroup::CollapsibleBlocks => "collapsible-blocks",
+        AgentChatKnobGroup::ErrorAndSystem => "error-system",
     }
 }

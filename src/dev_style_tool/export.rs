@@ -2,7 +2,10 @@ use std::path::{Path, PathBuf};
 
 use serde_json::json;
 
-use super::{runtime_overrides, StyleValue, ACTIONS_POPUP_KNOBS, COPY_CONTROLS, STYLE_KNOBS};
+use super::{
+    runtime_overrides, StyleValue, ACTIONS_POPUP_KNOBS, AGENT_CHAT_KNOBS, COPY_CONTROLS,
+    STYLE_KNOBS,
+};
 
 pub fn save_current_settings_markdown() -> anyhow::Result<PathBuf> {
     save_current_settings_markdown_with_contents().map(|(path, _contents)| path)
@@ -34,6 +37,7 @@ pub fn current_settings_markdown() -> String {
 pub fn current_settings_json() -> serde_json::Value {
     let main_window_base = crate::designs::current_main_menu_theme().base_def();
     let actions_popup_base = crate::designs::base_actions_popup_theme();
+    let agent_chat_base = super::agent_chat_catalog::base_agent_chat_style();
     let main_window_style_overrides: Vec<_> = STYLE_KNOBS
         .iter()
         .filter_map(|knob| {
@@ -126,10 +130,43 @@ pub fn current_settings_json() -> serde_json::Value {
             })
         })
         .collect();
+    let agent_chat_style_overrides: Vec<_> = AGENT_CHAT_KNOBS
+        .iter()
+        .filter_map(|knob| {
+            runtime_overrides::current_agent_chat_value(knob.id).map(|value| {
+                let StyleValue::Number(value) = value;
+                json!({
+                    "id": knob.id.as_str(),
+                    "label": knob.label,
+                    "group": knob.group.label(),
+                    "unit": knob.unit.label(),
+                    "value": value,
+                })
+            })
+        })
+        .collect();
+    let agent_chat_style_effective: Vec<_> = AGENT_CHAT_KNOBS
+        .iter()
+        .map(|knob| {
+            let StyleValue::Number(base_value) = (knob.get)(&agent_chat_base);
+            let StyleValue::Number(value) = runtime_overrides::current_agent_chat_value(knob.id)
+                .unwrap_or(StyleValue::Number(base_value));
+            json!({
+                "id": knob.id.as_str(),
+                "label": knob.label,
+                "group": knob.group.label(),
+                "unit": knob.unit.label(),
+                "base": base_value,
+                "value": value,
+                "overridden": runtime_overrides::current_agent_chat_value(knob.id).is_some(),
+            })
+        })
+        .collect();
     let override_count = main_window_style_overrides
         .len()
         .saturating_add(main_window_copy_overrides.len())
-        .saturating_add(actions_popup_style_overrides.len());
+        .saturating_add(actions_popup_style_overrides.len())
+        .saturating_add(agent_chat_style_overrides.len());
 
     json!({
         "schema": "script-kit-dev-style/v2",
@@ -140,6 +177,7 @@ pub fn current_settings_json() -> serde_json::Value {
             "mainWindowStyle": STYLE_KNOBS.len(),
             "mainWindowCopy": COPY_CONTROLS.len(),
             "actionsPopupStyle": ACTIONS_POPUP_KNOBS.len(),
+            "agentChatStyle": AGENT_CHAT_KNOBS.len(),
         },
         "surfaces": {
             "mainWindow": {
@@ -158,8 +196,14 @@ pub fn current_settings_json() -> serde_json::Value {
                     "effective": actions_popup_style_effective,
                 },
             },
+            "agentChat": {
+                "style": {
+                    "overrides": agent_chat_style_overrides,
+                    "effective": agent_chat_style_effective,
+                },
+            },
         },
-        "agentPrompt": "Apply or reason about these Script Kit GPUI dev style overrides by matching style ids to src/dev_style_tool/catalog.rs and src/dev_style_tool/actions_popup_catalog.rs, and copy ids to src/dev_style_tool/copy_catalog.rs.",
+        "agentPrompt": "Apply or reason about these Script Kit GPUI dev style overrides by matching style ids to src/dev_style_tool/catalog.rs, src/dev_style_tool/actions_popup_catalog.rs, and src/dev_style_tool/agent_chat_catalog.rs, and copy ids to src/dev_style_tool/copy_catalog.rs.",
     })
 }
 

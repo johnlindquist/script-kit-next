@@ -7545,6 +7545,30 @@ impl ScriptListApp {
                                                 &control,
                                                 &value,
                                             )?
+                                        } else if control
+                                            .strip_prefix("control:dev-style-tool-agent-chat:")
+                                            .or_else(|| {
+                                                control.strip_prefix(
+                                                    "input:dev-style-tool-agent-chat:",
+                                                )
+                                            })
+                                            .or_else(|| {
+                                                control.strip_prefix(
+                                                    "slider:dev-style-tool-agent-chat:",
+                                                )
+                                            })
+                                            .or_else(|| {
+                                                control.strip_prefix(
+                                                    "button:dev-style-tool-agent-chat-reset:",
+                                                )
+                                            })
+                                            .is_some()
+                                            || control.starts_with("agentChat.")
+                                        {
+                                            crate::dev_style_tool::runtime_overrides::set_agent_chat_number_from_devtools(
+                                                &control,
+                                                &value,
+                                            )?
                                         } else {
                                             crate::dev_style_tool::runtime_overrides::set_number_from_devtools(
                                                 &control,

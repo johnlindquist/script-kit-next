@@ -55,6 +55,7 @@ mod context_snapshot;
 mod designs;
 mod dev_style_tool {
     pub mod actions_popup_catalog;
+    pub mod agent_chat_catalog;
     pub mod catalog;
     pub mod copy_catalog;
     pub(crate) mod export;
@@ -64,6 +65,8 @@ mod dev_style_tool {
 
     #[allow(unused_imports)]
     pub use actions_popup_catalog::*;
+    #[allow(unused_imports)]
+    pub use agent_chat_catalog::*;
     #[allow(unused_imports)]
     pub use catalog::*;
     #[allow(unused_imports)]
