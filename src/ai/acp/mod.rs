@@ -32,6 +32,7 @@ pub(crate) mod history;
 pub(crate) mod history_attachment;
 pub(crate) mod history_popup;
 pub(crate) mod hosted;
+pub(crate) mod kitchen_sink_fixture;
 pub(crate) mod labels;
 pub(crate) mod permission_broker;
 pub(crate) mod picker_popup;
