@@ -8121,7 +8121,7 @@ dependencies = [
 
 [[package]]
 name = "script-kit-gpui"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "age",
  "agent-client-protocol",

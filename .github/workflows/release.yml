@@ -103,8 +103,6 @@ jobs:
       RUSTC_WRAPPER: "sccache"
       PI_AGENT_RUST_REF: "3d1a3950c16ffdb10cd81780b26921c75c180770"
       PI_AGENT_RUST_STRICT_REF: "1"
-      PI_AGENT_RUST_DIR: ${{ runner.temp }}/pi_agent_rust-src
-      PI_AGENT_RUST_TARGET_DIR: ${{ runner.temp }}/pi_agent_rust-target
     steps:
       - uses: actions/checkout@v4
 

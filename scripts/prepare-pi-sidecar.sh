@@ -14,7 +14,13 @@ else
 fi
 PI_AGENT_RUST_URL="${PI_AGENT_RUST_URL:-https://github.com/Dicklesworthstone/pi_agent_rust.git}"
 PI_AGENT_RUST_REF="${PI_AGENT_RUST_REF:-3d1a3950c16ffdb10cd81780b26921c75c180770}"
-PI_TARGET_DIR="${PI_AGENT_RUST_TARGET_DIR:-${PI_REPO}/target}"
+if [[ -n "${PI_AGENT_RUST_TARGET_DIR:-}" ]]; then
+  PI_TARGET_DIR="${PI_AGENT_RUST_TARGET_DIR}"
+elif [[ -n "${RUNNER_TEMP:-}" ]]; then
+  PI_TARGET_DIR="${RUNNER_TEMP}/pi_agent_rust-target"
+else
+  PI_TARGET_DIR="${PI_REPO}/target"
+fi
 PI_BIN="${PI_TARGET_DIR}/release/pi"
 DEST="${REPO_ROOT}/target/pi-sidecar/pi"
 STRICT_REF="${PI_AGENT_RUST_STRICT_REF:-${CI:-0}}"
