@@ -16,9 +16,73 @@ permissions:
   contents: write
 
 jobs:
-  validate:
-    name: Validate release gates
+  validate-version:
+    name: Validate release version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify tag matches Cargo.toml version
+        run: bash scripts/verify-release-version.sh
+
+  validate-fmt:
+    name: Validate release format
     runs-on: macos-14
+    needs: validate-version
+    steps:
+      - uses: actions/checkout@v4
+      # rust-toolchain.toml at repo root pins the actual channel; this action installs whatever it asks for.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Validate format
+        run: bash scripts/verify.sh --skip-bundle --only fmt
+
+  validate-check:
+    name: Validate release check
+    runs-on: macos-14
+    needs: validate-version
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+    steps:
+      - uses: actions/checkout@v4
+      # rust-toolchain.toml at repo root pins the actual channel; this action installs whatever it asks for.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "macos-debug"
+          cache-targets: false
+          save-if: false
+      - name: Validate check
+        run: bash scripts/verify.sh --skip-bundle --only check
+
+  validate-clippy:
+    name: Validate release clippy
+    runs-on: macos-14
+    needs: validate-version
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+    steps:
+      - uses: actions/checkout@v4
+      # rust-toolchain.toml at repo root pins the actual channel; this action installs whatever it asks for.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "macos-debug"
+          cache-targets: false
+          save-if: false
+      - name: Validate clippy
+        run: bash scripts/verify.sh --skip-bundle --only clippy
+
+  validate-test-compile:
+    name: Validate release test compile
+    runs-on: macos-14
+    needs: validate-version
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
@@ -27,8 +91,6 @@ jobs:
       - uses: actions/checkout@v4
       # rust-toolchain.toml at repo root pins the actual channel; this action installs whatever it asks for.
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
       - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: Swatinem/rust-cache@v2
         with:
@@ -39,16 +101,64 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.2.21
-      - name: Verify tag matches Cargo.toml version
-        run: bash scripts/verify-release-version.sh
+      - name: Validate test compile
+        run: bash scripts/verify.sh --skip-bundle --only test-compile
+
+  validate-sdk-types:
+    name: Validate release SDK types
+    runs-on: macos-14
+    needs: validate-version
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.21
       - name: Install JS dependencies
         run: bun install
-      - name: Validate release gates
-        run: bash scripts/verify.sh --skip-bundle
+      - name: Validate SDK types
+        run: bash scripts/verify.sh --skip-bundle --only sdk-types
+
+  validate-sdk-tests:
+    name: Validate release SDK tests
+    runs-on: macos-14
+    needs: validate-version
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.21
+      - name: Install JS dependencies
+        run: bun install
+      - name: Validate SDK tests
+        run: bash scripts/verify.sh --skip-bundle --only sdk-tests
+
+  validate-release-gates:
+    name: Validate release gates
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs:
+      - validate-version
+      - validate-fmt
+      - validate-check
+      - validate-clippy
+      - validate-test-compile
+      - validate-sdk-types
+      - validate-sdk-tests
+    steps:
+      - name: Fail closed if any release gate failed
+        run: |
+          test "${{ needs['validate-version'].result }}" = "success"
+          test "${{ needs['validate-fmt'].result }}" = "success"
+          test "${{ needs['validate-check'].result }}" = "success"
+          test "${{ needs['validate-clippy'].result }}" = "success"
+          test "${{ needs['validate-test-compile'].result }}" = "success"
+          test "${{ needs['validate-sdk-types'].result }}" = "success"
+          test "${{ needs['validate-sdk-tests'].result }}" = "success"
 
   build-macos-app:
     name: Build unsigned macOS app
     runs-on: macos-14
+    needs: validate-version
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
@@ -98,6 +208,7 @@ jobs:
   build-pi-sidecar:
     name: Build Pi sidecar
     runs-on: macos-14
+    needs: validate-version
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
@@ -143,7 +254,10 @@ jobs:
   sign-notarize-macos:
     name: Sign and notarize macOS app
     runs-on: macos-14
-    needs: [validate, build-macos-app, build-pi-sidecar]
+    needs:
+      - validate-release-gates
+      - build-macos-app
+      - build-pi-sidecar
     steps:
       - uses: actions/checkout@v4
 
@@ -264,6 +378,12 @@ jobs:
           rm -f Script-Kit-macos.zip
           /usr/bin/ditto -c -k --keepParent "Script Kit.app" "Script-Kit-macos.zip"
 
+      - name: Verify final release zip contents
+        run: |
+          TMP_DIR="$(mktemp -d)"
+          /usr/bin/ditto -x -k "target/release/bundle/osx/Script-Kit-macos.zip" "$TMP_DIR"
+          bash scripts/verify-macos-bundle.sh "$TMP_DIR/Script Kit.app"
+
       - name: Generate release manifest
         run: |
           cd target/release/bundle/osx
@@ -304,8 +424,14 @@ jobs:
 
   release:
     name: Create Release
-    needs: [validate, sign-notarize-macos]
-    if: ${{ needs.validate.result == 'success' && needs.sign-notarize-macos.result == 'success' }}
+    needs:
+      - validate-release-gates
+      - sign-notarize-macos
+    if: >-
+      ${{
+        needs['validate-release-gates'].result == 'success' &&
+        needs['sign-notarize-macos'].result == 'success'
+      }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

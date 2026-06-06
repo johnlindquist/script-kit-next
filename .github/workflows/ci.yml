@@ -171,16 +171,13 @@ jobs:
   # BUILD ARTIFACT (main branch only, after full validation passes)
   # ═══════════════════════════════════════════════════════════════════
 
-  build-artifact:
-    name: Build macOS Artifact
+  build-artifact-app:
+    name: Build macOS App Intermediate
     runs-on: macos-14
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [fmt, check, clippy, test, typescript-tests]
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
-      PI_AGENT_RUST_REF: "3d1a3950c16ffdb10cd81780b26921c75c180770"
-      PI_AGENT_RUST_STRICT_REF: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -209,6 +206,38 @@ jobs:
       - name: Verify cargo-bundle is available
         run: cargo bundle --help >/dev/null
 
+      - name: Build release bundle
+        run: cargo bundle --release --bin script-kit-gpui
+
+      - name: Zip unsigned app bundle
+        run: |
+          cd target/release/bundle/osx
+          /usr/bin/ditto -c -k --keepParent "Script Kit.app" "$RUNNER_TEMP/ci-unsigned-app.zip"
+
+      - name: Upload unsigned app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-macos-unsigned-app
+          path: ${{ runner.temp }}/ci-unsigned-app.zip
+          retention-days: 1
+
+  build-artifact-pi-sidecar:
+    name: Build CI Pi Sidecar
+    runs-on: macos-14
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+      PI_AGENT_RUST_REF: "3d1a3950c16ffdb10cd81780b26921c75c180770"
+      PI_AGENT_RUST_STRICT_REF: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml at repo root pins the actual channel; this action installs whatever it asks for.
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: mozilla-actions/sccache-action@v0.0.9
+
       - name: Cache Pi sidecar Cargo target
         uses: actions/cache@v4
         with:
@@ -221,8 +250,60 @@ jobs:
       - name: Prepare bundled Pi sidecar
         run: bash scripts/prepare-pi-sidecar.sh
 
-      - name: Build release bundle
-        run: cargo bundle --release --bin script-kit-gpui
+      - name: Verify Pi sidecar
+        run: |
+          test -x target/pi-sidecar/pi
+          file target/pi-sidecar/pi
+
+      - name: Zip Pi sidecar
+        run: |
+          cd target/pi-sidecar
+          /usr/bin/ditto -c -k pi "$RUNNER_TEMP/ci-pi-sidecar.zip"
+
+      - name: Upload Pi sidecar
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-pi-sidecar
+          path: ${{ runner.temp }}/ci-pi-sidecar.zip
+          retention-days: 1
+
+  assemble-artifact:
+    name: Assemble macOS Artifact
+    runs-on: macos-14
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - fmt
+      - check
+      - clippy
+      - test
+      - typescript-tests
+      - build-artifact-app
+      - build-artifact-pi-sidecar
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download unsigned app bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-macos-unsigned-app
+          path: artifacts/app
+
+      - name: Restore unsigned app bundle
+        run: |
+          mkdir -p target/release/bundle/osx
+          /usr/bin/ditto -x -k artifacts/app/ci-unsigned-app.zip target/release/bundle/osx
+
+      - name: Download Pi sidecar
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-pi-sidecar
+          path: artifacts/pi
+
+      - name: Restore Pi sidecar
+        run: |
+          mkdir -p target/pi-sidecar
+          /usr/bin/ditto -x -k artifacts/pi/ci-pi-sidecar.zip target/pi-sidecar
+          chmod 0755 target/pi-sidecar/pi
 
       - name: Install Pi sidecar into bundle
         run: bash scripts/install-pi-sidecar-into-bundle.sh
