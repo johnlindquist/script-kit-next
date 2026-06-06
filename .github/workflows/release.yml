@@ -46,10 +46,9 @@ jobs:
       - name: Validate release gates
         run: bash scripts/verify.sh --skip-bundle
 
-  build-macos:
-    name: Build macOS
+  build-macos-app:
+    name: Build unsigned macOS app
     runs-on: macos-14
-    needs: validate
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
@@ -81,14 +80,97 @@ jobs:
       - name: Verify cargo-bundle is available
         run: cargo bundle --help >/dev/null
 
-      - name: Build release
-        run: cargo build --release --bin script-kit-gpui
+      - name: Build release bundle
+        run: cargo bundle --release --bin script-kit-gpui
+
+      - name: Zip unsigned app bundle
+        run: |
+          cd target/release/bundle/osx
+          /usr/bin/ditto -c -k --keepParent "Script Kit.app" "$RUNNER_TEMP/Script-Kit-unsigned-app.zip"
+
+      - name: Upload unsigned app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-unsigned-app
+          path: ${{ runner.temp }}/Script-Kit-unsigned-app.zip
+          retention-days: 1
+
+  build-pi-sidecar:
+    name: Build Pi sidecar
+    runs-on: macos-14
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+      PI_AGENT_RUST_REF: "3d1a3950c16ffdb10cd81780b26921c75c180770"
+      PI_AGENT_RUST_STRICT_REF: "1"
+      PI_AGENT_RUST_DIR: ${{ runner.temp }}/pi_agent_rust-src
+      PI_AGENT_RUST_TARGET_DIR: ${{ runner.temp }}/pi_agent_rust-target
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml at repo root pins the actual channel; this action installs whatever it asks for.
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Cache Pi sidecar Cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/pi_agent_rust-target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: pi-sidecar-${{ runner.os }}-${{ runner.arch }}-${{ env.PI_AGENT_RUST_REF }}-${{ hashFiles('rust-toolchain.toml') }}
 
       - name: Prepare bundled Pi sidecar
         run: bash scripts/prepare-pi-sidecar.sh
 
-      - name: Create bundle
-        run: cargo bundle --release --bin script-kit-gpui
+      - name: Verify Pi sidecar
+        run: |
+          test -x target/pi-sidecar/pi
+          file target/pi-sidecar/pi
+
+      - name: Zip Pi sidecar
+        run: |
+          cd target/pi-sidecar
+          /usr/bin/ditto -c -k pi "$RUNNER_TEMP/pi-sidecar.zip"
+
+      - name: Upload Pi sidecar
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-sidecar
+          path: ${{ runner.temp }}/pi-sidecar.zip
+          retention-days: 1
+
+  sign-notarize-macos:
+    name: Sign and notarize macOS app
+    runs-on: macos-14
+    needs: [validate, build-macos-app, build-pi-sidecar]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download unsigned app bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-unsigned-app
+          path: artifacts/app
+
+      - name: Restore unsigned app bundle
+        run: |
+          mkdir -p target/release/bundle/osx
+          /usr/bin/ditto -x -k artifacts/app/Script-Kit-unsigned-app.zip target/release/bundle/osx
+
+      - name: Download Pi sidecar
+        uses: actions/download-artifact@v4
+        with:
+          name: pi-sidecar
+          path: artifacts/pi
+
+      - name: Restore Pi sidecar
+        run: |
+          mkdir -p target/pi-sidecar
+          /usr/bin/ditto -x -k artifacts/pi/pi-sidecar.zip target/pi-sidecar
+          chmod 0755 target/pi-sidecar/pi
 
       - name: Install Pi sidecar into bundle
         run: bash scripts/install-pi-sidecar-into-bundle.sh
@@ -224,7 +306,8 @@ jobs:
 
   release:
     name: Create Release
-    needs: build-macos
+    needs: [validate, sign-notarize-macos]
+    if: ${{ needs.validate.result == 'success' && needs.sign-notarize-macos.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

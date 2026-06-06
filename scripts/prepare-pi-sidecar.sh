@@ -14,23 +14,40 @@ else
 fi
 PI_AGENT_RUST_URL="${PI_AGENT_RUST_URL:-https://github.com/Dicklesworthstone/pi_agent_rust.git}"
 PI_AGENT_RUST_REF="${PI_AGENT_RUST_REF:-3d1a3950c16ffdb10cd81780b26921c75c180770}"
-PI_BIN="${PI_REPO}/target/release/pi"
+PI_TARGET_DIR="${PI_AGENT_RUST_TARGET_DIR:-${PI_REPO}/target}"
+PI_BIN="${PI_TARGET_DIR}/release/pi"
 DEST="${REPO_ROOT}/target/pi-sidecar/pi"
+STRICT_REF="${PI_AGENT_RUST_STRICT_REF:-${CI:-0}}"
 
 echo "pi_sidecar prepare repo=${PI_REPO}"
+echo "pi_sidecar target_dir=${PI_TARGET_DIR}"
 
-if [[ ! -f "${PI_REPO}/Cargo.toml" ]]; then
+if [[ ! -d "${PI_REPO}/.git" ]]; then
+  rm -rf "${PI_REPO}"
   mkdir -p "$(dirname "${PI_REPO}")"
-  git clone --filter=blob:none "${PI_AGENT_RUST_URL}" "${PI_REPO}"
-  git -C "${PI_REPO}" checkout "${PI_AGENT_RUST_REF}"
+  git clone --filter=blob:none --no-checkout "${PI_AGENT_RUST_URL}" "${PI_REPO}"
+  STRICT_REF=1
+fi
+
+if [[ "${STRICT_REF}" == "1" || "${STRICT_REF}" == "true" ]]; then
+  git -C "${PI_REPO}" fetch --filter=blob:none origin "${PI_AGENT_RUST_REF}"
+  git -C "${PI_REPO}" checkout --detach "${PI_AGENT_RUST_REF}"
 fi
 
 test -f "${PI_REPO}/Cargo.toml"
-git -C "${PI_REPO}" rev-parse HEAD
-cargo build --manifest-path "${PI_REPO}/Cargo.toml" --locked --release --bin pi
+actual_ref="$(git -C "${PI_REPO}" rev-parse HEAD)"
+echo "pi_sidecar ref=${actual_ref}"
+if [[ "${STRICT_REF}" == "1" || "${STRICT_REF}" == "true" ]]; then
+  if [[ "${actual_ref}" != "${PI_AGENT_RUST_REF}" ]]; then
+    echo "pi_sidecar expected ${PI_AGENT_RUST_REF}, got ${actual_ref}" >&2
+    exit 1
+  fi
+fi
+
+CARGO_TARGET_DIR="${PI_TARGET_DIR}" cargo build --manifest-path "${PI_REPO}/Cargo.toml" --locked --release --bin pi
 
 mkdir -p "$(dirname "${DEST}")"
-cp "${PI_BIN}" "${DEST}"
+install -m 0755 "${PI_BIN}" "${DEST}"
 chmod 0755 "${DEST}"
 
 echo "pi_sidecar ready dest=${DEST}"

@@ -179,6 +179,10 @@ jobs:
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
+      PI_AGENT_RUST_REF: "3d1a3950c16ffdb10cd81780b26921c75c180770"
+      PI_AGENT_RUST_STRICT_REF: "1"
+      PI_AGENT_RUST_DIR: ${{ runner.temp }}/pi_agent_rust-src
+      PI_AGENT_RUST_TARGET_DIR: ${{ runner.temp }}/pi_agent_rust-target
     steps:
       - uses: actions/checkout@v4
 
@@ -207,13 +211,19 @@ jobs:
       - name: Verify cargo-bundle is available
         run: cargo bundle --help >/dev/null
 
-      - name: Build release
-        run: cargo build --release --bin script-kit-gpui
+      - name: Cache Pi sidecar Cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/pi_agent_rust-target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: pi-sidecar-${{ runner.os }}-${{ runner.arch }}-${{ env.PI_AGENT_RUST_REF }}-${{ hashFiles('rust-toolchain.toml') }}
 
       - name: Prepare bundled Pi sidecar
         run: bash scripts/prepare-pi-sidecar.sh
 
-      - name: Create bundle
+      - name: Build release bundle
         run: cargo bundle --release --bin script-kit-gpui
 
       - name: Install Pi sidecar into bundle
