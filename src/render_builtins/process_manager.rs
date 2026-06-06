@@ -261,7 +261,6 @@ impl ScriptListApp {
         let _design_colors = tokens.colors();
         let design_spacing = tokens.spacing();
         let _design_typography = tokens.typography();
-        let design_visual = tokens.visual();
         let color_resolver =
             crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
         let typography_resolver =
@@ -271,7 +270,6 @@ impl ScriptListApp {
 
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
         let text_primary = chrome.text_primary_hex;
-        let text_hint = rgba(chrome.text_hint_rgba);
 
         // Filter processes from cached data
         let filtered_processes =
@@ -563,74 +561,19 @@ impl ScriptListApp {
         let stop_all_button_colors = crate::components::ButtonColors::from_theme(&self.theme);
         let stop_all_button_entity = cx.entity().downgrade();
 
-        div()
-            .flex()
-            .flex_col()
+        let content = div()
+            .flex_1()
+            .min_h(px(0.))
             .w_full()
-            .h_full()
-            .rounded(px(design_visual.radius_lg))
-            .bg(rgba(chrome.panel_surface_rgba))
-            .text_color(rgb(text_primary))
-            .font_family(self.theme_font_family())
-            .key_context("process_manager")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            // Header with input
+            .overflow_hidden()
+            .py(px(design_spacing.padding_xs))
             .child(
                 div()
+                    .relative()
                     .w_full()
-                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
-                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
-                    .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_3()
-                    .child(
-                        div().flex_1().flex().flex_row().items_center().child(
-                            self.render_search_input()
-                        ),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(text_hint)
-                            .child(Self::process_manager_count_label(total_count)),
-                    )
-                    .when(total_count > 0, |d| {
-                        let stop_all_button_entity = stop_all_button_entity.clone();
-                        d.child(
-                            crate::components::Button::new("Stop All", stop_all_button_colors)
-                                .variant(crate::components::ButtonVariant::Ghost)
-                                .shortcut("⌘↵")
-                                .on_click(Box::new(move |_event, _window, cx| {
-                                    cx.stop_propagation();
-                                    if let Some(app) = stop_all_button_entity.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            this.trigger_process_manager_stop_all(cx);
-                                        });
-                                    }
-                                })),
-                        )
-                    }),
-            )
-            // Divider
-            .child(crate::components::SectionDivider::new())
-            // Process list
-            .child(
-                div()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .w_full()
-                    .overflow_hidden()
-                    .py(px(design_spacing.padding_xs))
-                    .child(
-                        div()
-                            .relative()
-                            .w_full()
-                            .h_full()
-                            .on_scroll_wheel(cx.listener(
-                                move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                    .h_full()
+                    .on_scroll_wheel(cx.listener(
+                        move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
                                     let view_state = if let AppView::ProcessManagerView {
                                         filter,
                                         selected_index,
@@ -669,28 +612,67 @@ impl ScriptListApp {
                                     this.note_builtin_selection_owned_wheel_scroll(new_selected);
                                     cx.notify();
                                     cx.stop_propagation();
-                                },
-                            ))
-                            .child(list_element)
-                            .child(list_scrollbar),
-                    ),
-            )
-            .when_some(
-                self.main_window_footer_slot(crate::components::render_simple_hint_strip(
-                    if total_count > 0 {
-                        vec![
-                            gpui::SharedString::from("↵ Stop"),
-                            gpui::SharedString::from("⌘↵ Stop All"),
-                            gpui::SharedString::from("Esc Back"),
-                        ]
-                    } else {
-                        vec![gpui::SharedString::from("Esc Back")]
-                    },
-                    None,
-                )),
-                |d, footer| d.child(footer),
-            )
-            .into_any_element()
+                        },
+                    ))
+                    .child(list_element)
+                    .child(list_scrollbar),
+            );
+
+        let mut trailing = vec![self
+            .render_builtin_main_input_count_label(Self::process_manager_count_label(total_count))];
+        if total_count > 0 {
+            let stop_all_button_entity = stop_all_button_entity.clone();
+            trailing.push(
+                crate::components::Button::new("Stop All", stop_all_button_colors)
+                    .variant(crate::components::ButtonVariant::Ghost)
+                    .shortcut("⌘↵")
+                    .on_click(Box::new(move |_event, _window, cx| {
+                        cx.stop_propagation();
+                        if let Some(app) = stop_all_button_entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.trigger_process_manager_stop_all(cx);
+                            });
+                        }
+                    }))
+                    .into_any_element(),
+            );
+        }
+        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+            if total_count > 0 {
+                vec![
+                    gpui::SharedString::from("↵ Stop"),
+                    gpui::SharedString::from("⌘↵ Stop All"),
+                    gpui::SharedString::from("Esc Back"),
+                ]
+            } else {
+                vec![gpui::SharedString::from("Esc Back")]
+            },
+            None,
+        ));
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
+
+        crate::components::main_view_chrome::render_main_view_chrome(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .text_color(rgb(text_primary))
+                .font_family(self.theme_font_family())
+                .key_context("process_manager")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header: self.render_builtin_main_input_header(trailing),
+                divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                    margin_x: shell.divider_margin_x,
+                    height: shell.divider_height,
+                    visible: shell.divider_height > 0.0,
+                },
+                main: content.into_any_element(),
+                footer,
+                overlays: Vec::new(),
+            },
+        )
     }
 }
 
@@ -704,12 +686,23 @@ mod process_manager_chrome_audit {
             "process_manager should use render_simple_hint_strip"
         );
         assert!(
-            source.contains("SectionDivider::new()"),
-            "process_manager should use SectionDivider"
+            source.contains("render_builtin_main_input_header(")
+                && source.contains("render_builtin_main_input_count_label("),
+            "process_manager should use the shared built-in main input header"
         );
         assert!(
-            source.contains("HEADER_PADDING_X") && source.contains("HEADER_PADDING_Y"),
-            "process_manager should use shared chrome header padding"
+            !source.contains(&["SectionDivider", "::new()"].concat()),
+            "process_manager should use the shared main-view divider contract"
+        );
+        assert!(
+            !source.contains(&["HEADER_PADDING", "_X"].concat())
+                && !source.contains(&["HEADER_PADDING", "_Y"].concat()),
+            "process_manager should not hardcode local main input header padding"
+        );
+        assert!(
+            source.contains(".shortcut(\"⌘↵\")")
+                && source.contains("trigger_process_manager_stop_all(cx)"),
+            "process_manager should preserve the Stop All header action and keyboard route"
         );
         let legacy = "Prompt".to_owned() + "Footer::new(";
         assert_eq!(

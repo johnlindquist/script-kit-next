@@ -117,7 +117,6 @@ impl ScriptListApp {
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
         let _design_typography = tokens.typography();
-        let design_visual = tokens.visual();
 
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
@@ -388,16 +387,6 @@ impl ScriptListApp {
         let list_scrollbar =
             self.builtin_uniform_list_scrollbar(&self.list_scroll_handle, filtered_len, 8);
 
-        let header = div().w_full().flex().flex_row().items_center().child(
-            div()
-                .flex_1()
-                .min_w(px(0.0))
-                .flex()
-                .flex_row()
-                .items_center()
-                .child(self.render_search_input()),
-        );
-
         let content = div()
             .flex()
             .flex_col()
@@ -528,19 +517,30 @@ impl ScriptListApp {
             None,
         ));
 
-        crate::components::render_minimal_list_prompt_shell_with_footer(
-            design_visual.radius_lg,
-            crate::ui_foundation::get_vibrancy_background(&self.theme),
-            header,
-            content,
-            footer,
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
+
+        crate::components::main_view_chrome::render_main_view_chrome(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .text_color(rgb(text_primary))
+                .font_family(self.theme_font_family())
+                .key_context("app_launcher")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header: self.render_builtin_main_input_header(Vec::new()),
+                divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                    margin_x: shell.divider_margin_x,
+                    height: shell.divider_height,
+                    visible: shell.divider_height > 0.0,
+                },
+                main: content.into_any_element(),
+                footer,
+                overlays: Vec::new(),
+            },
         )
-        .text_color(rgb(text_primary))
-        .font_family(self.theme_font_family())
-        .key_context("app_launcher")
-        .track_focus(&self.focus_handle)
-        .on_key_down(handle_key)
-        .into_any_element()
     }
 }
 
@@ -553,8 +553,9 @@ mod app_launcher_chrome_audit {
         let render_code = &source[..render_fn_end];
 
         assert!(
-            render_code.contains("render_minimal_list_prompt_shell("),
-            "app_launcher should return the shared minimal list prompt shell"
+            render_code.contains("render_main_view_chrome(")
+                && render_code.contains("render_builtin_main_input_header("),
+            "app_launcher should return the shared main-view chrome with built-in input header"
         );
         assert!(
             render_code.contains(".key_context(\"app_launcher\")"),

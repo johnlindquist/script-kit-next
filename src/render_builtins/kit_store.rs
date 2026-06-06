@@ -920,7 +920,6 @@ impl ScriptListApp {
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
-        let design_visual = tokens.visual();
 
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
         let text_name = rgba((chrome.text_primary_hex << 8) | 0xff);
@@ -1159,61 +1158,20 @@ impl ScriptListApp {
             None,
         ));
 
-        let surface = div()
-            .w_full()
-            .h_full()
+        let content = div()
             .flex()
             .flex_col()
-            .rounded(px(design_visual.radius_lg))
-            .font_family(design_typography.font_family)
-            .text_color(text_name)
-            .key_context("kit_store_browse")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
+            .flex_1()
+            .min_h(px(0.0))
+            .w_full()
+            .py(px(design_spacing.padding_xs))
             .child(
                 div()
+                    .relative()
                     .w_full()
-                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
-                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
-                    .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_3()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.0))
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .child(self.render_search_input()),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(text_hint)
-                            .flex_none()
-                            .whitespace_nowrap()
-                            .child(Self::kit_store_browse_count_label(total_results)),
-                    ),
-            )
-            .child(crate::components::SectionDivider::new())
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_h(px(0.0))
-                    .w_full()
-                    .py(px(design_spacing.padding_xs))
-                    .child(
-                        div()
-                            .relative()
-                            .w_full()
-                            .h_full()
-                            .on_scroll_wheel(cx.listener(
-                                move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                    .h_full()
+                    .on_scroll_wheel(cx.listener(
+                        move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
                                     let view_state = if let AppView::BrowseKitsView {
                                         selected_index,
                                         results,
@@ -1247,19 +1205,40 @@ impl ScriptListApp {
                                     this.note_builtin_selection_owned_wheel_scroll(new_selected);
                                     cx.notify();
                                     cx.stop_propagation();
-                                },
-                            ))
-                            .child(list)
-                            .child(list_scrollbar),
-                    ),
+                        },
+                    ))
+                    .child(list)
+                    .child(list_scrollbar),
             );
 
-        if let Some(footer) = footer {
-            surface.child(footer)
-        } else {
-            surface
-        }
-        .into_any_element()
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
+
+        crate::components::main_view_chrome::render_main_view_chrome(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .font_family(design_typography.font_family)
+                .text_color(text_name)
+                .key_context("kit_store_browse")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header: self.render_builtin_main_input_header(vec![
+                    self.render_builtin_main_input_count_label(Self::kit_store_browse_count_label(
+                        total_results,
+                    )),
+                ]),
+                divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                    margin_x: shell.divider_margin_x,
+                    height: shell.divider_height,
+                    visible: shell.divider_height > 0.0,
+                },
+                main: content.into_any_element(),
+                footer,
+                overlays: Vec::new(),
+            },
+        )
     }
 
     fn render_installed_kits(
@@ -1275,7 +1254,6 @@ impl ScriptListApp {
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
-        let design_visual = tokens.visual();
 
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
         let text_name = rgba((chrome.text_primary_hex << 8) | 0xff);
@@ -1524,61 +1502,20 @@ impl ScriptListApp {
             None,
         ));
 
-        let surface = div()
-            .w_full()
-            .h_full()
+        let content = div()
             .flex()
             .flex_col()
-            .rounded(px(design_visual.radius_lg))
-            .font_family(design_typography.font_family)
-            .text_color(text_name)
-            .key_context("kit_store_installed")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
+            .flex_1()
+            .min_h(px(0.0))
+            .w_full()
+            .py(px(design_spacing.padding_xs))
             .child(
                 div()
+                    .relative()
                     .w_full()
-                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
-                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
-                    .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_3()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.0))
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .child(self.render_search_input()),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(text_hint)
-                            .flex_none()
-                            .whitespace_nowrap()
-                            .child(Self::kit_store_installed_count_label(dataset_kits)),
-                    ),
-            )
-            .child(crate::components::SectionDivider::new())
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_h(px(0.0))
-                    .w_full()
-                    .py(px(design_spacing.padding_xs))
-                    .child(
-                        div()
-                            .relative()
-                            .w_full()
-                            .h_full()
-                            .on_scroll_wheel(cx.listener(
-                                move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                    .h_full()
+                    .on_scroll_wheel(cx.listener(
+                        move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
                                     let view_state = if let AppView::InstalledKitsView {
                                         filter,
                                         selected_index,
@@ -1616,18 +1553,39 @@ impl ScriptListApp {
                                     this.note_builtin_selection_owned_wheel_scroll(new_selected);
                                     cx.notify();
                                     cx.stop_propagation();
-                                },
-                            ))
-                            .child(list)
-                            .child(list_scrollbar),
-                    ),
+                        },
+                    ))
+                    .child(list)
+                    .child(list_scrollbar),
             );
 
-        if let Some(footer) = footer {
-            surface.child(footer)
-        } else {
-            surface
-        }
-        .into_any_element()
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
+
+        crate::components::main_view_chrome::render_main_view_chrome(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .font_family(design_typography.font_family)
+                .text_color(text_name)
+                .key_context("kit_store_installed")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header: self.render_builtin_main_input_header(vec![
+                    self.render_builtin_main_input_count_label(
+                        Self::kit_store_installed_count_label(dataset_kits),
+                    ),
+                ]),
+                divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                    margin_x: shell.divider_margin_x,
+                    height: shell.divider_height,
+                    visible: shell.divider_height > 0.0,
+                },
+                main: content.into_any_element(),
+                footer,
+                overlays: Vec::new(),
+            },
+        )
     }
 }

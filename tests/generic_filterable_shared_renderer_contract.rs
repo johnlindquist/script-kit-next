@@ -20,12 +20,12 @@ fn generic_filterable_surfaces_share_search_shell() {
     );
 
     assert!(
-        helper.contains("render_search_input()"),
-        "generic filterable helper should use the shared main search input"
+        helper.contains("render_builtin_main_input_surface("),
+        "generic filterable helper should use the shared built-in main input surface"
     );
     assert!(
-        helper.contains("render_minimal_list_prompt_shell_with_footer("),
-        "generic filterable helper should use the shared minimal-list shell"
+        helper.contains("render_builtin_main_input_count_label("),
+        "generic filterable helper should use the shared built-in count label"
     );
     assert!(
         helper.contains("count_label"),

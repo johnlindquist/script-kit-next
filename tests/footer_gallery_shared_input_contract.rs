@@ -1,6 +1,6 @@
 //! Source-level contract for Footer Gallery shared main-search migration.
 //!
-//! Footer Gallery should share the GPUI filter input and minimal shell with
+//! Footer Gallery should share the GPUI filter input and main-view input header with
 //! other compact builtin lists while preserving its 80px live PromptFooter
 //! preview rows.
 
@@ -29,14 +29,15 @@ fn footer_gallery_uses_shared_search_input_shell_and_preserves_preview_rows() {
     let render_body = &FOOTER_GALLERY[start..];
 
     for required in [
-        "self.render_search_input()",
-        "render_minimal_list_prompt_shell_with_footer(",
+        "render_builtin_main_input_header(",
+        "render_main_view_chrome(",
         ".key_context(\"footer_gallery\")",
         ".track_focus(&self.focus_handle)",
         ".on_key_down(handle_key)",
         "main_window_footer_slot(",
         "render_simple_hint_strip(",
-        "Self::footer_gallery_count_label(filtered_len)",
+        "Self::footer_gallery_count_label(",
+        "filtered_len",
         "uniform_list(\n                \"footer-gallery\"",
         "PromptFooter::new(config, footer_colors)",
         ".h(px(80.0))",

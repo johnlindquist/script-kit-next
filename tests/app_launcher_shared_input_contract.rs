@@ -24,7 +24,8 @@ fn app_launcher_uses_shared_search_input_and_rows() {
     let render_body = source_between(APP_LAUNCHER, "fn render_app_launcher(", "\n#[cfg(test)]");
 
     for required in [
-        "self.render_search_input()",
+        "render_builtin_main_input_header(",
+        "render_main_view_chrome(",
         "ListItem::new(",
         "ListItemColors::from_theme(&self.theme)",
         ".selected(is_selected)",
@@ -32,7 +33,6 @@ fn app_launcher_uses_shared_search_input_and_rows() {
         ".main_menu_theme(",
         ".with_accent_bar(true)",
         "builtin_uniform_list_scrollbar(&self.list_scroll_handle",
-        "render_minimal_list_prompt_shell_with_footer(",
         ".key_context(\"app_launcher\")",
         ".track_focus(&self.focus_handle)",
         ".on_key_down(handle_key)",

@@ -1,7 +1,7 @@
 //! Source-level contract for Design Gallery shared main-search migration.
 //!
 //! Design Gallery keeps its gallery data helpers, but the filter UI must use
-//! the shared GPUI search input and shared minimal list shell. Text edits flow
+//! the shared GPUI search input and shared main-view input header. Text edits flow
 //! through `InputEvent::Change`; key handlers own navigation and dismissal.
 
 const DESIGN_GALLERY: &str = include_str!("../src/render_builtins/design_gallery.rs");
@@ -27,14 +27,15 @@ fn design_gallery_uses_shared_search_input_shell() {
     let render_body = &DESIGN_GALLERY[start..];
 
     for required in [
-        "self.render_search_input()",
-        "render_minimal_list_prompt_shell_with_footer(",
+        "render_builtin_main_input_header(",
+        "render_main_view_chrome(",
         ".key_context(\"design_gallery\")",
         ".track_focus(&self.focus_handle)",
         ".on_key_down(handle_key)",
         "main_window_footer_slot(",
         "render_simple_hint_strip(",
-        "Self::design_gallery_count_label(filtered_len)",
+        "Self::design_gallery_count_label(",
+        "filtered_len",
     ] {
         assert!(
             render_body.contains(required),

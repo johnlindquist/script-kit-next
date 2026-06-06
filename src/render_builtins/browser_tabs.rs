@@ -119,8 +119,6 @@ impl ScriptListApp {
 
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
-        let design_typography = tokens.typography();
-        let design_visual = tokens.visual();
         let color_resolver =
             crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
         let typography_resolver =
@@ -129,7 +127,6 @@ impl ScriptListApp {
         let empty_font_family = typography_resolver.primary_font().to_string();
 
         let text_primary = self.theme.colors.text.primary;
-        let text_dimmed = self.theme.colors.text.dimmed;
         let _text_muted = self.theme.colors.text.muted;
 
         let filtered_tabs =
@@ -401,55 +398,15 @@ impl ScriptListApp {
             .into_any_element()
         };
 
-        // Build layout following the process_manager / favorites pattern:
-        // outer div with shared GPUI Input in header, divider, scrollable list, footer.
-        div()
-            .flex()
-            .flex_col()
+        let content = div()
+            .relative()
+            .flex_1()
+            .min_h(px(0.))
             .w_full()
-            .h_full()
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(self.theme_font_family())
-            .key_context("browser_tabs")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            // Header with shared GPUI Input
-            .child(
-                div()
-                    .w_full()
-                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
-                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
-                    .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_3()
-                    .child(
-                        div().flex_1().flex().flex_row().items_center().child(
-                            self.render_search_input()
-                        ),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(design_typography.font_size_sm))
-                            .text_color(rgb(text_dimmed))
-                            .child(Self::browser_tabs_count_label(total_count)),
-                    ),
-            )
-            // Divider
-            .child(crate::components::SectionDivider::new())
-            // Scrollable list
-            .child(
-                div()
-                    .relative()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .w_full()
-                    .overflow_hidden()
-                    .py(px(design_spacing.padding_xs))
-                    .on_scroll_wheel(cx.listener(
-                        move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+            .overflow_hidden()
+            .py(px(design_spacing.padding_xs))
+            .on_scroll_wheel(cx.listener(
+                move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
                             let view_state = if let AppView::BrowserTabsView {
                                 filter,
                                 selected_index,
@@ -503,34 +460,57 @@ impl ScriptListApp {
                             );
                             cx.notify();
                             cx.stop_propagation();
-                        },
-                    ))
-                    .child(list_element)
-                    .child(self.builtin_uniform_list_scrollbar(
-                        &self.browser_tabs_scroll_handle,
-                        filtered_len,
-                        8,
+                },
+            ))
+            .child(list_element)
+            .child(self.builtin_uniform_list_scrollbar(
+                &self.browser_tabs_scroll_handle,
+                filtered_len,
+                8,
+            ));
+
+        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+            if self.is_in_attachment_portal() {
+                vec![
+                    gpui::SharedString::from("↵ Attach"),
+                    gpui::SharedString::from("Esc Cancel"),
+                ]
+            } else {
+                vec![
+                    gpui::SharedString::from("↵ Open Tab"),
+                    gpui::SharedString::from("Esc Back"),
+                ]
+            },
+            None,
+        ));
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
+
+        crate::components::main_view_chrome::render_main_view_chrome(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .text_color(rgb(text_primary))
+                .font_family(self.theme_font_family())
+                .key_context("browser_tabs")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header: self.render_builtin_main_input_header(vec![
+                    self.render_builtin_main_input_count_label(Self::browser_tabs_count_label(
+                        total_count,
                     )),
-            )
-            // Footer
-            .when_some(
-                self.main_window_footer_slot(crate::components::render_simple_hint_strip(
-                    if self.is_in_attachment_portal() {
-                        vec![
-                            gpui::SharedString::from("↵ Attach"),
-                            gpui::SharedString::from("Esc Cancel"),
-                        ]
-                    } else {
-                        vec![
-                            gpui::SharedString::from("↵ Open Tab"),
-                            gpui::SharedString::from("Esc Back"),
-                        ]
-                    },
-                    None,
-                )),
-                |d, footer| d.child(footer),
-            )
-            .into_any_element()
+                ]),
+                divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                    margin_x: shell.divider_margin_x,
+                    height: shell.divider_height,
+                    visible: shell.divider_height > 0.0,
+                },
+                main: content.into_any_element(),
+                footer,
+                overlays: Vec::new(),
+            },
+        )
     }
 }
 
@@ -598,20 +578,22 @@ mod browser_tabs_chrome_tests {
         let source = production_source();
 
         assert!(
-            source.contains("self.render_search_input()"),
-            "browser tabs must use the shared GPUI input"
+            source.contains("render_builtin_main_input_header(")
+                && source.contains("render_builtin_main_input_count_label("),
+            "browser tabs must use the shared built-in main input header"
         );
         assert!(
             !source.contains(&["Input::new(&self.", "gpui_input_state)"].concat()),
             "browser tabs should delegate GPUI input construction to render_search_input"
         );
         assert!(
-            source.contains("HEADER_PADDING_X") && source.contains("HEADER_PADDING_Y"),
-            "browser tabs must use shared chrome header padding"
+            !source.contains(&["HEADER_PADDING", "_X"].concat())
+                && !source.contains(&["HEADER_PADDING", "_Y"].concat()),
+            "browser tabs should not hardcode local main input header padding"
         );
         assert!(
-            source.contains("SectionDivider::new()"),
-            "browser tabs must use SectionDivider"
+            !source.contains(&["SectionDivider", "::new()"].concat()),
+            "browser tabs should use the shared main-view divider contract"
         );
         assert!(
             source.contains("render_simple_hint_strip("),

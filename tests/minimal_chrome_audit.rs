@@ -128,8 +128,38 @@ fn builtin_main_input_surfaces_use_shared_input_chrome() {
 
     for (surface, source) in [
         (
+            "app_launcher",
+            production_source(include_str!("../src/render_builtins/app_launcher.rs")),
+        ),
+        (
+            "browser_tabs",
+            production_source(include_str!("../src/render_builtins/browser_tabs.rs")),
+        ),
+        (
+            "current_app_commands",
+            production_source(include_str!(
+                "../src/render_builtins/current_app_commands.rs"
+            )),
+        ),
+        (
+            "design_gallery",
+            production_source(include_str!("../src/render_builtins/design_gallery.rs")),
+        ),
+        (
             "emoji_picker",
             production_source(include_str!("../src/render_builtins/emoji_picker.rs")),
+        ),
+        (
+            "footer_gallery",
+            production_source(include_str!("../src/render_builtins/footer_gallery.rs")),
+        ),
+        (
+            "kit_store",
+            production_source(include_str!("../src/render_builtins/kit_store.rs")),
+        ),
+        (
+            "process_manager",
+            production_source(include_str!("../src/render_builtins/process_manager.rs")),
         ),
         (
             "settings",
@@ -138,6 +168,10 @@ fn builtin_main_input_surfaces_use_shared_input_chrome() {
         (
             "theme_chooser",
             production_source(include_str!("../src/render_builtins/theme_chooser.rs")),
+        ),
+        (
+            "window_switcher",
+            production_source(include_str!("../src/render_builtins/window_switcher.rs")),
         ),
     ] {
         assert!(

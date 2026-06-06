@@ -259,7 +259,6 @@ impl ScriptListApp {
 
         // Pre-compute colors - use theme for consistency with main menu
         let text_primary = self.theme.colors.text.primary;
-        let text_dimmed = self.theme.colors.text.dimmed;
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
@@ -476,20 +475,6 @@ impl ScriptListApp {
             .into_any_element();
         let footer = self.main_window_footer_slot(footer);
 
-        let header = div()
-            .w_full()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap_3()
-            .child(self.render_search_input())
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(text_dimmed))
-                    .child(Self::design_gallery_count_label(filtered_len)),
-            );
-
         let content = div()
             .flex_1()
             .w_full()
@@ -501,16 +486,31 @@ impl ScriptListApp {
             .font_family(design_typography.font_family)
             .child(list_element);
 
-        crate::components::render_minimal_list_prompt_shell_with_footer(
-            design_visual.radius_lg,
-            None,
-            header,
-            content,
-            footer,
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
+
+        crate::components::main_view_chrome::render_main_view_chrome(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .key_context("design_gallery")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header: self.render_builtin_main_input_header(vec![
+                    self.render_builtin_main_input_count_label(Self::design_gallery_count_label(
+                        filtered_len,
+                    )),
+                ]),
+                divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                    margin_x: shell.divider_margin_x,
+                    height: shell.divider_height,
+                    visible: shell.divider_height > 0.0,
+                },
+                main: content.into_any_element(),
+                footer,
+                overlays: Vec::new(),
+            },
         )
-        .key_context("design_gallery")
-        .track_focus(&self.focus_handle)
-        .on_key_down(handle_key)
-        .into_any_element()
     }
 }

@@ -74,8 +74,8 @@ fn kit_store_row_detail_copy_is_modeled() {
 #[test]
 fn kit_store_input_and_count_copy_are_modeled() {
     assert!(
-        KIT_STORE.contains("self.render_search_input()"),
-        "Kit Store search surfaces should use the shared GPUI search input"
+        KIT_STORE.contains("render_builtin_main_input_header("),
+        "Kit Store search surfaces should use the shared built-in main input header"
     );
     assert!(
         KIT_STORE.contains("fn kit_store_browse_count_label(")
@@ -83,7 +83,8 @@ fn kit_store_input_and_count_copy_are_modeled() {
         "browse count helper should avoid '1 kits'"
     );
     assert!(
-        KIT_STORE.contains("Self::kit_store_browse_count_label(total_results)"),
+        KIT_STORE.contains("Self::kit_store_browse_count_label(")
+            && KIT_STORE.contains("total_results"),
         "browse renderer should use the count label helper"
     );
     assert!(
@@ -92,7 +93,8 @@ fn kit_store_input_and_count_copy_are_modeled() {
         "installed count helper should avoid ambiguous or unpluralized installed counts"
     );
     assert!(
-        KIT_STORE.contains("Self::kit_store_installed_count_label(dataset_kits)"),
+        KIT_STORE.contains("Self::kit_store_installed_count_label(")
+            && KIT_STORE.contains("dataset_kits"),
         "installed renderer should use the installed count label helper"
     );
 }

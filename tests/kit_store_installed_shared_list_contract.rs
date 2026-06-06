@@ -13,8 +13,9 @@ fn installed_kits_uses_shared_search_input_and_list_item_rows() {
     let body = function_body(KIT_STORE_SOURCE, "fn render_installed_kits(", "}\n}");
 
     for required in [
-        "self.render_search_input()",
-        "crate::components::SectionDivider::new()",
+        "render_builtin_main_input_header(",
+        "render_builtin_main_input_count_label(",
+        "render_main_view_chrome(",
         "ListItem::new(",
         "ListItemColors::from_theme(&self.theme)",
         ".selected(is_selected)",

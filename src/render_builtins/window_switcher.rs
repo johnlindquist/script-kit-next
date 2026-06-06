@@ -232,7 +232,6 @@ impl ScriptListApp {
         let text_primary = self.theme.colors.text.primary;
         #[allow(unused_variables)]
         let text_muted = self.theme.colors.text.muted;
-        let text_dimmed = self.theme.colors.text.dimmed;
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
@@ -383,24 +382,6 @@ impl ScriptListApp {
             cx,
         );
 
-        let header = div()
-            .w_full()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap_3()
-            .child(
-                div().flex_1().flex().flex_row().items_center().child(
-                    self.render_search_input()
-                ),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(text_dimmed))
-                    .child(format!("{} windows", self.cached_windows.len())),
-            );
-
         // Main content area - 50/50 split: Window list on left, Actions on right
         let content = div()
             .flex()
@@ -506,39 +487,35 @@ impl ScriptListApp {
             None,
         ));
 
-        div()
-            .w_full()
-            .h_full()
-            .flex()
-            .flex_col()
-            .child(
-                div()
-                    .w_full()
-                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
-                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .child(header),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .w_full()
-                    .overflow_hidden()
-                    .child(content),
-            )
-            .when_some(footer, |d, footer| d.child(footer))
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(self.theme_font_family())
-            .key_context("window_switcher")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            .into_any_element()
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
+
+        crate::components::main_view_chrome::render_main_view_chrome(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .text_color(rgb(text_primary))
+                .font_family(self.theme_font_family())
+                .key_context("window_switcher")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header: self.render_builtin_main_input_header(vec![
+                    self.render_builtin_main_input_count_label(format!(
+                        "{} windows",
+                        self.cached_windows.len()
+                    )),
+                ]),
+                divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                    margin_x: shell.divider_margin_x,
+                    height: shell.divider_height,
+                    visible: shell.divider_height > 0.0,
+                },
+                main: content.into_any_element(),
+                footer,
+                overlays: Vec::new(),
+            },
+        )
     }
 }
 
@@ -548,8 +525,9 @@ mod window_switcher_chrome_audit {
     fn window_switcher_uses_minimal_chrome_footer() {
         let source = include_str!("window_switcher.rs");
         assert!(
-            source.contains("render_minimal_list_prompt_scaffold("),
-            "window_switcher should use render_minimal_list_prompt_scaffold"
+            source.contains("render_main_view_chrome(")
+                && source.contains("render_builtin_main_input_header("),
+            "window_switcher should use shared main-view chrome and built-in input header"
         );
         let legacy = "Prompt".to_owned() + "Footer::new(";
         assert_eq!(
