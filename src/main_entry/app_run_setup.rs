@@ -827,7 +827,11 @@ app.run(move |cx: &mut App| {
                 let state = tray_mgr.update_state_handle();
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_secs(5));
-                    crate::updates::check_now(state, || {});
+                    crate::updates::check_now(
+                        state,
+                        crate::updates::CheckKind::Automatic,
+                        || {},
+                    );
                 });
             }
 
@@ -948,20 +952,21 @@ app.run(move |cx: &mut App| {
                     Some(TrayMenuAction::CheckForUpdates) => {
                         logging::log("TRAY", "Check for Updates clicked");
                         let state = tray_mgr.update_state_handle();
-                        std::thread::spawn(move || {
-                            crate::updates::check_now(state, || {});
-                        });
-                        // Refresh the Version row a moment later. We can't
-                        // signal back from the worker (muda needs main thread)
-                        // so we poll once after a generous timeout.
-                        cx.background_executor()
-                            .timer(std::time::Duration::from_secs(12))
-                            .await;
+                        let (complete_tx, complete_rx) = async_channel::bounded(1);
+                        crate::updates::check_now(
+                            state,
+                            crate::updates::CheckKind::Manual,
+                            move || {
+                                let _ = complete_tx.send_blocking(());
+                            },
+                        );
+                        tray_mgr.refresh_version_label();
+                        let _ = complete_rx.recv().await;
                         tray_mgr.refresh_version_label();
                     }
                     Some(TrayMenuAction::OpenReleasePage) => {
                         let snapshot = tray_mgr.update_state_snapshot();
-                        if let Some(url) = snapshot.release_url() {
+                        if let Some(url) = snapshot.release_page_url() {
                             logging::log("TRAY", &format!("Opening release page: {}", url));
                             if let Err(e) = open::that(url) {
                                 logging::log("TRAY", &format!("Failed to open release page: {}", e));

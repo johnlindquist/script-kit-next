@@ -8166,6 +8166,7 @@ dependencies = [
  "resvg",
  "rusqlite",
  "rustfft",
+ "semver",
  "serde",
  "serde_json",
  "serde_yaml",

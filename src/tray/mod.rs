@@ -588,7 +588,10 @@ impl TrayManager {
         let version_snapshot = update_state
             .read()
             .map(|state| state.clone())
-            .unwrap_or_else(|_| UpdateState::Error("Update state unavailable".to_string()));
+            .unwrap_or_else(|_| UpdateState::Error {
+                message: "Update state unavailable".to_string(),
+                failure: crate::updates::UpdateFailure::InvalidResponse,
+            });
         let (version_label, version_enabled) = version_label_and_enabled(&version_snapshot);
         let version_item = MenuItem::with_id(
             TrayMenuAction::OpenReleasePage.id(),
@@ -708,7 +711,10 @@ impl TrayManager {
         self.update_state
             .read()
             .map(|state| state.clone())
-            .unwrap_or_else(|_| UpdateState::Error("Update state unavailable".to_string()))
+            .unwrap_or_else(|_| UpdateState::Error {
+                message: "Update state unavailable".to_string(),
+                failure: crate::updates::UpdateFailure::InvalidResponse,
+            })
     }
 
     /// Shared `Arc<RwLock<UpdateState>>` so the dispatcher can hand it to
@@ -761,7 +767,10 @@ pub fn current_tray_menu_observation_snapshot() -> TrayMenuObservation {
                 .update_state
                 .read()
                 .map(|state| state.clone())
-                .unwrap_or_else(|_| UpdateState::Error("Update state unavailable".to_string()));
+                .unwrap_or_else(|_| UpdateState::Error {
+                    message: "Update state unavailable".to_string(),
+                    failure: crate::updates::UpdateFailure::InvalidResponse,
+                });
             tray_menu_observation_snapshot(&update_state, source.launcher_shortcut_configured)
         }
         None => {
@@ -1060,10 +1069,19 @@ fn current_app_commands_label() -> String {
 fn version_label_and_enabled(state: &UpdateState) -> (String, bool) {
     let current = env!("CARGO_PKG_VERSION");
     match state {
-        UpdateState::Available { version, .. } => (format!("Update Available: v{version}"), true),
-        UpdateState::Checking => (format!("Checking for updates… (v{current})"), false),
-        UpdateState::Error(_) => (format!("Version {current} (update check failed)"), false),
-        UpdateState::Idle | UpdateState::UpToDate => (format!("Version {current}"), false),
+        UpdateState::Available { release } => {
+            (format!("Update Available: v{}", release.version), true)
+        }
+        UpdateState::ReleaseNotReady {
+            version, reason, ..
+        } => (
+            format!("Update v{version} not ready ({})", reason.label()),
+            true,
+        ),
+        UpdateState::Checking { .. } => (format!("Checking for updates… (v{current})"), false),
+        UpdateState::UpToDate => (format!("Version {current} — up to date"), false),
+        UpdateState::Error { .. } => (format!("Version {current} (update check failed)"), false),
+        UpdateState::Idle => (format!("Version {current}"), false),
     }
 }
 
@@ -1230,8 +1248,20 @@ mod tests {
     fn tray_menu_observation_version_row_reflects_update_state() {
         let snapshot = tray_menu_observation_snapshot(
             &UpdateState::Available {
-                version: "9.9.9".to_string(),
-                url: "https://example.com/release".to_string(),
+                release: crate::updates::VerifiedRelease {
+                    version: semver::Version::parse("9.9.9").unwrap(),
+                    tag: "v9.9.9".to_string(),
+                    release_page_url: "https://example.com/release".to_string(),
+                    manifest_url: "https://example.com/release-manifest.json".to_string(),
+                    artifact: crate::updates::VerifiedArtifact {
+                        name: "Script-Kit-macos.zip".to_string(),
+                        download_url: "https://example.com/Script-Kit-macos.zip".to_string(),
+                        size_bytes: Some(123),
+                        sha256: "022689519147819b7eb0ef2dba102e03677e53eb550eddd5f3b10f78aa5d3427"
+                            .to_string(),
+                        github_digest: None,
+                    },
+                },
             },
             false,
         );

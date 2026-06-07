@@ -79,7 +79,10 @@ fn render_about_surface_inner(
     let snapshot = update_state
         .read()
         .map(|guard| guard.clone())
-        .unwrap_or_else(|_| UpdateState::Error("update state unavailable".into()));
+        .unwrap_or_else(|_| UpdateState::Error {
+            message: "update state unavailable".into(),
+            failure: crate::updates::UpdateFailure::InvalidResponse,
+        });
     let key_down = actions.key_down.clone();
 
     div()
@@ -320,7 +323,7 @@ fn render_update_card(
             true,
             actions.check_updates.clone(),
         ),
-        UpdateState::Checking => (
+        UpdateState::Checking { .. } => (
             "Checking…".to_string(),
             "Checking…",
             false,
@@ -332,15 +335,23 @@ fn render_update_card(
             true,
             actions.check_updates.clone(),
         ),
-        UpdateState::Available { version, .. } => (
-            format!("Update Available: v{version}"),
-            "Download",
+        UpdateState::Available { release } => (
+            format!("Update Available: v{}", release.version),
+            "Open Release Page",
+            true,
+            actions.open_release.clone(),
+        ),
+        UpdateState::ReleaseNotReady {
+            version, reason, ..
+        } => (
+            format!("Update v{version} found, but {}", reason.label()),
+            "Open Release Page",
             true,
             actions.open_release.clone(),
         ),
         // KNOWN: Uses generic color; a proper semantic success design token requires a theme-API addition.
-        UpdateState::Error(_) => (
-            "Check failed".to_string(),
+        UpdateState::Error { .. } => (
+            "Couldn't check for updates".to_string(),
             "Check for Updates",
             true,
             actions.check_updates.clone(),

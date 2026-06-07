@@ -369,11 +369,19 @@ impl Render for ScriptListApp {
                         move |_event, _window, cx| {
                             let state = update_state.clone();
                             let app = check_app.clone();
-                            crate::updates::check_now(state, || {});
+                            let (complete_tx, complete_rx) = async_channel::bounded(1);
+                            crate::updates::check_now(
+                                state,
+                                crate::updates::CheckKind::Manual,
+                                move || {
+                                    let _ = complete_tx.send_blocking(());
+                                },
+                            );
+                            if let Some(app) = app.upgrade() {
+                                app.update(cx, |_this, cx| cx.notify());
+                            }
                             cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-                                cx.background_executor()
-                                    .timer(std::time::Duration::from_secs(12))
-                                    .await;
+                                let _ = complete_rx.recv().await;
                                 cx.update(move |cx| {
                                     if let Some(app) = app.upgrade() {
                                         app.update(cx, |_this, cx| cx.notify());
@@ -390,7 +398,7 @@ impl Render for ScriptListApp {
                                 .read()
                                 .map(|guard| guard.clone())
                                 .unwrap_or_else(|_| crate::updates::UpdateState::Idle);
-                            if let Some(url) = snapshot.release_url() {
+                            if let Some(url) = snapshot.release_page_url() {
                                 if let Err(error) = open::that(url) {
                                     logging::log(
                                         "ABOUT",
