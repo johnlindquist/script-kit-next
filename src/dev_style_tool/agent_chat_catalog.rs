@@ -632,8 +632,24 @@ f32_knob!(
     system.border_alpha
 );
 
+macro_rules! knob {
+    ($id:expr, $label:expr, $group:expr, $unit:expr, $min:expr, $max:expr, $step:expr, $get:expr, $apply:expr $(,)?) => {
+        AgentChatKnob {
+            id: $id,
+            label: $label,
+            group: $group,
+            unit: $unit,
+            min: $min,
+            max: $max,
+            step: $step,
+            get: $get,
+            apply: $apply,
+        }
+    };
+}
+
 pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
-    knob(
+    knob!(
         AGENT_CHAT_TRANSCRIPT_ROW_PADDING_X,
         "Transcript row padding X",
         AgentChatKnobGroup::Transcript,
@@ -644,7 +660,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_transcript_row_padding_x,
         apply_transcript_row_padding_x,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_TRANSCRIPT_ROW_PADDING_BOTTOM,
         "Transcript row bottom padding",
         AgentChatKnobGroup::Transcript,
@@ -655,7 +671,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_transcript_row_padding_bottom,
         apply_transcript_row_padding_bottom,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_TRANSCRIPT_DENSE_ROW_PADDING_BOTTOM,
         "Dense row bottom padding",
         AgentChatKnobGroup::Transcript,
@@ -666,7 +682,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_transcript_dense_row_padding_bottom,
         apply_transcript_dense_row_padding_bottom,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_TRANSCRIPT_RESPONSE_START_MARGIN_TOP,
         "Response start margin top",
         AgentChatKnobGroup::Transcript,
@@ -677,7 +693,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_transcript_response_start_margin_top,
         apply_transcript_response_start_margin_top,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_TRANSCRIPT_TURN_MARGIN_TOP,
         "New turn margin top",
         AgentChatKnobGroup::Transcript,
@@ -688,7 +704,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_transcript_turn_margin_top,
         apply_transcript_turn_margin_top,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_TRANSCRIPT_TURN_PADDING_TOP,
         "New turn padding top",
         AgentChatKnobGroup::Transcript,
@@ -699,7 +715,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_transcript_turn_padding_top,
         apply_transcript_turn_padding_top,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_TRANSCRIPT_TURN_DIVIDER_ALPHA,
         "Turn divider alpha",
         AgentChatKnobGroup::Transcript,
@@ -710,7 +726,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_transcript_turn_divider_alpha,
         apply_transcript_turn_divider_alpha,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_TRANSCRIPT_FOCUSED_PREVIEW_PADDING_X,
         "Focused preview padding X",
         AgentChatKnobGroup::Transcript,
@@ -721,7 +737,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_transcript_focused_preview_padding_x,
         apply_transcript_focused_preview_padding_x,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_TRANSCRIPT_FOCUSED_PREVIEW_PADDING_BOTTOM,
         "Focused preview padding bottom",
         AgentChatKnobGroup::Transcript,
@@ -732,7 +748,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_transcript_focused_preview_padding_bottom,
         apply_transcript_focused_preview_padding_bottom,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_BODY_FONT_SIZE,
         "Markdown body font size",
         AgentChatKnobGroup::Markdown,
@@ -743,7 +759,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_body_font_size,
         apply_markdown_body_font_size,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_PARAGRAPH_GAP,
         "Paragraph gap",
         AgentChatKnobGroup::Markdown,
@@ -754,7 +770,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_paragraph_gap,
         apply_markdown_paragraph_gap,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_HEADING_1_FONT_SIZE,
         "Heading 1 font size",
         AgentChatKnobGroup::Markdown,
@@ -765,7 +781,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_heading_1_font_size,
         apply_markdown_heading_1_font_size,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_HEADING_2_FONT_SIZE,
         "Heading 2 font size",
         AgentChatKnobGroup::Markdown,
@@ -776,7 +792,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_heading_2_font_size,
         apply_markdown_heading_2_font_size,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_HEADING_3_FONT_SIZE,
         "Heading 3 font size",
         AgentChatKnobGroup::Markdown,
@@ -787,7 +803,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_heading_3_font_size,
         apply_markdown_heading_3_font_size,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_CODE_BLOCK_FONT_SIZE,
         "Code block font size",
         AgentChatKnobGroup::Markdown,
@@ -798,7 +814,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_code_block_font_size,
         apply_markdown_code_block_font_size,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_CODE_BLOCK_PADDING_X,
         "Code block padding X",
         AgentChatKnobGroup::Markdown,
@@ -809,7 +825,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_code_block_padding_x,
         apply_markdown_code_block_padding_x,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_CODE_BLOCK_PADDING_Y,
         "Code block padding Y",
         AgentChatKnobGroup::Markdown,
@@ -820,7 +836,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_code_block_padding_y,
         apply_markdown_code_block_padding_y,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_CODE_BLOCK_RADIUS,
         "Code block radius",
         AgentChatKnobGroup::Markdown,
@@ -831,7 +847,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_code_block_radius,
         apply_markdown_code_block_radius,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_CODE_BLOCK_BG_ALPHA,
         "Code block background alpha",
         AgentChatKnobGroup::Markdown,
@@ -842,7 +858,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_code_block_bg_alpha,
         apply_markdown_code_block_bg_alpha,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_CODE_BLOCK_BORDER_ALPHA,
         "Code block border alpha",
         AgentChatKnobGroup::Markdown,
@@ -853,7 +869,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_code_block_border_alpha,
         apply_markdown_code_block_border_alpha,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_BLOCKQUOTE_PADDING_X,
         "Blockquote padding X",
         AgentChatKnobGroup::Markdown,
@@ -864,7 +880,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_blockquote_padding_x,
         apply_markdown_blockquote_padding_x,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_BLOCKQUOTE_PADDING_Y,
         "Blockquote padding Y",
         AgentChatKnobGroup::Markdown,
@@ -875,7 +891,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_blockquote_padding_y,
         apply_markdown_blockquote_padding_y,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_BLOCKQUOTE_RADIUS,
         "Blockquote radius",
         AgentChatKnobGroup::Markdown,
@@ -886,7 +902,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_blockquote_radius,
         apply_markdown_blockquote_radius,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_BLOCKQUOTE_BG_ALPHA,
         "Blockquote background alpha",
         AgentChatKnobGroup::Markdown,
@@ -897,7 +913,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_blockquote_bg_alpha,
         apply_markdown_blockquote_bg_alpha,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_MARKDOWN_BLOCKQUOTE_BORDER_ALPHA,
         "Blockquote border alpha",
         AgentChatKnobGroup::Markdown,
@@ -908,7 +924,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_markdown_blockquote_border_alpha,
         apply_markdown_blockquote_border_alpha,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_USER_PADDING_X,
         "User padding X",
         AgentChatKnobGroup::UserMessage,
@@ -919,7 +935,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_user_padding_x,
         apply_user_padding_x,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_USER_PADDING_Y,
         "User padding Y",
         AgentChatKnobGroup::UserMessage,
@@ -930,7 +946,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_user_padding_y,
         apply_user_padding_y,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_USER_DENSE_PADDING_Y,
         "User dense padding Y",
         AgentChatKnobGroup::UserMessage,
@@ -941,7 +957,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_user_dense_padding_y,
         apply_user_dense_padding_y,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_USER_RADIUS,
         "User bubble radius",
         AgentChatKnobGroup::UserMessage,
@@ -952,7 +968,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_user_radius,
         apply_user_radius,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_USER_BG_ALPHA,
         "User bubble alpha",
         AgentChatKnobGroup::UserMessage,
@@ -963,7 +979,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_user_bg_alpha,
         apply_user_bg_alpha,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_USER_MAX_WIDTH,
         "User role-split max width",
         AgentChatKnobGroup::UserMessage,
@@ -974,7 +990,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_user_max_width,
         apply_user_max_width,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_ASSISTANT_PADDING_X,
         "Assistant padding X",
         AgentChatKnobGroup::AssistantMessage,
@@ -985,7 +1001,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_assistant_padding_x,
         apply_assistant_padding_x,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_ASSISTANT_PADDING_Y,
         "Assistant padding Y",
         AgentChatKnobGroup::AssistantMessage,
@@ -996,7 +1012,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_assistant_padding_y,
         apply_assistant_padding_y,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_ASSISTANT_DENSE_PADDING_Y,
         "Assistant dense padding Y",
         AgentChatKnobGroup::AssistantMessage,
@@ -1007,7 +1023,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_assistant_dense_padding_y,
         apply_assistant_dense_padding_y,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_ASSISTANT_RADIUS,
         "Assistant bubble radius",
         AgentChatKnobGroup::AssistantMessage,
@@ -1018,7 +1034,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_assistant_radius,
         apply_assistant_radius,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_ASSISTANT_BG_ALPHA,
         "Assistant bubble alpha",
         AgentChatKnobGroup::AssistantMessage,
@@ -1029,7 +1045,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_assistant_bg_alpha,
         apply_assistant_bg_alpha,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_ASSISTANT_MAX_WIDTH,
         "Assistant role-split max width",
         AgentChatKnobGroup::AssistantMessage,
@@ -1040,7 +1056,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_assistant_max_width,
         apply_assistant_max_width,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_COLLAPSIBLE_PADDING_X,
         "Block padding X",
         AgentChatKnobGroup::CollapsibleBlocks,
@@ -1051,7 +1067,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_collapsible_padding_x,
         apply_collapsible_padding_x,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_COLLAPSIBLE_PADDING_Y,
         "Block padding Y",
         AgentChatKnobGroup::CollapsibleBlocks,
@@ -1062,7 +1078,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_collapsible_padding_y,
         apply_collapsible_padding_y,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_COLLAPSIBLE_BODY_PADDING_TOP,
         "Block body padding top",
         AgentChatKnobGroup::CollapsibleBlocks,
@@ -1073,7 +1089,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_collapsible_body_padding_top,
         apply_collapsible_body_padding_top,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_COLLAPSIBLE_MAX_BODY_HEIGHT,
         "Block max body height",
         AgentChatKnobGroup::CollapsibleBlocks,
@@ -1084,7 +1100,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_collapsible_max_body_height,
         apply_collapsible_max_body_height,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_COLLAPSIBLE_THOUGHT_HEADER_OPACITY,
         "Thought header opacity",
         AgentChatKnobGroup::CollapsibleBlocks,
@@ -1095,7 +1111,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_collapsible_thought_header_opacity,
         apply_collapsible_thought_header_opacity,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_COLLAPSIBLE_TOOL_HEADER_OPACITY,
         "Tool header opacity",
         AgentChatKnobGroup::CollapsibleBlocks,
@@ -1106,7 +1122,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_collapsible_tool_header_opacity,
         apply_collapsible_tool_header_opacity,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_COLLAPSIBLE_STATUS_OPACITY,
         "Block status opacity",
         AgentChatKnobGroup::CollapsibleBlocks,
@@ -1117,7 +1133,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_collapsible_status_opacity,
         apply_collapsible_status_opacity,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_COLLAPSIBLE_THOUGHT_BORDER_ALPHA,
         "Thought border alpha",
         AgentChatKnobGroup::CollapsibleBlocks,
@@ -1128,7 +1144,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_collapsible_thought_border_alpha,
         apply_collapsible_thought_border_alpha,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_COLLAPSIBLE_TOOL_BORDER_ALPHA,
         "Tool border alpha",
         AgentChatKnobGroup::CollapsibleBlocks,
@@ -1139,7 +1155,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_collapsible_tool_border_alpha,
         apply_collapsible_tool_border_alpha,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_ERROR_PADDING_X,
         "Error padding X",
         AgentChatKnobGroup::ErrorAndSystem,
@@ -1150,7 +1166,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_error_padding_x,
         apply_error_padding_x,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_ERROR_PADDING_Y,
         "Error padding Y",
         AgentChatKnobGroup::ErrorAndSystem,
@@ -1161,7 +1177,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_error_padding_y,
         apply_error_padding_y,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_ERROR_RADIUS,
         "Error radius",
         AgentChatKnobGroup::ErrorAndSystem,
@@ -1172,7 +1188,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_error_radius,
         apply_error_radius,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_ERROR_BG_ALPHA,
         "Error background alpha",
         AgentChatKnobGroup::ErrorAndSystem,
@@ -1183,7 +1199,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_error_bg_alpha,
         apply_error_bg_alpha,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_ERROR_BORDER_ALPHA,
         "Error border alpha",
         AgentChatKnobGroup::ErrorAndSystem,
@@ -1194,7 +1210,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_error_border_alpha,
         apply_error_border_alpha,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_ERROR_LABEL_OPACITY,
         "Error label opacity",
         AgentChatKnobGroup::ErrorAndSystem,
@@ -1205,7 +1221,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_error_label_opacity,
         apply_error_label_opacity,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_ERROR_HINT_OPACITY,
         "Error hint opacity",
         AgentChatKnobGroup::ErrorAndSystem,
@@ -1216,7 +1232,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_error_hint_opacity,
         apply_error_hint_opacity,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_SYSTEM_PADDING_X,
         "System padding X",
         AgentChatKnobGroup::ErrorAndSystem,
@@ -1227,7 +1243,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_system_padding_x,
         apply_system_padding_x,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_SYSTEM_PADDING_Y,
         "System padding Y",
         AgentChatKnobGroup::ErrorAndSystem,
@@ -1238,7 +1254,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_system_padding_y,
         apply_system_padding_y,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_SYSTEM_OPACITY,
         "System opacity",
         AgentChatKnobGroup::ErrorAndSystem,
@@ -1249,7 +1265,7 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         get_system_opacity,
         apply_system_opacity,
     ),
-    knob(
+    knob!(
         AGENT_CHAT_SYSTEM_BORDER_ALPHA,
         "System border alpha",
         AgentChatKnobGroup::ErrorAndSystem,
@@ -1261,30 +1277,6 @@ pub const AGENT_CHAT_KNOBS: &[AgentChatKnob] = &[
         apply_system_border_alpha,
     ),
 ];
-
-const fn knob(
-    id: AgentChatKnobId,
-    label: &'static str,
-    group: AgentChatKnobGroup,
-    unit: StyleUnit,
-    min: f32,
-    max: f32,
-    step: f32,
-    get: fn(&AgentChatStyleDef) -> StyleValue,
-    apply: fn(&mut AgentChatStyleDef, StyleValue),
-) -> AgentChatKnob {
-    AgentChatKnob {
-        id,
-        label,
-        group,
-        unit,
-        min,
-        max,
-        step,
-        get,
-        apply,
-    }
-}
 
 pub fn agent_chat_knob_by_id(id: AgentChatKnobId) -> Option<&'static AgentChatKnob> {
     AGENT_CHAT_KNOBS.iter().find(|knob| knob.id == id)
