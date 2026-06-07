@@ -1211,6 +1211,37 @@ impl ScriptListApp {
             return DispatchOutcome::not_handled();
         };
 
+        if let Some(adapter_id) = crate::ai::agent_prompt_handoff::adapter_from_action_id(action_id)
+        {
+            let payload = entity.update(cx, |view, cx| {
+                view.current_prompt_handoff_payload(adapter_id, cx)
+            });
+            return match payload
+                .and_then(|payload| crate::ai::agent_prompt_handoff::launch_prompt_handoff(&payload))
+            {
+                Ok(receipt) => {
+                    tracing::info!(
+                        target: "script_kit::agent_handoff",
+                        event = "agent_prompt_handoff_succeeded",
+                        adapter_id = %receipt.adapter_id,
+                        action_id = %receipt.action_id,
+                        dry_run = receipt.dry_run,
+                        prompt_chars = receipt.prompt_chars,
+                        prompt_sha256 = %receipt.prompt_sha256,
+                        spawned = receipt.spawned,
+                        pid = ?receipt.pid,
+                    );
+                    let mut outcome = DispatchOutcome::success();
+                    outcome.user_message = Some("Sent prompt to cmux Codex".to_string());
+                    outcome
+                }
+                Err(error) => DispatchOutcome::error(
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    error.user_message(),
+                ),
+            };
+        }
+
         if let Some(action) = crate::ai::acp::view::FocusedTextMiniAction::from_action_id(action_id)
         {
             let receipt = entity.update(cx, |view, cx| {

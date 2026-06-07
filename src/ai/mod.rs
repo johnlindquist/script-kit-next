@@ -26,6 +26,7 @@
 
 pub(crate) mod acp;
 pub mod agent_chat;
+pub(crate) mod agent_prompt_handoff;
 pub mod agent_task_dock;
 pub(crate) mod config;
 pub(crate) mod context_contract;

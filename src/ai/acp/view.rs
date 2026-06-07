@@ -7636,6 +7636,85 @@ impl AcpChatView {
         true
     }
 
+    pub(crate) fn current_prompt_handoff_payload(
+        &mut self,
+        adapter_id: crate::ai::agent_prompt_handoff::AgentPromptHandoffAdapterId,
+        cx: &mut Context<Self>,
+    ) -> Result<
+        crate::ai::agent_prompt_handoff::AgentPromptHandoffPayload,
+        crate::ai::agent_prompt_handoff::AgentPromptHandoffError,
+    > {
+        if self.is_setup_mode() {
+            return Err(crate::ai::agent_prompt_handoff::AgentPromptHandoffError::SetupMode);
+        }
+
+        self.sync_inline_mentions(cx);
+        let (raw_input, cursor, cwd, model_id, attached_parts) = {
+            let thread = self.live_thread().read(cx);
+            (
+                thread.input.text().to_string(),
+                thread.input.cursor(),
+                thread.cwd().clone(),
+                thread.selected_model_id().map(str::to_string),
+                thread.pending_context_parts().to_vec(),
+            )
+        };
+
+        if raw_input.trim().is_empty() {
+            return Err(crate::ai::agent_prompt_handoff::AgentPromptHandoffError::EmptyPrompt);
+        }
+
+        self.composer_spine.refresh(&raw_input, cursor);
+        let plan =
+            crate::spine::prompt_plan::build_spine_prompt_plan(&self.composer_spine.input.parse);
+        let mut context_parts = attached_parts;
+        for part in &plan.context_parts {
+            if !context_parts.iter().any(|existing| existing == part) {
+                context_parts.push(part.clone());
+            }
+        }
+
+        let normalized_prompt = if plan.prompt_builder_segment_count > 0 {
+            plan.normalized_prompt.trim().to_string()
+        } else {
+            raw_input.trim().to_string()
+        };
+
+        if normalized_prompt.is_empty() && context_parts.is_empty() {
+            return Err(crate::ai::agent_prompt_handoff::AgentPromptHandoffError::EmptyPrompt);
+        }
+
+        let scripts: Vec<std::sync::Arc<crate::scripts::Script>> = Vec::new();
+        let scriptlets: Vec<std::sync::Arc<crate::scripts::Scriptlet>> = Vec::new();
+        let prepared = crate::ai::message_parts::prepare_user_message_with_receipt(
+            &normalized_prompt,
+            &context_parts,
+            &scripts,
+            &scriptlets,
+        );
+        let prompt = prepared.final_user_content.trim().to_string();
+        if prompt.is_empty() {
+            return Err(crate::ai::agent_prompt_handoff::AgentPromptHandoffError::EmptyPrompt);
+        }
+
+        Ok(crate::ai::agent_prompt_handoff::AgentPromptHandoffPayload {
+            source: crate::ai::agent_prompt_handoff::AgentPromptHandoffSource::AcpComposer,
+            adapter_id,
+            raw_input,
+            prompt,
+            cwd,
+            model_id,
+            profile_id: plan.selected_profile.map(|profile| profile.id),
+            context_part_count: context_parts.len(),
+            prompt_builder_segment_count: plan.prompt_builder_segment_count,
+            warnings: plan
+                .unknown_warnings
+                .into_iter()
+                .map(|warning| warning.preflight_instruction)
+                .collect(),
+        })
+    }
+
     fn handle_acp_spine_key_down(
         &mut self,
         event: &gpui::KeyDownEvent,

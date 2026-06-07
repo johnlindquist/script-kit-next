@@ -794,6 +794,14 @@ pub(crate) fn agent_chat_switch_profile_id_from_action(action_id: &str) -> Optio
 #[allow(dead_code)]
 pub fn get_acp_chat_actions() -> Vec<Action> {
     vec![
+        Action::new(
+            crate::ai::agent_prompt_handoff::CMUX_CODEX_ACTION_ID,
+            "Send Prompt to cmux Codex",
+            Some("Open cmux with Codex using the current Agent Chat prompt".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::ArrowRight)
+        .with_section("Handoff"),
         // ── Response ─────────────────────────────────────────
         Action::new(
             "acp_copy_last_response",
@@ -2109,6 +2117,19 @@ mod tests {
             .find(|action| action.id == "acp_switch_model:claude-sonnet-4-6")
             .expect("alternate model action should exist");
         assert_eq!(alternate.title, "Sonnet 4.6");
+    }
+
+    #[test]
+    fn acp_chat_actions_include_cmux_codex_prompt_handoff() {
+        let actions = get_acp_chat_actions();
+        let action = actions
+            .iter()
+            .find(|action| action.id == crate::ai::agent_prompt_handoff::CMUX_CODEX_ACTION_ID)
+            .expect("Agent Chat actions should expose cmux Codex prompt handoff");
+
+        assert_eq!(action.title, "Send Prompt to cmux Codex");
+        assert_eq!(action.section.as_deref(), Some("Handoff"));
+        assert!(action.shortcut.is_none());
     }
 
     #[test]
