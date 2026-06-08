@@ -867,6 +867,38 @@ fn test_seeded_content_uses_plugin_and_skill_first_language() {
     });
 }
 
+#[test]
+fn test_examples_start_here_points_to_first_run_template_creation() {
+    with_temp_sk_path(|kit_root| {
+        let _ = ensure_kit_setup();
+
+        let start_here = fs::read_to_string(
+            kit_root
+                .join("plugins")
+                .join("examples")
+                .join("START_HERE.md"),
+        )
+        .expect("read START_HERE.md");
+
+        assert!(
+            start_here.contains("Script Template Catalog"),
+            "START_HERE.md should point first-run users to the Script Template Catalog"
+        );
+        assert!(
+            start_here.contains("local TypeScript script"),
+            "START_HERE.md should describe the first-run artifact as a local TypeScript script"
+        );
+        assert!(
+            start_here.contains("~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md"),
+            "START_HERE.md should keep new-script skill guidance for Agent Chat creation"
+        );
+        assert!(
+            start_here.contains("bun build") && start_here.contains("SK_VERIFY=1"),
+            "START_HERE.md should keep both verification commands visible"
+        );
+    });
+}
+
 /// Root agent docs are the canonical agent entrypoint and must stay free of legacy v1 tokens.
 #[test]
 fn test_root_agent_docs_do_not_reference_legacy_v1_contract() {

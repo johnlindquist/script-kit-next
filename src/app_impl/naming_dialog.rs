@@ -229,11 +229,10 @@ impl ScriptListApp {
                     );
                 }
 
-                self.current_view = AppView::CreationFeedback {
-                    payload: prompts::CreationFeedbackPayload::local_artifact(created_file_path),
-                };
-                self.opened_from_main_menu = true;
-                cx.notify();
+                self.open_creation_feedback_payload(
+                    prompts::CreationFeedbackPayload::local_artifact(created_file_path),
+                    cx,
+                );
             }
             Err(e) => {
                 logging::log("ERROR", &format!("Failed to create {}: {}", item_type, e));

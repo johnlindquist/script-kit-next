@@ -5176,11 +5176,10 @@ impl ScriptListApp {
             }
         }
 
-        self.current_view = AppView::CreationFeedback {
-            payload: prompts::CreationFeedbackPayload::generated_script(created_file_path),
-        };
-        self.opened_from_main_menu = true;
-        cx.notify();
+        self.open_creation_feedback_payload(
+            prompts::CreationFeedbackPayload::generated_script(created_file_path),
+            cx,
+        );
     }
 
     fn handle_tab_ai_save_offer_key_down(

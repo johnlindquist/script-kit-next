@@ -1,6 +1,38 @@
 const SCRIPT_TEMPLATES: &str = include_str!("../src/render_builtins/script_templates.rs");
 
 #[test]
+fn script_template_catalog_copy_promises_local_creation() {
+    assert!(
+        SCRIPT_TEMPLATES.contains("Create Local Script"),
+        "Script Template Catalog primary action should promise local script creation"
+    );
+    assert!(
+        SCRIPT_TEMPLATES.contains("show_naming_dialog_for_script_template"),
+        "Script Template Catalog Enter path should hand off to the naming dialog"
+    );
+    assert!(
+        SCRIPT_TEMPLATES.contains("render_script_template_file"),
+        "Script Template Catalog should document the rendered local file owner"
+    );
+}
+
+#[test]
+fn script_template_catalog_keeps_shared_surface_contract() {
+    assert!(
+        SCRIPT_TEMPLATES.contains("render_expanded_view_scaffold_with_footer"),
+        "Script Template Catalog should stay on the shared expanded view scaffold"
+    );
+    assert!(
+        SCRIPT_TEMPLATES.contains("render_simple_hint_strip"),
+        "Script Template Catalog should use the shared footer hint strip"
+    );
+    assert!(
+        SCRIPT_TEMPLATES.contains("emit_prompt_chrome_audit"),
+        "Script Template Catalog should emit the shared chrome audit"
+    );
+}
+
+#[test]
 fn script_template_empty_state_copy_is_modeled() {
     assert!(
         SCRIPT_TEMPLATES.contains("enum ScriptTemplateCatalogEmptyState")
@@ -14,7 +46,8 @@ fn script_template_empty_state_copy_is_modeled() {
         "Script Template catalog empty states should own filter classification and visible copy"
     );
     assert!(
-        SCRIPT_TEMPLATES.contains("ScriptTemplateCatalogEmptyState::from_filter(filter).message()"),
+        SCRIPT_TEMPLATES.contains("ScriptTemplateCatalogEmptyState::from_filter(filter)")
+            && SCRIPT_TEMPLATES.contains("state.message()"),
         "Script Template catalog renderer should derive empty-state copy from the model"
     );
     assert!(

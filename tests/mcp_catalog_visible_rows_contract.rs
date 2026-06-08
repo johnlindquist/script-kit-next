@@ -12,6 +12,7 @@ const SDK_REFERENCE_RENDER: &str = include_str!("../src/render_builtins/sdk_refe
 const SCRIPT_TEMPLATES_RENDER: &str = include_str!("../src/render_builtins/script_templates.rs");
 const COLLECT_ELEMENTS: &str = include_str!("../src/app_layout/collect_elements.rs");
 const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
+const NAMING_DIALOG: &str = include_str!("../src/app_impl/naming_dialog.rs");
 const TAB_AI_MODE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 const UI_WINDOW: &str = include_str!("../src/app_impl/ui_window.rs");
 
@@ -143,6 +144,35 @@ fn catalog_renderers_use_projection_helpers() {
     assert!(
         !SCRIPT_TEMPLATES_RENDER.contains("filter_script_template_entries("),
         "Script Template render path must not call the raw filter directly"
+    );
+}
+
+#[test]
+fn script_template_catalog_and_mcp_rendering_stay_coupled() {
+    for required in [
+        "script_template_entries_for_ui",
+        "script_template_catalog_visible_rows",
+        "render_script_template_file",
+        "format_script_template_markdown",
+    ] {
+        assert!(
+            MCP_RESOURCES.contains(required),
+            "MCP script template catalog owner must expose {required}"
+        );
+    }
+
+    assert!(
+        SCRIPT_TEMPLATES_RENDER
+            .contains("script_template_catalog_visible_rows(&templates, filter)"),
+        "launcher Script Template Catalog should use MCP visible-row projection"
+    );
+    assert!(
+        SCRIPT_TEMPLATES_RENDER.contains("format_script_template_markdown(template)"),
+        "launcher copy action should use MCP markdown formatting"
+    );
+    assert!(
+        NAMING_DIALOG.contains("render_script_template_file("),
+        "naming completion should render selected templates through the MCP renderer"
     );
 }
 

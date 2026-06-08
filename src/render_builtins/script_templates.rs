@@ -34,6 +34,10 @@ impl ScriptTemplateCatalogEmptyState {
     }
 }
 
+fn script_template_catalog_primary_hint() -> SharedString {
+    "↵ Create Local Script".into()
+}
+
 impl ScriptListApp {
     fn script_template_catalog_row_description(
         template: &crate::mcp_resources::ScriptTemplateRef,
@@ -320,7 +324,11 @@ impl ScriptListApp {
             .py(px(design_spacing.padding_xs))
             .child(list_element);
 
-        let hints: Vec<SharedString> = vec!["↵ Create".into(), "⌘C Copy".into(), "Esc Back".into()];
+        let hints: Vec<SharedString> = vec![
+            script_template_catalog_primary_hint(),
+            "⌘C Copy".into(),
+            "Esc Back".into(),
+        ];
         crate::components::emit_surface_prompt_hint_audit(
             "script_template_catalog",
             &hints,

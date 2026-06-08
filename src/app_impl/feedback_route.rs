@@ -9,6 +9,7 @@ impl ScriptListApp {
         self.transition_current_view_and_rekey_main_automation_surface(AppView::CreationFeedback {
             payload,
         });
+        self.opened_from_main_menu = true;
         self.focused_input = FocusedInput::None;
         self.pending_focus = Some(FocusTarget::AppRoot);
         cx.notify();

@@ -1,5 +1,32 @@
 use script_kit_gpui::test_utils::read_source;
 
+#[test]
+fn first_run_script_templates_use_canonical_metadata() {
+    let script_creation = read_source("src/script_creation/mod.rs");
+    let mcp_resources = read_source("src/mcp_resources/mod.rs");
+
+    assert!(
+        script_creation.contains("import \"@scriptkit/sdk\";"),
+        "default first-run script template should import the SDK"
+    );
+    assert!(
+        script_creation.contains("export const metadata = {"),
+        "default first-run script template should use canonical metadata export"
+    );
+    assert!(
+        mcp_resources.contains("export const metadata = {"),
+        "MCP-rendered starter templates should use canonical metadata export"
+    );
+    assert!(
+        !script_creation.contains("kenvPath"),
+        "default first-run script template must not teach kenvPath"
+    );
+    assert!(
+        !script_creation.contains("~/.kenv"),
+        "default first-run script template must not teach legacy ~/.kenv paths"
+    );
+}
+
 /// The AI generation contract must not disagree with the default script template
 /// about the canonical metadata shape. Both must accept `export const metadata = { name, ... }`.
 #[test]
