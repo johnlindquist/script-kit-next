@@ -89,6 +89,39 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    pub(crate) fn try_open_profile_search_from_script_list_shift_tab(
+        &mut self,
+        key: &str,
+        modifiers: &gpui::Modifiers,
+        source: &'static str,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return false;
+        }
+        if !crate::ui_foundation::is_key_tab(key) {
+            return false;
+        }
+        if !modifiers.shift || modifiers.platform || modifiers.alt || modifiers.control {
+            return false;
+        }
+        if !self.spine_enabled
+            || self.show_actions_popup
+            || self.menu_syntax_capture_form_owns_input()
+        {
+            return false;
+        }
+
+        tracing::info!(
+            target: "script_kit::spine",
+            event = "profile_switcher_open_shift_tab",
+            source,
+            "Shift+Tab -> Profile Search"
+        );
+        self.open_profile_search(cx);
+        true
+    }
+
     pub(crate) fn profile_search_results_for_filter(
         &self,
         filter: &str,

@@ -9,6 +9,10 @@ const SIMULATE_KEY: &str = include_str!("../src/app_impl/simulate_key_dispatch.r
 const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
 const COLLECT_ELEMENTS: &str = include_str!("../src/app_layout/collect_elements.rs");
 
+fn compact_source(source: &str) -> String {
+    source.split_whitespace().collect::<String>()
+}
+
 #[test]
 fn trigger_owner_no_longer_defines_detached_prompt_popup_window() {
     for stale in [
@@ -125,13 +129,22 @@ fn script_list_elements_expose_trigger_picker_rows() {
         "menuSyntaxTriggerPicker",
         "menu-syntax-trigger-row",
         "protocol::generate_semantic_id(\"choice\", index, &row.id)",
-        "self.menu_syntax_trigger_popup_state.selected_row_id",
     ] {
         assert!(
             COLLECT_ELEMENTS.contains(needle),
             "ScriptList getElements must expose trigger picker rows: {needle}"
         );
     }
+
+    let compact = compact_source(COLLECT_ELEMENTS);
+    assert!(
+        compact.contains(
+            "self.menu_syntax_trigger_popup_state.selected_row_id.as_deref()==Some(row.id.as_str())"
+        ) || (compact.contains(
+            "letselected_row_id=self.menu_syntax_trigger_popup_state.selected_row_id.as_deref();"
+        ) && compact.contains("selected:Some(selected_row_id==Some(row.id.as_str()))")),
+        "ScriptList getElements must mark trigger picker rows selected from menu_syntax_trigger_popup_state.selected_row_id"
+    );
 }
 
 #[test]

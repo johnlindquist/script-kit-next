@@ -215,23 +215,19 @@ impl ScriptListApp {
                         &key_lower, has_cmd, has_shift, _has_alt, _has_ctrl, window, ctx,
                     ) {
                         logging::log("STDIN", "SimulateKey: root file direct action shortcut");
-                    } else if key_lower == "tab"
-                        && has_shift
-                        && !has_cmd
-                        && !_has_alt
-                        && !_has_ctrl
-                        && view.spine_enabled
-                        && !view.show_actions_popup
-                        && !view.menu_syntax_capture_form_owns_input()
-                    {
-                        tracing::info!(
-                            target: "script_kit::spine",
-                            event = "profile_switcher_open_shift_tab",
-                            source = "simulate_key",
-                            "simulateKey Shift+Tab -> Profile Search"
-                        );
+                    } else if view.try_open_profile_search_from_script_list_shift_tab(
+                        &key_lower,
+                        &gpui::Modifiers {
+                            platform: has_cmd,
+                            shift: has_shift,
+                            control: _has_ctrl,
+                            alt: _has_alt,
+                            function: false,
+                        },
+                        "simulate_key",
+                        ctx,
+                    ) {
                         logging::log("STDIN", "SimulateKey: Shift+Tab - open Profile Search");
-                        view.open_profile_search(ctx);
                     } else if has_cmd && key_lower == "k" {
                         logging::log("STDIN", "SimulateKey: Cmd+K - dispatch actions toggle");
                         view.handle_cmd_k_actions_toggle(window, ctx);

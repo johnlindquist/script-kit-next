@@ -1578,22 +1578,12 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            // Shift+Tab on the main menu opens the global
-                            // Profile Switcher so the user can pre-configure
-                            // which profile the next Cmd+Enter launch uses,
-                            // without leaving the launcher.
-                            if matches!(this.current_view, AppView::ScriptList)
-                                && has_shift
-                                && this.spine_enabled
-                                && !this.show_actions_popup
-                                && !this.menu_syntax_capture_form_owns_input()
-                            {
-                                tracing::info!(
-                                    target: "script_kit::spine",
-                                    event = "profile_switcher_open_shift_tab",
-                                    "Shift+Tab → Profile Search"
-                                );
-                                this.open_profile_search(cx);
+                            if this.try_open_profile_search_from_script_list_shift_tab(
+                                key,
+                                &event.keystroke.modifiers,
+                                "runtime",
+                                cx,
+                            ) {
                                 cx.stop_propagation();
                                 return;
                             }

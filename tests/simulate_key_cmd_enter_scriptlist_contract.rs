@@ -3,6 +3,7 @@
 
 const CANONICAL_SIMULATEKEY: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
 const TAB_AI_MODE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const STARTUP_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 const RUNTIME_MATCH_SIMULATEKEY: &str =
     include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
@@ -106,6 +107,22 @@ fn try_route_global_cmd_enter_to_acp_context_capture_still_defined() {
     assert!(
         TAB_AI_MODE.contains("pub(crate) fn try_route_global_cmd_enter_to_acp_context_capture("),
         "try_route_global_cmd_enter_to_acp_context_capture must still be defined"
+    );
+}
+
+#[test]
+fn script_list_shift_tab_runtime_and_simulate_key_share_profile_search_helper() {
+    assert!(
+        CANONICAL_SIMULATEKEY.contains("try_open_profile_search_from_script_list_shift_tab"),
+        "simulateKey ScriptList Shift+Tab must use the shared Profile Search helper"
+    );
+    assert!(
+        STARTUP_SOURCE.contains("try_open_profile_search_from_script_list_shift_tab"),
+        "live ScriptList Shift+Tab must use the same Profile Search helper as simulateKey"
+    );
+    assert!(
+        !STARTUP_SOURCE.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
+        "Shift+Tab must not reintroduce hidden quick-submit routing"
     );
 }
 
