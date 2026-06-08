@@ -192,7 +192,7 @@ fn profile_display_flows_through_thread_and_footer() {
 
 #[test]
 fn shift_tab_routes_to_profile_switcher_copy() {
-    assert!(STARTUP_SOURCE.contains("profile_switcher_open_shift_tab"));
+    assert!(APP_IMPL_PROFILE_SEARCH_SOURCE.contains("profile_switcher_open_shift_tab"));
     assert!(STARTUP_SOURCE.contains("acp_shift_tab_profile_switcher"));
     assert!(STARTUP_NEW_TAB_SOURCE.contains("acp_shift_tab_profile_switcher"));
     assert!(!STARTUP_SOURCE.contains("Shift+Tab → Agent & Model picker"));
@@ -209,11 +209,11 @@ fn simulate_key_shift_tab_routes_to_profile_switcher_for_runtime_proof() {
         .next()
         .expect("ScriptList simulateKey arm must have a body");
 
-    assert!(script_list_arm.contains("key_lower == \"tab\""));
+    assert!(script_list_arm.contains("try_open_profile_search_from_script_list_shift_tab"));
     assert!(script_list_arm.contains("has_shift"));
-    assert!(script_list_arm.contains("profile_switcher_open_shift_tab"));
-    assert!(script_list_arm.contains("open_profile_search(ctx)"));
-    assert!(script_list_arm.contains("menu_syntax_capture_form_owns_input"));
+    assert!(APP_IMPL_PROFILE_SEARCH_SOURCE.contains("profile_switcher_open_shift_tab"));
+    assert!(APP_IMPL_PROFILE_SEARCH_SOURCE.contains("open_profile_search(cx)"));
+    assert!(APP_IMPL_PROFILE_SEARCH_SOURCE.contains("menu_syntax_capture_form_owns_input"));
     assert!(!script_list_arm.contains("submit_to_current_or_new_tab_ai_harness_from_text"));
 }
 
@@ -222,8 +222,11 @@ fn shift_tab_profile_search_is_main_window_split_pane_not_actions_dialog() {
     assert!(APP_VIEW_STATE_SOURCE.contains("ProfileSearchView"));
     assert!(APP_VIEW_STATE_SOURCE.contains("SurfaceKind::ProfileSearch"));
     assert!(APP_VIEW_STATE_SOURCE.contains("RequiredSplitPreview"));
-    assert!(STARTUP_SOURCE.contains("open_profile_search(cx)"));
-    assert!(SIMULATE_KEY_DISPATCH_SOURCE.contains("open_profile_search(ctx)"));
+    assert!(STARTUP_SOURCE.contains("try_open_profile_search_from_script_list_shift_tab"));
+    assert!(
+        SIMULATE_KEY_DISPATCH_SOURCE.contains("try_open_profile_search_from_script_list_shift_tab")
+    );
+    assert!(APP_IMPL_PROFILE_SEARCH_SOURCE.contains("open_profile_search(cx)"));
 
     assert!(!ACTIONS_TOGGLE_SOURCE.contains("pub(crate) fn open_profile_switcher_window("));
     assert!(!SIMULATE_KEY_DISPATCH_SOURCE.contains("open_profile_switcher_window"));

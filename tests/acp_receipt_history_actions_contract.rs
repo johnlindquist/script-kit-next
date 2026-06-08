@@ -37,7 +37,7 @@ fn acp_actions_route_exposes_receipt_history_without_new_ui_island() {
         "pub(crate) fn acp_receipt_history_copy_action_id(",
         "pub(crate) fn acp_receipt_history_request_id_from_action(",
         "pub(crate) fn get_acp_receipt_history_route()",
-        "load_recent_protocol_response_summaries(\n            ACP_RECEIPT_HISTORY_ROUTE_LIMIT,\n        )",
+        "crate::agentic_protocol_bus::load_recent_protocol_response_summaries(\n        ACP_RECEIPT_HISTORY_ROUTE_LIMIT,\n    )",
         ".with_section(\"Proof\")",
         ".with_section(\"Receipts\")",
         "No receipt history",
