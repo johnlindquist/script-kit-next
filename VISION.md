@@ -39,6 +39,37 @@ That promise is more important than feature breadth. A small number of coherent,
 fast, ownable workflows beats a large surface area that feels fragmented or
 opaque.
 
+## Launch Workflows
+
+Launch should be legible through a few concrete workflows, not only through
+architecture language.
+
+### First Five Minutes
+
+In the first five minutes, a new user should be able to:
+
+- Open Main Menu Search, find a runnable example, and understand where its local
+  TypeScript file lives.
+- Describe a workflow to Agent Chat, review the generated script, run a bounded
+  verification step, and save the result as an owned local artifact.
+- See which profile, cwd, model, tools, and context posture Agent Chat will use
+  before trusting AI output.
+- Inspect the receipt or local file path that proves what happened.
+
+### Daily Loop
+
+In the daily loop, a returning user should be able to:
+
+- Type one query, choose a script, built-in, profile, capture target, or Action,
+  then return to work without managing a dashboard.
+- Attach current desktop context to Agent Chat with a resolution receipt that
+  names attempted, resolved, and failed parts.
+- Inspect or adopt a local plugin artifact by looking at its manifest and
+  folders before running what it contains.
+- Automate a prompt through semantic target identity, `getState`,
+  `getElements`, `getLayoutInfo`, `waitFor`, `batch`, logs, and action receipts
+  instead of timing guesses.
+
 ## Product Loop
 
 Script Kit GPUI uses launcher speed as the front door, but the launcher is not
@@ -67,6 +98,10 @@ Each step is a product lens:
 At launch, Script Kit GPUI should feel like one coherent native tool across
 scripts, prompt UIs, built-ins, Actions, Agent Chat, profiles, shareable plugin
 artifacts, and semantic automation receipts.
+
+The launch workflows above are examples of that loop in practice: the product
+should make owned creation, context-aware Agent Chat, local artifact inspection,
+and semantic automation feel like one repeatable path.
 
 ## What Script Kit GPUI Is Trying To Be
 
@@ -139,16 +174,24 @@ The product should not win by copying another launcher feature-for-feature. It
 should win by making the user's own workflows feel native, fast, programmable,
 and verifiable.
 
-## Audience
+## Audience And Jobs To Be Done
 
-Script Kit GPUI should serve developers and automation-minded users first. These
-users value speed, keyboard control, local ownership, inspectability, and the
-ability to build their own workflows.
+Script Kit GPUI should delight developers and power users first: people who
+already live in editors, terminals, Git, local files, keyboard launchers, and
+personal automation. Their daily pain is not lack of another command palette; it
+is the gap between a fast idea and an owned workflow they can inspect, edit,
+version, rerun, and prove.
 
-The product should still welcome technically curious Mac users who want
-installable examples, scriptable workflows, and AI profiles without starting from
-scratch. The onboarding can be approachable, but product tradeoffs should remain
-clear: local ownership and programmable control are the core.
+The next audience is automation-minded Mac users who want useful examples,
+scriptable workflows, and Agent Chat profiles without starting from a blank
+file. They should be able to adopt a local artifact, understand what it will run,
+and make small edits before they need to understand the whole architecture.
+
+The launch wedge is deliberately narrower than "everyone who uses a Mac." Do not
+dilute the programmable local core to behave like a generic consumer launcher,
+a folder of shell scripts, or a generic AI chat tab. Onboarding can be friendly,
+but the tradeoff should stay explicit: local ownership, keyboard speed, and
+inspectable automation matter more than hiding the filesystem.
 
 ## Priority Ladder
 
@@ -167,6 +210,64 @@ The ladder is not a rigid roadmap. It is a tie-breaker. A feature that improves
 distribution but weakens local ownership should lose. A feature that adds AI
 power but weakens attribution should wait. A feature that looks polished but
 cannot be operated or verified semantically is not launch-ready.
+
+## Launch Bets
+
+The priority ladder turns into these launch bets for near-term execution. These
+are not a permanent roadmap; they are the product moves that should win while
+the launch promise is still being proven.
+
+### Now
+
+- Make Main Menu Search the command spine for scripts, built-ins, profiles,
+  command grammar, capture targets, and Agent Chat intent.
+- Make verified local artifact creation feel first-class: intent becomes a
+  reviewable TypeScript script, profile, skill, scriptlet, or plugin artifact
+  with a local path and proof status.
+- Keep prompt UIs, built-ins, Actions, Agent Chat, and feedback surfaces inside
+  one shared native surface language.
+- Make Agent Chat and profile behavior attributable through explicit model,
+  prompt, tool, cwd, session, context, log, and receipt posture.
+- Treat semantic receipts as product evidence, not internal debug output.
+
+### Next
+
+- Deepen context attachment so desktop, file, clipboard, notes, browser,
+  selected-text, and current-app context can be staged with honest resolution
+  receipts.
+- Polish CreationFeedback so generated artifacts clearly offer edit, reveal,
+  rerun, attach-to-profile, and inspect-receipt actions.
+- Broaden profile and local plugin artifact coverage without weakening
+  inspectability or editability.
+- Make receipt history visible enough that users and agents can audit important
+  actions after the fact.
+
+### Later
+
+- Defer broad marketplace and distribution-system decisions until local
+  ownership, reviewability, update, removal, and rollback expectations are
+  proven.
+- Defer broad feature breadth that would add side-channel pickers, one-off
+  chrome, or unsupported prompt promises.
+- Defer media prompt launch claims until current source and runtime receipts
+  prove them.
+- Defer stronger AI filesystem-enforcement claims until native or wrapper-level
+  enforcement exists and receipts prove it.
+
+## Launch Gates
+
+A launch-facing claim needs a named proof path before it becomes product copy.
+Where the repo does not yet have stable numeric baselines, use receipts and
+focused checks instead of fake precision.
+
+| Gate | Launch-ready means | Proof shape |
+| --- | --- | --- |
+| Native speed and keyboard confidence | The launcher opens, filters, moves selection, stages intent, and dismisses without visible hesitation or focus ambiguity. | DevTools or focused test receipts for surface identity, input freshness, selection movement, and return-to-work behavior. |
+| Time-to-first owned artifact | A new user can reach a runnable or generated local script/profile/skill/plugin artifact, inspect its path, and know whether verification passed. | CreationFeedback/source-audit checks plus a receipt or diff showing the local artifact path and proof status. |
+| Prompt coherence | Stable prompts, built-ins, Actions, and Agent Chat share chrome, rows, footer discipline, focus behavior, and semantic IDs unless a documented exception exists. | Shared surface contract tests, footer ownership checks, `getElements`, and `getLayoutInfo` receipts. |
+| Local artifact ownership | Scripts, scriptlets, skills, profiles, and plugin artifacts remain inspectable, editable, versionable, removable, and migratable after adoption. | Manifest/path checks, plugin/profile artifact validation, and source checks that expose the local folder model. |
+| Agent Chat/profile attribution | AI behavior is tied to an explicit profile/runtime boundary and does not imply hidden agents or stronger enforcement than exists. | Profile selection, model/cwd/tool posture, transcript, log, and action receipts. |
+| Semantic receipt coverage | Launch-facing automation can report target identity, state, semantic elements, layout, transactions, logs, and pass/fail status. | `getState`, `getElements`, `getLayoutInfo`, `waitFor`, `batch`, transcript, and action-receipt checks. |
 
 ## Product Pillars
 
