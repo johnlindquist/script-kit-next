@@ -17,7 +17,7 @@ modals for this goal.
 
 | Interaction | Owner | Current route | Status |
 | --- | --- | --- | --- |
-| Quit Script Kit | `src/app_actions/handle_action/scripts.rs` | `open_parent_confirm_dialog_for_entity` with `quit_script_kit_confirm_options`. | Shared popup shell via `src/confirm/window.rs`; runtime proof pending. |
+| Quit Script Kit | `src/app_execute/builtin_execution.rs` | Built-in confirmation gate opens `confirm_with_parent_dialog` with `quit_script_kit_confirm_options`. | Runtime-proven through real launcher row: `confirm-popup` parent dialog, shared confirm semantics, Quit/Cancel buttons, and parent target. Dismiss primitive gap remains; disposable session was stopped for cleanup. |
 | Remove/delete script | `src/app_actions/handle_action/scripts.rs` | Entity-owned parent confirm helper before destructive action. | Shared popup shell via `src/confirm/window.rs`; representative runtime proof pending. |
 | Move file to trash | `src/app_actions/handle_action/files.rs` | `confirm_with_parent_dialog` with destructive options. | Shared popup shell via `src/confirm/window.rs`; representative runtime proof pending. |
 | Clipboard bulk delete / clear unpinned | `src/app_actions/handle_action/clipboard.rs` | `confirm_with_parent_dialog` with destructive options. | Shared popup shell via `src/confirm/window.rs`; representative runtime proof pending. |
@@ -115,3 +115,40 @@ Captured in session `confirm-modal-proof` against
   - SDK and built-in confirm routes are source-contract proven.
   - SDK script-facing runtime proof remains pending because the external
     agentic `run` route did not produce confirm traffic during the proof run.
+
+## Iteration 5 Quit Script Kit Runtime Proof
+
+- User path:
+  - Started disposable session `confirm-modal-quit-proof`.
+  - Set launcher input to `quit script kit`.
+  - Verified the selected row was the real `builtin/quit-script-kit` entry.
+  - Sent low-level `simulateKey Enter` only after confirming the source
+    `requires_confirmation(&entry.id)` gate for destructive built-ins.
+- Runtime receipts:
+  - `/tmp/confirm-modal-quit-set-input.json`
+  - `/tmp/confirm-modal-quit-filtered-state.json`
+  - `/tmp/confirm-modal-quit-sim-enter.json`
+  - `/tmp/confirm-modal-quit-targets-after-enter.json`
+  - `/tmp/confirm-modal-quit-elements.json`
+  - `/tmp/confirm-modal-quit-focus.json`
+  - `/tmp/confirm-modal-quit-keyboard.json`
+  - `/tmp/confirm-modal-quit-layout.json`
+  - `/tmp/confirm-modal-quit-targets-after-escape.json`
+- Proven behavior:
+  - `targets.list` exposed `confirm-popup` as a `PromptPopup`, title
+    `Quit Script Kit`, semantic surface `confirmDialog`, parent
+    `main`, bounds `360x132`.
+  - Popup semantic inspection exposed `panel:confirm-dialog`,
+    `button:0:confirm` text `Quit`, and `button:1:cancel` text `Cancel`.
+  - Focus inspection reported `focusedSemanticId=button:0:confirm`.
+  - Layout measurement resolved the popup window region and produced no
+    overlap errors.
+- Known primitive gaps:
+  - `triggerBuiltin` cannot open `builtin/quit-script-kit`; the registry
+    omits this destructive command, so the proof used the real launcher row
+    instead.
+  - `keyboard.inspect` for `PromptPopup` reports
+    `blocked-by-missing-primitive` for `keyboardBindings`.
+  - Target-scoped `simulateKey Escape` returned ok but did not dismiss the
+    parent confirm popup. Cleanup used `session.sh stop` instead of attempting
+    an Enter-based cancel path.
