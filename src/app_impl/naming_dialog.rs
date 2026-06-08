@@ -207,6 +207,53 @@ impl ScriptListApp {
                     }
                 }
 
+                if result.target == prompts::NamingTarget::Script {
+                    let used_script_template = result.template_id.is_some();
+                    let receipt_prompt = if let Some(template_id) = result.template_id.as_deref() {
+                        format!(
+                            "Created local script '{}' from Script Template Catalog template '{}'",
+                            result.friendly_name, template_id
+                        )
+                    } else {
+                        format!(
+                            "Created local script '{}' from NamingPrompt",
+                            result.friendly_name
+                        )
+                    };
+                    let receipt_result =
+                        crate::ai::script_generation::write_script_creation_receipt_for_path(
+                            &created_file_path,
+                            &receipt_prompt,
+                            &result.friendly_name,
+                            if used_script_template {
+                                "script_template_catalog"
+                            } else {
+                                "naming_prompt"
+                            },
+                            if used_script_template {
+                                "script-template"
+                            } else {
+                                "manual"
+                            },
+                            "script-creation",
+                        );
+                    if let Err(error) = receipt_result {
+                        tracing::warn!(
+                            target: "naming",
+                            error = %error,
+                            path = %created_file_path.display(),
+                            "script_creation_receipt.unavailable"
+                        );
+                        self.toast_manager.push(
+                            components::toast::Toast::warning(
+                                "Created script, but verification receipt was unavailable",
+                                &self.theme,
+                            )
+                            .duration_ms(Some(TOAST_ERROR_MS)),
+                        );
+                    }
+                }
+
                 if let Err(e) = script_creation::open_in_editor(&path, &self.config) {
                     logging::log("ERROR", &format!("Failed to open in editor: {}", e));
                     self.toast_manager.push(

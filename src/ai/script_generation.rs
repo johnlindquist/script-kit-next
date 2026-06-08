@@ -459,6 +459,8 @@ fn verify_generated_script_with_bun_build(
         "build".to_string(),
         script_path.display().to_string(),
         "--target=bun".to_string(),
+        "--external".to_string(),
+        SCRIPT_KIT_SDK_IMPORT_MODULE.to_string(),
         "--outfile".to_string(),
         output_path.display().to_string(),
     ];
@@ -468,6 +470,8 @@ fn verify_generated_script_with_bun_build(
         .arg("build")
         .arg(script_path)
         .arg("--target=bun")
+        .arg("--external")
+        .arg(SCRIPT_KIT_SDK_IMPORT_MODULE)
         .arg("--outfile")
         .arg(&output_path)
         .stdin(Stdio::null())
@@ -560,6 +564,48 @@ fn verify_generated_script_with_bun_build(
             }
         }
     }
+}
+
+pub(crate) fn write_script_creation_receipt_for_path(
+    script_path: &Path,
+    prompt: &str,
+    slug_source: &str,
+    slug_source_kind: &str,
+    model_id: &str,
+    provider_id: &str,
+) -> Result<GeneratedScriptReceipt> {
+    let source = fs::read_to_string(script_path).with_context(|| {
+        format!(
+            "Failed reading created script for verification receipt (state=script_creation_receipt_read_failed, path={})",
+            script_path.display()
+        )
+    })?;
+    let slug = script_path
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().to_string())
+        .filter(|stem| !stem.trim().is_empty())
+        .unwrap_or_else(|| slugify_script_name(slug_source));
+    let contract = audit_generated_script_contract(&source);
+    let verification = verify_generated_script_with_bun_build(script_path);
+    let receipt_path = generated_script_receipt_path(script_path);
+    let receipt = GeneratedScriptReceipt {
+        schema_version: AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
+        prompt: prompt.trim().to_string(),
+        slug,
+        slug_source: slug_source.to_string(),
+        slug_source_kind: slug_source_kind.to_string(),
+        model_id: model_id.to_string(),
+        provider_id: provider_id.to_string(),
+        script_path: script_path.display().to_string(),
+        receipt_path: receipt_path.display().to_string(),
+        shell_execution_warning: false,
+        contract,
+        verification,
+        current_app_recipe: None,
+    };
+
+    write_generated_script_receipt(&receipt_path, &receipt)?;
+    Ok(receipt)
 }
 
 pub fn extract_current_app_recipe_from_script(
