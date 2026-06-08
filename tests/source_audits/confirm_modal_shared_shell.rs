@@ -100,3 +100,29 @@ fn actions_and_trigger_popups_are_not_classified_as_confirm_modals() {
         "actions menu and trigger popup must stay out of the confirm modal migration"
     );
 }
+
+#[test]
+fn sdk_confirm_api_stays_single_word_and_avoids_modal_namespace() {
+    let sdk = read("scripts/kit-sdk.ts");
+    let goal = read(".goals/modal-consistency-design-system.md");
+    let inventory = read(".goals/receipts/modal-inventory.md");
+
+    assert!(
+        sdk.contains("export interface ConfirmConfig")
+            && sdk.contains("(globalThis as any).confirm = async function confirm")
+            && sdk.contains("type: 'confirm'"),
+        "SDK confirm exposure must keep the typed global confirm() implementation"
+    );
+    assert!(
+        !sdk.contains("modal.confirm") && !sdk.contains("globalThis.modal"),
+        "SDK confirm exposure must not introduce a modal.confirm namespace"
+    );
+    assert!(
+        goal.contains("API as `confirm`") && !goal.contains("modal.confirm"),
+        "goal contract must preserve the single-word SDK confirm API"
+    );
+    assert!(
+        inventory.contains("SDK `confirm`"),
+        "inventory must track the script-facing SDK confirm route"
+    );
+}
