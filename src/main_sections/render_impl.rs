@@ -571,8 +571,8 @@ impl Render for ScriptListApp {
             AppView::NamingPrompt { entity, .. } => {
                 self.render_naming_prompt(entity, cx).into_any_element()
             }
-            AppView::CreationFeedback { ref path } => {
-                self.render_creation_feedback(path.clone(), cx)
+            AppView::CreationFeedback { ref payload } => {
+                self.render_creation_feedback(payload.clone(), cx)
             }
             AppView::ScriptIssuesView { ref report } => {
                 self.render_script_issues_view(report.clone(), cx)

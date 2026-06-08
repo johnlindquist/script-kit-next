@@ -892,7 +892,7 @@ impl ScriptListApp {
 
     pub(crate) fn render_creation_feedback(
         &mut self,
-        path: std::path::PathBuf,
+        payload: prompts::CreationFeedbackPayload,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
@@ -909,15 +909,17 @@ impl ScriptListApp {
         let vibrancy_bg = get_vibrancy_background(render_context.theme);
 
         let entity = cx.entity().downgrade();
+        let entity_for_receipt = cx.entity().downgrade();
+        let config = self.config.clone();
 
-        let panel = prompts::CreationFeedbackPanel::new(path, theme)
+        let panel = prompts::CreationFeedbackPanel::new(payload, theme)
             .design_variant(self.current_design)
-            .on_reveal_in_finder(Box::new(move |p, _window, _cx| {
+            .on_reveal_artifact(Box::new(move |p, _window, _cx| {
                 if let Err(e) = crate::platform::reveal_in_finder(p) {
                     tracing::warn!(error = %e, "reveal_in_finder failed");
                 }
             }))
-            .on_copy_path(Box::new(move |p, _window, cx| {
+            .on_copy_artifact_path(Box::new(move |p, _window, cx| {
                 if let Err(e) = crate::platform::copy_text_to_clipboard(&p.to_string_lossy()) {
                     tracing::warn!(error = %e, "copy_text_to_clipboard failed");
                 } else if let Some(app) = entity.upgrade() {
@@ -926,9 +928,23 @@ impl ScriptListApp {
                     });
                 }
             }))
-            .on_open(Box::new(move |p, _window, _cx| {
+            .on_edit_artifact(Box::new(move |p, _window, _cx| {
+                if let Err(e) = crate::script_creation::open_in_editor(p, &config) {
+                    tracing::warn!(error = %e, "creation_feedback_open_in_editor failed");
+                }
+            }))
+            .on_copy_receipt_path(Box::new(move |p, _window, cx| {
+                if let Err(e) = crate::platform::copy_text_to_clipboard(&p.to_string_lossy()) {
+                    tracing::warn!(error = %e, "copy_receipt_path_to_clipboard failed");
+                } else if let Some(app) = entity_for_receipt.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.show_hud("Receipt path copied".to_string(), None, cx);
+                    });
+                }
+            }))
+            .on_open_receipt(Box::new(move |p, _window, _cx| {
                 if let Err(e) = crate::platform::open_in_default_app(p) {
-                    tracing::warn!(error = %e, "open_in_default_app failed");
+                    tracing::warn!(error = %e, "open_receipt_in_default_app failed");
                 }
             }));
 

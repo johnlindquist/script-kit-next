@@ -50,11 +50,21 @@ fn creation_feedback_layout_exposes_window_panel_path_and_action_geometry() {
 
     for component in [
         "CreationFeedbackPanel",
-        "CreationFeedbackPathSurface",
-        "CreationFeedbackActions",
+        "CreationFeedbackArtifactSection",
+        "CreationFeedbackArtifactPathSurface",
+        "CreationFeedbackVerificationSection",
+        "CreationFeedbackVerificationStatusSurface",
+        "CreationFeedbackReceiptSection",
+        "CreationFeedbackReceiptPathSurface",
+        "CreationFeedbackReceiptStatusSurface",
+        "CreationFeedbackArtifactActions",
+        "CreationFeedbackReceiptActions",
         "CreationFeedbackRevealButton",
         "CreationFeedbackCopyButton",
-        "CreationFeedbackOpenButton",
+        "CreationFeedbackEditButton",
+        "CreationFeedbackRunButton",
+        "CreationFeedbackCopyReceiptButton",
+        "CreationFeedbackOpenReceiptButton",
     ] {
         assert!(
             branch.contains(component),
@@ -85,5 +95,11 @@ fn open_creation_feedback_stdin_fixture_is_registered() {
     assert!(
         STDIN_SOURCE.contains("test_external_command_open_creation_feedback_deserialization"),
         "openCreationFeedback should have a parser contract"
+    );
+    assert!(
+        STDIN_SOURCE.contains("receiptPath")
+            && STDIN_SOURCE.contains("receiptStatus")
+            && STDIN_SOURCE.contains("verificationStatus"),
+        "openCreationFeedback should expose receipt and verification fixture fields"
     );
 }

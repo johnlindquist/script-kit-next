@@ -47,7 +47,9 @@ pub use chat::{
     ChatClaudeCodeCallback, ChatConfigureCallback, ChatEscapeCallback, ChatPrompt,
     ChatSubmitCallback,
 };
-pub use creation_feedback::CreationFeedbackPanel;
+pub use creation_feedback::{
+    CreationFeedbackPanel, CreationFeedbackPayload, CreationFeedbackReceiptStatus,
+};
 pub use div::{ContainerOptions, ContainerPadding, DivPrompt};
 pub use naming::{
     NamingPrompt, NamingPromptConfig, NamingSubmitResult, NamingTarget, TemplateSelection,

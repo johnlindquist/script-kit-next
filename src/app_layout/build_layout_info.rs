@@ -482,7 +482,10 @@ impl ScriptListApp {
             const FEEDBACK_BUTTON_GAP: f32 = 8.0;
             const FEEDBACK_REVEAL_WIDTH: f32 = 128.0;
             const FEEDBACK_COPY_WIDTH: f32 = 92.0;
-            const FEEDBACK_OPEN_WIDTH: f32 = 58.0;
+            const FEEDBACK_EDIT_WIDTH: f32 = 58.0;
+            const FEEDBACK_RUN_WIDTH: f32 = 58.0;
+            const FEEDBACK_RECEIPT_COPY_WIDTH: f32 = 142.0;
+            const FEEDBACK_RECEIPT_OPEN_WIDTH: f32 = 116.0;
 
             let panel_x = FEEDBACK_PADDING_X;
             let panel_y = FEEDBACK_PADDING_Y;
@@ -533,7 +536,7 @@ impl ScriptListApp {
                 FEEDBACK_SECTION_LABEL_HEIGHT + FEEDBACK_SECTION_GAP + FEEDBACK_PATH_HEIGHT;
             components.push(
                 LayoutComponentInfo::new(
-                    "CreationFeedbackPathSection",
+                    "CreationFeedbackArtifactSection",
                     LayoutComponentType::Container,
                 )
                 .with_bounds(panel_x, cursor_y, panel_width, section_height)
@@ -542,17 +545,20 @@ impl ScriptListApp {
                     chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
                     Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                 )
-                .with_visual_token("feedback.pathSection")
+                .with_visual_token("feedback.artifactSection")
                 .with_gap(FEEDBACK_SECTION_GAP)
                 .with_flex_column()
                 .with_depth(2)
                 .with_parent("CreationFeedbackPanel")
                 .with_explanation(
-                    "Path section owns the read-only path surface and label spacing.",
+                    "Artifact section owns the read-only created path surface and label spacing.",
                 ),
             );
             components.push(
-                LayoutComponentInfo::new("CreationFeedbackPathSurface", LayoutComponentType::Input)
+                LayoutComponentInfo::new(
+                    "CreationFeedbackArtifactPathSurface",
+                    LayoutComponentType::Input,
+                )
                     .with_bounds(
                         panel_x,
                         cursor_y + FEEDBACK_SECTION_LABEL_HEIGHT + FEEDBACK_SECTION_GAP,
@@ -564,39 +570,113 @@ impl ScriptListApp {
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
                         Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
                     )
-                    .with_visual_token("feedback.pathSurface")
+                    .with_visual_token("feedback.artifactPathSurface")
                     .with_padding(10.0, 12.0, 10.0, 12.0)
                     .with_depth(3)
-                    .with_parent("CreationFeedbackPathSection")
-                    .with_explanation("Read-only path surface uses a 14px control radius and 42px height for long-path scrolling."),
+                    .with_parent("CreationFeedbackArtifactSection")
+                    .with_explanation("Read-only artifact path surface uses a 14px control radius and 42px height for long-path scrolling."),
             );
             cursor_y += section_height + FEEDBACK_STACK_GAP;
+
+            for (section_name, surface_name, visual_token) in [
+                (
+                    "CreationFeedbackVerificationSection",
+                    "CreationFeedbackVerificationStatusSurface",
+                    "feedback.verificationSection",
+                ),
+                (
+                    "CreationFeedbackReceiptSection",
+                    "CreationFeedbackReceiptPathSurface",
+                    "feedback.receiptSection",
+                ),
+            ] {
+                components.push(
+                    LayoutComponentInfo::new(section_name, LayoutComponentType::Container)
+                        .with_bounds(panel_x, cursor_y, panel_width, section_height)
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_CONTENT,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                        )
+                        .with_visual_token(visual_token)
+                        .with_gap(FEEDBACK_SECTION_GAP)
+                        .with_flex_column()
+                        .with_depth(2)
+                        .with_parent("CreationFeedbackPanel")
+                        .with_explanation(
+                            "CreationFeedback status section exposes receipt-backed creation proof.",
+                        ),
+                );
+                components.push(
+                    LayoutComponentInfo::new(surface_name, LayoutComponentType::Input)
+                        .with_bounds(
+                            panel_x,
+                            cursor_y + FEEDBACK_SECTION_LABEL_HEIGHT + FEEDBACK_SECTION_GAP,
+                            panel_width,
+                            FEEDBACK_PATH_HEIGHT,
+                        )
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
+                        )
+                        .with_visual_token("feedback.statusSurface")
+                        .with_padding(10.0, 12.0, 10.0, 12.0)
+                        .with_depth(3)
+                        .with_parent(section_name)
+                        .with_explanation(
+                            "Read-only status surface uses the shared prompt field control treatment.",
+                        ),
+                );
+                cursor_y += section_height + FEEDBACK_STACK_GAP;
+            }
+
+            components.push(
+                LayoutComponentInfo::new(
+                    "CreationFeedbackReceiptStatusSurface",
+                    LayoutComponentType::Input,
+                )
+                .with_bounds(panel_x, cursor_y - FEEDBACK_STACK_GAP, panel_width, FEEDBACK_PATH_HEIGHT)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
+                )
+                .with_visual_token("feedback.receiptStatusSurface")
+                .with_padding(10.0, 12.0, 10.0, 12.0)
+                .with_depth(3)
+                .with_parent("CreationFeedbackReceiptSection")
+                .with_explanation("Receipt status surface exposes whether a sidecar receipt is present, missing, or unreadable."),
+            );
 
             let button_widths = [
                 ("CreationFeedbackRevealButton", FEEDBACK_REVEAL_WIDTH),
                 ("CreationFeedbackCopyButton", FEEDBACK_COPY_WIDTH),
-                ("CreationFeedbackOpenButton", FEEDBACK_OPEN_WIDTH),
+                ("CreationFeedbackEditButton", FEEDBACK_EDIT_WIDTH),
+                ("CreationFeedbackRunButton", FEEDBACK_RUN_WIDTH),
             ];
             let action_row_width = FEEDBACK_REVEAL_WIDTH
                 + FEEDBACK_COPY_WIDTH
-                + FEEDBACK_OPEN_WIDTH
-                + FEEDBACK_BUTTON_GAP * 2.0;
+                + FEEDBACK_EDIT_WIDTH
+                + FEEDBACK_RUN_WIDTH
+                + FEEDBACK_BUTTON_GAP * 3.0;
             components.push(
-                LayoutComponentInfo::new("CreationFeedbackActions", LayoutComponentType::Container)
-                    .with_bounds(panel_x, cursor_y, action_row_width, FEEDBACK_BUTTON_HEIGHT)
-                    .with_visual_style(
-                        chrome_tokens::CHROME_LAYER_FUNCTIONAL,
-                        chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                        Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
-                    )
-                    .with_visual_token("feedback.actions")
-                    .with_gap(FEEDBACK_BUTTON_GAP)
-                    .with_flex_row()
-                    .with_depth(2)
-                    .with_parent("CreationFeedbackPanel")
-                    .with_explanation(
-                        "Action row keeps three 28px-tall controls on an 8px rhythm.",
-                    ),
+                LayoutComponentInfo::new(
+                    "CreationFeedbackArtifactActions",
+                    LayoutComponentType::Container,
+                )
+                .with_bounds(panel_x, cursor_y, action_row_width, FEEDBACK_BUTTON_HEIGHT)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                )
+                .with_visual_token("feedback.artifactActions")
+                .with_gap(FEEDBACK_BUTTON_GAP)
+                .with_flex_row()
+                .with_depth(2)
+                .with_parent("CreationFeedbackPanel")
+                .with_explanation("Action row keeps three 28px-tall controls on an 8px rhythm."),
             );
 
             let mut button_x = panel_x;
@@ -612,10 +692,63 @@ impl ScriptListApp {
                         .with_visual_token("feedback.actionButton")
                         .with_hit_bounds(button_x, cursor_y, width, FEEDBACK_BUTTON_HEIGHT)
                         .with_depth(3)
-                        .with_parent("CreationFeedbackActions")
+                            .with_parent("CreationFeedbackArtifactActions")
                         .with_explanation("Compact ghost button uses the shared 10px Liquid Glass button radius and 28px minimum hit height."),
                 );
                 button_x += width + FEEDBACK_BUTTON_GAP;
+            }
+
+            cursor_y += FEEDBACK_BUTTON_HEIGHT + FEEDBACK_STACK_GAP;
+            let receipt_button_widths = [
+                (
+                    "CreationFeedbackCopyReceiptButton",
+                    FEEDBACK_RECEIPT_COPY_WIDTH,
+                ),
+                (
+                    "CreationFeedbackOpenReceiptButton",
+                    FEEDBACK_RECEIPT_OPEN_WIDTH,
+                ),
+            ];
+            let receipt_row_width =
+                FEEDBACK_RECEIPT_COPY_WIDTH + FEEDBACK_RECEIPT_OPEN_WIDTH + FEEDBACK_BUTTON_GAP;
+            components.push(
+                LayoutComponentInfo::new(
+                    "CreationFeedbackReceiptActions",
+                    LayoutComponentType::Container,
+                )
+                .with_bounds(panel_x, cursor_y, receipt_row_width, FEEDBACK_BUTTON_HEIGHT)
+                .with_visual_style(
+                    chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                    chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                    Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
+                )
+                .with_visual_token("feedback.receiptActions")
+                .with_gap(FEEDBACK_BUTTON_GAP)
+                .with_flex_row()
+                .with_depth(2)
+                .with_parent("CreationFeedbackPanel")
+                .with_explanation("Receipt action row exposes copy/open controls only when a sidecar receipt path exists."),
+            );
+
+            let mut receipt_button_x = panel_x;
+            for (name, width) in receipt_button_widths {
+                components.push(
+                    LayoutComponentInfo::new(name, LayoutComponentType::Button)
+                        .with_bounds(receipt_button_x, cursor_y, width, FEEDBACK_BUTTON_HEIGHT)
+                        .with_visual_style(
+                            chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                            chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                            Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+                        )
+                        .with_visual_token("feedback.actionButton")
+                        .with_hit_bounds(receipt_button_x, cursor_y, width, FEEDBACK_BUTTON_HEIGHT)
+                        .with_depth(3)
+                        .with_parent("CreationFeedbackReceiptActions")
+                        .with_explanation(
+                            "Receipt button uses the shared compact Liquid Glass button treatment.",
+                        ),
+                );
+                receipt_button_x += width + FEEDBACK_BUTTON_GAP;
             }
 
             return LayoutInfo {

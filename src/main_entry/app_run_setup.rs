@@ -2549,14 +2549,25 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     ctx,
                                 );
                             }
-                            ExternalCommand::OpenCreationFeedback { path, request_id: _ } => {
+                            ExternalCommand::OpenCreationFeedback { path, receipt_path, receipt_status, verification_status, request_id: _ } => {
                                 logging::log("STDIN", "Opening CreationFeedback surface via stdin command");
                                 script_kit_gpui::set_main_window_visible(true);
                                 script_kit_gpui::mark_window_shown();
                                 platform::show_main_window_without_activation();
                                 window.activate_window();
                                 sync_main_automation_window(current_main_automation_bounds(), true, true);
-                                view.open_creation_feedback_surface(path.map(std::path::PathBuf::from), ctx);
+                                let artifact_path = path
+                                    .map(std::path::PathBuf::from)
+                                    .unwrap_or_else(|| std::path::PathBuf::from("/tmp/script-kit-liquid-glass-feedback-fixture.ts"));
+                                let payload = crate::prompts::CreationFeedbackPayload::fixture(
+                                    artifact_path,
+                                    receipt_path.map(std::path::PathBuf::from),
+                                    receipt_status
+                                        .as_deref()
+                                        .map(crate::prompts::CreationFeedbackReceiptStatus::from_fixture_str),
+                                    verification_status,
+                                );
+                                view.open_creation_feedback_payload(payload, ctx);
                             }
                             ExternalCommand::OpenConfirmPrompt { title, body, confirm_text, cancel_text, request_id: _ } => {
                                 logging::log("STDIN", "Opening ConfirmPrompt surface via stdin command");

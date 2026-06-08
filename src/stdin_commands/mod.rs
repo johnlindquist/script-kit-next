@@ -432,6 +432,12 @@ pub enum ExternalCommand {
     OpenCreationFeedback {
         #[serde(default)]
         path: Option<String>,
+        #[serde(default, rename = "receiptPath")]
+        receipt_path: Option<String>,
+        #[serde(default, rename = "receiptStatus")]
+        receipt_status: Option<String>,
+        #[serde(default, rename = "verificationStatus")]
+        verification_status: Option<crate::ai::GeneratedScriptVerificationStatus>,
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
@@ -2005,8 +2011,43 @@ mod tests {
         let json = r#"{"type": "openCreationFeedback", "path": "/tmp/fixture.ts"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
-            ExternalCommand::OpenCreationFeedback { path, .. } => {
+            ExternalCommand::OpenCreationFeedback {
+                path,
+                receipt_path,
+                receipt_status,
+                verification_status,
+                ..
+            } => {
                 assert_eq!(path.as_deref(), Some("/tmp/fixture.ts"));
+                assert!(receipt_path.is_none());
+                assert!(receipt_status.is_none());
+                assert!(verification_status.is_none());
+            }
+            other => panic!("Expected OpenCreationFeedback, got: {:?}", other),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_external_command_open_creation_feedback_receipt_fixture_deserialization(
+    ) -> anyhow::Result<()> {
+        let json = r#"{"type": "openCreationFeedback", "path": "/tmp/fixture.ts", "receiptPath": "/tmp/fixture.scriptkit.json", "receiptStatus": "present", "verificationStatus": "blocked"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        match cmd {
+            ExternalCommand::OpenCreationFeedback {
+                path,
+                receipt_path,
+                receipt_status,
+                verification_status,
+                ..
+            } => {
+                assert_eq!(path.as_deref(), Some("/tmp/fixture.ts"));
+                assert_eq!(receipt_path.as_deref(), Some("/tmp/fixture.scriptkit.json"));
+                assert_eq!(receipt_status.as_deref(), Some("present"));
+                assert_eq!(
+                    verification_status,
+                    Some(crate::ai::GeneratedScriptVerificationStatus::Blocked)
+                );
             }
             other => panic!("Expected OpenCreationFeedback, got: {:?}", other),
         }

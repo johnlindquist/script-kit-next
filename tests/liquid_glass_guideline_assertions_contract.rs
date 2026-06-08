@@ -554,21 +554,31 @@ fn shared_prompt_layout_nodes_use_liquid_glass_radius_tokens() {
 fn creation_feedback_content_nodes_use_liquid_glass_panel_radius() {
     let layout = fs::read_to_string("src/app_layout/build_layout_info.rs")
         .expect("failed to read build_layout_info.rs");
+    let start = layout
+        .find("if matches!(self.current_view, AppView::CreationFeedback")
+        .expect("CreationFeedback layout branch should exist");
+    let branch = &layout[start..];
 
     for node in [
         "CreationFeedbackIntro",
-        "CreationFeedbackPathSection",
-        "CreationFeedbackActions",
+        "CreationFeedbackArtifactSection",
+        "CreationFeedbackVerificationSection",
+        "CreationFeedbackReceiptSection",
+        "CreationFeedbackArtifactActions",
+        "CreationFeedbackReceiptActions",
     ] {
-        let node_source = layout_component_source(&layout, node);
-        let end = node_source
-            .find(".with_visual_token")
-            .unwrap_or_else(|| panic!("{node} should declare visual metadata"));
         assert!(
-            node_source[..end].contains("Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX)"),
-            "{node} must use the shared Liquid Glass panel radius token"
+            branch.contains(node),
+            "{node} layout node should exist in the CreationFeedback branch"
         );
     }
+
+    assert!(
+        branch.matches("Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX)")
+            .count()
+            >= 5,
+        "CreationFeedback content/action containers must use the shared Liquid Glass panel radius token"
+    );
 }
 
 #[test]

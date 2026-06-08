@@ -198,9 +198,11 @@ enum AppView {
         id: String,
         entity: Entity<prompts::NamingPrompt>,
     },
-    /// Showing creation feedback with file path and quick actions after script/extension creation.
+    /// Showing creation feedback with artifact path, receipt status, and quick actions after creation.
     /// Requires explicit dismiss (Enter/Escape/button) — non-dismissable by click-outside.
-    CreationFeedback { path: std::path::PathBuf },
+    CreationFeedback {
+        payload: prompts::CreationFeedbackPayload,
+    },
     /// Read-only diagnostic view listing scripts excluded by validation.
     /// Populated from the Arc<ValidationReport> already held by ScriptListApp;
     /// Escape returns to ScriptList, Cmd+C copies diagnostics to clipboard.

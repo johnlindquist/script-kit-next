@@ -5177,7 +5177,7 @@ impl ScriptListApp {
         }
 
         self.current_view = AppView::CreationFeedback {
-            path: created_file_path,
+            payload: prompts::CreationFeedbackPayload::generated_script(created_file_path),
         };
         self.opened_from_main_menu = true;
         cx.notify();

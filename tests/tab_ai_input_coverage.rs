@@ -772,13 +772,24 @@ fn tab_ai_context_quality_theme_chooser_is_degraded() {
         .contains(&TabAiDegradationReason::PanelOnlyElements));
 }
 
-/// CreationFeedback: read-only confirmation, panel-only.
+/// CreationFeedback: read-only confirmation with semantic receipt/action elements.
 #[test]
-fn tab_ai_context_quality_creation_feedback_is_degraded() {
-    let r = panel_only_receipt("CreationFeedback", "panel_only_creation_feedback");
+fn tab_ai_context_quality_creation_feedback_is_read_only_but_semantic() {
+    let r = TabAiInvocationReceipt::from_snapshot(
+        "CreationFeedback",
+        &None,
+        &None,
+        &Some("creation-feedback:artifact-path".to_string()),
+        12,
+        &[],
+    );
     assert_eq!(r.prompt_type, "CreationFeedback");
     assert!(!r.rich);
     assert_eq!(r.input_status, TabAiFieldStatus::Unavailable);
+    assert_eq!(r.elements_status, TabAiFieldStatus::Captured);
+    assert!(!r
+        .degradation_reasons
+        .contains(&TabAiDegradationReason::PanelOnlyElements));
 }
 
 /// SettingsView: no elements, no warnings, no input → all unavailable.
@@ -1052,7 +1063,6 @@ fn tab_ai_receipt_matches_blob_quality_for_degraded_surfaces() {
         ("Webcam", "panel_only_webcam"),
         ("ActionsDialog", "panel_only_actions_dialog"),
         ("ThemeChooser", "panel_only_theme_chooser"),
-        ("CreationFeedback", "panel_only_creation_feedback"),
     ];
 
     for (surface, warning) in &degraded_surfaces {
@@ -1223,7 +1233,6 @@ fn collect_elements_panel_only_surfaces_emit_warnings() {
         ("ActionsDialog", "panel_only_actions_dialog"),
         ("DivPrompt", "panel_only_div_prompt"),
         ("WebcamView", "panel_only_webcam"),
-        ("CreationFeedback", "panel_only_creation_feedback"),
     ];
 
     for (view, expected_warning) in panel_only_views {
@@ -1232,6 +1241,11 @@ fn collect_elements_panel_only_surfaces_emit_warnings() {
             "{view} must emit {expected_warning} in collect_visible_elements"
         );
     }
+
+    assert!(
+        !COLLECT_ELEMENTS_SOURCE.contains("panel_only_creation_feedback"),
+        "CreationFeedback must expose semantic receipt/action elements instead of a panel-only warning"
+    );
 }
 
 // ---------------------------------------------------------------------------
