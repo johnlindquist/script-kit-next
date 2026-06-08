@@ -1,7 +1,7 @@
 use super::*;
 use crate::ai::script_generation::{
     GeneratedScriptContractAudit, GeneratedScriptMetadataStyle, GeneratedScriptReceipt,
-    AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
+    GeneratedScriptVerificationReceipt, AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
 };
 use crate::menu_bar::current_app_commands::{
     CurrentAppCommandRecipe, CurrentAppIntentTraceReceipt, CurrentAppScriptPromptReceipt,
@@ -70,6 +70,7 @@ fn make_test_receipt(
             current_app_recipe_header_at_top: recipe.is_some(),
             warnings: vec![],
         },
+        verification: GeneratedScriptVerificationReceipt::skipped("unit_test_fixture"),
         current_app_recipe: recipe,
     }
 }

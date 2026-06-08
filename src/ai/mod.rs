@@ -104,8 +104,8 @@ pub use self::script_generation::{
     extract_current_app_recipe_from_script, generate_script_from_prompt,
     generate_script_from_prompt_with_receipt, generated_script_receipt_path,
     GeneratedScriptContractAudit, GeneratedScriptMetadataStyle, GeneratedScriptOutput,
-    GeneratedScriptReceipt, AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
-    AI_SCRIPT_GENERATION_SYSTEM_PROMPT,
+    GeneratedScriptReceipt, GeneratedScriptVerificationReceipt, GeneratedScriptVerificationStatus,
+    AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION, AI_SCRIPT_GENERATION_SYSTEM_PROMPT,
 };
 pub use self::sdk_handlers::try_handle_ai_message;
 pub use self::storage::{

@@ -134,6 +134,14 @@ fn test_receipt_api_exports_visible_from_ai_module() {
         "invariant_receipt_type_export: GeneratedScriptReceipt must be re-exported from src/ai/mod.rs"
     );
     assert!(
+        mod_rs.contains("GeneratedScriptVerificationReceipt"),
+        "invariant_verification_receipt_export: GeneratedScriptVerificationReceipt must be re-exported from src/ai/mod.rs"
+    );
+    assert!(
+        mod_rs.contains("GeneratedScriptVerificationStatus"),
+        "invariant_verification_status_export: GeneratedScriptVerificationStatus must be re-exported from src/ai/mod.rs"
+    );
+    assert!(
         mod_rs.contains("GeneratedScriptContractAudit"),
         "invariant_contract_audit_export: GeneratedScriptContractAudit must be re-exported from src/ai/mod.rs"
     );
@@ -171,6 +179,75 @@ fn test_generator_defines_contract_audit_infrastructure() {
     assert!(
         generator.contains("write_generated_script_receipt"),
         "invariant_receipt_writer: script_generation.rs must define write_generated_script_receipt"
+    );
+}
+
+/// Generated script receipts must record bounded verification truth, not only
+/// creation metadata.
+#[test]
+fn test_receipt_struct_has_bounded_verification_fields() {
+    let generator = read_source("src/ai/script_generation.rs");
+
+    assert!(
+        generator.contains("GeneratedScriptVerificationStatus"),
+        "invariant_verification_status_enum: script_generation.rs must define GeneratedScriptVerificationStatus"
+    );
+    assert!(
+        generator.contains("GeneratedScriptVerificationReceipt"),
+        "invariant_verification_receipt_struct: script_generation.rs must define GeneratedScriptVerificationReceipt"
+    );
+    assert!(
+        generator.contains("verification: GeneratedScriptVerificationReceipt"),
+        "invariant_receipt_verification_field: GeneratedScriptReceipt must include a verification field"
+    );
+    assert!(
+        generator.contains("AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION: u32 = 2"),
+        "GeneratedScriptReceipt schema version must be bumped for verification receipts"
+    );
+    for status in ["Passed", "Failed", "Skipped", "Blocked"] {
+        assert!(
+            generator.contains(status),
+            "GeneratedScriptVerificationStatus must include {status}"
+        );
+    }
+    for field in [
+        "command_kind",
+        "command",
+        "exit_code",
+        "duration_ms",
+        "diagnostics",
+    ] {
+        assert!(
+            generator.contains(field),
+            "GeneratedScriptVerificationReceipt must expose `{field}`"
+        );
+    }
+}
+
+/// The verifier must be bounded and must only mark success from a successful
+/// command status.
+#[test]
+fn test_bounded_verifier_does_not_claim_success_without_command_success() {
+    let generator = read_source("src/ai/script_generation.rs");
+
+    assert!(
+        generator.contains("AI_GENERATED_SCRIPT_VERIFY_TIMEOUT"),
+        "generated-script verification must have an explicit timeout"
+    );
+    assert!(
+        generator.contains("Command::new(\"bun\")") && generator.contains(".arg(\"build\")"),
+        "generated-script verification must use a bounded bun build command"
+    );
+    assert!(
+        generator.contains("output.status.success()")
+            && generator.contains("GeneratedScriptVerificationStatus::Passed")
+            && generator.contains("GeneratedScriptVerificationStatus::Failed"),
+        "verification may mark passed only from command success and must record failed otherwise"
+    );
+    assert!(
+        generator.contains("verification_timed_out")
+            && generator.contains("GeneratedScriptVerificationStatus::Blocked"),
+        "verification timeout must be recorded as blocked, not passed"
     );
 }
 
@@ -222,5 +299,14 @@ fn test_legacy_save_path_writes_receipt_sidecar() {
     assert!(
         generator.contains("write_generated_script_receipt(&receipt_path, &receipt)?;"),
         "invariant_legacy_save_writes_receipt: legacy save path must persist the receipt sidecar"
+    );
+    assert!(
+        generator
+            .contains("let verification = verify_generated_script_with_bun_build(&script_path);"),
+        "invariant_legacy_save_verification: legacy save path must record bounded verification"
+    );
+    assert!(
+        generator.contains("verification,"),
+        "invariant_legacy_save_receipt_verification: legacy save receipt must include verification"
     );
 }

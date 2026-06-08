@@ -3,7 +3,10 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use super::config::ModelInfo;
 use super::providers::{AiProvider, ProviderMessage, ProviderRegistry};
@@ -15,7 +18,9 @@ const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
 const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
 const AI_SCRIPT_USER_REQUEST_START_DELIMITER: &str = "---USER_REQUEST---";
 const AI_SCRIPT_USER_REQUEST_END_DELIMITER: &str = "---END_REQUEST---";
-pub const AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION: u32 = 1;
+pub const AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION: u32 = 2;
+const AI_GENERATED_SCRIPT_VERIFY_TIMEOUT: Duration = Duration::from_secs(15);
+const AI_GENERATED_SCRIPT_VERIFY_OUTPUT_LIMIT: usize = 4096;
 
 const AI_SCRIPT_SHELL_EXECUTION_PATTERNS: [(&str, &str); 5] = [
     ("child_process", "child_process"),
@@ -293,6 +298,70 @@ pub struct GeneratedScriptContractAudit {
     pub warnings: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GeneratedScriptVerificationStatus {
+    Passed,
+    Failed,
+    Skipped,
+    Blocked,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GeneratedScriptVerificationReceipt {
+    pub status: GeneratedScriptVerificationStatus,
+    pub command_kind: String,
+    pub command: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    pub duration_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stdout_excerpt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stderr_excerpt: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<String>,
+}
+
+impl Default for GeneratedScriptVerificationReceipt {
+    fn default() -> Self {
+        Self::skipped("legacy_receipt_missing_verification")
+    }
+}
+
+impl GeneratedScriptVerificationReceipt {
+    pub fn skipped(reason: impl Into<String>) -> Self {
+        Self {
+            status: GeneratedScriptVerificationStatus::Skipped,
+            command_kind: "not_run".to_string(),
+            command: Vec::new(),
+            exit_code: None,
+            duration_ms: 0,
+            output_path: None,
+            stdout_excerpt: None,
+            stderr_excerpt: None,
+            diagnostics: vec![reason.into()],
+        }
+    }
+
+    fn blocked(reason: impl Into<String>, command_kind: impl Into<String>) -> Self {
+        Self {
+            status: GeneratedScriptVerificationStatus::Blocked,
+            command_kind: command_kind.into(),
+            command: Vec::new(),
+            exit_code: None,
+            duration_ms: 0,
+            output_path: None,
+            stdout_excerpt: None,
+            stderr_excerpt: None,
+            diagnostics: vec![reason.into()],
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct GeneratedScriptReceipt {
@@ -307,6 +376,8 @@ pub struct GeneratedScriptReceipt {
     pub receipt_path: String,
     pub shell_execution_warning: bool,
     pub contract: GeneratedScriptContractAudit,
+    #[serde(default)]
+    pub verification: GeneratedScriptVerificationReceipt,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current_app_recipe: Option<CurrentAppCommandRecipe>,
 }
@@ -347,6 +418,148 @@ fn write_generated_script_receipt(
             receipt_path.display()
         )
     })
+}
+
+fn truncate_verification_output(output: &[u8]) -> Option<String> {
+    if output.is_empty() {
+        return None;
+    }
+
+    let text = String::from_utf8_lossy(output);
+    let mut excerpt = text
+        .chars()
+        .take(AI_GENERATED_SCRIPT_VERIFY_OUTPUT_LIMIT)
+        .collect::<String>();
+    if text.chars().count() > AI_GENERATED_SCRIPT_VERIFY_OUTPUT_LIMIT {
+        excerpt.push_str("\n... truncated ...");
+    }
+    Some(excerpt)
+}
+
+fn verification_output_path(script_path: &Path) -> PathBuf {
+    let stem = script_path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("generated-script");
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    std::env::temp_dir().join(format!(
+        "script-kit-generated-verification-{stem}-{timestamp}.mjs"
+    ))
+}
+
+fn verify_generated_script_with_bun_build(
+    script_path: &Path,
+) -> GeneratedScriptVerificationReceipt {
+    let output_path = verification_output_path(script_path);
+    let command = vec![
+        "bun".to_string(),
+        "build".to_string(),
+        script_path.display().to_string(),
+        "--target=bun".to_string(),
+        "--outfile".to_string(),
+        output_path.display().to_string(),
+    ];
+    let started = Instant::now();
+
+    let mut child = match Command::new("bun")
+        .arg("build")
+        .arg(script_path)
+        .arg("--target=bun")
+        .arg("--outfile")
+        .arg(&output_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(error) => {
+            let mut receipt =
+                GeneratedScriptVerificationReceipt::blocked(error.to_string(), "bun_build");
+            receipt.command = command;
+            receipt.output_path = Some(output_path.display().to_string());
+            return receipt;
+        }
+    };
+
+    loop {
+        match child.try_wait() {
+            Ok(Some(_status)) => {
+                let duration_ms = started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+                match child.wait_with_output() {
+                    Ok(output) => {
+                        let status = if output.status.success() {
+                            GeneratedScriptVerificationStatus::Passed
+                        } else {
+                            GeneratedScriptVerificationStatus::Failed
+                        };
+                        return GeneratedScriptVerificationReceipt {
+                            status,
+                            command_kind: "bun_build".to_string(),
+                            command,
+                            exit_code: output.status.code(),
+                            duration_ms,
+                            output_path: Some(output_path.display().to_string()),
+                            stdout_excerpt: truncate_verification_output(&output.stdout),
+                            stderr_excerpt: truncate_verification_output(&output.stderr),
+                            diagnostics: Vec::new(),
+                        };
+                    }
+                    Err(error) => {
+                        return GeneratedScriptVerificationReceipt {
+                            status: GeneratedScriptVerificationStatus::Blocked,
+                            command_kind: "bun_build".to_string(),
+                            command,
+                            exit_code: None,
+                            duration_ms,
+                            output_path: Some(output_path.display().to_string()),
+                            stdout_excerpt: None,
+                            stderr_excerpt: None,
+                            diagnostics: vec![format!("verification_output_read_failed: {error}")],
+                        };
+                    }
+                }
+            }
+            Ok(None) => {
+                if started.elapsed() >= AI_GENERATED_SCRIPT_VERIFY_TIMEOUT {
+                    let _ = child.kill();
+                    let output = child.wait_with_output().ok();
+                    return GeneratedScriptVerificationReceipt {
+                        status: GeneratedScriptVerificationStatus::Blocked,
+                        command_kind: "bun_build".to_string(),
+                        command,
+                        exit_code: output.as_ref().and_then(|output| output.status.code()),
+                        duration_ms: started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
+                        output_path: Some(output_path.display().to_string()),
+                        stdout_excerpt: output
+                            .as_ref()
+                            .and_then(|output| truncate_verification_output(&output.stdout)),
+                        stderr_excerpt: output
+                            .as_ref()
+                            .and_then(|output| truncate_verification_output(&output.stderr)),
+                        diagnostics: vec!["verification_timed_out".to_string()],
+                    };
+                }
+                thread::sleep(Duration::from_millis(25));
+            }
+            Err(error) => {
+                return GeneratedScriptVerificationReceipt {
+                    status: GeneratedScriptVerificationStatus::Blocked,
+                    command_kind: "bun_build".to_string(),
+                    command,
+                    exit_code: None,
+                    duration_ms: started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
+                    output_path: Some(output_path.display().to_string()),
+                    stdout_excerpt: None,
+                    stderr_excerpt: None,
+                    diagnostics: vec![format!("verification_wait_failed: {error}")],
+                };
+            }
+        }
+    }
 }
 
 pub fn extract_current_app_recipe_from_script(
@@ -450,6 +663,7 @@ pub fn generate_script_from_prompt_with_receipt(
     })?;
 
     let receipt_path = generated_script_receipt_path(&path);
+    let verification = verify_generated_script_with_bun_build(&path);
     let receipt = GeneratedScriptReceipt {
         schema_version: AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
         prompt: normalized_prompt.to_string(),
@@ -462,6 +676,7 @@ pub fn generate_script_from_prompt_with_receipt(
         receipt_path: receipt_path.display().to_string(),
         shell_execution_warning,
         contract: prepared.contract.clone(),
+        verification,
         current_app_recipe: None,
     };
 
@@ -599,6 +814,7 @@ pub(crate) fn save_generated_script_from_response(
     })?;
 
     let receipt_path = generated_script_receipt_path(&script_path);
+    let verification = verify_generated_script_with_bun_build(&script_path);
     let receipt = GeneratedScriptReceipt {
         schema_version: AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
         prompt: prompt.trim().to_string(),
@@ -611,6 +827,7 @@ pub(crate) fn save_generated_script_from_response(
         receipt_path: receipt_path.display().to_string(),
         shell_execution_warning: false,
         contract: prepared.contract,
+        verification,
         current_app_recipe: None,
     };
     write_generated_script_receipt(&receipt_path, &receipt)?;
@@ -1961,6 +2178,7 @@ await div(JSON.stringify(urls));
                 current_app_recipe_header_at_top: true,
                 warnings: vec![],
             },
+            verification: GeneratedScriptVerificationReceipt::skipped("unit_test_fixture"),
             current_app_recipe: None,
         };
 
@@ -1968,9 +2186,46 @@ await div(JSON.stringify(urls));
         let deserialized: GeneratedScriptReceipt =
             serde_json::from_str(&json).expect("deserialize receipt");
         assert_eq!(receipt, deserialized);
-        assert!(json.contains("\"schemaVersion\": 1"));
+        assert!(json.contains("\"schemaVersion\": 2"));
         assert!(json.contains("\"metadataStyle\": \"metadataExport\""));
+        assert!(json.contains("\"verification\""));
+        assert!(json.contains("\"status\": \"skipped\""));
         assert!(!json.contains("\"currentAppRecipe\""));
+    }
+
+    #[test]
+    fn receipt_serde_defaults_missing_verification_to_skipped() {
+        let json = r#"{
+  "schemaVersion": 1,
+  "prompt": "close duplicate tabs",
+  "slug": "close-duplicate-tabs",
+  "slugSource": "Close Duplicate Tabs",
+  "slugSourceKind": "metadata_export",
+  "modelId": "gpt-4",
+  "providerId": "openai",
+  "scriptPath": "/tmp/test.ts",
+  "receiptPath": "/tmp/test.scriptkit.json",
+  "shellExecutionWarning": false,
+  "contract": {
+    "metadataStyle": "metadataExport",
+    "hasName": true,
+    "hasDescription": true,
+    "hasKitImport": true,
+    "hasCurrentAppRecipeHeader": false,
+    "currentAppRecipeHeaderAtTop": true
+  }
+}"#;
+
+        let receipt: GeneratedScriptReceipt =
+            serde_json::from_str(json).expect("deserialize legacy receipt");
+        assert_eq!(
+            receipt.verification.status,
+            GeneratedScriptVerificationStatus::Skipped
+        );
+        assert!(receipt
+            .verification
+            .diagnostics
+            .contains(&"legacy_receipt_missing_verification".to_string()));
     }
 
     #[test]
@@ -2046,6 +2301,7 @@ await div("Ready");
             receipt_path: "/tmp/test.scriptkit.json".to_string(),
             shell_execution_warning: false,
             contract: prepared.contract.clone(),
+            verification: GeneratedScriptVerificationReceipt::skipped("unit_test_fixture"),
             current_app_recipe: None,
         };
 
@@ -2098,6 +2354,7 @@ await div("ok");
             receipt_path: "/tmp/test.scriptkit.json".to_string(),
             shell_execution_warning: false,
             contract: prepared.contract.clone(),
+            verification: GeneratedScriptVerificationReceipt::skipped("unit_test_fixture"),
             current_app_recipe: None,
         };
 
