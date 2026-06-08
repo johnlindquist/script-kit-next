@@ -12,6 +12,10 @@ use super::agent_chat_catalog::{
     AgentChatStyleDef, AGENT_CHAT_KNOBS,
 };
 use super::catalog::{knob_by_id, knob_id_from_str, StyleKnobId, StyleValue, STYLE_KNOBS};
+use super::confirm_modal_catalog::{
+    base_confirm_modal_style, confirm_modal_knob_by_id, confirm_modal_knob_id_from_str,
+    ConfirmModalKnobId, ConfirmModalStyleDef, CONFIRM_MODAL_KNOBS,
+};
 use super::copy_catalog::{copy_control_by_id, copy_control_id_from_str, CopyControlId};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -37,6 +41,7 @@ struct RuntimeStyleOverrides {
     copy_values: BTreeMap<CopyControlId, String>,
     actions_values: BTreeMap<ActionsPopupKnobId, StyleValue>,
     agent_chat_values: BTreeMap<AgentChatKnobId, StyleValue>,
+    confirm_modal_values: BTreeMap<ConfirmModalKnobId, StyleValue>,
     undo_stack: Vec<HistoryEntry>,
     redo_stack: Vec<HistoryEntry>,
 }
@@ -65,15 +70,22 @@ enum HistoryEntry {
         before: Option<StyleValue>,
         after: Option<StyleValue>,
     },
+    ConfirmModalSingle {
+        id: ConfirmModalKnobId,
+        before: Option<StyleValue>,
+        after: Option<StyleValue>,
+    },
     Snapshot {
         before: BTreeMap<StyleKnobId, StyleValue>,
         copy_before: BTreeMap<CopyControlId, String>,
         actions_before: BTreeMap<ActionsPopupKnobId, StyleValue>,
         agent_chat_before: BTreeMap<AgentChatKnobId, StyleValue>,
+        confirm_modal_before: BTreeMap<ConfirmModalKnobId, StyleValue>,
         after: BTreeMap<StyleKnobId, StyleValue>,
         copy_after: BTreeMap<CopyControlId, String>,
         actions_after: BTreeMap<ActionsPopupKnobId, StyleValue>,
         agent_chat_after: BTreeMap<AgentChatKnobId, StyleValue>,
+        confirm_modal_after: BTreeMap<ConfirmModalKnobId, StyleValue>,
     },
 }
 
@@ -108,7 +120,8 @@ pub fn history_state() -> StyleHistoryState {
             .len()
             .saturating_add(guard.copy_values.len())
             .saturating_add(guard.actions_values.len())
-            .saturating_add(guard.agent_chat_values.len()),
+            .saturating_add(guard.agent_chat_values.len())
+            .saturating_add(guard.confirm_modal_values.len()),
         generation: guard.generation,
     }
 }
@@ -334,6 +347,62 @@ pub fn current_agent_chat_value(id: AgentChatKnobId) -> Option<StyleValue> {
         .copied()
 }
 
+pub fn set_confirm_modal_value(
+    id: ConfirmModalKnobId,
+    requested: StyleValue,
+) -> Option<AppliedStyleChange> {
+    let knob = confirm_modal_knob_by_id(id)?;
+    let applied = knob.clamp_value(requested);
+    let mut guard = store()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let previous = guard.confirm_modal_values.insert(id, applied);
+    guard.undo_stack.push(HistoryEntry::ConfirmModalSingle {
+        id,
+        before: previous,
+        after: Some(applied),
+    });
+    guard.redo_stack.clear();
+    guard.generation = guard.generation.saturating_add(1);
+    Some(AppliedStyleChange {
+        generation: guard.generation,
+        previous,
+        requested,
+        applied,
+    })
+}
+
+pub fn reset_confirm_modal_value(id: ConfirmModalKnobId) -> Option<AppliedStyleChange> {
+    let knob = confirm_modal_knob_by_id(id)?;
+    let mut guard = store()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let previous = guard.confirm_modal_values.remove(&id);
+    guard.undo_stack.push(HistoryEntry::ConfirmModalSingle {
+        id,
+        before: previous,
+        after: None,
+    });
+    guard.redo_stack.clear();
+    guard.generation = guard.generation.saturating_add(1);
+    let base_value = (knob.get)(&base_confirm_modal_style());
+    Some(AppliedStyleChange {
+        generation: guard.generation,
+        previous,
+        requested: base_value,
+        applied: base_value,
+    })
+}
+
+pub fn current_confirm_modal_value(id: ConfirmModalKnobId) -> Option<StyleValue> {
+    store()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .confirm_modal_values
+        .get(&id)
+        .copied()
+}
+
 pub fn reset_all() -> u64 {
     let mut guard = store()
         .write()
@@ -342,19 +411,23 @@ pub fn reset_all() -> u64 {
     let copy_before = guard.copy_values.clone();
     let actions_before = guard.actions_values.clone();
     let agent_chat_before = guard.agent_chat_values.clone();
+    let confirm_modal_before = guard.confirm_modal_values.clone();
     guard.values.clear();
     guard.copy_values.clear();
     guard.actions_values.clear();
     guard.agent_chat_values.clear();
+    guard.confirm_modal_values.clear();
     guard.undo_stack.push(HistoryEntry::Snapshot {
         before,
         copy_before,
         actions_before,
         agent_chat_before,
+        confirm_modal_before,
         after: BTreeMap::new(),
         copy_after: BTreeMap::new(),
         actions_after: BTreeMap::new(),
         agent_chat_after: BTreeMap::new(),
+        confirm_modal_after: BTreeMap::new(),
     });
     guard.redo_stack.clear();
     guard.generation = guard.generation.saturating_add(1);
@@ -416,6 +489,14 @@ pub fn agent_chat_override_count() -> usize {
         .len()
 }
 
+pub fn confirm_modal_override_count() -> usize {
+    store()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .confirm_modal_values
+        .len()
+}
+
 #[derive(Debug, Clone, Copy)]
 enum HistoryDirection {
     Undo,
@@ -452,12 +533,19 @@ fn apply_history_entry(
         (HistoryEntry::AgentChatSingle { id, after, .. }, HistoryDirection::Redo) => {
             apply_optional_agent_chat_value(&mut overrides.agent_chat_values, *id, *after);
         }
+        (HistoryEntry::ConfirmModalSingle { id, before, .. }, HistoryDirection::Undo) => {
+            apply_optional_confirm_modal_value(&mut overrides.confirm_modal_values, *id, *before);
+        }
+        (HistoryEntry::ConfirmModalSingle { id, after, .. }, HistoryDirection::Redo) => {
+            apply_optional_confirm_modal_value(&mut overrides.confirm_modal_values, *id, *after);
+        }
         (
             HistoryEntry::Snapshot {
                 before,
                 copy_before,
                 actions_before,
                 agent_chat_before,
+                confirm_modal_before,
                 ..
             },
             HistoryDirection::Undo,
@@ -466,6 +554,7 @@ fn apply_history_entry(
             overrides.copy_values = copy_before.clone();
             overrides.actions_values = actions_before.clone();
             overrides.agent_chat_values = agent_chat_before.clone();
+            overrides.confirm_modal_values = confirm_modal_before.clone();
         }
         (
             HistoryEntry::Snapshot {
@@ -473,6 +562,7 @@ fn apply_history_entry(
                 copy_after,
                 actions_after,
                 agent_chat_after,
+                confirm_modal_after,
                 ..
             },
             HistoryDirection::Redo,
@@ -481,6 +571,7 @@ fn apply_history_entry(
             overrides.copy_values = copy_after.clone();
             overrides.actions_values = actions_after.clone();
             overrides.agent_chat_values = agent_chat_after.clone();
+            overrides.confirm_modal_values = confirm_modal_after.clone();
         }
     }
 }
@@ -533,6 +624,18 @@ fn apply_optional_agent_chat_value(
     }
 }
 
+fn apply_optional_confirm_modal_value(
+    values: &mut BTreeMap<ConfirmModalKnobId, StyleValue>,
+    id: ConfirmModalKnobId,
+    value: Option<StyleValue>,
+) {
+    if let Some(value) = value {
+        values.insert(id, value);
+    } else {
+        values.remove(&id);
+    }
+}
+
 fn format_history_result(action: &str, entry: &HistoryEntry, generation: u64) -> String {
     match entry {
         HistoryEntry::Single { id, .. } => {
@@ -547,26 +650,33 @@ fn format_history_result(action: &str, entry: &HistoryEntry, generation: u64) ->
         HistoryEntry::AgentChatSingle { id, .. } => {
             format!("{action}:{} generation={generation}", id.as_str())
         }
+        HistoryEntry::ConfirmModalSingle { id, .. } => {
+            format!("{action}:{} generation={generation}", id.as_str())
+        }
         HistoryEntry::Snapshot {
             before,
             copy_before,
             actions_before,
             agent_chat_before,
+            confirm_modal_before,
             after,
             copy_after,
             actions_after,
             agent_chat_after,
+            confirm_modal_after,
         } => {
             let before = before
                 .len()
                 .saturating_add(copy_before.len())
                 .saturating_add(actions_before.len())
-                .saturating_add(agent_chat_before.len());
+                .saturating_add(agent_chat_before.len())
+                .saturating_add(confirm_modal_before.len());
             let after = after
                 .len()
                 .saturating_add(copy_after.len())
                 .saturating_add(actions_after.len())
-                .saturating_add(agent_chat_after.len());
+                .saturating_add(agent_chat_after.len())
+                .saturating_add(confirm_modal_after.len());
             format!("{action}:all before={before} after={after} generation={generation}")
         }
     }
@@ -627,6 +737,25 @@ pub fn set_agent_chat_number_from_devtools(control: &str, value: &str) -> anyhow
     Ok(format!("{}={applied}", id.as_str()))
 }
 
+pub fn set_confirm_modal_number_from_devtools(
+    control: &str,
+    value: &str,
+) -> anyhow::Result<String> {
+    let id = confirm_modal_knob_id_from_str(control)
+        .ok_or_else(|| anyhow::anyhow!("unknown dev style confirm modal control '{control}'"))?;
+    let parsed = value
+        .trim()
+        .trim_end_matches("px")
+        .trim_end_matches('%')
+        .trim()
+        .parse::<f32>()
+        .map_err(|_| anyhow::anyhow!("invalid numeric value '{value}'"))?;
+    let change = set_confirm_modal_value(id, StyleValue::Number(parsed))
+        .ok_or_else(|| anyhow::anyhow!("unknown dev style confirm modal control '{control}'"))?;
+    let StyleValue::Number(applied) = change.applied;
+    Ok(format!("{}={applied}", id.as_str()))
+}
+
 pub fn apply_to_main_menu_def(mut def: MainMenuThemeDef) -> MainMenuThemeDef {
     let guard = store()
         .read()
@@ -658,6 +787,19 @@ pub fn effective_agent_chat_style() -> AgentChatStyleDef {
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     for knob in AGENT_CHAT_KNOBS {
         if let Some(value) = guard.agent_chat_values.get(&knob.id).copied() {
+            (knob.apply)(&mut def, value);
+        }
+    }
+    def
+}
+
+pub fn effective_confirm_modal_style() -> ConfirmModalStyleDef {
+    let mut def = base_confirm_modal_style();
+    let guard = store()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    for knob in CONFIRM_MODAL_KNOBS {
+        if let Some(value) = guard.confirm_modal_values.get(&knob.id).copied() {
             (knob.apply)(&mut def, value);
         }
     }

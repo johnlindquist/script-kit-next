@@ -1,5 +1,12 @@
 use gpui::{div, prelude::*, px, AnyElement, Div, Rgba, SharedString, Stateful};
 
+use crate::dev_style_tool::{
+    runtime_overrides, StyleValue, CONFIRM_MODAL_GAP_KNOB_ID,
+    CONFIRM_MODAL_HEADER_ACCENT_HEIGHT_KNOB_ID, CONFIRM_MODAL_HEADER_ACCENT_WIDTH_KNOB_ID,
+    CONFIRM_MODAL_HEADER_GAP_KNOB_ID, CONFIRM_MODAL_PADDING_X_KNOB_ID,
+    CONFIRM_MODAL_PADDING_Y_KNOB_ID, CONFIRM_MODAL_RADIUS_KNOB_ID,
+};
+
 pub(crate) const CONFIRM_MODAL_SHELL_ID: &str = "modal-shell:confirm";
 pub(crate) const CONFIRM_MODAL_HEADER_ACCENT_WIDTH: f32 = 2.0;
 pub(crate) const CONFIRM_MODAL_HEADER_ACCENT_HEIGHT: f32 = 14.0;
@@ -25,16 +32,27 @@ pub(crate) fn confirm_modal_header(
     accent: Rgba,
     title_color: Rgba,
 ) -> Div {
+    let accent_width = confirm_modal_override(
+        CONFIRM_MODAL_HEADER_ACCENT_WIDTH_KNOB_ID,
+        CONFIRM_MODAL_HEADER_ACCENT_WIDTH,
+    );
+    let accent_height = confirm_modal_override(
+        CONFIRM_MODAL_HEADER_ACCENT_HEIGHT_KNOB_ID,
+        CONFIRM_MODAL_HEADER_ACCENT_HEIGHT,
+    );
+    let header_gap =
+        confirm_modal_override(CONFIRM_MODAL_HEADER_GAP_KNOB_ID, CONFIRM_MODAL_HEADER_GAP);
+
     div()
         .w_full()
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(CONFIRM_MODAL_HEADER_GAP))
+        .gap(px(header_gap))
         .child(
             div()
-                .w(px(CONFIRM_MODAL_HEADER_ACCENT_WIDTH))
-                .h(px(CONFIRM_MODAL_HEADER_ACCENT_HEIGHT))
+                .w(px(accent_width))
+                .h(px(accent_height))
                 .rounded(px(1.0))
                 .bg(accent),
         )
@@ -53,13 +71,18 @@ pub(crate) fn confirm_modal_shell(
     config: ConfirmModalShellConfig,
     children: Vec<AnyElement>,
 ) -> Stateful<Div> {
+    let padding_x = confirm_modal_override(CONFIRM_MODAL_PADDING_X_KNOB_ID, config.padding_x);
+    let padding_y = confirm_modal_override(CONFIRM_MODAL_PADDING_Y_KNOB_ID, config.padding_y);
+    let gap = confirm_modal_override(CONFIRM_MODAL_GAP_KNOB_ID, config.gap);
+    let radius = confirm_modal_override(CONFIRM_MODAL_RADIUS_KNOB_ID, config.radius);
+
     let mut content = div()
         .id(config.content_id)
         .w_full()
         .p_0()
         .flex()
         .flex_col()
-        .gap(px(config.gap));
+        .gap(px(gap));
 
     for child in children {
         content = content.child(child);
@@ -67,11 +90,11 @@ pub(crate) fn confirm_modal_shell(
 
     let mut shell = div()
         .id(CONFIRM_MODAL_SHELL_ID)
-        .px(px(config.padding_x))
-        .py(px(config.padding_y))
+        .px(px(padding_x))
+        .py(px(padding_y))
         .border_1()
         .border_color(config.border)
-        .rounded(px(config.radius))
+        .rounded(px(radius))
         .flex()
         .flex_col()
         .mt(px(config.offset_y))
@@ -90,4 +113,11 @@ pub(crate) fn confirm_modal_shell(
     }
 
     shell
+}
+
+fn confirm_modal_override(id: crate::dev_style_tool::ConfirmModalKnobId, fallback: f32) -> f32 {
+    match runtime_overrides::current_confirm_modal_value(id) {
+        Some(StyleValue::Number(value)) => value,
+        None => fallback,
+    }
 }

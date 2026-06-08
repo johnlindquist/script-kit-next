@@ -57,6 +57,7 @@ mod dev_style_tool {
     pub mod actions_popup_catalog;
     pub mod agent_chat_catalog;
     pub mod catalog;
+    pub mod confirm_modal_catalog;
     pub mod copy_catalog;
     pub(crate) mod export;
     pub mod kitchen_sink_targets;
@@ -70,6 +71,8 @@ mod dev_style_tool {
     pub use agent_chat_catalog::*;
     #[allow(unused_imports)]
     pub use catalog::*;
+    #[allow(unused_imports)]
+    pub use confirm_modal_catalog::*;
     #[allow(unused_imports)]
     pub use copy_catalog::*;
     #[allow(unused_imports)]

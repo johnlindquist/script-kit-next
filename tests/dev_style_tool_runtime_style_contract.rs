@@ -1,8 +1,9 @@
 use gpui::FontWeight;
 use script_kit_gpui::designs::MainMenuThemeVariant;
 use script_kit_gpui::dev_style_tool::{
-    base_agent_chat_style, export, runtime_overrides, StyleValue, ACTIONS_POPUP_KNOBS,
-    COPY_CONTROLS, FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID, FOOTER_AI_SLOT_WIDTH_KNOB_ID,
+    base_agent_chat_style, base_confirm_modal_style, export, runtime_overrides, StyleValue,
+    ACTIONS_POPUP_KNOBS, CONFIRM_MODAL_KNOBS, CONFIRM_MODAL_PADDING_X_KNOB_ID, COPY_CONTROLS,
+    FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID, FOOTER_AI_SLOT_WIDTH_KNOB_ID,
     FOOTER_BUTTON_HOVER_BG_ALPHA_KNOB_ID, FOOTER_BUTTON_HOVER_BORDER_ALPHA_KNOB_ID,
     FOOTER_BUTTON_HOVER_GLYPH_ALPHA_KNOB_ID, FOOTER_BUTTON_HOVER_TEXT_ALPHA_KNOB_ID,
     FOOTER_FONT_WEIGHT_KNOB_ID, FOOTER_HEIGHT_KNOB_ID, FOOTER_KEYCAP_HEIGHT_KNOB_ID,
@@ -134,6 +135,21 @@ fn saved_agent_chat_style_values_are_project_defaults() {
     assert_eq!(base.markdown.blockquote_radius, 5.0);
     assert_eq!(base.markdown.blockquote_bg_alpha, 16.0);
     assert_eq!(base.markdown.blockquote_border_alpha, 64.0);
+}
+
+#[test]
+fn saved_confirm_modal_style_values_are_project_defaults() {
+    let _guard = runtime_test_guard();
+    runtime_overrides::reset_all();
+    let base = base_confirm_modal_style();
+
+    assert_eq!(base.shell.padding_x, 16.0);
+    assert_eq!(base.shell.padding_y, 16.0);
+    assert_eq!(base.shell.gap, 10.0);
+    assert_eq!(base.shell.radius, 8.0);
+    assert_eq!(base.header.accent_width, 2.0);
+    assert_eq!(base.header.accent_height, 14.0);
+    assert_eq!(base.header.gap, 8.0);
 }
 
 #[test]
@@ -795,6 +811,40 @@ fn devtools_actions_setter_updates_current_actions_popup_theme() {
         base.list.row_height
     );
 
+    let applied =
+        runtime_overrides::set_actions_number_from_devtools("actions.search.paddingX", "18px")
+            .expect("actions search padding should be settable through devtools");
+    assert_eq!(applied, "actions.search.paddingX=18");
+    assert_eq!(
+        script_kit_gpui::designs::current_actions_popup_theme()
+            .search
+            .padding_x,
+        18.0
+    );
+
+    let applied =
+        runtime_overrides::set_actions_number_from_devtools("actions.list.paddingTop", "11px")
+            .expect("actions list top padding should be settable through devtools");
+    assert_eq!(applied, "actions.list.paddingTop=11");
+    assert_eq!(
+        script_kit_gpui::designs::current_actions_popup_theme()
+            .list
+            .padding_top,
+        11.0
+    );
+
+    let applied =
+        runtime_overrides::set_actions_number_from_devtools("actions.section.fontWeight", "700")
+            .expect("actions section font weight should be settable through devtools");
+    assert_eq!(applied, "actions.section.fontWeight=700");
+    assert_eq!(
+        script_kit_gpui::designs::current_actions_popup_theme()
+            .section
+            .font_weight
+            .0,
+        700.0
+    );
+
     runtime_overrides::reset_all();
 }
 
@@ -825,6 +875,36 @@ fn devtools_agent_chat_setter_updates_markdown_code_and_blockquote_styles() {
 }
 
 #[test]
+fn devtools_confirm_modal_setter_updates_effective_shell_style() {
+    let _guard = runtime_test_guard();
+    runtime_overrides::reset_all();
+
+    let applied = runtime_overrides::set_confirm_modal_number_from_devtools(
+        "confirmModal.shell.paddingX",
+        "22",
+    )
+    .expect("confirm modal shell padding should be settable through devtools");
+    assert_eq!(applied, "confirmModal.shell.paddingX=22");
+
+    let applied = runtime_overrides::set_confirm_modal_number_from_devtools(
+        "slider:dev-style-tool-confirm-modal:confirmModal.shell.radius",
+        "13",
+    )
+    .expect("confirm modal shell radius should be settable by semantic control id");
+    assert_eq!(applied, "confirmModal.shell.radius=13");
+
+    let effective = runtime_overrides::effective_confirm_modal_style();
+    assert_eq!(effective.shell.padding_x, 22.0);
+    assert_eq!(effective.shell.radius, 13.0);
+
+    let change = runtime_overrides::reset_confirm_modal_value(CONFIRM_MODAL_PADDING_X_KNOB_ID)
+        .expect("confirm modal padding should reset");
+    assert_eq!(change.applied, StyleValue::Number(16.0));
+
+    runtime_overrides::reset_all();
+}
+
+#[test]
 fn export_current_settings_includes_agent_readable_overrides_and_effective_values() {
     let _guard = runtime_test_guard();
     runtime_overrides::reset_all();
@@ -840,6 +920,10 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         json["controls"]["actionsPopupStyle"],
         ACTIONS_POPUP_KNOBS.len()
     );
+    assert_eq!(
+        json["controls"]["confirmModalStyle"],
+        CONFIRM_MODAL_KNOBS.len()
+    );
     assert!(json["agentPrompt"]
         .as_str()
         .expect("agent prompt should be a string")
@@ -851,10 +935,15 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
     assert!(json["agentPrompt"]
         .as_str()
         .expect("agent prompt should be a string")
+        .contains("src/dev_style_tool/confirm_modal_catalog.rs"));
+    assert!(json["agentPrompt"]
+        .as_str()
+        .expect("agent prompt should be a string")
         .contains("src/dev_style_tool/copy_catalog.rs"));
     let main_window_style = &json["surfaces"]["mainWindow"]["style"];
     let main_window_copy = &json["surfaces"]["mainWindow"]["copy"];
     let actions_popup_style = &json["surfaces"]["actionsPopup"]["style"];
+    let confirm_modal_style = &json["surfaces"]["confirmModal"]["style"];
     assert!(main_window_style["overrides"]
         .as_array()
         .expect("overrides should be an array")
@@ -870,6 +959,26 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         .expect("actions popup effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "actions.list.rowHeight"));
+    assert!(actions_popup_style["effective"]
+        .as_array()
+        .expect("actions popup effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "actions.search.paddingX"));
+    assert!(actions_popup_style["effective"]
+        .as_array()
+        .expect("actions popup effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "actions.list.paddingTop"));
+    assert!(actions_popup_style["effective"]
+        .as_array()
+        .expect("actions popup effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "actions.contextHeader.paddingBottom"));
+    assert!(confirm_modal_style["effective"]
+        .as_array()
+        .expect("confirm modal effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "confirmModal.shell.radius"));
     assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")

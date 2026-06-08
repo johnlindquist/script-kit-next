@@ -25,6 +25,10 @@ use crate::dev_style_tool::{
         knob_by_id, StyleKnob, StyleKnobGroup, StyleKnobId, StyleKnobSection, StyleUnit,
         StyleValue, STYLE_KNOBS,
     },
+    confirm_modal_catalog::{
+        base_confirm_modal_style, confirm_modal_knob_by_id, ConfirmModalKnob,
+        ConfirmModalKnobGroup, ConfirmModalKnobId, CONFIRM_MODAL_KNOBS,
+    },
     copy_catalog::{copy_control_by_id, CopyControlId, COPY_CONTROLS},
     export,
     kitchen_sink_targets::{DevStyleKitchenSinkTarget, OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON},
@@ -55,12 +59,19 @@ struct AgentChatControlState {
     slider: Entity<SliderState>,
 }
 
+struct ConfirmModalControlState {
+    knob_id: ConfirmModalKnobId,
+    input: Entity<InputState>,
+    slider: Entity<SliderState>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DevStyleToolTab {
     MainWindowStyling,
     TextCopy,
     ActionsPopupStyling,
     AgentChatStyling,
+    ConfirmModalStyling,
 }
 
 impl DevStyleToolTab {
@@ -69,6 +80,7 @@ impl DevStyleToolTab {
         Self::TextCopy,
         Self::ActionsPopupStyling,
         Self::AgentChatStyling,
+        Self::ConfirmModalStyling,
     ];
 
     const fn label(self) -> &'static str {
@@ -77,6 +89,7 @@ impl DevStyleToolTab {
             Self::TextCopy => "Text / Copy",
             Self::ActionsPopupStyling => "Actions Popup Styling",
             Self::AgentChatStyling => "Agent Chat Styling",
+            Self::ConfirmModalStyling => "Confirm Modal Styling",
         }
     }
 
@@ -86,6 +99,7 @@ impl DevStyleToolTab {
             Self::TextCopy => "tab:dev-style-tool:text-copy",
             Self::ActionsPopupStyling => "tab:dev-style-tool:actions-popup-styling",
             Self::AgentChatStyling => "tab:dev-style-tool:agent-chat-styling",
+            Self::ConfirmModalStyling => "tab:dev-style-tool:confirm-modal-styling",
         }
     }
 }
@@ -97,6 +111,7 @@ pub(crate) struct DevStyleToolApp {
     copy_controls: Vec<CopyControlState>,
     actions_popup_controls: Vec<ActionsPopupControlState>,
     agent_chat_controls: Vec<AgentChatControlState>,
+    confirm_modal_controls: Vec<ConfirmModalControlState>,
     save_status: Option<String>,
     save_path: Option<PathBuf>,
     saved_markdown: Entity<InputState>,
@@ -104,6 +119,7 @@ pub(crate) struct DevStyleToolApp {
     active_group: StyleKnobGroup,
     active_actions_group: ActionsPopupKnobGroup,
     active_agent_chat_group: AgentChatKnobGroup,
+    active_confirm_modal_group: ConfirmModalKnobGroup,
     subscriptions: Vec<Subscription>,
 }
 
@@ -275,6 +291,52 @@ impl DevStyleToolApp {
                 }
             })
             .collect();
+        let confirm_modal_controls = CONFIRM_MODAL_KNOBS
+            .iter()
+            .map(|knob| {
+                let initial = current_confirm_modal_knob_value(knob.id);
+                let input = cx.new(|cx| {
+                    InputState::new(window, cx)
+                        .tab_navigation(true)
+                        .default_value(format_style_value(initial, knob.unit))
+                });
+                let slider = cx.new(|_| {
+                    SliderState::new()
+                        .max(knob.max)
+                        .min(knob.min)
+                        .step(knob.step)
+                        .default_value(initial)
+                });
+
+                let knob_id = knob.id;
+                subscriptions.push(cx.subscribe_in(
+                    &slider,
+                    window,
+                    move |this, _, event: &SliderEvent, window, cx| match event {
+                        SliderEvent::Change(value) | SliderEvent::Release(value) => {
+                            this.apply_confirm_modal_knob_value(knob_id, value.end(), window, cx);
+                        }
+                    },
+                ));
+                subscriptions.push(cx.subscribe_in(
+                    &input,
+                    window,
+                    move |this, input, event: &InputEvent, window, cx| match event {
+                        InputEvent::PressEnter { .. } | InputEvent::Blur => {
+                            let value = input.read(cx).value().to_string();
+                            this.commit_confirm_modal_knob_text(knob_id, &value, window, cx);
+                        }
+                        _ => {}
+                    },
+                ));
+
+                ConfirmModalControlState {
+                    knob_id,
+                    input,
+                    slider,
+                }
+            })
+            .collect();
         let saved_markdown = cx.new(|cx| {
             InputState::new(window, cx)
                 .multi_line(true)
@@ -289,6 +351,7 @@ impl DevStyleToolApp {
             copy_controls,
             actions_popup_controls,
             agent_chat_controls,
+            confirm_modal_controls,
             save_status: None,
             save_path: None,
             saved_markdown,
@@ -296,6 +359,7 @@ impl DevStyleToolApp {
             active_group: StyleKnobGroup::Search,
             active_actions_group: ActionsPopupKnobGroup::Shell,
             active_agent_chat_group: AgentChatKnobGroup::Transcript,
+            active_confirm_modal_group: ConfirmModalKnobGroup::Shell,
             subscriptions,
         }
     }
@@ -473,12 +537,67 @@ impl DevStyleToolApp {
         self.refresh_agent_chat(cx);
     }
 
+    fn apply_confirm_modal_knob_value(
+        &mut self,
+        knob_id: ConfirmModalKnobId,
+        value: f32,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if let Some(change) =
+            runtime_overrides::set_confirm_modal_value(knob_id, StyleValue::Number(value))
+        {
+            let StyleValue::Number(applied) = change.applied;
+            self.sync_confirm_modal_control_to_value(knob_id, applied, window, cx);
+            self.refresh_confirm_modal(cx);
+        }
+    }
+
+    fn commit_confirm_modal_knob_text(
+        &mut self,
+        knob_id: ConfirmModalKnobId,
+        value: &str,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let Some(knob) = confirm_modal_knob_by_id(knob_id) else {
+            return;
+        };
+        let Ok(number) = parse_style_value(value, knob.unit) else {
+            self.sync_confirm_modal_control_to_value(
+                knob_id,
+                current_confirm_modal_knob_value(knob_id),
+                window,
+                cx,
+            );
+            return;
+        };
+        self.apply_confirm_modal_knob_value(knob_id, number, window, cx);
+    }
+
+    fn reset_confirm_modal_knob(
+        &mut self,
+        knob_id: ConfirmModalKnobId,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let _ = runtime_overrides::reset_confirm_modal_value(knob_id);
+        self.sync_confirm_modal_control_to_value(
+            knob_id,
+            current_confirm_modal_knob_value(knob_id),
+            window,
+            cx,
+        );
+        self.refresh_confirm_modal(cx);
+    }
+
     fn undo_style_change(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
         if runtime_overrides::undo_last().is_some() {
             self.sync_all_controls(window, cx);
             self.refresh_main_window(cx);
             self.refresh_actions_popup(cx);
             self.refresh_agent_chat(cx);
+            self.refresh_confirm_modal(cx);
         }
     }
 
@@ -488,6 +607,7 @@ impl DevStyleToolApp {
             self.refresh_main_window(cx);
             self.refresh_actions_popup(cx);
             self.refresh_agent_chat(cx);
+            self.refresh_confirm_modal(cx);
         }
     }
 
@@ -497,6 +617,7 @@ impl DevStyleToolApp {
         self.refresh_main_window(cx);
         self.refresh_actions_popup(cx);
         self.refresh_agent_chat(cx);
+        self.refresh_confirm_modal(cx);
     }
 
     fn sync_all_controls(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
@@ -538,6 +659,19 @@ impl DevStyleToolApp {
             self.sync_agent_chat_control_to_value(
                 knob_id,
                 current_agent_chat_knob_value(knob_id),
+                window,
+                cx,
+            );
+        }
+        let confirm_modal_knob_ids: Vec<ConfirmModalKnobId> = self
+            .confirm_modal_controls
+            .iter()
+            .map(|control| control.knob_id)
+            .collect();
+        for knob_id in confirm_modal_knob_ids {
+            self.sync_confirm_modal_control_to_value(
+                knob_id,
+                current_confirm_modal_knob_value(knob_id),
                 window,
                 cx,
             );
@@ -659,6 +793,37 @@ impl DevStyleToolApp {
         cx.notify();
     }
 
+    fn sync_confirm_modal_control_to_value(
+        &mut self,
+        knob_id: ConfirmModalKnobId,
+        value: f32,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let Some(knob) = confirm_modal_knob_by_id(knob_id) else {
+            return;
+        };
+        let Some(control) = self
+            .confirm_modal_controls
+            .iter()
+            .find(|control| control.knob_id == knob_id)
+        else {
+            return;
+        };
+        control.slider.update(cx, |slider, cx| {
+            if (slider.value().end() - value).abs() > f32::EPSILON {
+                slider.set_value(SliderValue::Single(value), window, cx);
+            }
+        });
+        let label = format_style_value(value, knob.unit);
+        control.input.update(cx, |input, cx| {
+            if input.value().as_ref() != label {
+                input.set_value(label, window, cx);
+            }
+        });
+        cx.notify();
+    }
+
     fn refresh_main_window(&self, cx: &mut gpui::Context<Self>) {
         self.main_app.update(cx, |view, cx| {
             view.update_theme(cx);
@@ -682,6 +847,12 @@ impl DevStyleToolApp {
     }
 
     fn refresh_agent_chat(&self, cx: &mut gpui::Context<Self>) {
+        self.main_app.update(cx, |_view, cx| {
+            cx.notify();
+        });
+    }
+
+    fn refresh_confirm_modal(&self, cx: &mut gpui::Context<Self>) {
         self.main_app.update(cx, |_view, cx| {
             cx.notify();
         });
@@ -774,6 +945,7 @@ impl DevStyleToolApp {
                 DevStyleKitchenSinkTarget::ActionsPopupNoMatch,
             ],
             DevStyleToolTab::AgentChatStyling => &[DevStyleKitchenSinkTarget::AgentChat],
+            DevStyleToolTab::ConfirmModalStyling => &[],
             DevStyleToolTab::TextCopy => &[],
         };
 
@@ -958,6 +1130,55 @@ impl DevStyleToolApp {
             .text_color(rgb(chrome.text_primary_hex))
     }
 
+    fn render_confirm_modal_group_tabs(
+        &self,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        let selected_index = CONFIRM_MODAL_KNOB_GROUPS
+            .iter()
+            .position(|group| *group == self.active_confirm_modal_group)
+            .unwrap_or(0);
+        div()
+            .id("tabs:dev-style-tool-confirm-modal-groups")
+            .flex()
+            .items_center()
+            .gap(px(8.0))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(chrome.text_secondary_hex))
+                    .child("Confirm Modal"),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .p(px(3.0))
+                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+                    .border(px(1.0))
+                    .border_color(rgba(chrome.border_rgba))
+                    .bg(rgba(chrome.input_surface_rgba))
+                    .child(
+                        TabBar::new("tabbar:dev-style-tool-confirm-modal-groups")
+                            .segmented()
+                            .small()
+                            .selected_index(selected_index)
+                            .children(CONFIRM_MODAL_KNOB_GROUPS.iter().map(|group| {
+                                let group = *group;
+                                Tab::new().label(group.label()).on_click(cx.listener(
+                                    move |this, _event, _window, cx| {
+                                        this.active_confirm_modal_group = group;
+                                        cx.notify();
+                                    },
+                                ))
+                            })),
+                    ),
+            )
+            .text_color(rgb(chrome.text_primary_hex))
+    }
+
     fn render_primary_tabs(
         &self,
         chrome: theme::AppChromeColors,
@@ -1046,6 +1267,11 @@ impl DevStyleToolApp {
                 "{} / {}",
                 self.active_tab.label(),
                 self.active_agent_chat_group.label()
+            ),
+            DevStyleToolTab::ConfirmModalStyling => format!(
+                "{} / {}",
+                self.active_tab.label(),
+                self.active_confirm_modal_group.label()
             ),
         }
     }
@@ -1741,6 +1967,168 @@ impl DevStyleToolApp {
             )
     }
 
+    fn render_confirm_modal_controls(
+        &self,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> Div {
+        let mut column = div().flex().flex_col().gap(px(10.0)).flex_1();
+        let controls: Vec<&ConfirmModalControlState> = self
+            .confirm_modal_controls
+            .iter()
+            .filter(|control| {
+                confirm_modal_knob_by_id(control.knob_id)
+                    .is_some_and(|knob| knob.group == self.active_confirm_modal_group)
+            })
+            .collect();
+        if !controls.is_empty() {
+            column = column.child(self.render_confirm_modal_group(
+                self.active_confirm_modal_group,
+                controls,
+                chrome,
+                cx,
+            ));
+        }
+        column
+    }
+
+    fn render_confirm_modal_group(
+        &self,
+        group: ConfirmModalKnobGroup,
+        controls: Vec<&ConfirmModalControlState>,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        div()
+            .id(ElementId::Name(
+                format!(
+                    "confirm-modal-style-section:{}",
+                    confirm_modal_group_slug(group)
+                )
+                .into(),
+            ))
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .p(px(8.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(rgba(chrome.border_rgba))
+            .bg(rgba(chrome.input_surface_rgba))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(rgb(chrome.text_secondary_hex))
+                    .child(group.label()),
+            )
+            .children(
+                controls
+                    .into_iter()
+                    .map(|control| self.render_confirm_modal_control(control, chrome, cx)),
+            )
+    }
+
+    fn render_confirm_modal_control(
+        &self,
+        control: &ConfirmModalControlState,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        let knob = confirm_modal_knob_by_id(control.knob_id)
+            .expect("confirm modal control must reference knob");
+        let base = confirm_modal_knob_base_value(knob);
+        let effective = current_confirm_modal_knob_value(knob.id);
+        let knob_id = knob.id;
+
+        div()
+            .id(ElementId::Name(
+                format!("control:dev-style-tool-confirm-modal:{}", knob.id.as_str()).into(),
+            ))
+            .flex()
+            .flex_col()
+            .gap(px(4.0))
+            .p(px(7.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(rgba(chrome.border_rgba))
+            .bg(rgba(chrome.window_surface_rgba))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.0))
+                    .child(div().text_xs().child(knob.label))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(chrome.text_secondary_hex))
+                            .child(format!(
+                                "{} | base {}",
+                                format_style_value(effective, knob.unit),
+                                format_style_value(base, knob.unit)
+                            )),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .child(
+                        div()
+                            .id(ElementId::Name(
+                                format!("slider:dev-style-tool-confirm-modal:{}", knob.id.as_str())
+                                    .into(),
+                            ))
+                            .h(px(22.0))
+                            .flex_1()
+                            .flex()
+                            .items_center()
+                            .child(Slider::new(&control.slider).horizontal()),
+                    )
+                    .child(
+                        div()
+                            .id(ElementId::Name(
+                                format!("input:dev-style-tool-confirm-modal:{}", knob.id.as_str())
+                                    .into(),
+                            ))
+                            .w(px(64.0))
+                            .child(Input::new(&control.input).small()),
+                    )
+                    .child(
+                        div()
+                            .w(px(42.0))
+                            .text_xs()
+                            .text_color(rgb(chrome.text_secondary_hex))
+                            .child(knob.unit.label()),
+                    )
+                    .child(
+                        div()
+                            .id(ElementId::Name(
+                                format!(
+                                    "button:dev-style-tool-confirm-modal-reset:{}",
+                                    knob.id.as_str()
+                                )
+                                .into(),
+                            ))
+                            .px(px(6.0))
+                            .py(px(3.0))
+                            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+                            .border(px(1.0))
+                            .border_color(rgba(chrome.border_rgba))
+                            .text_xs()
+                            .cursor_pointer()
+                            .hover(|style| style.bg(rgba(chrome.hover_rgba)))
+                            .on_click(cx.listener(move |this, _event, window, cx| {
+                                this.reset_confirm_modal_knob(knob_id, window, cx);
+                            }))
+                            .child("Reset"),
+                    ),
+            )
+    }
+
     fn render_toolbar_button(
         &self,
         semantic_id: &'static str,
@@ -1907,6 +2295,10 @@ impl Render for DevStyleToolApp {
                 self.active_tab == DevStyleToolTab::AgentChatStyling,
                 |view| view.child(self.render_agent_chat_group_tabs(chrome, cx)),
             )
+            .when(
+                self.active_tab == DevStyleToolTab::ConfirmModalStyling,
+                |view| view.child(self.render_confirm_modal_group_tabs(chrome, cx)),
+            )
             .child(self.render_active_scope_summary(chrome))
             .child(
                 div()
@@ -1928,6 +2320,9 @@ impl Render for DevStyleToolApp {
                         }
                         DevStyleToolTab::AgentChatStyling => {
                             self.render_agent_chat_controls(chrome, cx)
+                        }
+                        DevStyleToolTab::ConfirmModalStyling => {
+                            self.render_confirm_modal_controls(chrome, cx)
                         }
                     }),
             )
@@ -1955,6 +2350,9 @@ const AGENT_CHAT_KNOB_GROUPS: &[AgentChatKnobGroup] = &[
     AgentChatKnobGroup::ErrorAndSystem,
 ];
 
+const CONFIRM_MODAL_KNOB_GROUPS: &[ConfirmModalKnobGroup] =
+    &[ConfirmModalKnobGroup::Shell, ConfirmModalKnobGroup::Header];
+
 fn current_knob_value(knob_id: StyleKnobId) -> f32 {
     match runtime_overrides::current_value(knob_id).unwrap_or_else(|| {
         let knob = knob_by_id(knob_id).expect("style knob must exist");
@@ -1981,6 +2379,21 @@ fn current_agent_chat_knob_value(knob_id: AgentChatKnobId) -> f32 {
 
 fn agent_chat_knob_base_value(knob: &AgentChatKnob) -> f32 {
     match (knob.get)(&crate::dev_style_tool::agent_chat_catalog::base_agent_chat_style()) {
+        StyleValue::Number(value) => value,
+    }
+}
+
+fn current_confirm_modal_knob_value(knob_id: ConfirmModalKnobId) -> f32 {
+    match runtime_overrides::current_confirm_modal_value(knob_id).unwrap_or_else(|| {
+        let knob = confirm_modal_knob_by_id(knob_id).expect("confirm modal style knob must exist");
+        (knob.get)(&base_confirm_modal_style())
+    }) {
+        StyleValue::Number(value) => value,
+    }
+}
+
+fn confirm_modal_knob_base_value(knob: &ConfirmModalKnob) -> f32 {
+    match (knob.get)(&base_confirm_modal_style()) {
         StyleValue::Number(value) => value,
     }
 }
@@ -2072,5 +2485,12 @@ fn agent_chat_group_slug(group: AgentChatKnobGroup) -> &'static str {
         AgentChatKnobGroup::AssistantMessage => "assistant-message",
         AgentChatKnobGroup::CollapsibleBlocks => "collapsible-blocks",
         AgentChatKnobGroup::ErrorAndSystem => "error-system",
+    }
+}
+
+fn confirm_modal_group_slug(group: ConfirmModalKnobGroup) -> &'static str {
+    match group {
+        ConfirmModalKnobGroup::Shell => "shell",
+        ConfirmModalKnobGroup::Header => "header",
     }
 }

@@ -7684,6 +7684,30 @@ impl ScriptListApp {
                                                 &control,
                                                 &value,
                                             )?
+                                        } else if control
+                                            .strip_prefix("control:dev-style-tool-confirm-modal:")
+                                            .or_else(|| {
+                                                control.strip_prefix(
+                                                    "input:dev-style-tool-confirm-modal:",
+                                                )
+                                            })
+                                            .or_else(|| {
+                                                control.strip_prefix(
+                                                    "slider:dev-style-tool-confirm-modal:",
+                                                )
+                                            })
+                                            .or_else(|| {
+                                                control.strip_prefix(
+                                                    "button:dev-style-tool-confirm-modal-reset:",
+                                                )
+                                            })
+                                            .is_some()
+                                            || control.starts_with("confirmModal.")
+                                        {
+                                            crate::dev_style_tool::runtime_overrides::set_confirm_modal_number_from_devtools(
+                                                &control,
+                                                &value,
+                                            )?
                                         } else {
                                             crate::dev_style_tool::runtime_overrides::set_number_from_devtools(
                                                 &control,

@@ -1,6 +1,7 @@
 pub mod actions_popup_catalog;
 pub mod agent_chat_catalog;
 pub mod catalog;
+pub mod confirm_modal_catalog;
 pub mod copy_catalog;
 pub mod export;
 pub mod kitchen_sink_targets;
@@ -18,6 +19,8 @@ pub use actions_popup_catalog::*;
 pub use agent_chat_catalog::*;
 #[allow(unused_imports)]
 pub use catalog::*;
+#[allow(unused_imports)]
+pub use confirm_modal_catalog::*;
 #[allow(unused_imports)]
 pub use copy_catalog::*;
 #[allow(unused_imports)]
