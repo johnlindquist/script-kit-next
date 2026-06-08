@@ -1071,6 +1071,64 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
   if (!actionId) {
     return { state: "blocked-before-dispatch", reason: "submit requires selected ActionsDialog choice:* row", selectedSemanticId: selectedSemanticId as string | null };
   }
+  if (args.submitIntent === "receipt-history-route") {
+    if (!args.allowSubmitReason.trim()) {
+      return {
+        state: "blocked-before-dispatch",
+        reason: "receipt-history-route requires --allow-submit-reason",
+        gateName: "submit.reason.required",
+        selectedSemanticId: selectedSemanticId as string | null,
+        requiredFlags: [
+          "--allow-submit",
+          "--submit-intent receipt-history-route",
+          "--allow-submit-reason <why>",
+        ],
+      };
+    }
+    if (actionId !== "acp_show_receipt_history") {
+      return {
+        state: "blocked-before-dispatch",
+        reason: "receipt-history-route requires the acp_show_receipt_history ActionsDialog row",
+        gateName: "receipt-history-route.action.required",
+        selectedSemanticId: selectedSemanticId as string | null,
+      };
+    }
+    return {
+      state: "dispatched",
+      actionId,
+      allowedBy: "submitIntent:receipt-history-route",
+      proofIntent: args.submitIntent,
+    };
+  }
+  if (args.submitIntent === "receipt-history-copy") {
+    if (!args.allowSubmitReason.trim()) {
+      return {
+        state: "blocked-before-dispatch",
+        reason: "receipt-history-copy requires --allow-submit-reason",
+        gateName: "submit.reason.required",
+        selectedSemanticId: selectedSemanticId as string | null,
+        requiredFlags: [
+          "--allow-submit",
+          "--submit-intent receipt-history-copy",
+          "--allow-submit-reason <why>",
+        ],
+      };
+    }
+    if (!actionId.startsWith("acp_receipt_history:copy:")) {
+      return {
+        state: "blocked-before-dispatch",
+        reason: "receipt-history-copy requires an acp_receipt_history:copy row",
+        gateName: "receipt-history-copy.action.required",
+        selectedSemanticId: selectedSemanticId as string | null,
+      };
+    }
+    return {
+      state: "dispatched",
+      actionId,
+      allowedBy: "submitIntent:receipt-history-copy",
+      proofIntent: args.submitIntent,
+    };
+  }
   if (isScopedAgentHandoffDryRun(args, actionId, targetReceipt)) {
     return {
       state: "dispatched",

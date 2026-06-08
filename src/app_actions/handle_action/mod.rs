@@ -1577,6 +1577,33 @@ impl ScriptListApp {
             return outcome;
         }
 
+        if let Some(request_id) =
+            crate::actions::acp_receipt_history_request_id_from_action(action_id)
+        {
+            let Some(entry) =
+                crate::agentic_protocol_bus::find_protocol_response_by_request_id(request_id)
+            else {
+                return DispatchOutcome::error(
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    format!("Receipt {request_id} was not found"),
+                );
+            };
+
+            let json = serde_json::to_string_pretty(&entry).unwrap_or_else(|_| "{}".to_string());
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_receipt_history_copied",
+                request_id,
+                response_type = %entry.response_type,
+                "Copied protocol receipt history entry"
+            );
+
+            let mut outcome = DispatchOutcome::success();
+            outcome.user_message = Some("Copied receipt history to clipboard".to_string());
+            return outcome;
+        }
+
         match action_id {
             "acp_copy_last_response" => {
                 let Some(last_response_action) =

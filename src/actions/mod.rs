@@ -32,10 +32,13 @@ pub(crate) use builders::resolve_file_search_secondary_action_id;
 pub(crate) use builders::AcpActionsDialogHost;
 #[allow(unused_imports)]
 pub(crate) use builders::{
-    acp_switch_model_id_from_action, agent_chat_switch_profile_id_from_action,
-    get_acp_chat_actions, get_acp_chat_root_route_for_host, get_acp_history_route,
-    get_acp_model_picker_route, get_global_actions, get_script_context_actions,
+    acp_receipt_history_request_id_from_action, acp_switch_model_id_from_action,
+    agent_chat_switch_profile_id_from_action, get_acp_chat_actions,
+    get_acp_chat_root_route_for_host, get_acp_history_route, get_acp_model_picker_route,
+    get_acp_receipt_history_route, get_global_actions, get_script_context_actions,
     get_scriptlet_context_actions_with_custom, ACP_HISTORY_SELECT_ACTION_PREFIX,
+    ACP_RECEIPT_HISTORY_COPY_ACTION_PREFIX, ACP_RECEIPT_HISTORY_ROUTE_ID,
+    ACP_SHOW_RECEIPT_HISTORY_ACTION_ID,
 };
 pub use builders::{
     get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,

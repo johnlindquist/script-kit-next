@@ -1656,6 +1656,10 @@ impl ActionsDialog {
                 host,
             ),
         );
+        dialog.register_drill_down_route(
+            super::builders::ACP_SHOW_RECEIPT_HISTORY_ACTION_ID,
+            crate::actions::get_acp_receipt_history_route(),
+        );
         if matches!(
             host,
             super::builders::AcpActionsDialogHost::Detached

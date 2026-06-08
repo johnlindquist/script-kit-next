@@ -4,7 +4,7 @@
 //! every stdin protocol response is appended as one NDJSON envelope so
 //! `await-response.ts` can correlate by `requestId` without scraping `app.log`.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -36,6 +36,35 @@ struct ProtocolResponseEnvelope<'a> {
     response: Value,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtocolResponseHistoryEntry {
+    pub schema_version: u32,
+    pub kind: String,
+    pub session: String,
+    pub session_generation: String,
+    pub request_id: String,
+    pub response_type: String,
+    pub correlation_id: String,
+    pub finished_at_ms: u128,
+    pub response: Value,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtocolResponseHistorySummary {
+    pub request_id: String,
+    pub response_type: String,
+    pub session: String,
+    pub session_generation: String,
+    pub finished_at_ms: u128,
+    pub status: Option<String>,
+    pub classification: Option<String>,
+    pub surface_kind: Option<String>,
+    pub automation_id: Option<String>,
+    pub preview: String,
+}
+
 fn now_ms() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -47,6 +76,10 @@ fn bus_path_from_env() -> Option<std::path::PathBuf> {
     std::env::var_os("SCRIPT_KIT_AGENTIC_PROTOCOL_RESPONSES_PATH")
         .map(std::path::PathBuf::from)
         .filter(|path| !path.as_os_str().is_empty())
+}
+
+pub fn protocol_response_history_path() -> Option<std::path::PathBuf> {
+    bus_path_from_env()
 }
 
 fn session_name_from_env() -> String {
@@ -70,6 +103,92 @@ fn response_type_from_json(value: &Value) -> String {
         .and_then(Value::as_str)
         .unwrap_or("unknown")
         .to_string()
+}
+
+fn string_field(value: &Value, key: &str) -> Option<String> {
+    value.get(key).and_then(Value::as_str).map(str::to_string)
+}
+
+fn nested_string_field(value: &Value, object_key: &str, key: &str) -> Option<String> {
+    value
+        .get(object_key)
+        .and_then(Value::as_object)
+        .and_then(|object| object.get(key))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+}
+
+fn response_surface_kind(response: &Value) -> Option<String> {
+    nested_string_field(response, "resolvedTarget", "surfaceKind")
+        .or_else(|| nested_string_field(response, "target", "surfaceKind"))
+        .or_else(|| nested_string_field(response, "surfaceContract", "surfaceKind"))
+}
+
+fn response_automation_id(response: &Value) -> Option<String> {
+    nested_string_field(response, "resolvedTarget", "automationId")
+        .or_else(|| nested_string_field(response, "target", "automationId"))
+        .or_else(|| string_field(response, "automationId"))
+}
+
+fn summarize_protocol_response(
+    entry: ProtocolResponseHistoryEntry,
+) -> ProtocolResponseHistorySummary {
+    let status =
+        string_field(&entry.response, "status").or_else(|| string_field(&entry.response, "result"));
+    let classification = string_field(&entry.response, "classification");
+    let surface_kind = response_surface_kind(&entry.response);
+    let automation_id = response_automation_id(&entry.response);
+    let preview = format!(
+        "{} · {} · {}",
+        entry.response_type,
+        classification.as_deref().unwrap_or("unclassified"),
+        surface_kind.as_deref().unwrap_or("no surface")
+    );
+
+    ProtocolResponseHistorySummary {
+        request_id: entry.request_id,
+        response_type: entry.response_type,
+        session: entry.session,
+        session_generation: entry.session_generation,
+        finished_at_ms: entry.finished_at_ms,
+        status,
+        classification,
+        surface_kind,
+        automation_id,
+        preview,
+    }
+}
+
+pub fn load_recent_protocol_response_history(limit: usize) -> Vec<ProtocolResponseHistoryEntry> {
+    let Some(path) = protocol_response_history_path() else {
+        return Vec::new();
+    };
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+
+    raw.lines()
+        .rev()
+        .filter_map(|line| serde_json::from_str::<ProtocolResponseHistoryEntry>(line).ok())
+        .take(limit)
+        .collect()
+}
+
+pub fn load_recent_protocol_response_summaries(
+    limit: usize,
+) -> Vec<ProtocolResponseHistorySummary> {
+    load_recent_protocol_response_history(limit)
+        .into_iter()
+        .map(summarize_protocol_response)
+        .collect()
+}
+
+pub fn find_protocol_response_by_request_id(
+    request_id: &str,
+) -> Option<ProtocolResponseHistoryEntry> {
+    load_recent_protocol_response_history(500)
+        .into_iter()
+        .find(|entry| entry.request_id == request_id)
 }
 
 /// Append a serialized protocol JSON line to the agentic response bus when configured.
@@ -163,6 +282,18 @@ mod tests {
             assert!(raw.contains(r#""requestId":"req-1""#));
             assert!(raw.contains(r#""responseType":"stateResult""#));
             assert!(raw.contains(r#""correlationId":"stdin:req:req-1""#));
+
+            let summaries = load_recent_protocol_response_summaries(10);
+            assert_eq!(summaries.len(), 1);
+            assert_eq!(summaries[0].request_id, "req-1");
+            assert_eq!(summaries[0].response_type, "stateResult");
+            assert_eq!(
+                summaries[0].preview,
+                "stateResult · unclassified · no surface"
+            );
+
+            let found = find_protocol_response_by_request_id("req-1").expect("history entry");
+            assert_eq!(found.request_id, "req-1");
 
             std::env::remove_var("SCRIPT_KIT_AGENTIC_PROTOCOL_RESPONSES_PATH");
             std::env::remove_var("SCRIPT_KIT_AGENTIC_SESSION_NAME");

@@ -967,6 +967,14 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_shortcut("\u{2318}P")
         .with_icon(IconName::MagnifyingGlass)
         .with_section("Navigate"),
+        Action::new(
+            ACP_SHOW_RECEIPT_HISTORY_ACTION_ID,
+            "Receipt History",
+            Some("Inspect recent semantic automation receipts for this session".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::FileCode)
+        .with_section("Proof"),
         // ── View ─────────────────────────────────────────────
         Action::new(
             "acp_expand_all",
@@ -1141,6 +1149,14 @@ pub const AGENT_CHAT_PROFILE_PICKER_ROUTE_ID: &str = "agent_chat:profile_picker"
 pub const ACP_HISTORY_ROUTE_ID: &str = "acp:history";
 /// Prefix for Agent Chat history row actions.
 pub const ACP_HISTORY_SELECT_ACTION_PREFIX: &str = "acp_history:select:";
+/// Action ID for the root-level receipt-history entry.
+pub const ACP_SHOW_RECEIPT_HISTORY_ACTION_ID: &str = "acp_show_receipt_history";
+/// Route ID for the Agent Chat receipt-history sub-route.
+pub const ACP_RECEIPT_HISTORY_ROUTE_ID: &str = "acp:receipt_history";
+/// Prefix for receipt-history copy row actions.
+pub const ACP_RECEIPT_HISTORY_COPY_ACTION_PREFIX: &str = "acp_receipt_history:copy:";
+/// Maximum receipt rows displayed in the compact ActionsDialog route.
+pub const ACP_RECEIPT_HISTORY_ROUTE_LIMIT: usize = 20;
 
 fn acp_model_display_name(entry: &crate::ai::acp::config::AcpModelEntry) -> String {
     entry
@@ -1151,6 +1167,14 @@ fn acp_model_display_name(entry: &crate::ai::acp::config::AcpModelEntry) -> Stri
 
 pub(crate) fn acp_history_select_action_id(session_id: &str) -> String {
     format!("{ACP_HISTORY_SELECT_ACTION_PREFIX}{session_id}")
+}
+
+pub(crate) fn acp_receipt_history_copy_action_id(request_id: &str) -> String {
+    format!("{ACP_RECEIPT_HISTORY_COPY_ACTION_PREFIX}{request_id}")
+}
+
+pub(crate) fn acp_receipt_history_request_id_from_action(action_id: &str) -> Option<&str> {
+    action_id.strip_prefix(ACP_RECEIPT_HISTORY_COPY_ACTION_PREFIX)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1405,6 +1429,7 @@ fn acp_host_action_plan(host: AcpActionsDialogHost, action_id: &str) -> AcpHostA
                     | "acp_retry_last"
                     | "acp_export_markdown"
                     | "acp_show_history"
+                    | ACP_SHOW_RECEIPT_HISTORY_ACTION_ID
                     | "acp_scroll_to_top"
                     | "acp_scroll_to_bottom"
                     | "acp_expand_all"
@@ -1433,6 +1458,7 @@ fn acp_host_action_plan(host: AcpActionsDialogHost, action_id: &str) -> AcpHostA
                     | "acp_export_markdown"
                     | "acp_save_as_note"
                     | "acp_show_history"
+                    | ACP_SHOW_RECEIPT_HISTORY_ACTION_ID
                     | "acp_scroll_to_top"
                     | "acp_scroll_to_bottom"
                     | "acp_expand_all"
@@ -1555,6 +1581,55 @@ pub(crate) fn get_acp_history_route() -> crate::actions::ActionsDialogRoute {
         actions,
         context_title: Some("Agent Chat History".to_string()),
         search_placeholder: Some("Search conversation history...".to_string()),
+        initial_selected_action_id: None,
+    }
+}
+
+/// Build an `ActionsDialogRoute` for recent semantic automation receipts.
+pub(crate) fn get_acp_receipt_history_route() -> crate::actions::ActionsDialogRoute {
+    let mut actions = crate::agentic_protocol_bus::load_recent_protocol_response_summaries(
+        ACP_RECEIPT_HISTORY_ROUTE_LIMIT,
+    )
+    .into_iter()
+    .map(|summary| {
+        let description = format!(
+            "{} · session {} · {}",
+            summary.preview,
+            summary.session,
+            summary
+                .automation_id
+                .as_deref()
+                .unwrap_or("no automation target")
+        );
+        Action::new(
+            acp_receipt_history_copy_action_id(&summary.request_id),
+            format!("{} · {}", summary.response_type, summary.request_id),
+            Some(description),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::FileCode)
+        .with_section("Receipts")
+    })
+    .collect::<Vec<_>>();
+
+    if actions.is_empty() {
+        actions.push(
+            Action::new(
+                "acp_receipt_history_empty",
+                "No receipt history",
+                Some("No protocol receipts have been recorded for this app session.".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::FileCode)
+            .with_section("Receipts"),
+        );
+    }
+
+    crate::actions::ActionsDialogRoute {
+        id: ACP_RECEIPT_HISTORY_ROUTE_ID.to_string(),
+        actions,
+        context_title: Some("Receipt History".to_string()),
+        search_placeholder: Some("Search receipts...".to_string()),
         initial_selected_action_id: None,
     }
 }

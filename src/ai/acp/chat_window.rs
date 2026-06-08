@@ -1100,6 +1100,27 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
         return;
     }
 
+    if let Some(request_id) = crate::actions::acp_receipt_history_request_id_from_action(action_id)
+    {
+        if let Some(entry) =
+            crate::agentic_protocol_bus::find_protocol_response_by_request_id(request_id)
+        {
+            let json = serde_json::to_string_pretty(&entry).unwrap_or_else(|_| "{}".to_string());
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
+            tracing::info!(
+                event = "detached_action_receipt_history_copied",
+                request_id,
+                response_type = %entry.response_type,
+            );
+        } else {
+            tracing::warn!(
+                event = "detached_action_receipt_history_missing",
+                request_id,
+            );
+        }
+        return;
+    }
+
     if let Some(adapter_id) = crate::ai::agent_prompt_handoff::adapter_from_action_id(action_id) {
         if let Some(entity) = entity_weak.upgrade() {
             let result = entity.update(cx, |chat, cx| {
