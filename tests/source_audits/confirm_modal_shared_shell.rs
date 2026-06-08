@@ -55,6 +55,41 @@ fn shortcut_recorder_and_confirm_popup_use_the_same_shell() {
 }
 
 #[test]
+fn destructive_confirm_routes_use_shared_parent_confirm_helpers() {
+    let scripts = read("src/app_actions/handle_action/scripts.rs");
+    let files = read("src/app_actions/handle_action/files.rs");
+    let clipboard = read("src/app_actions/handle_action/clipboard.rs");
+    let notes = read("src/notes/window/notes.rs");
+
+    assert!(
+        scripts.contains("crate::confirm::open_parent_confirm_dialog_for_entity(")
+            && scripts.contains("remove_script_confirmed")
+            && scripts.contains("quit_script_kit_confirm_options()"),
+        "script removal and quit confirmations must use the entity-owned shared parent confirm helper"
+    );
+    assert!(
+        files.contains("crate::confirm::ParentConfirmOptions::destructive(")
+            && files.contains("crate::confirm::confirm_with_parent_dialog(")
+            && files.contains("\"Async action cancelled: move_to_trash\""),
+        "file move-to-trash confirmation must use the shared parent confirm dialog and handle cancel"
+    );
+    assert!(
+        clipboard.contains("clipboard_delete_multiple")
+            && clipboard.contains("clipboard_delete_all")
+            && clipboard.contains("crate::confirm::ParentConfirmOptions::destructive(")
+            && clipboard.contains("crate::confirm::confirm_with_parent_dialog("),
+        "clipboard bulk delete confirmations must use the shared parent confirm dialog"
+    );
+    assert!(
+        notes.contains("crate::confirm::open_parent_confirm_dialog_for_automation_parent(")
+            && notes.contains("\"notes\"")
+            && notes.contains("notes_delete_cancelled")
+            && notes.contains("restore_primary_focus_after_dialog"),
+        "notes delete confirmation must use the parent-id-aware shared confirm helper and restore focus on cancel"
+    );
+}
+
+#[test]
 fn confirm_modal_inventory_tracks_routes_and_excludes_non_modals() {
     let inventory = read(".goals/receipts/modal-inventory.md");
 

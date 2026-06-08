@@ -18,15 +18,15 @@ modals for this goal.
 | Interaction | Owner | Current route | Status |
 | --- | --- | --- | --- |
 | Quit Script Kit | `src/app_execute/builtin_execution.rs` | Built-in confirmation gate opens `confirm_with_parent_dialog` with `quit_script_kit_confirm_options`. | Runtime-proven through real launcher row: `confirm-popup` parent dialog, shared confirm semantics, Quit/Cancel buttons, and parent target. Dismiss primitive gap remains; disposable session was stopped for cleanup. |
-| Remove/delete script | `src/app_actions/handle_action/scripts.rs` | Entity-owned parent confirm helper before destructive action. | Shared popup shell via `src/confirm/window.rs`; representative runtime proof pending. |
-| Move file to trash | `src/app_actions/handle_action/files.rs` | `confirm_with_parent_dialog` with destructive options. | Shared popup shell via `src/confirm/window.rs`; representative runtime proof pending. |
-| Clipboard bulk delete / clear unpinned | `src/app_actions/handle_action/clipboard.rs` | `confirm_with_parent_dialog` with destructive options. | Shared popup shell via `src/confirm/window.rs`; representative runtime proof pending. |
+| Remove/delete script | `src/app_actions/handle_action/scripts.rs` | Entity-owned parent confirm helper before destructive action. | Source route audit proven via `destructive_confirm_routes_use_shared_parent_confirm_helpers`; representative runtime proof pending. |
+| Move file to trash | `src/app_actions/handle_action/files.rs` | `confirm_with_parent_dialog` with destructive options. | Source route audit proven via `destructive_confirm_routes_use_shared_parent_confirm_helpers`; representative runtime proof pending. |
+| Clipboard bulk delete / clear unpinned | `src/app_actions/handle_action/clipboard.rs` | `confirm_with_parent_dialog` with destructive options. | Source route audit proven via `destructive_confirm_routes_use_shared_parent_confirm_helpers`; representative runtime proof pending. |
 | Destructive dry-run safety fixture | `scripts/agentic/scenario.ts`, `src/stdin_commands/mod.rs`, `src/app_impl/simulate_key_dispatch.rs` | `destructive-confirm-modal-safety-stress --dry-run-only` opens a deterministic `openConfirmPrompt` fixture and refuses non-dry-run execution. | Runtime-proven: prompt identity, footer buttons, Escape cancel, and no destructive flags. Receipt: `/tmp/confirm-modal-destructive-safety.json`. |
 | Built-in confirmation gate | `src/config/defaults.rs`, `src/config/types.rs`, `src/app_execute/builtin_execution.rs`, `src/app_execute/builtin_confirmation.rs` | Command config requires confirmation for destructive built-ins, then routes through `confirm_with_parent_dialog` before execution. | Source route audit proven by `tests/source_audits/builtin_confirmation.rs`; representative runtime proof still pending. |
 | SDK `confirm` | `scripts/kit-sdk.ts`, `src/execute_script/mod.rs`, `src/prompt_handler/mod.rs`, `src/stdin_commands/mod.rs` | SDK exposes single-word `confirm()` and sends protocol messages with `type: 'confirm'`; host route opens the shared in-window `ConfirmPrompt` through `open_confirm_prompt`. | Source guard added to prevent `modal.confirm` drift and to prevent reverting to `confirm_with_parent_dialog`; script-facing runtime proof still pending. |
 | `openConfirmPrompt` stdin fixture | `src/stdin_commands/mod.rs` | Deterministic fixture for DevTools/runtime confirm proof. | Runtime proof captured in `/tmp/confirm-modal-confirm-elements.json`, `/tmp/confirm-modal-confirm-keyboard.json`, and `/tmp/confirm-modal-confirm-escape.json`. |
 | `showShortcutRecorder` stdin fixture | `src/stdin_commands/mod.rs`, `src/components/shortcut_recorder/**` | Deterministic fixture for Add Shortcut-style modal proof. | Runtime proof captured in `/tmp/confirm-modal-shortcut-popup-elements.json` and `/tmp/confirm-modal-shortcut-popup-focus.json`; popup internals require source contract because DevTools exposes only the popup panel node. |
-| Notes delete confirmation | `src/notes/window/notes.rs`, `src/notes/window/keyboard.rs` | Parent-id-aware confirm helper for Notes window. | Shared popup shell via `src/confirm/window.rs`; runtime proof pending. |
+| Notes delete confirmation | `src/notes/window/notes.rs`, `src/notes/window/keyboard.rs` | Parent-id-aware confirm helper for Notes window. | Source route audit proven via `destructive_confirm_routes_use_shared_parent_confirm_helpers`; runtime proof pending. |
 
 ## Explicit Non-Modals
 
@@ -152,3 +152,21 @@ Captured in session `confirm-modal-proof` against
   - Target-scoped `simulateKey Escape` returned ok but did not dismiss the
     parent confirm popup. Cleanup used `session.sh stop` instead of attempting
     an Enter-based cancel path.
+
+## Iteration 6 Remaining Confirm Route Source Audit
+
+- Source contract:
+  - `./scripts/agentic/agent-cargo.sh test --test source_audits confirm_modal_shared_shell`
+- Guarded behavior:
+  - Script removal and legacy quit action confirmations use
+    `open_parent_confirm_dialog_for_entity`.
+  - File move-to-trash and clipboard bulk delete/clear-unpinned confirmations
+    use `ParentConfirmOptions::destructive` and `confirm_with_parent_dialog`.
+  - Notes delete confirmation uses
+    `open_parent_confirm_dialog_for_automation_parent("notes", ...)` and
+    restores primary focus on cancel.
+- Current result:
+  - Remaining route owners are source-contract proven against the shared parent
+    confirm helper path.
+  - Runtime representatives remain pending for remove/delete script, file
+    trash, clipboard bulk delete/clear-unpinned, and Notes delete.
