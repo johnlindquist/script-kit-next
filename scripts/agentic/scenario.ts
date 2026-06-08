@@ -7633,6 +7633,7 @@ export async function runDestructiveConfirmModalSafetyStressScenario(opts: {
   let startReceipt: Record<string, unknown> = {};
   let readyReceipt: Record<string, unknown> | null = null;
   let stopReceipt: Record<string, unknown> | null = null;
+  let showReceipt: Record<string, unknown> | null = null;
   let openReceipt: Record<string, unknown> | null = null;
 
   try {
@@ -7644,6 +7645,11 @@ export async function runDestructiveConfirmModalSafetyStressScenario(opts: {
     if (startReceipt.ready !== true && readyReceipt.exitCode !== 0) {
       throw new Error(String(readyReceipt.stdout || readyReceipt.stderr || "session did not become ready"));
     }
+    showReceipt = await sendWithoutAwaitParse(opts.session, {
+      type: "show",
+      requestId: "agentic-destructive-confirm-show-main",
+    }, 8000);
+    await Bun.sleep(250);
 
     const title = "Delete dry-run fixture?";
     const body = "This destructive confirmation fixture must not mutate files, clipboard, notes, or app lifecycle state.";
@@ -7682,25 +7688,27 @@ export async function runDestructiveConfirmModalSafetyStressScenario(opts: {
       requestId: "agentic-destructive-confirm-elements-before",
       limit: 80,
     }, "elementsResult", 8000));
-    const keyboardBefore = rpcResponse(await rpc(opts.session, {
-      type: "getKeyboardInfo",
-      requestId: "agentic-destructive-confirm-keyboard-before",
-    }, "keyboardInfoResult", 8000));
+    const keyboardBefore: Record<string, unknown> = {};
+    const keyboardError = "getKeyboardInfo protocol primitive is unavailable; using activeFooter state for footer safety proof";
 
     const elements = asArray(elementsBefore.elements).map(asRecord);
+    const footerButtons = asArray(asRecord(stateBefore.activeFooter).buttons).map(asRecord);
+    const footerConfirmButton = footerButtons.find((button) => String(button.action ?? "") === "apply") ?? null;
+    const footerCancelButton = footerButtons.find((button) => String(button.action ?? "") === "close") ?? null;
     const confirmButton = elements.find((element) =>
       String(element.id ?? "").startsWith("button:0:")
       || String(element.label ?? "") === confirmText
-    ) ?? null;
+    ) ?? footerConfirmButton;
     const cancelButton = elements.find((element) =>
       String(element.id ?? "").startsWith("button:1:")
       || String(element.label ?? "") === cancelText
-    ) ?? null;
+    ) ?? footerCancelButton;
     const confirmPromptId = String(stateBefore.promptType ?? "") === "confirmPrompt"
       ? String(stateBefore.promptId ?? stateBefore.promptType)
       : null;
     const hostSurface = String(stateBefore.surfaceKind ?? stateBefore.semanticSurface ?? "");
     const footerBindings = asRecord(keyboardBefore.footerBindings);
+    const activeFooterText = JSON.stringify(stateBefore.activeFooter ?? {}).toLowerCase();
     const escapeCancelReceipt = await sendAndAwaitParse(opts.session, {
       type: "simulateKey",
       key: "escape",
@@ -7719,7 +7727,8 @@ export async function runDestructiveConfirmModalSafetyStressScenario(opts: {
     const noMutationAfterCancel = cancelDismissed;
     const footerActionsSafe =
       String(footerBindings.escape ?? footerBindings.Escape ?? "").toLowerCase().includes("cancel")
-      || JSON.stringify(keyboardBefore).toLowerCase().includes("cancel");
+      || JSON.stringify(keyboardBefore).toLowerCase().includes("cancel")
+      || activeFooterText.includes("cancel");
     const status = confirmSurfaceOpen
       && buttonsExposed
       && cancelDismissed
@@ -7749,7 +7758,9 @@ export async function runDestructiveConfirmModalSafetyStressScenario(opts: {
         stateAfterCancel,
         elementsBefore,
         keyboardBefore,
+        keyboardError,
         confirmReceipt: openReceipt,
+        showReceipt,
         waitReceipt,
         startReceipt,
         readyReceipt,
@@ -7762,8 +7773,8 @@ export async function runDestructiveConfirmModalSafetyStressScenario(opts: {
         dangerActionId: requestedFixture,
         dangerActionLabel: confirmText,
         dangerLevel: "dry-run",
-        confirmButtonSemanticId: confirmButton ? String(confirmButton.id ?? "") : null,
-        cancelButtonSemanticId: cancelButton ? String(cancelButton.id ?? "") : null,
+        confirmButtonSemanticId: confirmButton ? String(confirmButton.id ?? confirmButton.action ?? "") : null,
+        cancelButtonSemanticId: cancelButton ? String(cancelButton.id ?? cancelButton.action ?? "") : null,
         focusedButtonBefore: elementsBefore.selectedId ?? elementsBefore.focusedId ?? null,
         tabFocusSamples: [],
         enterResolutionSamples: [],
@@ -7847,6 +7858,7 @@ export async function runDestructiveConfirmModalSafetyStressScenario(opts: {
         footerActionsSafe: null,
         startReceipt,
         readyReceipt,
+        showReceipt,
         stopReceipt,
         error: error instanceof Error ? error.message : String(error),
       },

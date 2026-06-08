@@ -145,3 +145,18 @@ fn destructive_confirm_safety_scenario_uses_dry_run_confirm_fixture() {
         "dry-run destructive confirm proof must explicitly guard against real destructive commands"
     );
 }
+
+#[test]
+fn confirm_prompt_simulate_key_routes_confirm_and_cancel() {
+    let source = read("src/app_impl/simulate_key_dispatch.rs");
+
+    assert!(
+        source.contains("AppView::ConfirmPrompt { .. }")
+            && source.contains("SimulateKey: Escape - cancel ConfirmPrompt")
+            && source.contains("view.resolve_confirm_prompt(false, window, ctx)")
+            && source.contains("SimulateKey: Enter - confirm ConfirmPrompt")
+            && source.contains("view.resolve_confirm_prompt(confirmed, window, ctx)")
+            && source.contains("view.toggle_confirm_prompt_focus(ctx)"),
+        "stdin simulateKey must route ConfirmPrompt Tab, Enter, and Escape through the shared confirm resolver"
+    );
+}

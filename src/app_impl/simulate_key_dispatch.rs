@@ -180,6 +180,40 @@ impl ScriptListApp {
 
         if !actions_popup_consumed_key {
             match &view.current_view {
+                AppView::ConfirmPrompt { .. } => match key_lower.as_str() {
+                    "tab" => {
+                        logging::log("STDIN", "SimulateKey: Tab - toggle ConfirmPrompt focus");
+                        view.toggle_confirm_prompt_focus(ctx);
+                    }
+                    "enter" | "return" if !has_cmd && !has_shift && !_has_alt && !_has_ctrl => {
+                        let confirmed = !matches!(
+                            view.confirm_prompt_focused_button(),
+                            Some(ConfirmFocusedButton::Cancel)
+                        );
+                        logging::log(
+                            "STDIN",
+                            if confirmed {
+                                "SimulateKey: Enter - confirm ConfirmPrompt"
+                            } else {
+                                "SimulateKey: Enter - cancel ConfirmPrompt"
+                            },
+                        );
+                        view.resolve_confirm_prompt(confirmed, window, ctx);
+                    }
+                    "escape" | "esc" if !has_cmd && !has_shift && !_has_alt && !_has_ctrl => {
+                        logging::log("STDIN", "SimulateKey: Escape - cancel ConfirmPrompt");
+                        view.resolve_confirm_prompt(false, window, ctx);
+                    }
+                    _ => {
+                        logging::log(
+                            "STDIN",
+                            &format!(
+                                "SimulateKey: Unhandled key '{}' in ConfirmPrompt",
+                                key_lower
+                            ),
+                        );
+                    }
+                },
                 AppView::ScriptList => {
                     if view.consume_return_to_script_list_enter_guard(
                         &key_lower,
