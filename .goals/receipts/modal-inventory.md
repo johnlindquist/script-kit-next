@@ -22,7 +22,7 @@ modals for this goal.
 | Move file to trash | `src/app_actions/handle_action/files.rs` | `confirm_with_parent_dialog` with destructive options. | Shared popup shell via `src/confirm/window.rs`; representative runtime proof pending. |
 | Clipboard bulk delete / clear unpinned | `src/app_actions/handle_action/clipboard.rs` | `confirm_with_parent_dialog` with destructive options. | Shared popup shell via `src/confirm/window.rs`; representative runtime proof pending. |
 | Built-in confirmation gate | `src/config/defaults.rs`, `src/config/types.rs`, execution/handler confirmation path | Command config requires confirmation for destructive built-ins. | Route audit pending in later iteration. |
-| SDK `confirm` | `scripts/kit-sdk.ts`, `src/execute_script/mod.rs`, `src/prompt_handler/mod.rs`, `src/stdin_commands/mod.rs` | SDK sends confirm prompt data through stdin/protocol confirm handling. | Existing SDK API retained; host-route proof pending. |
+| SDK `confirm` | `scripts/kit-sdk.ts`, `src/execute_script/mod.rs`, `src/prompt_handler/mod.rs`, `src/stdin_commands/mod.rs` | SDK exposes single-word `confirm()` and sends protocol messages with `type: 'confirm'`. | Source guard added to prevent `modal.confirm` drift; host-route proof pending. |
 | `openConfirmPrompt` stdin fixture | `src/stdin_commands/mod.rs` | Deterministic fixture for DevTools/runtime confirm proof. | Runtime proof captured in `/tmp/confirm-modal-confirm-elements.json`, `/tmp/confirm-modal-confirm-keyboard.json`, and `/tmp/confirm-modal-confirm-escape.json`. |
 | `showShortcutRecorder` stdin fixture | `src/stdin_commands/mod.rs`, `src/components/shortcut_recorder/**` | Deterministic fixture for Add Shortcut-style modal proof. | Runtime proof captured in `/tmp/confirm-modal-shortcut-popup-elements.json` and `/tmp/confirm-modal-shortcut-popup-focus.json`; popup internals require source contract because DevTools exposes only the popup panel node. |
 | Notes delete confirmation | `src/notes/window/notes.rs`, `src/notes/window/keyboard.rs` | Parent-id-aware confirm helper for Notes window. | Shared popup shell via `src/confirm/window.rs`; runtime proof pending. |
@@ -60,3 +60,23 @@ Captured in session `confirm-modal-proof` against
 | `/tmp/confirm-modal-confirm-elements.json` | Proof | Target `main`, surface `ConfirmPrompt`, selected `button:0:quit`, visible `button:1:cancel`, native footer apply/close buttons. |
 | `/tmp/confirm-modal-confirm-keyboard.json` | Proof with limitation | Keyboard policy `NoEditableKeyboard`; bindings `Enter -> Quit`, `Esc -> Cancel`; missing `nativeFooterActivationReceipt` primitive. |
 | `/tmp/confirm-modal-confirm-escape.json` | Primitive gap | DevTools key dispatch reports missing `nativeFooterActivationReceipt`, so post-dismiss transition is not machine-provable with the current tool. |
+
+## Iteration 2 Dev Style Tool Proof
+
+- Source contracts:
+  - `./scripts/agentic/agent-cargo.sh test --test dev_style_tool_runtime_style_contract confirm_modal`
+  - `./scripts/agentic/agent-cargo.sh test --test dev_style_tool_window_contract dev_style_tool`
+  - `./scripts/agentic/agent-cargo.sh test --test dev_style_tool_runtime_style_contract export_current_settings_includes_agent_readable_overrides_and_effective_values`
+- Runtime proof:
+  - Session `confirm-modal-style-proof` launched with `SCRIPT_KIT_STYLE_DEVTOOLS=1`.
+  - `/tmp/confirm-modal-style-tool-elements.json` exposed `tab:dev-style-tool:confirm-modal-styling`.
+  - `/tmp/confirm-modal-style-tool-set-radius.json` applied `confirmModal.shell.radius=13`.
+  - `/tmp/confirm-modal-style-tool-elements-full.json` contains the Confirm Modal shell and header group tabs and slider/input/reset controls.
+
+## SDK Naming Proof
+
+- Source contract:
+  - `./scripts/agentic/agent-cargo.sh test --test source_audits confirm_modal_shared_shell`
+- Guarded behavior:
+  - `scripts/kit-sdk.ts` retains `ConfirmConfig`, global `confirm()`, and protocol `type: 'confirm'`.
+  - `scripts/kit-sdk.ts` and `.goals/modal-consistency-design-system.md` must not introduce `modal.confirm`.

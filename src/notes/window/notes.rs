@@ -445,8 +445,8 @@ impl NotesApp {
 
     /// Request deletion of the currently selected note with a confirmation dialog.
     ///
-    /// Opens an in-window gpui-component `Dialog::confirm()` modal; the actual
-    /// soft-delete happens only after the user confirms via `WeakEntity::update_in`.
+    /// Opens the shared parent confirm dialog; the actual soft-delete happens
+    /// only after the user confirms via `WeakEntity::update_in`.
     pub(super) fn request_delete_selected_note(
         &mut self,
         window: &mut Window,
