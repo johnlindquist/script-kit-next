@@ -1,6 +1,7 @@
 //! Source-level contract tests for the ACP portal intent and host handoff flow.
 
 const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
+const ACP_TYPES_SOURCE: &str = include_str!("../src/ai/acp/types.rs");
 const PORTAL_CONTRACT_SOURCE: &str = include_str!("../src/ai/acp/portal_contract.rs");
 const ATTACHMENT_PORTAL_SOURCE: &str = include_str!("../src/app_impl/attachment_portal.rs");
 const CHAT_WINDOW_SOURCE: &str = include_str!("../src/ai/acp/chat_window.rs");
@@ -11,20 +12,21 @@ const PASTED_IMAGE_SOURCE: &str = include_str!("../src/pasted_image.rs");
 #[test]
 fn pending_portal_session_uses_shared_contract_state() {
     assert!(
-        ACP_VIEW_SOURCE.contains("struct AcpPendingPortalSession"),
-        "ACP view must keep a pending portal session type"
+        ACP_VIEW_SOURCE.contains("AcpPendingPortalSession")
+            && ACP_TYPES_SOURCE.contains("struct AcpPendingPortalSession"),
+        "ACP view must store the extracted pending portal session type"
     );
     assert!(
-        ACP_VIEW_SOURCE
+        ACP_TYPES_SOURCE
             .contains("contract: crate::ai::acp::portal_contract::AcpPortalLaunchContract"),
         "pending portal session must store the shared launch contract"
     );
     assert!(
-        ACP_VIEW_SOURCE.contains("composer_text: String"),
+        ACP_TYPES_SOURCE.contains("composer_text: String"),
         "pending portal session must preserve composer text across portal entry"
     );
     assert!(
-        ACP_VIEW_SOURCE.contains("composer_cursor: usize"),
+        ACP_TYPES_SOURCE.contains("composer_cursor: usize"),
         "pending portal session must preserve composer cursor across portal entry"
     );
 }
