@@ -22,8 +22,8 @@ modals for this goal.
 | Move file to trash | `src/app_actions/handle_action/files.rs` | `confirm_with_parent_dialog` with destructive options. | Shared popup shell via `src/confirm/window.rs`; representative runtime proof pending. |
 | Clipboard bulk delete / clear unpinned | `src/app_actions/handle_action/clipboard.rs` | `confirm_with_parent_dialog` with destructive options. | Shared popup shell via `src/confirm/window.rs`; representative runtime proof pending. |
 | Destructive dry-run safety fixture | `scripts/agentic/scenario.ts`, `src/stdin_commands/mod.rs`, `src/app_impl/simulate_key_dispatch.rs` | `destructive-confirm-modal-safety-stress --dry-run-only` opens a deterministic `openConfirmPrompt` fixture and refuses non-dry-run execution. | Runtime-proven: prompt identity, footer buttons, Escape cancel, and no destructive flags. Receipt: `/tmp/confirm-modal-destructive-safety.json`. |
-| Built-in confirmation gate | `src/config/defaults.rs`, `src/config/types.rs`, execution/handler confirmation path | Command config requires confirmation for destructive built-ins. | Route audit pending in later iteration. |
-| SDK `confirm` | `scripts/kit-sdk.ts`, `src/execute_script/mod.rs`, `src/prompt_handler/mod.rs`, `src/stdin_commands/mod.rs` | SDK exposes single-word `confirm()` and sends protocol messages with `type: 'confirm'`. | Source guard added to prevent `modal.confirm` drift; host-route proof pending. |
+| Built-in confirmation gate | `src/config/defaults.rs`, `src/config/types.rs`, `src/app_execute/builtin_execution.rs`, `src/app_execute/builtin_confirmation.rs` | Command config requires confirmation for destructive built-ins, then routes through `confirm_with_parent_dialog` before execution. | Source route audit proven by `tests/source_audits/builtin_confirmation.rs`; representative runtime proof still pending. |
+| SDK `confirm` | `scripts/kit-sdk.ts`, `src/execute_script/mod.rs`, `src/prompt_handler/mod.rs`, `src/stdin_commands/mod.rs` | SDK exposes single-word `confirm()` and sends protocol messages with `type: 'confirm'`; host route opens the shared in-window `ConfirmPrompt` through `open_confirm_prompt`. | Source guard added to prevent `modal.confirm` drift and to prevent reverting to `confirm_with_parent_dialog`; script-facing runtime proof still pending. |
 | `openConfirmPrompt` stdin fixture | `src/stdin_commands/mod.rs` | Deterministic fixture for DevTools/runtime confirm proof. | Runtime proof captured in `/tmp/confirm-modal-confirm-elements.json`, `/tmp/confirm-modal-confirm-keyboard.json`, and `/tmp/confirm-modal-confirm-escape.json`. |
 | `showShortcutRecorder` stdin fixture | `src/stdin_commands/mod.rs`, `src/components/shortcut_recorder/**` | Deterministic fixture for Add Shortcut-style modal proof. | Runtime proof captured in `/tmp/confirm-modal-shortcut-popup-elements.json` and `/tmp/confirm-modal-shortcut-popup-focus.json`; popup internals require source contract because DevTools exposes only the popup panel node. |
 | Notes delete confirmation | `src/notes/window/notes.rs`, `src/notes/window/keyboard.rs` | Parent-id-aware confirm helper for Notes window. | Shared popup shell via `src/confirm/window.rs`; runtime proof pending. |
@@ -92,3 +92,26 @@ Captured in session `confirm-modal-proof` against
   - The scenario starts the app, waits for readiness, sends `show` to register the main window, opens `openConfirmPrompt`, inspects `ConfirmPrompt` state/elements, and fail-closes with explicit `destructiveCommandExecuted=false`, `systemCommandRequested=false`, and `trashMutationRequested=false`.
   - Runtime proof now passes: `stateBefore.promptType=confirmPrompt`, native footer exposes `apply` and `close`, `simulateKey Escape` restores `stateAfterCancel.promptType=none`, `noMutationAfterCancel=true`, `systemCommandRequested=false`, and `trashMutationRequested=false`.
   - Known primitive nuance: the Escape send envelope still reports `parseOutcome=timeout`, so the scenario uses post-state as the authoritative dismissal proof.
+
+## Iteration 4 SDK Host Route And Built-In Gate Audit
+
+- Source contracts:
+  - `./scripts/agentic/agent-cargo.sh test --test source_audits confirm_modal_shared_shell`
+  - `./scripts/agentic/agent-cargo.sh test --test source_audits builtin_confirmation`
+- Guarded behavior:
+  - SDK `confirm()` keeps the single-word API name and protocol `type: 'confirm'`.
+  - The SDK host route in `src/prompt_handler/mod.rs` now opens the shared
+    in-window `ConfirmPrompt` with `open_confirm_prompt` instead of the
+    parent-attached `confirm_with_parent_dialog` path.
+  - Built-in destructive confirmations keep the config gate
+    `requires_confirmation(&entry.id)`, spawn the async confirmation flow, call
+    `confirm_with_parent_dialog`, and handle accept, cancel, and error arms.
+- Runtime attempt:
+  - SDK runtime proof was attempted through agentic sessions after the source
+    route change. Baseline state RPCs worked, but `session.sh send run` did not
+    surface the expected script log, `ShowConfirm`, or `sdk-confirm-run*`
+    evidence before follow-up RPCs timed out.
+- Current result:
+  - SDK and built-in confirm routes are source-contract proven.
+  - SDK script-facing runtime proof remains pending because the external
+    agentic `run` route did not produce confirm traffic during the proof run.
