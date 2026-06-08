@@ -4,6 +4,9 @@ use gpui::{
 };
 
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
+use crate::components::confirm_modal_shell::{
+    confirm_modal_header, confirm_modal_shell, ConfirmModalShellConfig, CONFIRM_MODAL_RADIUS,
+};
 use crate::components::overlay_modal::OverlayAnimation;
 use crate::logging;
 use crate::ui_foundation::{is_key_enter, is_key_escape};
@@ -51,28 +54,8 @@ impl Render for ShortcutRecorder {
             .filter(|name| !name.is_empty())
             .unwrap_or("Shortcut")
             .to_string();
-        let header = div()
-            .w_full()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(8.0))
-            .child(
-                div()
-                    .w(px(2.0))
-                    .h(px(14.0))
-                    .rounded(px(1.0))
-                    .bg(rgb(chrome.accent_hex)),
-            )
-            .child(
-                div()
-                    .min_w(px(0.0))
-                    .truncate()
-                    .text_sm()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(rgb(chrome.text_primary_hex))
-                    .child(title),
-            );
+        let header =
+            confirm_modal_header(title, rgb(chrome.accent_hex), rgb(chrome.text_primary_hex));
 
         // Build button row
         let clear_handler = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
@@ -193,27 +176,30 @@ impl Render for ShortcutRecorder {
         });
 
         // Modal content - with stop propagation to prevent backdrop dismiss
-        let modal = div()
-            .id("shortcut-modal-content")
-            .w(px(RECORDER_MODAL_WIDTH))
-            .p(px(RECORDER_MODAL_PADDING))
-            .when(!self.detached_window, |modal| {
-                modal.bg(rgba(chrome.popup_surface_rgba))
-            })
-            .border_1()
-            .border_color(rgba(chrome.border_rgba))
-            .rounded(px(8.))
-            .flex()
-            .flex_col()
-            // Stop propagation - clicks inside modal shouldn't dismiss it
-            .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {
-                // Empty handler stops propagation to backdrop
-            })
-            .child(header)
-            .child(div().h(px(10.)))
-            .child(self.render_key_display())
-            .child(self.render_conflict_warning())
-            .child(buttons);
+        let modal = confirm_modal_shell(
+            ConfirmModalShellConfig {
+                content_id: "shortcut-modal-content",
+                width: Some(RECORDER_MODAL_WIDTH),
+                padding_x: RECORDER_MODAL_PADDING,
+                padding_y: RECORDER_MODAL_PADDING,
+                gap: 10.0,
+                background: (!self.detached_window).then_some(rgba(chrome.popup_surface_rgba)),
+                border: rgba(chrome.border_rgba),
+                radius: CONFIRM_MODAL_RADIUS,
+                offset_y: 0.0,
+                opacity: 1.0,
+            },
+            vec![
+                header.into_any_element(),
+                self.render_key_display().into_any_element(),
+                self.render_conflict_warning().into_any_element(),
+                buttons.into_any_element(),
+            ],
+        )
+        // Stop propagation - clicks inside modal shouldn't dismiss it
+        .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {
+            // Empty handler stops propagation to backdrop
+        });
 
         let recorder_surface = div()
             .id("shortcut-recorder-overlay")

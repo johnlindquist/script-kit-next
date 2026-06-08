@@ -9,13 +9,16 @@ use std::{
 };
 
 use gpui::{
-    div, prelude::*, px, AnyWindowHandle, App, Bounds, Context, DisplayId, FocusHandle, Focusable,
-    MouseButton, Pixels, Point, Render, SharedString, Size, Task, Window,
+    div, prelude::*, px, AnyElement, AnyWindowHandle, App, Bounds, Context, DisplayId, FocusHandle,
+    Focusable, MouseButton, Pixels, Point, Render, SharedString, Size, Task, Window,
     WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
 use gpui_component::button::ButtonVariant;
 
 use crate::{
+    components::confirm_modal_shell::{
+        confirm_modal_header, confirm_modal_shell, ConfirmModalShellConfig, CONFIRM_MODAL_RADIUS,
+    },
     components::overlay_modal::{OverlayAnimation, BUTTON_GAP, MODAL_PADDING},
     list_item::FONT_MONO,
     platform,
@@ -1294,27 +1297,8 @@ impl Render for ConfirmPopupWindow {
         let cancel_entity = entity.clone();
         let confirm_entity = entity.clone();
 
-        let title_row = div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(8.))
-            .child(
-                div()
-                    .w(px(2.0))
-                    .h(px(14.0))
-                    .rounded(px(1.0))
-                    .bg(accent_color),
-            )
-            .child(
-                div()
-                    .min_w(px(0.))
-                    .truncate()
-                    .text_xs()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(title_color)
-                    .child(self.title.clone()),
-            );
+        let title_row =
+            confirm_modal_header(self.title.clone(), accent_color.into(), title_color.into());
 
         // ── Keycap action row ───────────────────────────────────
         let action_row = div()
@@ -1393,45 +1377,43 @@ impl Render for ConfirmPopupWindow {
                     ),
             );
 
+        let mut shell_children: Vec<AnyElement> = vec![title_row.into_any_element()];
+        if !self.body.is_empty() {
+            shell_children.push(
+                div()
+                    .w_full()
+                    .min_h(px(0.))
+                    .overflow_hidden()
+                    .text_xs()
+                    .line_height(px(CONFIRM_BODY_LINE_HEIGHT))
+                    .text_color(body_color)
+                    .child(self.body.clone())
+                    .into_any_element(),
+            );
+        }
+        shell_children.push(action_row.into_any_element());
+
         div()
             .size_full()
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
             .bg(surface_bg)
             .overflow_hidden()
-            .child(
-                div()
-                    .size_full()
-                    .flex()
-                    .flex_col()
-                    .mt(px(overlay_appear.modal_offset_y))
-                    .opacity(overlay_appear.modal_opacity)
-                    .bg(panel_bg)
-                    .px(px(CONFIRM_PADDING_X))
-                    .py(px(CONFIRM_PADDING_Y))
-                    .gap(px(CONFIRM_SECTION_GAP))
-                    .border_1()
-                    .border_color(border_color)
-                    .rounded(px(8.0))
-                    .overflow_hidden()
-                    // Title row
-                    .child(title_row)
-                    // Body (if present)
-                    .when(!self.body.is_empty(), |d| {
-                        d.child(
-                            div()
-                                .w_full()
-                                .min_h(px(0.))
-                                .overflow_hidden()
-                                .text_xs()
-                                .line_height(px(CONFIRM_BODY_LINE_HEIGHT))
-                                .text_color(body_color)
-                                .child(self.body.clone()),
-                        )
-                    })
-                    // Action row
-                    .child(action_row),
-            )
+            .child(confirm_modal_shell(
+                ConfirmModalShellConfig {
+                    content_id: "confirm-modal-content",
+                    width: None,
+                    padding_x: CONFIRM_PADDING_X,
+                    padding_y: CONFIRM_PADDING_Y,
+                    gap: CONFIRM_SECTION_GAP,
+                    background: Some(panel_bg),
+                    border: border_color.into(),
+                    radius: CONFIRM_MODAL_RADIUS,
+                    offset_y: overlay_appear.modal_offset_y,
+                    opacity: overlay_appear.modal_opacity,
+                },
+                shell_children,
+            ))
     }
 }
 

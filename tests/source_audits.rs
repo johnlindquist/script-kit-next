@@ -110,6 +110,9 @@ mod dialog_tab_navigation;
 #[path = "source_audits/no_popup_confirm_callers.rs"]
 mod no_popup_confirm_callers;
 
+#[path = "source_audits/confirm_modal_shared_shell.rs"]
+mod confirm_modal_shared_shell;
+
 #[path = "source_audits/arrow_interceptor_filtered_bounds.rs"]
 mod arrow_interceptor_filtered_bounds;
 

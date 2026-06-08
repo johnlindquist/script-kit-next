@@ -27,6 +27,7 @@
 
 pub mod alias_input;
 pub mod button;
+pub(crate) mod confirm_modal_shell;
 #[cfg(test)]
 mod error_handling_audit_tests;
 pub mod focusable_prompt_wrapper;
@@ -61,6 +62,11 @@ mod unified_list_item_tests;
 #[allow(unused_imports)]
 pub use alias_input::{AliasInput, AliasInputAction, AliasInputColors};
 pub use button::{Button, ButtonColors, ButtonVariant};
+#[allow(unused_imports)]
+pub(crate) use confirm_modal_shell::{
+    confirm_modal_header, confirm_modal_shell, ConfirmModalShellConfig, CONFIRM_MODAL_RADIUS,
+    CONFIRM_MODAL_SHELL_ID,
+};
 #[allow(unused_imports)]
 pub use focusable_prompt_wrapper::{
     match_focusable_prompt_intercepted_key, FocusablePrompt, FocusablePromptInterceptedKey,
