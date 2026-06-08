@@ -142,7 +142,7 @@ carries forward: fast scripting, prompt APIs, keyboard-first automation, and
 local control. The old giant global helper surface does not.
 
 Script Kit GPUI is not a marketplace-first product with local scripts bolted on.
-Discovery and installation matter, but they should preserve local ownership,
+Discovery and adoption matter, but they should preserve local ownership,
 inspectability, and editability.
 
 Script Kit GPUI is not a web dashboard in native clothing. It should appear,
@@ -165,7 +165,7 @@ local artifacts they can own:
 | --- | --- |
 | Core unit | User-owned script, prompt, plugin artifact, or profile |
 | Customization | TypeScript, Bun packages, prompt APIs, plugin folders, config/theme files |
-| Distribution | Shareable plugin repos that remain local and inspectable after install |
+| Sharing/adoption | Shareable plugin repos that remain local and inspectable after adoption |
 | AI | Profile-scoped Agent Chat runtime with tools, cwd, prompt, session policy, and receipts |
 | Automation | Semantic state, `getElements`, `getLayoutInfo`, `waitFor`, `batch`, logs, and receipts |
 | Migration | Preserve prompt spirit, drop helper sprawl, convert durable AI behavior into explicit profiles |
@@ -291,6 +291,19 @@ Do not claim media prompts such as `mic()` or `webcam()` are launch-ready until
 current source and runtime receipts prove they are implemented. The current
 source treats them as explicit coming-soon stubs.
 
+#### Prompt Launch Readiness
+
+Prompt claims should be source-aligned and updated when source, tests, and
+runtime receipts change. A README or SDK list is not enough by itself to make a
+prompt launch-ready.
+
+| Prompt surface | Launch posture | Claim rule |
+| --- | --- | --- |
+| `arg`, `div`, `editor`, `fields`, `form`, `path`, `term`, `drop`, `hotkey`, `chat` | Source-aligned prompt surfaces | Claim launch readiness only with current source ownership, tests, and prompt/runtime receipts. |
+| `mic()` | Coming-soon media prompt | Do not call launch-ready while source routes it through `MicComingSoon` or lacks runtime media receipts. |
+| `webcam()` | Coming-soon media prompt | Do not call launch-ready while source routes it through `WebcamComingSoon` or lacks runtime media receipts. |
+| `ShowMicro` | Compact input implementation detail | Do not confuse micro input support with `mic()` audio capture readiness. |
+
 ### The Launcher Is The Spine
 
 Main Menu Search is the entry point for scripts, built-ins, profiles, command
@@ -329,8 +342,26 @@ artifacts. The local filesystem model is a product contract, not an
 implementation detail.
 
 Users should be able to inspect the plugin folder, understand what will run,
-version it, edit it, and migrate it. Distribution should support that ownership
-model rather than obscure it.
+version it, edit it, and migrate it. Future sharing and distribution mechanics
+should support that ownership model rather than obscure it.
+
+#### Plugin Ownership Standards
+
+Plugin work should preserve local ownership before it optimizes discovery.
+
+- The local plugin root should be inspectable before launch-facing code runs
+  from it.
+- Manifest data should be visible and explainable. Prefer `plugin.json`; a
+  `package.json` fallback can identify legacy or imported roots, but it should
+  not hide what the local folder contains.
+- `scripts`, `scriptlets`, `skills`, `profiles`, and compatibility `agents`
+  should remain normal local artifacts that can be edited, versioned, removed,
+  or migrated.
+- Update, remove, and rollback flows should make the affected local folder and
+  manifest clear before they change user-owned files.
+- Distribution and broader marketplace mechanics are deferred until they can
+  preserve inspectability, editability, rollback, and removal instead of
+  obscuring them.
 
 ### Profiles Are Runtime Boundaries
 
@@ -344,6 +375,19 @@ blobs.
 
 If future work adds profile handoffs or subagent-like flows, the UI, logs, and
 receipts must show who acted and why.
+
+#### AI Claim Levels
+
+AI trust language should distinguish what the app actually enforces from what it
+validates, prompts, or hopes to support later.
+
+| Claim level | Meaning | Product language rule |
+| --- | --- | --- |
+| Enforced | Source, runtime, native, or wrapper-level behavior prevents the action and receipts prove it. | Use strong safety language only at this level. |
+| Validated | Config, schema, or artifact checks reject invalid inputs before launch or runtime selection. | Say the artifact or configuration is validated, not sandboxed. |
+| Prompt-policy or advisory | The profile prompt, tool posture, path policy, or blocked-action message guides behavior without filesystem enforcement. | Be explicit that this is policy posture, not native enforcement. |
+| Receipted | Logs, transcripts, state, or action receipts show what happened and who acted. | Use receipts to support attribution and auditability. |
+| Future aspiration | A claim depends on future Pi, native, or wrapper-level enforcement work. | Keep it out of launch promises until source and receipts prove it. |
 
 ### Skills Are Recipes, Not Ambient Magic
 
@@ -366,6 +410,25 @@ selected, and what changed, it is not agent-ready.
 
 Exploratory prototypes can use lighter proof while ideas are still forming. Once
 a claim becomes launch-facing, receipts are non-negotiable.
+
+## AI Terminology
+
+Use one product language layer even when implementation and compatibility names
+remain in the source.
+
+- Agent Chat is the user-facing AI chat product.
+- A profile is the explicit Agent Chat runtime boundary: prompt, model, tools,
+  cwd, session policy, context posture, logs, and receipts.
+- A skill is a repeatable task recipe that runs inside an Agent Chat/profile
+  runtime.
+- A plugin is a local artifact container for scripts, scriptlets, skills,
+  profiles, and compatibility agent artifacts.
+- A legacy agent is an import or compatibility source. Durable behavior should
+  become an explicit profile or skill before it is treated as launch-facing.
+- Pi is backend/runtime implementation detail unless the UI is intentionally
+  showing model, provider, or backend attribution.
+- ACP and `tab_ai` are compatibility or implementation names. They should not
+  create a second user-facing AI chat concept.
 
 ## Source-Of-Truth Map
 
@@ -407,6 +470,21 @@ a claim becomes launch-facing, receipts are non-negotiable.
 Keep these references source-aware but not brittle. Prefer subsystem ownership
 over freezing exact type placement forever.
 
+## Product Loop Proof Matrix
+
+Use this matrix as the checklist for making a launch-facing claim falsifiable.
+Source areas are intentionally subsystem-level; exact type placement can move.
+
+| Loop step | Owning surfaces | Source areas | Representative checks | Runtime receipts |
+| --- | --- | --- | --- | --- |
+| Search | Main Menu Search, catalog sources, command grammar | `src/render_script_list/**`, `src/main_sections/**`, `src/menu_syntax/**`, root source audits | `./scripts/agentic/agent-cargo.sh test --test source_audits/root_unified_search_stability_contract`, `./scripts/agentic/agent-cargo.sh test --test simulate_key_cmd_enter_scriptlist_contract` | target identity, input state, selected row, source label, footer ownership |
+| Choose | ScriptList rows, built-ins, profile rows, Actions rows | `src/components/unified_list_item/**`, `src/render_builtins/**`, `src/actions/**`, profile/plugin discovery | `./scripts/agentic/agent-cargo.sh test --test actions_dialog_shared_list_contract`, `./scripts/agentic/agent-cargo.sh test --test agent_chat_profile_selector_contract` | `getElements`, selected/focused semantic IDs, preview/layout identity |
+| Prompt | Prompt APIs and prompt shells | `src/main_sections/prompt_messages.rs`, `src/render_prompts/**`, `src/components/prompt_*` | `./scripts/agentic/agent-cargo.sh test --test surface_contract_matrix_artifact_contract`, prompt-specific source checks | prompt state, focus owner, footer hints, `getLayoutInfo` |
+| Act | Enter, Cmd+K Actions, Cmd+Enter Agent Chat, direct action execution | `src/actions/**`, `src/app_actions/**`, `src/app_impl/**` | `./scripts/agentic/agent-cargo.sh test --test actions_dialog_enter_routing_contract`, `./scripts/agentic/agent-cargo.sh test --test main_window_footer_surface_owner_contract` | action receipt, route stack, target identity, focus restoration |
+| Automate | Protocol, MCP, DevTools, semantic transactions | `src/agentic_protocol_bus.rs`, `src/app_layout/**`, `scripts/devtools/**` | `./scripts/agentic/agent-cargo.sh test --test devtools_coverage_contract`, protocol wait/batch contracts | `getState`, `getElements`, `getLayoutInfo`, `waitFor`, `batch` |
+| Verify | Receipts, transcripts, logs, generated contracts | `docs/ai/contracts/**`, `scripts/devtools/**`, `src/ai/**`, test contracts | `./scripts/agentic/agent-cargo.sh test --test pi_profile_artifact_contract`, `./scripts/agentic/agent-cargo.sh test --test pi_profile_launch_contract` | transcript export, logs, profile selection receipts, pass/fail status |
+| Return | Dismissal, close/reopen, focus recovery, cleanup | `src/main_sections/**`, `src/app_impl/**`, `scripts/agentic/session.sh` | focused close/reopen and lifecycle checks, `git status --short` after proof | window target status, input freshness, previous surface, cleanup proof |
+
 ## Decision Rules
 
 Build as a script when the user should own the TypeScript, dependencies, and
@@ -446,6 +524,31 @@ AI chat concept because compatibility implementation names exist.
 
 New launcher-family surfaces should join the shared surface contract, shared
 chrome, footer ownership, semantic elements, and layout receipt model.
+
+### Decision Examples
+
+- Build as a script when the user wants to own the TypeScript and dependencies,
+  such as a personal deploy helper, report generator, or clipboard formatter.
+- Build as a prompt when the workflow needs structured native input, selection,
+  editing, terminal output, forms, paths, drops, hotkeys, or chat-like
+  interaction.
+- Build as a built-in when the feature owns privileged app state, global
+  indexing, native integration, or a first-party reference surface such as
+  Clipboard History, App Launcher, Window Switcher, or Notes.
+- Build as a plugin when scripts, scriptlets, skills, profiles, and compatibility
+  agent artifacts should travel together as local files.
+- Build as a profile when the difference is AI runtime identity: prompt, model,
+  tools, cwd, session policy, context posture, or warm behavior.
+- Build as a skill when the value is a repeatable task recipe that should run
+  inside an existing profile instead of defining a new runtime boundary.
+- Expose through Main Menu Search when the object is first-class, runnable, or
+  selectable.
+- Expose through Actions when the operation depends on the currently selected
+  row, prompt, profile, built-in, Agent Chat thread, or artifact.
+- Anti-example: do not add persistent footer chrome for every feature just
+  because the operation is useful.
+- Anti-example: do not hide profile handoffs, call prompt-policy path posture a
+  sandbox, or turn ACP/`tab_ai` compatibility names into new product concepts.
 
 ## Migration Model
 
